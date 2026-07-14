@@ -30,8 +30,8 @@ import Profile from "./pages/Profile";
 import Invoices1 from "./pages/Invoices1";
 import ContactDetailsPage from "./pages/ContactDetails";
 import Insights from "./pages/Insights";
-import Vendors from "./pages/Vendors";
 import VendorDetailsPage from "./pages/VendorDetailsPage";
+import VendorsHub from "./pages/VendorsHub";
 import AllTasks from "./pages/AllTasks";
 import AllMeetings from "./pages/AllMeetings";
 import PurchaseOrderPage from "./pages/PurchaseOrderPage";
@@ -50,12 +50,19 @@ import Analytics from "./pages/Analytics";
 import Support from "./pages/Support";
 import TenantDetails from "./pages/TenantDetails";
 import ContactSupport from "./pages/ContactSupport";
-import PaymentPage from "./pages/PaymentPage";
 import BillingDetail from "./pages/BillingDetail";
 import AdminCalendar from "./pages/Calender";
 import Onboarding from "./pages/Onboarding";
 import PlanManagement from "./pages/PlanManagement";
 import PromotionsAndRewards from "./pages/PromotionsAndRewards";
+import SalesReturn from "./pages/SalesReturn";
+import SalesSubscription from "./pages/SalesSubscription";
+import EInvoicing from "./pages/EInvoicing";
+import PurchaseReturn from "./pages/PurchaseReturn";
+import PaymentsTimeline from "./pages/PaymentsTimeline";
+import Journals from "./pages/Journals";
+import Expenses from "./pages/Expenses";
+import IndirectIncome from "./pages/IndirectIncome";
 
 function ChecklistModal({ showChecklist, setShowChecklist }) {
   const location = useLocation();
@@ -414,6 +421,30 @@ function App() {
               }
             />
             <Route
+              path="/sales-return"
+              element={
+                <PrivateRoute>
+                  <SalesReturn />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/sales-subscription"
+              element={
+                <PrivateRoute>
+                  <SalesSubscription />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/e-invoicing"
+              element={
+                <PrivateRoute>
+                  <EInvoicing />
+                </PrivateRoute>
+              }
+            />
+            <Route
               path="/performa-invoices"
               element={
                 <PrivateRoute>
@@ -497,7 +528,7 @@ function App() {
               path="/vendors"
               element={
                 <PrivateRoute>
-                  <Vendors />
+                  <VendorsHub />
                 </PrivateRoute>
               }
             />
@@ -542,10 +573,42 @@ function App() {
               }
             />
             <Route
-              path="/payment"
+              path="/purchase-return"
               element={
                 <PrivateRoute>
-                  <PaymentPage />
+                  <PurchaseReturn />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/payments-timeline"
+              element={
+                <PrivateRoute>
+                  <PaymentsTimeline />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/journals"
+              element={
+                <PrivateRoute>
+                  <Journals />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/expenses"
+              element={
+                <PrivateRoute>
+                  <Expenses />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/indirect-income"
+              element={
+                <PrivateRoute>
+                  <IndirectIncome />
                 </PrivateRoute>
               }
             />
