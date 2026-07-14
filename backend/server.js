@@ -68,6 +68,11 @@ app.use('/api/contacts', contactRoutes);
 const publicFormRoutes = require('./routes/publicFormRoutes');
 app.use('/api/public/forms', publicFormRoutes);
 
+// Authenticated Forms management + Duplicate Review Center (Phase 1b) — mounted at /api so the
+// router's own /forms/* and /duplicate-reviews/* paths resolve correctly.
+const formRoutes = require('./routes/formRoutes');
+app.use('/api', formRoutes);
+
 const dealRoutes = require('./routes/dealRoutes');
 app.use('/api/deals', dealRoutes);
 
