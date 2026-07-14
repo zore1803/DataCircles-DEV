@@ -1,0 +1,8 @@
+.ql-editor ol li[data-list="bullet"]::before {
+  content: '•' !important;
+  counter-increment: none !important;
+}
+
+.ql-editor ol li[data-list="bullet"] {
+  counter-increment: none !important;
+}

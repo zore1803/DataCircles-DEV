@@ -1,0 +1,150 @@
+//middlewares/userSync.js
+const User = require('../models/User');
+const Invited = require('../models/Invited');
+const Organization = require('../models/Organization');
+const generateUniqueCode = require('../utils/generateUniqueCode');
+
+module.exports = async (req, res, next) => {
+  if (req.auth && req.auth._id && !req.auth.sub) {
+    try {
+      const SuperAdmin = require('../models/SuperAdmin');
+      const superAdmin = await SuperAdmin.findById(req.auth._id).select('-password');
+      if (!superAdmin) {
+        return res.status(401).json({ message: 'Super-admin not found' });
+      }
+      req.superAdmin = superAdmin;
+      req.user = superAdmin;
+      return next();
+    } catch (err) {
+      console.error('Super-admin lookup failed:', err);
+      return res.status(500).json({ message: 'Server error during super-admin authentication' });
+    }
+  }
+  const auth0User = req.auth;
+  const sub = auth0User.sub;
+  const namespace = process.env.AUTH0_NAMESPACE;
+  let email = auth0User[`${namespace}email`] || auth0User.email;
+  const name = auth0User[`${namespace}name`] || auth0User.name || 'Unknown';
+  const provider = sub.split('|')[0];
+  let updated = false;
+
+  if (provider === 'phone') {
+    const phone = sub.split('|')[1];
+    let user = await User.findOne({ phone });
+    if (user) {
+      if (user.name !== name) {
+        user.name = name;
+        updated = true;
+      }
+      if (user.profileEmail !== email) {
+        user.profileEmail = email;
+        updated = true;
+      }
+      if (updated) await user.save();
+      req.user = user;
+      return next();
+    }
+
+    // For new phone user, should not reach here as registration handles it
+    return res.status(401).json({ message: 'User not found' });
+  }
+
+  if (provider === 'facebook') {
+    let user = await User.findOne({ auth0Id: sub });
+    if (user) {
+      req.user = user;
+      return next();
+    }
+
+    // If no email, prompt for it
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({
+        error: 'EMAIL_REQUIRED',
+        message: 'Email not available from provider',
+        requiresEmail: true,
+        provider: 'facebook',
+        name,
+      });
+    }
+
+    // Check if email is already taken by another user
+    const emailTaken = await User.findOne({ email, auth0Id: { $ne: sub } });
+    if (emailTaken) {
+      return res.status(400).json({ message: "This email is already registered" });
+    }
+
+    // Check for invitation by email
+    const invited = await Invited.findOne({ email });
+    if (invited) {
+      user = new User({
+        auth0Id: sub,
+        name,
+        email,
+        role: 'staff',
+        organization: invited.organization,
+        permissions: invited.permissions || [],
+      });
+      await user.save();
+      await Invited.deleteOne({ _id: invited._id });
+      req.user = user;
+      return next();
+    }
+
+    // No user or invitation found, require registration
+    return res.status(428).json({
+      error: 'REGISTRATION_REQUIRED',
+      message: 'Complete registration by providing a company code to join or organization name to create a new one',
+      requiresSetup: true,
+    });
+  }
+
+  // For non-Facebook providers (Google, GitHub)
+  // FIX: only search by email if email is actually defined
+  // Without this guard, { email: undefined } matches documents with no email field
+  let user = await User.findOne({
+    $or: [
+      { auth0Id: sub },
+      ...(email ? [{ email }] : []),
+    ],
+  });
+
+  if (user) {
+    if (!user.auth0Id) {
+      user.auth0Id = sub;
+      updated = true;
+    }
+    if (email && user.email !== email) {
+      user.email = email;
+      updated = true;
+    }
+    if (user.name !== name) {
+      user.name = name;
+      updated = true;
+    }
+    if (updated) await user.save();
+    req.user = user;
+    return next();
+  }
+
+  const invited = await Invited.findOne({ email });
+  if (invited) {
+    user = new User({
+      auth0Id: sub,
+      name,
+      email,
+      role: 'staff',
+      organization: invited.organization,
+      permissions: invited.permissions || [],
+    });
+    await user.save();
+    await Invited.deleteOne({ _id: invited._id });
+    req.user = user;
+    return next();
+  }
+
+  return res.status(428).json({
+    error: 'REGISTRATION_REQUIRED',
+    message: 'Complete registration by providing a company code to join or organization name to create a new one',
+    requiresSetup: true,
+  });
+};

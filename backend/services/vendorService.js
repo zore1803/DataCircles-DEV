@@ -1,0 +1,135 @@
+const Vendor = require("../models/Vendor");
+const { processAdditionalFields } = require("./fieldCoercionService");
+
+/**
+ * Purpose: Error subclass carrying the exact {message} response shape the
+ * original vendorController returned for malformed address/additionalFields
+ * JSON, so the controller can map it back to the identical 400 response
+ * without vendorService knowing about Express.
+ */
+class VendorInputError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "VendorInputError";
+  }
+}
+
+function normalizeSocialMedia(socialMedia) {
+  return {
+    twitter: socialMedia.twitter || "",
+    linkedin: socialMedia.linkedin || "",
+    facebook: socialMedia.facebook || "",
+    whatsapp: socialMedia.whatsapp || "",
+  };
+}
+
+/**
+ * Purpose: Build the persistable vendor payload from raw input, preserving
+ * vendorController's exact behavior: socialMedia normalization, JSON parsing
+ * of stringified `address`/`additionalFields` (multipart/form-data sends
+ * nested objects as strings), and additionalFields type coercion.
+ * Inputs: rawData (plain object, e.g. req.body)
+ * Outputs: Promise<Object> - vendor payload ready to merge with organization/user/avatar
+ * Side effects: one read query via processAdditionalFields
+ * Errors thrown: VendorInputError("Invalid address format" | "Invalid additionalFields format")
+ *   on malformed JSON strings, matching the original try/catch behavior exactly.
+ */
+async function buildVendorPayload(rawData, organizationId) {
+  const data = { ...rawData };
+
+  if (data.socialMedia) {
+    data.socialMedia = normalizeSocialMedia(data.socialMedia);
+  }
+
+  if (data.address) {
+    try {
+      data.address = typeof data.address === "string" ? JSON.parse(data.address) : data.address;
+    } catch (err) {
+      throw new VendorInputError("Invalid address format");
+    }
+  }
+
+  if (data.additionalFields) {
+    try {
+      const parsedFields =
+        typeof data.additionalFields === "string"
+          ? JSON.parse(data.additionalFields)
+          : data.additionalFields;
+      data.additionalFields = await processAdditionalFields("vendor", parsedFields, organizationId);
+    } catch (err) {
+      if (err instanceof VendorInputError) throw err;
+      throw new VendorInputError("Invalid additionalFields format");
+    }
+  }
+
+  return data;
+}
+
+/**
+ * Purpose: Create a Vendor document from raw submitted data. Orchestration
+ * only — payload shaping delegated to buildVendorPayload, coercion delegated
+ * to fieldCoercionService.
+ * Inputs:
+ *   organizationId: ObjectId|string
+ *   rawData: plain object (e.g. req.body)
+ *   options: { userId, avatarUrl?, session? }
+ * Outputs: Promise<VendorDocument>
+ * Side effects: one Vendor insert (participates in `session` if provided — see
+ *   FORMS_IMPLEMENTATION.md §0.4a; unused by any Phase 0 caller)
+ * Errors thrown: VendorInputError (bad address/additionalFields JSON),
+ *   Mongoose ValidationError (missing required fields, e.g. `name`)
+ * Known callers: vendorController.createVendor (Phase 0)
+ */
+async function createVendor(organizationId, rawData, { userId, avatarUrl, session } = {}) {
+  const payload = await buildVendorPayload(rawData, organizationId);
+
+  const vendorData = {
+    ...payload,
+    user: userId,
+    organization: organizationId,
+  };
+
+  if (avatarUrl) {
+    vendorData.avatar = avatarUrl;
+  }
+
+  const vendor = new Vendor(vendorData);
+  await vendor.save({ session });
+  return vendor;
+}
+
+/**
+ * Purpose: Update an existing Vendor document from raw submitted data.
+ * Inputs:
+ *   vendorId: ObjectId|string
+ *   organizationId: ObjectId|string (used to scope the update, matching original)
+ *   rawData: plain object (e.g. req.body)
+ *   options: { avatarUrl?, session? }
+ * Outputs: Promise<VendorDocument|null> - null if no matching vendor (caller maps to 404)
+ * Side effects: one Vendor findOneAndUpdate (participates in `session` if provided)
+ * Errors thrown: VendorInputError (bad address/additionalFields JSON),
+ *   Mongoose ValidationError (runValidators: true)
+ * Known callers: vendorController.updateVendor (Phase 0)
+ */
+async function updateVendor(vendorId, organizationId, rawData, { avatarUrl, session } = {}) {
+  const payload = await buildVendorPayload(rawData, organizationId);
+
+  const updateData = { ...payload };
+  if (avatarUrl) {
+    updateData.avatar = avatarUrl;
+  }
+
+  const vendor = await Vendor.findOneAndUpdate(
+    { _id: vendorId, organization: organizationId },
+    updateData,
+    { new: true, runValidators: true, session }
+  );
+
+  return vendor;
+}
+
+module.exports = {
+  VendorInputError,
+  createVendor,
+  updateVendor,
+};
