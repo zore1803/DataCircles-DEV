@@ -1,0 +1,46 @@
+# === Dependencies ===
+node_modules/
+**/node_modules/
+
+# === Environment / secrets ===
+# Never commit real env files. .env.example files are the only tracked template.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# === Build output ===
+dist/
+build/
+**/dist/
+**/build/
+
+# === Test / coverage ===
+coverage/
+**/coverage/
+
+# === Logs ===
+*.log
+logs/
+npm-debug.log*
+
+# === OS artifacts ===
+.DS_Store
+Thumbs.db
+
+# === Editor ===
+.vscode/
+.idea/
+*.swp
+
+# === Local tool settings (personal, not shared) ===
+.claude/settings.local.json
+
+# === Throwaway / scratch scripts ===
+# backend/scripts/scratch/ is the designated home for one-off verification/debug scripts run
+# against a dev database and deleted afterward. Nothing in it is ever committed except the
+# README documenting the convention. Real migrations/seed scripts belong in backend/scripts/
+# proper and ship in the PR that needs them — see backend/scripts/scratch/README.md.
+backend/scripts/scratch/*
+!backend/scripts/scratch/README.md
+!backend/scripts/scratch/.gitkeep
