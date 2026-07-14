@@ -53,9 +53,11 @@ const Navbar = () => {
   const [isHovered, setIsHovered] = useState(false);
   const [salesOpen, setSalesOpen] = useState(false);
   const [procurementOpen, setProcurementOpen] = useState(false);
+  const [paymentsOpen, setPaymentsOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [hoveredChildIndex, setHoveredChildIndex] = useState(null);
   const [hoveredProcurementIndex, setHoveredProcurementIndex] = useState(null);
+  const [hoveredPaymentsIndex, setHoveredPaymentsIndex] = useState(null);
   const [hoveredActivityIndex, setHoveredActivityIndex] = useState(null);
   const [branding, setBranding] = useState(null);
   const [isLoadingBranding, setIsLoadingBranding] = useState(false);
@@ -131,6 +133,13 @@ const Navbar = () => {
       isDropdown: true,
       dropdownType: "procurement",
     },
+    { name: "Vendors", href: "/vendors", icon: Truck },
+    {
+      name: "Payments",
+      icon: Wallet,
+      isDropdown: true,
+      dropdownType: "payments",
+    },
     { name: "Products and Services", href: "/products", icon: Boxes },
     { name: "Others", isHeader: true },
     { name: "Insights", href: "/insights", icon: ChartColumnIncreasing },
@@ -147,13 +156,22 @@ const Navbar = () => {
     { name: "Invoices", href: "/invoices?tab=tax" },
     { name: "Proforma Invoice", href: "/invoices?tab=performa" },
     { name: "Delivery Challan", href: "/invoices?tab=deliveryChallan" },
+    { name: "Sales Return", href: "/sales-return" },
+    { name: "Subscription", href: "/sales-subscription" },
+    { name: "E-Invoicing", href: "/e-invoicing" },
   ];
 
   const procurementChildren = [
-    { name: "Vendors", href: "/vendors" },
-    { name: "Purchase Orders", href: "/purchase-order" },
     { name: "Purchases", href: "/purchase" },
-    { name: "Vendor Payments", href: "/payment" },
+    { name: "Purchase Orders", href: "/purchase-order" },
+    { name: "Purchase Return", href: "/purchase-return" },
+  ];
+
+  const paymentsChildren = [
+    { name: "Timeline", href: "/payments-timeline" },
+    { name: "Journals", href: "/journals" },
+    { name: "Expenses", href: "/expenses" },
+    { name: "Indirect Income", href: "/indirect-income" },
   ];
 
   const superAdminNavigation = [
@@ -178,6 +196,7 @@ const Navbar = () => {
   useEffect(() => {
     setSalesOpen(false);
     setProcurementOpen(false);
+    setPaymentsOpen(false);
     setActivityOpen(false);
   }, []);
 
@@ -463,9 +482,11 @@ const Navbar = () => {
             setIsHovered(false);
             setSalesOpen(false);
             setProcurementOpen(false);
+            setPaymentsOpen(false);
             setActivityOpen(false);
             setHoveredChildIndex(null);
             setHoveredProcurementIndex(null);
+            setHoveredPaymentsIndex(null);
             setHoveredActivityIndex(null);
           }
         }}
@@ -533,6 +554,15 @@ const Navbar = () => {
                       hoveredProcurementIndex,
                       setHoveredProcurementIndex,
                     )
+                  ) : item.dropdownType === "payments" ? (
+                    renderDropdown(
+                      item,
+                      paymentsOpen,
+                      setPaymentsOpen,
+                      paymentsChildren,
+                      hoveredPaymentsIndex,
+                      setHoveredPaymentsIndex,
+                    )
                   ) : (
                     renderDropdown(
                       item,
@@ -554,6 +584,7 @@ const Navbar = () => {
                         setIsMobileOpen(false);
                         setSalesOpen(false);
                         setProcurementOpen(false);
+                        setPaymentsOpen(false);
                         setActivityOpen(false);
                       }}
                       className={`flex items-center gap-3 px-3 py-3 text-sm rounded-2xl transition-all overflow-y-hidden duration-300 text-black
