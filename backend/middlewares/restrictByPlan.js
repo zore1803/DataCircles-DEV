@@ -30,6 +30,7 @@ const PurchaseOrder = require('../models/PurchaseOrder');
 const EmailLog = require('../models/EmailLog');
 const EmailTemplate = require('../models/EmailTemplate');
 const StorageUsage = require('../models/StorageUsage');
+const FormDefinition = require('../models/FormDefinition');
 
 // ----------------------------------------------------------------------
 // Per-module numeric limits, ORG-WIDE (all users combined), checked
@@ -59,6 +60,12 @@ const perModuleLimitModels = {
   'delivery-challans': [DeliveryChallan],
   purchases: [Purchase, PurchaseOrder], // combined count, by design
   emails: [EmailLog],
+  // Unfiltered count, matching every other module's semantics exactly (e.g. Deal counts
+  // Won/Lost the same as Open — no module filters by internal status). An archived
+  // FormDefinition counts against the limit the same as a published one. Deliberate: whether
+  // archived/terminal-state resources should stop counting is a cross-module Billing policy
+  // question, not something to special-case for Forms alone in this change.
+  forms: [FormDefinition],
 };
 
 // Cache to reduce database queries — caches PlanConfig.features per
