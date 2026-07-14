@@ -145,6 +145,28 @@ Not exercised live: the full additionalFields type matrix (number/dropdown/date/
 
 No test suite exists in this repo (confirmed in §0.1), so this manual pass is the only verification available. Two throwaway test vendors were created and deleted as part of this check — no residual data left in the org.
 
+## Frontend milestone checklist (running, updated as screens land)
+
+Grounded in `FORMS_FRONTEND_ARCHITECTURE.md`'s build order (§12). Update this list in the same commit that lands each milestone — don't let it drift from what's actually merged.
+
+**Backend (all complete, see entries above)**
+- ✅ Domain models, versioning, public submission endpoint
+- ✅ Duplicate detection, resume processing (Company-bucket resume + idempotency guard)
+- ✅ Authenticated Forms API (`formController`/`formRoutes`)
+- ✅ Billing / plan gating (`forms` registered in `PlanConfig`/`restrictByPlan`)
+
+**Frontend**
+- ✅ Settings → Forms card (`settingsItems` entry, `/settings/forms`)
+- ✅ Company → Forms button
+- ✅ Contact → Forms button
+- ✅ Vendor → Forms button
+- ✅ Forms List page (table, empty/loading states, permission gate, filters, pagination, Create Form modal) — `submissionCount` added to `formController.listForms` (small additive backend gap, needed for this screen's own column)
+- ⬜ Form Detail shell (`/forms/:id`, tabs: Overview/Builder/Submissions/Duplicate Reviews/Settings)
+- ⬜ Builder (last, largest — placeholder until then)
+- ⬜ Submission Inbox (Submissions tab, real data)
+- ⬜ Submission Details (drawer)
+- ⬜ Duplicate Review Center (Duplicate Reviews tab, real data) — needs the flagged `formId` filter on `GET /api/duplicate-reviews` first
+
 ### Original plan (below), before implementation began
 
 ### Scope confirmation
