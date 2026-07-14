@@ -26,6 +26,7 @@ import Header from "./components/Header";
 import CompanyProfilePage from "./pages/CompanyProfilePage";
 import DealDetail from "./pages/DealDetail";
 import FormDetailPage from "./pages/FormDetailPage";
+import FormBuilderPage from "./pages/FormBuilderPage";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Invoices1 from "./pages/Invoices1";
@@ -467,6 +468,14 @@ function App() {
               element={
                 <PrivateRoute>
                   <FormDetailPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/forms/:id/builder"
+              element={
+                <PrivateRoute>
+                  <FormBuilderPage />
                 </PrivateRoute>
               }
             />
