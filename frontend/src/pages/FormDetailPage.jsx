@@ -2,8 +2,12 @@
 // Form Detail — Build order step 2, per FORMS_FRONTEND_ARCHITECTURE.md §1.2/§3. New top-level
 // route (/forms/:id), mirroring /companies/:id -> CompanyProfilePage.jsx's structure exactly:
 // useParams for the id, a tab bar + activeTab useState, conditional content blocks per tab.
-// Overview is real from the start (cheap — reuses data the other tabs need anyway); Builder/
-// Submissions/Duplicate Reviews are placeholders until their own build-order steps land.
+// Overview is real from the start (cheap — reuses data the other tabs need anyway); Submissions/
+// Duplicate Reviews are placeholders until their own build-order steps land.
+//
+// Builder is NOT one of these tabs — later, explicit decision (post-dating the architecture doc's
+// original tab list): Builder is a dedicated full-width route, /forms/:id/builder, sibling to this
+// page rather than a tab within it. See FormBuilderPage.jsx.
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import API from "../services/api";
@@ -53,9 +57,11 @@ const loadingMessages = [
 ];
 const randomMessage = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
 
-const tabs = ["Overview", "Builder", "Submissions", "Duplicate Reviews", "Settings"];
+// Builder is deliberately NOT one of these tabs — per explicit decision, it's a dedicated full-width
+// route (/forms/:id/builder), sibling to this tabbed page, not a tab within it. See FormBuilderPage.jsx.
+const tabs = ["Overview", "Submissions", "Duplicate Reviews", "Settings"];
 
-function OverviewTab({ form, activeVersion, submissionCount, pendingReviewCount, lastSubmittedAt, setActiveTab }) {
+function OverviewTab({ form, activeVersion, submissionCount, pendingReviewCount, lastSubmittedAt, setActiveTab, navigate }) {
   // No public Forms renderer page exists in the frontend yet (confirmed in the original frontend
   // audit) — only the backend accepts submissions, at POST /api/public/forms/:publicSlug/submit.
   // Showing a fake-working "open this URL" link would silently 404. Surface the real slug (useful
@@ -114,7 +120,7 @@ function OverviewTab({ form, activeVersion, submissionCount, pendingReviewCount,
 
       <div className="flex flex-wrap gap-3">
         <button
-          onClick={() => setActiveTab("Builder")}
+          onClick={() => navigate(`/forms/${form._id}/builder`)}
           className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
         >
           Continue Editing
@@ -327,9 +333,9 @@ const FormDetailPage = () => {
                 pendingReviewCount={pendingReviewCount}
                 lastSubmittedAt={lastSubmittedAt}
                 setActiveTab={setActiveTab}
+                navigate={navigate}
               />
             )}
-            {activeTab === "Builder" && <PlaceholderTab label="Builder" />}
             {activeTab === "Submissions" && <PlaceholderTab label="Submissions" />}
             {activeTab === "Duplicate Reviews" && <PlaceholderTab label="Duplicate Reviews" />}
             {activeTab === "Settings" && <FormSettingsTab form={form} onFormUpdated={setForm} />}

@@ -57,7 +57,9 @@ This renders at `/settings/forms`, inside `Settings.jsx`'s existing `activeSecti
 
 `FormDetailPage.jsx` lives at `frontend/src/pages/FormDetailPage.jsx` (top-level `pages/`, matching `CompanyProfilePage.jsx`'s location — not inside `components/settings/`, since it is no longer a Settings sub-page once you're viewing one specific form). It is reached by `navigate(`/forms/${form._id}`)` from a `FormsList.jsx` row click — same as `Companies.jsx` navigating to `/companies/${company._id}`.
 
-`tabs = ["Overview", "Builder", "Submissions", "Duplicate Reviews", "Settings"]`, `const [activeTab, setActiveTab] = useState("Overview")`, conditional blocks per tab, same as `CompanyProfilePage`.
+`tabs = ["Overview", "Submissions", "Duplicate Reviews", "Settings"]`, `const [activeTab, setActiveTab] = useState("Overview")`, conditional blocks per tab, same as `CompanyProfilePage`.
+
+**Amendment (post-dates this document's original draft — explicit, new decision, not a resurfacing of one already made here):** Builder was originally specified as a fifth tab in this list. After Form Detail and Forms List were built and reviewed, it was decided that Builder should instead be a **dedicated full-width route**, `/forms/:id/builder`, sibling to this tabbed page rather than a tab within it — because Builder is expected to need the full viewport (FieldsPanel/Canvas/PropertiesPanel) in a way that doesn't fit the tabbed-content pattern the other four tabs share. `tabs` above no longer includes `"Builder"`; the Overview tab's "Continue Editing" quick action (§3.2) navigates to the new route instead of switching tabs. See `FormBuilderPage.jsx`.
 
 ### 1.3 Full route/render map
 
@@ -65,10 +67,10 @@ This renders at `/settings/forms`, inside `Settings.jsx`'s existing `activeSecti
 /settings/forms                    Settings.jsx shell → FormsList.jsx (table)
 /forms/:id                         FormDetailPage.jsx (own page, own header — NOT the Settings shell)
   activeTab === "Overview"         → OverviewTab (default landing tab — see §3.2)
-  activeTab === "Builder"          → BuilderTab (placeholder shell first, real builder last — see §11)
   activeTab === "Submissions"      → SubmissionsTab
   activeTab === "Duplicate Reviews"→ DuplicateReviewsTab
   activeTab === "Settings"         → FormSettingsTab (title/module/duplicate-strategy/theme config — form-level, not app Settings)
+/forms/:id/builder                 FormBuilderPage.jsx (own page, full-width, sibling to Form Detail — see §1.2 amendment)
 ```
 
 Note the name collision risk: the fourth tab is called "Settings" (a Forms concept — publish state, duplicate strategy, notification config) and is unrelated to the app's `Settings.jsx`/`settingsItems` (a completely different concept, just an unfortunate shared word). Keep the component named `FormSettingsTab`, not `SettingsTab`, to avoid confusion in the codebase.
@@ -176,9 +178,9 @@ No new backend endpoint beyond what §9 already flags — this tab reuses `GET /
 
 The one tab not explicitly scoped by the five decisions — smallest reasonable v1 given what `formController` actually exposes: edit `title` (calls `PATCH /api/forms/:id` with `{title}`), view `module` (read-only — module is not editable after creation, since layout/targetModule derivation and `schemaHash` all key off it per `FORMS_SCHEMA.md`), show `status` + `publishState.publicSlug` (with a copy-link button once published — also surfaced on Overview, §3.2, so this is a secondary/detail view of the same fact, not a competing source), and a **Publish** button calling `POST /api/forms/:id/publish`. `duplicateStrategy` editing is **not exposed by any Phase 1b endpoint today** — but note it does **not** block the Duplicate Reviews tab: `FormDefinition.publishState.duplicateStrategy` already defaults to `"review_queue"` in the schema itself (`FormDefinition.js`), and `formController.createForm` doesn't override `publishState` at all, so every form created via this UI is review-enabled from creation, with no code change needed. What's still missing is only the ability to later *switch* a form to `"allow_duplicates"` (`formController.updateForm` only passes `{layout, theme, title}` through to `saveDraft`, which itself only touches those three fields). **Flag, don't invent**: defer duplicate-strategy *editing* to a later backend addition — the default already makes the Duplicate Reviews tab reachable without it.
 
-### 3.4 Tab: Builder (placeholder first, real build last — per your build order)
+### 3.4 Builder — moved out of this page entirely (see §1.2 amendment)
 
-Initial placeholder: render `form.layout` read-only (or an explicit "Builder coming soon" message) so the tab exists and is navigable, without pretending it does more than it does. The real drag-and-drop builder is explicitly the last, largest piece of the build order you specified — this document does not design its internals yet (no FieldsPanel/Canvas/PropertiesPanel component shapes here), since that's future work, not something to invent ahead of need.
+No longer a tab here. Builder lives at its own route, `/forms/:id/builder` (`FormBuilderPage.jsx`), reached from this page's Overview tab via "Continue Editing" (a `navigate()` call, not `setActiveTab`). Its internals (FieldsPanel/Canvas/PropertiesPanel) are still not designed in this document — that remains future work, scoped separately when Builder itself is built, not invented ahead of need here.
 
 ### 3.5 Tab: Submissions (`SubmissionsTab`)
 
@@ -289,10 +291,10 @@ frontend/src/
       SubmissionsTab.jsx            (NEW)
       DuplicateReviewsTab.jsx       (NEW)
       FormSettingsTab.jsx           (NEW)
-      BuilderTab.jsx                (NEW — placeholder first)
   pages/
     FormDetailPage.jsx              (NEW — copies CompanyProfilePage.jsx's tab-container structure)
-  App.jsx                           (MODIFIED — one new route: /forms/:id)
+    FormBuilderPage.jsx             (NEW — dedicated full-width route, NOT a tab; see §1.2 amendment)
+  App.jsx                           (MODIFIED — two new routes: /forms/:id and /forms/:id/builder)
   pages/Settings.jsx                (MODIFIED — one new settingsItems entry)
   pages/Companies.jsx               (MODIFIED — one new "Forms" button)
   pages/Contacts.jsx                (MODIFIED — one new "Forms" button)
