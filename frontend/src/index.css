@@ -1,0 +1,326 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap');
+
+/* Keep your existing CSS exactly as-is */
+@import "tailwindcss";
+
+::-webkit-scrollbar {
+    display: none;
+}
+
+/* Custom scrollbar styles */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 8px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}
+
+/* Smooth scrolling */
+.overflow-x-auto {
+  scroll-behavior: smooth;
+}
+
+/* Prevent text selection during drag */
+.cursor-grabbing * {
+  user-select: none;
+}
+
+/* === Font Faces === */
+@font-face {
+  font-family: 'SF Pro';
+  src: url('/SF-Pro-Display-Medium.woff') format('woff');
+  font-weight: 500;
+  font-style: normal;
+}
+
+/* === Global font setup (optional) === */
+@theme{
+  --font-sf: 'SF Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-inter: 'Inter', sans-serif;
+  --font-space: 'Space Grotesk', sans-serif;
+}
+
+body{
+  font-family: var(--font-inter);
+  font-weight: 500;
+}
+
+label{
+  font-family: var(--font-sf);
+
+}
+
+button{
+  font-family: var(--font-sf);
+
+}
+
+h1{
+  font-family: var(--font-sf);
+  font-weight: 500;
+}
+
+h6{
+  font-family: var(--font-space);
+}
+@theme {
+  --primary-color: linear-gradient(190deg, #7E7AE8 0%, #0033FF 50%, #7E7AE8 100%);    /* your secondary color */
+  --primary-hover: #3C38BD;      
+  --secondary-color: #585BEB;  
+  --secondary-hover: #274BA3;      
+}
+
+/* Primary button */
+.btn-primary {
+  background-image: var(--primary-color);
+  color: white;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+  color:white
+  
+}
+
+/* Secondary button */
+.btn-secondary {
+  background-color: var(--secondary-color);
+  color: white;
+  cursor: pointer;
+   
+}
+
+.btn-secondary:hover {
+  background-color: var(--secondary-hover);
+}
+
+@keyframes spin-smooth {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-smooth {
+  animation: spin-smooth 1.8s linear infinite;
+}
+
+
+@theme {
+  --primary-color: linear-gradient(190deg, #7E7AE8 0%, #0033FF 50%, #7E7AE8 100%);    /* your secondary color */
+  --primary-hover: #3C38BD;      
+  --secondary-color: #585BEB;  
+  --secondary-hover: #274BA3;      
+}
+
+/* Primary button */
+.btn-primary {
+  background-image: var(--primary-color);
+  color: white;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+  color:white
+  
+}
+
+/* Secondary button */
+.btn-secondary {
+  background-color: var(--secondary-color);
+  color: white;
+  cursor: pointer;
+   
+}
+
+.btn-secondary:hover {
+  background-color: var(--secondary-hover);
+}
+
+@keyframes spin-smooth {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-smooth {
+  animation: spin-smooth 1.8s linear infinite;
+}
+
+
+@theme {
+  --primary-color: linear-gradient(190deg, #7E7AE8 0%, #0033FF 50%, #7E7AE8 100%);    /* your secondary color */
+  --primary-hover: #3C38BD;      
+  --secondary-color: #585BEB;  
+  --secondary-hover: #274BA3;      
+}
+
+/* Primary button */
+.btn-primary {
+  background-image: var(--primary-color);
+  color: white;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+  color:white
+  
+}
+
+/* Secondary button */
+.btn-secondary {
+  background-color: var(--secondary-color);
+  color: white;
+  cursor: pointer;
+   
+}
+
+.btn-secondary:hover {
+  background-color: var(--secondary-hover);
+}
+
+@keyframes spin-smooth {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-smooth {
+  animation: spin-smooth 1.8s linear infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s ease-out;
+}
+
+.animate-spin-smooth {
+  animation: spin 1.8s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.shake {
+  animation: shakeCycle 2.2s ease-in-out infinite;
+}
+
+@keyframes shakeCycle {
+  /* 0–80% = shaking (≈2 seconds) */
+  0%   { transform: rotate(0deg); }
+  10%  { transform: rotate(-10deg); }
+  20%  { transform: rotate(10deg); }
+  30%  { transform: rotate(-6deg); }
+  40%  { transform: rotate(6deg); }
+  50%  { transform: rotate(10deg); }
+  60%  { transform: rotate(-10deg); }
+  70%  { transform: rotate(6deg); }
+  80%  { transform: rotate(0deg); }
+
+  /* 80–100% = pause (no movement) */
+  80.1% { transform: rotate(0deg); }
+  100%  { transform: rotate(0deg); }
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Subtle pulse animation for trial badge */
+@keyframes subtle-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0);
+  }
+}
+
+.animate-subtle-pulse {
+  animation: subtle-pulse 3s ease-in-out infinite;
+}
+
+/* Slow spin animation for clock icon */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+/* Add group class support for hover effects */
+.group:hover .group-hover\:translate-x-1 {
+  transform: translateX(0.25rem);
+}
+
+/* Progress bar hatching texture */
+.bg-hatched {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 10px,
+    rgba(0, 0, 0, 0.03) 10px,
+    rgba(0, 0, 0, 0.03) 20px
+  );
+}
