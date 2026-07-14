@@ -132,6 +132,7 @@ function UserManagement() {
     "Emails",
     "Quotations",
     "Delivery-Challans",
+    "Forms",
   ];
 
   const getInitialPermissions = (user) => {

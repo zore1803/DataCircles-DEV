@@ -38,6 +38,7 @@ const planConfigSchema = new mongoose.Schema({
         purchases: { read: false, write: false, limit: 0 }, // also covers purchase orders, by design
         emails: { read: false, write: false, limit: 0 },
         folders: { read: false, write: false }, // NO limit field — Folder model has no organization field to count against
+        forms: { read: false, write: false, limit: 0 }, // registered as a first-class plan-gated module; supersedes the legacy top-level `websiteForms` display field (left in place, unused by restrictByPlan — see restrictByPlan.js)
       },
       rottenDeals: false,
       advancedReports: false,
