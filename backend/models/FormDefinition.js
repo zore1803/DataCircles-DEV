@@ -50,6 +50,9 @@ const elementSchema = new Schema(
 
     // type: "heading" | "paragraph"
     text: String,
+    fontSize: { type: String, enum: ["small", "normal", "large", "xlarge"] },
+    fontWeight: { type: String, enum: ["normal", "bold"] },
+    textAlign: { type: String, enum: ["left", "center", "right"] },
 
     // type: "spacer"
     height: Number,
