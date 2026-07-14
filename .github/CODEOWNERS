@@ -4,79 +4,78 @@
 # merged (once branch protection's "Require review from Code Owners" is enabled — see
 # docs/ONBOARDING.md). Last matching pattern wins, same as .gitignore semantics.
 #
-# Replace @owner-username below with the actual GitHub username before pushing this repo.
 # Anything NOT listed here has no owner — free to work on without special review requirements.
 
 # =============================================================================
 # BILLING — architectural subsystem. Do not modify without discussing first.
 # =============================================================================
-/backend/controllers/subscriptionController.js   @owner-username
-/backend/utils/addonManagement.js                @owner-username
-/backend/utils/pricingEngine.js                  @owner-username
-/backend/utils/modifierResolver.js               @owner-username
-/backend/utils/billingEvents.js                  @owner-username
-/backend/models/Subscription.js                  @owner-username
-/backend/models/PlanAddon.js                      @owner-username
-/backend/models/PlanConfig.js                     @owner-username
-/backend/models/Coupon.js                         @owner-username
-/backend/models/BillingEvent.js                   @owner-username
-/backend/models/Referral*                         @owner-username
-/backend/models/Reward*                           @owner-username
-/backend/routes/subscription.js                   @owner-username
-/backend/routes/superAdminRoutes.js               @owner-username
-/backend/middlewares/subscriptionGate.js          @owner-username
-/backend/middlewares/restrictByPlan.js            @owner-username
+/backend/controllers/subscriptionController.js   @Chaityad97
+/backend/utils/addonManagement.js                @Chaityad97
+/backend/utils/pricingEngine.js                  @Chaityad97
+/backend/utils/modifierResolver.js               @Chaityad97
+/backend/utils/billingEvents.js                  @Chaityad97
+/backend/models/Subscription.js                  @Chaityad97
+/backend/models/PlanAddon.js                      @Chaityad97
+/backend/models/PlanConfig.js                     @Chaityad97
+/backend/models/Coupon.js                         @Chaityad97
+/backend/models/BillingEvent.js                   @Chaityad97
+/backend/models/Referral*                         @Chaityad97
+/backend/models/Reward*                           @Chaityad97
+/backend/routes/subscription.js                   @Chaityad97
+/backend/routes/superAdminRoutes.js               @Chaityad97
+/backend/middlewares/subscriptionGate.js          @Chaityad97
+/backend/middlewares/restrictByPlan.js            @Chaityad97
 
-/frontend/src/components/settings/SubscriptionPlans.jsx      @owner-username
-/frontend/src/components/subscription/PlanCard.jsx           @owner-username
-/frontend/src/components/subscription/CheckoutSummaryModal.jsx @owner-username
-/frontend/src/components/settings/Billing*                   @owner-username
-/frontend/src/components/settings/Referrals.jsx               @owner-username
-/frontend/src/contexts/SubscriptionContext.jsx                @owner-username
-/frontend/src/services/subscriptionApi.js                     @owner-username
-/frontend/src/services/couponApi.js                           @owner-username
-/frontend/src/services/referralAdminApi.js                    @owner-username
+/frontend/src/components/settings/SubscriptionPlans.jsx      @Chaityad97
+/frontend/src/components/subscription/PlanCard.jsx           @Chaityad97
+/frontend/src/components/subscription/CheckoutSummaryModal.jsx @Chaityad97
+/frontend/src/components/settings/Billing*                   @Chaityad97
+/frontend/src/components/settings/Referrals.jsx               @Chaityad97
+/frontend/src/contexts/SubscriptionContext.jsx                @Chaityad97
+/frontend/src/services/subscriptionApi.js                     @Chaityad97
+/frontend/src/services/couponApi.js                           @Chaityad97
+/frontend/src/services/referralAdminApi.js                    @Chaityad97
 
 # =============================================================================
 # FORMS — architectural subsystem. Do not modify without discussing first.
 # =============================================================================
 
 # Architecture docs (root-level today)
-/FORMS_ARCHITECTURE.md                    @owner-username
-/FORMS_SCHEMA.md                          @owner-username
-/FORMS_DOMAIN_MODEL.md                    @owner-username
-/FORMS_IMPLEMENTATION.md                  @owner-username
-/FORMS_SCHEMA_IMPLEMENTATION_NOTES.md     @owner-username
+/FORMS_ARCHITECTURE.md                    @Chaityad97
+/FORMS_SCHEMA.md                          @Chaityad97
+/FORMS_DOMAIN_MODEL.md                    @Chaityad97
+/FORMS_IMPLEMENTATION.md                  @Chaityad97
+/FORMS_SCHEMA_IMPLEMENTATION_NOTES.md     @Chaityad97
 
 # Backend — Forms code is currently FLAT (no /forms/ subfolder yet). Listed by actual file today;
 # add new Forms files here as they're created rather than assuming a subfolder that doesn't exist.
-/backend/models/FormDefinition.js           @owner-username
-/backend/models/FormVersion.js              @owner-username
-/backend/models/FormSubmission.js           @owner-username
-/backend/models/SubmissionEvent.js          @owner-username
-/backend/models/DuplicateReview.js          @owner-username
-/backend/services/formPublishService.js     @owner-username
-/backend/services/formVersionService.js     @owner-username
-/backend/services/submissionService.js      @owner-username
-/backend/services/duplicateDetectionService.js   @owner-username
-/backend/services/duplicateResolutionService.js  @owner-username
-/backend/utils/systemFields.js               @owner-username
-/backend/controllers/publicFormController.js @owner-username
-/backend/routes/publicFormRoutes.js           @owner-username
+/backend/models/FormDefinition.js           @Chaityad97
+/backend/models/FormVersion.js              @Chaityad97
+/backend/models/FormSubmission.js           @Chaityad97
+/backend/models/SubmissionEvent.js          @Chaityad97
+/backend/models/DuplicateReview.js          @Chaityad97
+/backend/services/formPublishService.js     @Chaityad97
+/backend/services/formVersionService.js     @Chaityad97
+/backend/services/submissionService.js      @Chaityad97
+/backend/services/duplicateDetectionService.js   @Chaityad97
+/backend/services/duplicateResolutionService.js  @Chaityad97
+/backend/utils/systemFields.js               @Chaityad97
+/backend/controllers/publicFormController.js @Chaityad97
+/backend/routes/publicFormRoutes.js           @Chaityad97
 
 # Reserved — Forms backend/controllers/forms/**, backend/routes/forms/**, backend/models/forms/**,
 # and any future /forms/ subfolder do not exist yet. Kept here so ownership auto-applies the moment
 # they're created; harmless no-op glob until then.
-/backend/services/forms/**    @owner-username
-/backend/controllers/forms/** @owner-username
-/backend/routes/forms/**      @owner-username
-/backend/models/forms/**      @owner-username
+/backend/services/forms/**    @Chaityad97
+/backend/controllers/forms/** @Chaityad97
+/backend/routes/forms/**      @Chaityad97
+/backend/models/forms/**      @Chaityad97
 
 # Reserved — Forms Builder/Public Renderer frontend does NOT exist yet (no builder has been built).
 # Predicted structure per FORMS_ARCHITECTURE.md §2.6; update once the real paths land.
-/frontend/src/pages/forms/**       @owner-username
-/frontend/src/components/forms/**  @owner-username
-/frontend/forms/**                 @owner-username
+/frontend/src/pages/forms/**       @Chaityad97
+/frontend/src/components/forms/**  @Chaityad97
+/frontend/forms/**                 @Chaityad97
 
 # =============================================================================
 # EVERYTHING ELSE — no owner. CRM screens, Dashboard, Contacts/Companies/Deals/Tasks/Products/
