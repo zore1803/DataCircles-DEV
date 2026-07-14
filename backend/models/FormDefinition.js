@@ -44,6 +44,7 @@ const elementSchema = new Schema(
     targetModule: { type: String, enum: ["Contact", "Company", "Vendor"] },
     required: Boolean,
     helpText: String,
+    placeholder: String,
     defaultValue: Schema.Types.Mixed,
     validationOverrides: validationOverridesSchema,
 

@@ -161,8 +161,8 @@ Grounded in `FORMS_FRONTEND_ARCHITECTURE.md`'s build order (§12). Update this l
 - ✅ Contact → Forms button
 - ✅ Vendor → Forms button
 - ✅ Forms List page (table, empty/loading states, permission gate, filters, pagination, Create Form modal) — `submissionCount` added to `formController.listForms` (small additive backend gap, needed for this screen's own column)
-- ⬜ Form Detail shell (`/forms/:id`, tabs: Overview/Builder/Submissions/Duplicate Reviews/Settings)
-- ⬜ Builder (last, largest — placeholder until then)
+- ✅ Form Detail shell (`/forms/:id`, tabs: Overview/Submissions/Duplicate Reviews/Settings — Builder moved out to its own route, see amendment in FORMS_FRONTEND_ARCHITECTURE.md §1.2)
+- ✅ Builder (`/forms/:id/builder`) — Canvas + drag/drop (@dnd-kit) + Properties panel + Save (PATCH) + Publish (POST). Verified 13/13 end-to-end: create → save layout → reload (survives refresh) → publish → frozen version has targetModule derived correctly. Cross-module guard built into the FieldsPanel (system Company fields only, no custom); image element and full public-renderer-backed Preview explicitly deferred (see file header comments)
 - ⬜ Submission Inbox (Submissions tab, real data)
 - ⬜ Submission Details (drawer)
 - ⬜ Duplicate Review Center (Duplicate Reviews tab, real data) — needs the flagged `formId` filter on `GET /api/duplicate-reviews` first
