@@ -53,10 +53,25 @@ async function listForms(req, res) {
       FormDefinition.countDocuments(query),
     ]);
 
+    // One aggregation for the whole page, not N+1 — flagged in FORMS_FRONTEND_ARCHITECTURE.md §2.2
+    // as a small additive gap for the Forms List table's Submissions column.
+    const formIds = forms.map((f) => f._id);
+    const counts = formIds.length
+      ? await FormSubmission.aggregate([
+          { $match: { formDefinition: { $in: formIds } } },
+          { $group: { _id: "$formDefinition", count: { $sum: 1 } } },
+        ])
+      : [];
+    const countByFormId = new Map(counts.map((c) => [String(c._id), c.count]));
+    const formsWithCounts = forms.map((f) => ({
+      ...f.toObject(),
+      submissionCount: countByFormId.get(String(f._id)) || 0,
+    }));
+
     const totalPages = Math.ceil(totalCount / limit);
 
     res.json({
-      forms,
+      forms: formsWithCounts,
       pagination: {
         currentPage: page,
         totalPages,
