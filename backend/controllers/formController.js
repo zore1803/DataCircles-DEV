@@ -21,6 +21,7 @@ const duplicateResolutionService = require("../services/duplicateResolutionServi
 // 500 in the caller's catch block.
 function classifyServiceError(err) {
   const msg = err.message || "";
+  if (/already been resolved/i.test(msg)) return 409;
   if (/not found/i.test(msg)) return 404;
   if (/empty layout|invalid form definition|is not permitted|Unsupported module/i.test(msg)) return 400;
   return null; // unrecognized — caller decides (500)
