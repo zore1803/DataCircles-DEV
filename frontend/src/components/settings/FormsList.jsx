@@ -1,0 +1,364 @@
+// components/settings/FormsList.jsx
+// Forms List — Build order step 1, per FORMS_FRONTEND_ARCHITECTURE.md §2. Renders inside the
+// Settings shell at /settings/forms (settingsItems entry in Settings.jsx). Table via TanStack,
+// copying Companies.jsx's useReactTable usage exactly (§2.1); empty/loading states copy
+// Companies.jsx's ternary exactly (§2.4); permission check copies Contacts.jsx's exact per-page
+// pattern (§2.6). No shared Table/Modal/Badge component introduced — see the architecture doc's
+// "copy, don't extract" decision.
+import React, { useEffect, useState, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import API from "../../services/api";
+import toast from "react-hot-toast";
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+  createColumnHelper,
+} from "@tanstack/react-table";
+import { Plus, X, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+
+const columnHelper = createColumnHelper();
+
+// Copies DealQuickView.jsx / DealDetail.jsx's StatusBadge shape exactly (architecture doc §6) — a
+// third independent copy of this pattern, deliberately not extracted into a shared component (see
+// FORMS_IMPLEMENTATION.md's flagged-debt note).
+const STATUS_CONFIG = {
+  draft: { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200" },
+  published: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200" },
+  paused: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
+  archived: { bg: "bg-gray-50", text: "text-gray-500", border: "border-gray-200" },
+};
+
+const FormStatusBadge = ({ status }) => {
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.draft;
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+      {status}
+    </span>
+  );
+};
+
+const MODULE_OPTIONS = ["Contact", "Company", "Vendor"];
+
+function CreateFormModal({ onClose, onCreated }) {
+  const [title, setTitle] = useState("");
+  const [module, setModule] = useState("Contact");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleCreate = async () => {
+    if (!title.trim()) {
+      toast.error("Title is required");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await API.post("/forms", { title: title.trim(), module });
+      toast.success("Form created");
+      onCreated(res.data.form);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to create form");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full flex flex-col animate-in fade-in zoom-in-95 duration-200">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 rounded-t-xl">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-100 rounded-lg">
+              <FileText className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">New Form</h2>
+              <p className="text-xs text-gray-500">Set a title and module to get started</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="p-6 flex flex-col gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Contact Us"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Module</label>
+            <select
+              value={module}
+              onChange={(e) => setModule(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {MODULE_OPTIONS.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+            {/* Permanent-choice note per FORMS_FRONTEND_ARCHITECTURE.md §2.7 — module is immutable
+                after creation (routing/schemaHash key off it), so this must be stated up front. */}
+            <p className="text-xs text-gray-500 mt-1">Module can't be changed after creating this form.</p>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleCreate}
+            disabled={submitting}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors"
+          >
+            {submitting ? "Creating..." : "Create"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const FormsList = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const [forms, setForms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [permission, setPermission] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [search, setSearch] = useState("");
+  const [moduleFilter, setModuleFilter] = useState(searchParams.get("module") || "");
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 0,
+    totalCount: 0,
+    limit: 20,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
+
+  // Permission gating — copies Contacts.jsx's exact per-page pattern (architecture doc §2.6).
+  useEffect(() => {
+    const fetchPermission = async () => {
+      try {
+        const res = await API.get("/auth/me");
+        const p = res.data.user?.permissions?.find((p) => p.name.toLowerCase() === "forms");
+        setPermission(p?.permission || "no");
+      } catch {
+        console.error("Failed to fetch user permissions");
+      }
+    };
+    fetchPermission();
+  }, []);
+
+  const fetchForms = useCallback(async (page = 1) => {
+    try {
+      setLoading(true);
+      const params = { page, limit: pagination.limit };
+      if (search.trim()) params.search = search.trim();
+      if (moduleFilter) params.module = moduleFilter;
+
+      const res = await API.get("/forms", { params });
+      setForms(res.data.forms || []);
+      setPagination((prev) => ({ ...prev, ...res.data.pagination }));
+    } catch (err) {
+      console.error("Error fetching forms:", err);
+      if (err.response?.status === 403) {
+        toast.error(err.response.data?.error || "Access denied");
+      } else {
+        toast.error("Failed to load forms");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [search, moduleFilter, pagination.limit]);
+
+  useEffect(() => {
+    fetchForms(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, moduleFilter]);
+
+  const handlePageChange = (page) => {
+    if (page < 1 || page > pagination.totalPages) return;
+    fetchForms(page);
+  };
+
+  const columns = [
+    columnHelper.accessor("title", {
+      header: "Title",
+      cell: (info) => (
+        <button
+          onClick={() => navigate(`/forms/${info.row.original._id}`)}
+          className="text-blue-600 hover:text-blue-700 font-medium hover:underline text-left"
+        >
+          {info.getValue()}
+        </button>
+      ),
+    }),
+    columnHelper.accessor("module", {
+      header: "Module",
+      // Plain text, not the Badge pattern — Module is a fixed, non-transitioning classification,
+      // unlike Status below (architecture doc §2.2).
+      cell: (info) => <span className="text-gray-700">{info.getValue()}</span>,
+    }),
+    columnHelper.accessor("status", {
+      header: "Status",
+      cell: (info) => <FormStatusBadge status={info.getValue()} />,
+    }),
+    columnHelper.accessor("submissionCount", {
+      header: "Submissions",
+      cell: (info) => <span className="text-gray-700">{info.getValue() ?? 0}</span>,
+    }),
+    columnHelper.accessor("updatedAt", {
+      header: "Updated",
+      cell: (info) => (
+        <span className="text-gray-500 text-sm">
+          {info.getValue() ? new Date(info.getValue()).toLocaleDateString() : "—"}
+        </span>
+      ),
+    }),
+    columnHelper.display({
+      id: "actions",
+      header: "Actions",
+      cell: (info) => (
+        <button
+          onClick={() => navigate(`/forms/${info.row.original._id}`)}
+          className="text-sm font-medium text-blue-600 hover:text-blue-700"
+        >
+          Open
+        </button>
+      ),
+    }),
+  ];
+
+  const table = useReactTable({
+    data: forms,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4 gap-3">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search forms..."
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <select
+          value={moduleFilter}
+          onChange={(e) => setModuleFilter(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">All Modules</option>
+          {MODULE_OPTIONS.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+        <div className="flex-1" />
+        {permission !== "readonly" ? (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New Form
+          </button>
+        ) : null}
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-gray-100">
+        <table className="min-w-full border-collapse">
+          <thead className="bg-gray-50">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <th
+                    key={header.id}
+                    className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                  >
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                  </th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+          <tbody className="divide-y divide-gray-100 bg-white">
+            {loading && forms.length === 0 ? (
+              <tr>
+                <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center">
+                  <p>Loading forms...</p>
+                </td>
+              </tr>
+            ) : forms.length === 0 ? (
+              <tr>
+                <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500">
+                  <p className="font-medium">No forms found</p>
+                </td>
+              </tr>
+            ) : (
+              table.getRowModel().rows.map((row) => (
+                <tr key={row.id} className="hover:bg-gray-50">
+                  {row.getVisibleCells().map((cell) => (
+                    <td key={cell.id} className="px-6 py-4 whitespace-nowrap text-sm">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <span className="text-sm text-gray-500">
+            Page {pagination.currentPage} of {pagination.totalPages} ({pagination.totalCount} total)
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handlePageChange(pagination.currentPage - 1)}
+              disabled={!pagination.hasPrevPage}
+              className="p-2 border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => handlePageChange(pagination.currentPage + 1)}
+              disabled={!pagination.hasNextPage}
+              className="p-2 border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showCreateModal && (
+        <CreateFormModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={(form) => {
+            setShowCreateModal(false);
+            navigate(`/forms/${form._id}`);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default FormsList;

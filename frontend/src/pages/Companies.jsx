@@ -1454,6 +1454,16 @@ function Companies() {
               variant="minimal"
             />
 
+            {/* Per-module Forms entry point — v1-simple, navigates to Forms List pre-filtered to
+                this module. FORMS_FRONTEND_ARCHITECTURE.md §4. */}
+            <Link
+              to="/settings/forms?module=Company"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:inline">Forms</span>
+            </Link>
+
             <button
               onClick={() => setShowColumnSettings(true)}
               className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors"
