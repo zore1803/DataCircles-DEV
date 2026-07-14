@@ -63,9 +63,23 @@ async function listForms(req, res) {
         ])
       : [];
     const countByFormId = new Map(counts.map((c) => [String(c._id), c.count]));
+
+    // Published version number per form, for the List table's Version column — a small additive
+    // lookup (one query for the whole page), same reasoning as submissionCount above.
+    const activeVersionIds = forms
+      .map((f) => f.publishState?.activeFormVersionId)
+      .filter(Boolean);
+    const versions = activeVersionIds.length
+      ? await FormVersion.find({ _id: { $in: activeVersionIds } }, { versionNumber: 1 })
+      : [];
+    const versionNumberById = new Map(versions.map((v) => [String(v._id), v.versionNumber]));
+
     const formsWithCounts = forms.map((f) => ({
       ...f.toObject(),
       submissionCount: countByFormId.get(String(f._id)) || 0,
+      versionNumber: f.publishState?.activeFormVersionId
+        ? versionNumberById.get(String(f.publishState.activeFormVersionId)) ?? null
+        : null,
     }));
 
     const totalPages = Math.ceil(totalCount / limit);
@@ -229,8 +243,13 @@ async function listSubmissions(req, res) {
 }
 
 /**
- * GET /api/duplicate-reviews?page=&limit=&module=&decision=
+ * GET /api/duplicate-reviews?page=&limit=&module=&decision=&formId=
  * Defaults to decision=pending (the Review Center inbox's primary view) unless explicitly overridden.
+ * `formId` scopes to one form's reviews — DuplicateReview has no direct FormDefinition reference
+ * (it's deliberately not Forms-specific in shape, per FORMS_DOMAIN_MODEL.md §3/D6), so this joins
+ * through FormSubmission.formDefinition first. Added for the Form Detail Overview tab's
+ * pending-review count and the (future) Duplicate Reviews tab — flagged as a small additive gap in
+ * FORMS_FRONTEND_ARCHITECTURE.md §3.6/§9.
  */
 async function listDuplicateReviews(req, res) {
   try {
@@ -241,6 +260,14 @@ async function listDuplicateReviews(req, res) {
     const query = { organization: req.user.organization };
     query.decision = req.query.decision || "pending";
     if (req.query.module) query.module = req.query.module;
+
+    if (req.query.formId) {
+      const submissionIds = await FormSubmission.find(
+        { formDefinition: req.query.formId, organization: req.user.organization },
+        { _id: 1 }
+      );
+      query.formSubmission = { $in: submissionIds.map((s) => s._id) };
+    }
 
     const [reviews, totalCount] = await Promise.all([
       DuplicateReview.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),

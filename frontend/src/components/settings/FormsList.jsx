@@ -15,28 +15,57 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
-import { Plus, X, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { Plus, X, ChevronLeft, ChevronRight, FileText, User, Building2, Truck } from "lucide-react";
 
 const columnHelper = createColumnHelper();
 
 // Copies DealQuickView.jsx / DealDetail.jsx's StatusBadge shape exactly (architecture doc §6) — a
 // third independent copy of this pattern, deliberately not extracted into a shared component (see
-// FORMS_IMPLEMENTATION.md's flagged-debt note).
+// FORMS_IMPLEMENTATION.md's flagged-debt note). Dot + label, so status reads at a glance across a
+// long list rather than as another line of plain text.
 const STATUS_CONFIG = {
-  draft: { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200" },
-  published: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200" },
-  paused: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
-  archived: { bg: "bg-gray-50", text: "text-gray-500", border: "border-gray-200" },
+  draft: { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200", dot: "bg-gray-400" },
+  published: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", dot: "bg-green-500" },
+  paused: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
+  archived: { bg: "bg-gray-50", text: "text-gray-500", border: "border-gray-200", dot: "bg-gray-400" },
 };
 
 const FormStatusBadge = ({ status }) => {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.draft;
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-      {status}
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+      {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
 };
+
+const MODULE_ICONS = { Contact: User, Company: Building2, Vendor: Truck };
+const ModuleTag = ({ module }) => {
+  const Icon = MODULE_ICONS[module] || FileText;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-gray-700">
+      <Icon className="w-3.5 h-3.5 text-gray-400" />
+      {module}
+    </span>
+  );
+};
+
+// Small inline relative-time helper — no shared date util exists in this codebase (confirmed in
+// the frontend audit), so this stays local rather than becoming a new shared abstraction.
+function timeAgo(dateString) {
+  if (!dateString) return "—";
+  const diffMs = Date.now() - new Date(dateString).getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateString).toLocaleDateString();
+}
 
 const MODULE_OPTIONS = ["Contact", "Company", "Vendor"];
 
@@ -135,6 +164,7 @@ const FormsList = () => {
 
   const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [permission, setPermission] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [search, setSearch] = useState("");
@@ -165,6 +195,7 @@ const FormsList = () => {
   const fetchForms = useCallback(async (page = 1) => {
     try {
       setLoading(true);
+      setError(null);
       const params = { page, limit: pagination.limit };
       if (search.trim()) params.search = search.trim();
       if (moduleFilter) params.module = moduleFilter;
@@ -174,11 +205,14 @@ const FormsList = () => {
       setPagination((prev) => ({ ...prev, ...res.data.pagination }));
     } catch (err) {
       console.error("Error fetching forms:", err);
-      if (err.response?.status === 403) {
-        toast.error(err.response.data?.error || "Access denied");
-      } else {
-        toast.error("Failed to load forms");
-      }
+      // Distinct error state — a permission/network failure must never look identical to a
+      // genuinely empty list. Previously this only surfaced as a toast, which is easy to miss;
+      // now the table body itself shows the failure until the user retries.
+      const message = err.response?.status === 403
+        ? err.response.data?.error || "Access denied"
+        : "Failed to load forms";
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -197,20 +231,22 @@ const FormsList = () => {
   const columns = [
     columnHelper.accessor("title", {
       header: "Title",
+      // No inner click handler — the whole row is clickable (see tbody render below), matching
+      // Companies.jsx-style rows being the primary way in, not a separate link inside a cell.
       cell: (info) => (
-        <button
-          onClick={() => navigate(`/forms/${info.row.original._id}`)}
-          className="text-blue-600 hover:text-blue-700 font-medium hover:underline text-left"
-        >
-          {info.getValue()}
-        </button>
+        <div className="flex flex-col">
+          <span className="font-semibold text-gray-900">{info.getValue()}</span>
+          {info.row.original.versionNumber != null && (
+            <span className="text-xs text-gray-400">Version {info.row.original.versionNumber}</span>
+          )}
+        </div>
       ),
     }),
     columnHelper.accessor("module", {
       header: "Module",
-      // Plain text, not the Badge pattern — Module is a fixed, non-transitioning classification,
+      // Icon + label, not the Badge pattern — Module is a fixed, non-transitioning classification,
       // unlike Status below (architecture doc §2.2).
-      cell: (info) => <span className="text-gray-700">{info.getValue()}</span>,
+      cell: (info) => <ModuleTag module={info.getValue()} />,
     }),
     columnHelper.accessor("status", {
       header: "Status",
@@ -218,27 +254,20 @@ const FormsList = () => {
     }),
     columnHelper.accessor("submissionCount", {
       header: "Submissions",
-      cell: (info) => <span className="text-gray-700">{info.getValue() ?? 0}</span>,
+      cell: (info) => <span className="text-gray-700 font-medium">{info.getValue() ?? 0}</span>,
     }),
     columnHelper.accessor("updatedAt", {
       header: "Updated",
-      cell: (info) => (
-        <span className="text-gray-500 text-sm">
-          {info.getValue() ? new Date(info.getValue()).toLocaleDateString() : "—"}
-        </span>
-      ),
+      cell: (info) => <span className="text-gray-500 text-sm">{timeAgo(info.getValue())}</span>,
     }),
     columnHelper.display({
-      id: "actions",
-      header: "Actions",
-      cell: (info) => (
-        <button
-          onClick={() => navigate(`/forms/${info.row.original._id}`)}
-          className="text-sm font-medium text-blue-600 hover:text-blue-700"
-        >
-          Open
-        </button>
-      ),
+      id: "chevron",
+      header: "",
+      // Deliberately not a "⋮" actions menu — Duplicate/Archive/Delete have no backend endpoint
+      // yet (explicitly deferred, FORMS_FRONTEND_ARCHITECTURE.md §9). A dropdown offering options
+      // that don't work would repeat the exact dead-link mistake already caught and fixed on the
+      // Form Detail page's public-URL button. The whole row is clickable instead (see tbody).
+      cell: () => <ChevronRight className="w-4 h-4 text-gray-300" />,
     }),
   ];
 
@@ -270,9 +299,12 @@ const FormsList = () => {
         </select>
         <div className="flex-1" />
         {permission !== "readonly" ? (
+          // Matches Companies.jsx's "New Company" primary CTA exactly (#0C4FCD brand blue,
+          // px-4 py-2.5) — this is the reason people come to this page, so it should carry the
+          // same visual weight as the equivalent action on every other CRM module.
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0C4FCD] text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none cursor-pointer shadow-sm transition-colors"
           >
             <Plus className="w-4 h-4" />
             New Form
@@ -303,6 +335,18 @@ const FormsList = () => {
                   <p>Loading forms...</p>
                 </td>
               </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center">
+                  <p className="font-medium text-red-600">{error}</p>
+                  <button
+                    onClick={() => fetchForms(pagination.currentPage)}
+                    className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Retry
+                  </button>
+                </td>
+              </tr>
             ) : forms.length === 0 ? (
               <tr>
                 <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500">
@@ -311,7 +355,11 @@ const FormsList = () => {
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50">
+                <tr
+                  key={row.id}
+                  onClick={() => navigate(`/forms/${row.original._id}`)}
+                  className="hover:bg-gray-50 cursor-pointer"
+                >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-6 py-4 whitespace-nowrap text-sm">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

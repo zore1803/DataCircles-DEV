@@ -252,7 +252,7 @@ const Settings = () => {
       id: "forms",
       icon: <FileText className="w-5 h-5" />,
       label: "Forms",
-      description: "Build lead-capture forms and review submissions",
+      description: "Build and manage how customers enter your CRM",
       color: "text-emerald-600",
       bgColor: "bg-emerald-50",
       borderColor: "border-emerald-200",
