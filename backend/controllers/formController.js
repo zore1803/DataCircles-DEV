@@ -321,6 +321,7 @@ async function listDuplicateReviews(req, res) {
     const query = { organization: req.user.organization };
     query.decision = req.query.decision || "pending";
     if (req.query.module) query.module = req.query.module;
+    if (req.query.formSubmission) query.formSubmission = req.query.formSubmission;
 
     if (req.query.formId) {
       const submissionIds = await FormSubmission.find(
