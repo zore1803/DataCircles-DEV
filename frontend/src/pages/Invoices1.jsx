@@ -34,13 +34,14 @@ import InvoiceStylePreview from "../components/invoice/InvoiceStylePreview";
 import PerformaInvoiceStylePreview from "../components/PerformaInvoice/PerformaInvoiceStylePreview";
 // import QuotationStylePreview from "../components/quotation/QuotationStylePreview";
 // import DeliveryChallanStylePreview from "../components/deliveryChallan/DeliveryChallanStylePreview";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import logo from "/DataCircles.png";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import VideoTutorialButton from "../components/VideoTutorialButton";
 import QuickBrandingModal from "../components/invoice/QuickBrandingModal";
 import { useLocation, useNavigate } from "react-router-dom";
+import AppToaster from "../components/AppToaster";
 
 const statusOptions = [
   "Draft",
@@ -1309,7 +1310,7 @@ const MergedInvoiceManager = () => {
   if (currentLoading && currentDocuments.length === 0) {
     return (
       <>
-        <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+        <AppToaster />
         <Shimmer />
       </>
     );
@@ -1329,7 +1330,7 @@ const MergedInvoiceManager = () => {
 
   return (
     <>
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
 
       {/* Video Tutorial Modal */}
       <VideoTutorialModal

@@ -17,9 +17,10 @@ import {
   Activity,
   Mail,
 } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import API, { configureAxios } from "../services/api";
 import { FaWhatsapp } from "react-icons/fa";
+import AppToaster from "../components/AppToaster";
 const Shimmer = () => (
   <div className="animate-pulse space-y-6">
     <div className="h-8 bg-gray-200 rounded w-1/4"></div>
@@ -159,7 +160,7 @@ const TicketDetailModal = ({ ticket, isOpen, onClose, onStatusUpdate }) => {
 
   return (
     <div className="fixed inset-0 z-[100001] overflow-y-auto">
-      <Toaster position="top-right" />
+      <AppToaster />
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/40 transition-opacity"

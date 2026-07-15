@@ -23,7 +23,8 @@ import {
 import VendorForm from "../vendor/VendorForm";
 import VendorPaymentForm from "../vendor/VendorPaymentForm";
 import PaymentPreview from "../vendor/venerPaymentPreview";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
+import AppToaster from "../AppToaster";
 
 const PaymentsTable = ({ payments, vendor }) => {
   const { id } = useParams();
@@ -230,7 +231,7 @@ const PaymentsTable = ({ payments, vendor }) => {
 
   return (
     <div className="space-y-6">
-      <Toaster position="top-right" />
+      <AppToaster />
 
       {/* Header */}
       <div className="flex items-center justify-between">

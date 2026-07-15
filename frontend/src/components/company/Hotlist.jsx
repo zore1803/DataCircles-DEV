@@ -7,8 +7,6 @@ import {
   Plus,
   Edit3,
   Trash2,
-  ChevronDown,
-  ChevronRight,
   X,
   Building2,
   MapPin,
@@ -17,8 +15,30 @@ import {
   Menu,
 } from "lucide-react";
 
+const FolderIcon = ({ className = "h-8 w-8" }) => (
+  <svg viewBox="0 0 40 34" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+    <defs>
+      <linearGradient id="folderBack" x1="20" y1="2" x2="20" y2="34" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#5BB1E0" />
+        <stop offset="0.35" stopColor="#0591DE" />
+      </linearGradient>
+      <linearGradient id="folderFront" x1="20" y1="10" x2="20" y2="32" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#73D7FF" />
+        <stop offset="1" stopColor="#6BCBF3" />
+      </linearGradient>
+    </defs>
+    <path
+      d="M4 6C4 4.34315 5.34315 3 7 3H14.5C15.5 3 16.4 3.4 17.2 4.1L19 5.7C19.8 6.4 20.7 6.8 21.7 6.8H33C34.6569 6.8 36 8.14315 36 9.8V28C36 29.6569 34.6569 31 33 31H7C5.34315 31 4 29.6569 4 28V6Z"
+      fill="url(#folderBack)"
+    />
+    <rect x="4" y="12" width="32" height="19" rx="4" fill="url(#folderFront)" />
+  </svg>
+);
+
 const Hotlist = () => {
   const [folders, setFolders] = useState([]);
+  const [folderSearchTerm, setFolderSearchTerm] = useState("");
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [editingFolder, setEditingFolder] = useState(null);
   const [editingName, setEditingName] = useState("");
@@ -102,6 +122,7 @@ const Hotlist = () => {
     try {
       await API.post("/company-folders", { name: newFolderName });
       setNewFolderName("");
+      setShowCreateFolder(false);
       toast.success("Folder created successfully", { id: loadingToast });
       fetchFolders();
     } catch (error) {
@@ -185,41 +206,51 @@ const Hotlist = () => {
     fetchFolders();
   }, []);
 
+  const visibleFolders = folders?.filter((folder) =>
+    folder.name.toLowerCase().includes(folderSearchTerm.trim().toLowerCase()),
+  );
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      {/* Header - Mobile Responsive */}
-      <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-4 sm:px-6 py-4 border-b border-gray-100">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
-            <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
-          </div>
+    <div className="mx-4 mt-6 space-y-4">
+      {/* Header Card */}
+      <div className="bg-white rounded-xl border border-gray-200 px-6 py-5">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
-              Company Hotlists
-            </h2>
-            <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">
-              Organize companies into custom folders
+            <h2 className="text-base font-semibold text-gray-900">Company Hotlists</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Organise your companies into custom folders
             </p>
           </div>
-        </div>
-      </div>
 
-      <div className="p-4 sm:p-6">
-        {/* Create New Folder - Mobile Responsive */}
-        <div className="bg-gray-50 rounded-lg p-4 sm:p-5 mb-4 sm:mb-6 border border-gray-200">
-          <div className="flex items-center gap-2 sm:gap-3 mb-3">
-            <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600" />
-            <h3 className="font-semibold text-gray-900 text-sm sm:text-base">
-              Create New Folder
-            </h3>
+          <div className="flex items-center gap-3">
+            <div className="relative w-[320px] max-w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                className="w-full h-10 pl-9 pr-4 border border-gray-200 rounded-full text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                placeholder="Search by companies by name, industry, or location..."
+                value={folderSearchTerm}
+                onChange={(e) => setFolderSearchTerm(e.target.value)}
+              />
+            </div>
+            <button
+              onClick={() => setShowCreateFolder((prev) => !prev)}
+              className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 transition-colors flex-shrink-0"
+            >
+              <Plus className="h-4 w-4" />
+              New Folder
+            </button>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+        </div>
+
+        {showCreateFolder && (
+          <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col sm:flex-row gap-3">
             <input
               className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm sm:text-base"
               placeholder="Enter folder name..."
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && createFolder()}
+              autoFocus
             />
             <button
               onClick={createFolder}
@@ -229,52 +260,43 @@ const Hotlist = () => {
               Create
             </button>
           </div>
-        </div>
+        )}
+      </div>
 
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
         {/* Folders List - Mobile Responsive */}
-        <div className="space-y-3 sm:space-y-4">
-          {folders?.map((folder) => (
-            <div
-              key={folder._id}
-              className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
-            >
-              {/* Folder Header - Mobile Responsive */}
-              <div className="bg-white p-3 sm:p-4">
-                <div className="flex justify-between items-center">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+          {visibleFolders?.map((folder) => (
+            <div key={folder._id} className={openFolderIds.includes(folder._id) ? "col-span-full" : ""}>
+              {/* Folder Tile */}
+              <div className="relative group">
+                <div className="absolute -top-1 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
-                    onClick={() => toggleFolder(folder._id)}
-                    className="flex items-center gap-2 sm:gap-3 text-left hover:text-blue-600 transition-colors group flex-1 min-w-0"
+                    onClick={() => startEdit(folder)}
+                    className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
                   >
-                    {openFolderIds.includes(folder._id) ? (
-                      <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 group-hover:text-blue-600 flex-shrink-0" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 group-hover:text-blue-600 flex-shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
-                        {folder.name}
-                      </h4>
-                      <p className="text-xs sm:text-sm text-gray-500">
-                        {folder.companies?.length || 0} companies
-                      </p>
-                    </div>
+                    <Edit3 className="h-3.5 w-3.5" />
                   </button>
-
-                  <div className="flex items-center gap-1 sm:gap-2 ml-2">
-                    <button
-                      onClick={() => startEdit(folder)}
-                      className="p-1.5 sm:p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                    >
-                      <Edit3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    </button>
-                    <button
-                      onClick={() => deleteFolder(folder._id)}
-                      className="p-1.5 sm:p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => deleteFolder(folder._id)}
+                    className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
+
+                <button
+                  onClick={() => toggleFolder(folder._id)}
+                  className="flex flex-col items-center text-center w-full pt-2 pb-1 hover:opacity-80 transition-opacity"
+                >
+                  <FolderIcon className="h-14 w-14" />
+                  <h4 className="mt-2 font-semibold text-gray-900 text-sm truncate max-w-full">
+                    {folder.name}
+                  </h4>
+                  <p className="text-xs text-gray-500">
+                    {folder.companies?.length || 0} companies
+                  </p>
+                </button>
               </div>
 
               {/* Folder Content - Mobile Responsive */}
@@ -326,18 +348,21 @@ const Hotlist = () => {
             </div>
           ))}
 
-          {folders?.length === 0 && (
+          {visibleFolders?.length === 0 && (
             <div className="text-center py-8 sm:py-12 text-gray-500">
               <Building2 className="h-12 w-12 sm:h-16 sm:w-16 mx-auto text-gray-300 mb-4" />
               <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
-                No folders yet
+                {folders?.length === 0 ? "No folders yet" : "No folders match your search"}
               </h3>
               <p className="text-sm">
-                Create your first folder to start organizing companies
+                {folders?.length === 0
+                  ? "Create your first folder to start organizing companies"
+                  : "Try a different search term"}
               </p>
             </div>
           )}
         </div>
+      </div>
 
         {/* Edit Mode Modal - Mobile Responsive */}
         {editingFolder && (
@@ -519,7 +544,6 @@ const Hotlist = () => {
           </div>
         )}
       </div>
-    </div>
   );
 };
 

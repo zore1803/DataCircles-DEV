@@ -25,7 +25,7 @@ import {
   CopyPlus,
 } from "lucide-react";
 import ContactForm from "../components/contact/ContactForm";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import useContactStore from "../store/useContactStore";
 import MergeContactModal from "../components/contact/MergeContactModal";
 const tabsLeft = ["Details", "Call Logs"];
