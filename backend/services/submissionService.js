@@ -8,6 +8,9 @@ const FormVersion = require("../models/FormVersion");
 const FormSubmission = require("../models/FormSubmission");
 const SubmissionEvent = require("../models/SubmissionEvent");
 const DuplicateReview = require("../models/DuplicateReview");
+const Contact = require("../models/Contact");
+const Company = require("../models/Company");
+const Vendor = require("../models/Vendor");
 const { coerceAdditionalFields } = require("./fieldCoercionService");
 const duplicateDetectionService = require("./duplicateDetectionService");
 const contactService = require("./contactService");
@@ -22,6 +25,8 @@ const CREATE_SERVICE_BY_MODULE = {
   Company: (org, data) => companyService.createCompany(org, data, { source: "form" }),
   Vendor: (org, data) => vendorService.createVendor(org, data, { source: "form" }),
 };
+
+const MODEL_BY_MODULE = { Contact, Company, Vendor };
 
 async function logEvent(formSubmissionId, organization, eventType, payload) {
   return SubmissionEvent.create({
@@ -122,7 +127,15 @@ function buildCrmPayloads(formVersion, processedData, defaultModule) {
 
     if (meta.source === "system") {
       const crmFieldName = getCrmFieldNameForSystemId(fieldId);
-      if (crmFieldName) payloads[targetModule][crmFieldName] = value;
+      if (crmFieldName && crmFieldName.includes(".")) {
+        // Sub-fields of a nested CRM object (e.g. "socialMedia.twitter") can't be assigned as a
+        // flat top-level key — build/merge the nested object instead.
+        const [parentKey, childKey] = crmFieldName.split(".");
+        if (!payloads[targetModule][parentKey]) payloads[targetModule][parentKey] = {};
+        payloads[targetModule][parentKey][childKey] = value;
+      } else if (crmFieldName) {
+        payloads[targetModule][crmFieldName] = value;
+      }
     } else if (meta.source === "custom") {
       payloads[targetModule].additionalFields.push({ key: meta.label, value });
     }
@@ -136,9 +149,14 @@ function buildCrmPayloads(formVersion, processedData, defaultModule) {
 // Company record.
 function hasMeaningfulData(payload) {
   if (!payload) return false;
-  const hasSystem = Object.keys(payload).some(
-    (k) => k !== "additionalFields" && payload[k] !== undefined && payload[k] !== null && payload[k] !== ""
-  );
+  const hasSystem = Object.keys(payload).some((k) => {
+    if (k === "additionalFields") return false;
+    const v = payload[k];
+    if (v && typeof v === "object") {
+      return Object.values(v).some((sub) => sub !== undefined && sub !== null && sub !== "");
+    }
+    return v !== undefined && v !== null && v !== "";
+  });
   const hasCustom = Array.isArray(payload.additionalFields) && payload.additionalFields.length > 0;
   return hasSystem || hasCustom;
 }
@@ -215,15 +233,18 @@ async function submitToForm(publicSlug, rawData, sourceMeta = {}) {
 
   // --- Dependent Company bucket (ONLY for a Contact form; DO NOT GENERALIZE) ---
   // The single supported cross-module relationship is Contact -> Company. Only attempt it when
-  // the visitor actually filled at least one Company field, and only when a Contact record was
-  // actually created this submission (if the Contact itself is under review, there is nothing to
-  // link the Company to yet — the Company is handled when that Contact review resolves).
-  if (form.module === "Contact" && hasMeaningfulData(payloads.Company) && primaryOutcome.createdRecord) {
+  // the visitor actually filled at least one Company field, and only when a real Contact record is
+  // known to attach it to this submission — either newly created, or the existing record a prior
+  // decision just auto-linked to (if the Contact itself is newly queued for review instead, there
+  // is nothing to link the Company to yet — the Company is handled when that Contact review
+  // resolves, via resumeCompanyProcessing).
+  const contactForCompanyLink = primaryOutcome.createdRecord || primaryOutcome.linkedRecord;
+  if (form.module === "Contact" && hasMeaningfulData(payloads.Company) && contactForCompanyLink) {
     await handleRelatedCompany({
       submission,
       form,
       companyPayload: payloads.Company,
-      contactRecord: primaryOutcome.createdRecord,
+      contactRecord: contactForCompanyLink,
       duplicateStrategy,
     });
   }
@@ -279,13 +300,22 @@ async function processModuleBucket({ submission, form, module, payload, duplicat
     });
     if (priorDecision.decision === "kept_separate") {
       const record = await createCrmRecord(submission, form, module, payload);
+      await FormSubmission.findByIdAndUpdate(submission._id, { reviewStatus: "resolved" });
       return { createdRecord: record, review: null };
     }
-    // kept-existing prior decision: nothing new is created for this bucket.
-    if (isPrimary) {
-      await FormSubmission.findByIdAndUpdate(submission._id, { importStatus: "imported" });
-    }
-    return { createdRecord: null, review: null };
+    // kept-existing prior decision: nothing new is created for this bucket, but a duplicate WAS
+    // detected and auto-resolved via the prior decision — reviewStatus must reflect that (not stay
+    // at its "not_required" default, which would wrongly imply dedup never ran for this submission).
+    const importUpdate = { reviewStatus: "resolved" };
+    if (isPrimary) importUpdate.importStatus = "imported";
+    await FormSubmission.findByIdAndUpdate(submission._id, importUpdate);
+    // Return the actual existing record (not null) so a dependent bucket (Contact -> Company) can
+    // still process against it. Without this, any Contact whose email ever collected one
+    // "linked_to_existing" decision would silently skip Company processing on every later
+    // submission forever, since submitToForm's dependent-bucket gate checks for a real record.
+    const LinkedModel = MODEL_BY_MODULE[bestMatch.existingRecord.module];
+    const linkedRecord = LinkedModel ? await LinkedModel.findById(bestMatch.existingRecord.recordId) : null;
+    return { createdRecord: null, review: null, linkedRecord };
   }
 
   const review = await duplicateDetectionService.createReview({
