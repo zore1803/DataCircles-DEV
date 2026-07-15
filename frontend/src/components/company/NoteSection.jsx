@@ -4,7 +4,7 @@ import "react-quill/dist/quill.snow.css";
 import Select from "react-select";
 import API from "../../services/api";
 import { useParams } from "react-router-dom";
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import {
   StickyNote,
   Plus,
@@ -39,6 +39,7 @@ import {
   Code,
   UserPlus
 } from "lucide-react";
+import AppToaster from "../AppToaster";
 
 
 // Custom Quill modules and formats configuration
@@ -138,7 +139,7 @@ const quillFormats = [
 
 
 // NoteViewer component
-const NoteViewer = ({ isOpen, onClose, noteTitle, noteContent, taggedContacts, createdAt }) => {
+export const NoteViewer = ({ isOpen, onClose, noteTitle, noteContent, taggedContacts, createdAt }) => {
   if (!isOpen) return null;
 
   const formatDate = (dateString) => {
@@ -210,7 +211,7 @@ const NoteViewer = ({ isOpen, onClose, noteTitle, noteContent, taggedContacts, c
 
 
 // NoteCard component
-const NoteCard = ({ note, onEdit, onDelete, onView }) => {
+export const NoteCard = ({ note, onEdit, onDelete, onView }) => {
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -357,9 +358,9 @@ export const NoteEditor = ({
         className="fixed inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden relative z-10 transform transition-all duration-300 ${isSliding ? "scale-100 translate-y-0" : "scale-95 translate-y-4"}`}>
+      <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden relative z-10 flex flex-col transform transition-all duration-300 ${isSliding ? "scale-100 translate-y-0" : "scale-95 translate-y-4"}`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h3 className="text-base font-semibold text-gray-700">
             {isEditing ? 'Edit Note' : 'Create New Note'}
           </h3>
@@ -371,9 +372,9 @@ export const NoteEditor = ({
           </button>
         </div>
 
-        <form onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+        <form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="flex flex-col min-h-0 flex-1">
           {/* Main Body */}
-          <div className="p-8 space-y-8">
+          <div className="p-8 space-y-8 overflow-y-auto min-h-0 flex-1">
             {/* Note Title Input */}
             <input
               type="text"
@@ -433,7 +434,7 @@ export const NoteEditor = ({
           </div>
 
           {/* Footer Actions */}
-          <div className="p-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
+          <div className="p-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3 flex-shrink-0">
             {isEditing && (
               <button
                 type="button"
@@ -623,7 +624,7 @@ const NoteSection = ({ companyId: propCompanyId }) => {
 
   return (
     <div className="h-full">
-      <Toaster position="top-right" />
+      <AppToaster />
 
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-sm text-gray-600">

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import API from "../services/api";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
+import AppToaster from "../components/AppToaster";
 
 const ResetPassword = () => {
   const [password, setPassword] = useState("");
@@ -102,7 +103,7 @@ const ResetPassword = () => {
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 font-inter relative">
-      <Toaster position="top-center" />
+      <AppToaster />
 
       {/* Header Logo */}
       <div className="absolute top-8 left-8 flex items-center gap-2">

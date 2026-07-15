@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import DealForm from "../components/deal/DealForm";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import {
   ArrowLeft,
   Building2,
@@ -36,6 +36,7 @@ import NoteSection from "../components/contact/NoteSection";
 // import DealCalendar from "../components/deal/DealCalendar";
 import BasicDetails from "../components/deal/BasicDetails";
 import logo from "/DataCircles.png";
+import AppToaster from "../components/AppToaster";
 
 const tabsLeft = ["Details", "Invoices"];
 const tabsRight = ["Notes", "Tasks", "Meetings", "Calendar"];
@@ -368,7 +369,7 @@ function DealDetail() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
-      <Toaster position="top-right" toastOptions={{ style: { zIndex: 99999 } }} />
+      <AppToaster />
       {/* 👉 ADD THIS BLOCK HERE */}
       {showForm && (
         <DealForm

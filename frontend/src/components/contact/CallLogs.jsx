@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import CallLogForm from "./CallLogForm";
 import CallLogDetailView from "./CallLogDetailView";
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
+import AppToaster from "../AppToaster";
 
 const callTypeOptions = [
   { value: "Outbound", label: "Outbound", icon: PhoneOutgoing },
@@ -156,7 +157,7 @@ const CallLogs = ({ contactId }) => {
 
   return (
     <div className="h-full">
-      <Toaster position="top-right" />
+      <AppToaster />
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4">

@@ -24,7 +24,7 @@ import {
   FileText,
   User,
 } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import BulkActions from "../components/BulkActions";
 import ItemForm from "../components/item/ItemForm";
 import ImportItems from "../components/item/ImportItems";
@@ -34,6 +34,7 @@ import logo from "/DataCircles.png";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import VideoTutorialButton from "../components/VideoTutorialButton";
+import AppToaster from "../components/AppToaster";
 
 const ViewDetails = ({ item, onRequestClose }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -706,7 +707,7 @@ function ProductsServices() {
 
   return (
     <>
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
 
       <VideoTutorialModal
         isOpen={showVideoTutorial}

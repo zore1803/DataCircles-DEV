@@ -16,7 +16,8 @@ import {
   LayoutGrid 
 } from "lucide-react";
 import API from "../../services/api";
-import { toast, Toaster } from "react-hot-toast";
+import { toast } from "react-hot-toast";
+import AppToaster from "../AppToaster";
 
 const CompanyDetails = ({
   data,
@@ -305,7 +306,7 @@ const handleOwnerChange = async (newOwnerId) => {
   return (
     <div className="">
       {/* --- REPLACE EXISTING TOP ACTION BAR WITH THIS --- */}
-      <Toaster position="top-right" />
+      <AppToaster />
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-lg border border-gray-200 mb-6 relative z-10">
 

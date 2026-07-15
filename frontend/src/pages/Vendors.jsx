@@ -38,13 +38,14 @@ import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import { useLocation } from "react-router-dom";
 import ImportVendors from "../components/vendor/ImportVendors";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import logo from "/DataCircles.png";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import VideoTutorialButton from "../components/VideoTutorialButton";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
+import AppToaster from "../components/AppToaster";
 
 // ✅ FIXED: Use useCallback to memoize the callback
 function useOutsideClick(ref, callback) {
@@ -909,7 +910,7 @@ function Vendors() {
 
   return (
     <>
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
 
       {/* Video Tutorial Modal */}
       <VideoTutorialModal

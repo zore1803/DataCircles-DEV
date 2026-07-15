@@ -44,7 +44,7 @@ import { useLocation } from "react-router-dom";
 import CallLogForm from "../components/contact/CallLogForm";
 import ImportContacts from "../components/contact/ImportContacts";
 import KanbanBoard from "../components/contact/KanbanBoard";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import VideoTutorialButton from "../components/VideoTutorialButton";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
@@ -72,6 +72,7 @@ import {
   createColumnHelper,
 } from "@tanstack/react-table";
 import ContactQuickView from "../components/contact/ContactQuickView";
+import AppToaster from "../components/AppToaster";
 
 // Custom hook to detect mobile screen
 const useIsMobile = () => {
@@ -2037,7 +2038,7 @@ function Contacts() {
 
   return (
     <div className="bg-white min-h-screen">
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
 
       {/* Video Tutorial Modal */}
       <VideoTutorialModal

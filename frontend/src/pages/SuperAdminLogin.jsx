@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Toaster, toast } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import API from '../services/api';
+import AppToaster from "../components/AppToaster";
 
 function SuperAdminLogin() {
   const navigate = useNavigate();
@@ -72,7 +73,7 @@ function SuperAdminLogin() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
       <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
         <h1 className="text-2xl font-bold text-gray-900 mb-6 text-center">
           Data Circles Super Admin Login

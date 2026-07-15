@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import API from "../../services/api";
 import { formatNumberToIndian } from "../../utils/numberFormatter"; // Adjust path if needed
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import {
   User,
   Building2,
@@ -18,6 +18,7 @@ import {
   FolderOpen,
   Activity
 } from "lucide-react";
+import AppToaster from "../AppToaster";
 
 // --- Info Card Component ---
 const InfoCard = ({ title, value, icon: Icon, action, description }) => (
@@ -191,7 +192,7 @@ const BasicDetails = ({ deal, dealFieldList = [] }) => {
 
   return (
     <div className="space-y-6">
-      <Toaster position="top-right" toastOptions={{ style: { zIndex: 99999 } }} />
+      <AppToaster />
 
       {/* --- ACTION BAR (OWNER & AUDIT) --- */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-xl border border-gray-200 relative z-50 hover:shadow-sm transition-shadow">

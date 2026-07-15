@@ -19,9 +19,10 @@ import {
 } from "lucide-react";
 import API, { configureAxios } from "../../services/api";
 import { useAuth0 } from "@auth0/auth0-react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
+import AppToaster from "../AppToaster";
 
 // ✅ Fixed Quill configuration
 const quillModules = {
@@ -706,7 +707,7 @@ const EmailNotifications = () => {
 
   return (
     <div className="">
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
 
       {/* Notification Settings */}
       <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg">

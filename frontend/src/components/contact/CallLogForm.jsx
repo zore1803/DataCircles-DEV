@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import { X, PhoneOutgoing, PhoneIncoming } from "lucide-react";
 import API from "../../services/api";
 import SearchableDropdown from "./SearchableDropdown";
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import ReactQuill from 'react-quill-new';
+import AppToaster from "../AppToaster";
 
 const initialFormState = {
   callType: "Outbound",
@@ -226,7 +227,7 @@ const CallLogForm = ({
 
   return (
     <>
-      <Toaster position="top-right" reverseOrder={false} />
+      <AppToaster />
       <div
         className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
         style={{ opacity: isSliding ? 1 : 0 }}
