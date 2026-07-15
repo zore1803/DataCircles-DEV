@@ -89,7 +89,7 @@ function OverviewTab({ form, activeVersion, submissionCount, pendingReviewCount,
       <div className="flex flex-col items-center text-center gap-3 max-w-md mx-auto py-10">
         <FormStatusBadge status="archived" />
         <p className="text-sm text-gray-500">
-          This form is archived and no longer accepts submissions. Last updated {timeAgo(form.updatedAt)}.
+          This form has been retired. Submissions remain available, but it no longer accepts responses.
         </p>
         <button
           onClick={() => navigate(`/forms/${form._id}/builder`)}
@@ -108,9 +108,9 @@ function OverviewTab({ form, activeVersion, submissionCount, pendingReviewCount,
           <FileText className="w-6 h-6 text-blue-600" />
         </div>
         <div>
-          <h3 className="text-lg font-bold text-gray-900">Let's build your first form.</h3>
+          <h3 className="text-lg font-bold text-gray-900">Your form is empty.</h3>
           <p className="text-sm text-gray-500 mt-1">
-            Start by adding the fields your customers should fill in.
+            Start building by adding fields.
           </p>
         </div>
         <button
@@ -216,8 +216,12 @@ function OverviewTab({ form, activeVersion, submissionCount, pendingReviewCount,
       </div>
 
       <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
-        <p className="text-sm font-semibold text-gray-800 mb-3">Share this form</p>
-        <PublicLinkCard publicSlug={form.publishState?.publicSlug} published={form.status === "published"} title={form.title} />
+        <p className="text-sm font-semibold text-gray-800">
+          {form.status === "published" ? "Your form is live. Share it using the link below." : "Share this form"}
+        </p>
+        <div className="mt-3">
+          <PublicLinkCard publicSlug={form.publishState?.publicSlug} published={form.status === "published"} title={form.title} />
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -315,7 +319,7 @@ function FormSettingsTab({ form, onFormUpdated }) {
   };
 
   const archive = async () => {
-    if (!window.confirm("Archive this form? It will stop accepting submissions and can then be deleted.")) return;
+    if (!window.confirm("Archive this form permanently? Unlike Pause, this cannot be undone — the form can't be republished, only deleted afterward.")) return;
     setArchiving(true);
     try {
       const res = await API.post(`/forms/${form._id}/archive`);
@@ -367,7 +371,7 @@ function FormSettingsTab({ form, onFormUpdated }) {
 
       <SettingsSection
         title="Status"
-        description={form.status === "draft" ? "Publishing requires at least one field in the Builder." : "Pausing stops new submissions without archiving the form."}
+        description={form.status === "draft" ? "Publishing requires at least one field in the Builder." : "Pause temporarily blocks new submissions — resume anytime to start collecting again, same link, same form."}
       >
         <div className="flex items-center gap-3 flex-wrap">
           <FormStatusBadge status={form.status} />
@@ -395,7 +399,7 @@ function FormSettingsTab({ form, onFormUpdated }) {
       {(form.status === "published" || form.status === "paused") && (
         <SettingsSection
           title="Archive"
-          description="Stops this form from accepting submissions. An archived form with no submissions can be deleted."
+          description="Permanently retires this form — unlike Pause, there is no way back to Published. An archived form with no submissions can then be deleted."
         >
           <button
             onClick={archive}
@@ -614,11 +618,27 @@ const SUBMISSION_FILTERS = [
   { key: "processingStatus", label: "Processing", options: PROCESSING_STATUS_LABEL },
 ];
 
-function SubmissionsTab({ formId }) {
+function SubmissionsTab({ formId, onOpenReview }) {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState(null);
+  const [findingReviewFor, setFindingReviewFor] = useState(null);
   const [filters, setFilters] = useState({ reviewStatus: "", importStatus: "", processingStatus: "" });
+
+  const goToReview = async (e, submissionId) => {
+    e.stopPropagation(); // don't also open the submission drawer behind it
+    setFindingReviewFor(submissionId);
+    try {
+      const res = await API.get("/duplicate-reviews", { params: { formSubmission: submissionId, decision: "pending", limit: 1 } });
+      const review = res.data.reviews?.[0];
+      if (review) onOpenReview?.(review._id);
+      else toast.error("No pending review found for this submission");
+    } catch {
+      toast.error("Failed to open review");
+    } finally {
+      setFindingReviewFor(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -684,7 +704,21 @@ function SubmissionsTab({ formId }) {
                 className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
               >
                 <td className="py-2.5 text-gray-700">{timeAgo(s.submittedAt)}</td>
-                <td className="py-2.5"><StatusPill value={s.reviewStatus} labelMap={REVIEW_STATUS_LABEL} colorMap={REVIEW_STATUS_BADGE} /></td>
+                <td className="py-2.5">
+                  {s.reviewStatus === "needs_review" ? (
+                    <button
+                      onClick={(e) => goToReview(e, s._id)}
+                      disabled={findingReviewFor === s._id}
+                      className="inline-flex items-center gap-1.5 hover:underline disabled:opacity-50"
+                      title="Open this submission's pending duplicate review"
+                    >
+                      <StatusPill value={s.reviewStatus} labelMap={REVIEW_STATUS_LABEL} colorMap={REVIEW_STATUS_BADGE} />
+                      <span className="text-xs font-medium text-blue-600">Review →</span>
+                    </button>
+                  ) : (
+                    <StatusPill value={s.reviewStatus} labelMap={REVIEW_STATUS_LABEL} colorMap={REVIEW_STATUS_BADGE} />
+                  )}
+                </td>
                 <td className="py-2.5"><StatusPill value={s.importStatus} labelMap={IMPORT_STATUS_LABEL} colorMap={IMPORT_STATUS_BADGE} /></td>
                 <td className="py-2.5"><StatusPill value={s.processingStatus} labelMap={PROCESSING_STATUS_LABEL} colorMap={PROCESSING_STATUS_BADGE} /></td>
               </tr>
@@ -944,32 +978,46 @@ function DuplicateReviewModal({ reviewId, onClose, onResolved }) {
   );
 }
 
-function DuplicateReviewsTab({ formId }) {
+function DuplicateReviewsTab({ formId, initialOpenId, onConsumedInitialOpen }) {
   const [reviews, setReviews] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
     return API.get("/duplicate-reviews", { params: { formId, decision: "pending", limit: 50 } })
-      .then((res) => setReviews(res.data.reviews || []))
+      .then((res) => {
+        setReviews(res.data.reviews || []);
+        setTotalCount(res.data.pagination?.totalCount ?? (res.data.reviews || []).length);
+      })
       .catch(() => toast.error("Failed to load duplicate reviews"))
       .finally(() => setLoading(false));
   }, [formId]);
 
   useEffect(() => { load(); }, [load]);
 
+  // Opened directly from a flagged Submissions row — jump straight to that review once, then
+  // hand control back to this tab's own openId state.
+  useEffect(() => {
+    if (initialOpenId) {
+      setOpenId(initialOpenId);
+      onConsumedInitialOpen?.();
+    }
+  }, [initialOpenId, onConsumedInitialOpen]);
+
   if (loading) return <p className="text-sm text-gray-400">Loading…</p>;
-  if (reviews.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <p className="text-gray-500 font-medium">No pending duplicate reviews</p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-3">
+      <p className="text-sm font-semibold text-gray-700">
+        {totalCount === 0 ? "No pending reviews" : `${totalCount} pending review${totalCount === 1 ? "" : "s"}`}
+      </p>
+      {reviews.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-gray-500 font-medium">No pending duplicate reviews</p>
+        </div>
+      )}
       {reviews.map((r) => (
         <button
           key={r._id}
@@ -1006,23 +1054,27 @@ const FormDetailPage = () => {
   const [activeTab, setActiveTab] = useState("Overview");
   const [submissionCount, setSubmissionCount] = useState(0);
   const [pendingReviewCount, setPendingReviewCount] = useState(0);
+  const [needsReviewSubmissionCount, setNeedsReviewSubmissionCount] = useState(0);
   const [lastSubmittedAt, setLastSubmittedAt] = useState(null);
+  const [openReviewId, setOpenReviewId] = useState(null);
 
   const loadForm = useCallback(async () => {
     try {
       setLoading(true);
-      const [formRes, submissionsRes, reviewsRes] = await Promise.all([
+      const [formRes, submissionsRes, reviewsRes, needsReviewRes] = await Promise.all([
         API.get(`/forms/${id}`),
         // limit:1 sorted by submittedAt desc (formController.listSubmissions default sort) also
         // hands back the single most recent submission for free — no separate endpoint needed.
         API.get(`/forms/${id}/submissions`, { params: { limit: 1 } }),
         API.get("/duplicate-reviews", { params: { formId: id, decision: "pending", limit: 1 } }),
+        API.get(`/forms/${id}/submissions`, { params: { limit: 1, reviewStatus: "needs_review" } }),
       ]);
       setForm(formRes.data.form);
       setActiveVersion(formRes.data.activeVersion);
       setLastSubmittedAt(submissionsRes.data.submissions?.[0]?.submittedAt || null);
       setSubmissionCount(submissionsRes.data.pagination?.totalCount || 0);
       setPendingReviewCount(reviewsRes.data.pagination?.totalCount || 0);
+      setNeedsReviewSubmissionCount(needsReviewRes.data.pagination?.totalCount || 0);
     } catch (err) {
       if (err.response?.status === 404) {
         toast.error("Form not found");
@@ -1070,28 +1122,50 @@ const FormDetailPage = () => {
         </Link>
 
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{form.title}</h1>
-            <FormStatusBadge status={form.status} />
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{form.title}</h1>
+                <FormStatusBadge status={form.status} />
+              </div>
+              <p className="text-gray-500 text-sm mt-1">{form.module} Form</p>
+            </div>
+            {/* Persistent, always-visible entry into the Builder — reachable from every tab, not
+                just Overview, so it's never more than one click away regardless of where the user is. */}
+            <button
+              onClick={() => navigate(`/forms/${form._id}/builder`)}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors shrink-0"
+            >
+              {builderCtaLabel(form, (form.layout || []).reduce((sum, section) => sum + (section.elements?.length || 0), 0))}
+            </button>
           </div>
-          <p className="text-gray-500 text-sm mt-1">{form.module} Form</p>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-lg">
           <nav className="flex items-center border-b border-gray-200 overflow-x-auto">
             <div className="flex flex-1">
               {visibleTabs(form, activeVersion).map((tab) => {
+                // Only "Duplicate Reviews" and "Submissions" ever carry a badge — a count that
+                // means "something here needs your attention," not a generic item total.
+                const badgeCount = tab === "Duplicate Reviews" ? pendingReviewCount
+                  : tab === "Submissions" ? needsReviewSubmissionCount
+                  : 0;
                 return (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${
+                    className={`px-4 py-3 text-sm font-medium whitespace-nowrap flex items-center gap-1.5 ${
                       activeTab === tab
                         ? "border-b-2 border-blue-600 text-blue-600 -mb-[1px]"
                         : "text-gray-500 hover:text-gray-900"
                     }`}
                   >
                     {tab}
+                    {badgeCount > 0 && (
+                      <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-semibold leading-none">
+                        {badgeCount > 99 ? "99+" : badgeCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -1110,8 +1184,19 @@ const FormDetailPage = () => {
                 navigate={navigate}
               />
             )}
-            {activeTab === "Submissions" && <SubmissionsTab formId={form._id} />}
-            {activeTab === "Duplicate Reviews" && <DuplicateReviewsTab formId={form._id} />}
+            {activeTab === "Submissions" && (
+              <SubmissionsTab
+                formId={form._id}
+                onOpenReview={(reviewId) => { setOpenReviewId(reviewId); setActiveTab("Duplicate Reviews"); }}
+              />
+            )}
+            {activeTab === "Duplicate Reviews" && (
+              <DuplicateReviewsTab
+                formId={form._id}
+                initialOpenId={openReviewId}
+                onConsumedInitialOpen={() => setOpenReviewId(null)}
+              />
+            )}
             {activeTab === "Settings" && <FormSettingsTab form={form} onFormUpdated={setForm} />}
           </div>
         </div>
