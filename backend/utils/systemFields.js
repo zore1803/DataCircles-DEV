@@ -9,7 +9,15 @@ const SYSTEM_FIELD_IDS = {
     name: "system:contact.name",
     email: "system:contact.email",
     phone: "system:contact.phone",
-    company: "system:contact.company",
+    // Deliberately no `company` entry here: Contact.company is an ObjectId ref (see Contact.js),
+    // not a value a visitor can type. A Contact form collects the relationship via the Company
+    // system fields instead (system:company.name, etc.) — submissionService's Contact->Company
+    // bucket logic creates/links the Company and sets this ref server-side. Exposing this as a
+    // fillable field is what caused the CastError("company") incident; do not re-add it.
+    "socialMedia.twitter": "system:contact.socialMedia.twitter",
+    "socialMedia.linkedin": "system:contact.socialMedia.linkedin",
+    "socialMedia.facebook": "system:contact.socialMedia.facebook",
+    "socialMedia.whatsapp": "system:contact.socialMedia.whatsapp",
   },
   Company: {
     name: "system:company.name",
@@ -18,6 +26,10 @@ const SYSTEM_FIELD_IDS = {
     address: "system:company.address",
     website: "system:company.website",
     profilePicture: "system:company.profilePicture",
+    "socialMedia.twitter": "system:company.socialMedia.twitter",
+    "socialMedia.linkedin": "system:company.socialMedia.linkedin",
+    "socialMedia.facebook": "system:company.socialMedia.facebook",
+    "socialMedia.whatsapp": "system:company.socialMedia.whatsapp",
   },
   Vendor: {
     name: "system:vendor.name",
@@ -26,6 +38,10 @@ const SYSTEM_FIELD_IDS = {
     email: "system:vendor.email",
     company: "system:vendor.company",
     address: "system:vendor.address",
+    "socialMedia.twitter": "system:vendor.socialMedia.twitter",
+    "socialMedia.linkedin": "system:vendor.socialMedia.linkedin",
+    "socialMedia.facebook": "system:vendor.socialMedia.facebook",
+    "socialMedia.whatsapp": "system:vendor.socialMedia.whatsapp",
   },
 };
 
@@ -33,10 +49,9 @@ const SYSTEM_FIELD_IDS = {
 // FORMS_SCHEMA.md §3 resolvedFieldSchema. Kept alongside the ID constants since both are
 // static, code-defined facts about system fields, not database-derived ones.
 const SYSTEM_FIELD_META = {
-  "system:contact.name": { label: "Name", type: "string", baseRequired: false },
-  "system:contact.email": { label: "Email", type: "string", baseRequired: false },
+  "system:contact.name": { label: "Name", type: "string", baseRequired: true },
+  "system:contact.email": { label: "Email", type: "string", baseRequired: true },
   "system:contact.phone": { label: "Phone", type: "string", baseRequired: false },
-  "system:contact.company": { label: "Company", type: "string", baseRequired: false },
   "system:company.name": { label: "Company Name", type: "string", baseRequired: true },
   "system:company.industry": { label: "Industry", type: "dropdown", baseRequired: true },
   "system:company.gstin": { label: "GSTIN", type: "string", baseRequired: false },
@@ -49,6 +64,18 @@ const SYSTEM_FIELD_META = {
   "system:vendor.email": { label: "Email", type: "string", baseRequired: false },
   "system:vendor.company": { label: "Company", type: "string", baseRequired: false },
   "system:vendor.address": { label: "Address", type: "string", baseRequired: false },
+  "system:contact.socialMedia.twitter": { label: "Twitter / X", type: "string", baseRequired: false },
+  "system:contact.socialMedia.linkedin": { label: "LinkedIn", type: "string", baseRequired: false },
+  "system:contact.socialMedia.facebook": { label: "Facebook", type: "string", baseRequired: false },
+  "system:contact.socialMedia.whatsapp": { label: "WhatsApp Number", type: "string", baseRequired: false },
+  "system:company.socialMedia.twitter": { label: "Twitter / X", type: "string", baseRequired: false },
+  "system:company.socialMedia.linkedin": { label: "LinkedIn", type: "string", baseRequired: false },
+  "system:company.socialMedia.facebook": { label: "Facebook", type: "string", baseRequired: false },
+  "system:company.socialMedia.whatsapp": { label: "WhatsApp Number", type: "string", baseRequired: false },
+  "system:vendor.socialMedia.twitter": { label: "Twitter / X", type: "string", baseRequired: false },
+  "system:vendor.socialMedia.linkedin": { label: "LinkedIn", type: "string", baseRequired: false },
+  "system:vendor.socialMedia.facebook": { label: "Facebook", type: "string", baseRequired: false },
+  "system:vendor.socialMedia.whatsapp": { label: "WhatsApp Number", type: "string", baseRequired: false },
 };
 
 function isSystemFieldId(fieldId) {

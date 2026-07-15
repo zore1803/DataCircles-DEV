@@ -11,5 +11,7 @@ const publicFormController = require("../controllers/publicFormController");
 
 // POST /api/public/forms/:publicSlug/submit
 router.post("/:publicSlug/submit", publicFormController.submitForm);
+// GET /api/public/forms/:publicSlug
+router.get("/:publicSlug", publicFormController.getPublicForm);
 
 module.exports = router;

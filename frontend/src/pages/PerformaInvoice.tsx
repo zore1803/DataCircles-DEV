@@ -11,7 +11,8 @@ import {
 import API from "../services/api";
 import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceForm";
 import PerformaInvoiceStylePreview from "../components/PerformaInvoice/PerformaInvoiceStylePreview";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
+import AppToaster from "../components/AppToaster";
 
 const statusOptions = ["Draft", "Sent", "Paid", "Overdue", "Void"];
 
@@ -515,7 +516,7 @@ const PerformaInvoiceManager = () => {
   if (loading && performaInvoices.length === 0) {
     return (
       <>
-        <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+        <AppToaster />
         <Shimmer />
       </>
     );
@@ -523,7 +524,7 @@ const PerformaInvoiceManager = () => {
 
   return (
     <>
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
       <div className="">
         {/* Header */}
         <div className="md:flex flex-row justify-between items-center mb-6">

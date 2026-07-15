@@ -22,7 +22,8 @@ import {
   GripVertical,
   Database
 } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
+import AppToaster from "../AppToaster";
 
 const VendorFieldSettings = () => {
   const [fields, setFields] = useState([]);
@@ -585,7 +586,7 @@ const VendorFieldSettings = () => {
 
   return (
     <div className="space-y-6">
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
 
 
       {/* Built-in Mandatory Fields */}

@@ -29,6 +29,14 @@ const companySchema = new mongoose.Schema(
     gstin: {
       type: String,
     },
+    documentSigned: {
+      type: Boolean,
+      default: false,
+    },
+    leadSource: {
+      type: String,
+      default: "",
+    },
     address: String,
     website: String,
     profilePicture: String,

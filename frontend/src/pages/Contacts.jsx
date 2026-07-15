@@ -32,7 +32,8 @@ import {
   Eye,
   Pin,
   PinOff,
-  Star
+  Star,
+  FileText
 } from "lucide-react";
 import API from "../services/api";
 import ContactFolder from "../components/contact/ContactFolder";
@@ -44,7 +45,7 @@ import { useLocation } from "react-router-dom";
 import CallLogForm from "../components/contact/CallLogForm";
 import ImportContacts from "../components/contact/ImportContacts";
 import KanbanBoard from "../components/contact/KanbanBoard";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import VideoTutorialButton from "../components/VideoTutorialButton";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
@@ -72,6 +73,7 @@ import {
   createColumnHelper,
 } from "@tanstack/react-table";
 import ContactQuickView from "../components/contact/ContactQuickView";
+import AppToaster from "../components/AppToaster";
 
 // Custom hook to detect mobile screen
 const useIsMobile = () => {
@@ -2037,7 +2039,7 @@ function Contacts() {
 
   return (
     <div className="bg-white min-h-screen">
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
 
       {/* Video Tutorial Modal */}
       <VideoTutorialModal
@@ -2266,6 +2268,15 @@ function Contacts() {
               onClick={() => setShowVideoTutorial(true)}
               variant="minimal" // Options: "default", "minimal", "icon"
             />
+            {/* Per-module Forms entry point — v1-simple, navigates to Forms List pre-filtered to
+                this module. FORMS_FRONTEND_ARCHITECTURE.md §4. */}
+            <Link
+              to="/settings/forms?module=Contact"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:inline">Forms</span>
+            </Link>
             <button
               onClick={() => setShowColumnSettings(true)}
               className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors"

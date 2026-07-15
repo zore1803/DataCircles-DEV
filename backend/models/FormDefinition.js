@@ -44,14 +44,25 @@ const elementSchema = new Schema(
     targetModule: { type: String, enum: ["Contact", "Company", "Vendor"] },
     required: Boolean,
     helpText: String,
+    placeholder: String,
     defaultValue: Schema.Types.Mixed,
     validationOverrides: validationOverridesSchema,
 
     // type: "heading" | "paragraph"
     text: String,
+    fontSize: { type: String, enum: ["small", "normal", "large", "xlarge"] },
+    fontWeight: { type: String, enum: ["normal", "bold"] },
+    textAlign: { type: String, enum: ["left", "center", "right"] },
 
     // type: "spacer"
     height: Number,
+
+    // type: "divider" — additive, presentation-only (same category as heading/paragraph's
+    // fontSize/fontWeight/textAlign above), no new element type or model introduced.
+    dividerThickness: Number, // px
+    dividerColor: String,
+    dividerSpacingTop: Number, // px
+    dividerSpacingBottom: Number, // px
 
     // type: "image"
     url: String,
@@ -97,6 +108,12 @@ const themeSchema = new Schema(
     backgroundColor: String,
     backgroundImageUrl: String,
     fontFamily: String,
+    // Global typography defaults — same category as fontFamily above (presentation-only, no
+    // colors/palettes). Per-element heading/paragraph fontSize/fontWeight/textAlign overrides
+    // (elementSchema above) still take precedence when set; these are just the form-wide fallback.
+    fontSize: { type: String, enum: ["small", "normal", "large", "xlarge"] },
+    fontWeight: { type: String, enum: ["normal", "bold"] },
+    textAlign: { type: String, enum: ["left", "center", "right"] },
     buttonColor: String,
     buttonPosition: { type: String, enum: ["left", "center", "right"] },
     buttonStyle: String,

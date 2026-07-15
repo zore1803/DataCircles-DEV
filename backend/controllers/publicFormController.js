@@ -6,6 +6,8 @@
 // to the service, and maps the outcome to a public-safe response that never leaks CRM internals
 // (record IDs, duplicate-review state, organization).
 const submissionService = require("../services/submissionService");
+const FormDefinition = require("../models/FormDefinition");
+const FormVersion = require("../models/FormVersion");
 
 // Best-effort client IP without trusting a spoofable header blindly: prefer Express's own req.ip
 // (honors the app's trust-proxy setting), fall back to the socket address. Stored for audit only.
@@ -77,4 +79,36 @@ async function submitForm(req, res) {
   }
 }
 
-module.exports = { submitForm };
+// exports at bottom
+/**
+ * GET /api/public/forms/:publicSlug
+ * Returns only what's needed to render a public form.
+ */
+async function getPublicForm(req, res) {
+  try {
+    const { publicSlug } = req.params;
+    const form = await FormDefinition.findOne(
+      { "publishState.publicSlug": publicSlug, status: "published" },
+      { title: 1, theme: 1, "publishState.activeFormVersionId": 1 }
+    );
+    if (!form) return res.status(404).json({ error: "Form not found or not accepting submissions." });
+
+    const version = await FormVersion.findById(form.publishState.activeFormVersionId, {
+      layout: 1,
+      resolvedFields: 1,
+    });
+    if (!version) return res.status(404).json({ error: "Form not found or not accepting submissions." });
+
+    res.json({
+      title: form.title,
+      theme: form.theme,
+      layout: version.layout,
+      resolvedFields: version.resolvedFields,
+    });
+  } catch (err) {
+    console.error("publicFormController.getPublicForm error:", err);
+    res.status(500).json({ error: "Something went wrong loading this form." });
+  }
+}
+
+module.exports = { submitForm, getPublicForm };

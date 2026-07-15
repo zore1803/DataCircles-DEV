@@ -5,7 +5,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { useSubscription } from "../contexts/SubscriptionContext";
 import useRazorpay from "../hooks/useRazorpay";
 import { waitForSettlement } from "../utils/waitForSettlement";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import {
   Users,
   UserPlus,
@@ -25,6 +25,7 @@ import {
   Crown,
   Loader2,
 } from "lucide-react";
+import AppToaster from "../components/AppToaster";
 
 function ConfirmModal({
   isOpen,
@@ -132,6 +133,7 @@ function UserManagement() {
     "Emails",
     "Quotations",
     "Delivery-Challans",
+    "Forms",
   ];
 
   const getInitialPermissions = (user) => {
@@ -478,7 +480,7 @@ function UserManagement() {
 
   return (
     <div className="space-y-6">
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
       {/* Seat Info */}
       {renderSeatInfo()}
 

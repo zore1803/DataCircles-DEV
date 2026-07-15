@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import API from "../../services/api";
 import CompanyMeetingForm from "./CompanyMeetingForm";
 import CompanyTaskForm from "./CompanyTaskForm";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,32 +13,37 @@ import {
   X,
   Calendar,
 } from "lucide-react";
+import AppToaster from "../AppToaster";
 
-const CompactEventCard = ({ item, type, onClick }) => (
-  <div
-    className={`
-      text-[10px] px-1 py-0.5 rounded cursor-pointer truncate mb-0.5 transition-all
-      ${type === "meeting"
-        ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-        : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-      }
-    `}
-    onClick={(e) => {
-      e.stopPropagation();
-      onClick(item);
-    }}
-    title={`${type}: ${item.title}`}
-  >
-    <div className="flex items-center gap-0.5">
-      {type === "meeting" ? (
-        <Users className="w-2 h-2 flex-shrink-0" />
-      ) : (
-        <CheckSquare className="w-2 h-2 flex-shrink-0" />
-      )}
+const CompactEventCard = ({ item, type, onClick }) => {
+  const time = item.scheduledAt || item.dueDate;
+  return (
+    <div
+      className={`
+        flex items-center justify-between gap-1 text-[10px] px-1.5 py-0.5 rounded cursor-pointer mb-0.5 transition-all
+        ${type === "meeting"
+          ? "bg-blue-50 text-blue-700 hover:bg-blue-100"
+          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+        }
+      `}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(item);
+      }}
+      title={`${type}: ${item.title}`}
+    >
       <span className="truncate">{item.title}</span>
+      {time && (
+        <span className="flex-shrink-0 opacity-70">
+          {new Date(time).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </span>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 const QuickAddModal = ({ isOpen, onClose, onAddMeeting, onAddTask, date }) => {
   if (!isOpen) return null;
@@ -174,6 +179,7 @@ const ActivityListPopup = ({
 
 const CompanyCalendar = ({ companyId }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState("month");
   const [meetings, setMeetings] = useState({});
   const [tasks, setTasks] = useState({});
   const [modalOpen, setModalOpen] = useState(false);
@@ -306,7 +312,53 @@ const CompanyCalendar = ({ companyId }) => {
 
   const goToMonth = (offset) =>
     setCurrentDate(new Date(year, month + offset, 1));
-  const goToToday = () => setCurrentDate(new Date());
+  const goToPeriod = (offset) => {
+    if (viewMode === "month") {
+      goToMonth(offset);
+    } else if (viewMode === "week") {
+      const next = new Date(currentDate);
+      next.setDate(next.getDate() + offset * 7);
+      setCurrentDate(next);
+    } else {
+      const next = new Date(currentDate);
+      next.setDate(next.getDate() + offset);
+      setCurrentDate(next);
+    }
+  };
+
+  // Monday-start week containing currentDate
+  const weekStart = (() => {
+    const d = new Date(currentDate);
+    const dow = d.getDay() === 0 ? 6 : d.getDay() - 1;
+    d.setDate(d.getDate() - dow);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  })();
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+
+  const periodLabel = (() => {
+    if (viewMode === "month") return `${months[month]} ${year}`;
+    if (viewMode === "week") {
+      const end = weekDays[6];
+      const startLabel = weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const endLabel = end.toLocaleDateString("en-US", {
+        month: weekStart.getMonth() === end.getMonth() ? undefined : "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      return `${startLabel} - ${endLabel}`;
+    }
+    return currentDate.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  })();
 
   // ✅ Updated to convert Date to string
   const handleDayClick = (date) => {
@@ -415,52 +467,66 @@ const CompanyCalendar = ({ companyId }) => {
   };
 
   return (
-    <div className="h-full">
-      <Toaster position="top-right" />
+    <div className="min-h-[868px]">
+      <AppToaster />
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900">
-            {months[month]} {year}
-          </h3>
-        </div>
-
-        <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <button
-            onClick={() => goToMonth(-1)}
-            className="p-1 hover:bg-gray-100 rounded transition-colors"
+            onClick={() => goToPeriod(-1)}
+            className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
             <ChevronLeft className="w-4 h-4 text-gray-600" />
           </button>
+          <span className="text-sm font-semibold text-gray-900 min-w-[90px] text-center whitespace-nowrap">
+            {periodLabel}
+          </span>
           <button
-            onClick={goToToday}
-            className="p-1 hover:bg-gray-100 rounded transition-colors"
-          >
-            <Calendar className="w-4 h-4 text-gray-600" />
-          </button>
-          <button
-            onClick={() => goToMonth(1)}
-            className="p-1 hover:bg-gray-100 rounded transition-colors"
+            onClick={() => goToPeriod(1)}
+            className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
             <ChevronRight className="w-4 h-4 text-gray-600" />
           </button>
         </div>
-      </div>
 
-      {/* Search */}
-      <div className="relative mb-4">
-        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
-        <input
-          type="text"
-          placeholder="Search..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-7 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:border-gray-400"
-        />
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <input
+            type="text"
+            placeholder="Search Events"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full h-9 pl-9 pr-3 border border-gray-200 rounded-full text-sm focus:outline-none focus:border-blue-300"
+          />
+        </div>
+
+        <div className="flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0">
+          {["month", "week", "day"].map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${viewMode === mode
+                ? "bg-white text-blue-600 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={() => handleDayClick(today)}
+          className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 flex-shrink-0"
+          title="Add Event"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Calendar Grid */}
+      {viewMode === "month" && (
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
           {weekdays.map((day, index) => (
@@ -483,12 +549,15 @@ const CompanyCalendar = ({ companyId }) => {
             const totalItems = filteredMeetings.length + filteredTasks.length;
             const maxDisplay = 1;
             const hasMore = totalItems > maxDisplay;
+            const hasHighPriority = filteredMeetings.some(
+              (m) => m.priority === "high",
+            );
 
             return (
               <div
                 key={key + idx}
                 className={`
-                  min-h-[60px] p-1 border-b border-r border-gray-200 last:border-r-0 relative transition-all
+                  min-h-[110px] p-1 border-b border-r border-gray-200 last:border-r-0 relative transition-all
                   ${!isCurrentMonth
                     ? "bg-gray-50 text-gray-400"
                     : "bg-white text-gray-900"
@@ -517,6 +586,11 @@ const CompanyCalendar = ({ companyId }) => {
                   >
                     {date.getDate()}
                   </span>
+                  {hasHighPriority && (
+                    <span className="text-[9px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">
+                      High
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-0.5">
@@ -560,18 +634,140 @@ const CompanyCalendar = ({ companyId }) => {
           })}
         </div>
       </div>
+      )}
 
-      {/* Stats */}
-      <div className="flex items-center justify-center gap-4 py-3 text-xs text-gray-600">
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-          <span>{Object.values(meetings).flat().length} meetings</span>
+      {/* Week View */}
+      {viewMode === "week" && (
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
+            {weekDays.map((date, idx) => {
+              const isToday = date.toDateString() === today.toDateString();
+              return (
+                <div key={idx} className="p-2 text-center border-r border-gray-200 last:border-r-0">
+                  <div className="text-xs font-medium text-gray-500">{weekdays[idx]}</div>
+                  <div
+                    className={`text-sm mt-0.5 ${isToday
+                      ? "inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white"
+                      : "text-gray-900"
+                      }`}
+                  >
+                    {date.getDate()}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="grid grid-cols-7 min-h-[600px]">
+            {weekDays.map((date, idx) => {
+              const key = date.toDateString();
+              const isFuture = date >= today;
+              const dayMeetings = meetings[key] || [];
+              const dayTasks = tasks[key] || [];
+              const { meetings: filteredMeetings, tasks: filteredTasks } =
+                filteredEvents(dayMeetings, dayTasks);
+
+              return (
+                <div
+                  key={idx}
+                  className={`p-1.5 border-r border-gray-200 last:border-r-0 space-y-1 ${isFuture ? "hover:bg-gray-50 cursor-pointer" : "bg-gray-50/50"
+                    }`}
+                  onClick={() => isFuture && handleDayClick(date)}
+                >
+                  {filteredMeetings.map((meeting) => (
+                    <CompactEventCard
+                      key={meeting._id}
+                      item={meeting}
+                      type="meeting"
+                      onClick={handleMeetingClick}
+                    />
+                  ))}
+                  {filteredTasks.map((task) => (
+                    <CompactEventCard
+                      key={task._id}
+                      item={task}
+                      type="task"
+                      onClick={handleTaskClick}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-gray-600 rounded-full"></div>
-          <span>{Object.values(tasks).flat().length} tasks</span>
-        </div>
-      </div>
+      )}
+
+      {/* Day View */}
+      {viewMode === "day" && (() => {
+        const key = currentDate.toDateString();
+        const isFuture = currentDate >= today;
+        const dayMeetings = meetings[key] || [];
+        const dayTasks = tasks[key] || [];
+        const { meetings: filteredMeetings, tasks: filteredTasks } =
+          filteredEvents(dayMeetings, dayTasks);
+        const hasEvents = filteredMeetings.length > 0 || filteredTasks.length > 0;
+
+        return (
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden min-h-[600px] p-4">
+            {!hasEvents ? (
+              <div className="flex flex-col items-center justify-center h-full py-16 text-gray-400">
+                <Calendar className="w-8 h-8 mb-2" />
+                <p className="text-sm">No events on this day</p>
+                {isFuture && (
+                  <button
+                    onClick={() => handleDayClick(currentDate)}
+                    className="mt-3 text-sm text-blue-600 hover:underline"
+                  >
+                    + Add event
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredMeetings.map((meeting) => (
+                  <div
+                    key={meeting._id}
+                    onClick={() => handleMeetingClick(meeting)}
+                    className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Users className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-sm font-medium truncate">{meeting.title}</span>
+                    </div>
+                    {meeting.scheduledAt && (
+                      <span className="text-xs flex-shrink-0">
+                        {new Date(meeting.scheduledAt).toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {filteredTasks.map((task) => (
+                  <div
+                    key={task._id}
+                    onClick={() => handleTaskClick(task)}
+                    className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckSquare className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-sm font-medium truncate">{task.title}</span>
+                    </div>
+                    {task.dueDate && (
+                      <span className="text-xs flex-shrink-0">
+                        {new Date(task.dueDate).toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <QuickAddModal
         isOpen={quickAddOpen}
