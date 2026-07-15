@@ -34,11 +34,12 @@ import {
   CheckCircle2,
   ChevronDown as SelectChevron,
 } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import logo from "/DataCircles.png";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import VideoTutorialButton from "../components/VideoTutorialButton";
+import AppToaster from "../components/AppToaster";
 
 const SingleSelectDropdown = ({ options, value, onChange, disabled, variant = "pill" }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -571,7 +572,7 @@ const PurchaseOrderPage = () => {
 
   return (
     <>
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
 
       <VideoTutorialModal
         isOpen={showVideoTutorial}

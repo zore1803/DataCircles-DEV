@@ -509,7 +509,7 @@ const CompanyTaskForm = ({
                             className="fixed inset-0 z-40"
                             onClick={() => setShowUserSelector(false)}
                           />
-                          <div className="absolute z-50 left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto p-2 space-y-1 animate-in fade-in slide-in-from-top-2">
+                          <div className="absolute z-50 left-0 right-0 bottom-full mb-2 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto p-2 space-y-1 animate-in fade-in slide-in-from-bottom-2">
                             {users?.map((user) => (
                               <label
                                 key={user._id}

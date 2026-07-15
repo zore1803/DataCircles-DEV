@@ -3,7 +3,7 @@ import API from "../services/api";
 import TaskForm from "../components/Task/TaskForm";
 import AdminMeetingForm from "../components/admin/AdminMeetingForm";
 import { useLocation, Link } from "react-router-dom";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import {
   Search,
   ChevronUp,
@@ -46,6 +46,7 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
+import AppToaster from "../components/AppToaster";
 
 // Task Status Dropdown Component
 const StatusSelect = ({ task, onUpdate }) => {
@@ -1621,7 +1622,7 @@ function Tasks() {
 
   return (
     <div className="bg-white min-h-screen">
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
 
       {/* Video Tutorial Modal */}
       <VideoTutorialModal

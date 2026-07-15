@@ -340,7 +340,7 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50 relative">
+      <div className="min-h-screen bg-white relative">
         {userIsAuthenticated && adminNotice && !shouldHideNavigation && (
           <div className="bg-indigo-600 text-white px-4 py-3 flex items-center justify-between gap-3 relative z-[100010]">
             <div className="flex items-center gap-2 text-sm">

@@ -48,7 +48,7 @@ import {
   Settings
 } from "lucide-react";
 
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import confetti from "canvas-confetti";
 // Note: We are replacing the external KanbanColumn with an internal Modern version
 // import KanbanColumn from "../components/deal/KanbanColumn"; 
@@ -63,6 +63,7 @@ import DealQuickView from "../components/deal/DealQuickView";
 // Add these to your component imports:
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
+import AppToaster from "../components/AppToaster";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -1790,23 +1791,7 @@ function Deals() {
 
   return (
     <div className="bg-white min-h-screen font-sans">
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 5000,
-          style: {
-            zIndex: 99999,
-            background: "#ffffff",
-            border: "1px solid #e5e7eb",
-            borderRadius: "8px",
-            color: "#374151",
-            padding: "10px",
-            fontSize: "14px",
-            maxWidth: "90vw",
-            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-          },
-        }}
-      />
+      <AppToaster />
 
       {/* Video Tutorial Modal */}
       <VideoTutorialModal

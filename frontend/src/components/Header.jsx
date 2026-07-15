@@ -759,7 +759,6 @@ import {
   Sparkles,
   Clock,
   HelpCircle,
-  Bell,
 } from "lucide-react";
 import SearchResults from "./SearchResults";
 import QuickCompanyForm from "./company/QuickCompanyForm";
@@ -801,7 +800,7 @@ const Header = () => {
   const [isLoadingData, setIsLoadingData] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { getAccessTokenSilently } = useAuth0();
+  const { getAccessTokenSilently, user } = useAuth0();
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");
   const [isTrialActive, setIsTrialActive] = useState(false);
   const [trialEnd, setTrialEnd] = useState(null);
@@ -813,6 +812,69 @@ const Header = () => {
   const [subscriptionLabel, setSubscriptionLabel] = useState("");
 
   const isSuperAdminRoute = location.pathname.startsWith("/super-admin");
+  const [dynamicCrumbName, setDynamicCrumbName] = useState("");
+
+  useEffect(() => {
+    const match = location.pathname.match(/^\/companies\/([^/]+)$/);
+    if (!match) {
+      setDynamicCrumbName("");
+      return;
+    }
+    const companyId = match[1];
+    const cached = companies.find((c) => c._id === companyId);
+    if (cached) {
+      setDynamicCrumbName(cached.name);
+      return;
+    }
+    let cancelled = false;
+    API.get(`/companies/${companyId}`)
+      .then((res) => {
+        if (!cancelled) setDynamicCrumbName(res.data?.name || "");
+      })
+      .catch(() => {
+        if (!cancelled) setDynamicCrumbName("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, companies]);
+
+  const ROUTE_LABELS = {
+    "/": "Dashboard",
+    "/companies": "Companies",
+    "/deals": "Deals",
+    "/contacts": "Contacts",
+    "/vendors": "Vendors",
+    "/products": "Products and Services",
+    "/insights": "Insights",
+    "/settings": "Settings",
+    "/tasks": "Tasks and Meetings",
+    "/calender": "Calendar",
+    "/invoices": "Invoices",
+    "/sales-return": "Sales Return",
+    "/sales-subscription": "Subscription",
+    "/e-invoicing": "E-Invoicing",
+    "/purchase": "Purchases",
+    "/purchase-order": "Purchase Orders",
+    "/purchase-return": "Purchase Return",
+    "/payments-timeline": "Timeline",
+    "/journals": "Journals",
+    "/expenses": "Expenses",
+    "/indirect-income": "Indirect Income",
+  };
+
+  const getBreadcrumb = () => {
+    const path = location.pathname;
+    if (path === "/" || path === "") return [{ label: "Dashboard", path: "/" }];
+    const firstSegment = "/" + path.split("/").filter(Boolean)[0];
+    const label = ROUTE_LABELS[firstSegment] || firstSegment.slice(1);
+    const crumbs = [
+      { label: "Dashboard", path: "/" },
+      { label, path: firstSegment },
+    ];
+    if (dynamicCrumbName) crumbs.push({ label: dynamicCrumbName, path });
+    return crumbs;
+  };
 
   const getInitials = (name) => {
     if (!name || !name.trim()) return "?";
@@ -1212,18 +1274,41 @@ const Header = () => {
         className="fixed top-0 right-0 bg-white border-b border-gray-200 shadow-sm z-[9992] h-16 flex items-center justify-between px-4 lg:px-6 transition-all duration-300 ease-in-out"
         style={{ left: "var(--sidebar-width, 0px)" }}
       >
-        {/* Left Section: Page Title */}
+        {/* Left Section: Breadcrumb */}
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-bold text-gray-900">Dashboard</h1>
+          <div className="flex items-center gap-2">
+            {getBreadcrumb().map((crumb, idx, arr) => {
+              const isLast = idx === arr.length - 1;
+              return (
+                <span key={idx} className="flex items-center gap-2">
+                  {isLast ? (
+                    <span className="text-base font-semibold text-gray-900">
+                      {crumb.label}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => navigate(crumb.path)}
+                      className="text-base font-semibold text-gray-500 hover:text-gray-700 hover:underline transition-colors"
+                    >
+                      {crumb.label}
+                    </button>
+                  )}
+                  {!isLast && <ChevronRight className="w-4 h-4 text-gray-400" />}
+                </span>
+              );
+            })}
+          </div>
         </div>
 
         {/* Right Section: Promo Buttons, Search & Actions */}
         <div className="flex items-center gap-2 lg:gap-4">
           {/* Promo Buttons */}
           <div className="hidden md:flex items-center gap-4">
-            <button className="w-[145px] h-[39px] flex items-center justify-center bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-              Book Free Demo
-            </button>
+            {!isTrialActive && (
+              <button className="w-[145px] h-[39px] flex items-center justify-center bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                Book Free Demo
+              </button>
+            )}
 
             {(() => {
               const label = trialLeftLabel || subscriptionLabel;
@@ -1259,33 +1344,40 @@ const Header = () => {
             })()}
           </div>
           {/* Search */}
-          <div className="relative hidden lg:block w-[326px] h-[36px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <div className="relative hidden lg:block w-[326px] h-10">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" strokeWidth={1.5} />
             <input
               type="text"
               placeholder="Search Companies, Deals, Contacts"
               value={searchQuery}
               onChange={handleSearchChange}
               onFocus={handleSearchFocus}
-              className="w-full h-full pl-9 pr-4 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans"
+              className="w-full h-full pl-11 pr-4 bg-white border border-gray-200 rounded-full text-sm text-gray-700 placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans"
             />
           </div>
 
-          <button className="text-gray-500 hover:text-gray-700 p-1">
-            <HelpCircle className="w-5 h-5" />
-          </button>
-          <button className="text-gray-500 hover:text-gray-700 p-1">
-            <Bell className="w-5 h-5" />
+          <button className="flex items-center justify-center w-9 h-9 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <g clipPath="url(#clip0_2018_53)">
+                <path d="M12 6.66658C12 4.45745 10.2092 2.66659 8.00004 2.66659C5.7909 2.66659 4.00004 4.45745 4.00004 6.66658V11.9999H12V6.66658ZM13.3334 12.4444L13.6 12.7999C13.7105 12.9472 13.6806 13.1561 13.5334 13.2666C13.4757 13.3099 13.4055 13.3333 13.3334 13.3333H2.66671C2.48261 13.3333 2.33337 13.184 2.33337 12.9999C2.33337 12.9278 2.35677 12.8576 2.40004 12.7999L2.66671 12.4444V6.66658C2.66671 3.72107 5.05452 1.33325 8.00004 1.33325C10.9456 1.33325 13.3334 3.72107 13.3334 6.66658V12.4444ZM6.33337 13.9999H9.66671C9.66671 14.9204 8.92051 15.6666 8.00004 15.6666C7.07957 15.6666 6.33337 14.9204 6.33337 13.9999Z" fill="#111827" />
+                <circle cx="14.1666" cy="3.33325" r="2.5" fill="#DF120B" />
+              </g>
+              <defs>
+                <clipPath id="clip0_2018_53">
+                  <rect width="16" height="16" fill="white" />
+                </clipPath>
+              </defs>
+            </svg>
           </button>
 
           {/* New Button (Global Add) */}
           <div className="relative group">
             <button
               onClick={handleGlobalAdd}
-              className="flex items-center gap-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm shadow-sm hover:shadow"
+              title="New"
+              className="flex items-center justify-center w-9 h-9 bg-blue-600 hover:bg-blue-700 text-white rounded-full ring-4 ring-blue-200 transition-colors"
             >
-              <Plus className="w-4 h-4" />
-              New
+              <Plus className="w-4 h-4" strokeWidth={3} />
             </button>
 
             {/* Redesigned Global Add Menu */}
@@ -1368,6 +1460,14 @@ const Header = () => {
                 </div>
               </>
             )}
+          </div>
+
+          {/* User Avatar */}
+          <div
+            className={`flex items-center justify-center w-9 h-9 rounded-full text-white font-semibold text-sm ring-4 ring-gray-200 ${getRandomColor(user?.name)}`}
+            title={user?.name || ""}
+          >
+            {getInitials(user?.name)}
           </div>
         </div>
       </header>

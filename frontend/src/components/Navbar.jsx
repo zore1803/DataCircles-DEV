@@ -461,7 +461,7 @@ const Navbar = () => {
 
       {/* Sidebar */}
       <div
-        className={`fixed top-0 left-0 h-screen shadow-2xl z-[9995] flex flex-col transition-all duration-300 ease-in-out lg:w-auto ${isMobileOpen
+        className={`fixed top-0 left-0 h-screen border-r border-gray-200 z-[9995] flex flex-col transition-all duration-300 ease-in-out lg:w-auto ${isMobileOpen
           ? "w-72 translate-x-0"
           : "w-72 -translate-x-full lg:translate-x-0"
           }`}
@@ -501,7 +501,7 @@ const Navbar = () => {
             )}
           </div>
         </div>
-        <nav className="flex-1 overflow-y-auto  shadow-2xl pt-3 pb-2 bg-white   flex flex-col">
+        <nav className="flex-1 overflow-y-auto pt-3 pb-2 bg-white flex flex-col">
           <ul className="flex-1 flex flex-col justify-evenly px-2  text-black">
             {(isSuperAdmin ? superAdminNavigation : navigation).map(
               (item, index) =>

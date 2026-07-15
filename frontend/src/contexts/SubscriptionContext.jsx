@@ -1,8 +1,9 @@
 // contexts/SubscriptionContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { subscriptionAPI } from '../services/subscriptionApi';
+import AppToaster from "../components/AppToaster";
 
 const SubscriptionContext = createContext();
 
@@ -228,7 +229,7 @@ export const SubscriptionProvider = ({ children }) => {
         isAuthenticated: isUserAuthenticated() // Expose combined authentication status
       }}
     >
-      <Toaster position="top-right" />
+      <AppToaster />
       {children}
     </SubscriptionContext.Provider>
   );

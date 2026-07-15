@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import API from "../../services/api";
 import VendorMeetingForm from "./VendorMeetingForm";
 import VendorTaskForm from "./VendorTaskForm";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,6 +13,7 @@ import {
   X,
   Calendar,
 } from "lucide-react";
+import AppToaster from "../AppToaster";
 
 const CompactEventCard = ({ item, type, onClick }) => (
   <div
@@ -386,7 +387,7 @@ const VendorCalendar = ({ vendorId }) => {
 
   return (
     <div className="h-full">
-      <Toaster position="top-right" />
+      <AppToaster />
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
