@@ -17,18 +17,24 @@ const checkPermission = require("../middlewares/checkPermission");
 
 const requireAuth = [authMiddleware, userSync];
 const readGate = [requireAuth, subscriptionGate, restrictByPlan("forms", "read"), checkPermission("forms", "readonly")];
+// Only form CREATION should be counted against the plan's numeric forms limit.
 const writeGate = [requireAuth, subscriptionGate, restrictByPlan("forms", "write"), checkPermission("forms", "read-write")];
+// Mutating/deleting an EXISTING form (update, publish, pause, resume, archive, delete) never
+// creates a new form document, so it must skip the numeric limit check — otherwise an org at its
+// limit can never pause/archive/delete its way back under it. Still enforces write-access gating
+// and permissions exactly like writeGate.
+const mutateGate = [requireAuth, subscriptionGate, restrictByPlan("forms", "write", { skipLimit: true }), checkPermission("forms", "read-write")];
 
 // --- Forms CRUD / publish ---
 router.get("/forms", readGate, formController.listForms);
 router.post("/forms", writeGate, formController.createForm);
 router.get("/forms/:id", readGate, formController.getForm);
-router.patch("/forms/:id", writeGate, formController.updateForm);
-router.post("/forms/:id/publish", writeGate, formController.publishForm);
-router.post("/forms/:id/archive", writeGate, formController.archiveForm);
-router.post("/forms/:id/pause", writeGate, formController.pauseForm);
-router.post("/forms/:id/resume", writeGate, formController.resumeForm);
-router.delete("/forms/:id", writeGate, formController.deleteForm);
+router.patch("/forms/:id", mutateGate, formController.updateForm);
+router.post("/forms/:id/publish", mutateGate, formController.publishForm);
+router.post("/forms/:id/archive", mutateGate, formController.archiveForm);
+router.post("/forms/:id/pause", mutateGate, formController.pauseForm);
+router.post("/forms/:id/resume", mutateGate, formController.resumeForm);
+router.delete("/forms/:id", mutateGate, formController.deleteForm);
 
 // --- Submissions ---
 router.get("/forms/:id/submissions", readGate, formController.listSubmissions);

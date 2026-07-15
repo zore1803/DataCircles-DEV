@@ -72,6 +72,10 @@ const SYSTEM_FIELDS = {
     // No "Company" entry: Contact.company is an internal ObjectId relationship, not a visitor-
     // fillable value. Use the Company system fields below (Company Name, Industry, ...) instead —
     // the relationship is created/linked automatically server-side.
+    { fieldId: "system:contact.socialMedia.twitter", label: "Twitter / X", type: "string" },
+    { fieldId: "system:contact.socialMedia.linkedin", label: "LinkedIn", type: "string" },
+    { fieldId: "system:contact.socialMedia.facebook", label: "Facebook", type: "string" },
+    { fieldId: "system:contact.socialMedia.whatsapp", label: "WhatsApp Number", type: "string" },
   ],
   Company: [
     { fieldId: "system:company.name", label: "Company Name", type: "string", baseRequired: true },
@@ -84,6 +88,10 @@ const SYSTEM_FIELDS = {
     // upload endpoint for an unauthenticated visitor. This is a URL field (visitor pastes an
     // image link), matching backend SYSTEM_FIELD_META's "system:company.profilePicture": url.
     { fieldId: "system:company.profilePicture", label: "Profile Picture (Image URL)", type: "url" },
+    { fieldId: "system:company.socialMedia.twitter", label: "Twitter / X", type: "string" },
+    { fieldId: "system:company.socialMedia.linkedin", label: "LinkedIn", type: "string" },
+    { fieldId: "system:company.socialMedia.facebook", label: "Facebook", type: "string" },
+    { fieldId: "system:company.socialMedia.whatsapp", label: "WhatsApp Number", type: "string" },
   ],
   Vendor: [
     { fieldId: "system:vendor.name", label: "Vendor Name", type: "string", baseRequired: true },
@@ -91,6 +99,10 @@ const SYSTEM_FIELDS = {
     { fieldId: "system:vendor.phone", label: "Phone", type: "string" },
     { fieldId: "system:vendor.email", label: "Email", type: "string" },
     { fieldId: "system:vendor.address", label: "Address", type: "string" },
+    { fieldId: "system:vendor.socialMedia.twitter", label: "Twitter / X", type: "string" },
+    { fieldId: "system:vendor.socialMedia.linkedin", label: "LinkedIn", type: "string" },
+    { fieldId: "system:vendor.socialMedia.facebook", label: "Facebook", type: "string" },
+    { fieldId: "system:vendor.socialMedia.whatsapp", label: "WhatsApp Number", type: "string" },
   ],
 };
 
@@ -423,11 +435,11 @@ function PropertiesPanel({ element, fieldMetaById, onChange }) {
           <input
             type="checkbox"
             checked={!!element.required}
-            disabled={BASE_REQUIRED_FIELD_IDS.has(element.fieldId)}
+            disabled={BASE_REQUIRED_FIELD_IDS.has(element.fieldId) || !!meta?.baseRequired}
             onChange={(e) => onChange({ ...element, required: e.target.checked })}
           />
           Required
-          {BASE_REQUIRED_FIELD_IDS.has(element.fieldId) && (
+          {(BASE_REQUIRED_FIELD_IDS.has(element.fieldId) || !!meta?.baseRequired) && (
             <span className="text-xs text-gray-400">(always required)</span>
           )}
         </label>
@@ -758,10 +770,33 @@ const FormBuilderPage = () => {
       map.set("system:company.industry", { ...map.get("system:company.industry"), options: industryOptions });
     }
     customFields.forEach((f) =>
-      map.set(f._id, { fieldId: f._id, label: f.name, type: f.type, options: f.options || [] })
+      map.set(f._id, { fieldId: f._id, label: f.name, type: f.type, options: f.options || [], baseRequired: !!f.required })
     );
     return map;
   }, [form, customFields, industryOptions]);
+
+  // A field is "always required" (locked, can't be unchecked) if it's a hardcoded system
+  // baseRequired field OR a custom field whose own definition (Settings > *Fields) has
+  // `required: true`. Reads live off fieldMetaById so a Settings-side change is reflected here
+  // with zero Builder code changes — same principle as the custom-fields palette itself.
+  const isAlwaysRequired = useCallback(
+    (fieldId) => BASE_REQUIRED_FIELD_IDS.has(fieldId) || !!fieldMetaById.get(fieldId)?.baseRequired,
+    [fieldMetaById]
+  );
+
+  // All fields (system + custom) that must exist on the canvas for `module` to be creatable —
+  // used both to lock a field's Required checkbox and to auto-backfill missing ones.
+  const getRequiredFieldsForModule = useCallback(
+    (module) => {
+      const systemRequired = (SYSTEM_FIELDS[module] || []).filter((f) => f.baseRequired);
+      const customRequired =
+        form?.module === module
+          ? customFields.filter((f) => f.required).map((f) => ({ fieldId: f._id, label: f.name }))
+          : [];
+      return [...systemRequired, ...customRequired];
+    },
+    [form, customFields]
+  );
 
   // Fields already placed on canvas — used to disable them in the palette so a duplicate can't be
   // dragged a second time. The backend's assertUniqueFieldIds is a correctness backstop for this,
@@ -787,14 +822,14 @@ const FormBuilderPage = () => {
   // manually or auto-inserted. Once it's the last field left for that module, deleting it is safe.
   const isFieldLocked = useCallback(
     (element) => {
-      if (element.type !== "field" || !BASE_REQUIRED_FIELD_IDS.has(element.fieldId)) return false;
-      const owningModule = moduleFromFieldId(element.fieldId);
+      if (element.type !== "field" || !isAlwaysRequired(element.fieldId)) return false;
+      const owningModule = moduleFromFieldId(element.fieldId) || (element.source === "custom" ? form?.module : null);
       if (!owningModule) return false;
       return elements.some(
-        (e) => e.id !== element.id && e.type === "field" && moduleFromFieldId(e.fieldId) === owningModule
+        (e) => e.id !== element.id && e.type === "field" && (moduleFromFieldId(e.fieldId) || (e.source === "custom" ? form?.module : null)) === owningModule
       );
     },
-    [elements]
+    [elements, isAlwaysRequired, form]
   );
 
   const deleteElement = (elId) => {
@@ -829,7 +864,7 @@ const FormBuilderPage = () => {
           type: "field",
           fieldId: field.fieldId,
           source,
-          required: BASE_REQUIRED_FIELD_IDS.has(field.fieldId),
+          required: isAlwaysRequired(field.fieldId),
         };
       }
       if (!newElement) return;
@@ -842,14 +877,15 @@ const FormBuilderPage = () => {
         let next = [...withoutSubmit];
         next.splice(insertAt, 0, newElement);
 
-        // A system field belongs to a CRM module that has its own hard-required fields (e.g.
-        // Company Name for any Company field) — the builder must never let a visitor-facing form
-        // reach publish in a state that can't actually create the record it's meant for. Backfill
-        // silently, mark the inserted fields so the canvas can explain why they're there.
-        if (source === "system") {
-          const owningModule = moduleFromFieldId(field.fieldId);
+        // Any field (system or custom) belongs to a CRM module that has its own hard-required
+        // fields (e.g. Company Name for any Company field, or a custom field marked Required in
+        // Settings) — the builder must never let a visitor-facing form reach publish in a state
+        // that can't actually create the record it's meant for. Backfill silently, mark the
+        // inserted fields so the canvas can explain why they're there.
+        if (source === "system" || source === "custom") {
+          const owningModule = source === "system" ? moduleFromFieldId(field.fieldId) : form?.module;
           if (owningModule) {
-            const requiredFields = (SYSTEM_FIELDS[owningModule] || []).filter((f) => f.baseRequired);
+            const requiredFields = getRequiredFieldsForModule(owningModule);
             const existingIds = new Set(next.filter((e) => e.type === "field").map((e) => e.fieldId));
             const missing = requiredFields.filter((f) => !existingIds.has(f.fieldId));
             if (missing.length > 0) {
@@ -857,7 +893,7 @@ const FormBuilderPage = () => {
                 id: uid(),
                 type: "field",
                 fieldId: f.fieldId,
-                source: "system",
+                source: SYSTEM_FIELDS[owningModule]?.some((sf) => sf.fieldId === f.fieldId) ? "system" : "custom",
                 required: true,
               }));
               next = [...missingElements, ...next];

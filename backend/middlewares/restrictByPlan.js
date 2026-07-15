@@ -128,7 +128,14 @@ const getStorageUpgradeMessage = (currentPlan) => {
   return messages[currentPlan] || messages.trial;
 };
 
-module.exports = (moduleName, actionType) => async (req, res, next) => {
+// `options.skipLimit`: for write routes that mutate/delete an EXISTING document rather than
+// create a new one (e.g. PATCH/pause/archive/publish/delete) — the numeric limit check below
+// counts documents and compares against `newItemsOfThisModule` (defaulting to 1 per request),
+// which only makes sense for creation. Applying it to a route that doesn't add a document traps
+// an org at its limit: every route that could reduce the count (Delete/Archive) is itself blocked
+// by the count being too high, with no way to get unstuck through the UI. Read/write-access
+// gating (module enabled, write allowed by plan) still applies regardless of this flag.
+module.exports = (moduleName, actionType, options = {}) => async (req, res, next) => {
   try {
     const organization = req.user.organization;
 
@@ -249,6 +256,7 @@ module.exports = (moduleName, actionType) => async (req, res, next) => {
     // ------------------------------------------------------------------
     if (
       actionType === 'write' &&
+      !options.skipLimit &&
       moduleFeatures &&
       Object.prototype.hasOwnProperty.call(moduleFeatures, 'limit') &&
       perModuleLimitModels[moduleName]
@@ -264,9 +272,14 @@ module.exports = (moduleName, actionType) => async (req, res, next) => {
 
           // Sum counts across all backing models for this module (usually
           // just one model; invoices and purchases combine two).
+          // Forms is the one module whose count deliberately excludes a terminal status: an
+          // archived FormDefinition is retired (formPublishService.archiveForm — no way back to
+          // published) and shouldn't permanently occupy a slot in the plan's numeric limit the
+          // way an active draft/published/paused form does.
           let currentModuleCount = 0;
           for (const Model of models) {
-            currentModuleCount += await Model.countDocuments({ organization });
+            const filter = moduleName === 'forms' ? { organization, status: { $ne: 'archived' } } : { organization };
+            currentModuleCount += await Model.countDocuments(filter);
           }
 
           const newItemsOfThisModule = req.body?.[moduleName]?.length || 1;
