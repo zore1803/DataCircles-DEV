@@ -25,13 +25,20 @@ router.post("/forms", writeGate, formController.createForm);
 router.get("/forms/:id", readGate, formController.getForm);
 router.patch("/forms/:id", writeGate, formController.updateForm);
 router.post("/forms/:id/publish", writeGate, formController.publishForm);
+router.post("/forms/:id/archive", writeGate, formController.archiveForm);
+router.post("/forms/:id/pause", writeGate, formController.pauseForm);
+router.post("/forms/:id/resume", writeGate, formController.resumeForm);
+router.delete("/forms/:id", writeGate, formController.deleteForm);
 
 // --- Submissions ---
 router.get("/forms/:id/submissions", readGate, formController.listSubmissions);
+router.get("/forms/:id/submissions/:submissionId", readGate, formController.getSubmission);
 
 // --- Duplicate Review Center ---
 router.get("/duplicate-reviews", readGate, formController.listDuplicateReviews);
+router.get("/duplicate-reviews/:id", readGate, formController.getDuplicateReview);
 router.post("/duplicate-reviews/:id/keep-separate", writeGate, formController.resolveKeepSeparate);
 router.post("/duplicate-reviews/:id/link", writeGate, formController.resolveLinkToExisting);
+router.post("/duplicate-reviews/:id/merge", writeGate, formController.resolveMerge);
 
 module.exports = router;

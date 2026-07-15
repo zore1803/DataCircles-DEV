@@ -60,31 +60,50 @@ import {
   AlignRight,
   Bold,
 } from "lucide-react";
+import FormElementRenderer from "../components/forms/FormElementRenderer";
 
 // Mirrors backend/utils/systemFields.js exactly (SYSTEM_FIELD_IDS/SYSTEM_FIELD_META) — no frontend
 // endpoint exposes this static registry, so it's inlined rather than fetched.
 const SYSTEM_FIELDS = {
   Contact: [
-    { fieldId: "system:contact.name", label: "Name", type: "string" },
-    { fieldId: "system:contact.email", label: "Email", type: "string" },
+    { fieldId: "system:contact.name", label: "Name", type: "string", baseRequired: true },
+    { fieldId: "system:contact.email", label: "Email", type: "string", baseRequired: true },
     { fieldId: "system:contact.phone", label: "Phone", type: "string" },
-    { fieldId: "system:contact.company", label: "Company", type: "string" },
+    // No "Company" entry: Contact.company is an internal ObjectId relationship, not a visitor-
+    // fillable value. Use the Company system fields below (Company Name, Industry, ...) instead —
+    // the relationship is created/linked automatically server-side.
   ],
   Company: [
-    { fieldId: "system:company.name", label: "Company Name", type: "string" },
-    { fieldId: "system:company.industry", label: "Industry", type: "dropdown" },
+    { fieldId: "system:company.name", label: "Company Name", type: "string", baseRequired: true },
+    { fieldId: "system:company.industry", label: "Industry", type: "dropdown", baseRequired: true },
     { fieldId: "system:company.gstin", label: "GSTIN", type: "string" },
     { fieldId: "system:company.address", label: "Address", type: "string" },
     { fieldId: "system:company.website", label: "Website", type: "url" },
+    // No true file-upload support exists yet: FormSubmission.processedData is Mixed but the
+    // ContactFields/CompanyFields field-type enum has no "file" type, and there's no public-safe
+    // upload endpoint for an unauthenticated visitor. This is a URL field (visitor pastes an
+    // image link), matching backend SYSTEM_FIELD_META's "system:company.profilePicture": url.
+    { fieldId: "system:company.profilePicture", label: "Profile Picture (Image URL)", type: "url" },
   ],
   Vendor: [
-    { fieldId: "system:vendor.name", label: "Vendor Name", type: "string" },
+    { fieldId: "system:vendor.name", label: "Vendor Name", type: "string", baseRequired: true },
     { fieldId: "system:vendor.gstin", label: "GSTIN", type: "string" },
     { fieldId: "system:vendor.phone", label: "Phone", type: "string" },
     { fieldId: "system:vendor.email", label: "Email", type: "string" },
     { fieldId: "system:vendor.address", label: "Address", type: "string" },
   ],
 };
+
+// fieldId -> true for system fields whose underlying CRM schema hard-requires the value
+// (backend/utils/systemFields.js SYSTEM_FIELD_META baseRequired). A form element for one of
+// these must never be submittable as optional — the Builder can't let a visitor skip it only to
+// have companyService.createCompany() etc. throw a Mongoose ValidationError downstream.
+const BASE_REQUIRED_FIELD_IDS = new Set(
+  Object.values(SYSTEM_FIELDS)
+    .flat()
+    .filter((f) => f.baseRequired)
+    .map((f) => f.fieldId)
+);
 
 const FIELD_ENDPOINT_BY_MODULE = {
   Contact: "/contact-fields",
@@ -98,6 +117,16 @@ const FONT_SIZE_CLASS = { small: "text-sm", normal: "text-base", large: "text-xl
 
 function uid() {
   return `el-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+// "system:company.industry" -> "Company", etc. — used to figure out which module's mandatory
+// fields must be backfilled when a system field from that module gets placed on the canvas
+// (including the Company-fields-inside-a-Contact-form cross-module case).
+function moduleFromFieldId(fieldId) {
+  if (fieldId?.startsWith("system:contact.")) return "Contact";
+  if (fieldId?.startsWith("system:company.")) return "Company";
+  if (fieldId?.startsWith("system:vendor.")) return "Vendor";
+  return null;
 }
 
 function ensureSubmitButton(elements) {
@@ -149,16 +178,53 @@ function FieldsPanel({ module, customFields, usedFieldIds, theme, onThemeChange 
       </div>
 
       {tab === "theme" ? (
-        <div className="p-4">
-          <label className="block text-xs font-medium text-gray-500 mb-1">Font Family</label>
-          <select
-            value={theme?.fontFamily || FONT_OPTIONS[0]}
-            onChange={(e) => onThemeChange({ ...theme, fontFamily: e.target.value })}
-            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-          >
-            {FONT_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
-          </select>
-          <p className="text-xs text-gray-400 mt-2">Applies to the whole form. Button color/style is set on the Submit Button itself — click it on the canvas.</p>
+        <div className="p-4 flex flex-col gap-4">
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Typography</p>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Font Family</label>
+                <select
+                  value={theme?.fontFamily || FONT_OPTIONS[0]}
+                  onChange={(e) => onThemeChange({ ...theme, fontFamily: e.target.value })}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                >
+                  {FONT_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Font Size</label>
+                <select
+                  value={theme?.fontSize || "normal"}
+                  onChange={(e) => onThemeChange({ ...theme, fontSize: e.target.value })}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                >
+                  <option value="small">Small</option>
+                  <option value="normal">Normal</option>
+                  <option value="large">Large</option>
+                  <option value="xlarge">Extra Large</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Font Weight</label>
+                <select
+                  value={theme?.fontWeight || "normal"}
+                  onChange={(e) => onThemeChange({ ...theme, fontWeight: e.target.value })}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                >
+                  <option value="normal">Normal</option>
+                  <option value="bold">Bold</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Text Alignment</label>
+                <AlignButtons value={theme?.textAlign || "left"} onChange={(v) => onThemeChange({ ...theme, textAlign: v })} />
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 border-t border-gray-100 pt-3">
+            Applies to the whole form as the default — individual Heading/Paragraph elements can still override these. Button color/style is set on the Submit Button itself — click it on the canvas.
+          </p>
         </div>
       ) : (
         <div className="p-4 overflow-y-auto flex flex-col gap-5">
@@ -228,62 +294,9 @@ function FieldsPanel({ module, customFields, usedFieldIds, theme, onThemeChange 
 
 // --- Canvas — renders each element as it will actually look, not a generic card ---
 
-function fieldMeta(element, fieldMetaById) {
-  return fieldMetaById.get(element.fieldId);
-}
+// Canvas rendering is handled by the shared FormElementRenderer component.
 
-function CanvasElementContent({ element, fieldMetaById }) {
-  const alignClass = { left: "text-left", center: "text-center", right: "text-right" }[element.textAlign] || "text-left";
-  const weightClass = element.fontWeight === "bold" ? "font-bold" : "font-normal";
-  const sizeClass = FONT_SIZE_CLASS[element.fontSize] || (element.type === "heading" ? "text-xl" : "text-sm");
-
-  if (element.type === "heading") {
-    return <p className={`${sizeClass} ${weightClass || "font-bold"} text-gray-900 ${alignClass}`}>{element.text || "Heading"}</p>;
-  }
-  if (element.type === "paragraph") {
-    return <p className={`${sizeClass} ${weightClass} text-gray-600 ${alignClass}`}>{element.text || "Paragraph text"}</p>;
-  }
-  if (element.type === "divider") {
-    return <hr className="border-gray-200 w-full" />;
-  }
-  if (element.type === "submitButton") {
-    const posClass = { left: "justify-start", center: "justify-center", right: "justify-end" }[element.position] || "justify-start";
-    return (
-      <div className={`flex w-full ${posClass}`}>
-        <button
-          disabled
-          style={{ backgroundColor: element.color || BUTTON_COLORS[0] }}
-          className={`px-5 py-2 text-white text-sm font-semibold ${element.style === "outline" ? "bg-transparent border-2" : ""} ${element.style === "rounded" ? "rounded-full" : "rounded-lg"}`}
-        >
-          {element.label || "Submit"}
-        </button>
-      </div>
-    );
-  }
-  if (element.type === "field") {
-    const meta = fieldMeta(element, fieldMetaById);
-    const isDropdown = meta?.type === "dropdown";
-    return (
-      <div className="w-full">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {meta?.label || element.fieldId}
-          {element.required && <span className="text-red-500"> *</span>}
-        </label>
-        {isDropdown ? (
-          <select disabled className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-400">
-            <option>{element.placeholder || "Select..."}</option>
-          </select>
-        ) : (
-          <input disabled placeholder={element.placeholder || ""} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-400" />
-        )}
-        {element.helpText && <p className="text-xs text-gray-400 mt-1">{element.helpText}</p>}
-      </div>
-    );
-  }
-  return null;
-}
-
-function CanvasItem({ element, fieldMetaById, isSelected, onSelect, onDelete }) {
+function CanvasItem({ element, fieldMetaById, isSelected, onSelect, onDelete, isLocked, theme }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: element.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const deletable = element.type !== "submitButton";
@@ -302,11 +315,19 @@ function CanvasItem({ element, fieldMetaById, isSelected, onSelect, onDelete }) 
           <GripVertical className="w-3.5 h-3.5" />
         </button>
       </div>
-      <CanvasElementContent element={element} fieldMetaById={fieldMetaById} />
+      <FormElementRenderer
+        element={element}
+        fieldMeta={element.fieldId ? fieldMetaById.get(element.fieldId) : undefined}
+        interactive={false}
+        theme={theme}
+      />
       {deletable && (
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(element.id); }}
-          className="absolute top-1 right-1 text-gray-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          title={isLocked ? `${fieldMetaById.get(element.fieldId)?.label || "This field"} is required while ${moduleFromFieldId(element.fieldId)} fields exist on this form.` : undefined}
+          className={`absolute top-1 right-1 p-1 opacity-0 group-hover:opacity-100 transition-opacity ${
+            isLocked ? "text-gray-300 cursor-not-allowed" : "text-gray-300 hover:text-red-500"
+          }`}
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -315,12 +336,15 @@ function CanvasItem({ element, fieldMetaById, isSelected, onSelect, onDelete }) 
   );
 }
 
-function Canvas({ elements, fieldMetaById, selectedId, onSelect, onDelete }) {
+function Canvas({ elements, fieldMetaById, selectedId, onSelect, onDelete, isFieldLocked, theme }) {
   const { setNodeRef, isOver } = useDroppable({ id: "canvas-droppable" });
 
   return (
     <div ref={setNodeRef} className={`flex-1 p-8 overflow-y-auto ${isOver ? "bg-blue-50/40" : ""}`}>
-      <div className="max-w-xl mx-auto bg-white rounded-xl border border-gray-200 shadow-sm p-6 min-h-[500px]">
+      <div
+        className="max-w-xl mx-auto bg-white rounded-xl border border-gray-200 shadow-sm p-6 min-h-[500px]"
+        style={{ fontFamily: theme?.fontFamily || undefined }}
+      >
         {elements.length === 0 ? (
           <div className="flex items-center justify-center h-full min-h-[400px] text-center">
             <p className="text-gray-400 text-sm">Drag fields here to build your form</p>
@@ -336,6 +360,8 @@ function Canvas({ elements, fieldMetaById, selectedId, onSelect, onDelete }) {
                   isSelected={selectedId === el.id}
                   onSelect={onSelect}
                   onDelete={onDelete}
+                  isLocked={isFieldLocked(el)}
+                  theme={theme}
                 />
               ))}
             </div>
@@ -394,8 +420,16 @@ function PropertiesPanel({ element, fieldMetaById, onChange }) {
           <p className="text-sm text-gray-700 px-2 py-1.5 bg-gray-50 rounded border border-gray-100">{meta?.label || element.fieldId}</p>
         </div>
         <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={!!element.required} onChange={(e) => onChange({ ...element, required: e.target.checked })} />
+          <input
+            type="checkbox"
+            checked={!!element.required}
+            disabled={BASE_REQUIRED_FIELD_IDS.has(element.fieldId)}
+            onChange={(e) => onChange({ ...element, required: e.target.checked })}
+          />
           Required
+          {BASE_REQUIRED_FIELD_IDS.has(element.fieldId) && (
+            <span className="text-xs text-gray-400">(always required)</span>
+          )}
         </label>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">Placeholder</label>
@@ -549,6 +583,57 @@ function PropertiesPanel({ element, fieldMetaById, onChange }) {
     );
   }
 
+  if (element.type === "divider") {
+    return (
+      <div className="w-72 shrink-0 bg-white border-l border-gray-200 p-4 flex flex-col gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Thickness (px)</label>
+          <input
+            type="number"
+            min={1}
+            max={12}
+            value={element.dividerThickness ?? 1}
+            onChange={(e) => onChange({ ...element, dividerThickness: Number(e.target.value) })}
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Color</label>
+          <input
+            type="color"
+            value={element.dividerColor || "#e5e7eb"}
+            onChange={(e) => onChange({ ...element, dividerColor: e.target.value })}
+            className="w-full h-9 border border-gray-300 rounded cursor-pointer"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Top Spacing (px)</label>
+            <input
+              type="number"
+              min={0}
+              max={64}
+              value={element.dividerSpacingTop ?? 0}
+              onChange={(e) => onChange({ ...element, dividerSpacingTop: Number(e.target.value) })}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Bottom Spacing (px)</label>
+            <input
+              type="number"
+              min={0}
+              max={64}
+              value={element.dividerSpacingBottom ?? 0}
+              onChange={(e) => onChange({ ...element, dividerSpacingBottom: Number(e.target.value) })}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-72 shrink-0 bg-white border-l border-gray-200 p-4">
       <p className="text-sm text-gray-400">No editable properties for this element.</p>
@@ -556,22 +641,47 @@ function PropertiesPanel({ element, fieldMetaById, onChange }) {
   );
 }
 
-// --- Preview (simplified — not the shared public renderer, which doesn't exist yet) ---
+// --- Preview — a real interactive sandbox, not a screenshot. Reuses FormElementRenderer's
+// existing `interactive` mode (the same code path a future public-form renderer would use) rather
+// than a second, fake read-only copy — typing, dropdowns, and native required-field validation all
+// behave as they would on the real public form. The one difference: submit is intercepted so
+// nothing is ever actually sent anywhere.
 
 function PreviewModal({ elements, fieldMetaById, theme, onClose }) {
+  const [values, setValues] = useState({});
+
+  const handleChange = (fieldId, value) => {
+    setValues((prev) => ({ ...prev, [fieldId]: value }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    toast.success("This is a preview — no data was submitted.");
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto flex flex-col">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Preview</h2>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Preview</h2>
+            <p className="text-xs text-gray-400">Try it out — nothing you enter here gets submitted.</p>
+          </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-500" /></button>
         </div>
-        <div className="p-6 flex flex-col gap-4" style={{ fontFamily: theme?.fontFamily || undefined }}>
-          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            Simplified preview — the real public form renderer doesn't exist yet.
-          </p>
-          {elements.map((el) => <CanvasElementContent key={el.id} element={el} fieldMetaById={fieldMetaById} />)}
-        </div>
+        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4" style={{ fontFamily: theme?.fontFamily || undefined }}>
+          {elements.map((el) => (
+            <FormElementRenderer
+              key={el.id}
+              element={el}
+              fieldMeta={el.fieldId ? fieldMetaById.get(el.fieldId) : undefined}
+              interactive={true}
+              value={el.fieldId ? values[el.fieldId] : undefined}
+              onChange={el.fieldId ? (v) => handleChange(el.fieldId, v) : undefined}
+              theme={theme}
+            />
+          ))}
+        </form>
       </div>
     </div>
   );
@@ -586,6 +696,7 @@ const FormBuilderPage = () => {
   const [elements, setElements] = useState([]);
   const [theme, setTheme] = useState({});
   const [customFields, setCustomFields] = useState([]);
+  const [industryOptions, setIndustryOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -614,6 +725,15 @@ const FormBuilderPage = () => {
           setCustomFields([]);
         }
       }
+
+      if (f.module === "Company") {
+        try {
+          const industriesRes = await API.get("/company-industries");
+          setIndustryOptions((industriesRes.data || []).map((i) => i.name));
+        } catch {
+          setIndustryOptions([]);
+        }
+      }
     } catch (err) {
       if (err.response?.status === 404) {
         toast.error("Form not found");
@@ -634,9 +754,14 @@ const FormBuilderPage = () => {
       (SYSTEM_FIELDS[form.module] || []).forEach((f) => map.set(f.fieldId, f));
       SYSTEM_FIELDS.Company.forEach((f) => map.set(f.fieldId, f));
     }
-    customFields.forEach((f) => map.set(f._id, { fieldId: f._id, label: f.name, type: f.type }));
+    if (map.has("system:company.industry")) {
+      map.set("system:company.industry", { ...map.get("system:company.industry"), options: industryOptions });
+    }
+    customFields.forEach((f) =>
+      map.set(f._id, { fieldId: f._id, label: f.name, type: f.type, options: f.options || [] })
+    );
     return map;
-  }, [form, customFields]);
+  }, [form, customFields, industryOptions]);
 
   // Fields already placed on canvas — used to disable them in the palette so a duplicate can't be
   // dragged a second time. The backend's assertUniqueFieldIds is a correctness backstop for this,
@@ -656,7 +781,29 @@ const FormBuilderPage = () => {
     setDirty(true);
   };
 
+  // A baseRequired field (e.g. Company Name, Industry) can't be removed while any other field from
+  // the same module is still on the canvas — that other field is evidence the form still creates a
+  // record in that module, so the mandatory field must stay regardless of whether it was dropped in
+  // manually or auto-inserted. Once it's the last field left for that module, deleting it is safe.
+  const isFieldLocked = useCallback(
+    (element) => {
+      if (element.type !== "field" || !BASE_REQUIRED_FIELD_IDS.has(element.fieldId)) return false;
+      const owningModule = moduleFromFieldId(element.fieldId);
+      if (!owningModule) return false;
+      return elements.some(
+        (e) => e.id !== element.id && e.type === "field" && moduleFromFieldId(e.fieldId) === owningModule
+      );
+    },
+    [elements]
+  );
+
   const deleteElement = (elId) => {
+    const target = elements.find((e) => e.id === elId);
+    if (target && isFieldLocked(target)) {
+      const label = fieldMetaById.get(target.fieldId)?.label || "This field";
+      toast.error(`${label} is required while ${moduleFromFieldId(target.fieldId)} fields exist on this form.`);
+      return;
+    }
     setElements((prev) => prev.filter((e) => e.id !== elId));
     if (selectedId === elId) setSelectedId(null);
     setDirty(true);
@@ -677,7 +824,13 @@ const FormBuilderPage = () => {
         if (usedFieldIds.has(field.fieldId)) return; // guard: same check as the disabled palette state
         // system or custom field — targetModule is deliberately NOT set here; it's derived
         // server-side at publish time (formVersionService.deriveTargetModule), never by the UI.
-        newElement = { id: uid(), type: "field", fieldId: field.fieldId, source, required: false };
+        newElement = {
+          id: uid(),
+          type: "field",
+          fieldId: field.fieldId,
+          source,
+          required: BASE_REQUIRED_FIELD_IDS.has(field.fieldId),
+        };
       }
       if (!newElement) return;
 
@@ -686,8 +839,37 @@ const FormBuilderPage = () => {
         const submitEl = prev.find((e) => e.type === "submitButton");
         const overIndex = withoutSubmit.findIndex((e) => e.id === over.id);
         const insertAt = overIndex === -1 ? withoutSubmit.length : overIndex + 1;
-        const next = [...withoutSubmit];
+        let next = [...withoutSubmit];
         next.splice(insertAt, 0, newElement);
+
+        // A system field belongs to a CRM module that has its own hard-required fields (e.g.
+        // Company Name for any Company field) — the builder must never let a visitor-facing form
+        // reach publish in a state that can't actually create the record it's meant for. Backfill
+        // silently, mark the inserted fields so the canvas can explain why they're there.
+        if (source === "system") {
+          const owningModule = moduleFromFieldId(field.fieldId);
+          if (owningModule) {
+            const requiredFields = (SYSTEM_FIELDS[owningModule] || []).filter((f) => f.baseRequired);
+            const existingIds = new Set(next.filter((e) => e.type === "field").map((e) => e.fieldId));
+            const missing = requiredFields.filter((f) => !existingIds.has(f.fieldId));
+            if (missing.length > 0) {
+              const missingElements = missing.map((f) => ({
+                id: uid(),
+                type: "field",
+                fieldId: f.fieldId,
+                source: "system",
+                required: true,
+              }));
+              next = [...missingElements, ...next];
+              const labels = missing.map((f) => f.label).join(" and ");
+              // One-time notification only — no permanent marker is kept on the element (backend
+              // schema has no autoAdded field either). Once inserted, these fields behave exactly
+              // like any other field; the user only needs to be told why, once.
+              setTimeout(() => toast(`${labels} automatically added — required to create ${owningModule} records.`, { icon: "ℹ️" }), 0);
+            }
+          }
+        }
+
         return ensureSubmitButton(submitEl ? [...next, submitEl] : next);
       });
       setDirty(true);
@@ -816,6 +998,8 @@ const FormBuilderPage = () => {
             selectedId={selectedId}
             onSelect={setSelectedId}
             onDelete={deleteElement}
+            isFieldLocked={isFieldLocked}
+            theme={theme}
           />
           <PropertiesPanel element={selectedElement} fieldMetaById={fieldMetaById} onChange={updateElement} />
         </div>

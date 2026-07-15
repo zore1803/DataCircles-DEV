@@ -15,6 +15,8 @@ const companyService = require("./companyService");
 const vendorService = require("./vendorService");
 const { getCrmFieldNameForSystemId } = require("../utils/systemFields");
 
+const mongoose = require("mongoose");
+
 const CREATE_SERVICE_BY_MODULE = {
   Contact: (org, data) => contactService.createContact(org, data, { source: "form" }),
   Company: (org, data) => companyService.createCompany(org, data, { source: "form" }),
@@ -52,7 +54,14 @@ function coerceAndValidate(formVersion, rawData) {
       const rawValue = rawData ? rawData[el.fieldId] : undefined;
       const isPresent = rawValue !== undefined && rawValue !== null && rawValue !== "";
 
-      if (el.required && !isPresent) {
+      // A system field whose underlying CRM schema hard-requires a value (e.g. Company.industry)
+      // must be enforced here even if an older FormVersion froze `required: false` for it — the
+      // Builder now defaults these to required for newly-added fields, but a frozen layout can't be
+      // retroactively edited, and letting one through here just moves the failure downstream to a
+      // raw Mongoose ValidationError inside createCrmRecord instead of a clean 422.
+      const isHardRequired = el.required || (meta && meta.baseRequired);
+
+      if (isHardRequired && !isPresent) {
         validationErrors.push({ fieldId: el.fieldId, message: `${meta ? meta.label : el.fieldId} is required` });
         continue;
       }
@@ -410,6 +419,24 @@ async function linkContactToCompany(submission, form, contactId, companyRecord) 
 async function createCrmRecord(submission, form, module, crmPayload) {
   const createFn = CREATE_SERVICE_BY_MODULE[module];
   if (!createFn) throw new Error(`Unsupported module: ${module}`);
+  // Defensive sanitization: some system fields (e.g. Contact.company) are ObjectId refs.
+  // If the incoming payload contains a non-ObjectId string for such a ref (for example,
+  // the literal string "company" due to a builder misconfiguration), Mongoose will throw
+  // a CastError and crash the submission pipeline. Remove invalid ObjectId-like values
+  // here so downstream related-bucket processing (Company creation + linking) can still
+  // run and attach a Company to the Contact if appropriate.
+  try {
+    if (module === "Contact" && crmPayload && typeof crmPayload.company === "string") {
+      if (!mongoose.Types.ObjectId.isValid(crmPayload.company)) {
+        // log and drop the invalid company value to avoid a CastError
+        console.warn(`submissionService: dropping invalid Contact.company value for submission ${submission._id}`);
+        delete crmPayload.company;
+      }
+    }
+  } catch (sanErr) {
+    console.error("submissionService.sanitize error:", sanErr);
+  }
+
   const record = await createFn(form.organization, crmPayload);
 
   await FormSubmission.findByIdAndUpdate(submission._id, {
