@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Mail, Clock, User, CheckCircle, XCircle, AlertCircle, Send } from "lucide-react";
 import API from "../../services/api";
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
+import AppToaster from "../AppToaster";
 
 const Emails = ({ contactId, contactEmail }) => {
   const [logs, setLogs] = useState([]);
@@ -157,14 +158,7 @@ const Emails = ({ contactId, contactEmail }) => {
     <div className="min-h-screen">
       {/* Safe area for laptop notch */}
       <div className="pt-safe-top">
-        <Toaster 
-          position="top-right" 
-          reverseOrder={false} 
-          gutter={8}
-          containerStyle={{
-            top: 'max(1rem, env(safe-area-inset-top))'
-          }}
-        />
+        <AppToaster />
 
         <div>
           {/* Header Section */}

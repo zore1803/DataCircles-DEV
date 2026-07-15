@@ -28,10 +28,10 @@ import {
   Download,
   StickyNote,
   MoreHorizontal,
+  SlidersHorizontal,
   Eye,
   Pin,
   PinOff,
-  Star
 } from "lucide-react";
 import ImportClients from "../components/company/ImportClients";
 import Hotlist from "../components/company/Hotlist";
@@ -43,7 +43,45 @@ import VideoTutorialButton from "../components/VideoTutorialButton";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import { useLocation } from "react-router-dom";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
+
+const CompanyNameIcon = (props) => (
+  <svg width="16" height="15" viewBox="0 0 16 15" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M7.91667 10.2083C8.32153 10.2083 8.66583 10.0665 8.94958 9.78292C9.2332 9.49917 9.375 9.15486 9.375 8.75C9.375 8.34514 9.2332 8.00083 8.94958 7.71708C8.66583 7.43347 8.32153 7.29167 7.91667 7.29167C7.51181 7.29167 7.1675 7.43347 6.88375 7.71708C6.60014 8.00083 6.45833 8.34514 6.45833 8.75C6.45833 9.15486 6.60014 9.49917 6.88375 9.78292C7.1675 10.0665 7.51181 10.2083 7.91667 10.2083ZM1.50646 14.5833C1.08549 14.5833 0.729167 14.4375 0.4375 14.1458C0.145833 13.8542 0 13.4978 0 13.0769V4.42313C0 4.00215 0.145833 3.64583 0.4375 3.35417C0.729167 3.0625 1.08549 2.91667 1.50646 2.91667H5V1.50646C5 1.08549 5.14583 0.729167 5.4375 0.4375C5.72917 0.145833 6.08549 0 6.50646 0H9.32687C9.74785 0 10.1042 0.145833 10.3958 0.4375C10.6875 0.729167 10.8333 1.08549 10.8333 1.50646V2.91667H14.3269C14.7478 2.91667 15.1042 3.0625 15.3958 3.35417C15.6875 3.64583 15.8333 4.00215 15.8333 4.42313V13.0769C15.8333 13.4978 15.6875 13.8542 15.3958 14.1458C15.1042 14.4375 14.7478 14.5833 14.3269 14.5833H1.50646ZM1.50646 13.3333H14.3269C14.391 13.3333 14.4498 13.3066 14.5031 13.2531C14.5566 13.1998 14.5833 13.141 14.5833 13.0769V4.42313C14.5833 4.35896 14.5566 4.30021 14.5031 4.24687C14.4498 4.1934 14.391 4.16667 14.3269 4.16667H1.50646C1.44229 4.16667 1.38354 4.1934 1.33021 4.24687C1.27674 4.30021 1.25 4.35896 1.25 4.42313V13.0769C1.25 13.141 1.27674 13.1998 1.33021 13.2531C1.38354 13.3066 1.44229 13.3333 1.50646 13.3333ZM6.25 2.91667H9.58333V1.50646C9.58333 1.44229 9.5566 1.38354 9.50313 1.33021C9.44979 1.27674 9.39104 1.25 9.32687 1.25H6.50646C6.44229 1.25 6.38354 1.27674 6.33021 1.33021C6.27674 1.38354 6.25 1.44229 6.25 1.50646V2.91667Z" fill="#525252" />
+  </svg>
+);
+
+const CompanyIndustryIcon = (props) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M0 15.5127V6.18896L5 4.0625V5.71312L9.16667 4.04646V6.34604H15.8333V15.5127H0ZM1.25 14.2627H14.5833V7.59604H7.91667V5.88771L3.75 7.55437V5.92937L1.25 7.03354V14.2627ZM7.17958 12.4038H8.65375V9.455H7.17958V12.4038ZM3.84625 12.4038H5.32042V9.455H3.84625V12.4038ZM10.5129 12.4038H11.9871V9.455H10.5129V12.4038ZM15.8333 6.34604H12.4519L13.2852 0H15.0481L15.8333 6.34604Z" fill="#525252" />
+  </svg>
+);
+
+const CompanyLocationIcon = (props) => (
+  <svg width="11" height="16" viewBox="0 0 11 16" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M1.96479 15.2275C1.0716 14.8237 0.625 14.3019 0.625 13.6619C0.625 13.3659 0.736389 13.0876 0.959167 12.8269C1.18194 12.5662 1.48993 12.3424 1.88313 12.1554L2.86708 13.0481C2.68861 13.1197 2.50104 13.2088 2.30437 13.3156C2.10785 13.4226 1.97326 13.5353 1.90063 13.6538C2.0384 13.9028 2.4484 14.1199 3.13062 14.3052C3.81271 14.4906 4.57472 14.5833 5.41667 14.5833C6.25319 14.5833 7.01604 14.4906 7.70521 14.3052C8.39424 14.1199 8.80771 13.9028 8.94563 13.6538C8.87507 13.5267 8.73271 13.4097 8.51854 13.3029C8.30424 13.1961 8.10097 13.1069 7.90875 13.0352L8.87979 12.1298C9.30604 12.3253 9.63403 12.5535 9.86375 12.8142C10.0935 13.0749 10.2083 13.3574 10.2083 13.6619C10.2083 14.3019 9.76174 14.8237 8.86854 15.2275C7.97535 15.6314 6.82472 15.8333 5.41667 15.8333C4.00861 15.8333 2.85799 15.6314 1.96479 15.2275ZM5.4375 11.7708C6.81778 10.7249 7.85382 9.68882 8.54562 8.66271C9.23743 7.63646 9.58333 6.6175 9.58333 5.60583C9.58333 4.16778 9.13326 3.08229 8.23312 2.34938C7.33299 1.61646 6.39417 1.25 5.41667 1.25C4.44444 1.25 3.50694 1.61646 2.60417 2.34938C1.70139 3.08229 1.25 4.16778 1.25 5.60583C1.25 6.55236 1.5916 7.53313 2.27479 8.54813C2.95799 9.56313 4.01222 10.6374 5.4375 11.7708ZM5.41667 13.3333C3.59722 11.9743 2.23958 10.6543 1.34375 9.37333C0.447917 8.09236 0 6.83653 0 5.60583C0 4.67847 0.16375 3.86597 0.49125 3.16833C0.81875 2.47069 1.24153 1.88653 1.75958 1.41583C2.27778 0.945278 2.85875 0.591666 3.5025 0.355C4.14611 0.118333 4.78417 0 5.41667 0C6.04917 0 6.68722 0.118333 7.33083 0.355C7.97458 0.591666 8.55556 0.945278 9.07375 1.41583C9.59181 1.88653 10.0146 2.47069 10.3421 3.16833C10.6696 3.86597 10.8333 4.67847 10.8333 5.60583C10.8333 6.83653 10.3854 8.09236 9.48958 9.37333C8.59375 10.6543 7.23611 11.9743 5.41667 13.3333ZM5.41667 6.99521C5.83222 6.99521 6.18715 6.84938 6.48146 6.55771C6.7759 6.26604 6.92312 5.90972 6.92312 5.48875C6.92312 5.07319 6.7759 4.71826 6.48146 4.42396C6.18715 4.12951 5.83222 3.98229 5.41667 3.98229C5.00639 3.98229 4.65278 4.12951 4.35583 4.42396C4.05875 4.71826 3.91021 5.07319 3.91021 5.48875C3.91021 5.90972 4.05875 6.26604 4.35583 6.55771C4.65278 6.84938 5.00639 6.99521 5.41667 6.99521Z" fill="#525252" />
+  </svg>
+);
+
+const CompanyWebsiteIcon = (props) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M15.6667 15.9166L12.9999 13.2499V15.4166H11.7499V11.1249H15.9999V12.3749H13.8332L16.5 15.0416L15.6667 15.9166ZM8 15.6666C6.90556 15.6666 5.87639 15.4588 4.9125 15.0433C3.94861 14.6277 3.11111 14.0637 2.39861 13.3514C1.68639 12.639 1.12222 11.8014 0.706944 10.8383C0.291389 9.87528 0.0833333 8.84618 0.0833333 7.75139C0.0833333 6.65639 0.291389 5.62709 0.706944 4.66375C1.12222 3.70022 1.68639 2.86209 2.39861 2.14958C3.11111 1.43695 3.94861 0.872569 4.9125 0.456805C5.87556 0.041144 6.90444 -0.166672 8 -0.166672C9.09444 -0.166672 10.1236 0.041144 11.0875 0.456805C12.0514 0.872256 12.8889 1.43626 13.6014 2.14875C14.3136 2.86125 14.8778 3.69907 15.2931 4.66222C15.7086 5.62542 15.9167 6.65459 15.9167 7.74972C15.9167 7.99976 15.9047 8.25085 15.8806 8.50305C15.8567 8.75417 15.8222 9.00528 15.7736 9.25639H14.4903C14.5486 9.00528 14.5931 8.75417 14.6222 8.50305C14.6522 8.25207 14.6667 7.99976 14.6667 7.74972C14.6667 7.44695 14.6467 7.14417 14.6069 6.84167C14.5667 6.53889 14.5042 6.23792 14.4181 5.93889H11.3208C11.3736 6.23792 11.4111 6.53889 11.4347 6.84167C11.4583 7.14417 11.4694 7.44695 11.4694 7.74972C11.4694 7.99976 11.4611 8.25085 11.4444 8.50305C11.4272 8.75417 11.4028 9.00528 11.3694 9.25639H10.1194C10.1522 9.00528 10.1778 8.75417 10.1944 8.50305C10.2111 8.25207 10.2194 7.99976 10.2194 7.74972C10.2194 7.44695 10.2078 7.14417 10.1847 6.84167C10.1611 6.53889 10.1236 6.23792 10.0708 5.93889H5.92917C5.87694 6.23792 5.83889 6.53903 5.81583 6.84222C5.79194 7.14542 5.78 7.44861 5.78 7.75181C5.78 8.05499 5.79194 8.35735 5.81583 8.65916C5.83889 8.96097 5.87694 9.26153 5.92917 9.56083H8.99444V10.8108H6.21639C6.40139 11.4663 6.63944 12.0954 6.93167 12.6977C7.22389 13.2999 7.58 13.867 8 14.3989C8.25139 14.3989 8.50194 14.3842 8.75167 14.3549C9.00167 14.3255 9.25222 14.297 9.50333 14.2691V15.5368C9.25222 15.5646 9.00167 15.5931 8.75167 15.6224C8.50194 15.6519 8.25139 15.6666 8 15.6666ZM1.58194 9.56083H4.68C4.62778 9.26153 4.58972 8.96056 4.56583 8.65792C4.54194 8.35513 4.53 8.05194 4.53 7.74833C4.53 7.44528 4.54194 7.14264 4.56583 6.84042C4.58972 6.53792 4.62778 6.23792 4.68 5.93889H1.58194C1.49583 6.23792 1.43333 6.53903 1.39333 6.84222C1.35306 7.14542 1.33306 7.44861 1.33306 7.75181C1.33306 8.05499 1.35306 8.35735 1.39333 8.65916C1.43333 8.96097 1.49583 9.26153 1.58194 9.56083ZM2.10583 4.6889H4.92917C5.07222 4.08417 5.26333 3.49917 5.50278 2.9339C5.74222 2.36862 6.03722 1.82848 6.38667 1.31347C5.45111 1.52068 4.6125 1.91917 3.87028 2.5089C3.12806 3.09862 2.54083 3.82514 2.10583 4.6889ZM6.38667 14.19C6.05167 13.6668 5.76278 13.1213 5.52 12.5535C5.27722 11.9857 5.08083 11.4022 4.93083 10.8031H2.10583C2.54083 11.6609 3.13028 12.3823 3.87417 12.9672C4.61806 13.5522 5.45722 13.9531 6.38667 14.19ZM6.21639 4.6889H9.78028C9.60528 4.03292 9.36722 3.40667 9.06611 2.81014C8.765 2.21361 8.41722 1.64361 8.02278 1.10014C7.6075 1.63194 7.25139 2.19889 6.95444 2.8010C6.65722 3.40292 6.40972 4.03181 6.21639 4.6889ZM11.0708 4.6889H13.8942C13.4592 3.82264 12.8708 3.09472 12.1289 2.50236C11.3867 1.90972 10.5481 1.51264 9.61306 1.31111C9.94806 1.83128 10.2389 2.36917 10.4856 2.9248C10.7325 3.48042 10.9306 4.06153 11.0708 4.6889Z" fill="#525252" />
+  </svg>
+);
+
+const CompanyGSTINIcon = (props) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M3.125 11.0417H8.541V9.7917H3.125V11.0417ZM3.125 7.7083H10.958V6.4583H3.125V7.7083ZM3.125 4.375H10.958V3.125H3.125V4.375ZM1.506 14.1667C1.085 14.1667 0.729 14.0209 0.4375 13.7292C0.14583 13.4375 0 13.0812 0 12.6603V1.50638C0 1.08543 0.14583 0.72913 0.4375 0.4375C0.729 0.14583 1.085 0 1.506 0H12.66C13.081 0 13.4373 0.14583 13.729 0.4375C14.0207 0.72913 14.1667 1.08543 14.1667 1.50638V12.6603C14.1667 13.0812 14.0207 13.4375 13.729 13.7292C13.4373 14.0209 13.081 14.1667 12.66 14.1667H1.506ZM1.506 12.9167H12.66C12.7241 12.9167 12.7829 12.89 12.8363 12.8365C12.8896 12.7832 12.9163 12.7244 12.9163 12.6603V1.50638C12.9163 1.44221 12.8896 1.38346 12.8363 1.33013C12.7829 1.27665 12.7241 1.24992 12.66 1.24992H1.506C1.44183 1.24992 1.38308 1.27665 1.32975 1.33013C1.27625 1.38346 1.2495 1.44221 1.2495 1.50638V12.6603C1.2495 12.7244 1.27625 12.7832 1.32975 12.8365C1.38308 12.89 1.44183 12.9167 1.506 12.9167Z" fill="#1C1B1F" />
+  </svg>
+);
+
+const CompanyDocumentSignedIcon = (props) => (
+  <svg width="13" height="16" viewBox="0 0 13 16" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M2.87021 11.7227L1.16188 4.6875L6.25 0L11.33 4.6875L9.62187 11.7227H2.87021ZM3.85417 10.4727H8.63792L9.94063 5.11375L6.875 2.28042V4.98562C7.05875 5.09785 7.20618 5.24604 7.31729 5.43021C7.4284 5.61451 7.48396 5.82097 7.48396 6.04958C7.48396 6.38833 7.36299 6.67868 7.12104 6.92063C6.87896 7.16257 6.58861 7.28354 6.25 7.28354C5.90597 7.28354 5.61299 7.16257 5.37104 6.92063C5.1291 6.67868 5.00813 6.38833 5.00813 6.04958C5.00813 5.82097 5.06368 5.61319 5.17479 5.42625C5.2859 5.23931 5.43597 5.09243 5.625 4.98562V2.28042L2.55938 5.11375L3.85417 10.4727ZM0 15.8333L0.42625 14.6073C0.526667 14.3081 0.701389 14.0691 0.950417 13.8902C1.19931 13.7113 1.48028 13.6219 1.79333 13.6219H10.7067C11.0197 13.6219 11.3007 13.7113 11.5496 13.8902C11.7986 14.0691 11.9733 14.3081 12.0737 14.6073L12.5 15.8333H0Z" fill="#525252" />
+  </svg>
+);
+
+const CompanyLeadSourceIcon = CompanyDocumentSignedIcon;
 import { getVideoTutorial } from "../utils/videoTutorials";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import useCompanyStore from "../store/useCompanyStore";
@@ -57,6 +95,7 @@ import {
   createColumnHelper,
 } from "@tanstack/react-table";
 import CompanyQuickView from "../components/company/CompanyQuickView";
+import AppToaster from "../components/AppToaster";
 
 function Companies() {
   const [companies, setCompanies] = useState([]);
@@ -66,6 +105,8 @@ function Companies() {
     address: "",
     website: "",
     gstin: "",
+    documentSigned: false,
+    leadSource: "",
     profilePicture: null,
     profilePictureUrl: "",
   });
@@ -78,9 +119,11 @@ function Companies() {
   const [showImport, setShowImport] = useState(false);
   const [showHotlist, setShowHotlist] = useState(false);
   const [permission, setPermission] = useState("");
-  const [isIndustryDropdownOpen, setIsIndustryDropdownOpen] = useState(false);
   const [showAddToHotlistModal, setShowAddToHotlistModal] = useState(false);
-  const industryDropdownRef = useRef(null);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef(null);
+  const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const rowActionsRef = useRef(null);
   const location = useLocation();
   const { state } = location;
 
@@ -119,25 +162,6 @@ function Companies() {
 
   const [pinnedColumn, setPinnedColumn] = useState(null);
 
-  const [starredCompanies, setStarredCompanies] = useState(() => {
-    const saved = localStorage.getItem("starred_companies");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // Sync to local storage whenever it changes
-  useEffect(() => {
-    localStorage.setItem("starred_companies", JSON.stringify(starredCompanies));
-  }, [starredCompanies]);
-
-  const toggleStar = (e, companyId) => {
-    e.stopPropagation(); // Prevents row selection or expansion
-    setStarredCompanies((prev) =>
-      prev.includes(companyId)
-        ? prev.filter((id) => id !== companyId)
-        : [...prev, companyId]
-    );
-  };
-
   const togglePinColumn = (colKey) => {
     setPinnedColumn((prev) => (prev === colKey ? null : colKey));
   };
@@ -167,7 +191,7 @@ function Companies() {
         required: true,
         defaultVisible: true,
         sortable: true,
-        icon: Building2,
+        icon: CompanyNameIcon,
       },
       {
         key: "industry",
@@ -175,21 +199,21 @@ function Companies() {
         visible: true,
         order: 1,
         sortable: true,
-        icon: Briefcase,
+        icon: CompanyIndustryIcon,
       },
       {
         key: "address",
         label: "Location",
         visible: true,
         order: 2,
-        icon: MapPin,
+        icon: CompanyLocationIcon,
       },
       {
         key: "website",
         label: "Website",
         visible: true,
         order: 3,
-        icon: Globe,
+        icon: CompanyWebsiteIcon,
       },
       {
         key: "gstin",
@@ -197,7 +221,23 @@ function Companies() {
         visible: true,
         order: 4,
         sortable: true,
-        icon: FileText,
+        icon: CompanyGSTINIcon,
+      },
+      {
+        key: "documentSigned",
+        label: "Document Signed",
+        visible: true,
+        order: 5,
+        sortable: true,
+        icon: CompanyDocumentSignedIcon,
+      },
+      {
+        key: "leadSource",
+        label: "Lead Source",
+        visible: true,
+        order: 6,
+        sortable: true,
+        icon: CompanyLeadSourceIcon,
       },
     ];
 
@@ -231,17 +271,7 @@ function Companies() {
   const columnHelper = createColumnHelper();
 
   // Sort companies so that starred ones always appear at the top
-  const sortedCompanies = useMemo(() => {
-    if (!companies || companies.length === 0) return [];
-    const dataCopy = [...companies];
-    return dataCopy.sort((a, b) => {
-      const isAStarred = starredCompanies.includes(a._id);
-      const isBStarred = starredCompanies.includes(b._id);
-      if (isAStarred && !isBStarred) return -1;
-      if (!isAStarred && isBStarred) return 1;
-      return 0;
-    });
-  }, [companies, starredCompanies]);
+  const sortedCompanies = companies || [];
 
   const tableColumns = useMemo(() => {
     const cols = [];
@@ -281,103 +311,6 @@ function Companies() {
     }
 
 
-    cols.push(
-      columnHelper.display({
-        id: "star",
-        size: 40,
-        enableResizing: false,
-        header: () => (
-          <div className="flex justify-center items-center w-full">
-            <Star className="w-4 h-4 text-gray-400" />
-          </div>
-        ),
-        cell: ({ row }) => {
-          const isStarred = starredCompanies.includes(row.original._id);
-          return (
-            <div className="flex justify-center items-center w-full">
-              <button
-                onClick={(e) => toggleStar(e, row.original._id)}
-                className="focus:outline-none hover:scale-110 transition-transform"
-                title={isStarred ? "Unstar" : "Star"}
-              >
-                <Star
-                  className={`w-4 h-4 transition-colors ${isStarred
-                    ? "text-yellow-400 fill-yellow-400"
-                    : "text-gray-300 hover:text-yellow-400"
-                    }`}
-                />
-              </button>
-            </div>
-          );
-        },
-      })
-    );
-
-    // --- ACTIONS COLUMN DEFINITION ---
-    const isActionsPinned = pinnedColumn === "actions";
-    const actionsColumnDef = columnHelper.display({
-      id: "actions",
-      size: 100,
-      enableResizing: false,
-      header: () => (
-        <div
-          className="flex items-center justify-between w-full group select-none cursor-pointer"
-          onDoubleClick={(e) => {
-            e.stopPropagation();
-            togglePinColumn("actions");
-          }}
-        >
-          <span>Actions</span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePinColumn("actions");
-            }}
-            className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isActionsPinned
-              ? "opacity-100 text-blue-600"
-              : "opacity-0 group-hover:opacity-100 text-gray-400"
-              }`}
-            title={isActionsPinned ? "Unpin Column" : "Pin Column"}
-          >
-            {isActionsPinned ? (
-              <PinOff className="w-3.5 h-3.5" />
-            ) : (
-              <Pin className="w-3.5 h-3.5" />
-            )}
-          </button>
-        </div>
-      ),
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleEdit(row.original);
-            }}
-            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            title="Edit"
-          >
-            <Edit2 className="w-4 h-4" />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(row.original._id);
-            }}
-            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            title="Delete"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      ),
-    });
-
-    // If Actions is pinned, it goes immediately after the selection checkbox
-    if (isActionsPinned) {
-      cols.push(actionsColumnDef);
-    }
-
     // 2. Dynamic Data Columns
     const pinnedFields = visibleColumns.filter((vc) => vc.key === pinnedColumn);
     const unpinnedFields = visibleColumns.filter((vc) => vc.key !== pinnedColumn);
@@ -409,42 +342,46 @@ function Companies() {
                   <span className="truncate" title={vc.label}>
                     {vc.label}
                   </span>
-                  {isSortable && (
-                    <div className="flex flex-col ml-1 flex-shrink-0">
-                      <ChevronUp
-                        className={`w-3 h-3 ${sortConfig.key === vc.key && sortConfig.direction === "asc"
-                          ? "text-blue-600"
-                          : "text-gray-400"
-                          }`}
-                      />
-                      <ChevronDown
-                        className={`w-3 h-3 -mt-1 ${sortConfig.key === vc.key && sortConfig.direction === "desc"
-                          ? "text-blue-600"
-                          : "text-gray-400"
-                          }`}
-                      />
-                    </div>
-                  )}
+
+                  {/* Pin Icon */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePinColumn(vc.key);
+                    }}
+                    className={`p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned
+                      ? "opacity-100 text-blue-600"
+                      : "opacity-0 group-hover:opacity-100 text-gray-400"
+                      }`}
+                    title={isPinned ? "Unpin Column" : "Pin Column"}
+                  >
+                    {isPinned ? (
+                      <PinOff className="w-3.5 h-3.5" />
+                    ) : (
+                      <Pin className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                 </div>
 
-                {/* Pin Icon */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    togglePinColumn(vc.key);
-                  }}
-                  className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned
-                    ? "opacity-100 text-blue-600"
-                    : "opacity-0 group-hover:opacity-100 text-gray-400"
-                    }`}
-                  title={isPinned ? "Unpin Column" : "Pin Column"}
-                >
-                  {isPinned ? (
-                    <PinOff className="w-3.5 h-3.5" />
-                  ) : (
-                    <Pin className="w-3.5 h-3.5" />
-                  )}
-                </button>
+                {isSortable && (
+                  <div
+                    className="flex flex-col ml-1 flex-shrink-0 cursor-pointer"
+                    onClick={() => handleSort(vc.key)}
+                  >
+                    <ChevronUp
+                      className={`w-3 h-3 ${sortConfig.key === vc.key && sortConfig.direction === "asc"
+                        ? "text-blue-600"
+                        : "text-gray-400"
+                        }`}
+                    />
+                    <ChevronDown
+                      className={`w-3 h-3 -mt-1 ${sortConfig.key === vc.key && sortConfig.direction === "desc"
+                        ? "text-blue-600"
+                        : "text-gray-400"
+                        }`}
+                    />
+                  </div>
+                )}
               </div>
             );
           },
@@ -461,7 +398,7 @@ function Companies() {
                   <div className="truncate flex-1 pr-4">
                     <Link
                       to={`/companies/${company._id}`}
-                      className="text-blue-600 font-semibold hover:underline truncate transition-all duration-150 ease-out group-hover:text-blue-700"
+                      className="text-[#0085FF] font-semibold hover:underline truncate transition-all duration-150 ease-out group-hover:text-[#004CFF]"
                       title={company.name}
                     >
                       {company.name}
@@ -529,17 +466,68 @@ function Companies() {
             if (vc.key === "gstin") {
               return <div className="truncate text-sm text-gray-700 font-mono w-full" title={company.gstin}>{company.gstin || "—"}</div>;
             }
+            if (vc.key === "documentSigned") {
+              return company.documentSigned ? (
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                  Accepted
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-50 text-gray-500 border border-gray-200">
+                  Pending
+                </span>
+              );
+            }
+            if (vc.key === "leadSource") {
+              const isOpen = openRowActionsId === company._id;
+              return (
+                <div className="flex items-center justify-between w-full">
+                  <span className="truncate text-sm text-gray-700" title={company.leadSource}>{company.leadSource || "—"}</span>
+                  <div className="relative flex-shrink-0" ref={isOpen ? rowActionsRef : null}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenRowActionsId(isOpen ? null : company._id);
+                      }}
+                      className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="More actions"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                    {isOpen && (
+                      <div className="absolute right-0 top-full z-50 mt-1 w-36 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-150 origin-top-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenRowActionsId(null);
+                            handleEdit(company);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <Edit2 className="w-4 h-4 text-blue-600" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenRowActionsId(null);
+                            handleDelete(company._id);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
             return <div className="truncate text-sm text-gray-700 w-full" title={String(val)}>{truncateText(String(val), 30)}</div>;
           },
         })
       );
     });
-
-    // 3. If Actions is NOT pinned, push it at the end (its normal position)
-    if (!isActionsPinned) {
-      cols.push(actionsColumnDef);
-    }
-
 
     return cols;
   }, [
@@ -550,7 +538,7 @@ function Companies() {
     sortConfig,
     expandedRows,
     pinnedColumn,
-    starredCompanies
+    openRowActionsId,
   ]);
 
   const table = useReactTable({
@@ -971,14 +959,20 @@ function Companies() {
     return industries; // Return the fetched industries
   };
 
-  // Click outside listener for industry dropdown
+  // Click outside listener for the overflow menu
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
-        industryDropdownRef.current &&
-        !industryDropdownRef.current.contains(event.target)
+        moreMenuRef.current &&
+        !moreMenuRef.current.contains(event.target)
       ) {
-        setIsIndustryDropdownOpen(false);
+        setIsMoreMenuOpen(false);
+      }
+      if (
+        rowActionsRef.current &&
+        !rowActionsRef.current.contains(event.target)
+      ) {
+        setOpenRowActionsId(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -1096,11 +1090,11 @@ function Companies() {
             </select>
           </div>
 
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={!hasPrevPage}
-              className="relative inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -1110,7 +1104,7 @@ function Companies() {
                 pageNum === "..." ? (
                   <span
                     key={`dots-${index}`}
-                    className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700"
+                    className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
                   >
                     ...
                   </span>
@@ -1118,9 +1112,9 @@ function Companies() {
                   <button
                     key={`page-${pageNum}`}
                     onClick={() => handlePageChange(pageNum)}
-                    className={`relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${pageNum === currentPage
+                    className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${pageNum === currentPage
                       ? "bg-blue-600 text-white"
-                      : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
                       }`}
                   >
                     {pageNum}
@@ -1131,7 +1125,7 @@ function Companies() {
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={!hasNextPage}
-              className="relative inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -1150,6 +1144,8 @@ function Companies() {
       address: "",
       website: "",
       gstin: "",
+      documentSigned: false,
+      leadSource: "",
       profilePicture: null,
       profilePictureUrl: "",
     });
@@ -1174,6 +1170,8 @@ function Companies() {
       gstin: company.gstin || "",
       address: company.address || "",
       website: company.website || "",
+      documentSigned: company.documentSigned || false,
+      leadSource: company.leadSource || "",
       profilePicture: null,
       profilePictureUrl: company.profilePicture || "",
       socialMedia: {
@@ -1194,8 +1192,8 @@ function Companies() {
   };
 
   return (
-    <div className="">
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+    <div className="-mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-4">
+      <AppToaster />
 
       {/* Video Tutorial Modal */}
       <VideoTutorialModal
@@ -1258,23 +1256,6 @@ function Companies() {
           </div>
         </div>
       )}
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 mt-5 gap-4">
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-100 p-2 rounded-xl">
-            <Building2 className="w-6 h-6 text-blue-600" />
-          </div>
-          <div>
-            <h1 className="font-bold text-3xl font-sf text-gray-900">
-              Companies
-            </h1>
-            <p className="text-sm text-gray-500 font-inter">
-              Manage your client relationships
-            </p>
-          </div>
-        </div>
-      </div>
 
       {showForm && (
         <CompanyForm
@@ -1373,52 +1354,50 @@ function Companies() {
 
       {/* Main Content Card */}
       <div className="bg-white overflow-visible border-b border-gray-100">
-        {/* Toolbar (Search + Buttons) */}
-        <div className="p-4 sm:p-6 border-b border-[#E0E0E1]">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-[70%] pl-10 pr-4 py-2.5 border border-[#E0E0E1] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-colors font-inter bg-gradient-to-r from-white to-blue-100"
-                placeholder="Search companies by name, industry, or location..."
-              />
+        {/* Toolbar (Title + Search + Buttons) */}
+        <div className="h-14 px-4 border-b border-[#E1E4EA] flex items-center">
+          <div className="flex items-center gap-4 w-full">
+            <div className="flex-shrink-0 flex flex-col justify-center gap-1.5">
+              <h1 className="m-0 leading-tight font-bold text-lg text-gray-900">Companies</h1>
+              <p className="m-0 leading-tight text-xs text-gray-500 font-inter">
+                Manage your organisation contracts
+              </p>
             </div>
 
-            {/* Custom Industry Filter Dropdown */}
-            <div
-              className="relative hidden sm:block"
-              ref={industryDropdownRef}
-            >
-              <button
-                onClick={() =>
-                  setIsIndustryDropdownOpen(!isIndustryDropdownOpen)
-                }
-                className="flex items-center justify-between min-w-[160px] px-4 py-2.5 bg-white border border-[#E0E0E1] rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              >
-                <div className="flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 text-gray-400" />
-                  <span>{filterIndustry || "All Industries"}</span>
-                </div>
-                <ChevronDown
-                  className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isIndustryDropdownOpen ? "rotate-180" : ""}`}
+            <div className="relative flex-1 flex items-center justify-end">
+              <div className="relative w-[416px] max-w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full h-10 pl-9 pr-4 border border-[#E1E4EA] rounded-full text-sm focus:outline-none focus:border-[#0085FF] transition-colors font-inter bg-white"
+                  placeholder="Search companies by name, industry, or location..."
                 />
+              </div>
+            </div>
+
+            {/* Overflow menu: Industry filter, Columns, Import, Video Tutorial */}
+            <div className="relative" ref={moreMenuRef}>
+              <button
+                onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+                title="More options"
+              >
+                <MoreVertical className="w-4 h-4" />
               </button>
 
-              {isIndustryDropdownOpen && (
+              {isMoreMenuOpen && (
                 <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
                   <div className="px-3 pb-2 mb-2 border-b border-gray-50">
                     <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 px-1">
                       Filter by Industry
                     </p>
                   </div>
-                  <div className="max-h-[280px] overflow-y-auto px-1 custom-scrollbar">
+                  <div className="max-h-[200px] overflow-y-auto px-1 custom-scrollbar mb-2">
                     <button
                       onClick={() => {
                         setFilterIndustry("");
-                        setIsIndustryDropdownOpen(false);
                         setPagination((p) => ({ ...p, currentPage: 1 }));
                       }}
                       className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${!filterIndustry ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
@@ -1433,7 +1412,6 @@ function Companies() {
                         key={i}
                         onClick={() => {
                           setFilterIndustry(i);
-                          setIsIndustryDropdownOpen(false);
                           setPagination((p) => ({ ...p, currentPage: 1 }));
                         }}
                         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between mt-0.5 ${filterIndustry === i ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
@@ -1444,6 +1422,38 @@ function Companies() {
                         )}
                       </button>
                     ))}
+                  </div>
+                  <div className="border-t border-gray-50 pt-1">
+                    <button
+                      onClick={() => {
+                        setShowColumnSettings(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Settings className="w-4 h-4 text-gray-400" />
+                      Columns
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowImport(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Upload className="w-4 h-4 text-gray-400" />
+                      Import
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowVideoTutorial(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      Video Tutorial
+                    </button>
                   </div>
                 </div>
               )}
@@ -1473,25 +1483,34 @@ function Companies() {
               <span className="hidden sm:inline">Columns</span>
             </button>
 
+            {/* Filters */}
             <button
               onClick={() => setShowAdvancedFilters(true)}
-              className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors relative"
+              className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+              title="Filters"
             >
-              <Filter className="w-4 h-4" />
-              Filters
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4.16667 5.83464C4.16667 5.14428 4.72631 4.58464 5.41667 4.58464C6.10702 4.58464 6.66667 5.14428 6.66667 5.83464C6.66667 6.52499 6.10702 7.08464 5.41667 7.08464C4.72631 7.08464 4.16667 6.52499 4.16667 5.83464ZM5.41667 2.91797C3.80583 2.91797 2.5 4.2238 2.5 5.83464C2.5 7.44547 3.80583 8.7513 5.41667 8.7513C7.0275 8.7513 8.33333 7.44547 8.33333 5.83464C8.33333 4.2238 7.0275 2.91797 5.41667 2.91797ZM10 6.66797H16.6667V5.0013H10V6.66797ZM13.3333 14.168C13.3333 13.4776 13.893 12.918 14.5833 12.918C15.2737 12.918 15.8333 13.4776 15.8333 14.168C15.8333 14.8583 15.2737 15.418 14.5833 15.418C13.893 15.418 13.3333 14.8583 13.3333 14.168ZM14.5833 11.2513C12.9725 11.2513 11.6667 12.5571 11.6667 14.168C11.6667 15.7788 12.9725 17.0846 14.5833 17.0846C16.1942 17.0846 17.5 15.7788 17.5 14.168C17.5 12.5571 16.1942 11.2513 14.5833 11.2513ZM3.33333 13.3346V15.0013H10V13.3346H3.33333Z" fill="#1F2937" />
+              </svg>
               {activeFilters.length > 0 && (
-                <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">
+                <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                   {activeFilters.length}
                 </span>
               )}
             </button>
 
+            {/* Hotlist */}
             <button
-              onClick={() => setShowImport(true)}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors"
+              onClick={() => setShowHotlist(!showHotlist)}
+              className={`inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors ${showHotlist
+                ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
+                : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
+                }`}
             >
-              <Upload className="w-4 h-4" />
-              <span className="hidden sm:inline">Import</span>
+              <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#1F2937" />
+              </svg>
+              <span className="font-medium">Hotlist</span>
             </button>
 
             <button
@@ -1499,31 +1518,10 @@ function Companies() {
                 resetForm();
                 setShowForm(true);
               }}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0C4FCD] text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none cursor-pointer shadow-sm transition-colors"
+              className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
             >
               <Plus className="w-4 h-4" />
               {showForm ? "Cancel" : "New Company"}
-            </button>
-            <button
-              className="md:hidden flex items-center justify-center p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50"
-              onClick={() => {
-                /* Mobile filter trigger if needed */
-              }}
-            >
-              <Filter className="w-5 h-5 text-gray-600" />
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs / Secondary Header for Hotlist */}
-        <div className="border-b border-gray-200 bg-white">
-          <div className="flex px-4 sm:px-6 justify-end py-2">
-            <button
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${showHotlist ? "bg-blue-100 text-blue-700 border border-blue-200" : "text-gray-600 hover:bg-gray-200"}`}
-              onClick={() => setShowHotlist(!showHotlist)}
-            >
-              <FileText className="w-3 h-3" />
-              {showHotlist ? "Showing Hotlist" : "Show Hotlist"}
             </button>
           </div>
         </div>
@@ -1532,7 +1530,7 @@ function Companies() {
           <Hotlist />
         ) : (
           <div
-            className={`relative bg-white overflow-hidden ${loading ? "pointer-events-none opacity-60" : ""}`}
+            className={`relative bg-white overflow-hidden border border-[#E1E4EA] rounded-lg mx-4 mt-6 ${loading ? "pointer-events-none opacity-60" : ""}`}
           >
             <div className="overflow-x-auto overflow-y-visible">
               <table
@@ -1542,19 +1540,18 @@ function Companies() {
                   tableLayout: "fixed",
                 }}
               >
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
                   {table.getHeaderGroups().map((headerGroup) => (
                     <tr key={headerGroup.id}>
                       {headerGroup.headers.map((header) => {
                         const colId = header.column.id;
-                        const isSticky = colId === "selection" || colId === "star" || colId === pinnedColumn;
-                        const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "star";
+                        const isSticky = colId === "selection" || colId === pinnedColumn;
+                        const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "selection";
 
                         // Calculate left offset
                         let leftOffset = "auto";
                         if (colId === "selection") leftOffset = 0;
-                        if (colId === "star") leftOffset = selectionMode ? 60 : 0;
-                        if (colId === pinnedColumn) leftOffset = (selectionMode ? 60 : 0) + 40;
+                        if (colId === pinnedColumn) leftOffset = selectionMode ? 60 : 0;
 
                         return (
                           <th
@@ -1565,7 +1562,7 @@ function Companies() {
                               left: leftOffset,
                               zIndex: isSticky ? 20 : 1,
                             }}
-                            className={`px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider border-r border-gray-200 hover:bg-gray-100 transition-colors bg-gray-50 ${isRightMostSticky
+                            className={`px-4 py-3 text-sm font-medium text-[#525866] border-r border-[#E1E4EA] hover:bg-gray-100 transition-colors bg-[#F5F7FA] ${isRightMostSticky
                               ? "border-r-2 border-r-gray-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
                               : "last:border-r-0"
                               }`}
@@ -1581,8 +1578,7 @@ function Companies() {
                               <div
                                 onMouseDown={header.getResizeHandler()}
                                 onTouchStart={header.getResizeHandler()}
-                                className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 ${header.column.getIsResizing() ? "bg-blue-500" : "bg-transparent"
-                                  }`}
+                                className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
                               />
                             )}
                           </th>
@@ -1592,7 +1588,7 @@ function Companies() {
                   ))}
                 </thead>
 
-                <tbody className="divide-y divide-gray-100 bg-white">
+                <tbody className="divide-y divide-[#E1E4EA] bg-white">
                   {loading && companies.length === 0 ? (
                     <tr>
                       <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center">
@@ -1618,14 +1614,13 @@ function Companies() {
                       >
                         {row.getVisibleCells().map((cell) => {
                           const colId = cell.column.id;
-                          const isSticky = colId === "selection" || colId === "star" || colId === pinnedColumn;
-                          const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "star";
+                          const isSticky = colId === "selection" || colId === pinnedColumn;
+                          const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "selection";
 
                           // Calculate left offset
                           let leftOffset = "auto";
                           if (colId === "selection") leftOffset = 0;
-                          if (colId === "star") leftOffset = selectionMode ? 60 : 0;
-                          if (colId === pinnedColumn) leftOffset = (selectionMode ? 60 : 0) + 40;
+                          if (colId === pinnedColumn) leftOffset = selectionMode ? 60 : 0;
 
                           return (
                             <td
@@ -1636,9 +1631,9 @@ function Companies() {
                                 left: leftOffset,
                                 zIndex: isSticky ? 10 : 1,
                               }}
-                              className={`px-4 py-2 border-r border-gray-100 align-middle text-sm bg-inherit ${isRightMostSticky
-                                ? "border-r-2 border-r-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
-                                : "last:border-r-0"
+                              className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit ${isRightMostSticky
+                                ? "shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
+                                : ""
                                 }`}
                             >
                               {flexRender(
@@ -1657,7 +1652,11 @@ function Companies() {
           </div>
         )}
 
-        {!loading && !showHotlist && <PaginationControls />}
+        {!loading && !showHotlist && (
+          <div className="mx-4 pb-6">
+            <PaginationControls />
+          </div>
+        )}
       </div>
 
       {/* Bulk Delete Confirmation Modal */}

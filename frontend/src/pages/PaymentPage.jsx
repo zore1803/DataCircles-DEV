@@ -23,13 +23,14 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
 } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
 import logo from "/DataCircles.png";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import VideoTutorialButton from "../components/VideoTutorialButton";
 import PaymentPreview from "../components/vendor/venerPaymentPreview";
+import AppToaster from "../components/AppToaster";
 
 const PaymentPage = () => {
   const [vendors, setVendors] = useState([]);
@@ -446,7 +447,7 @@ const PaymentPage = () => {
 
   return (
     <>
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
 
       <VideoTutorialModal
         isOpen={showVideoTutorial}

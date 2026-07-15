@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import DealsTable from "./DealsTable";
 import API from "../../services/api";
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import {
   X,
   ChevronDown,
@@ -25,6 +25,7 @@ import {
   Eye,
   EyeOff
 } from "lucide-react";
+import AppToaster from "../AppToaster";
 
 // Lifecycle Stage Modal Component  
 const LifecycleStageModal = ({ isOpen, onClose, contact, onUpdate }) => {
@@ -311,7 +312,7 @@ const LifecycleStages = ({ contact, onContactUpdate }) => {
 
   return (
     <div className="mb-6">
-      <Toaster position="top-right" />
+      <AppToaster />
 
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
@@ -773,7 +774,7 @@ const BasicDetails = ({ contact, company, deals, contactFieldList = [], onContac
         </div>
       </div>
 
-      <Toaster position="top-right" />
+      <AppToaster />
 
       {/* Lifecycle Stages */}
       <LifecycleStages contact={contact} onContactUpdate={onContactUpdate} />

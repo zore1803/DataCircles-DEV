@@ -3,7 +3,7 @@ import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
 import API from "../../services/api";
 import { useParams } from "react-router-dom";
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { 
   StickyNote,
   Plus,
@@ -16,6 +16,7 @@ import {
   X,
   Eye
 } from "lucide-react";
+import AppToaster from "../AppToaster";
 
 // Custom Quill modules and formats configuration
 const quillModules = {
@@ -358,7 +359,7 @@ const NoteSection = () => {
 
   return (
     <div className="h-full">
-      <Toaster position="top-right" />
+      <AppToaster />
       
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-sm text-gray-600">
