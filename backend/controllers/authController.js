@@ -1092,6 +1092,7 @@ exports.completeRegistration = async (req, res) => {
         { name: "Emails", permission: "readonly" },
         { name: "quotations", permission: "readonly" },
         { name: "delivery-challans", permission: "readonly" },
+        { name: "Forms", permission: "readonly" },
       ];
 
       // Generate new code for security
@@ -1120,6 +1121,7 @@ exports.completeRegistration = async (req, res) => {
         { name: "Emails", permission: "read-write" },
         { name: "quotations", permission: "read-write" },
         { name: "delivery-challans", permission: "read-write" },
+        { name: "Forms", permission: "read-write" },
       ];
 
       const branding = new Branding();

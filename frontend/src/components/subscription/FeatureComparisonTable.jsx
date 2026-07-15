@@ -4,12 +4,17 @@ import { Check, X } from 'lucide-react';
 
 // Rows we always want to show, in this order
 // Each entry maps a display label → how to get the value from plan.limits or plan.modules
+//
+// Note: the old 'Website Forms' row (plan.limits.websiteForms) was removed here — Forms is now
+// a first-class plan-gated module (plan.modules.forms, in MODULE_ROWS below), which shows the
+// same limit number plus the real enforcement it's actually gated by. The underlying
+// `websiteForms` field still exists on PlanConfig (unused, display-only elsewhere) — left alone,
+// not part of this change; a future Billing cleanup pass can remove it.
 const LIMIT_ROWS = [
   { label: 'Email Templates',  key: 'emailTemplates' },
   { label: 'Sales Pipelines',  key: 'salesPipelines'  },
   { label: 'Custom Fields',    key: 'customFields'    },
   { label: 'Record Tags',      key: 'recordTags'      },
-  { label: 'Website Forms',    key: 'websiteForms'    },
   {
     label: 'File Storage',
     key: 'fileStorage',
@@ -37,6 +42,7 @@ const MODULE_ROWS = [
   { label: 'Purchases',         mod: 'purchases'          },
   { label: 'Emails',            mod: 'emails'             },
   { label: 'Folders',           mod: 'folders'            },
+  { label: 'Forms',             mod: 'forms'              },
 ];
 
 const Tick = () => <Check className="w-4 h-4 text-green-600 mx-auto" />;

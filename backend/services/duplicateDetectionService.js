@@ -83,21 +83,35 @@ async function findCompanyDuplicates(organization, data) {
   if (data.gstin) orClauses.push({ gstin: data.gstin });
   if (domain) orClauses.push({ website: { $regex: escapeRegex(domain), $options: "i" } });
 
-  if (orClauses.length === 0) return matches;
+  let candidates;
+  let nameIsOnlySignal = false;
+  if (orClauses.length > 0) {
+    candidates = await Company.find({ organization, $or: orClauses }).limit(10);
+  } else if (data.name) {
+    // Forms with no GSTIN/Website field (name-only) have no key to query by — without this
+    // fallback, findCompanyDuplicates returned [] unconditionally and duplicate detection never
+    // ran at all for these forms, no matter how similar the incoming name was to an existing
+    // Company. Scan the org's companies and let name similarity carry the match on its own.
+    candidates = await Company.find({ organization }).limit(200);
+    nameIsOnlySignal = true;
+  } else {
+    return matches;
+  }
 
-  const candidates = await Company.find({ organization, $or: orClauses }).limit(10);
   for (const existing of candidates) {
     // GSTIN is a unique legal identifier — an exact match alone should clear the ≥95 auto-attach
-    // band, same calibration reasoning as Contact's email weight above.
+    // band, same calibration reasoning as Contact's email weight above. When it's the only signal
+    // available (no gstin/website on either side), name similarity must be able to carry a match
+    // to the review threshold by itself — a human still always makes the final call (D9).
     matches.push(
       buildMatch("Company", existing._id, [
         { signal: "gstin", matched: !!(data.gstin && existing.gstin === data.gstin), existingValue: existing.gstin, incomingValue: data.gstin, weight: 96 },
         { signal: "website", matched: !!(domain && normalizeDomain(existing.website) === domain), existingValue: existing.website, incomingValue: data.website, weight: 90 },
-        nameSignal(existing.name, data.name, 15),
+        nameSignal(existing.name, data.name, nameIsOnlySignal ? 85 : 15),
       ])
     );
   }
-  return matches.sort((a, b) => b.score - a.score);
+  return matches.filter((m) => m.score > 0).sort((a, b) => b.score - a.score).slice(0, 10);
 }
 
 async function findVendorDuplicates(organization, data) {

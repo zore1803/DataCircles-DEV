@@ -23,8 +23,9 @@ import {
   FolderPlus,
   GripVertical,
 } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import CompanyIndustrySettings from "./CompanyIndustrySettings";
+import AppToaster from "../AppToaster";
 
 const defaultIndustries = [
   "Information Technology & Services",
@@ -604,7 +605,7 @@ const CompanyFieldSettings = () => {
 
   return (
     <div className="space-y-6">
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
 
       {/* Built-in Mandatory Fields */}
       <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-4 sm:p-6">

@@ -1,5 +1,8 @@
 require('dotenv').config();
 
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -67,6 +70,11 @@ app.use('/api/contacts', contactRoutes);
 // absence of requireAuth is intentional and obvious, not an oversight.
 const publicFormRoutes = require('./routes/publicFormRoutes');
 app.use('/api/public/forms', publicFormRoutes);
+
+// Authenticated Forms management + Duplicate Review Center (Phase 1b) — mounted at /api so the
+// router's own /forms/* and /duplicate-reviews/* paths resolve correctly.
+const formRoutes = require('./routes/formRoutes');
+app.use('/api', formRoutes);
 
 const dealRoutes = require('./routes/dealRoutes');
 app.use('/api/deals', dealRoutes);

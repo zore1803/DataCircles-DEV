@@ -23,6 +23,7 @@ import {
   ExternalLink,
   Receipt,
   Gift,
+  FileText,
 } from "lucide-react";
 import BankDetails from "../components/settings/BankDetails";
 import BrandSettings from "../components/settings/BrandSettings";
@@ -33,6 +34,7 @@ import ContactFieldSettings from "../components/settings/ContactFieldSettings";
 import DealFieldSettings from "../components/settings/DealFieldSettings";
 import HelpCenter from "../components/settings/HelpCenter";
 import VendorFieldSettings from "../components/settings/VendorFieldSettings";
+import FormsList from "../components/settings/FormsList";
 import EmailNotifications from "../components/settings/EmailNotifications";
 import SubscriptionPlans from "../components/settings/SubscriptionPlans";
 import BasicSettings from "./BasicSettings";
@@ -244,6 +246,18 @@ const Settings = () => {
       borderColor: "border-pink-200",
       hoverBg: "hover:bg-pink-50",
       component: <VendorFieldSettings />,
+      category: "Customization",
+    },
+    {
+      id: "forms",
+      icon: <FileText className="w-5 h-5" />,
+      label: "Forms",
+      description: "Build and manage how customers enter your CRM",
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-50",
+      borderColor: "border-emerald-200",
+      hoverBg: "hover:bg-emerald-50",
+      component: <FormsList />,
       category: "Customization",
     },
     {

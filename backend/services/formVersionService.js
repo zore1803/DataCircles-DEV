@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const ContactFields = require("../models/ContactFields");
 const CompanyFields = require("../models/CompanyFields");
 const VendorFields = require("../models/VendorFields");
+const Industry = require("../models/Industry");
 const FormVersion = require("../models/FormVersion");
 const { isSystemFieldId, getSystemFieldMeta, getSystemFieldModule } = require("../utils/systemFields");
 
@@ -145,7 +146,19 @@ async function resolveOneField(module, fieldId, organizationId) {
   if (isSystemFieldId(fieldId)) {
     const meta = getSystemFieldMeta(fieldId);
     if (!meta) return null;
-    return { fieldId, source: "system", label: meta.label, type: meta.type, options: [], baseRequired: meta.baseRequired };
+    let options = [];
+    if (fieldId === "system:company.industry") {
+      // Industry has no fixed enum (Company.industry is a plain String) — its dropdown options
+      // come from the org's Industry collection (defaults + org-created), the same source
+      // CompanyIndustrySettings.jsx manages. Resolved at publish time and frozen into
+      // resolvedFields so the public renderer never needs an authenticated lookup.
+      const industries = await Industry.find(
+        { $or: [{ isDefault: true }, { organization: organizationId }] },
+        { name: 1 }
+      ).sort({ isDefault: -1, name: 1 });
+      options = industries.map((i) => i.name);
+    }
+    return { fieldId, source: "system", label: meta.label, type: meta.type, options, baseRequired: meta.baseRequired };
   }
 
   const Model = FIELD_MODEL_BY_MODULE[module];

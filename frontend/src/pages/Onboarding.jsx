@@ -2,10 +2,11 @@ import React, { useState, useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { Link, useNavigate } from "react-router-dom";
 import API from "../services/api";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import { User, Upload, Check, ChevronRight, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import onboardingBg from "../assets/onboarding-bg.png";
+import AppToaster from "../components/AppToaster";
 
 const Onboarding = () => {
   const { user } = useAuth0();
@@ -478,7 +479,7 @@ const Onboarding = () => {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-white font-inter">
-      <Toaster position="top-center" />
+      <AppToaster />
 
       {/* Left Side - Hero Image */}
       <div className="hidden lg:block lg:w-1/2 relative bg-gray-900 h-[90%]">

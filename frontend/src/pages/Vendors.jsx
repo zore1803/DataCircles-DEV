@@ -31,6 +31,7 @@ import {
   Settings,
   Mail,
   Phone,
+  FileText,
 } from "lucide-react";
 import BulkActions from "../components/BulkActions";
 import VendorForm from "../components/vendor/VendorForm";
@@ -38,13 +39,14 @@ import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import { useLocation } from "react-router-dom";
 import ImportVendors from "../components/vendor/ImportVendors";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import logo from "/DataCircles.png";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import VideoTutorialButton from "../components/VideoTutorialButton";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
+import AppToaster from "../components/AppToaster";
 
 // ✅ FIXED: Use useCallback to memoize the callback
 function useOutsideClick(ref, callback) {
@@ -909,7 +911,7 @@ function Vendors() {
 
   return (
     <>
-      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <AppToaster />
 
       {/* Video Tutorial Modal */}
       <VideoTutorialModal
@@ -1028,6 +1030,15 @@ function Vendors() {
             </div>
 
             <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+              {/* Per-module Forms entry point — v1-simple, navigates to Forms List pre-filtered to
+                  this module. FORMS_FRONTEND_ARCHITECTURE.md §4. */}
+              <Link
+                to="/settings/forms?module=Vendor"
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium text-sm px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+              >
+                <FileText className="w-4 h-4" />
+                Forms
+              </Link>
               <button
                 onClick={() => setShowImport(!showImport)}
                 className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium text-sm px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"

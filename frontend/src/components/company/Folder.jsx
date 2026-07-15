@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import API from "../../services/api";
 import { useParams } from "react-router-dom";
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import {
   Folder as FolderIcon,
   File,
@@ -13,10 +13,12 @@ import {
   Trash2,
   Download,
   Search,
+  Filter,
   X,
   Link as LinkIcon,
   ExternalLink
 } from "lucide-react";
+import AppToaster from "../AppToaster";
 
 const DragDropZone = ({ onFileDrop, isActive, children }) => {
   const [isDragOver, setIsDragOver] = useState(false);
@@ -567,35 +569,33 @@ const Folder = ({ companyId: propCompanyId }) => {
       isActive={!!selectedFolderId && uploadMode === "file"}
     >
       <div className="h-full">
-        <Toaster position="top-right" />
+        <AppToaster />
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <FolderIcon className="w-4 h-4" />
-            <span>{folders.length} folders</span>
+        {/* Search + Controls */}
+        <div className="flex items-center gap-2 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search folder by name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-full text-sm focus:outline-none focus:border-blue-300"
+            />
           </div>
+          <button className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-full hover:bg-gray-50">
+            <Filter className="w-3.5 h-3.5" />
+            Filter
+          </button>
           <button
             onClick={() =>
               setModalState({ isOpen: true, editingId: null, initialName: "" })
             }
-            className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
+            className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50"
+            title="New Folder"
           >
             <Plus className="w-4 h-4" />
-            New Folder
           </button>
-        </div>
-
-        {/* Search */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            type="text"
-            placeholder="Search folders..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-400"
-          />
         </div>
 
         {/* Upload Section */}
@@ -702,25 +702,19 @@ const Folder = ({ companyId: propCompanyId }) => {
 
         {/* Folders List */}
         {filteredFolders.length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-            <FolderIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-            <p className="text-sm text-gray-600 mb-1">No folders yet</p>
-            <p className="text-xs text-gray-500 mb-4">
-              Create your first folder
-            </p>
-            <button
-              onClick={() =>
-                setModalState({
-                  isOpen: true,
-                  editingId: null,
-                  initialName: "",
-                })
-              }
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
-            >
-              Create Folder
-            </button>
-          </div>
+          <button
+            onClick={() =>
+              setModalState({
+                isOpen: true,
+                editingId: null,
+                initialName: "",
+              })
+            }
+            className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
+          >
+            <FolderIcon className="w-7 h-7 mb-2" />
+            <span className="text-sm font-medium">Create New Folder</span>
+          </button>
         ) : (
           <div className="space-y-3">
             {filteredFolders.map((folder) => (

@@ -64,6 +64,9 @@ async function findLinkedContactId(submission) {
 async function keepSeparate(reviewId, organizationId, { decidedByUserId } = {}) {
   const review = await DuplicateReview.findOne({ _id: reviewId, organization: organizationId });
   if (!review) throw new Error("DuplicateReview not found");
+  // A review is resolved exactly once. Without this guard, a retried/double-submitted request
+  // would create a second CRM record and re-fire the Company-resume hook a second time.
+  if (review.decision !== "pending") throw new Error("Duplicate review has already been resolved");
 
   const createFn = CREATE_SERVICE_BY_MODULE[review.module];
   if (!createFn) throw new Error(`Unsupported module: ${review.module}`);
@@ -118,6 +121,8 @@ async function keepSeparate(reviewId, organizationId, { decidedByUserId } = {}) 
 async function linkToExisting(reviewId, organizationId, { decidedByUserId } = {}) {
   const review = await DuplicateReview.findOne({ _id: reviewId, organization: organizationId });
   if (!review) throw new Error("DuplicateReview not found");
+  // Same idempotency guard as keepSeparate — see its comment for why.
+  if (review.decision !== "pending") throw new Error("Duplicate review has already been resolved");
 
   review.decision = "linked_to_existing";
   review.decidedBy = decidedByUserId || undefined;

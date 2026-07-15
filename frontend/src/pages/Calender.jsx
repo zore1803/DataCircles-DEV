@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import API from "../services/api";
 import AdminMeetingForm from "../components/admin/AdminMeetingForm";
 import AdminTaskForm from "../components/admin/AdminTaskForm";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import {
   ChevronLeft,
   ChevronRight,
@@ -22,6 +22,7 @@ import {
   User,
 } from "lucide-react";
 import logo from "/DataCircles.png";
+import AppToaster from "../components/AppToaster";
 
 // --- Components ---
 
@@ -433,7 +434,7 @@ const AdminCalendar = () => {
   // --- Render ---
   return (
     <div className="flex flex-col h-full bg-gray-50/50 w-full min-h-screen">
-      <Toaster />
+      <AppToaster />
 
       {/* --- Page Header & Stats (New) --- */}
       <div className="px-8 py-6 mb-2">

@@ -335,6 +335,8 @@ const CompanyForm = ({
     payload.append("gstin", form.gstin || "");
     payload.append("address", form.address || "");
     payload.append("website", form.website || "");
+    payload.append("documentSigned", form.documentSigned ? "true" : "false");
+    payload.append("leadSource", form.leadSource || "");
 
     // Add social media links - using bracket notation
     if (form.socialMedia) {
@@ -626,6 +628,41 @@ const CompanyForm = ({
                   }`}
                 placeholder="e.g., 22ABCDE1234F1Z5"
               />
+            </div>
+
+            {/* Document Signed */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="documentSigned"
+                checked={!!form.documentSigned}
+                onChange={(e) => handleFormChange("documentSigned", e.target.checked)}
+                className="w-4 h-4 rounded border-[#E0E0E1] text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="documentSigned" className="text-[13px] font-semibold text-[#111216]">
+                Document Signed
+              </label>
+            </div>
+
+            {/* Lead Source */}
+            <div>
+              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                Lead Source
+              </label>
+              <select
+                value={form.leadSource || ""}
+                onChange={(e) => handleFormChange("leadSource", e.target.value)}
+                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+              >
+                <option value="">Select source</option>
+                <option value="Referral">Referral</option>
+                <option value="Website">Website</option>
+                <option value="Cold Call">Cold Call</option>
+                <option value="Social Media">Social Media</option>
+                <option value="Event">Event</option>
+                <option value="Advertisement">Advertisement</option>
+                <option value="Other">Other</option>
+              </select>
             </div>
 
             {/* Address */}
