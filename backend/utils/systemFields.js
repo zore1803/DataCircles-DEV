@@ -14,6 +14,10 @@ const SYSTEM_FIELD_IDS = {
     // system fields instead (system:company.name, etc.) — submissionService's Contact->Company
     // bucket logic creates/links the Company and sets this ref server-side. Exposing this as a
     // fillable field is what caused the CastError("company") incident; do not re-add it.
+    "socialMedia.twitter": "system:contact.socialMedia.twitter",
+    "socialMedia.linkedin": "system:contact.socialMedia.linkedin",
+    "socialMedia.facebook": "system:contact.socialMedia.facebook",
+    "socialMedia.whatsapp": "system:contact.socialMedia.whatsapp",
   },
   Company: {
     name: "system:company.name",
@@ -22,6 +26,10 @@ const SYSTEM_FIELD_IDS = {
     address: "system:company.address",
     website: "system:company.website",
     profilePicture: "system:company.profilePicture",
+    "socialMedia.twitter": "system:company.socialMedia.twitter",
+    "socialMedia.linkedin": "system:company.socialMedia.linkedin",
+    "socialMedia.facebook": "system:company.socialMedia.facebook",
+    "socialMedia.whatsapp": "system:company.socialMedia.whatsapp",
   },
   Vendor: {
     name: "system:vendor.name",
@@ -30,6 +38,10 @@ const SYSTEM_FIELD_IDS = {
     email: "system:vendor.email",
     company: "system:vendor.company",
     address: "system:vendor.address",
+    "socialMedia.twitter": "system:vendor.socialMedia.twitter",
+    "socialMedia.linkedin": "system:vendor.socialMedia.linkedin",
+    "socialMedia.facebook": "system:vendor.socialMedia.facebook",
+    "socialMedia.whatsapp": "system:vendor.socialMedia.whatsapp",
   },
 };
 
@@ -52,6 +64,18 @@ const SYSTEM_FIELD_META = {
   "system:vendor.email": { label: "Email", type: "string", baseRequired: false },
   "system:vendor.company": { label: "Company", type: "string", baseRequired: false },
   "system:vendor.address": { label: "Address", type: "string", baseRequired: false },
+  "system:contact.socialMedia.twitter": { label: "Twitter / X", type: "string", baseRequired: false },
+  "system:contact.socialMedia.linkedin": { label: "LinkedIn", type: "string", baseRequired: false },
+  "system:contact.socialMedia.facebook": { label: "Facebook", type: "string", baseRequired: false },
+  "system:contact.socialMedia.whatsapp": { label: "WhatsApp Number", type: "string", baseRequired: false },
+  "system:company.socialMedia.twitter": { label: "Twitter / X", type: "string", baseRequired: false },
+  "system:company.socialMedia.linkedin": { label: "LinkedIn", type: "string", baseRequired: false },
+  "system:company.socialMedia.facebook": { label: "Facebook", type: "string", baseRequired: false },
+  "system:company.socialMedia.whatsapp": { label: "WhatsApp Number", type: "string", baseRequired: false },
+  "system:vendor.socialMedia.twitter": { label: "Twitter / X", type: "string", baseRequired: false },
+  "system:vendor.socialMedia.linkedin": { label: "LinkedIn", type: "string", baseRequired: false },
+  "system:vendor.socialMedia.facebook": { label: "Facebook", type: "string", baseRequired: false },
+  "system:vendor.socialMedia.whatsapp": { label: "WhatsApp Number", type: "string", baseRequired: false },
 };
 
 function isSystemFieldId(fieldId) {

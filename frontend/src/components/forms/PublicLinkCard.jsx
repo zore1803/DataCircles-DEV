@@ -5,8 +5,6 @@ import toast from "react-hot-toast";
 
 const PUBLIC_BASE = window.location.origin.replace(/\/$/, "");
 
-const EMBED_TABS = ["iframe", "source"];
-
 function CopyButton({ text, className = "" }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -59,17 +57,15 @@ function QrCodePanel({ url }) {
 }
 
 export default function PublicLinkCard({ publicSlug, published, title }) {
-  const [embedTab, setEmbedTab] = useState("iframe");
-
   if (!published || !publicSlug) {
     return <p className="text-sm text-gray-400">Publish this form to get a shareable link.</p>;
   }
 
   const url = `${PUBLIC_BASE}/f/${publicSlug}`;
   const iframeSnippet = `<iframe src="${url}" width="100%" height="800" frameborder="0"></iframe>`;
-  // No JS-embed script exists on the backend today (no /embed.js route) — only offer embed
-  // methods that actually work: an iframe, or the raw link to share/paste as a source URL.
-  const embedSnippets = { iframe: iframeSnippet, source: url };
+  // No JS-embed script exists on the backend today (no /embed.js route) — an iframe is the only
+  // embed method that actually works. A "Source URL" tab was removed here: it showed the exact
+  // same string as the Public Link field above, with no distinct purpose.
 
   const canShare = typeof navigator !== "undefined" && !!navigator.share;
   const share = async () => {
@@ -109,28 +105,15 @@ export default function PublicLinkCard({ publicSlug, published, title }) {
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-500 mb-1">Embed</label>
-        <div className="flex gap-1 mb-2">
-          {EMBED_TABS.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setEmbedTab(tab)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium ${
-                embedTab === tab ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {tab === "iframe" ? "iframe" : "Source URL"}
-            </button>
-          ))}
-        </div>
+        <label className="block text-xs font-medium text-gray-500 mb-1">Embed (iframe)</label>
         <div className="flex gap-2">
           <textarea
             readOnly
-            value={embedSnippets[embedTab]}
+            value={iframeSnippet}
             rows={2}
             className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono bg-gray-50 text-gray-600 resize-none overflow-x-auto"
           />
-          <CopyButton text={embedSnippets[embedTab]} className="self-start" />
+          <CopyButton text={iframeSnippet} className="self-start" />
         </div>
       </div>
     </div>
