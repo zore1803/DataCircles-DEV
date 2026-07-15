@@ -15,7 +15,7 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
-import { Plus, X, ChevronLeft, ChevronRight, FileText, User, Building2, Truck } from "lucide-react";
+import { Plus, X, ChevronLeft, ChevronRight, FileText, User, Building2, Truck, Trash2, Lock, WifiOff, AlertTriangle, ShieldOff } from "lucide-react";
 
 const columnHelper = createColumnHelper();
 
@@ -164,8 +164,14 @@ const FormsList = () => {
 
   const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // Classified failure state — a bare "Access denied" string can't distinguish "you're out of
+  // plan" from "you lack permission" from "server is down", and each of those needs a different
+  // UI (upgrade card vs. contact-admin vs. retry). `type` drives which card renders; `message`/
+  // `planName` carry the backend's actual text so we're not inventing copy it didn't send.
+  const [error, setError] = useState(null); // { type: "module"|"permission"|"network"|"server", message, planName? } | null
   const [permission, setPermission] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null); // form object or null
+  const [deleting, setDeleting] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [search, setSearch] = useState("");
   const [moduleFilter, setModuleFilter] = useState(searchParams.get("module") || "");
@@ -206,17 +212,44 @@ const FormsList = () => {
     } catch (err) {
       console.error("Error fetching forms:", err);
       // Distinct error state — a permission/network failure must never look identical to a
-      // genuinely empty list. Previously this only surfaced as a toast, which is easy to miss;
-      // now the table body itself shows the failure until the user retries.
-      const message = err.response?.status === 403
-        ? err.response.data?.error || "Access denied"
-        : "Failed to load forms";
-      setError(message);
-      toast.error(message);
+      // genuinely empty list, and the four failure modes below each need a different UI (only
+      // "network"/"server" make Retry meaningful — retrying a plan/permission block just repeats
+      // the same 403 forever).
+      const status = err.response?.status;
+      const code = err.response?.data?.code;
+      let classified;
+      if (!err.response) {
+        classified = { type: "network", message: "Couldn't connect to the server." };
+      } else if (status === 403 && code === "MODULE_NOT_AVAILABLE") {
+        classified = { type: "module", message: err.response.data?.error, planName: err.response.data?.planName };
+      } else if (status === 403) {
+        classified = { type: "permission", message: err.response.data?.error || "You don't have permission to access Forms." };
+      } else if (status >= 500) {
+        classified = { type: "server", message: "Our server encountered an error." };
+      } else {
+        classified = { type: "server", message: err.response.data?.error || "Failed to load forms." };
+      }
+      setError(classified);
+      toast.error(classified.message);
     } finally {
       setLoading(false);
     }
   }, [search, moduleFilter, pagination.limit]);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await API.delete(`/forms/${deleteTarget._id}`);
+      toast.success("Form deleted");
+      setDeleteTarget(null);
+      fetchForms(pagination.currentPage);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to delete form");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     fetchForms(1);
@@ -261,13 +294,21 @@ const FormsList = () => {
       cell: (info) => <span className="text-gray-500 text-sm">{timeAgo(info.getValue())}</span>,
     }),
     columnHelper.display({
-      id: "chevron",
+      id: "actions",
       header: "",
-      // Deliberately not a "⋮" actions menu — Duplicate/Archive/Delete have no backend endpoint
-      // yet (explicitly deferred, FORMS_FRONTEND_ARCHITECTURE.md §9). A dropdown offering options
-      // that don't work would repeat the exact dead-link mistake already caught and fixed on the
-      // Form Detail page's public-URL button. The whole row is clickable instead (see tbody).
-      cell: () => <ChevronRight className="w-4 h-4 text-gray-300" />,
+      cell: (info) => (
+        <div className="flex items-center gap-2 justify-end">
+          {(info.row.original.status === "draft" || info.row.original.status === "archived") && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setDeleteTarget(info.row.original); }}
+              className="p-1.5 text-gray-300 hover:text-red-500 rounded"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          <ChevronRight className="w-4 h-4 text-gray-300" />
+        </div>
+      ),
     }),
   ];
 
@@ -298,7 +339,16 @@ const FormsList = () => {
           ))}
         </select>
         <div className="flex-1" />
-        {permission !== "readonly" ? (
+        {error?.type === "module" ? (
+          <button
+            disabled
+            title={error.message}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-400 text-sm font-medium rounded-lg cursor-not-allowed"
+          >
+            <Lock className="w-4 h-4" />
+            New Form
+          </button>
+        ) : permission !== "readonly" ? (
           // Matches Companies.jsx's "New Company" primary CTA exactly (#0C4FCD brand blue,
           // px-4 py-2.5) — this is the reason people come to this page, so it should carry the
           // same visual weight as the equivalent action on every other CRM module.
@@ -338,19 +388,70 @@ const FormsList = () => {
             ) : error ? (
               <tr>
                 <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center">
-                  <p className="font-medium text-red-600">{error}</p>
-                  <button
-                    onClick={() => fetchForms(pagination.currentPage)}
-                    className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Retry
-                  </button>
+                  {error.type === "module" ? (
+                    <div className="flex flex-col items-center gap-2 max-w-md mx-auto">
+                      <Lock className="w-8 h-8 text-gray-300" />
+                      <p className="font-semibold text-gray-900">Forms isn't included in your current plan</p>
+                      <p className="text-sm text-gray-500">
+                        Create lead capture forms, embed them on your website, and automatically send submissions to your CRM.
+                      </p>
+                      {error.planName && <p className="text-xs text-gray-400">Current plan: {error.planName}</p>}
+                      <button
+                        onClick={() => navigate("/subscription")}
+                        className="mt-1 px-4 py-2 bg-[#0C4FCD] text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+                      >
+                        Upgrade Plan
+                      </button>
+                    </div>
+                  ) : error.type === "permission" ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <ShieldOff className="w-8 h-8 text-gray-300" />
+                      <p className="font-semibold text-gray-900">You don't have permission to access Forms</p>
+                      <p className="text-sm text-gray-500">Contact your administrator.</p>
+                    </div>
+                  ) : error.type === "network" ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <WifiOff className="w-8 h-8 text-gray-300" />
+                      <p className="font-semibold text-gray-900">Couldn't connect to the server</p>
+                      <button
+                        onClick={() => fetchForms(pagination.currentPage)}
+                        className="mt-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <AlertTriangle className="w-8 h-8 text-gray-300" />
+                      <p className="font-semibold text-gray-900">Something went wrong</p>
+                      <p className="text-sm text-gray-500">{error.message}</p>
+                      <button
+                        onClick={() => fetchForms(pagination.currentPage)}
+                        className="mt-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ) : forms.length === 0 ? (
               <tr>
                 <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500">
-                  <p className="font-medium">No forms found</p>
+                  <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="font-semibold text-gray-900">Website Forms</p>
+                  <p className="text-sm text-gray-500 max-w-sm mx-auto mt-1">
+                    Capture leads directly into your CRM. Forms let visitors submit enquiries, requests, and
+                    registrations that automatically create CRM records.
+                  </p>
+                  {permission !== "readonly" && (
+                    <button
+                      onClick={() => setShowCreateModal(true)}
+                      className="mt-3 px-4 py-2 bg-[#0C4FCD] text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+                    >
+                      Create your first form
+                    </button>
+                  )}
                 </td>
               </tr>
             ) : (
@@ -404,6 +505,20 @@ const FormsList = () => {
             navigate(`/forms/${form._id}`);
           }}
         />
+      )}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Delete "{deleteTarget.title}"?</h2>
+            <p className="text-sm text-gray-500 mb-4">This can't be undone.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+              <button onClick={handleDelete} disabled={deleting} className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50">
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

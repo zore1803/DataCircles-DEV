@@ -29,6 +29,7 @@
     "lucide-react": "^0.525.0",
     "motion": "^12.23.24",
     "papaparse": "^5.5.3",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-beautiful-dnd": "^13.1.1",
     "react-calendly": "^4.4.0",

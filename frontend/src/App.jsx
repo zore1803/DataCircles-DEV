@@ -27,6 +27,7 @@ import CompanyProfilePage from "./pages/CompanyProfilePage";
 import DealDetail from "./pages/DealDetail";
 import FormDetailPage from "./pages/FormDetailPage";
 import FormBuilderPage from "./pages/FormBuilderPage";
+import PublicFormPage from "./pages/PublicFormPage";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Invoices1 from "./pages/Invoices1";
@@ -399,6 +400,7 @@ function App() {
                 </PrivateRoute>
               }
             />
+            <Route path="/f/:slug" element={<PublicFormPage />} />
             <Route
               path="/deals"
               element={

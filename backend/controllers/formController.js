@@ -13,8 +13,13 @@ const FormDefinition = require("../models/FormDefinition");
 const FormVersion = require("../models/FormVersion");
 const FormSubmission = require("../models/FormSubmission");
 const DuplicateReview = require("../models/DuplicateReview");
+const Contact = require("../models/Contact");
+const Company = require("../models/Company");
+const Vendor = require("../models/Vendor");
 const formPublishService = require("../services/formPublishService");
 const duplicateResolutionService = require("../services/duplicateResolutionService");
+
+const RECORD_MODEL_BY_MODULE = { Contact, Company, Vendor };
 
 // Mirrors publicFormController's error-classification approach — map known service error messages
 // to the right HTTP status rather than a blanket 500. Anything unrecognized still falls through to
@@ -23,7 +28,7 @@ function classifyServiceError(err) {
   const msg = err.message || "";
   if (/already been resolved/i.test(msg)) return 409;
   if (/not found/i.test(msg)) return 404;
-  if (/empty layout|invalid form definition|is not permitted|Unsupported module/i.test(msg)) return 400;
+  if (/empty layout|invalid form definition|is not permitted|Unsupported module|Cannot (pause|resume)/i.test(msg)) return 400;
   return null; // unrecognized — caller decides (500)
 }
 
@@ -197,6 +202,43 @@ async function publishForm(req, res) {
 }
 
 /**
+ * POST /api/forms/:id/archive — moves a published/paused form to "archived" so it can later be
+ * deleted (deleteForm requires draft or archived). Direct pass-through to formPublishService.
+ */
+async function archiveForm(req, res) {
+  try {
+    const form = await formPublishService.archiveForm(req.params.id, req.user.organization);
+    res.json({ form });
+  } catch (err) {
+    handleServiceError(res, err, "Failed to archive form");
+  }
+}
+
+/**
+ * POST /api/forms/:id/pause — temporarily stops a published form from accepting submissions.
+ */
+async function pauseForm(req, res) {
+  try {
+    const form = await formPublishService.pauseForm(req.params.id, req.user.organization);
+    res.json({ form });
+  } catch (err) {
+    handleServiceError(res, err, "Failed to pause form");
+  }
+}
+
+/**
+ * POST /api/forms/:id/resume — resumes a paused form back to published.
+ */
+async function resumeForm(req, res) {
+  try {
+    const form = await formPublishService.resumeForm(req.params.id, req.user.organization);
+    res.json({ form });
+  } catch (err) {
+    handleServiceError(res, err, "Failed to resume form");
+  }
+}
+
+/**
  * GET /api/forms/:id/submissions?page=&limit=&reviewStatus=&importStatus=&processingStatus=
  */
 async function listSubmissions(req, res) {
@@ -239,6 +281,25 @@ async function listSubmissions(req, res) {
   } catch (err) {
     console.error("formController.listSubmissions error:", err);
     res.status(500).json({ error: "Failed to list submissions" });
+  }
+}
+
+/**
+ * GET /api/forms/:id/submissions/:submissionId — full detail (rawData/processedData included,
+ * unlike the list view) for the Submissions tab's row-click drawer.
+ */
+async function getSubmission(req, res) {
+  try {
+    const form = await FormDefinition.findOne({ _id: req.params.id, organization: req.user.organization }, { _id: 1 });
+    if (!form) return res.status(404).json({ error: "Form not found" });
+
+    const submission = await FormSubmission.findOne({ _id: req.params.submissionId, formDefinition: form._id });
+    if (!submission) return res.status(404).json({ error: "Submission not found" });
+
+    res.json({ submission });
+  } catch (err) {
+    console.error("formController.getSubmission error:", err);
+    res.status(500).json({ error: "Failed to load submission" });
   }
 }
 
@@ -296,6 +357,33 @@ async function listDuplicateReviews(req, res) {
 }
 
 /**
+ * GET /api/duplicate-reviews/:id — single review detail, plus the existing CRM record's current
+ * field values alongside it (existingRecordData). matchDetails only carries the handful of
+ * detection signals (email/phone/name_fuzzy, gstin/website, etc.) — the Review Center's
+ * side-by-side diff needs the full record, not just those signals, to show every field that
+ * differs, not only the ones the matching engine happened to check.
+ */
+async function getDuplicateReview(req, res) {
+  try {
+    const review = await DuplicateReview.findOne({ _id: req.params.id, organization: req.user.organization });
+    if (!review) return res.status(404).json({ error: "Duplicate review not found" });
+
+    const Model = RECORD_MODEL_BY_MODULE[review.existingRecord.module];
+    const existingRecordDoc = Model
+      ? await Model.findOne({ _id: review.existingRecord.recordId, organization: req.user.organization })
+      : null;
+
+    res.json({
+      review,
+      existingRecordData: existingRecordDoc ? existingRecordDoc.toObject() : null,
+    });
+  } catch (err) {
+    console.error("formController.getDuplicateReview error:", err);
+    res.status(500).json({ error: "Failed to load duplicate review" });
+  }
+}
+
+/**
  * POST /api/duplicate-reviews/:id/keep-separate — direct pass-through to
  * duplicateResolutionService.keepSeparate.
  */
@@ -329,14 +417,69 @@ async function resolveLinkToExisting(req, res) {
   }
 }
 
+/**
+ * POST /api/duplicate-reviews/:id/merge — direct pass-through to
+ * duplicateResolutionService.mergeIntoExisting. Body: { resolvedFieldValues: {...} } — the
+ * per-field values the reviewer chose (from the UI's side-by-side diff), not auto-computed here.
+ */
+async function resolveMerge(req, res) {
+  try {
+    const { review, updatedRecord } = await duplicateResolutionService.mergeIntoExisting(
+      req.params.id,
+      req.user.organization,
+      { decidedByUserId: req.user._id, resolvedFieldValues: req.body.resolvedFieldValues }
+    );
+    res.json({ review, updatedRecord });
+  } catch (err) {
+    handleServiceError(res, err, "Failed to resolve review");
+  }
+}
+
+/**
+ * DELETE /api/forms/:id
+ * Only allowed for: draft forms (never had real submissions), or archived forms with zero
+ * submissions. Published/paused forms must be archived first.
+ */
+async function deleteForm(req, res) {
+  try {
+    const form = await FormDefinition.findOne({ _id: req.params.id, organization: req.user.organization });
+    if (!form) return res.status(404).json({ error: "Form not found" });
+
+    if (form.status === "published" || form.status === "paused") {
+      return res.status(400).json({ error: "Archive this form before deleting it." });
+    }
+
+    if (form.status === "archived") {
+      const submissionCount = await FormSubmission.countDocuments({ formDefinition: form._id });
+      if (submissionCount > 0) {
+        return res.status(400).json({ error: "Cannot delete a form with existing submissions." });
+      }
+    }
+
+    // status === "draft" falls through — safe to delete freely.
+    await FormDefinition.deleteOne({ _id: form._id });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("formController.deleteForm error:", err);
+    res.status(500).json({ error: "Failed to delete form" });
+  }
+}
+
 module.exports = {
   listForms,
   createForm,
   getForm,
   updateForm,
   publishForm,
+  archiveForm,
+  pauseForm,
+  resumeForm,
   listSubmissions,
+  getSubmission,
   listDuplicateReviews,
+  getDuplicateReview,
   resolveKeepSeparate,
   resolveLinkToExisting,
+  resolveMerge,
+  deleteForm,
 };

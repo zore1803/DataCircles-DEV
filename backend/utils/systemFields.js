@@ -9,7 +9,11 @@ const SYSTEM_FIELD_IDS = {
     name: "system:contact.name",
     email: "system:contact.email",
     phone: "system:contact.phone",
-    company: "system:contact.company",
+    // Deliberately no `company` entry here: Contact.company is an ObjectId ref (see Contact.js),
+    // not a value a visitor can type. A Contact form collects the relationship via the Company
+    // system fields instead (system:company.name, etc.) — submissionService's Contact->Company
+    // bucket logic creates/links the Company and sets this ref server-side. Exposing this as a
+    // fillable field is what caused the CastError("company") incident; do not re-add it.
   },
   Company: {
     name: "system:company.name",
@@ -33,10 +37,9 @@ const SYSTEM_FIELD_IDS = {
 // FORMS_SCHEMA.md §3 resolvedFieldSchema. Kept alongside the ID constants since both are
 // static, code-defined facts about system fields, not database-derived ones.
 const SYSTEM_FIELD_META = {
-  "system:contact.name": { label: "Name", type: "string", baseRequired: false },
-  "system:contact.email": { label: "Email", type: "string", baseRequired: false },
+  "system:contact.name": { label: "Name", type: "string", baseRequired: true },
+  "system:contact.email": { label: "Email", type: "string", baseRequired: true },
   "system:contact.phone": { label: "Phone", type: "string", baseRequired: false },
-  "system:contact.company": { label: "Company", type: "string", baseRequired: false },
   "system:company.name": { label: "Company Name", type: "string", baseRequired: true },
   "system:company.industry": { label: "Industry", type: "dropdown", baseRequired: true },
   "system:company.gstin": { label: "GSTIN", type: "string", baseRequired: false },

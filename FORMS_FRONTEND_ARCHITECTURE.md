@@ -188,15 +188,16 @@ Table, same TanStack convention as `FormsList.jsx` / `Companies.jsx`. Calls `GET
 
 Empty/loading states: copy §2.4's exact pattern again.
 
-### 3.6 Tab: Duplicate Reviews (`DuplicateReviewsTab`)
+### 3.6 Tab: Duplicate Reviews (`DuplicateReviewsTab`) — redesigned in the post-publish UX pass
 
-Table again. Calls `GET /api/duplicate-reviews?module=&decision=` — **note this is an org-wide endpoint, not form-scoped** (confirmed: `formController.listDuplicateReviews` queries by `organization`, not by `formDefinition`/`formSubmission`). Two ways to show only *this* form's reviews inside this tab:
-- (a) client-side filter after fetching (fetch all pending org-wide reviews, filter in the browser by whether `review.formSubmission` belongs to this form) — wasteful and wrong once other forms have their own pending reviews, or
-- (b) add a `formId` query param to `GET /api/duplicate-reviews` server-side (small, additive backend change — the review already denormalizes `organization`; adding a `formSubmission`-based join filter is a one-line addition to `formController.listDuplicateReviews`'s query object, no schema change).
+**Shipped, superseding the original inline-row-actions plan below.** `GET /api/duplicate-reviews` now accepts a `formId` query param (the small backend addition flagged in the original draft — one join through `FormSubmission.formDefinition`, no schema change), so this tab is genuinely form-scoped, not client-side filtered from an org-wide fetch.
 
-**Recommend (b)**, flagged as a small necessary backend addition before this tab is built — not a redesign, and directly parallel to the `submissionCount` flag in §2.2. Columns: Contact/Company name (from `existingRecord`/`incomingData` — needs a bit of shaping, since the raw API returns `matchDetails`/`score` rather than display-ready names; keep this shaping in the component, don't invent a new backend endpoint just to reformat it), Match confidence (derived label — **never render the raw `score` number**, per the general Review Center principle already established during the Phase 1b API design discussion), Actions (Keep Separate / Keep Existing buttons calling `POST /api/duplicate-reviews/:id/keep-separate` and `/link` directly).
+The list itself stayed simple (one row per pending review, "Review →" affordance) but row actions were replaced with a dedicated **comparison modal** (`DuplicateReviewModal`, same file), because inline Keep Separate/Keep Existing buttons proved too cramped for what a reviewer actually needs to decide correctly — this is the "richer v2" the original draft flagged as a fallback if inline buttons didn't hold up. On open, it fetches `GET /api/duplicate-reviews/:id` (new endpoint, returns `{ review, existingRecordData }`) and renders a full field-by-field table: Existing Record column vs. New Submission column, with changed/added/missing rows highlighted, matched detection signals shown as a strip under the header. Raw `score`/`matchDetails` are still never rendered directly — the table computes its own diff between `existingRecordData` and `review.incomingData` by key, independent of what signals the duplicate engine happened to check.
 
-No dedicated review-detail drawer is specified by the five decisions — inline row actions are enough for v1 (a full "Submission Review" comparison-card screen, as sketched in the earlier UX discussion, is bigger than what's been scoped now; flag it as a richer v2 if the inline buttons prove too cramped once built).
+Three actions, honestly labeled against actual backend behavior (not the two originally scoped — see D9's update in `FORMS_ARCHITECTURE.md`):
+- **Keep Existing Record** → `POST /duplicate-reviews/:id/link` — discards the new submission's data, existing record untouched.
+- **Keep Both Records** → `POST /duplicate-reviews/:id/keep-separate` — creates a new, separate record.
+- **Merge Records…** → per-field radio picker (existing value vs. new value) for every differing/added field, then `POST /duplicate-reviews/:id/merge` with only the user-chosen `resolvedFieldValues`. The UI is the only thing that ever decides which value wins per field — the backend still refuses to guess.
 
 ---
 
@@ -212,15 +213,13 @@ No dropdown, no per-page data-fetch of the org's actual Company-module forms —
 
 ---
 
-## 5. Submission Details Drawer — copies `CompanyQuickView.jsx` exactly (decision 1)
+## 5. Submission Details Drawer — shipped as `SubmissionDrawer`, in-file in `FormDetailPage.jsx`, not a separate tabbed component
 
-`frontend/src/components/forms/SubmissionDetailsDrawer.jsx` (new subfolder `components/forms/`, matching the `components/company/`, `components/contact/`, `components/vendor/`, `components/deal/` per-module convention already established).
+**Deviates from the original plan below in two ways, both discovered once `GET /api/forms/:id/submissions/:submissionId` actually existed and real field data was on screen.** `GET /api/forms/:id/submissions/:submissionId` is now built (`formController.getSubmission`, plain `FormSubmission.findOne` — no separate `SubmissionEvent` model was ever introduced, so there's nothing beyond the submission document itself to fetch).
 
-Copied verbatim from `CompanyQuickView.jsx`:
-- **CSS**: `fixed top-0 right-0 h-full w-full lg:w-[45vw] xl:w-[40vw] 2xl:w-[35vw]`, `translate-x-0`/`translate-x-full` toggle, plus the `fixed inset-0 bg-black/30 lg:hidden` mobile backdrop.
-- **Prop shape**: `{ submissionId, onClose }` — controlled by `submissionId` being non-null (not a boolean `isOpen`), exactly like `companyId` in `CompanyQuickView`.
-- **Tabs inside the drawer**: per the earlier UX discussion (Submission Details: Submission / Timeline / Raw Payload / Logs) — same `tabs` array + `activeTab` `useState` pattern as `CompanyQuickView`'s own internal `tabs = ["Notes","Tasks","Meetings","Folder","Calendar"]`.
-- Data: `GET /api/forms/:id/submissions/:submissionId` is **not yet built** — `formController.js` only has `listSubmissions`, no single-submission detail handler. **Flag**: this is a small, additive Phase 1b follow-up (one new controller function + one new route, wrapping a plain `FormSubmission.findById` + its `SubmissionEvent`s — exactly the shape already designed in the earlier Phase 1b contract discussion), needed before this drawer can be built, not before the rest of this document.
+Kept from the original plan: same drawer CSS family (slide-in panel + backdrop, per decision 1's "copy an existing pattern" rule), same `{ submissionId, onClose }` controlled-prop shape.
+
+Changed: the internal **tabs** pattern (`Submission / Timeline / Raw Payload / Logs`) was replaced with **collapsible sections** (`CollapsibleSection`), because the submission document turned out to have more independently-toggleable groups than a tab bar comfortably holds once all of it is actually rendered — status pills, Timeline, Submitted Values (from `processedData`/`rawData`), Uploaded Files, Validation Errors, Records Created (from `resultingRecords`), and Source/UTM (from `sourceMeta`) — all fields that existed on the `FormSubmission` model from the start but were previously unrendered. Raw JSON is now a collapsed-by-default toggle at the bottom rather than a primary tab, since it's the least useful view once the sectioned data above covers the same information more readably.
 
 No `VendorQuickView` equivalent exists to also model against — irrelevant here since Forms' drawer is submission-scoped, not module-scoped.
 
@@ -261,13 +260,18 @@ The only modal-shaped UI in this scope is the "Create Form" name/module picker (
 Restating and consolidating the flags raised throughout this document, plus the decisions' own explicit deferrals:
 
 - **No shared Drawer/Badge/Table/Modal/EmptyState component** — three, now four (Drawer) and three (Badge) independent copies of the same pattern exist across the codebase; Forms adds one more of each. Logged as future cleanup in `FORMS_IMPLEMENTATION.md` (§10 below), matching how Phase 0 originally flagged (then later fixed, in its own separate follow-up commit) the Vendor bulk-import coercion duplication rather than fixing it mid-phase.
-- **`submissionCount` on the Forms List response** — small backend addition needed before building that column (§2.2).
-- **`formId` filter on `GET /api/duplicate-reviews`** — small backend addition needed before the Duplicate Reviews tab can scope to one form (§3.6).
-- **`GET /api/forms/:id/submissions/:submissionId`** — not yet built; needed before the Submission Details Drawer (§5).
-- **Duplicate-strategy editing** in the Settings tab — no backend update path exists yet; deferred (§3.3). Note this only blocks *switching* a form to `allow_duplicates` later, not the Duplicate Reviews tab itself — the schema already defaults new forms to `review_queue` (confirmed, see §3.3).
+- ~~`submissionCount` on the Forms List response~~ — shipped.
+- ~~`formId` filter on `GET /api/duplicate-reviews`~~ — shipped (§3.6).
+- ~~`GET /api/forms/:id/submissions/:submissionId`~~ — shipped (§5).
+- ~~Row actions beyond "Open" on Duplicate Reviews (full comparison screen)~~ — shipped as `DuplicateReviewModal`, including a third Merge action beyond the original two-outcome scope (§3.6; see D9's update in `FORMS_ARCHITECTURE.md`).
+- **Duplicate-strategy, thank-you message, and captcha/privacy-policy-tool editing** in the Settings tab — `FormDefinition.publishState` already has `duplicateStrategy`/`thankYou`/`tools` fields in the schema, but `updateForm`/`formPublishService.saveDraft` only accept `{layout, theme, title}` — there is no endpoint to write any of these yet. Deliberately left out of the post-publish Settings redesign for this reason (explicit product decision, not an oversight) rather than building UI against a write path that doesn't exist. Still doesn't block the Duplicate Reviews tab itself — new forms default to `duplicateStrategy: "review_queue"` (§3.3).
 - **Richer per-module Forms button** (dropdown of actual forms, skip-list-if-one) — explicitly v1.1, not now (§4).
-- **Real Builder internals** (FieldsPanel/Canvas/PropertiesPanel) — explicitly last in the build order, not designed in this document (§3.4).
-- **Row actions beyond "Open"** on Forms List (Duplicate/Archive/Delete) and a full Submission Review comparison-card screen for Duplicate Reviews — both previously identified as v1-deferred; restated here, not reopened.
+- **Real Builder internals** (FieldsPanel/Canvas/PropertiesPanel) — now built; see `FormBuilderPage.jsx` directly rather than this document, which was written before Builder existed.
+- **Row actions beyond "Open" on Forms List** (Duplicate/Archive/Delete) — still v1-deferred at the list-row level; Archive/Delete/Pause/Resume are however now reachable per-form from the redesigned Settings tab (§3.3 update below).
+
+**Settings tab (§3.3), redesign note:** beyond title/module/publish/archive already scoped, the tab now also surfaces Pause/Resume (`POST /forms/:id/pause|resume`) and Delete (`DELETE /forms/:id`, gated to draft/archived forms per the backend's own rule) — both routes existed before this pass but had no UI. Restructured into consistent label/description/control rows rather than the original stacked-labels layout.
+
+**Sharing (Overview tab / `PublicLinkCard.jsx`), addition beyond original scope:** QR code generation (client-side, via the `qrcode` npm package — no backend involvement), a Download-QR button, a native Share button (Web Share API, only rendered when `navigator.share` exists), and embed snippets limited to **iframe** and the raw **Source URL** — a JavaScript-embed option was drafted and then deliberately removed once it became clear it would need a `/embed.js` route that doesn't exist; not offering it is more honest than shipping a snippet that doesn't work.
 
 ---
 
