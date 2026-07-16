@@ -331,33 +331,10 @@ export default function CompanyDealsKanban({ deals, setDeals }) {
           </div>
         </DndContext>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredDeals.length === 0 ? (
-            <div className="text-sm text-gray-500 bg-gray-50 p-6 rounded-xl border border-dashed border-gray-200 text-center col-span-full">
-              No deals found for this company.
-            </div>
-          ) : (
-            filteredDeals.map((deal) => (
-              <Link
-                to={`/deals/${deal._id}`}
-                key={deal._id}
-                className="group flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-blue-300 transition-all"
-              >
-                <div className="w-10 h-10 bg-blue-100 group-hover:bg-blue-200 transition-colors rounded-full flex items-center justify-center font-semibold text-blue-700 flex-shrink-0">
-                  <Gem size={16} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors">
-                    {deal.title}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {deal.status || "Open"}
-                  </p>
-                </div>
-              </Link>
-            ))
-          )}
-        </div>
+        <div
+          className="box-border flex flex-col items-start bg-white self-stretch"
+          style={{ height: "542px", border: "1px solid #E1E4EA", borderRadius: "8px" }}
+        />
       )}
     </div>
   );
