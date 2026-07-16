@@ -22,6 +22,8 @@ import {
   MoreHorizontal,
   MoreVertical,
   Building2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
@@ -146,6 +148,8 @@ export default function CompanyDealsKanban({ deals, setDeals }) {
   const [statuses, setStatuses] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState("board");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limit, setLimit] = useState(10);
 
   useEffect(() => {
     const fetchStatuses = async () => {
@@ -165,6 +169,38 @@ export default function CompanyDealsKanban({ deals, setDeals }) {
     const q = searchTerm.toLowerCase();
     return deals.filter((d) => (d.title || "").toLowerCase().includes(q));
   }, [deals, searchTerm]);
+
+  const totalCount = filteredDeals.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / limit));
+  const startItem = totalCount === 0 ? 0 : (currentPage - 1) * limit + 1;
+  const endItem = Math.min(currentPage * limit, totalCount);
+  const hasPrevPage = currentPage > 1;
+  const hasNextPage = currentPage < totalPages;
+
+  const handlePageChange = (page) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+  };
+
+  const handleLimitChange = (newLimit) => {
+    setLimit(newLimit);
+    setCurrentPage(1);
+  };
+
+  const getPageNumbers = () => {
+    const delta = 2;
+    const range = [];
+    const rangeWithDots = [];
+    for (let i = Math.max(2, currentPage - delta); i <= Math.min(totalPages - 1, currentPage + delta); i++) {
+      range.push(i);
+    }
+    if (currentPage - delta > 2) rangeWithDots.push(1, "...");
+    else rangeWithDots.push(1);
+    rangeWithDots.push(...range);
+    if (currentPage + delta < totalPages - 1) rangeWithDots.push("...", totalPages);
+    else if (totalPages > 1) rangeWithDots.push(totalPages);
+    return rangeWithDots.filter((item, index, arr) => index === 0 || arr[index - 1] !== item);
+  };
 
   const dealsByStatus = useMemo(() => {
     const map = {};
@@ -331,10 +367,94 @@ export default function CompanyDealsKanban({ deals, setDeals }) {
           </div>
         </DndContext>
       ) : (
-        <div
-          className="box-border flex flex-col items-start bg-white self-stretch"
-          style={{ height: "542px", border: "1px solid #E1E4EA", borderRadius: "8px" }}
-        />
+        <>
+          <div
+            className="box-border flex flex-col items-start bg-white self-stretch"
+            style={{ height: "542px", border: "1px solid #E1E4EA", borderRadius: "8px" }}
+          />
+
+          {totalCount > 0 && (
+            <div className="w-full bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+              <div className="flex-1 flex justify-between sm:hidden">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={!hasPrevPage}
+                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={!hasNextPage}
+                  className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div className="flex items-center space-x-2">
+                  <p className="text-sm text-gray-700 font-inter">
+                    Showing <span className="font-semibold">{startItem}</span> to{" "}
+                    <span className="font-semibold">{endItem}</span> of{" "}
+                    <span className="font-semibold">{totalCount}</span> results
+                  </p>
+                  <select
+                    value={limit}
+                    onChange={(e) => handleLimitChange(parseInt(e.target.value))}
+                    className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
+                  >
+                    <option value={10}>10 per page</option>
+                    <option value={20}>20 per page</option>
+                    <option value={50}>50 per page</option>
+                    <option value={100}>100 per page</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={!hasPrevPage}
+                    className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+
+                  {totalPages > 0 &&
+                    getPageNumbers().map((pageNum, index) =>
+                      pageNum === "..." ? (
+                        <span
+                          key={`dots-${index}`}
+                          className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
+                        >
+                          ...
+                        </span>
+                      ) : (
+                        <button
+                          key={`page-${pageNum}`}
+                          onClick={() => handlePageChange(pageNum)}
+                          className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${pageNum === currentPage
+                            ? "bg-blue-600 text-white"
+                            : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                            }`}
+                        >
+                          {pageNum}
+                        </button>
+                      ),
+                    )}
+
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={!hasNextPage}
+                    className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
