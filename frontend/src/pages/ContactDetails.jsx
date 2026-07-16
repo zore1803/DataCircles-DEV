@@ -23,11 +23,25 @@ import {
   ChevronRight,
   MessageCircle,
   CopyPlus,
+  Trash2,
+  Plus,
+  Video,
+  CalendarClock,
+  MapPin,
+  Target,
 } from "lucide-react";
 import ContactForm from "../components/contact/ContactForm";
 import toast from "react-hot-toast";
 import useContactStore from "../store/useContactStore";
 import MergeContactModal from "../components/contact/MergeContactModal";
+import { formatNumberToIndian } from "../utils/numberFormatter";
+
+const CorporateFareIcon = (props) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M2 21V3h10v4h10v14H2zm2-2h2v-2H4v2zm0-4h2v-2H4v2zm0-4h2V9H4v2zm0-4h2V5H4v2zm4 12h2v-2H8v2zm0-4h2v-2H8v2zm0-4h2V9H8v2zm0-4h2V5H8v2zm4 12h8V9h-8v2h2v2h-2v2h2v2h-2v2zm4-8h2v2h-2v-2zm0 4h2v2h-2v-2z" />
+  </svg>
+);
+
 const tabsLeft = ["Details", "Call Logs"];
 const tabsRight = ["Notes", "Tasks", "Meetings", "Calendar"];
 import { FaWhatsapp } from "react-icons/fa";
@@ -223,307 +237,231 @@ const ContactDetailsPage = () => {
     );
   }
 
+  const handleDeleteContact = async () => {
+    if (!window.confirm("Are you sure you want to delete this contact? This action cannot be undone.")) {
+      return;
+    }
+    try {
+      await API.delete(`/contacts/${id}`);
+      toast.success("Contact deleted successfully");
+      navigate("/contacts");
+    } catch (err) {
+      console.error("Failed to delete contact:", err);
+      toast.error(err.response?.data?.error || "Failed to delete contact");
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
-      {showForm && (
-        <ContactForm
-          form={form}
-          setForm={setForm}
-          additionalValues={additionalValues}
-          setAdditionalValues={setAdditionalValues}
-          contactFieldList={contactFieldList}
-          companies={allCompanies}
-          loading={formLoading}
-          setLoading={setFormLoading}
-          setError={(message) =>
-            toast.error(message || "Failed to save contact")
-          }
-          setSuccess={(message) =>
-            toast.success(message || "Contact saved successfully")
-          }
-          fetchContacts={fetchContactDetails} // Refreshes the specific contact after saving!
-          onRequestClose={() => setShowForm(false)}
-        />
-      )}
+    <div className="min-h-screen bg-[#f8fafc] -mt-6 -mx-4 sm:-mx-6 lg:-mx-8">
+      <div
+        className="box-border flex items-center justify-between bg-white border-b border-[#E1E4EA]"
+        style={{ padding: "12px 24px", height: "72px" }}
+      >
+        <div className="flex items-center" style={{ gap: "12px" }}>
+          <button
+            onClick={() => navigate("/contacts")}
+            className="flex items-center justify-center bg-white border border-[#E5E5E5] rounded flex-shrink-0"
+            style={{ width: "24px", height: "24px", padding: 0, boxSizing: "border-box" }}
+            title="Back to Contacts"
+          >
+            <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M0 4.13806L4.13805 8.27613L5.08085 7.33333L1.88561 4.13806L5.08085 0.942807L4.13805 0L0 4.13806ZM3.76659 4.13806L7.90465 8.27613L8.84745 7.33333L5.65219 4.13806L8.84745 0.942807L7.90465 0L3.76659 4.13806Z" fill="#0A0A0A" />
+            </svg>
+          </button>
+          <span
+            style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "16px", lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
+          >
+            {contact.name}
+          </span>
+        </div>
 
-      <div className="mx-auto">
-        {/* Two Column Grid - Dynamic 60/40 or 40/60 split */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center justify-center gap-2 bg-white rounded-full flex-shrink-0"
+            style={{ width: "75px", minHeight: "32px", padding: 0, boxSizing: "border-box", border: "1px solid rgba(31, 41, 55, 0.3)" }}
+          >
+            <svg width="14" height="15" viewBox="0 0 17 18" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+              <path d="M0 17.58V15.08H16.6667V17.58H0ZM3.33333 11.2579H4.36375L11.2804 4.35396L10.7565 3.82208L10.2373 3.31083L3.33333 10.2275V11.2579ZM2.08333 12.5079V9.69542L11.4248 0.366876C11.5455 0.246182 11.6825 0.154862 11.8358 0.0929171C11.989 0.0309727 12.1485 0 12.3142 0C12.48 0 12.6406 0.0309727 12.7958 0.0929171C12.9511 0.154862 13.0934 0.250487 13.2227 0.379793L14.2244 1.39417C14.3537 1.51486 14.4472 1.65313 14.5048 1.80896C14.5624 1.96465 14.5913 2.12563 14.5913 2.29188C14.5913 2.44771 14.562 2.60264 14.5035 2.75667C14.4451 2.91083 14.352 3.05174 14.2244 3.17938L4.89583 12.5079H2.08333ZM11.2804 4.35396L10.7565 3.82208L10.2373 3.31083L11.2804 4.35396Z" fill="#1C1B1F" />
+            </svg>
+            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "20px", color: "#1F2937", whiteSpace: "nowrap" }}>
+              Edit
+            </span>
+          </button>
+          <button
+            onClick={handleDeleteContact}
+            className="flex items-center justify-center gap-2 rounded-full flex-shrink-0"
+            style={{ width: "139px", minHeight: "32px", padding: 0, boxSizing: "border-box", background: "rgba(232, 34, 34, 0.1)", border: "1px solid rgba(232, 34, 34, 0.3)" }}
+          >
+            <Trash2 className="w-3.5 h-3.5 text-[#E82222] flex-shrink-0" />
+            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "20px", color: "#E82222", whiteSpace: "nowrap" }}>
+              Delete Contact
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <div
+        className="box-border flex flex-row items-start bg-white"
+        style={{
+          padding: "18px 24px",
+          gap: "18px",
+          height: "216px",
+          borderRight: "1px solid #F1F1F5",
+          boxShadow: "0px 38px 23px rgba(0, 0, 0, 0.01), 0px 17px 17px rgba(0, 0, 0, 0.02), 0px 4px 9px rgba(0, 0, 0, 0.02)",
+        }}
+      >
         <div
-          className="grid grid-cols-1 lg:grid-cols-2 gap-6 transition-all duration-300"
-          style={{
-            gridTemplateColumns:
-              window.innerWidth >= 1024
-                ? isExpanded
-                  ? "40% 60%"
-                  : "60% 40%"
-                : "1fr",
-          }}
+          className="flex flex-col items-start"
+          style={{ width: "345px", height: "175px", gap: "17px" }}
         >
-          {/* LEFT SIDE - Contact Details & Call Logs */}
-          <div className="space-y-0">
-            {/* Breadcrumb */}
-            <div className="flex items-center justify-between mb-6">
-              <nav className="text-sm text-gray-500 flex items-center gap-2">
-                <Link
-                  to="/contacts"
-                  className="text-gray-500 hover:text-blue-600"
-                >
-                  Contacts
-                </Link>
-                <span className="text-gray-400">·</span>
-                <span className="text-gray-700">
-                  {contact.jobTitle || "Contact"}
-                </span>
-              </nav>
-
-              {/* Prev / Next Buttons */}
-              {currentContactIds.length > 1 && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={goToPrev}
-                    disabled={!hasPrev}
-                    className={`p-1.5 rounded-lg border flex items-center gap-1 text-sm transition-colors ${
-                      hasPrev
-                        ? "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                        : "bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed"
-                    }`}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    <span className="hidden sm:inline">Prev</span>
-                  </button>
-                  <button
-                    onClick={goToNext}
-                    disabled={!hasNext}
-                    className={`p-1.5 rounded-lg border flex items-center gap-1 text-sm transition-colors ${
-                      hasNext
-                        ? "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                        : "bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed"
-                    }`}
-                  >
-                    <span className="hidden sm:inline">Next</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Separator */}
-            <div className="border-b border-gray-200 mb-4"></div>
-
-            {/* Header Section */}
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-start gap-4">
-                {/* Profile Picture */}
-                <ProfilePicture
-                  contact={contact}
-                  size="w-16 h-16"
-                  textSize="text-2xl"
-                />
-
-                {/* Contact Info */}
-                <div className="flex-1">
-                  <h1 className="text-3xl font-bold text-gray-900">
-                    {contact.name}
-                  </h1>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {contact.jobTitle}
-                  </p>
-
-                  {/* Contact Details */}
-                  <div className="flex flex-col gap-1 mt-3">
-                    {contact.email && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Mail size={14} className="text-gray-400" />
-                        <span>{contact.email}</span>
-                      </div>
-                    )}
-                    {contact.phone && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Phone size={14} className="text-gray-400" />
-                        <span>{contact.phone}</span>
-                      </div>
-                    )}
-                    {company && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Building2 size={14} className="text-gray-400" />
-                        <Link
-                          to={`/companies/${company._id}`}
-                          className="text-blue-600 hover:underline"
-                        >
-                          {company.name}
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Social Media Icons */}
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={handleEdit}
-                  className="flex items-center p-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors border border-blue-200"
-                >
-                  <Edit2 size={14} />
-                </button>
-                <button
-                  onClick={() => setShowMergeModal(true)}
-                  className="flex items-center p-1.5 bg-orange-50 text-orange-700 rounded-full hover:bg-orange-100 border border-orange-200 text-sm font-medium transition-colors mr-1"
-                  title="Merge Duplicate Contact"
-                >
-                  <CopyPlus size={16} />
-                </button>
-                {/* Twitter/X */}
-                <button
-                  disabled={!hasSocialLink("twitter")}
-                  className={`
-                    p-1.5 rounded-full border bg-white transition-colors
-                    ${hasSocialLink("twitter") ? "text-blue-400 hover:bg-gray-50 cursor-pointer" : "text-gray-300 cursor-not-allowed"}
-                  `}
-                  onClick={() => openSocialLink("twitter")}
-                  title="X (Twitter)"
-                >
-                  <Twitter size={16} />
-                </button>
-
-                {/* LinkedIn */}
-                <button
-                  disabled={!hasSocialLink("linkedin")}
-                  className={`
-                    p-1.5 rounded-full border bg-white transition-colors
-                    ${hasSocialLink("linkedin") ? "text-blue-600 hover:bg-gray-50 cursor-pointer" : "text-gray-300 cursor-not-allowed"}
-                  `}
-                  onClick={() => openSocialLink("linkedin")}
-                  title="LinkedIn"
-                >
-                  <Linkedin size={16} />
-                </button>
-
-                {/* Facebook */}
-                <button
-                  disabled={!hasSocialLink("facebook")}
-                  className={`
-                    p-1.5 rounded-full border bg-white transition-colors
-                    ${hasSocialLink("facebook") ? "text-blue-700 hover:bg-gray-50 cursor-pointer" : "text-gray-300 cursor-not-allowed"}
-                  `}
-                  onClick={() => openSocialLink("facebook")}
-                  title="Facebook"
-                >
-                  <Facebook size={16} />
-                </button>
-
-                {/* WhatsApp */}
-                <button
-                  disabled={!hasSocialLink("whatsapp")}
-                  className={`
-                    p-1.5 rounded-full border bg-white transition-colors
-                    ${hasSocialLink("whatsapp") ? "text-green-600 hover:bg-green-50 cursor-pointer" : "text-gray-300 cursor-not-allowed"}
-                  `}
-                  onClick={() => openSocialLink("whatsapp")}
-                  title="WhatsApp"
-                >
-                  <FaWhatsapp size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Separator */}
-            <div className="border-b border-gray-200 mb-6"></div>
-
-            {/* Left Tabs */}
-            <div className="border-b border-gray-200 mb-6">
-              <nav className="flex gap-6">
-                {tabsLeft.map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTabLeft(tab)}
-                    className={`pb-3 text-sm font-medium transition-colors ${
-                      activeTabLeft === tab
-                        ? "border-b-2 border-gray-900 text-gray-900"
-                        : "text-gray-500 hover:text-gray-900"
-                    }`}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </nav>
-            </div>
-
-            {/* Left Content */}
-            <div className="px-1">
-              {activeTabLeft === "Details" && (
-                <BasicDetails
-                  contact={contact}
-                  company={company}
-                  deals={deals}
-                  contactFieldList={contactFieldList}
-                  onContactUpdate={handleContactUpdate}
-                  onDealCreated={handleDealCreated}
-                />
-              )}
-              {activeTabLeft === "Call Logs" && <CallLogs contactId={id} />}
-            </div>
+          <div className="flex items-center gap-3">
+            <ProfilePicture contact={contact} />
+            <span
+              style={{ fontFamily: "Inter", fontWeight: 700, fontSize: "20px", lineHeight: "120%", color: "#0E121B" }}
+            >
+              {contact.name}
+            </span>
           </div>
 
-          {/* RIGHT SIDE - Other Components */}
-          <div className="space-y-0">
-            {/* Right Tabs */}
-            <div className="min-h-[85vh] bg-white border border-gray-200 rounded-lg">
-              <nav className="flex items-center border-b border-gray-200 overflow-x-auto">
-                <div className="flex flex-1">
-                  {tabsRight.map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTabRight(tab)}
-                      className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${
-                        activeTabRight === tab
-                          ? "border-b-2 border-gray-900 text-gray-900 -mb-[1px]"
-                          : "text-gray-500 hover:text-gray-900"
-                      }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
+          <div
+            className="box-border flex flex-row items-center justify-between rounded-[10px]"
+            style={{
+              width: "345px",
+              height: "67px",
+              padding: "16px",
+              gap: "10px",
+              border: "1px solid #E5E5EC",
+              background: "linear-gradient(94.22deg, rgba(255, 255, 255, 0) -7.06%, rgba(179, 204, 255, 0.2) 101.14%), #FFFFFF",
+            }}
+          >
+            <div className="flex flex-col justify-center" style={{ gap: "2px" }}>
+              <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "rgba(82, 88, 102, 0.8)" }}>
+                Recent Deal Created
+              </span>
+              <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "22px", lineHeight: "150%", letterSpacing: "-0.03em", color: "#0E121B" }}>
+                {deals.length > 0 ? `₹${formatNumberToIndian(deals[0].amount || 0)}` : "—"}
+              </span>
+            </div>
+            {deals.length > 0 && (
+              <Link
+                to={`/deals/${deals[0]._id}`}
+                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#0085FF", flexShrink: 0 }}
+              >
+                View
+              </Link>
+            )}
+          </div>
 
-                {/* Expand/Collapse Button */}
-                <button
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className="p-3 text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors border-l border-gray-200"
-                  title={isExpanded ? "Collapse (60/40)" : "Expand (40/60)"}
+          <div className="flex items-center" style={{ gap: "8px", width: "254px", height: "32px" }}>
+            <button
+              className="flex items-center justify-center gap-1.5 rounded-full flex-shrink-0"
+              style={{ width: "174px", height: "32px", padding: 0, boxSizing: "border-box", background: "#0085FF" }}
+            >
+              <Plus className="w-4 h-4 text-white flex-shrink-0" />
+              <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "20px", color: "#FFFFFF", whiteSpace: "nowrap" }}>
+                Create New Deal
+              </span>
+            </button>
+            <button
+              className="flex items-center justify-center rounded-full bg-white flex-shrink-0"
+              style={{ width: "32px", height: "32px", padding: 0, boxSizing: "border-box", border: "1px solid rgba(31, 41, 55, 0.3)" }}
+              title="Schedule Video Call"
+            >
+              <Video className="w-4 h-4 text-[#525252]" />
+            </button>
+            <button
+              className="flex items-center justify-center rounded-full bg-white flex-shrink-0"
+              style={{ width: "32px", height: "32px", padding: 0, boxSizing: "border-box", border: "1px solid rgba(31, 41, 55, 0.3)" }}
+              title="Schedule Meeting"
+            >
+              <CalendarClock className="w-4 h-4 text-[#525252]" />
+            </button>
+          </div>
+        </div>
+
+        <div
+          className="box-border flex-shrink-0 flex flex-col items-start"
+          style={{ width: "642px", height: "198px", borderRadius: "10px" }}
+        >
+          <div
+            className="flex flex-col items-start"
+            style={{ width: "641.5px", height: "175px", gap: "8px" }}
+          >
+            <div
+              className="flex flex-row justify-center items-center self-stretch"
+              style={{ padding: "8px 0", gap: "16px", height: "33px", borderRadius: "8px" }}
+            >
+              <div className="flex items-center flex-1" style={{ gap: "8px", height: "17px" }}>
+                <span style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: "14px", lineHeight: "120%", color: "#0A0A0A" }}>
+                  Contact Details
+                </span>
+              </div>
+            </div>
+
+            <div style={{ width: "641.5px", height: "1px", background: "rgba(31, 41, 55, 0.2)" }} />
+
+            <div className="relative" style={{ width: "641.5px", height: "148px" }}>
+              {[
+                { icon: Mail, label: "Email", value: contact.email, left: 0, top: 0 },
+                { icon: Phone, label: "Phone", value: contact.phone, left: 216.5, top: 0 },
+                { icon: CorporateFareIcon, label: "Company", value: company?.name, left: 433, top: 0 },
+                { icon: MapPin, label: "Location", value: contact.address, left: 0, top: 52 },
+                { icon: Target, label: "Status", value: contact.stageStatus, left: 216.5, top: 52 },
+              ].map(({ icon: Icon, label, value, left, top }) => (
+                <div
+                  key={label}
+                  className="absolute flex flex-row justify-center items-center"
+                  style={{ width: "208.5px", height: "44px", left: `${left}px`, top: `${top}px`, padding: "8px", gap: "16px", borderRadius: "8px" }}
                 >
-                  {isExpanded ? (
-                    <Minimize2 className="w-4 h-4" />
-                  ) : (
-                    <Maximize2 className="w-4 h-4" />
-                  )}
-                </button>
-              </nav>
+                  <div className="flex items-center flex-1" style={{ gap: "8px", height: "28px" }}>
+                    <Icon className="w-5 h-5 text-[#525252] flex-shrink-0" />
+                    <div className="flex flex-col justify-center items-start" style={{ gap: "2px" }}>
+                      <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "10px", lineHeight: "120%", color: "rgba(107, 114, 128, 0.5)" }}>
+                        {label}
+                      </span>
+                      <span className="truncate" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}>
+                        {value || "—"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
 
-              {/* Right Content */}
-              <div className="p-6 min-h-[400px]">
-                {activeTabRight === "Notes" && <NoteSection />}
-                {activeTabRight === "Tasks" && (
-                  <ContactTasksTable contactId={id} />
-                )}
-                {activeTabRight === "Meetings" && (
-                  <MeetingsTable contactId={id} />
-                )}
-                {activeTabRight === "Calendar" && <Calendar contactId={id} />}
+        <div
+          className="flex flex-col items-start flex-shrink-0"
+          style={{ width: "254px", height: "126px", gap: "18px" }}
+        >
+          <div className="flex flex-col items-start" style={{ width: "254px", height: "94px", gap: "8px" }}>
+            <div
+              className="flex flex-row justify-center items-center self-stretch"
+              style={{ padding: "8px 0", gap: "16px", height: "33px", borderRadius: "8px" }}
+            >
+              <div className="flex items-center flex-1" style={{ gap: "8px", height: "17px" }}>
+                <span style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: "14px", lineHeight: "120%", color: "#0A0A0A" }}>
+                  Associated Contacts
+                </span>
+              </div>
+            </div>
+
+            <div style={{ width: "254px", height: "1px", background: "rgba(31, 41, 55, 0.2)" }} />
+
+            <div className="flex flex-col items-start self-stretch" style={{ height: "44px" }}>
+              <div
+                className="flex flex-row items-center self-stretch"
+                style={{ padding: "8px", gap: "16px", height: "44px", borderRadius: "8px" }}
+              >
+                <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: "12px", color: "rgba(107, 114, 128, 0.8)" }}>
+                  No associated contacts
+                </span>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      <MergeContactModal
-        primaryContact={contact}
-        isOpen={showMergeModal}
-        onClose={() => setShowMergeModal(false)}
-        onSuccess={() => {
-          fetchContactDetails();
-        }}
-      />
     </div>
   );
 };

@@ -570,7 +570,11 @@ const ContactForm = ({
                       {profilePicture ? profilePicture.name : "Choose a File"}
                     </div>
                   </div>
-                  <button type="button" className="bg-[#F2F2F7] text-[#111216] px-8 rounded-xl h-12 text-[14px] font-medium hover:bg-gray-200 transition-colors pointer-events-none">
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById("avatar").click()}
+                    className="bg-[#F2F2F7] text-[#111216] px-8 rounded-xl h-12 text-[14px] font-medium hover:bg-gray-200 transition-colors cursor-pointer"
+                  >
                     Upload
                   </button>
                 </div>

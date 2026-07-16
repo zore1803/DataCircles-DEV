@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import DealForm from "../components/deal/DealForm";
@@ -368,7 +368,7 @@ function DealDetail() {
   const totalInvoiceAmount = invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0);
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen bg-[#f8fafc] -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-4 px-6">
       <AppToaster />
       {/* 👉 ADD THIS BLOCK HERE */}
       {showForm && (
@@ -398,17 +398,6 @@ function DealDetail() {
           {/* LEFT SIDE - Details & Invoices         */}
           {/* ======================================= */}
           <div className="space-y-0">
-            {/* Breadcrumbs */}
-            <div className="flex items-center justify-between mb-6">
-              <nav className="text-sm text-gray-500 flex items-center gap-2">
-                <Link to="/deals" className="text-gray-500 hover:text-blue-600">Deals</Link>
-                <span className="text-gray-400">·</span>
-                <span className="text-gray-700 truncate max-w-[200px]">{deal.title}</span>
-              </nav>
-            </div>
-
-            <div className="border-b border-gray-200 mb-4"></div>
-
             {/* Header Block */}
             <div className="flex items-start justify-between mb-4">
               <div>
