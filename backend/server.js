@@ -29,6 +29,7 @@ const corsOptions = {
     "https://datacircles.netlify.app",
     "https://app.datacircles.in",
     "https://data-circles-crm-dev.vercel.app",
+    "https://data-circles-dev.vercel.app",
   ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
