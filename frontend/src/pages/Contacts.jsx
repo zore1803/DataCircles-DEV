@@ -33,7 +33,9 @@ import {
   Pin,
   PinOff,
   Star,
-  FileText
+  FileText,
+  List,
+  LayoutGrid,
 } from "lucide-react";
 import API from "../services/api";
 import ContactFolder from "../components/contact/ContactFolder";
@@ -123,6 +125,18 @@ function Contacts() {
   const user = JSON.parse(localStorage.getItem("user"));
   const navigate = useNavigate();
   const [showImport, setShowImport] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutsideMoreMenu = (event) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
+        setIsMoreMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutsideMoreMenu);
+    return () => document.removeEventListener("mousedown", handleClickOutsideMoreMenu);
+  }, []);
   const isMobile = useIsMobile();
   const [showKanban, setShowKanban] = useState(false);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
@@ -455,7 +469,7 @@ function Contacts() {
       cols.push(
         columnHelper.display({
           id: "selection",
-          size: 60,
+          size: 50,
           enableResizing: false,
           header: () => (
             <div className="flex justify-center items-center w-full">
@@ -520,7 +534,7 @@ function Contacts() {
     const isActionsPinned = pinnedColumn === "actions";
     const actionsColumnDef = columnHelper.display({
       id: "actions",
-      size: 100,
+      size: 152,
       enableResizing: false,
       header: () => (
         <div
@@ -604,7 +618,18 @@ function Contacts() {
       cols.push(
         columnHelper.accessor((row) => getFieldValue(row, vc.key), {
           id: vc.key,
-          size: vc.key === "name" ? 220 : vc.key === "email" ? 200 : 150,
+          size:
+            vc.key === "name"
+              ? 235
+              : vc.key === "company"
+                ? 207
+                : vc.key === "email"
+                  ? 288
+                  : vc.key === "phone"
+                    ? 196
+                    : vc.key === "status" || vc.key === "stageStatus"
+                      ? 198
+                      : 150,
           header: () => {
             const Icon = vc.icon;
             const isSortable = vc.sortable !== false;
@@ -671,63 +696,17 @@ function Contacts() {
 
             if (vc.key === "name") {
               return (
-                <div className="flex items-center justify-between w-full group relative">
-                  <div className="flex items-center space-x-3 truncate flex-1 pr-4">
-                    <div className="flex-shrink-0">
-                      <ProfilePicture contact={contact} />
-                    </div>
-                    <Link
-                      to={`/contacts/${contact._id}`}
-                      className="text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-all duration-150 ease-out"
-                      title={contact.name}
-                    >
-                      {contact.name}
-                    </Link>
+                <div className="flex items-center space-x-3 truncate w-full">
+                  <div className="flex-shrink-0">
+                    <ProfilePicture contact={contact} />
                   </div>
-
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-150 ease-out pointer-events-none group-hover:pointer-events-auto bg-white/80 backdrop-blur-[2px] rounded-lg">
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setQuickViewContactId(contact._id);
-                      }}
-                      className="p-1.5 rounded-md bg-white shadow-sm border border-gray-200 hover:bg-blue-50 text-blue-600"
-                      title="Quick view"
-                    >
-                      <Eye size={15} />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openAddToFolderModal(row.original);
-                      }}
-                      className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
-                      title="Add to Folder"
-                    >
-                      <FolderPlus className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditContact(contact);
-                      }}
-                      className="p-1.5 rounded-md hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
-                      title="Edit Contact"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(contact._id);
-                      }}
-                      className="p-1.5 rounded-md hover:bg-red-50 text-gray-500 hover:text-red-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
-                      title="Delete Contact"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <Link
+                    to={`/contacts/${contact._id}`}
+                    className="text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-all duration-150 ease-out"
+                    title={contact.name}
+                  >
+                    {contact.name}
+                  </Link>
                 </div>
               );
             }
@@ -1474,7 +1453,7 @@ function Contacts() {
     };
 
     return (
-      <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+      <div className="bg-white px-4 py-3 flex items-center justify-between sm:px-6">
         <div className="flex-1 flex justify-between sm:hidden">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
@@ -1509,20 +1488,21 @@ function Contacts() {
               <option value={100}>100 per page</option>
             </select>
           </div>
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={!hasPrevPage}
-              className="relative inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
+
             {totalPages > 0 &&
               getPageNumbers().map((pageNum, index) =>
                 pageNum === "..." ? (
                   <span
                     key={`dots-${index}`}
-                    className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700"
+                    className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
                   >
                     ...
                   </span>
@@ -1530,19 +1510,20 @@ function Contacts() {
                   <button
                     key={`page-${pageNum}`}
                     onClick={() => handlePageChange(pageNum)}
-                    className={`relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${pageNum === currentPage
+                    className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${pageNum === currentPage
                       ? "bg-blue-600 text-white"
-                      : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
                       }`}
                   >
                     {pageNum}
                   </button>
                 ),
               )}
+
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={!hasNextPage}
-              className="relative inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -1882,25 +1863,33 @@ function Contacts() {
 
   const handleKanbanItemMove = async (contactId, newStatus) => {
     const newLifecycleStage = getLifecycleStageForStatus(newStatus);
+    const previousContact = contacts.find((c) => c._id === contactId);
+
+    setContacts((prev) =>
+      prev.map((c) =>
+        c._id === contactId
+          ? {
+            ...c,
+            lifecycleStage: newLifecycleStage,
+            stageStatus: newStatus,
+          }
+          : c,
+      ),
+    );
+
     try {
       await API.put(`/contacts/${contactId}/lifecycle-stage`, {
         lifecycleStage: newLifecycleStage,
         stageStatus: newStatus,
       });
-      setContacts((prev) =>
-        prev.map((c) =>
-          c._id === contactId
-            ? {
-              ...c,
-              lifecycleStage: newLifecycleStage,
-              stageStatus: newStatus,
-            }
-            : c,
-        ),
-      );
       toast.success("Contact status updated successfully!");
     } catch (err) {
       console.error("Failed to update contact status:", err);
+      if (previousContact) {
+        setContacts((prev) =>
+          prev.map((c) => (c._id === contactId ? previousContact : c)),
+        );
+      }
       if (err.response?.status === 402) {
         toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
       } else {
@@ -2058,55 +2047,110 @@ function Contacts() {
         moduleName="Contacts"
       />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 mt-5  gap-4">
-        <div className="flex items-center gap-3">
-          <div className="mb-10 mt-10">
-            <h1 className="font-bold text-3xl font-sf text-gray-900">
-              Contacts
-            </h1>
-            <p className="text-sm text-gray-500 font-inter">
-              Manage your customer relationships
-            </p>
-          </div>
-        </div>
-        {/* ============================================================= Right side buttons start ============================================================= */}
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          {/* <VideoTutorialButton
-            onClick={() => setShowVideoTutorial(true)}
-            variant="minimal" // Options: "default", "minimal", "icon"
-          /> */}
-          {/*  <button
-            onClick={() => setShowColumnSettings(true)}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors"
-            title="Column Settings"
+      {/* Title Strip */}
+      <div className="-mt-6 -mx-4 sm:-mx-6 lg:-mx-8 flex items-center justify-between gap-3 px-6 pt-4 pb-3 bg-white border-b border-[#E5E5EC]">
+        <div className="flex flex-col gap-1.5">
+          <h1
+            className="m-0"
+            style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "16px", lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
           >
-            <Settings className="w-4 h-4" />
-            <span className="hidden sm:inline">Columns</span>
-          </button> */}
-          {/* <button
-            onClick={toggleForm}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 btn-primary bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none cursor-pointer shadow-sm transition-colors"
+            Contacts
+          </h1>
+          <p
+            className="m-0"
+            style={{ fontFamily: "Inter", fontWeight: 400, fontSize: "12px", lineHeight: "120%", color: "#525866" }}
+          >
+            Manage your customer relationships
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="relative" ref={moreMenuRef}>
+            <button
+              onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+              className="flex items-center justify-center w-11 h-11 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+              title="More options"
             >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+
+            {isMoreMenuOpen && (
+              <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
+                <button
+                  onClick={() => {
+                    setShowVideoTutorial(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <FileText className="w-4 h-4 text-gray-400" />
+                  Video Tutorial
+                </button>
+                <button
+                  onClick={() => {
+                    setShowImport(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Upload className="w-4 h-4 text-gray-400" />
+                  Import
+                </button>
+                <Link
+                  to="/settings/forms?module=Contact"
+                  onClick={() => setIsMoreMenuOpen(false)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <FileText className="w-4 h-4 text-gray-400" />
+                  Forms
+                </Link>
+                <button
+                  onClick={() => {
+                    setShowColumnSettings(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Settings className="w-4 h-4 text-gray-400" />
+                  Columns
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAdvancedFilters(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Filter className="w-4 h-4 text-gray-400" />
+                  Filters
+                  {activeFilters.length > 0 && (
+                    <span className="ml-auto bg-blue-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">
+                      {activeFilters.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={toggleForm}
+            className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
+          >
             <Plus className="w-4 h-4" />
             {showForm ? "Cancel" : "New Contact"}
-            </button> */}
-          {/* <button
-            onClick={() => setShowImport(true)}
-            className="inline-flex btn-primary items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors"
+          </button>
+
+          <button
+            onClick={() => setShowMobileFilters(true)}
+            className="md:hidden p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors relative"
           >
-            <Upload className="w-4 h-4" />
-            Import
-          </button> */}
-          {/* <button
-            onClick={() => setShowKanban(!showKanban)}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 btn-secondary border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors"
-          >
-            <Target className="w-4 h-4" />
-            {showKanban ? "Table View" : "Kanban View"}
-          </button> */}
+            <Filter className="w-5 h-5 text-gray-600" />
+            {statusFilter && (
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full"></div>
+            )}
+          </button>
         </div>
-        {/* ============================================================= Right side buttons end ============================================================= */}
       </div>
 
       <ImportContacts
@@ -2251,72 +2295,6 @@ function Contacts() {
 
       {/* Main Content Card */}
       <div className="bg-white overflow-visible border-b border-gray-100">
-        {/* Search Bar +======================================================================================= */}
-        <div className="p-4 sm:p-6 border-b border-[#E0E0E1]">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-[70%] pl-10 pr-4 py-2.5 border border-[#E0E0E1] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-colors font-inter bg-gradient-to-r from-white to-blue-100"
-                placeholder="Search contacts by name, email, or company..."
-              />
-            </div>
-            <VideoTutorialButton
-              onClick={() => setShowVideoTutorial(true)}
-              variant="minimal" // Options: "default", "minimal", "icon"
-            />
-            {/* Per-module Forms entry point — v1-simple, navigates to Forms List pre-filtered to
-                this module. FORMS_FRONTEND_ARCHITECTURE.md §4. */}
-            <Link
-              to="/settings/forms?module=Contact"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors"
-            >
-              <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">Forms</span>
-            </Link>
-            <button
-              onClick={() => setShowColumnSettings(true)}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors"
-              title="Column Settings"
-            >
-              <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">Columns</span>
-            </button>
-            <button
-              onClick={() => setShowAdvancedFilters(true)}
-              className="hidden md:inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors relative"
-            >
-              <Filter className="w-4 h-4" />
-              <span className="hidden sm:inline">Filters</span>
-              {activeFilters.length > 0 && (
-                <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">
-                  {activeFilters.length}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={toggleForm}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 btn-primary bg-[#0C4FCD] text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none cursor-pointer shadow-sm transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              {showForm ? "Cancel" : "New Contact"}
-            </button>
-
-            <button
-              onClick={() => setShowMobileFilters(true)}
-              className="md:hidden p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors relative"
-            >
-              <Filter className="w-5 h-5 text-gray-600" />
-              {statusFilter && (
-                <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full"></div>
-              )}
-            </button>
-          </div>
-        </div>
-
         {/* Tabs */}
         {/* <div className="border-b border-gray-200 bg-white">
           <nav className="flex px-4 sm:px-6 overflow-x-auto">
@@ -2341,91 +2319,201 @@ function Contacts() {
           </nav>
         </div> */}
 
-        <div className="border-[#E0E0E1] bg-white border-b mb-6">
-          <nav className="flex px-4 sm:px-6 gap-6 overflow-x-auto">
+        <div
+          className="flex items-center justify-between border-b border-[#F1F1F5] bg-white px-6 -mx-4 sm:-mx-6 lg:-mx-8"
+          style={{ height: "64px" }}
+        >
+          <nav className="flex items-stretch h-full overflow-x-auto">
             {[
-              { id: "All", label: "All", icon: Sparkles },
-              { id: "Leads", label: "Leads", icon: User },
-              {
-                id: "Sales Qualified Lead",
-                label: "Sales Qualified Leads",
-                icon: BarChart2,
-              },
-              { id: "Customers", label: "Customers", icon: Briefcase },
-              { id: "Hotlist", label: "Hotlist", icon: Users },
-            ].map(({ id, label, icon: Icon }) => (
+              { id: "All", label: "All" },
+              { id: "Leads", label: "Leads" },
+              { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
+              { id: "Customers", label: "Customers" },
+              { id: "Hotlist", label: "Hotlist" },
+            ].map(({ id, label }) => (
               <button
                 key={id}
                 onClick={() => handleTabChange(id)}
-                className={`group flex items-center gap-2 px-1 py-4 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${activeTab === id
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
+                className="flex items-center justify-center px-4 h-full whitespace-nowrap"
+                style={{
+                  fontFamily: "Inter",
+                  fontWeight: 600,
+                  fontSize: "14px",
+                  letterSpacing: "-0.04em",
+                  color: activeTab === id ? "#0085FF" : "#44444A",
+                  borderBottom: activeTab === id ? "3px solid #0085FF" : "3px solid transparent",
+                }}
               >
-                <Icon
-                  className={`w-4 h-4 ${activeTab === id
-                    ? "text-blue-600"
-                    : "text-gray-400 group-hover:text-gray-500"
-                    }`}
-                />
                 {label}
               </button>
             ))}
           </nav>
+
+          {activeTab !== "Hotlist" && (
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="relative w-[416px] max-w-full">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 opacity-50" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full h-11 pl-10 pr-4 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF] transition-colors font-inter"
+                  placeholder="Search by contact by name, company, or status..."
+                />
+              </div>
+
+              <button
+                onClick={() => setShowAdvancedFilters(true)}
+                className="relative flex items-center justify-center w-11 h-11 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
+                title="Filters"
+              >
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M1.66667 2.91667C1.66667 2.22631 2.22631 1.66667 2.91667 1.66667C3.60702 1.66667 4.16667 2.22631 4.16667 2.91667C4.16667 3.60703 3.60702 4.16667 2.91667 4.16667C2.22631 4.16667 1.66667 3.60703 1.66667 2.91667ZM2.91667 0C1.30583 0 0 1.30583 0 2.91667C0 4.5275 1.30583 5.83333 2.91667 5.83333C4.5275 5.83333 5.83333 4.5275 5.83333 2.91667C5.83333 1.30583 4.5275 0 2.91667 0ZM7.5 3.75H14.1667V2.08333H7.5V3.75ZM10.8333 11.25C10.8333 10.5597 11.393 10 12.0833 10C12.7737 10 13.3333 10.5597 13.3333 11.25C13.3333 11.9403 12.7737 12.5 12.0833 12.5C11.393 12.5 10.8333 11.9403 10.8333 11.25ZM12.0833 8.33333C10.4725 8.33333 9.16667 9.63917 9.16667 11.25C9.16667 12.8608 10.4725 14.1667 12.0833 14.1667C13.6942 14.1667 15 12.8608 15 11.25C15 9.63917 13.6942 8.33333 12.0833 8.33333ZM0.833333 10.4167V12.0833H7.5V10.4167H0.833333Z" fill="#1F2937" />
+                </svg>
+                {activeFilters.length > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                    {activeFilters.length}
+                  </span>
+                )}
+              </button>
+
+              <div className="flex items-center gap-1.5 bg-[#F1F1F5] rounded-full p-1 flex-shrink-0">
+                <button
+                  onClick={() => setShowKanban(false)}
+                  className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors ${!showKanban ? "bg-white text-[#0085FF] shadow-[0_0_6px_rgba(0,0,0,0.1)]" : "text-[#525252]"
+                    }`}
+                  title="List View"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setShowKanban(true)}
+                  className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showKanban ? "bg-white text-[#0085FF] shadow-[0_0_6px_rgba(0,0,0,0.1)]" : "text-[#525252]"
+                    }`}
+                  title="Kanban View"
+                >
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={showKanban ? "#0085FF" : "#525252"} />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-
-        {activeTab !== "Hotlist" && (
-          <div className="px-4 sm:px-6 py-2 bg-white flex justify-between items-center border-b border-gray-100 mb-4">
-            {/* Left: View Switcher (List vs Kanban) */}
-            <div className="flex space-x-6">
-              <button
-                onClick={() => setShowKanban(false)}
-                className={`pb-2 text-sm font-medium transition-colors relative ${!showKanban
-                  ? "text-blue-600 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-blue-600"
-                  : "text-gray-500 hover:text-gray-800"
-                  }`}
-              >
-                List View
-              </button>
-              <button
-                onClick={() => setShowKanban(true)}
-                className={`pb-2 text-sm font-medium transition-colors relative ${showKanban
-                  ? "text-blue-600 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-blue-600"
-                  : "text-gray-500 hover:text-gray-800"
-                  }`}
-              >
-                Kanban
-              </button>
-            </div>
-
-            {/* Right: Actions (Import/Filter) */}
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setShowImport(true)}
-                className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors"
-              >
-                <Upload className="w-4 h-4" />
-                Import/Export
-              </button>
-
-              <StatusFilterDropdown />
-            </div>
-          </div>
-        )}
 
         {/* Content Area */}
         {showKanban ? (
-          <KanbanBoard
-            columns={allStageStatuses}
-            items={contacts}
-            getItemColumn={(contact) => contact.stageStatus || "New"}
-            renderItem={renderContactCard}
-            onItemMove={handleKanbanItemMove}
-            getColumnColor={getColumnColor}
-            getBadgeColor={getBadgeColor}
-            permission={permission}
-            itemIdKey="_id"
-          />
+          <div className="flex gap-4 mx-4 sm:mx-6 mt-6 mb-2 overflow-x-auto">
+            {["New", "Contacted", "Interested", "Unqualified"].map((col) => {
+              const count = sortedContacts.filter(
+                (c) => (c.stageStatus || "New") === col
+              ).length;
+              return (
+                <div
+                  key={col}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const contactId = e.dataTransfer.getData("contactId");
+                    const fromStatus = e.dataTransfer.getData("fromStatus");
+                    if (contactId && fromStatus !== col) {
+                      handleKanbanItemMove(contactId, col);
+                    }
+                  }}
+                  className="border border-[#E1E4EA] rounded-lg flex-shrink-0 overflow-hidden flex flex-col"
+                  style={{ width: "340px", minHeight: "624px" }}
+                >
+                  <div
+                    className="flex items-center gap-1.5"
+                    style={{ height: "46px", background: "#F5F7FA", padding: "0 18px" }}
+                  >
+                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}>
+                      {col}
+                    </span>
+                    <span
+                      className="flex items-center justify-center rounded-full bg-white border border-[#E5E5EC]"
+                      style={{ width: "22px", height: "22px", boxShadow: "0px 1px 2px rgba(82, 88, 102, 0.06)" }}
+                    >
+                      <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#161618" }}>
+                        {count}
+                      </span>
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-3 p-3">
+                    {sortedContacts
+                      .filter((c) => (c.stageStatus || "New") === col)
+                      .map((contact) => (
+                        <div
+                          key={contact._id}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("contactId", contact._id);
+                            e.dataTransfer.setData("fromStatus", col);
+                            const node = e.currentTarget;
+                            const clone = node.cloneNode(true);
+                            clone.style.width = `${node.offsetWidth}px`;
+                            clone.style.position = "absolute";
+                            clone.style.top = "-9999px";
+                            clone.style.left = "-9999px";
+                            clone.style.opacity = "1";
+                            document.body.appendChild(clone);
+                            e.dataTransfer.setDragImage(clone, node.offsetWidth / 2, 20);
+                            requestAnimationFrame(() => document.body.removeChild(clone));
+                          }}
+                          onClick={() => navigate(`/contacts/${contact._id}`)}
+                          className="flex flex-col bg-white border border-[#E5E5EC] rounded-[10px] cursor-pointer hover:shadow-sm transition-shadow active:cursor-grabbing"
+                          style={{ padding: "16px", gap: "16px" }}
+                        >
+                          <div className="flex items-center gap-2 w-full">
+                            <ProfilePicture contact={contact} />
+                            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2.5 w-full">
+                                <span
+                                  className="truncate"
+                                  style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: "16px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
+                                >
+                                  {contact.name}
+                                </span>
+                                <MoreVertical className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
+                              </div>
+                              <span
+                                className="truncate"
+                                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "150%", letterSpacing: "-0.06em", color: "#525252" }}
+                              >
+                                {contact.company?.name || "—"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="w-full border-t border-[#F1F1F5]" />
+
+                          <div className="flex items-center gap-2 w-full">
+                            <Phone className="w-4 h-4 text-[#525252] flex-shrink-0" />
+                            <span
+                              className="truncate"
+                              style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}
+                            >
+                              {contact.phone || "—"}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 w-full">
+                            <Mail className="w-4 h-4 text-[#525252] flex-shrink-0" />
+                            <span
+                              className="truncate"
+                              style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}
+                            >
+                              {contact.email || "—"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : activeTab === "Hotlist" ? (
           <ContactFolder />
         ) : (
@@ -2450,131 +2538,208 @@ function Contacts() {
               </div>
             )}
 
-            <div className="overflow-visible border border-gray-200 rounded-lg mx-4 sm:mx-6 mb-6">
-              <div className="overflow-x-auto overflow-y-visible">
-                <table
-                  className="w-full border-collapse text-left"
-                  style={{
-                    minWidth: `${table.getTotalSize()}px`,
-                    tableLayout: "fixed",
-                  }}
+            <div className="border border-[#E1E4EA] rounded-lg mx-4 sm:mx-6 mt-6 mb-2 overflow-hidden">
+              <div className="flex" style={{ height: "56px" }}>
+                <div
+                  className="flex items-center px-3 border-b border-[#E1E4EA]"
+                  style={{ width: "50px", background: "#F5F7FA" }}
                 >
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    {table.getHeaderGroups().map((headerGroup) => (
-                      <tr key={headerGroup.id}>
-                        {headerGroup.headers.map((header) => {
-                          const colId = header.column.id;
-                          const isSticky = colId === "selection" || colId === "star" || colId === pinnedColumn;
-                          const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "star";
-
-                          // Calculate left offset
-                          let leftOffset = "auto";
-                          if (colId === "selection") leftOffset = 0;
-                          if (colId === "star") leftOffset = selectionMode ? 60 : 0;
-                          if (colId === pinnedColumn) leftOffset = (selectionMode ? 60 : 0) + 40;
-
-                          return (
-                            <th
-                              key={header.id}
-                              style={{
-                                width: header.getSize(),
-                                position: isSticky ? "sticky" : "relative",
-                                left: leftOffset,
-                                zIndex: isSticky ? 20 : 1,
-                              }}
-                              className={`px-6 py-4 text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-200 hover:bg-gray-100 transition-colors bg-white ${isRightMostSticky
-                                  ? "border-r-2 border-r-gray-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
-                                  : "last:border-r-0"
-                                }`}
-                            >
-                              <div className="truncate w-full">
-                                {flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext(),
-                                )}
-                              </div>
-
-                              {header.column.getCanResize() && (
-                                <div
-                                  onMouseDown={header.getResizeHandler()}
-                                  onTouchStart={header.getResizeHandler()}
-                                  className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 ${header.column.getIsResizing() ? "bg-blue-500" : "bg-transparent"
-                                    }`}
-                                />
-                              )}
-                            </th>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </thead>
-
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {loading && contacts.length === 0 ? (
-                      <tr>
-                        <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center bg-white">
-                          <p>Loading Contacts...</p>
-                        </td>
-                      </tr>
-                    ) : contacts.length === 0 ? (
-                      <tr>
-                        <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500">
-                          <Users className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                          <p className="font-medium">No contacts found</p>
-                        </td>
-                      </tr>
-                    ) : (
-                      table.getRowModel().rows.map((row) => (
-                        <tr
-                          key={row.id}
-                          className={`group bg-white hover:bg-blue-50 transition-colors ${selectedContacts.includes(row.original._id) ? "!bg-blue-50" : ""}`}
-                          onMouseDown={() => handleMouseDown(row.original._id)}
-                          onMouseUp={handleMouseUp}
-                          onMouseLeave={handleMouseUp}
-                          onTouchStart={() => handleTouchStart(row.original._id)}
-                          onTouchEnd={handleTouchEnd}
-                        >
-                          {row.getVisibleCells().map((cell) => {
-                            const colId = cell.column.id;
-                            const isSticky = colId === "selection" || colId === "star" || colId === pinnedColumn;
-                            const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "star";
-
-                            // Calculate left offset
-                            let leftOffset = "auto";
-                            if (colId === "selection") leftOffset = 0;
-                            if (colId === "star") leftOffset = selectionMode ? 60 : 0;
-                            if (colId === pinnedColumn) leftOffset = (selectionMode ? 60 : 0) + 40;
-
-                            return (
-                              <td
-                                key={cell.id}
-                                style={{
-                                  width: cell.column.getSize(),
-                                  position: isSticky ? "sticky" : "static",
-                                  left: leftOffset,
-                                  zIndex: isSticky ? 10 : 1,
-                                }}
-                                className={`px-6 py-2 border-r border-gray-100 align-middle text-sm text-gray-700 bg-inherit ${isRightMostSticky
-                                    ? "border-r-2 border-r-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
-                                    : "last:border-r-0"
-                                  }`}
-                              >
-                                {flexRender(
-                                  cell.column.columnDef.cell,
-                                  cell.getContext(),
-                                )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                  <input type="checkbox" className="w-4 h-4 rounded border-gray-300" disabled />
+                </div>
+                <div
+                  className="flex items-center gap-3 px-3 border-b border-[#E1E4EA]"
+                  style={{ width: "235px", background: "#F5F7FA" }}
+                >
+                  <User className="w-5 h-5 text-[#525252]" />
+                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
+                    Contact Name
+                  </span>
+                </div>
+                <div
+                  className="flex items-center gap-3 px-3 border-b border-[#E1E4EA]"
+                  style={{ width: "207px", background: "#F5F7FA" }}
+                >
+                  <Building2 className="w-5 h-5 text-[#525252]" />
+                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
+                    Company
+                  </span>
+                </div>
+                <div
+                  className="flex items-center gap-3 px-3 border-b border-[#E1E4EA]"
+                  style={{ width: "288px", background: "#F5F7FA" }}
+                >
+                  <Mail className="w-5 h-5 text-[#525252]" />
+                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
+                    Email
+                  </span>
+                </div>
+                <div
+                  className="flex items-center gap-3 px-3 border-b border-[#E1E4EA]"
+                  style={{ width: "196px", background: "#F5F7FA" }}
+                >
+                  <Phone className="w-5 h-5 text-[#525252]" />
+                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
+                    Phone
+                  </span>
+                </div>
+                <div
+                  className="flex items-center gap-3 px-3 border-b border-[#E1E4EA]"
+                  style={{ width: "198px", background: "#F5F7FA" }}
+                >
+                  <Target className="w-5 h-5 text-[#525252]" />
+                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
+                    Status
+                  </span>
+                </div>
+                <div
+                  className="flex items-center px-3 border-b border-[#E1E4EA] flex-1"
+                  style={{ width: "152px", background: "#F5F7FA" }}
+                >
+                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
+                    Actions
+                  </span>
+                </div>
               </div>
+
+              {loading && sortedContacts.length === 0 ? (
+                <div className="flex items-center justify-center py-12 text-gray-500">
+                  Loading Contacts...
+                </div>
+              ) : sortedContacts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                  <Users className="w-12 h-12 text-gray-300 mb-3" />
+                  <p className="font-medium">No contacts found</p>
+                </div>
+              ) : (
+                sortedContacts.map((contact) => (
+                  <div
+                    key={contact._id}
+                    className="flex bg-white hover:bg-blue-50 transition-colors cursor-pointer"
+                    style={{ height: "54px" }}
+                    onClick={() => navigate(`/contacts/${contact._id}`)}
+                  >
+                    <div
+                      className="flex items-center px-3 border-b border-gray-100"
+                      style={{ width: "50px" }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedContacts.includes(contact._id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleSelectContact(contact._id);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                      />
+                    </div>
+                    <div
+                      className="flex items-center gap-3 px-3 border-b border-gray-100"
+                      style={{ width: "235px" }}
+                    >
+                      <ProfilePicture contact={contact} />
+                      <span
+                        className="truncate"
+                        style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "14px", lineHeight: "20px", color: "#222530" }}
+                        title={contact.name}
+                      >
+                        {contact.name}
+                      </span>
+                    </div>
+                    <div
+                      className="flex items-center px-3 border-b border-gray-100"
+                      style={{ width: "207px" }}
+                    >
+                      <span
+                        className="truncate"
+                        style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "14px", lineHeight: "20px", color: "#525866" }}
+                        title={contact.company?.name}
+                      >
+                        {contact.company?.name || "—"}
+                      </span>
+                    </div>
+                    <div
+                      className="flex items-center px-3 border-b border-gray-100"
+                      style={{ width: "288px" }}
+                    >
+                      <span
+                        className="truncate"
+                        style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "14px", lineHeight: "20px", color: "#222530" }}
+                        title={contact.email}
+                      >
+                        {contact.email || "—"}
+                      </span>
+                    </div>
+                    <div
+                      className="flex items-center px-3 border-b border-gray-100"
+                      style={{ width: "196px" }}
+                    >
+                      <span
+                        className="truncate"
+                        style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "14px", lineHeight: "20px", color: "#525866" }}
+                        title={contact.phone}
+                      >
+                        {contact.phone || "—"}
+                      </span>
+                    </div>
+                    <div
+                      className="flex items-center px-3 border-b border-gray-100"
+                      style={{ width: "198px" }}
+                    >
+                      <span
+                        className="inline-flex items-center justify-center px-3 py-[5px] rounded-full"
+                        style={{
+                          fontFamily: "Inter",
+                          fontWeight: 500,
+                          fontSize: "12px",
+                          lineHeight: "120%",
+                          background: "rgba(0, 133, 255, 0.1)",
+                          color: "#0085FF",
+                        }}
+                      >
+                        {contact.stageStatus || "New"}
+                      </span>
+                    </div>
+                    <div
+                      className="flex items-center gap-2 px-3 border-b border-gray-100 flex-1"
+                      style={{ width: "152px" }}
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setQuickViewContactId(contact._id);
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
+                        title="Quick view"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditContact(contact);
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
+                        title="Edit Contact"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(contact._id);
+                        }}
+                        className="p-1.5 text-red-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors"
+                        title="Delete Contact"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
 
-            {/* Pagination */}
             {!loading && <PaginationControls />}
           </>
         )}

@@ -52,6 +52,12 @@ import {
   Target,
   TrendingDown,
   TrendingUp,
+  Wallet,
+  TimerReset,
+  Handshake,
+  PartyPopper,
+  ClipboardList,
+  CalendarCheck2,
 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -338,7 +344,7 @@ const ModernDealCard = ({ deal, onClick, isStale, colorTheme = "blue" }) => {
   return (
     <div
       ref={setNodeRef}
-      style={{ ...style, width: "300px" }}
+      style={{ ...style, width: "300px", height: "132px", boxSizing: "border-box" }}
       {...attributes}
       {...listeners}
       onClick={() => onClick(deal)}
@@ -406,6 +412,22 @@ const ModernKanbanColumn = ({
   const totalAmount = deals.reduce((sum, deal) => sum + (parseInt(deal.amount) || 0), 0);
   const formattedTotal = formatNumberToIndian(totalAmount);
 
+  const trendPct = useMemo(() => {
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+    const thisWeekStart = now - 7 * oneDay;
+    const lastWeekStart = now - 14 * oneDay;
+    const inRange = (deal, start, end) => {
+      const t = new Date(deal.createdAt).getTime();
+      return t >= start && t < end;
+    };
+    const sumAmount = (list) => list.reduce((sum, d) => sum + (parseInt(d.amount) || 0), 0);
+    const thisWeek = sumAmount(deals.filter((d) => inRange(d, thisWeekStart, now)));
+    const lastWeek = sumAmount(deals.filter((d) => inRange(d, lastWeekStart, thisWeekStart)));
+    if (lastWeek === 0) return thisWeek === 0 ? 0 : 100;
+    return Math.max(-999, Math.min(999, Math.round(((thisWeek - lastWeek) / lastWeek) * 100)));
+  }, [deals]);
+
   const tintColor =
     colorTheme === "green" ? "0, 201, 80" : colorTheme === "red" ? "232, 34, 34" : "179, 204, 255";
 
@@ -464,19 +486,34 @@ const ModernKanbanColumn = ({
       >
         {/* Summary Card */}
         <div
-          className="flex flex-row justify-between items-center w-full flex-shrink-0"
+          className="box-border flex flex-row justify-between items-center w-full flex-shrink-0"
           style={{
             padding: "16px",
+            gap: "10px",
             background: `linear-gradient(94.22deg, rgba(255, 255, 255, 0) -7.06%, rgba(${tintColor}, 0.2) 101.14%), #FFFFFF`,
             border: "1px solid #E5E5EC",
             borderRadius: "10px",
           }}
         >
-          <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "22px", lineHeight: "150%", letterSpacing: "-0.03em", color: "#48494C" }}>
+          <span
+            className="truncate"
+            style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "22px", lineHeight: "150%", letterSpacing: "-0.03em", color: "#48494C", minWidth: 0 }}
+          >
             ₹{formattedTotal}
           </span>
-          <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#5B5A64" }}>
-            Total
+          <span
+            className="flex-shrink-0"
+            style={{
+              fontFamily: "Inter",
+              fontWeight: 500,
+              fontSize: "12px",
+              lineHeight: "15px",
+              letterSpacing: "-0.02em",
+              color: trendPct >= 0 ? "#0747A6" : "#E82222",
+              marginLeft: "auto",
+            }}
+          >
+            {trendPct >= 0 ? "+" : ""}{trendPct}%
           </span>
         </div>
 
@@ -1567,6 +1604,7 @@ function Deals() {
     );
     const wonDeals = dealsToCalculate.filter((deal) => deal.status === "Won");
     const lostDeals = dealsToCalculate.filter((deal) => deal.status === "Lost");
+    const openDeals = dealsToCalculate.filter((deal) => deal.status === "Open");
     const totalWon = wonDeals.reduce(
       (sum, deal) => sum + (parseFloat(deal.amount) || 0),
       0,
@@ -1619,14 +1657,23 @@ function Deals() {
       lost: pctChange(sumAmount(thisWeekLost), sumAmount(lastWeekLost)),
     };
 
+    const closingDurations = wonDeals
+      .map((d) => (new Date(d.updatedAt).getTime() - new Date(d.createdAt).getTime()) / (24 * 60 * 60 * 1000))
+      .filter((days) => days >= 0);
+    const avgClosingDays = closingDurations.length > 0
+      ? Math.round(closingDurations.reduce((sum, d) => sum + d, 0) / closingDurations.length)
+      : 0;
+
     return {
       totalPipeline,
+      openCount: openDeals.length,
       wonCount: wonDeals.length,
       lostCount: lostDeals.length,
       totalWon,
       trends,
       totalLost,
       averageDealSize,
+      avgClosingDays,
       isFiltered: selectedRows.length > 0,
     };
   }, [sortedTableDeals, selectedRows]);
@@ -2109,63 +2156,49 @@ function Deals() {
       </div>
 
       <div
-        className="-mx-4 sm:-mx-6 lg:-mx-8 flex flex-row items-center gap-6 border-b border-[#E1E4EA] box-border"
-        style={{ padding: "24px", height: "120px" }}
+        className="box-border -mx-4 sm:-mx-6 lg:-mx-8 flex flex-col justify-center items-start border-b border-[#E1E4EA]"
+        style={{ padding: "24px", gap: "24px", height: "120px" }}
       >
         {/* KPI Strip */}
-        {[
-            { label: "Pipeline Summary", value: `₹${formatNumberToIndian(dealStatistics.totalPipeline)}`, icon: PipelineSummaryIcon, trend: dealStatistics.trends.pipeline },
-            { label: "Deals Won", value: `₹${formatNumberToIndian(dealStatistics.totalWon)}`, icon: DealsWonIcon, trend: dealStatistics.trends.won },
-            { label: "Average Deal Size", value: `₹${formatNumberToIndian(dealStatistics.averageDealSize)}`, icon: AverageDealSizeIcon, trend: dealStatistics.trends.avgSize },
-            { label: "Deals Lost", value: `₹${formatNumberToIndian(dealStatistics.totalLost)}`, icon: DealsLostIcon, trend: dealStatistics.trends.lost },
-          ].map(({ label, value, icon: Icon, trend }) => (
+        <div className="flex flex-row items-center self-stretch" style={{ gap: "24px", height: "72px" }}>
+          {[
+            { label: "Open Deals", value: dealStatistics.openCount, icon: Wallet },
+            { label: "Pipeline Value", value: `₹${formatNumberToIndian(dealStatistics.totalPipeline)}`, icon: TimerReset },
+            { label: "Won Deals", value: dealStatistics.wonCount, icon: Handshake },
+            { label: "Lost Deals", value: dealStatistics.lostCount, icon: PartyPopper },
+            { label: "Avg. Deal Size", value: `₹${formatNumberToIndian(dealStatistics.averageDealSize)}`, icon: ClipboardList },
+            { label: "Avg. Closing Time", value: `${dealStatistics.avgClosingDays}d`, icon: CalendarCheck2 },
+          ].map(({ label, value, icon: Icon }) => (
             <div
               key={label}
-              className="flex flex-col justify-center items-start bg-white border border-[#E1E4EA] rounded-xl flex-1"
-              style={{ padding: "16px", gap: "14px", height: "72px" }}
+              className="box-border flex flex-col justify-center items-start bg-white flex-shrink-0"
+              style={{ width: "201px", height: "72px", padding: "16px", gap: "14px", border: "1px solid #E1E4EA", borderRadius: "12px" }}
             >
-              <div className="flex flex-row items-end gap-3.5 w-full">
-                <div className="flex items-center justify-center w-10 h-10 border border-[#E1E4EA] rounded-md text-[#0085FF] flex-shrink-0">
-                  <Icon className="w-4 h-4" />
+              <div className="flex flex-row items-end" style={{ gap: "14px", width: "169px", height: "40px" }}>
+                <div
+                  className="box-border flex items-center justify-center flex-shrink-0"
+                  style={{ width: "40px", height: "40px", padding: "8px", gap: "10px", background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: "6px" }}
+                >
+                  <Icon className="w-6 h-6" style={{ color: "#0085FF" }} />
                 </div>
-                <div className="flex flex-col items-start gap-1">
-                  <p
-                    className="m-0 whitespace-nowrap"
+                <div className="flex flex-col items-start flex-1" style={{ gap: "4px", width: "115px", height: "40px" }}>
+                  <span
+                    className="whitespace-nowrap"
                     style={{ fontFamily: "'Inter Tight', 'Inter', sans-serif", fontWeight: 400, fontSize: "12px", lineHeight: "120%", color: "#525866" }}
                   >
                     {label}
-                  </p>
-                  <div className="flex flex-row items-center gap-2">
-                    <p
-                      className="m-0 whitespace-nowrap"
-                      style={{ fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: "18px", lineHeight: "120%", color: "#0E121B" }}
-                    >
-                      {value}
-                    </p>
-                    <div className="flex flex-row items-center gap-1">
-                      {trend >= 0 ? (
-                        <TrendingUp className="w-3.5 h-3.5" style={{ color: "#00C950" }} />
-                      ) : (
-                        <TrendingDown className="w-3.5 h-3.5" style={{ color: "#E82222" }} />
-                      )}
-                      <span
-                        className="m-0 whitespace-nowrap"
-                        style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: "12px", lineHeight: "120%", color: trend >= 0 ? "#00C950" : "#E82222" }}
-                      >
-                        {Math.abs(trend)}%
-                      </span>
-                      <span
-                        className="m-0 whitespace-nowrap"
-                        style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: "12px", lineHeight: "120%", color: "#525866" }}
-                      >
-                        Last week
-                      </span>
-                    </div>
-                  </div>
+                  </span>
+                  <span
+                    className="whitespace-nowrap"
+                    style={{ fontFamily: "Inter, sans-serif", fontWeight: 600, fontSize: "18px", lineHeight: "120%", color: "#0E121B" }}
+                  >
+                    {value}
+                  </span>
                 </div>
               </div>
             </div>
           ))}
+        </div>
       </div>
 
       <div className="p-6 space-y-8">

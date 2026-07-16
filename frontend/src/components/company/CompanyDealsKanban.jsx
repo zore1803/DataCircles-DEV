@@ -19,6 +19,7 @@ import {
   Sparkles,
   ListChecks,
   CalendarClock,
+  MoreHorizontal,
   MoreVertical,
   Building2,
 } from "lucide-react";
@@ -29,7 +30,7 @@ const TERMINAL_STATUSES = ["won", "lost"];
 
 const Avatar = ({ name, className = "" }) => (
   <div
-    className={`w-6 h-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[10px] font-semibold text-gray-600 ${className}`}
+    className={`w-[18px] h-[18px] rounded-full bg-gray-200 border border-white flex items-center justify-center text-[8px] font-semibold text-gray-600 flex-shrink-0 ${className}`}
     title={name}
   >
     {name?.charAt(0)?.toUpperCase() || "?"}
@@ -43,6 +44,11 @@ const DealCard = ({ deal }) => {
   const style = {
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.5 : 1,
+    width: "300px",
+    height: "132px",
+    padding: "16px",
+    gap: "16px",
+    borderColor: "#E5E5EC",
   };
 
   const tagLabel = deal.company?.name || deal.company?.industry || deal.contact?.name;
@@ -55,36 +61,46 @@ const DealCard = ({ deal }) => {
       style={style}
       {...listeners}
       {...attributes}
-      className="block bg-white border border-gray-200 rounded-xl p-4 mb-3 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow"
+      className="box-border flex flex-col items-start bg-white border rounded-[10px] mb-3 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow overflow-hidden"
     >
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-sm font-semibold text-gray-900 truncate">
-          {deal.title || "Deal Name"}
-        </p>
-        <MoreVertical size={14} className="text-gray-300 flex-shrink-0" />
-      </div>
-      <p className="text-sm text-gray-700 mb-2">
-        ₹{(deal.amount || 0).toLocaleString("en-IN")}
-      </p>
-      {(tagLabel || avatarNames.length > 0) && (
-        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-          {tagLabel ? (
-            <span className="flex items-center gap-1 text-[11px] text-gray-500 bg-gray-100 px-2 py-1 rounded-md truncate">
-              <Building2 size={11} className="flex-shrink-0" />
-              {tagLabel}
-            </span>
-          ) : (
-            <span />
-          )}
-          {avatarNames.length > 0 && (
-            <div className="flex -space-x-1.5 flex-shrink-0">
-              {avatarNames.map((name, idx) => (
-                <Avatar key={idx} name={name} />
-              ))}
-            </div>
-          )}
+      <div className="flex flex-col items-start gap-2 w-full">
+        <div className="flex items-center justify-between w-full">
+          <span
+            className="truncate"
+            style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "14px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
+          >
+            {deal.title || "Deal Name"}
+          </span>
+          <MoreHorizontal className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
         </div>
-      )}
+        <span
+          className="w-full"
+          style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "14px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
+        >
+          ₹{(deal.amount || 0).toLocaleString("en-IN")}
+        </span>
+      </div>
+
+      <div className="w-full border-t border-[#F1F1F5]" />
+
+      <div className="flex items-center gap-2 w-full">
+        <div className="flex items-center justify-center w-[18px] h-[18px] rounded-[5px] bg-[#48494C] flex-shrink-0">
+          <Building2 className="w-2.5 h-2.5 text-white" />
+        </div>
+        <span
+          className="truncate flex-1"
+          style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#161618" }}
+        >
+          {tagLabel || "—"}
+        </span>
+        {avatarNames.length > 0 && (
+          <div className="flex items-center flex-shrink-0">
+            {avatarNames.map((name, idx) => (
+              <Avatar key={idx} name={name} className={idx > 0 ? "-ml-1" : ""} />
+            ))}
+          </div>
+        )}
+      </div>
     </Link>
   );
 };

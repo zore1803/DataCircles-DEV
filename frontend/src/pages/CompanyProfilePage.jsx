@@ -942,7 +942,7 @@ const CompanyProfilePage = () => {
                       </button>
                     ))}
                   </div>
-                  <div className="space-y-3 overflow-y-auto flex-1">
+                  <div className="space-y-3 overflow-y-auto flex-1 pr-2 -mr-2">
                     {filteredActivityFeed.length === 0 ? (
                       <p className="text-sm text-gray-400 text-center py-4">
                         No recent activity.
