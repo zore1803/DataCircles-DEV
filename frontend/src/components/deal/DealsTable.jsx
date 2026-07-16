@@ -1,9 +1,7 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
 import {
-  ChevronUp,
-  ChevronDown,
   Edit2,
   Trash2,
   FileText,
@@ -11,11 +9,9 @@ import {
   IndianRupee,
   Calendar,
   Building2,
-  MoreVertical,
   ChevronsUpDown,
   Eye,
-  Star,    // Added
-  Pin,     // Added
+  Pin,
   PinOff,
 } from "lucide-react";
 import CustomDropdown from "../common/CustomDropdown";
@@ -27,14 +23,6 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
-
-const getColorTheme = (index, status) => {
-  if (status === "Won") return "green";
-  if (status === "Lost") return "red";
-  const themes = ["blue", "purple", "indigo", "cyan", "teal"];
-  const safeIndex = index >= 0 ? index : 0;
-  return themes[safeIndex % themes.length];
-};
 
 export default function DealsTable({
   sortedTableDeals = [],
@@ -59,7 +47,6 @@ export default function DealsTable({
   starredDeals = [], // Added
   toggleStar,
 }) {
-  const [activeActionMenu, setActiveActionMenu] = useState(null);
   const [columnSizing, setColumnSizing] = useState({});
 
   const [pinnedColumn, setPinnedColumn] = useState(null);
@@ -67,38 +54,6 @@ export default function DealsTable({
   const togglePinColumn = (colKey) => {
     setPinnedColumn((prev) => (prev === colKey ? null : colKey));
   };
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (activeActionMenu && !event.target.closest(".action-menu-container")) {
-        setActiveActionMenu(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [activeActionMenu]);
-
-  const toggleActionMenu = (e, dealId) => {
-    e.stopPropagation();
-    setActiveActionMenu(activeActionMenu === dealId ? null : dealId);
-  };
-
-  const SortIcons = ({ field }) => (
-    <div className="flex flex-col ml-1">
-      <ChevronUp
-        className={`w-3 h-3 ${sortConfig.key === field && sortConfig.direction === "asc"
-          ? "text-blue-600"
-          : "text-gray-400"
-          }`}
-      />
-      <ChevronDown
-        className={`w-3 h-3 -mt-1 ${sortConfig.key === field && sortConfig.direction === "desc"
-          ? "text-blue-600"
-          : "text-gray-400"
-          }`}
-      />
-    </div>
-  );
 
   const columnHelper = createColumnHelper();
 
@@ -140,33 +95,22 @@ export default function DealsTable({
         ),
       }),
 
-      // 2. Star Column
+      // 2. Deal ID Column
       columnHelper.display({
-        id: "star",
-        size: 60,
+        id: "dealId",
+        size: 127,
         enableResizing: false,
         header: () => (
-          <div className="flex justify-center items-center w-full">
-            <Star className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <div className="flex items-center gap-2 w-full">
+            <span className="truncate" title="Deal ID">Deal ID</span>
           </div>
         ),
         cell: ({ row }) => {
-          const isStarred = starredDeals.includes(row.original._id);
+          const shortId = row.original._id.slice(-5).toUpperCase();
           return (
-            <div className="flex justify-center items-center w-full">
-              <button
-                onClick={(e) => toggleStar(e, row.original._id)}
-                className="focus:outline-none hover:scale-110 transition-transform"
-                title={isStarred ? "Unstar" : "Star"}
-              >
-                <Star
-                  className={`w-4 h-4 transition-colors ${isStarred
-                    ? "text-yellow-400 fill-yellow-400"
-                    : "text-gray-300 hover:text-yellow-400"
-                    }`}
-                />
-              </button>
-            </div>
+            <span className="text-sm font-medium text-[#525866] truncate" title={`DL-${shortId}`}>
+              DL-{shortId}
+            </span>
           );
         },
       }),
@@ -174,7 +118,7 @@ export default function DealsTable({
       // 3. Title Column
       columnHelper.accessor("title", {
         id: "title",
-        size: 250,
+        size: 185,
         header: () => {
           const isPinned = pinnedColumn === "title";
           return (
@@ -191,7 +135,6 @@ export default function DealsTable({
               >
                 <FileText className="w-4 h-4 flex-shrink-0" />
                 <span className="truncate" title="Deal Name">Deal Name</span>
-                <SortIcons field="title" />
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); togglePinColumn("title"); }}
@@ -207,53 +150,107 @@ export default function DealsTable({
           const deal = row.original;
           return (
             <div className="flex items-center justify-between w-full group relative">
-              <div className="flex items-center gap-3 flex-1 truncate pr-4">
-                <Link
-                  to={`/deals/${deal._id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-all duration-150 ease-out truncate"
-                  title={getValue()}
+              <Link
+                to={`/deals/${deal._id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-all duration-150 ease-out truncate flex-1 pr-4"
+                title={getValue()}
+              >
+                {getValue()}
+              </Link>
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-150 ease-out pointer-events-none group-hover:pointer-events-auto bg-white/80 backdrop-blur-[2px] rounded-lg">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setQuickViewDealId(deal._id);
+                  }}
+                  className="p-1.5 rounded-md bg-white shadow-sm border border-gray-200 hover:bg-blue-50 text-blue-600 transition-colors"
+                  title="Quick view"
                 >
-                  {getValue()}
-                </Link>
+                  <Eye size={15} />
+                </button>
+                {permission === "read-write" && (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditDeal(deal);
+                      }}
+                      className="p-1.5 rounded-md hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
+                      title="Edit Deal"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteDeal(deal._id);
+                      }}
+                      className="p-1.5 rounded-md hover:bg-red-50 text-gray-500 hover:text-red-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
+                      title="Delete Deal"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
               </div>
-
-              {permission === "read-write" && (
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-150 ease-out pointer-events-none group-hover:pointer-events-auto bg-white/80 backdrop-blur-[2px] rounded-lg px-1">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setQuickViewDealId(deal._id);
-                    }}
-                    className="p-1.5 rounded-md bg-white shadow-sm border border-gray-200 hover:bg-blue-50 text-blue-600"
-                    title="Quick view"
-                  >
-                    <Eye size={15} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditDeal(deal);
-                    }}
-                    className="p-1.5 rounded-md hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
-                    title="Edit Deal"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteDeal(deal._id);
-                    }}
-                    className="p-1.5 rounded-md hover:bg-red-50 text-gray-500 hover:text-red-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
-                    title="Delete Deal"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
             </div>
+          );
+        },
+      }),
+
+      // Company
+      columnHelper.accessor((row) => row.company?.name, {
+        id: "company",
+        size: 150,
+        header: () => {
+          const isPinned = pinnedColumn === "company";
+          return (
+            <div
+              className="flex items-center justify-between w-full group cursor-pointer select-none"
+              onDoubleClick={(e) => { e.stopPropagation(); togglePinColumn("company"); }}
+            >
+              <div
+                className="flex items-center gap-2 flex-1 overflow-hidden"
+                onClick={(e) => { e.stopPropagation(); handleSort("company"); }}
+              >
+                <Building2 className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate" title="Company">Company</span>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); togglePinColumn("company"); }}
+                className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"}`}
+              >
+                {isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          );
+        },
+        cell: ({ row }) => {
+          const companyName = row.original.company?.name || "-";
+          return (
+            <span className="text-sm text-gray-900 truncate block" title={companyName}>
+              {companyName}
+            </span>
+          );
+        },
+      }),
+
+      // Contact
+      columnHelper.accessor((row) => row.contact?.name, {
+        id: "contact",
+        size: 150,
+        header: () => (
+          <div className="flex items-center gap-2 w-full">
+            <span className="truncate" title="Contact">Contact</span>
+          </div>
+        ),
+        cell: ({ row }) => {
+          const contactName = row.original.contact?.name || "-";
+          return (
+            <span className="text-sm text-gray-900 truncate block" title={contactName}>
+              {contactName}
+            </span>
           );
         },
       }),
@@ -261,7 +258,7 @@ export default function DealsTable({
       // Status
       columnHelper.accessor("status", {
         id: "status",
-        size: 200,
+        size: 131,
         header: () => {
           const isPinned = pinnedColumn === "status";
           return (
@@ -275,7 +272,6 @@ export default function DealsTable({
               >
                 <Tag className="w-4 h-4 flex-shrink-0" />
                 <span className="truncate" title="Stage">Stage</span>
-                <SortIcons field="status" />
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); togglePinColumn("status"); }}
@@ -288,7 +284,6 @@ export default function DealsTable({
         },
         cell: ({ row }) => {
           const dealStatus = row.original.status;
-          const theme = getColorTheme(statuses.indexOf(dealStatus), dealStatus);
           return (
             <div className="flex items-center gap-2 w-full" onClick={(e) => e.stopPropagation()}>
               <CustomDropdown
@@ -298,11 +293,22 @@ export default function DealsTable({
                 placeholder="Select Stage"
                 className="w-full h-auto"
                 buttonClassName="flex items-center justify-between w-full bg-transparent border-0 p-0 gap-2 group cursor-pointer"
-                renderValue={(value) => (
-                  <span className={`px-3 py-1.5 rounded-full border border-${theme}-200 bg-${theme}-50 text-${theme}-700 font-bold text-xs truncate`}>
-                    {value}
-                  </span>
-                )}
+                renderValue={(value) => {
+                  const pillStyle =
+                    value === "Won"
+                      ? { backgroundColor: "rgba(0, 201, 80, 0.1)", color: "#00A63E" }
+                      : value === "Lost"
+                        ? { backgroundColor: "rgba(232, 34, 34, 0.1)", color: "#E82222" }
+                        : { backgroundColor: "rgba(0, 133, 255, 0.1)", color: "#0085FF" };
+                  return (
+                    <span
+                      className="px-3 py-[5px] rounded-full font-medium text-xs truncate"
+                      style={pillStyle}
+                    >
+                      {value}
+                    </span>
+                  );
+                }}
                 dropdownIcon={<ChevronsUpDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors flex-shrink-0" />}
               />
             </div>
@@ -313,7 +319,7 @@ export default function DealsTable({
       // Amount
       columnHelper.accessor("amount", {
         id: "amount",
-        size: 180,
+        size: 123,
         header: () => {
           const isPinned = pinnedColumn === "amount";
           return (
@@ -327,7 +333,6 @@ export default function DealsTable({
               >
                 <IndianRupee className="w-4 h-4 flex-shrink-0" />
                 <span className="truncate" title="Amount">Amount</span>
-                <SortIcons field="amount" />
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); togglePinColumn("amount"); }}
@@ -349,38 +354,26 @@ export default function DealsTable({
         },
       }),
 
-      // Last Updated
-      columnHelper.accessor("updatedAt", {
-        id: "updatedAt",
-        size: 180,
-        header: () => {
-          const isPinned = pinnedColumn === "updatedAt";
-          return (
-            <div
-              className="flex items-center justify-between w-full group cursor-pointer select-none"
-              onDoubleClick={(e) => { e.stopPropagation(); togglePinColumn("updatedAt"); }}
-            >
-              <div
-                className="flex items-center gap-2 flex-1 overflow-hidden"
-                onClick={(e) => { e.stopPropagation(); handleSort("updatedAt"); }}
-              >
-                <Calendar className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate" title="Last Updated">Last Updated</span>
-                <SortIcons field="updatedAt" />
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); togglePinColumn("updatedAt"); }}
-                className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"}`}
-              >
-                {isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
-              </button>
-            </div>
+      // Due Date (sourced from the real "Expected Close Date" custom field, when set)
+      columnHelper.display({
+        id: "dueDate",
+        size: 171,
+        header: () => (
+          <div className="flex items-center gap-2 w-full">
+            <Calendar className="w-4 h-4 flex-shrink-0" />
+            <span className="truncate" title="Due Date">Due Date</span>
+          </div>
+        ),
+        cell: ({ row }) => {
+          const dueDateField = row.original.additionalFields?.find(
+            (f) => f.key === "Expected Close Date"
           );
-        },
-        cell: ({ getValue }) => {
-          const formattedDate = new Date(getValue()).toLocaleDateString("en-US", {
-            month: "short",
+          if (!dueDateField?.value) {
+            return <div className="text-sm text-gray-400 truncate">—</div>;
+          }
+          const formattedDate = new Date(dueDateField.value).toLocaleDateString("en-US", {
             day: "numeric",
+            month: "long",
             year: "numeric",
           });
           return (
@@ -391,75 +384,53 @@ export default function DealsTable({
         },
       }),
 
-      // Company + Actions
-      columnHelper.accessor("company", {
-        id: "company",
-        size: 250,
-        header: () => {
-          const isPinned = pinnedColumn === "company";
-          return (
-            <div
-              className="flex items-center justify-between w-full group cursor-pointer select-none"
-              onDoubleClick={(e) => { e.stopPropagation(); togglePinColumn("company"); }}
-            >
-              <div
-                className="flex items-center gap-2 flex-1 overflow-hidden"
-                onClick={(e) => { e.stopPropagation(); handleSort("company"); }}
-              >
-                <Building2 className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate" title="Company">Company</span>
-                <SortIcons field="company" />
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); togglePinColumn("company"); }}
-                className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"}`}
-              >
-                {isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          );
-        },
+      // Actions
+      columnHelper.display({
+        id: "actions",
+        size: 120,
+        enableResizing: false,
+        header: () => (
+          <div className="flex items-center gap-2 w-full">
+            <span className="truncate" title="Actions">Actions</span>
+          </div>
+        ),
         cell: ({ row }) => {
           const deal = row.original;
-          const companyName = deal.company?.name || "-";
           return (
-            <div className="flex items-center justify-between w-full relative action-menu-container">
-              <span className="text-sm text-gray-900 truncate pr-2" title={companyName}>
-                {companyName}
-              </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setQuickViewDealId(deal._id);
+                }}
+                className="text-gray-500 hover:text-blue-600 transition-colors"
+                title="Quick view"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
               {permission === "read-write" && (
-                <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                <>
                   <button
-                    onClick={(e) => toggleActionMenu(e, deal._id)}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditDeal(deal);
+                    }}
+                    className="text-gray-500 hover:text-blue-600 transition-colors"
+                    title="Edit Deal"
                   >
-                    <MoreVertical className="w-4 h-4" />
+                    <Edit2 className="w-4 h-4" />
                   </button>
-                  {activeActionMenu === deal._id && (
-                    <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1 overflow-hidden">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditDeal(deal);
-                          setActiveActionMenu(null);
-                        }}
-                        className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-blue-600 flex items-center gap-2"
-                      >
-                        <Edit2 className="w-3 h-3" /> Edit
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteDeal(deal._id);
-                          setActiveActionMenu(null);
-                        }}
-                        className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-red-600 flex items-center gap-2"
-                      >
-                        <Trash2 className="w-3 h-3" /> Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteDeal(deal._id);
+                    }}
+                    className="text-red-500 hover:text-red-700 transition-colors"
+                    title="Delete Deal"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
               )}
             </div>
           );
@@ -483,7 +454,6 @@ export default function DealsTable({
     sortConfig,
     statuses,
     permission,
-    activeActionMenu,
     handleSort,
     handleSelectAll,
     handleRowSelect,
@@ -518,7 +488,7 @@ export default function DealsTable({
 
   return (
     <div
-      className={`relative overflow-hidden ${loading ? "pointer-events-none opacity-60" : ""
+      className={`relative overflow-hidden bg-white border border-[#E1E4EA] rounded-lg ${loading ? "pointer-events-none opacity-60" : ""
         }`}
     >
       <div className="overflow-auto pb-4">
@@ -530,21 +500,20 @@ export default function DealsTable({
             tableLayout: "fixed",
           }}
         >
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   const colId = header.column.id;
 
                   // Selection, Star, and Pinned columns are all sticky
-                  const isSticky = colId === "selection" || colId === "star" || colId === pinnedColumn;
-                  const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "star";
+                  const isSticky = colId === "selection" || colId === pinnedColumn;
+                  const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "selection";
 
                   // Calculate left offsets incrementally
                   let leftOffset = "auto";
                   if (colId === "selection") leftOffset = 0;
-                  if (colId === "star") leftOffset = 60; // selection width
-                  if (colId === pinnedColumn) leftOffset = 120; // selection (60) + star (40)
+                  if (colId === pinnedColumn) leftOffset = 60; // selection width
 
                   return (
                     <th
@@ -553,11 +522,12 @@ export default function DealsTable({
                         width: header.getSize(),
                         minWidth: header.getSize(),
                         maxWidth: header.getSize(),
+                        height: "56px",
                         position: isSticky ? "sticky" : "relative",
                         left: leftOffset,
                         zIndex: isSticky ? 20 : 1,
                       }}
-                      className={`px-4 py-3 font-semibold text-gray-700 uppercase tracking-wider text-xs border-r border-gray-200 hover:bg-gray-100 transition-colors bg-gray-50 ${isRightMostSticky
+                      className={`px-3 font-medium text-[#525866] text-xs border-r border-[#E1E4EA] hover:bg-gray-100 transition-colors bg-[#F5F7FA] ${isRightMostSticky
                         ? "border-r-2 border-r-gray-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
                         : "last:border-r-0"
                         }`}
@@ -586,7 +556,7 @@ export default function DealsTable({
             ))}
           </thead>
 
-          <tbody className="divide-y divide-gray-100 bg-white">
+          <tbody className="divide-y divide-[#E1E4EA] bg-white">
             {sortedTableDeals.length === 0 ? (
               <tr>
                 <td
@@ -635,13 +605,12 @@ export default function DealsTable({
                       const colId = cell.column.id;
 
                       // Apply same stickiness calculation as the header
-                      const isSticky = colId === "selection" || colId === "star" || colId === pinnedColumn;
-                      const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "star";
+                      const isSticky = colId === "selection" || colId === pinnedColumn;
+                      const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "selection";
 
                       let leftOffset = "auto";
                       if (colId === "selection") leftOffset = 0;
-                      if (colId === "star") leftOffset = 60;
-                      if (colId === pinnedColumn) leftOffset = 100;
+                      if (colId === pinnedColumn) leftOffset = 60;
 
                       return (
                         <td
@@ -650,13 +619,14 @@ export default function DealsTable({
                             width: cell.column.getSize(),
                             minWidth: cell.column.getSize(),
                             maxWidth: cell.column.getSize(),
+                            height: "54px",
                             position: isSticky ? "sticky" : "static",
                             left: leftOffset,
                             zIndex: isSticky ? 10 : 1,
                           }}
-                          className={`px-4 py-2 border-r border-[#E5E5EC] align-middle bg-inherit ${isRightMostSticky
-                            ? "border-r-2 border-r-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
-                            : "last:border-r-0"
+                          className={`px-3 py-3 text-sm font-medium text-[#222530] align-middle bg-inherit ${isRightMostSticky
+                            ? "shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
+                            : ""
                             }`}
                         >
                           {flexRender(

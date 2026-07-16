@@ -32,6 +32,7 @@ import {
   Eye,
   Pin,
   PinOff,
+  Star,
 } from "lucide-react";
 import ImportClients from "../components/company/ImportClients";
 import Hotlist from "../components/company/Hotlist";
@@ -39,7 +40,6 @@ import BulkActions from "../components/BulkActions";
 import CompanyForm from "../components/company/CompanyForm";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import VideoTutorialModal from "../components/VideoTutorialModal";
-import VideoTutorialButton from "../components/VideoTutorialButton";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import { useLocation } from "react-router-dom";
@@ -124,6 +124,24 @@ function Companies() {
   const moreMenuRef = useRef(null);
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
   const rowActionsRef = useRef(null);
+  const [quickHotlistCompanyId, setQuickHotlistCompanyId] = useState(null);
+  const [starredCompanies, setStarredCompanies] = useState(() => {
+    const saved = localStorage.getItem("starred_companies");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem("starred_companies", JSON.stringify(starredCompanies));
+  }, [starredCompanies]);
+
+  const toggleStar = (e, companyId) => {
+    e.stopPropagation();
+    setStarredCompanies((prev) =>
+      prev.includes(companyId)
+        ? prev.filter((id) => id !== companyId)
+        : [...prev, companyId]
+    );
+  };
   const location = useLocation();
   const { state } = location;
 
@@ -297,7 +315,7 @@ function Companies() {
             </div>
           ),
           cell: ({ row }) => (
-            <div className="flex justify-center items-center w-full">
+            <div className="flex justify-center items-center gap-1 w-full">
               <input
                 type="checkbox"
                 checked={selectedCompanies.includes(row.original._id)}
@@ -395,14 +413,17 @@ function Companies() {
               // ... your existing name cell logic
               return (
                 <div className="flex items-center justify-between w-full group relative">
-                  <div className="truncate flex-1 pr-4">
+                  <div className="flex items-center min-w-0 flex-1 pr-4">
                     <Link
                       to={`/companies/${company._id}`}
-                      className="text-[#0085FF] font-semibold hover:underline truncate transition-all duration-150 ease-out group-hover:text-[#004CFF]"
+                      className="text-[#0085FF] font-semibold hover:underline truncate transition-all duration-150 ease-out group-hover:text-[#004CFF] min-w-0"
                       title={company.name}
                     >
                       {company.name}
                     </Link>
+                    {starredCompanies.includes(company._id) && (
+                      <Star className="flex-shrink-0 w-3.5 h-3.5 ml-1.5 text-yellow-400 fill-yellow-400" />
+                    )}
                   </div>
                   <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-150 ease-out pointer-events-none group-hover:pointer-events-auto bg-white/80 backdrop-blur-[2px] rounded-lg">
                     <button
@@ -482,7 +503,11 @@ function Companies() {
               return (
                 <div className="flex items-center justify-between w-full">
                   <span className="truncate text-sm text-gray-700" title={company.leadSource}>{company.leadSource || "—"}</span>
-                  <div className="relative flex-shrink-0" ref={isOpen ? rowActionsRef : null}>
+                  <div
+                    className="relative flex-shrink-0"
+                    ref={isOpen ? rowActionsRef : null}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -494,27 +519,68 @@ function Companies() {
                       <MoreVertical className="w-4 h-4" />
                     </button>
                     {isOpen && (
-                      <div className="absolute right-0 top-full z-50 mt-1 w-36 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-150 origin-top-right">
+                      <div className="absolute right-0 top-full z-[100] mt-1 w-[190px] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-2 animate-in fade-in zoom-in duration-150 origin-top-right pointer-events-auto">
+                        <Link
+                          to={`/companies/${company._id}`}
+                          onClick={() => setOpenRowActionsId(null)}
+                          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                        >
+                          <Eye className="w-4 h-4 text-[#1C1B1F]" />
+                          View Company
+                        </Link>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setOpenRowActionsId(null);
                             handleEdit(company);
                           }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                         >
-                          <Edit2 className="w-4 h-4 text-blue-600" />
+                          <Edit2 className="w-4 h-4 text-[#1C1B1F]" />
                           Edit
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setOpenRowActionsId(null);
+                            setQuickHotlistCompanyId(company._id);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                        >
+                          <FolderPlus className="w-4 h-4 text-[#1C1B1F]" />
+                          Move to a Folder
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenRowActionsId(null);
+                            setQuickHotlistCompanyId(company._id);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                        >
+                          <FileText className="w-4 h-4 text-[#1C1B1F]" />
+                          Add to Hotlist
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleStar(e, company._id);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                        >
+                          <Star className={`w-4 h-4 ${starredCompanies.includes(company._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
+                          {starredCompanies.includes(company._id) ? "Unstar Company" : "Star Company"}
+                        </button>
+                        <div className="w-full border-t border-[#F1F1F5]" />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenRowActionsId(null);
                             handleDelete(company._id);
                           }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4 text-[#CD3636]" />
                           Delete
                         </button>
                       </div>
@@ -539,6 +605,7 @@ function Companies() {
     expandedRows,
     pinnedColumn,
     openRowActionsId,
+    starredCompanies,
   ]);
 
   const table = useReactTable({
@@ -1381,10 +1448,13 @@ function Companies() {
             <div className="relative" ref={moreMenuRef}>
               <button
                 onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-                className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+                className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
                 title="More options"
               >
                 <MoreVertical className="w-4 h-4" />
+                {filterIndustry && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
+                )}
               </button>
 
               {isMoreMenuOpen && (
@@ -1458,30 +1528,6 @@ function Companies() {
                 </div>
               )}
             </div>
-
-            <VideoTutorialButton
-              onClick={() => setShowVideoTutorial(true)}
-              variant="minimal"
-            />
-
-            {/* Per-module Forms entry point — v1-simple, navigates to Forms List pre-filtered to
-                this module. FORMS_FRONTEND_ARCHITECTURE.md §4. */}
-            <Link
-              to="/settings/forms?module=Company"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors"
-            >
-              <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">Forms</span>
-            </Link>
-
-            <button
-              onClick={() => setShowColumnSettings(true)}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none cursor-pointer shadow-sm transition-colors"
-              title="Column Settings"
-            >
-              <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">Columns</span>
-            </button>
 
             {/* Filters */}
             <button
@@ -1737,6 +1783,13 @@ function Companies() {
           setSelectionMode(true);
           setSelectedCompanies([]);
         }}
+      />
+
+      <AddToCompanyHotlistModal
+        isOpen={!!quickHotlistCompanyId}
+        onClose={() => setQuickHotlistCompanyId(null)}
+        selectedCompanyIds={quickHotlistCompanyId ? [quickHotlistCompanyId] : []}
+        onComplete={() => setQuickHotlistCompanyId(null)}
       />
       {/* Export Selected Companies Modal */}
       <ExportModal
