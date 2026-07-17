@@ -8,9 +8,48 @@ const subscriptionSchema = new mongoose.Schema({
     required: true,
     unique: true 
   },
-  razorpaySubscriptionId: { type: String },
-  razorpayPlanId: { type: String, required: true },
-  planName: { 
+  // ============================================================
+  // @deprecated LEGACY (Subscriptions product) — slated for removal in Phase 8.
+  // Under Charge-at-Will there is no Razorpay Subscription or Plan object; the
+  // durable payment identity is `razorpayCustomerId` + `mandateTokenId` (below).
+  // These are kept for now because the legacy subscription/renewal/upgrade code
+  // paths still read and write them (~54 sites in subscriptionController.js, plus
+  // addonManagement.js / subscriptionCheck.js / RazorpayPriceCache). Deleting them
+  // here would either break those business-logic paths or silently feed `undefined`
+  // into live razorpay.subscriptions.* calls — that removal is Phase 8's job, once
+  // the CAW flows have replaced those call sites.
+  // `required: true` removed from razorpayPlanId per CAW_BILLING_DESIGN.md §2 so
+  // new CAW-onboarded subscriptions are not forced to carry a legacy plan id.
+  // ============================================================
+  razorpaySubscriptionId: { type: String }, // @deprecated — remove in Phase 8
+  razorpayPlanId: { type: String }, // @deprecated — remove in Phase 8 (was required:true)
+
+  // ============================================================
+  // CHARGE-AT-WILL mandate (Phase 1 — schema only).
+  // Populated by later phases: razorpayCustomerId/mandateTokenId/mandateStatus by
+  // the Registration Link onboarding (Phase 2) and the token.confirmed webhook
+  // (Phase 3); mandateMaxAmount/mandateExpiresAt from the confirmed token.
+  // See CAW_BILLING_DESIGN.md §2. No business logic reads these yet.
+  // ============================================================
+  razorpayCustomerId: { type: String }, // cust_… (the mandate's customer)
+  mandateTokenId: { type: String }, // token_… the reusable authorization CAW charges against
+  // Added in Phase 2 (onboarding) — needed to correlate the incoming
+  // token.confirmed/payment.captured webhooks back to the subscription that
+  // requested them, since the Registration Link's invoice/order ids aren't
+  // known until after creation. inv_… id.
+  registrationLinkId: { type: String },
+  mandateStatus: {
+    type: String,
+    enum: ['none', 'pending', 'confirmed', 'paused', 'cancelled', 'rejected'],
+    default: 'none',
+  },
+  mandateMaxAmount: { type: Number }, // cap in the same unit as totalAmount; charges above it hard-fail
+  mandateExpiresAt: { type: Date },
+  // TODO(Phase 7): `appStatus` will gain a `retrying` state and reconcile with the
+  // mandate state machine in CAW_BILLING_DESIGN.md §7. Not changed here — that is
+  // the retry engine's phase, not the schema phase.
+
+  planName: {
     type: String, 
     enum: ['starter', 'growth', 'business','test'], 
     required: true 
