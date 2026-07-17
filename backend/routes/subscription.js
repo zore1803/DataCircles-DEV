@@ -33,6 +33,11 @@ router.use(express.json({ limit: '50mb' }));
 router.get('/plans', subscriptionController.getPlans);
 router.get('/current', requireAuth, subscriptionController.getCurrentSubscription);
 router.post('/trial', requireAuth, adminMiddleware, subscriptionController.startFreeTrial);
+// createSubscription IS the Charge-at-Will implementation (Phase 2) now — no
+// alias, no parallel route. The legacy Subscriptions/Plans implementation
+// (401 on this account, see CAW_BILLING_DESIGN.md §0) is kept unexported in
+// the controller as legacyCreateSubscription_DEPRECATED, not wired to any
+// route, removed in Phase 8.
 router.post('/create', requireAuth, adminMiddleware, subscriptionController.createSubscription);
 router.put('/update', requireAuth, adminMiddleware, subscriptionController.updateSubscription);
 router.post('/cancel', requireAuth, adminMiddleware, subscriptionController.cancelSubscription);

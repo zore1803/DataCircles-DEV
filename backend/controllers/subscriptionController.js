@@ -27,6 +27,297 @@ const Reward = require('../models/Reward');
 const RewardUsage = require('../models/RewardUsage');
 const { rewardToModifier } = require('../utils/modifierResolver');
 const { reserveNextAvailableReward, consumeReservation, releaseReservation } = require('../utils/referralRewards');
+const RazorpayWebhookEvent = require('../models/RazorpayWebhookEvent');
+
+// ============================================================
+// CHARGE-AT-WILL — Phase 2: Registration Link onboarding.
+// See backend/docs/audit/CAW_BILLING_DESIGN.md and PHASE2_ONBOARDING_AUDIT.md.
+// Additive only — does not modify createSubscription/verifyPayment (legacy
+// Subscriptions path, deprecated, removed in Phase 8). Activation (Phase 3)
+// is NOT implemented here; onboarding only creates the mandate + first
+// invoice and leaves the subscription in mandateStatus='pending'.
+// ============================================================
+
+// Mandate ceiling headroom policy — CONFIGURABLE business policy, not
+// architecture (see CAW_BILLING_DESIGN.md §9 Billing Policy). A single
+// multiplier, no invented flat-rupee floor — env-configurable, default 2x
+// the first invoice, so routine upgrades/seats don't immediately exceed the
+// mandate cap. Tune via env, not by changing this function's logic.
+const MANDATE_HEADROOM_MULTIPLIER = Number(process.env.CAW_MANDATE_HEADROOM_MULTIPLIER) || 2;
+function computeMandateMaxAmountRupees(firstInvoiceRupees) {
+  return firstInvoiceRupees * MANDATE_HEADROOM_MULTIPLIER;
+}
+
+// Create subscription — Charge-at-Will (Registration Link onboarding, Phase 2).
+// This IS the public createSubscription implementation; there is no separate
+// public name. See CAW_BILLING_DESIGN.md.
+exports.createSubscription = async (req, res) => {
+  try {
+    const { planId, billingCycle, addons = [], couponCode } = req.body;
+
+    const existingSubscription = await Subscription.findOne({
+      organization: req.user.organization,
+    });
+    if (existingSubscription) {
+      return res.status(409).json({ error: "Organization already has a subscription" });
+    }
+
+    if (!planId || !billingCycle) {
+      return res.status(400).json({ error: "Plan ID and billing cycle are required" });
+    }
+
+    // Razorpay requires `contact` for recurring Registration Links (confirmed
+    // live: "The contact field is required for recurring links",
+    // BAD_REQUEST_ERROR/input_validation_failed) — unlike a plain one-time
+    // order. OAuth signups don't always capture a phone number, so this must
+    // be validated here with an actionable message rather than surfacing
+    // Razorpay's raw error to the customer.
+    if (!req.user.phone) {
+      return res.status(400).json({ error: "A contact phone number is required to set up recurring billing. Please add one to your profile before subscribing." });
+    }
+
+    const plan = await PlanConfig.findOne({ planId, isActive: true });
+    if (!plan) {
+      return res.status(404).json({ error: "Plan not found" });
+    }
+
+    const basePrice = billingCycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
+
+    // Add-on validation/pricing — same logic as the legacy createSubscription,
+    // reused as-is (Phase 2 does not touch pricing; that's Phase 4's job).
+    let activeAddons = [];
+    if (addons.length > 0) {
+      const addonKeys = addons.map((a) => a.addonKey);
+      const addonEntries = await PlanAddon.find({ key: { $in: addonKeys }, isActive: true });
+      for (const requested of addons) {
+        const entry = addonEntries.find((e) => e.key === requested.addonKey);
+        if (!entry) {
+          return res.status(400).json({ error: `Add-on "${requested.addonKey}" does not exist or is not available.` });
+        }
+        const planAllowed = entry.availableOnPlans.length === 0 || entry.availableOnPlans.includes(planId);
+        if (!planAllowed) {
+          return res.status(400).json({ error: `Add-on "${entry.displayName}" is not available on the ${planId} plan.` });
+        }
+        const unitPrice = entry.price[billingCycle];
+        if (!unitPrice) {
+          return res.status(400).json({ error: `Add-on "${entry.displayName}" has no price configured for the ${billingCycle} cycle.` });
+        }
+        const qty = Number(requested.quantity) || 1;
+        activeAddons.push({ addonKey: requested.addonKey, quantity: qty, pricePerUnit: unitPrice, addedAt: new Date() });
+      }
+    }
+
+    let appliedCoupon = null;
+    let couponResult = null;
+    if (couponCode) {
+      const lineItems = [
+        { key: planId, type: 'plan', amount: basePrice },
+        ...activeAddons.map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
+      ];
+      couponResult = await validateAndPriceCoupon(couponCode, {
+        organizationId: req.user.organization,
+        planId,
+        billingCycle,
+        lineItems,
+      });
+      if (!couponResult.valid) {
+        return res.status(400).json({ error: couponResult.reason });
+      }
+    }
+
+    // TODO(Phase 4): buildPricingSnapshot() is the pre-CAW pricing engine, reused
+    // here unchanged. calculateInvoice() (CAW_BILLING_DESIGN.md §4) is the
+    // designated single source of truth for all money calculation going
+    // forward — this call site must be migrated to it in Phase 4, not left
+    // computing money independently once that function exists.
+    const snapshot = buildPricingSnapshot({
+      plan,
+      billingCycle,
+      activeAddons,
+      couponDiscount: couponResult ? { totalDiscount: couponResult.discountAmount } : null,
+    });
+    const totalAmount = snapshot.totalAmount; // pre-GST, post-discount (rupees)
+    const firstInvoiceRupees = snapshot.grandTotal; // GST-inclusive (rupees) — what the customer is actually charged
+
+    if (couponResult) {
+      appliedCoupon = {
+        couponId: couponResult.coupon._id,
+        code: couponResult.coupon.code,
+        name: couponResult.coupon.name,
+        duration: {
+          type: couponResult.coupon.duration?.type || 'lifetime',
+          cycles: couponResult.coupon.duration?.cycles ?? null,
+        },
+        discountAmount: couponResult.discountAmount,
+        baseSubtotal: snapshot.subtotal,
+        recurringSubtotal: totalAmount,
+        rulesApplied: couponResult.lineItems
+          .filter((li) => li.discount > 0)
+          .map((li) => ({
+            productType: li.type,
+            productKey: li.key,
+            discountType: li.discountType,
+            discountValue: li.discountValue,
+            discountAmount: li.discount,
+          })),
+      };
+    }
+
+    // Model 2 (DECIDED — CAW_BILLING_DESIGN.md §6/§7): the Registration Link's
+    // authorization transaction charges the real first invoice; the mandate
+    // confirms in the background via the token.confirmed webhook (Phase 3).
+    const amountPaise = Math.round(firstInvoiceRupees * 100);
+    const mandateMaxAmountRupees = computeMandateMaxAmountRupees(firstInvoiceRupees);
+    const mandateMaxAmountPaise = Math.round(mandateMaxAmountRupees * 100);
+
+    // `method` and `expire_at` on subscription_registration are both OPTIONAL
+    // per the Razorpay SDK's own type definitions (RazorpaySubscriptionRegistrationUpi
+    // extends the base request body with nothing extra — confirmed by reading
+    // node_modules/razorpay/dist/types/subscriptions.d.ts, not assumed):
+    //   - method: omitted here entirely, on purpose. The backend must not
+    //     decide the payment instrument — Razorpay's hosted Registration Link
+    //     page presents every method enabled on the account (UPI Autopay,
+    //     card, etc.) and the customer picks. If a specific frontend flow ever
+    //     needs to pre-constrain this, pass req.body.mandateMethod through
+    //     explicitly rather than defaulting/guessing here.
+    //   - expire_at: also omitted — no documented default exists to override,
+    //     and there is no product requirement yet for a specific mandate
+    //     validity horizon. Only max_amount has a documented Razorpay default
+    //     (₹99,000 flat) that we deliberately override below, because a flat
+    //     cap independent of the actual invoice size is the wrong default for
+    //     a product with variable plan pricing — that's a real engineering
+    //     reason, not an invented number.
+    const registrationLinkParams = {
+      customer: {
+        name: req.user.name,
+        email: req.user.email,
+        contact: req.user.phone, // guaranteed present — validated above
+      },
+      type: 'link',
+      amount: amountPaise,
+      currency: 'INR',
+      // NOTE: PlanConfig has no `name` field (only `planId`, e.g. "starter") —
+      // `plan.name` was always undefined here (confirmed live: "PURPOSE:
+      // undefined Plan - monthly" on the actual Razorpay page). Pre-existing
+      // bug inherited from the legacy createSubscription's identical line;
+      // only fixed here since it's this function's own code — two other
+      // occurrences remain in legacy/out-of-scope code (Phase 5's problem).
+      description: `${planId.charAt(0).toUpperCase() + planId.slice(1)} Plan - ${billingCycle}`,
+      subscription_registration: {
+        max_amount: mandateMaxAmountPaise,
+        ...(req.body.mandateMethod ? { method: req.body.mandateMethod } : {}),
+      },
+      // Razorpay caps `receipt` at 40 chars (confirmed live: "The receipt may
+      // not be greater than 40 characters."). A full org ObjectId (24 chars)
+      // + prefix + timestamp exceeded that — shortened to fit with margin.
+      receipt: `caw-${req.user.organization.toString().slice(-12)}-${Date.now().toString(36)}`,
+      email_notify: true,
+      sms_notify: false,
+      notes: {
+        organization_id: req.user.organization.toString(),
+        plan_name: planId,
+        billing_cycle: billingCycle,
+      },
+    };
+    // expire_by (how long the customer has to complete the link) is optional
+    // per Razorpay's API — omitted unless explicitly configured, so Razorpay's
+    // own default applies rather than an invented number.
+    if (process.env.CAW_REGISTRATION_LINK_EXPIRY_SECONDS) {
+      registrationLinkParams.expire_by = Math.floor(Date.now() / 1000) + Number(process.env.CAW_REGISTRATION_LINK_EXPIRY_SECONDS);
+    }
+
+    const registrationLink = await razorpay.subscriptions.createRegistrationLink(registrationLinkParams);
+
+    // Subscription created in a pending-mandate state. mandateStatus stays
+    // 'pending' until the Phase 3 token.confirmed webhook fires (idempotent
+    // AND-gate with payment.captured — see CAW_BILLING_DESIGN.md §7a).
+    // NOT activated here; Phase 3 owns activation.
+    //
+    // WEBHOOK CORRELATION (verified against real captured payloads, not
+    // guessed — see webhook-log.jsonl from the validation session):
+    //   - registrationLinkId (registrationLink.id, an inv_… id — the
+    //     Registration Link IS a Razorpay Invoice) matches
+    //     payload.payment.entity.invoice_id on payment.captured. CONFIRMED
+    //     exact match on our own test payload. This is the primary key
+    //     Phase 3 uses to find this Subscription from a payment.captured
+    //     webhook, and that SAME payment.captured payload also carries
+    //     payload.payment.entity.token_id — so this one event both identifies
+    //     the subscription AND reveals which token belongs to it.
+    //   - IMPORTANT, discovered while writing this (not assumed): the
+    //     token.confirmed webhook payload has NO correlating field at all —
+    //     no customer_id, and entity_id was null on our real payload. It
+    //     cannot be matched to a Subscription by itself. Combined with §7a
+    //     (order not guaranteed — token.confirmed arrived BEFORE
+    //     payment.captured in our own test), Phase 3 will need one of:
+    //       (a) buffer token.confirmed events by token id until a later
+    //           payment.captured reveals which subscription that token_id
+    //           belongs to, then reconcile, or
+    //       (b) on payment.captured, actively Fetch Token by the revealed
+    //           token_id to read its current status, rather than relying on
+    //           matching a separately-arrived token.confirmed event.
+    //     This is a real open design question for Phase 3, not solved here —
+    //     Phase 2 only needs to persist registrationLinkId, which it does.
+    //   - notes.organization_id below is a secondary signal IF Razorpay
+    //     propagates registration-link notes down to the resulting
+    //     payment/order (NOT verified live — do not rely on it as a sole
+    //     mechanism; the invoice_id/token_id keys above are confirmed).
+    // mandateExpiresAt is intentionally left unset here (we no longer send
+    // expire_at at creation) — Phase 3 sets it from the confirmed token's own
+    // expired_at field once token.confirmed arrives (a real value from
+    // Razorpay, not one we invented up front).
+    const subscription = new Subscription({
+      organization: req.user.organization,
+      razorpayCustomerId: registrationLink.customer_id,
+      registrationLinkId: registrationLink.id,
+      mandateStatus: 'pending',
+      mandateMaxAmount: mandateMaxAmountRupees,
+      planName: planId,
+      status: "created",
+      paymentStatus: "pending_payment",
+      isPaymentConfirmed: false,
+      billingCycle,
+      pricePerUser: basePrice,
+      userCount: 1,
+      totalAmount,
+      activeAddons,
+      appliedCoupon,
+    });
+
+    await subscription.save();
+
+    await emitBillingEvent({
+      organization: subscription.organization,
+      subscription: subscription._id,
+      eventType: 'SUBSCRIPTION_CREATED',
+      status: 'completed',
+      after: subscription,
+      amounts: {
+        base: snapshot.subtotal,
+        discount: appliedCoupon?.discountAmount || 0,
+        recurringAfter: totalAmount,
+      },
+      razorpay: { registrationLinkId: registrationLink.id },
+      metadata: { planId, billingCycle, couponCode: appliedCoupon?.code || null, onboarding: 'charge_at_will' },
+    });
+
+    res.json({
+      success: true,
+      subscription,
+      registrationLink: {
+        shortUrl: registrationLink.short_url,
+        id: registrationLink.id,
+        expireBy: registrationLink.expire_by,
+      },
+    });
+  } catch (error) {
+    console.error("CAW onboarding error:", error);
+    const razorpayError = error.error?.description || error.error?.reason;
+    res.status(500).json({
+      error: razorpayError || error.message,
+      code: 'RAZORPAY_ERROR',
+    });
+  }
+};
 
 // Redemption must only be counted once payment actually clears, and must be
 // idempotent — both the client-side verifyPayment call AND the Razorpay
@@ -463,8 +754,12 @@ exports.startFreeTrial = async (req, res) => {
   }
 };
 
-// Create subscription
-exports.createSubscription = async (req, res) => {
+// @deprecated LEGACY (Razorpay Subscriptions/Plans product — 401 on this
+// account, see CAW_BILLING_DESIGN.md §0). No longer exported/routed; the
+// public `createSubscription` name below is now the Charge-at-Will
+// implementation. Body kept, unexported, for reference until Phase 8 deletes
+// it — do not wire this to any route.
+async function legacyCreateSubscription_DEPRECATED(req, res) {
   try {
     const { planId, billingCycle, addons = [], couponCode } = req.body;
     console.log(req.body);
@@ -1381,6 +1676,153 @@ exports.cancelSubscription = async (req, res) => {
   }
 };
 
+// ============================================================
+// CHARGE-AT-WILL — Phase 3A: webhook plumbing only.
+// See CAW_BILLING_DESIGN.md "Implementation Notes".
+//
+// Scope, deliberately narrow (per review — do NOT expand without a phase
+// boundary change):
+//   - verify signature (done once, at the top of handleWebhook, unchanged)
+//   - dedupe via x-razorpay-event-id (RazorpayWebhookEvent, unique index)
+//   - persist the raw vendor fact the event carries
+//   - correlate ONLY where it's a direct, single-field DB lookup — never an
+//     inference across multiple facts
+//   - NOT in scope here: activation, runFirstPaymentSettlement(), retries,
+//     interpreting "payment paid AND mandate confirmed" as a combined
+//     state — that is Phase 3B.
+//
+// Correlation keys, verified against real payloads (not assumed — see
+// CAW_BILLING_DESIGN.md Implementation Notes / CHARGE_AT_WILL_VALIDATION.md):
+//   - payment.captured / payment.failed → payload.payment.entity.invoice_id
+//     matches Subscription.registrationLinkId (the Registration Link IS an
+//     Invoice). That same payment payload also carries token_id, so a
+//     matched payment.captured is also how mandateTokenId gets recorded.
+//   - token.confirmed / token.paused / token.cancelled / token.rejected →
+//     Subscription.mandateTokenId matches payload.token.entity.id. This can
+//     legitimately find nothing (if payment.captured hasn't arrived yet to
+//     populate mandateTokenId, or arrives out of order — confirmed possible,
+//     §7a). When nothing matches, the event is stored unattached
+//     (subscription: null) and left for Phase 3B; Phase 3A does not invent a
+//     reconciliation mechanism for this case.
+// ============================================================
+
+// Records the webhook for dedup, unless already seen. Returns null if this
+// razorpayEventId was already processed (caller should skip and return 200).
+async function recordWebhookEventOnce(razorpayEventId, eventName, payload, subscriptionId) {
+  try {
+    return await RazorpayWebhookEvent.create({
+      razorpayEventId,
+      event: eventName,
+      payload,
+      subscription: subscriptionId || null,
+    });
+  } catch (err) {
+    if (err.code === 11000) return null; // duplicate delivery (at-least-once) — already recorded
+    throw err;
+  }
+}
+
+// ============================================================
+// Phase 3B — reconciliation + activation. ONE shared helper, called by BOTH
+// the payment and token handlers after each persists its own fact. Not
+// embedded in either handler specifically — Razorpay's delivery order is not
+// guaranteed (§7a) and must not be baked into which handler "owns" this.
+// See CAW_BILLING_DESIGN.md "Phase 3B Planning".
+// ============================================================
+async function reconcileMandate(subscription) {
+  // Claim any orphaned token.* event that arrived before we knew mandateTokenId
+  // (the out-of-order case observed live — token.confirmed before payment.captured).
+  if (subscription.mandateTokenId) {
+    const orphaned = await RazorpayWebhookEvent.findOne({
+      subscription: null,
+      'payload.id': subscription.mandateTokenId,
+    }).sort({ receivedAt: -1 });
+    if (orphaned) {
+      orphaned.subscription = subscription._id;
+      await orphaned.save();
+      const tokenMandateStatus = { 'token.confirmed': 'confirmed', 'token.paused': 'paused', 'token.cancelled': 'cancelled', 'token.rejected': 'rejected' }[orphaned.event];
+      if (tokenMandateStatus) {
+        subscription.mandateStatus = tokenMandateStatus;
+        if (tokenMandateStatus === 'confirmed') {
+          if (orphaned.payload.max_amount) subscription.mandateMaxAmount = orphaned.payload.max_amount / 100;
+          if (orphaned.payload.expired_at) subscription.mandateExpiresAt = new Date(orphaned.payload.expired_at * 1000);
+        }
+      }
+    }
+  }
+
+  // Activation AND-gate (§7a). setAppStatus and runFirstPaymentSettlement are
+  // both already idempotent (no-op on repeat) — this is safe to call every
+  // time reconcileMandate runs, from either handler, any number of times.
+  if (subscription.paymentStatus === 'payment_completed' && subscription.mandateStatus === 'confirmed') {
+    subscription.isPaymentConfirmed = true;
+    setAppStatus(subscription, 'active', 'Charge-at-Will mandate confirmed and first payment captured');
+  }
+
+  await subscription.save();
+
+  if (subscription.appStatus === 'active') {
+    await runFirstPaymentSettlement(subscription);
+  }
+}
+
+async function handleCAWPaymentCaptured(paymentEntity, razorpayEventId) {
+  const subscription = await Subscription.findOne({ registrationLinkId: paymentEntity.invoice_id });
+  const recorded = await recordWebhookEventOnce(razorpayEventId, 'payment.captured', paymentEntity, subscription?._id);
+  if (!recorded) return; // duplicate delivery, already processed
+  if (!subscription) return; // not a CAW subscription (or legacy payment) — legacy handler already ran separately
+
+  // Persist the fact.
+  subscription.paymentStatus = 'payment_completed';
+  subscription.lastPaymentAttempt = {
+    razorpayPaymentId: paymentEntity.id,
+    amount: paymentEntity.amount / 100,
+    attemptedAt: new Date(),
+    status: paymentEntity.status,
+  };
+  if (paymentEntity.token_id && !subscription.mandateTokenId) {
+    subscription.mandateTokenId = paymentEntity.token_id;
+  }
+  await reconcileMandate(subscription);
+}
+
+async function handleCAWPaymentFailed(paymentEntity, razorpayEventId) {
+  const subscription = await Subscription.findOne({ registrationLinkId: paymentEntity.invoice_id });
+  const recorded = await recordWebhookEventOnce(razorpayEventId, 'payment.failed', paymentEntity, subscription?._id);
+  if (!recorded) return;
+  if (!subscription) return;
+
+  // Persist the fact only — no retry logic (Phase 7 owns retries), and no
+  // activation (a failed auth payment must never activate anything).
+  subscription.paymentStatus = 'payment_failed';
+  subscription.lastPaymentAttempt = {
+    razorpayPaymentId: paymentEntity.id,
+    amount: paymentEntity.amount / 100,
+    attemptedAt: new Date(),
+    status: paymentEntity.status,
+  };
+  await subscription.save();
+}
+
+async function handleCAWTokenEvent(tokenEntity, mandateStatus, razorpayEventId, eventName) {
+  const subscription = await Subscription.findOne({ mandateTokenId: tokenEntity.id });
+  const recorded = await recordWebhookEventOnce(razorpayEventId, eventName, tokenEntity, subscription?._id);
+  if (!recorded) return;
+  if (!subscription) return; // no direct correlation available yet — see file-header note; not an error
+
+  subscription.mandateStatus = mandateStatus;
+  if (mandateStatus === 'confirmed') {
+    if (tokenEntity.max_amount) subscription.mandateMaxAmount = tokenEntity.max_amount / 100;
+    if (tokenEntity.expired_at) subscription.mandateExpiresAt = new Date(tokenEntity.expired_at * 1000);
+  }
+  await reconcileMandate(subscription);
+}
+
+// Exported so the future timeout-based reconciliation job (CAW_BILLING_DESIGN.md
+// "Phase 3B Planning" — the one sweep job, not a family of crons) can call the
+// exact same logic a webhook would have triggered.
+exports.reconcileMandate = reconcileMandate;
+
 // Webhook handler
 exports.handleWebhook = async (req, res) => {
   try {
@@ -1428,9 +1870,13 @@ exports.handleWebhook = async (req, res) => {
     }
 
     const event = req.body;
+    const razorpayEventId = req.headers['x-razorpay-event-id'];
     switch (event.event) {
       case "payment.captured":
         await handlePaymentCaptured(event.payload.payment.entity);
+        // CAW (Phase 3A) — additive, independent of the legacy handler above.
+        // No-ops if this payment isn't tied to a CAW subscription.
+        await handleCAWPaymentCaptured(event.payload.payment.entity, razorpayEventId);
         break;
       case "subscription.authenticated":
         await handleSubscriptionAuthenticated(event.payload.subscription.entity);
@@ -1446,12 +1892,27 @@ exports.handleWebhook = async (req, res) => {
         break;
       case "payment.failed":
         await handlePaymentFailed(event.payload.payment.entity);
+        // CAW (Phase 3A) — additive, see payment.captured above.
+        await handleCAWPaymentFailed(event.payload.payment.entity, razorpayEventId);
         break;
       case "subscription.cancelled":
         await handleSubscriptionCancelled(event.payload.subscription.entity);
         break;
       case "subscription.halted":
         await handleSubscriptionHalted(event.payload.subscription.entity);
+        break;
+      // CAW (Phase 3A) — new event types, no legacy equivalent.
+      case "token.confirmed":
+        await handleCAWTokenEvent(event.payload.token.entity, 'confirmed', razorpayEventId, event.event);
+        break;
+      case "token.paused":
+        await handleCAWTokenEvent(event.payload.token.entity, 'paused', razorpayEventId, event.event);
+        break;
+      case "token.cancelled":
+        await handleCAWTokenEvent(event.payload.token.entity, 'cancelled', razorpayEventId, event.event);
+        break;
+      case "token.rejected":
+        await handleCAWTokenEvent(event.payload.token.entity, 'rejected', razorpayEventId, event.event);
         break;
       default:
         console.log("Unhandled webhook event:", event.event);
