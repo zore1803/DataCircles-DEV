@@ -7,7 +7,8 @@ const taskSchema = new mongoose.Schema({
   dueDate: Date,
   selectedDate: Date,
   status: { type: String, enum: ['Pending', 'Completed'], default: 'Pending' },
-  
+  priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+
   // Updated: Array of related entities
   relatedEntities: [{
     entityId: {

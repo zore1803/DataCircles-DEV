@@ -120,7 +120,7 @@ const createTask = async (req, res) => {
 
     // Populate the relatedEntities
     await task.populate("relatedEntities.entityId");
-    await task.populate("users", "name email");
+    await task.populate("users", "name email role profileUrl userData.mainData.profilePic");
     await task.populate("createdBy", "name email");
 
     // Get related entity names for email
@@ -207,7 +207,7 @@ const getAllTask = async (req, res) => {
 
     const tasks = await Task.find(query)
       .populate("relatedEntities.entityId")
-      .populate("users", "name email")
+      .populate("users", "name email role profileUrl userData.mainData.profilePic")
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 });
     res.json(tasks);
@@ -272,7 +272,7 @@ const getAllTasksPaginated = async (req, res) => {
     const [tasks, totalCount] = await Promise.all([
       Task.find(query)
         .populate("relatedEntities.entityId")
-        .populate("users", "name email")
+        .populate("users", "name email role profileUrl userData.mainData.profilePic")
         .populate("createdBy", "name email")
         .skip(skip)
         .limit(limit)
@@ -324,7 +324,7 @@ const getMyTask = async (req, res) => {
 
     const tasks = await Task.find(query)
       .populate("relatedEntities.entityId")
-      .populate("users", "name email")
+      .populate("users", "name email role profileUrl userData.mainData.profilePic")
       .populate("createdBy", "name email");
     res.json(tasks);
   } catch (err) {
@@ -349,7 +349,7 @@ const getTasksByVendor = async (req, res) => {
       organization: req.user.organization,
     })
       .populate("relatedEntities.entityId")
-      .populate("users", "name email")
+      .populate("users", "name email role profileUrl userData.mainData.profilePic")
       .populate("createdBy", "name email");
 
     res.json(tasks);
@@ -375,7 +375,7 @@ const getTasksByContact = async (req, res) => {
       organization: req.user.organization,
     })
       .populate("relatedEntities.entityId")
-      .populate("users", "name email")
+      .populate("users", "name email role profileUrl userData.mainData.profilePic")
       .populate("createdBy", "name email");
 
     res.json(tasks);
@@ -401,7 +401,7 @@ const getTasksByCompany = async (req, res) => {
       organization: req.user.organization,
     })
       .populate("relatedEntities.entityId")
-      .populate("users", "name email")
+      .populate("users", "name email role profileUrl userData.mainData.profilePic")
       .populate("createdBy", "name email");
 
     res.json(tasks);
@@ -427,7 +427,7 @@ const getTasksByDeal = async (req, res) => {
       organization: req.user.organization,
     })
       .populate("relatedEntities.entityId")
-      .populate("users", "name email")
+      .populate("users", "name email role profileUrl userData.mainData.profilePic")
       .populate("createdBy", "name email");
 
     res.json(tasks);
@@ -537,7 +537,7 @@ const updateTask = async (req, res) => {
     // Get updated task with populated fields
     const updatedTask = await Task.findById(req.params.id)
       .populate("relatedEntities.entityId")
-      .populate("users", "name email")
+      .populate("users", "name email role profileUrl userData.mainData.profilePic")
       .populate("createdBy", "name email");
 
     // Get related entity names for email
@@ -634,7 +634,7 @@ const updateTaskStatus = async (req, res) => {
       { new: true }
     )
       .populate("relatedEntities.entityId")
-      .populate("users", "name email")
+      .populate("users", "name email role profileUrl userData.mainData.profilePic")
       .populate("createdBy", "name email");
 
     if (!task) {

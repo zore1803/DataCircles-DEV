@@ -3,20 +3,22 @@ const Contact = require("../models/Contact");
 // CREATE Note
 exports.createNote = async (req, res) => {
   try {
-    const { title, note, company, taggedContacts = [] } = req.body;
+    const { title, note, company, taggedContacts = [], noteType, visibility } = req.body;
     const newNote = await Note.create({
       title,
       note,
       company,
       taggedContacts,
+      noteType,
+      visibility,
       user: req.user._id,
       organization: req.user.organization
     });
     
     const populatedNote = await Note.findById(newNote._id)
-      .populate('taggedContacts', 'name email phone')
+      .populate('taggedContacts', 'name email phone avatar')
       .populate('company', 'name industry')
-      .populate('user', 'name email');
+      .populate('user', 'name email profileUrl userData.mainData.profilePic');
     
     res.status(201).json(populatedNote);
   } catch (err) {
@@ -108,8 +110,8 @@ exports.getNotesByCompany = async (req, res) => {
       company: req.params.companyId,
       organization: req.user.organization 
     })
-      .populate('taggedContacts', 'name email phone')
-      .populate('user', 'name email')
+      .populate('taggedContacts', 'name email phone avatar')
+      .populate('user', 'name email profileUrl userData.mainData.profilePic')
       .sort({ createdAt: -1 });
     res.json(notes);
   } catch (err) {
@@ -124,9 +126,9 @@ exports.getNotesByContact = async (req, res) => {
       taggedContacts: req.params.contactId,
       organization: req.user.organization 
     })
-      .populate('taggedContacts', 'name email phone')
+      .populate('taggedContacts', 'name email phone avatar')
       .populate('company', 'name industry')
-      .populate('user', 'name email')
+      .populate('user', 'name email profileUrl userData.mainData.profilePic')
       .sort({ createdAt: -1 });
 
     res.json(notes);
@@ -151,9 +153,9 @@ exports.getAllNotes = async (req, res) => {
     }
     
     const notes = await Note.find(query)
-      .populate('taggedContacts', 'name email phone')
+      .populate('taggedContacts', 'name email phone avatar')
       .populate('company', 'name industry')
-      .populate('user', 'name email')
+      .populate('user', 'name email profileUrl userData.mainData.profilePic')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
       
@@ -170,9 +172,9 @@ exports.getNoteById = async (req, res) => {
       _id: req.params.id,
       organization: req.user.organization
     })
-      .populate('taggedContacts', 'name email phone')
+      .populate('taggedContacts', 'name email phone avatar')
       .populate('company', 'name industry')
-      .populate('user', 'name email');
+      .populate('user', 'name email profileUrl userData.mainData.profilePic');
       
     if (!note) {
       return res.status(404).json({ error: 'Note not found' });
@@ -187,19 +189,19 @@ exports.getNoteById = async (req, res) => {
 // UPDATE note content or tags
 exports.updateNote = async (req, res) => {
   try {
-    const { title, note, taggedContacts } = req.body;
+    const { title, note, taggedContacts, noteType, visibility } = req.body;
 
     const updated = await Note.findOneAndUpdate(
       {
         _id: req.params.id,
         organization: req.user.organization
       },
-      { title, note, taggedContacts },
+      { title, note, taggedContacts, noteType, visibility },
       { new: true }
     )
-      .populate('taggedContacts', 'name email phone')
+      .populate('taggedContacts', 'name email phone avatar')
       .populate('company', 'name industry')
-      .populate('user', 'name email');
+      .populate('user', 'name email profileUrl userData.mainData.profilePic');
       
     if (!updated) {
       return res.status(404).json({ error: 'Note not found' });

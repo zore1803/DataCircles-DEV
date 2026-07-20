@@ -74,6 +74,8 @@ export default function CompanyNotesTab() {
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
   const [taggedContacts, setTaggedContacts] = useState([]);
+  const [noteType, setNoteType] = useState("General Note");
+  const [visibility, setVisibility] = useState("Team");
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [viewingNote, setViewingNote] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -157,6 +159,8 @@ export default function CompanyNotesTab() {
     setNoteTitle("");
     setNoteContent("");
     setTaggedContacts([]);
+    setNoteType("General Note");
+    setVisibility("Team");
     setIsEditorOpen(false);
   };
 
@@ -172,6 +176,8 @@ export default function CompanyNotesTab() {
           title: noteTitle,
           note: noteContent,
           taggedContacts: taggedContacts.map((c) => c.value),
+          noteType,
+          visibility,
         });
         toast.success("Note updated");
       } else {
@@ -180,6 +186,8 @@ export default function CompanyNotesTab() {
           note: noteContent,
           company: id,
           taggedContacts: taggedContacts.map((c) => c.value),
+          noteType,
+          visibility,
         });
         toast.success("Note created");
       }
@@ -203,6 +211,8 @@ export default function CompanyNotesTab() {
     setTaggedContacts(
       note.taggedContacts.map((c) => ({ label: c.name, value: c._id })),
     );
+    setNoteType(note.noteType || "General Note");
+    setVisibility(note.visibility || "Team");
     setIsEditorOpen(true);
   };
 
@@ -372,14 +382,14 @@ export default function CompanyNotesTab() {
             <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
               <tile.icon size={20} />
             </div>
-            <div className="min-w-0">
-              <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-              <div className="flex items-baseline gap-2 flex-wrap">
+            <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
                 <p className="text-base font-semibold text-gray-900">{tile.value}</p>
-                {tile.subtitle && (
-                  <span className={`text-[11px] ${tile.subtitleClass}`}>{tile.subtitle}</span>
-                )}
               </div>
+              {tile.subtitle && (
+                <span className={`text-[11px] flex-shrink-0 whitespace-nowrap ${tile.subtitleClass}`}>{tile.subtitle}</span>
+              )}
             </div>
           </div>
         ))}
@@ -717,6 +727,10 @@ export default function CompanyNotesTab() {
         taggedContacts={taggedContacts}
         setTaggedContacts={setTaggedContacts}
         contacts={contacts}
+        noteType={noteType}
+        setNoteType={setNoteType}
+        visibility={visibility}
+        setVisibility={setVisibility}
         onSave={handleAddOrUpdateNote}
         onDelete={() => handleDelete(editingNoteId)}
         loading={loading}

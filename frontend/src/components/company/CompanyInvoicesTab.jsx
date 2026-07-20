@@ -240,21 +240,21 @@ export default function CompanyInvoicesTab({ invoices, summary, loading }) {
             <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
               <tile.icon size={20} />
             </div>
-            <div className="min-w-0">
-              <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-              <div className="flex items-center gap-2 flex-wrap">
+            <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
                 <p className="text-base font-semibold text-gray-900">
                   {tile.value}
                 </p>
-                {tile.subtitle && (
-                  <span
-                    className={`text-[11px] font-medium flex items-center gap-0.5 whitespace-nowrap ${tile.subtitleClass}`}
-                  >
-                    {tile.subtitleIcon && <tile.subtitleIcon size={10} />}
-                    {tile.subtitle}
-                  </span>
-                )}
               </div>
+              {tile.subtitle && (
+                <span
+                  className={`text-[11px] font-medium flex items-center gap-0.5 whitespace-nowrap flex-shrink-0 ${tile.subtitleClass}`}
+                >
+                  {tile.subtitleIcon && <tile.subtitleIcon size={10} />}
+                  {tile.subtitle}
+                </span>
+              )}
             </div>
           </div>
         ))}

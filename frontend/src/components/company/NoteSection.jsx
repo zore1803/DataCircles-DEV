@@ -170,6 +170,9 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
   const noteId = `NOTE-${(note._id || "").slice(-5).toUpperCase()}`;
   const authorName = typeof note.user === "object" ? note.user?.name || "Unknown" : "Unknown";
   const authorRole = typeof note.user === "object" ? note.user?.role || "" : "";
+  const authorAvatar = typeof note.user === "object"
+    ? note.user?.profileUrl || note.user?.userData?.mainData?.profilePic
+    : null;
   const primaryContact = note.taggedContacts?.[0];
 
   const handleSave = () => {
@@ -250,16 +253,25 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Meeting Note
+                  {note.noteType || "General Note"}
                 </span>
               </div>
               <div className="flex flex-row items-center w-full" style={{ gap: 6 }}>
-                <div
-                  className="rounded-full bg-gray-200 flex items-center justify-center text-[8px] font-semibold text-gray-600 flex-shrink-0"
-                  style={{ width: 16, height: 16 }}
-                >
-                  {authorName?.charAt(0)?.toUpperCase() || "?"}
-                </div>
+                {authorAvatar ? (
+                  <img
+                    src={authorAvatar}
+                    alt={authorName}
+                    className="rounded-full object-cover flex-shrink-0"
+                    style={{ width: 16, height: 16 }}
+                  />
+                ) : (
+                  <div
+                    className="rounded-full bg-gray-200 flex items-center justify-center text-[8px] font-semibold text-gray-600 flex-shrink-0"
+                    style={{ width: 16, height: 16 }}
+                  >
+                    {authorName?.charAt(0)?.toUpperCase() || "?"}
+                  </div>
+                )}
                 <span
                   className="truncate"
                   style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}
@@ -352,7 +364,7 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
                   Note Type
                 </span>
                 <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#0085FF" }}>
-                  Meeting Note
+                  {note.noteType || "General Note"}
                 </span>
               </div>
               <div className="flex flex-col items-start flex-1" style={{ gap: 6 }}>
@@ -360,7 +372,7 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
                   Visibility
                 </span>
                 <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#0085FF" }}>
-                  Team
+                  {note.visibility || "Team"}
                 </span>
               </div>
             </div>
@@ -370,12 +382,21 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
                   Author
                 </span>
                 <div className="flex flex-row items-center" style={{ gap: 12 }}>
-                  <div
-                    className="rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 flex-shrink-0"
-                    style={{ width: 32, height: 32 }}
-                  >
-                    {authorName?.charAt(0)?.toUpperCase() || "?"}
-                  </div>
+                  {authorAvatar ? (
+                    <img
+                      src={authorAvatar}
+                      alt={authorName}
+                      className="rounded-full object-cover flex-shrink-0"
+                      style={{ width: 32, height: 32 }}
+                    />
+                  ) : (
+                    <div
+                      className="rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 flex-shrink-0"
+                      style={{ width: 32, height: 32 }}
+                    >
+                      {authorName?.charAt(0)?.toUpperCase() || "?"}
+                    </div>
+                  )}
                   <div className="flex flex-col items-start" style={{ gap: 4 }}>
                     <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }} className="truncate">
                       {authorName}
@@ -432,12 +453,21 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
               {/* Row 1: Contact / Deal */}
               <div className="flex flex-row justify-between items-center w-full" style={{ gap: 16 }}>
                 <div className="flex flex-row items-center flex-1 min-w-0" style={{ gap: 12 }}>
-                  <div
-                    className="rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 flex-shrink-0"
-                    style={{ width: 32, height: 32 }}
-                  >
-                    {primaryContact?.name?.charAt(0)?.toUpperCase() || "?"}
-                  </div>
+                  {primaryContact?.avatar ? (
+                    <img
+                      src={primaryContact.avatar}
+                      alt={primaryContact.name}
+                      className="rounded-full object-cover flex-shrink-0"
+                      style={{ width: 32, height: 32 }}
+                    />
+                  ) : (
+                    <div
+                      className="rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 flex-shrink-0"
+                      style={{ width: 32, height: 32 }}
+                    >
+                      {primaryContact?.name?.charAt(0)?.toUpperCase() || "?"}
+                    </div>
+                  )}
                   <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
                     <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
                       Contact
@@ -588,6 +618,7 @@ export const NoteCard = ({ note, onEdit, onDelete, onView }) => {
       className="bg-white hover:border-blue-200 transition-all group relative flex flex-col items-start overflow-hidden"
       style={{
         width: "100%",
+        height: "100%",
         borderRadius: 12,
         border: "1px solid #F3F4F6",
         boxShadow: "0px 0px 6px rgba(0, 0, 0, 0.02), 0px 2px 4px rgba(0, 0, 0, 0.08)",
@@ -612,7 +643,7 @@ export const NoteCard = ({ note, onEdit, onDelete, onView }) => {
       </div>
 
       <div
-        className="flex flex-col items-start w-full"
+        className="flex flex-col items-start w-full flex-1"
         style={{ padding: "10px 16px 16px" }}
       >
         <div className="flex flex-col items-start w-full" style={{ gap: 14 }}>
@@ -677,16 +708,29 @@ export const NoteCard = ({ note, onEdit, onDelete, onView }) => {
         </div>
 
         <div
-          className="flex items-center justify-between w-full"
-          style={{ marginTop: 20 }}
+          className="flex items-center justify-between w-full mt-auto"
+          style={{ paddingTop: 20 }}
         >
           <div className="flex items-center" style={{ gap: 12 }}>
-            <div
-              className="rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0"
-              style={{ width: 20, height: 20 }}
-            >
-              {(typeof note.user === "object" ? note.user?.name : null)?.charAt(0)?.toUpperCase() || "?"}
-            </div>
+            {(() => {
+              const authorUser = typeof note.user === "object" ? note.user : null;
+              const authorAvatar = authorUser?.profileUrl || authorUser?.userData?.mainData?.profilePic;
+              return authorAvatar ? (
+                <img
+                  src={authorAvatar}
+                  alt={authorUser?.name || "User"}
+                  className="rounded-full object-cover flex-shrink-0"
+                  style={{ width: 20, height: 20 }}
+                />
+              ) : (
+                <div
+                  className="rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0"
+                  style={{ width: 20, height: 20 }}
+                >
+                  {authorUser?.name?.charAt(0)?.toUpperCase() || "?"}
+                </div>
+              );
+            })()}
             <div className="flex items-center" style={{ gap: 6 }}>
               <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
                 {typeof note.user === "object" ? note.user?.name || "Unknown" : "Unknown"}
@@ -726,6 +770,10 @@ export const NoteEditor = ({
   taggedContacts,
   setTaggedContacts,
   contacts,
+  noteType,
+  setNoteType,
+  visibility,
+  setVisibility,
   onSave,
   onDelete,
   loading,
@@ -837,6 +885,35 @@ export const NoteEditor = ({
               </span>
             </div>
 
+            {/* Note Type / Visibility Row */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 px-4 py-2 border border-gray-100 rounded-xl min-w-[180px]">
+                <Type className="w-4 h-4 text-gray-500" />
+                <select
+                  value={noteType}
+                  onChange={(e) => setNoteType(e.target.value)}
+                  className="w-full bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
+                >
+                  <option value="General Note">General Note</option>
+                  <option value="Meeting Note">Meeting Note</option>
+                  <option value="Call Note">Call Note</option>
+                  <option value="Follow-up Note">Follow-up Note</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 px-4 py-2 border border-gray-100 rounded-xl min-w-[140px]">
+                <Eye className="w-4 h-4 text-gray-500" />
+                <select
+                  value={visibility}
+                  onChange={(e) => setVisibility(e.target.value)}
+                  className="w-full bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
+                >
+                  <option value="Team">Team</option>
+                  <option value="Private">Private</option>
+                </select>
+              </div>
+            </div>
+
             {/* Editor Area */}
             <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
               <QuillToolbar />
@@ -906,6 +983,8 @@ const NoteSection = ({ companyId: propCompanyId }) => {
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
   const [taggedContacts, setTaggedContacts] = useState([]);
+  const [noteType, setNoteType] = useState("General Note");
+  const [visibility, setVisibility] = useState("Team");
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [viewingNote, setViewingNote] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -955,6 +1034,8 @@ const NoteSection = ({ companyId: propCompanyId }) => {
           title: noteTitle,
           note: noteContent,
           taggedContacts: taggedContacts.map((c) => c.value),
+          noteType,
+          visibility,
         });
         toast.success("Note updated");
       } else {
@@ -963,6 +1044,8 @@ const NoteSection = ({ companyId: propCompanyId }) => {
           note: noteContent,
           company: companyId,
           taggedContacts: taggedContacts.map((c) => c.value),
+          noteType,
+          visibility,
         });
         toast.success("Note created");
       }
@@ -990,6 +1073,8 @@ const NoteSection = ({ companyId: propCompanyId }) => {
         value: c._id,
       })),
     );
+    setNoteType(note.noteType || "General Note");
+    setVisibility(note.visibility || "Team");
     setIsEditorOpen(true);
   };
 
@@ -1019,6 +1104,8 @@ const NoteSection = ({ companyId: propCompanyId }) => {
     setNoteTitle("");
     setNoteContent("");
     setTaggedContacts([]);
+    setNoteType("General Note");
+    setVisibility("Team");
     setIsEditorOpen(false);
   };
 
@@ -1109,6 +1196,10 @@ const NoteSection = ({ companyId: propCompanyId }) => {
         taggedContacts={taggedContacts}
         setTaggedContacts={setTaggedContacts}
         contacts={contacts}
+        noteType={noteType}
+        setNoteType={setNoteType}
+        visibility={visibility}
+        setVisibility={setVisibility}
         onSave={handleAddOrUpdateNote}
         onDelete={() => handleDelete(editingNoteId)}
         loading={loading}

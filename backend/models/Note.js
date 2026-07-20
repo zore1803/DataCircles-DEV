@@ -10,6 +10,16 @@ const noteSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  noteType: {
+    type: String,
+    enum: ['Meeting Note', 'Call Note', 'General Note', 'Follow-up Note'],
+    default: 'General Note',
+  },
+  visibility: {
+    type: String,
+    enum: ['Team', 'Private'],
+    default: 'Team',
+  },
   company: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Company',
