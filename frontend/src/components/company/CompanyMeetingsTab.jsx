@@ -14,6 +14,12 @@ import API from "../../services/api";
 import CompanyMeetingForm from "./CompanyMeetingForm";
 import MeetingDetailsModal from "./MeetingDetailsModal";
 
+const SlidersIcon = ({ size = 14, ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M1.66667 2.91667C1.66667 2.22631 2.22631 1.66667 2.91667 1.66667C3.60702 1.66667 4.16667 2.22631 4.16667 2.91667C4.16667 3.60703 3.60702 4.16667 2.91667 4.16667C2.22631 4.16667 1.66667 3.60703 1.66667 2.91667ZM2.91667 0C1.30583 0 0 1.30583 0 2.91667C0 4.5275 1.30583 5.83333 2.91667 5.83333C4.5275 5.83333 5.83333 4.5275 5.83333 2.91667C5.83333 1.30583 4.5275 0 2.91667 0ZM7.5 3.75H14.1667V2.08333H7.5V3.75ZM10.8333 11.25C10.8333 10.5597 11.393 10 12.0833 10C12.7737 10 13.3333 10.5597 13.3333 11.25C13.3333 11.9403 12.7737 12.5 12.0833 12.5C11.393 12.5 10.8333 11.9403 10.8333 11.25ZM12.0833 8.33333C10.4725 8.33333 9.16667 9.63917 9.16667 11.25C9.16667 12.8608 10.4725 14.1667 12.0833 14.1667C13.6942 14.1667 15 12.8608 15 11.25C15 9.63917 13.6942 8.33333 12.0833 8.33333ZM0.833333 10.4167V12.0833H7.5V10.4167H0.833333Z" fill="#1F2937" />
+  </svg>
+);
+
 export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetings }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [users, setUsers] = useState([]);
@@ -187,27 +193,32 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
       </div>
 
       {/* Search + Controls */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+      <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+        <div className="relative flex-1 h-full">
+          <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by meetings by type, time, or contact..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-full text-sm focus:outline-none focus:border-blue-300"
+            className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+            style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
           />
         </div>
-        <button className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-full hover:bg-gray-50">
-          <Filter size={14} />
+        <button
+          className="flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+          style={{ height: "44px", borderColor: "#E1E4EA" }}
+        >
+          <SlidersIcon size={16} />
           Filter
         </button>
         <button
           onClick={() => setShowMeetingForm(true)}
-          className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50"
+          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
+          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
           title="Add Meeting"
         >
-          <Plus size={16} />
+          <Plus size={20} />
         </button>
       </div>
 

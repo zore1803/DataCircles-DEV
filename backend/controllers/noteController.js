@@ -3,10 +3,11 @@ const Contact = require("../models/Contact");
 // CREATE Note
 exports.createNote = async (req, res) => {
   try {
-    const { note, company, taggedContacts = [] } = req.body;
-    const newNote = await Note.create({ 
-      note, 
-      company, 
+    const { title, note, company, taggedContacts = [] } = req.body;
+    const newNote = await Note.create({
+      title,
+      note,
+      company,
       taggedContacts,
       user: req.user._id,
       organization: req.user.organization
@@ -186,14 +187,14 @@ exports.getNoteById = async (req, res) => {
 // UPDATE note content or tags
 exports.updateNote = async (req, res) => {
   try {
-    const { note, taggedContacts } = req.body;
-    
+    const { title, note, taggedContacts } = req.body;
+
     const updated = await Note.findOneAndUpdate(
-      { 
+      {
         _id: req.params.id,
-        organization: req.user.organization 
+        organization: req.user.organization
       },
-      { note, taggedContacts },
+      { title, note, taggedContacts },
       { new: true }
     )
       .populate('taggedContacts', 'name email phone')

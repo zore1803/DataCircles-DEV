@@ -2189,17 +2189,17 @@ function Deals() {
           ].map(({ label, value, icon: Icon }) => (
             <div
               key={label}
-              className="box-border flex flex-col justify-center items-start bg-white flex-shrink-0"
-              style={{ width: "201px", height: "72px", padding: "16px", gap: "14px", border: "1px solid #E1E4EA", borderRadius: "12px" }}
+              className="box-border flex flex-col justify-center items-start bg-white flex-1 min-w-0"
+              style={{ height: "72px", padding: "16px", gap: "14px", border: "1px solid #E1E4EA", borderRadius: "12px" }}
             >
-              <div className="flex flex-row items-end" style={{ gap: "14px", width: "169px", height: "40px" }}>
+              <div className="flex flex-row items-end w-full" style={{ gap: "14px", height: "40px" }}>
                 <div
                   className="box-border flex items-center justify-center flex-shrink-0"
                   style={{ width: "40px", height: "40px", padding: "8px", gap: "10px", background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: "6px" }}
                 >
                   <Icon className="w-6 h-6" style={{ color: "#0085FF" }} />
                 </div>
-                <div className="flex flex-col items-start flex-1" style={{ gap: "4px", width: "115px", height: "40px" }}>
+                <div className="flex flex-col items-start flex-1 min-w-0" style={{ gap: "4px", height: "40px" }}>
                   <span
                     className="whitespace-nowrap"
                     style={{ fontFamily: "'Inter Tight', 'Inter', sans-serif", fontWeight: 400, fontSize: "12px", lineHeight: "120%", color: "#525866" }}
@@ -2219,7 +2219,7 @@ function Deals() {
         </div>
       </div>
 
-      <div className="p-6 space-y-8">
+      <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 py-6 space-y-8">
         {/* Filter Panel */}
         {showFilters && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 animate-slide-down">
