@@ -24,11 +24,24 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
+  Pin,
+  PinOff,
+  FileText,
+  User,
+  Tag,
+  IndianRupee,
+  Calendar,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 
 const TERMINAL_STATUSES = ["won", "lost"];
+
+const SlidersIcon = ({ size = 14, ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M1.66667 2.91667C1.66667 2.22631 2.22631 1.66667 2.91667 1.66667C3.60702 1.66667 4.16667 2.22631 4.16667 2.91667C4.16667 3.60703 3.60702 4.16667 2.91667 4.16667C2.22631 4.16667 1.66667 3.60703 1.66667 2.91667ZM2.91667 0C1.30583 0 0 1.30583 0 2.91667C0 4.5275 1.30583 5.83333 2.91667 5.83333C4.5275 5.83333 5.83333 4.5275 5.83333 2.91667C5.83333 1.30583 4.5275 0 2.91667 0ZM7.5 3.75H14.1667V2.08333H7.5V3.75ZM10.8333 11.25C10.8333 10.5597 11.393 10 12.0833 10C12.7737 10 13.3333 10.5597 13.3333 11.25C13.3333 11.9403 12.7737 12.5 12.0833 12.5C11.393 12.5 10.8333 11.9403 10.8333 11.25ZM12.0833 8.33333C10.4725 8.33333 9.16667 9.63917 9.16667 11.25C9.16667 12.8608 10.4725 14.1667 12.0833 14.1667C13.6942 14.1667 15 12.8608 15 11.25C15 9.63917 13.6942 8.33333 12.0833 8.33333ZM0.833333 10.4167V12.0833H7.5V10.4167H0.833333Z" fill="#1F2937" />
+  </svg>
+);
 
 const Avatar = ({ name, className = "" }) => (
   <div
@@ -150,6 +163,50 @@ export default function CompanyDealsKanban({ deals, setDeals }) {
   const [viewMode, setViewMode] = useState("board");
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [pinnedColumn, setPinnedColumn] = useState(null);
+  const [colWidths, setColWidths] = useState({
+    dealId: 127,
+    title: 185,
+    contact: 150,
+    stage: 131,
+    amount: 123,
+    lastUpdated: 171,
+    actions: 56,
+  });
+  const [resizingCol, setResizingCol] = useState(null);
+  const resizingRef = React.useRef(null);
+  const totalTableWidth = useMemo(
+    () => Object.values(colWidths).reduce((sum, w) => sum + w, 0),
+    [colWidths],
+  );
+
+  const togglePinColumn = (colId) => {
+    setPinnedColumn((prev) => (prev === colId ? null : colId));
+  };
+
+  const startResize = (e, colId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingRef.current = { colId, startX: e.clientX, startWidth: colWidths[colId] };
+    setResizingCol(colId);
+
+    const onMouseMove = (moveEvent) => {
+      if (!resizingRef.current) return;
+      const { colId: id, startX, startWidth } = resizingRef.current;
+      const newWidth = Math.max(60, startWidth + (moveEvent.clientX - startX));
+      setColWidths((prev) => ({ ...prev, [id]: newWidth }));
+    };
+
+    const onMouseUp = () => {
+      resizingRef.current = null;
+      setResizingCol(null);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  };
 
   useEffect(() => {
     const fetchStatuses = async () => {
@@ -201,6 +258,11 @@ export default function CompanyDealsKanban({ deals, setDeals }) {
     else if (totalPages > 1) rangeWithDots.push(totalPages);
     return rangeWithDots.filter((item, index, arr) => index === 0 || arr[index - 1] !== item);
   };
+
+  const paginatedDeals = useMemo(
+    () => filteredDeals.slice((currentPage - 1) * limit, currentPage * limit),
+    [filteredDeals, currentPage, limit],
+  );
 
   const dealsByStatus = useMemo(() => {
     const map = {};
@@ -311,46 +373,51 @@ export default function CompanyDealsKanban({ deals, setDeals }) {
       </div>
 
       {/* Search + Controls */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="relative flex-1">
+      <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+        <div className="relative flex-1 h-full">
           <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            size={20}
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50"
           />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by deal name..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-full text-sm focus:outline-none focus:border-blue-300"
+            className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+            style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
           />
         </div>
-        <button className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-full hover:bg-gray-50">
-          <Filter size={14} />
+        <button
+          className="flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+          style={{ height: "44px", borderColor: "#E1E4EA" }}
+        >
+          <SlidersIcon size={16} />
           Filter
         </button>
-        <div className="flex items-center bg-gray-100 rounded-full p-1">
+        <div className="flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0" style={{ height: "44px" }}>
           <button
             onClick={() => setViewMode("board")}
-            className={`p-1.5 rounded-full transition-colors ${viewMode === "board" ? "bg-white shadow-sm text-blue-600" : "text-gray-500"
+            className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "board" ? "bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.1)] text-blue-600" : "text-gray-500"
               }`}
           >
-            <LayoutGrid size={14} />
+            <LayoutGrid size={16} />
           </button>
           <button
             onClick={() => setViewMode("list")}
-            className={`p-1.5 rounded-full transition-colors ${viewMode === "list" ? "bg-white shadow-sm text-blue-600" : "text-gray-500"
+            className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "list" ? "bg-white shadow-sm text-blue-600" : "text-gray-500"
               }`}
           >
-            <ListIcon size={14} />
+            <ListIcon size={16} />
           </button>
         </div>
         <Link
           to="/deals"
-          className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50"
+          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
+          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
           title="Add Deal"
         >
-          <Plus size={16} />
+          <Plus size={20} />
         </Link>
       </div>
 
@@ -369,9 +436,149 @@ export default function CompanyDealsKanban({ deals, setDeals }) {
       ) : (
         <>
           <div
-            className="box-border flex flex-col items-start bg-white self-stretch"
-            style={{ height: "542px", border: "1px solid #E1E4EA", borderRadius: "8px" }}
-          />
+            className="box-border flex flex-col items-start bg-white self-stretch overflow-x-auto"
+            style={{ border: "1px solid #E1E4EA", borderRadius: "8px" }}
+          >
+            <table
+              className="text-sm text-left border-collapse"
+              style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%" }}
+            >
+              <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+                <tr>
+                  {[
+                    { id: "dealId", label: "Deal ID", width: 127 },
+                    { id: "title", label: "Deal Name", width: 185, icon: FileText, pinnable: true },
+                    { id: "contact", label: "Contact", width: 150, icon: User, pinnable: true },
+                    { id: "stage", label: "Stage", width: 131, icon: Tag, pinnable: true },
+                    { id: "amount", label: "Amount", width: 123, icon: IndianRupee, pinnable: true },
+                    { id: "lastUpdated", label: "Last Updated", width: 171, icon: Calendar },
+                  ].map((col) => {
+                    const isPinned = pinnedColumn === col.id;
+                    return (
+                      <th
+                        key={col.id}
+                        style={{ width: colWidths[col.id], height: 56, position: "relative" }}
+                        className={`px-3 py-2.5 font-medium text-[#525866] text-xs ${col.id === "lastUpdated" ? "" : "border-r border-[#E1E4EA]"
+                          }`}
+                      >
+                        {col.pinnable ? (
+                          <div
+                            className="relative flex items-center justify-start w-full group cursor-pointer select-none"
+                            onDoubleClick={() => togglePinColumn(col.id)}
+                          >
+                            <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
+                              <col.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                              <span className="truncate">{col.label}</span>
+                            </div>
+                            <button
+                              onClick={() => togglePinColumn(col.id)}
+                              className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
+                                }`}
+                              title={isPinned ? "Unpin Column" : "Pin Column"}
+                            >
+                              {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-start gap-1.5 whitespace-nowrap">
+                            {col.icon && <col.icon className="w-3.5 h-3.5 flex-shrink-0" />}
+                            <span>{col.label}</span>
+                          </div>
+                        )}
+
+                        {col.id !== "actions" && (
+                          <div
+                            onMouseDown={(e) => startResize(e, col.id)}
+                            className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"
+                              }`}
+                          />
+                        )}
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E1E4EA] bg-white">
+                {paginatedDeals.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500 font-medium">
+                      No deals found.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedDeals.map((deal) => {
+                    const lastUpdated = deal.updatedAt
+                      ? new Date(deal.updatedAt).toLocaleDateString("en-US", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })
+                      : "—";
+                    const pillStyle =
+                      deal.status === "Won"
+                        ? { backgroundColor: "rgba(0, 201, 80, 0.1)", color: "#00A63E" }
+                        : deal.status === "Lost"
+                          ? { backgroundColor: "rgba(232, 34, 34, 0.1)", color: "#E82222" }
+                          : { backgroundColor: "rgba(0, 133, 255, 0.1)", color: "#0085FF" };
+                    return (
+                      <tr key={deal._id} className="hover:bg-gray-50 transition-colors group">
+                        <td
+                          style={{ height: 54 }}
+                          className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
+                        >
+                          DL-{deal._id.slice(-5).toUpperCase()}
+                        </td>
+                        <td style={{ height: 54 }} className="px-3 text-left">
+                          <Link
+                            to={`/deals/${deal._id}`}
+                            className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
+                          >
+                            {deal.title || "Deal Name"}
+                          </Link>
+                        </td>
+                        <td
+                          style={{ height: 54 }}
+                          className="px-3 text-[14px] leading-5 font-medium text-[#222530] truncate text-left"
+                        >
+                          {deal.contact?.name || "-"}
+                        </td>
+                        <td style={{ height: 54 }} className="px-3">
+                          <div className="flex items-center justify-start">
+                            <span
+                              style={{ width: 80, height: 24, padding: "5px 12px", borderRadius: 53, ...pillStyle }}
+                              className="inline-flex items-center justify-center text-xs font-medium"
+                            >
+                              {deal.status || "Open"}
+                            </span>
+                          </div>
+                        </td>
+                        <td
+                          style={{ height: 54 }}
+                          className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
+                        >
+                          ₹{(deal.amount || 0).toLocaleString("en-IN")}
+                        </td>
+                        <td
+                          style={{ height: 54 }}
+                          className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap"
+                        >
+                          <div className="relative flex items-center justify-start">
+                            <span>{lastUpdated}</span>
+                            <button
+                              className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                              title="More options"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
 
           {totalCount > 0 && (
             <div className="w-full bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
