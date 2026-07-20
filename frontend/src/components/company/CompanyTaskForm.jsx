@@ -156,6 +156,7 @@ const CompanyTaskForm = ({
   onDelete,
   onClose,
   onUpdate,
+  startInEditMode,
 }) => {
   const [form, setForm] = useState(initialState);
   const [loading, setLoading] = useState(false);
@@ -166,6 +167,10 @@ const CompanyTaskForm = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditMode, setIsEditMode] = useState(mode === "create");
   const [company, setCompany] = useState(null);
+  const [contacts, setContacts] = useState([]);
+  const [deals, setDeals] = useState([]);
+  const [relatedContactId, setRelatedContactId] = useState("");
+  const [relatedDealId, setRelatedDealId] = useState("");
 
   const statusOptions = [
     { value: 'Pending', label: 'Pending', icon: Clock, className: 'bg-amber-50 text-amber-600' },
@@ -189,11 +194,26 @@ const CompanyTaskForm = ({
     }
   };
 
+  const fetchRelatedOptions = async () => {
+    if (!companyId) return;
+    try {
+      const [contactsRes, dealsRes] = await Promise.all([
+        API.get("/contacts"),
+        API.get("/deals"),
+      ]);
+      setContacts(contactsRes.data.filter((c) => c.company?._id === companyId));
+      setDeals(dealsRes.data.filter((d) => d.company?._id === companyId));
+    } catch (error) {
+      console.error("Error fetching related contact/deal options:", error);
+    }
+  };
+
   useEffect(() => {
     if (open) {
       setShouldRender(true);
       setTimeout(() => setIsSliding(true), 10);
       fetchCompanyDetails();
+      fetchRelatedOptions();
 
       if (taskData && mode === "view") {
         setForm({
@@ -207,20 +227,26 @@ const CompanyTaskForm = ({
           users: taskData.users?.map((u) => u._id || u) || [],
           priority: taskData.priority || "medium",
         });
+        const existingContact = taskData.relatedEntities?.find((e) => e.entityModel === "Contact");
+        const existingDeal = taskData.relatedEntities?.find((e) => e.entityModel === "Deal");
+        setRelatedContactId(existingContact?.entityId?._id || existingContact?.entityId || "");
+        setRelatedDealId(existingDeal?.entityId?._id || existingDeal?.entityId || "");
       } else {
         setForm({
           ...initialState,
           selectedDate: calendarDate,
         });
+        setRelatedContactId("");
+        setRelatedDealId("");
       }
       setErrors({});
-      setIsEditMode(mode === "create");
+      setIsEditMode(mode === "create" || !!startInEditMode);
     } else {
       setIsSliding(false);
       setTimeout(() => setShouldRender(false), 300);
       setShowUserSelector(false);
     }
-  }, [open, mode, taskData, calendarDate, companyId]);
+  }, [open, mode, taskData, calendarDate, companyId, startInEditMode]);
 
   const handleChange = (key, val) => {
     setForm((f) => ({ ...f, [key]: val }));
@@ -282,6 +308,19 @@ const CompanyTaskForm = ({
       };
 
       // Convert to new relatedEntities array format
+      const relatedEntities = [
+        {
+          entityModel: "Company",
+          entityId: companyId,
+        },
+      ];
+      if (relatedContactId) {
+        relatedEntities.push({ entityModel: "Contact", entityId: relatedContactId });
+      }
+      if (relatedDealId) {
+        relatedEntities.push({ entityModel: "Deal", entityId: relatedDealId });
+      }
+
       const payload = {
         title: form.title,
         description: form.description,
@@ -290,12 +329,7 @@ const CompanyTaskForm = ({
         users: form.users,
         dueDate: createLocalDate(form.dueDate),
         selectedDate: calendarDate || createLocalDate(form.selectedDate),
-        relatedEntities: [
-          {
-            entityModel: "Company",
-            entityId: companyId,
-          },
-        ],
+        relatedEntities,
       };
 
       if (isEditMode && mode === "view") {
@@ -359,7 +393,7 @@ const CompanyTaskForm = ({
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-100">
             <h3 className="text-lg font-bold text-gray-900">
-              Add New Task
+              {mode === "view" ? "Edit Task" : "Add New Task"}
             </h3>
             <button
               onClick={onClose}
@@ -413,6 +447,48 @@ const CompanyTaskForm = ({
                       <Building className="w-4 h-4 text-gray-400" />
                       <span className="truncate max-w-[150px]">{company?.name || "Company Name"}</span>
                     </div>
+                  </div>
+
+                  {/* Related Contact */}
+                  <div className="flex items-center justify-between group">
+                    <div className="flex items-center gap-2 text-gray-600 text-sm">
+                      <UserIcon className="w-4 h-4" />
+                      <span>Contact</span>
+                    </div>
+                    <select
+                      value={relatedContactId}
+                      onChange={(e) => setRelatedContactId(e.target.value)}
+                      disabled={!isEditMode && mode === "view"}
+                      className="text-sm font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer max-w-[150px]"
+                    >
+                      <option value="">None</option>
+                      {contacts.map((c) => (
+                        <option key={c._id} value={c._id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Related Deal */}
+                  <div className="flex items-center justify-between group">
+                    <div className="flex items-center gap-2 text-gray-600 text-sm">
+                      <Building className="w-4 h-4" />
+                      <span>Deal</span>
+                    </div>
+                    <select
+                      value={relatedDealId}
+                      onChange={(e) => setRelatedDealId(e.target.value)}
+                      disabled={!isEditMode && mode === "view"}
+                      className="text-sm font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer max-w-[150px]"
+                    >
+                      <option value="">None</option>
+                      {deals.map((d) => (
+                        <option key={d._id} value={d._id}>
+                          {d.title || d.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Selected Date (Start Date) */}

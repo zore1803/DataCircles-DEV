@@ -104,18 +104,18 @@ export default function CompanyFolderTab() {
             <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
               <tile.icon size={20} />
             </div>
-            <div className="min-w-0">
-              <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-              <div className="flex items-baseline gap-2 flex-wrap">
+            <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
                 <p className="text-base font-semibold text-gray-900">
                   {tile.value}
                 </p>
-                {tile.subtitle && (
-                  <span className={`text-[11px] ${tile.subtitleClass}`}>
-                    {tile.subtitle}
-                  </span>
-                )}
               </div>
+              {tile.subtitle && (
+                <span className={`text-[11px] flex-shrink-0 whitespace-nowrap ${tile.subtitleClass}`}>
+                  {tile.subtitle}
+                </span>
+              )}
             </div>
           </div>
         ))}
