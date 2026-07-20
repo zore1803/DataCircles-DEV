@@ -279,7 +279,8 @@ const CompanyMeetingForm = ({
   users,
   onSave,
   onDelete,
-  onClose
+  onClose,
+  startInEditMode
 }) => {
   const [form, setForm] = useState(initialState);
   const [loading, setLoading] = useState(false);
@@ -289,7 +290,7 @@ const CompanyMeetingForm = ({
   const [company, setCompany] = useState(null);
   const [timeConflict, setTimeConflict] = useState(null);
   const [errors, setErrors] = useState({});
-  const [isEditMode, setIsEditMode] = useState(mode === "create");
+  const [isEditMode, setIsEditMode] = useState(mode === "create" || !!startInEditMode);
 
   const meetingTypeOptions = [
     { value: 'in-person', label: 'In-person', icon: Building, className: 'bg-orange-50 text-orange-600' },
@@ -414,13 +415,13 @@ const CompanyMeetingForm = ({
       }
 
       setErrors({});
-      setIsEditMode(mode === "create");
+      setIsEditMode(mode === "create" || !!startInEditMode);
     } else {
       setIsSliding(false);
       setTimeout(() => setShouldRender(false), 300);
       setTimeConflict(null);
     }
-  }, [open, meetingData, mode, calendarDate, fetchMeetingsForDate]);
+  }, [open, meetingData, mode, calendarDate, fetchMeetingsForDate, startInEditMode]);
 
   const handleChange = (key, val) => {
     setForm(f => ({ ...f, [key]: val }));
