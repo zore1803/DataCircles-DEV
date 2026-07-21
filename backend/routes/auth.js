@@ -14,6 +14,9 @@ const {
 
 const requireAuth = [authMiddleware, userSyncMiddleware];
 
+// Email/password login
+router.post("/login", authController.login);
+
 // Get current user
 router.get("/me", requireAuth, authController.getCurrentUser);
 

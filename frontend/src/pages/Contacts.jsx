@@ -164,6 +164,35 @@ function Contacts() {
 
   const [columnSizing, setColumnSizing] = useState({});
 
+  const [contactColWidths, setContactColWidths] = useState({
+    name: 235,
+    company: 207,
+    email: 288,
+    phone: 196,
+    status: 198,
+    actions: 152,
+  });
+
+  const handleContactColResizeStart = (key) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = contactColWidths[key];
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      setContactColWidths((prev) => ({
+        ...prev,
+        [key]: Math.max(80, startWidth + delta),
+      }));
+    };
+    const onMouseUp = () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  };
+
   const [pinnedColumn, setPinnedColumn] = useState(null);
 
   const togglePinColumn = (colKey) => {
@@ -2544,56 +2573,118 @@ function Contacts() {
                   className="flex items-center px-3 border-b border-[#E1E4EA]"
                   style={{ width: "50px", background: "#F5F7FA" }}
                 >
-                  <input type="checkbox" className="w-4 h-4 rounded border-gray-300" disabled />
+                  <input
+                    type="checkbox"
+                    checked={
+                      contacts.length > 0 &&
+                      selectedContacts.length === contacts.length
+                    }
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleSelectAll();
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                  />
                 </div>
                 <div
-                  className="flex items-center gap-3 px-3 border-b border-[#E1E4EA]"
-                  style={{ width: "235px", background: "#F5F7FA" }}
+                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                  style={{ width: contactColWidths.name, background: "#F5F7FA" }}
+                  onClick={() => handleSort("name")}
                 >
                   <User className="w-5 h-5 text-[#525252]" />
                   <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
                     Contact Name
                   </span>
+                  <div className="flex flex-col">
+                    <ChevronUp className={`w-3 h-3 -mb-1 ${sortConfig.key === "name" && sortConfig.direction === "asc" ? "text-blue-600" : "text-gray-300"}`} />
+                    <ChevronDown className={`w-3 h-3 ${sortConfig.key === "name" && sortConfig.direction === "desc" ? "text-blue-600" : "text-gray-300"}`} />
+                  </div>
+                  <div
+                    onMouseDown={handleContactColResizeStart("name")}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 bg-transparent"
+                  />
                 </div>
                 <div
-                  className="flex items-center gap-3 px-3 border-b border-[#E1E4EA]"
-                  style={{ width: "207px", background: "#F5F7FA" }}
+                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                  style={{ width: contactColWidths.company, background: "#F5F7FA" }}
+                  onClick={() => handleSort("company")}
                 >
                   <Building2 className="w-5 h-5 text-[#525252]" />
                   <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
                     Company
                   </span>
+                  <div className="flex flex-col">
+                    <ChevronUp className={`w-3 h-3 -mb-1 ${sortConfig.key === "company" && sortConfig.direction === "asc" ? "text-blue-600" : "text-gray-300"}`} />
+                    <ChevronDown className={`w-3 h-3 ${sortConfig.key === "company" && sortConfig.direction === "desc" ? "text-blue-600" : "text-gray-300"}`} />
+                  </div>
+                  <div
+                    onMouseDown={handleContactColResizeStart("company")}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 bg-transparent"
+                  />
                 </div>
                 <div
-                  className="flex items-center gap-3 px-3 border-b border-[#E1E4EA]"
-                  style={{ width: "288px", background: "#F5F7FA" }}
+                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                  style={{ width: contactColWidths.email, background: "#F5F7FA" }}
+                  onClick={() => handleSort("email")}
                 >
                   <Mail className="w-5 h-5 text-[#525252]" />
                   <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
                     Email
                   </span>
+                  <div className="flex flex-col">
+                    <ChevronUp className={`w-3 h-3 -mb-1 ${sortConfig.key === "email" && sortConfig.direction === "asc" ? "text-blue-600" : "text-gray-300"}`} />
+                    <ChevronDown className={`w-3 h-3 ${sortConfig.key === "email" && sortConfig.direction === "desc" ? "text-blue-600" : "text-gray-300"}`} />
+                  </div>
+                  <div
+                    onMouseDown={handleContactColResizeStart("email")}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 bg-transparent"
+                  />
                 </div>
                 <div
-                  className="flex items-center gap-3 px-3 border-b border-[#E1E4EA]"
-                  style={{ width: "196px", background: "#F5F7FA" }}
+                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                  style={{ width: contactColWidths.phone, background: "#F5F7FA" }}
+                  onClick={() => handleSort("phone")}
                 >
                   <Phone className="w-5 h-5 text-[#525252]" />
                   <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
                     Phone
                   </span>
+                  <div className="flex flex-col">
+                    <ChevronUp className={`w-3 h-3 -mb-1 ${sortConfig.key === "phone" && sortConfig.direction === "asc" ? "text-blue-600" : "text-gray-300"}`} />
+                    <ChevronDown className={`w-3 h-3 ${sortConfig.key === "phone" && sortConfig.direction === "desc" ? "text-blue-600" : "text-gray-300"}`} />
+                  </div>
+                  <div
+                    onMouseDown={handleContactColResizeStart("phone")}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 bg-transparent"
+                  />
                 </div>
                 <div
-                  className="flex items-center gap-3 px-3 border-b border-[#E1E4EA]"
-                  style={{ width: "198px", background: "#F5F7FA" }}
+                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                  style={{ width: contactColWidths.status, background: "#F5F7FA" }}
+                  onClick={() => handleSort("status")}
                 >
                   <Target className="w-5 h-5 text-[#525252]" />
                   <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
                     Status
                   </span>
+                  <div className="flex flex-col">
+                    <ChevronUp className={`w-3 h-3 -mb-1 ${sortConfig.key === "status" && sortConfig.direction === "asc" ? "text-blue-600" : "text-gray-300"}`} />
+                    <ChevronDown className={`w-3 h-3 ${sortConfig.key === "status" && sortConfig.direction === "desc" ? "text-blue-600" : "text-gray-300"}`} />
+                  </div>
+                  <div
+                    onMouseDown={handleContactColResizeStart("status")}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 bg-transparent"
+                  />
                 </div>
                 <div
                   className="flex items-center px-3 border-b border-[#E1E4EA] flex-1"
-                  style={{ width: "152px", background: "#F5F7FA" }}
+                  style={{ width: contactColWidths.actions, background: "#F5F7FA" }}
                 >
                   <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
                     Actions
@@ -2635,7 +2726,7 @@ function Contacts() {
                     </div>
                     <div
                       className="flex items-center gap-3 px-3 border-b border-gray-100"
-                      style={{ width: "235px" }}
+                      style={{ width: contactColWidths.name }}
                     >
                       <ProfilePicture contact={contact} />
                       <span
@@ -2648,7 +2739,7 @@ function Contacts() {
                     </div>
                     <div
                       className="flex items-center px-3 border-b border-gray-100"
-                      style={{ width: "207px" }}
+                      style={{ width: contactColWidths.company }}
                     >
                       <span
                         className="truncate"
@@ -2660,7 +2751,7 @@ function Contacts() {
                     </div>
                     <div
                       className="flex items-center px-3 border-b border-gray-100"
-                      style={{ width: "288px" }}
+                      style={{ width: contactColWidths.email }}
                     >
                       <span
                         className="truncate"
@@ -2672,7 +2763,7 @@ function Contacts() {
                     </div>
                     <div
                       className="flex items-center px-3 border-b border-gray-100"
-                      style={{ width: "196px" }}
+                      style={{ width: contactColWidths.phone }}
                     >
                       <span
                         className="truncate"
@@ -2684,7 +2775,7 @@ function Contacts() {
                     </div>
                     <div
                       className="flex items-center px-3 border-b border-gray-100"
-                      style={{ width: "198px" }}
+                      style={{ width: contactColWidths.status }}
                     >
                       <span
                         className="inline-flex items-center justify-center px-3 py-[5px] rounded-full"
@@ -2702,7 +2793,7 @@ function Contacts() {
                     </div>
                     <div
                       className="flex items-center gap-2 px-3 border-b border-gray-100 flex-1"
-                      style={{ width: "152px" }}
+                      style={{ width: contactColWidths.actions }}
                     >
                       <button
                         onClick={(e) => {

@@ -327,6 +327,34 @@ function App() {
     getAccessTokenSilently,
   ]);
 
+  // Scale the whole desktop layout to the viewport instead of letting fixed
+  // pixel widths (built for a ~1440px design) reflow/crop on other screen
+  // sizes. CSS `zoom` (not `transform: scale`) is used deliberately: it keeps
+  // position:fixed/portaled elements (headers, modals, dropdown menus)
+  // aligned automatically, since it behaves like the browser's native zoom
+  // rather than creating a new containing block.
+  useEffect(() => {
+    const DESIGN_WIDTH = 1440;
+    const MIN_ZOOM = 0.6;
+    const MAX_ZOOM = 1.3;
+
+    const applyZoom = () => {
+      if (window.innerWidth < 1024) {
+        document.documentElement.style.zoom = "";
+        return;
+      }
+      const zoom = Math.min(
+        MAX_ZOOM,
+        Math.max(MIN_ZOOM, window.innerWidth / DESIGN_WIDTH),
+      );
+      document.documentElement.style.zoom = zoom;
+    };
+
+    applyZoom();
+    window.addEventListener("resize", applyZoom);
+    return () => window.removeEventListener("resize", applyZoom);
+  }, []);
+
   // Handle history cleanup on mount to prevent back button access
   useEffect(() => {
     const isLoggedOut = !userIsAuthenticated;

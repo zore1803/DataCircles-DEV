@@ -251,33 +251,92 @@ const DroppableColumn = ({
   return (
     <div
       ref={setNodeRef}
-      className={`h-full flex flex-col flex-shrink-0 px-4 ${
-        isOver ? "bg-gray-50" : "bg-white"
-      } ${!isLast ? "border-r border-gray-100" : ""}`}
-      style={{ width: "350px" }}
+      className={`flex flex-col flex-shrink-0 ${isOver ? "bg-gray-50" : "bg-white"}`}
+      style={{
+        boxSizing: "border-box",
+        width: 340,
+        border: "1px solid #E7E7E9",
+        borderRadius: 12,
+        overflow: "hidden",
+      }}
     >
-      {/* --- Column Header (Pill Style) --- */}
-      <div className="py-4 mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      {/* --- Column Header --- */}
+      <div
+        className="flex flex-row items-center justify-between flex-shrink-0"
+        style={{
+          boxSizing: "border-box",
+          padding: "0px 18px",
+          gap: 6,
+          width: 340,
+          height: 46,
+          background: "#F5F7FA",
+        }}
+      >
+        <div className="flex flex-row items-center gap-2 flex-1 min-w-0">
           <span
-            className={`px-3 py-1.5 rounded-md text-xs font-bold ${getHeaderStyle(column)}`}
+            className="truncate"
+            style={{
+              fontFamily: "Inter",
+              fontWeight: 600,
+              fontSize: 12,
+              lineHeight: "15px",
+              letterSpacing: "-0.02em",
+              color: "#44444A",
+            }}
           >
             {column}
           </span>
-          <span className="text-sm font-medium text-gray-500">
-            {columnItems.length}
-          </span>
+          <div
+            className="flex flex-row justify-center items-center flex-shrink-0"
+            style={{
+              boxSizing: "border-box",
+              padding: "5px 8px",
+              minWidth: 22,
+              height: 22,
+              background: "#FFFFFF",
+              border: "1px solid #E5E5EC",
+              boxShadow: "0px 1px 2px rgba(82, 88, 102, 0.06)",
+              borderRadius: 20,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "Inter",
+                fontWeight: 600,
+                fontSize: 12,
+                lineHeight: "15px",
+                textAlign: "center",
+                letterSpacing: "-0.02em",
+                color: "#161618",
+              }}
+            >
+              {columnItems.length}
+            </span>
+          </div>
         </div>
         <button
           onClick={() => onAddTask && onAddTask(column)}
-          className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+          className="flex-shrink-0"
+          style={{ width: 16, height: 16 }}
         >
-          <Plus className="w-5 h-5" />
+          <MoreVertical className="w-4 h-4" style={{ color: "#BEBEC8" }} />
         </button>
       </div>
 
+      <div style={{ width: "100%", height: 1, background: "#E7E7E9", flexShrink: 0 }} />
+
       {/* --- Cards List --- */}
-      <div className="flex-1 overflow-y-auto pb-4 space-y-4 pr-2 custom-scrollbar">
+      <div
+        className="flex-1 overflow-y-auto custom-scrollbar"
+        style={{
+          boxSizing: "border-box",
+          padding: 20,
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+          minHeight: 200,
+        }}
+      >
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
           {columnItems.map((item) => (
             <SortableItem
@@ -379,7 +438,7 @@ const TaskKanbanBoard = ({
       onDragEnd={handleDragEnd}
     >
       <div className="h-full w-full overflow-x-auto overflow-y-hidden bg-white">
-        <div className="flex h-full min-w-max">
+        <div className="flex h-full min-w-max gap-4 p-4 items-start">
           {columns.map((col, index) => (
             <DroppableColumn
               key={col}

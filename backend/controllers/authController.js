@@ -1514,8 +1514,12 @@ exports.login = async (req, res, next) => {
     }
 
     // 5. Generate JWT
+    // sub uses a "password|<userId>" format so authMiddleware/userSyncMiddleware
+    // can recognize this as a local password-login token (mirrors the phone|
+    // token convention) instead of falling through to Auth0 JWKS verification.
     const token = jwt.sign(
       {
+        sub: `password|${user._id}`,
         user_id: user._id, // Mongoose uses _id
         role: user.role,
         organization: user.organization?._id,
@@ -1533,10 +1537,8 @@ exports.login = async (req, res, next) => {
     res.json({
       success: true,
       message: "Login successful",
-      data: {
-        token,
-        user: userResponse
-      },
+      token,
+      user: userResponse,
     });
   } catch (error) {
     next(error);

@@ -10,6 +10,7 @@ import {
   Search,
   Filter,
   MoreHorizontal,
+  MoreVertical,
   X,
   Calendar as CalendarIcon,
   Clock,
@@ -433,284 +434,146 @@ const AdminCalendar = () => {
 
   // --- Render ---
   return (
-    <div className="flex flex-col h-full bg-gray-50/50 w-full min-h-screen">
+    <div className="flex flex-col h-full bg-gray-50/50 min-h-screen -mx-4 sm:-mx-6 lg:-mx-8">
       <AppToaster />
 
-      {/* --- Page Header & Stats (New) --- */}
-      <div className="px-8 py-6 mb-2">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Admin Calendar</h1>
-          <p className="text-sm text-gray-500 mt-1">View all meetings and tasks across contacts, companies, and vendors</p>
+      <div
+        className="flex flex-col flex-shrink-0 self-stretch"
+        style={{
+          width: "100%",
+          background: "#FFFFFF",
+          borderBottom: "1px solid #E1E4EA",
+          borderRadius: 0,
+        }}
+      >
+      <div
+        className="box-border flex flex-row justify-between items-center flex-shrink-0 self-stretch"
+        style={{
+          padding: "0px 24px 12px",
+          gap: 16,
+          width: "100%",
+        }}
+      >
+        <div
+          className="flex flex-col items-start flex-shrink min-w-0"
+          style={{ gap: 6, height: 39 }}
+        >
+          <span
+            className="truncate w-full"
+            style={{
+              fontFamily: "Inter",
+              fontWeight: 500,
+              fontSize: 16,
+              lineHeight: "120%",
+              letterSpacing: "-0.5px",
+              color: "#0E121B",
+            }}
+          >
+            Calendar
+          </span>
+          <span
+            className="truncate w-full"
+            style={{
+              fontFamily: "Inter",
+              fontWeight: 400,
+              fontSize: 12,
+              lineHeight: "120%",
+              color: "#525866",
+            }}
+          >
+            View all meetings and tasks across contacts, companies and vendors
+          </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1: Meetings */}
-          <div className="bg-gradient-to-l from-blue-50 to-white border border-[#E5E5EC] rounded-xl p-5 shadow-sm">
-            <div className="flex justify-between items-start mb-4">
-              <span className="text-gray-600 text-sm font-medium">Meetings Scheduled</span>
-              <MoreHorizontal className="w-4 h-4 text-gray-400 cursor-pointer" />
-            </div>
-            <div className="flex items-end justify-between">
-              <span className="text-3xl font-bold text-gray-900">{totalMeetings}</span>
-              <span className="text-xs font-medium text-blue-600">+10% from last month</span>
-            </div>
+        <div
+          className="flex flex-row items-center flex-shrink-0"
+          style={{ gap: 12, height: 44 }}
+        >
+          <div
+            className="box-border flex flex-row items-center flex-shrink"
+            style={{
+              padding: "12px 14px",
+              gap: 10,
+              width: 416,
+              maxWidth: "40vw",
+              minWidth: 120,
+              height: 44,
+              border: "1px solid rgba(31, 41, 55, 0.1)",
+              borderRadius: 95,
+            }}
+          >
+            <Search size={20} style={{ color: "#1F2937", opacity: 0.5 }} />
+            <span
+              className="truncate"
+              style={{
+                fontFamily: "Inter",
+                fontWeight: 400,
+                fontSize: 14,
+                lineHeight: "20px",
+                color: "#1F2937",
+                opacity: 0.5,
+              }}
+            >
+              Search by events by name, task, or meeting...
+            </span>
           </div>
 
-          {/* Card 2: Tasks */}
-          <div className="bg-gradient-to-l from-red-50 to-white border border-[#E5E5EC] rounded-xl p-5 shadow-sm">
-            <div className="flex justify-between items-start mb-4">
-              <span className="text-gray-600 text-sm font-medium">Tasks Pending</span>
-              <MoreHorizontal className="w-4 h-4 text-gray-400 cursor-pointer" />
-            </div>
-            <div className="flex items-end justify-between">
-              <span className="text-3xl font-bold text-gray-900">{totalTasks}</span>
-              <span className="text-xs font-medium text-red-600">+10% from last month</span>
-            </div>
-          </div>
+          <button
+            className="box-border flex flex-row justify-center items-center flex-shrink-0"
+            style={{
+              padding: 12,
+              gap: 8,
+              width: 44,
+              height: 44,
+              background: "#FFFFFF",
+              border: "1px solid #E1E4EA",
+              borderRadius: 95,
+            }}
+          >
+            <Filter size={20} style={{ color: "#1F2937" }} />
+          </button>
 
-          {/* Card 3: High Priority */}
-          <div className="bg-gradient-to-l from-emerald-50 to-white border border-[#E5E5EC] rounded-xl p-5 shadow-sm">
-            <div className="flex justify-between items-start mb-4">
-              <span className="text-gray-600 text-sm font-medium">High Priority Meetings</span>
-              <MoreHorizontal className="w-4 h-4 text-gray-400 cursor-pointer" />
-            </div>
-            <div className="flex items-end justify-between">
-              <span className="text-3xl font-bold text-gray-900">{highPriorityMeetings}</span>
-              <span className="text-xs font-medium text-emerald-600">+10% from last month</span>
-            </div>
-          </div>
+          <button
+            className="box-border flex flex-row justify-center items-center flex-shrink-0"
+            style={{
+              padding: 12,
+              gap: 8,
+              width: 44,
+              height: 44,
+              background: "#FFFFFF",
+              border: "1px solid #E1E4EA",
+              borderRadius: 96,
+            }}
+          >
+            <MoreVertical size={20} style={{ color: "#1F2937" }} />
+          </button>
+
+          <button
+            className="flex flex-row justify-center items-center flex-shrink-0"
+            style={{
+              padding: 12,
+              gap: 6,
+              width: 146,
+              height: 44,
+              background: "#0085FF",
+              borderRadius: 96,
+            }}
+          >
+            <Plus size={20} style={{ color: "#FFFFFF" }} />
+            <span
+              style={{
+                fontFamily: "Inter",
+                fontWeight: 500,
+                fontSize: 14,
+                lineHeight: "20px",
+                color: "#FFFFFF",
+              }}
+            >
+              Add Activity
+            </span>
+          </button>
         </div>
       </div>
-
-      {/* --- Calendar Container --- */}
-      <div className="flex flex-col flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mx-6 mb-6">
-
-        {/* Header Section */}
-        <div className="flex flex-col bg-white">
-          {/* Top Row: Navigation and Actions */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between px-6 py-4 gap-4 border-b border-gray-100">
-            {/* Left: Navigation Group */}
-            {/* Left: Navigation Group */}
-            <div className="flex items-center border border-gray-200 rounded-md shadow-sm">
-              <button
-                onClick={() => {
-                  const newDate = new Date(currentDate);
-                  if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
-                  else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
-                  else newDate.setDate(newDate.getDate() - 1);
-                  setCurrentDate(newDate);
-                }}
-                className="p-2 border-r border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <div className="px-4 py-1.5 text-sm font-semibold text-gray-900 min-w-[140px] text-center bg-white">
-                {(view === 'month' || view === 'week') && currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                {view === 'day' && currentDate.toLocaleDateString()}
-              </div>
-              <button
-                onClick={() => {
-                  const newDate = new Date(currentDate);
-                  if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
-                  else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
-                  else newDate.setDate(newDate.getDate() + 1);
-                  setCurrentDate(newDate);
-                }}
-                className="p-2 border-l border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Right: Actions */}
-            <div className="flex items-center gap-3">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search Events"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-64"
-                />
-              </div>
-
-              {/* Filter */}
-              <button
-                onClick={() => {/* To be implemented */ }}
-                className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 bg-white"
-              >
-                <Filter className="w-4 h-4" />
-                Filter
-              </button>
-
-              {/* Settings */}
-              <button className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 bg-white">
-                <MoreHorizontal className="w-4 h-4" />
-                Settings
-              </button>
-            </div>
-          </div>
-
-          {/* Bottom Row: Tabs */}
-          <div className="flex items-center px-6 border-b border-gray-200">
-            <button
-              onClick={() => setView("month")}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${view === "month" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-            >
-              <CalendarIcon className="w-4 h-4" />
-              Month
-            </button>
-            <button
-              onClick={() => setView("week")}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${view === "week" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-            >
-              <CalendarIcon className="w-4 h-4" />
-              Week
-            </button>
-            <button
-              onClick={() => setView("day")}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${view === "day" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-            >
-              <CalendarIcon className="w-4 h-4" />
-              Day
-            </button>
-          </div>
-        </div>
-
-        {/* Calendar Grid Container */}
-        <div className="flex-1 overflow-auto bg-gray-50 flex flex-col">
-
-          {/* MONTH VIEW */}
-          {view === 'month' && (
-            <>
-              <div className="grid grid-cols-7 border-b border-gray-200 bg-white sticky top-0 z-10 shadow-sm">
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                  <div key={day} className="py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    {day}
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-7 auto-rows-fr bg-gray-200 gap-px border-b border-gray-200 flex-1">
-                {calendarDays.map((dayObj, idx) => {
-                  const dateKey = dayObj.date.toDateString();
-                  const isToday = dayObj.date.toDateString() === today.toDateString();
-
-                  // Filter Items
-                  const dayMeetings = filters.meetings ? (meetings[dateKey] || []) : [];
-                  const dayTasks = filters.tasks ? (tasks[dateKey] || []) : [];
-
-                  // Search Filter
-                  const filterBySearch = (item) => {
-                    if (!searchTerm) return true;
-                    return item.title.toLowerCase().includes(searchTerm.toLowerCase());
-                  };
-
-                  const filteredItems = [
-                    ...dayMeetings.map(m => ({ ...m, type: 'meeting' })),
-                    ...dayTasks.map(t => ({ ...t, type: 'task' }))
-                  ].filter(filterBySearch);
-
-                  return (
-                    <div
-                      key={idx}
-                      onClick={(e) => handleDayClick(e, dayObj.date)}
-                      className={`min-h-[140px] bg-white p-2 transition-colors hover:bg-gray-50 flex flex-col gap-1 relative group
-                              ${!dayObj.isCurrent ? "bg-gray-50/50" : ""}
-                            `}
-                    >
-                      <div className="flex items-center justify-between pointer-events-none">
-                        <span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full
-                                    ${isToday ? "bg-blue-600 text-white" : dayObj.isCurrent ? "text-gray-900" : "text-gray-400"}
-                                `}>
-                          {dayObj.date.getDate()}
-                        </span>
-                        {dayObj.isCurrent && (
-                          <button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded text-gray-400 pointer-events-auto transition-opacity">
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="flex-1 overflow-y-auto no-scrollbar space-y-1 mt-1">
-                        {filteredItems.map(item => (
-                          <EventCard
-                            key={item._id}
-                            item={item}
-                            type={item.type}
-                            onClick={() => handleEventClick(item, item.type)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {/* WEEK VIEW */}
-          {view === 'week' && (
-            <WeekView
-              currentDate={currentDate}
-              meetings={meetings}
-              tasks={tasks}
-              onEventClick={handleEventClick}
-            />
-          )}
-
-          {/* DAY VIEW (Placeholder) */}
-          {view === 'day' && (
-            <div className="flex items-center justify-center h-full text-gray-500">Day View Coming Soon</div>
-          )}
-
-        </div>
-
-        {/* Quick Add Menu */}
-        <QuickAddMenu
-          isOpen={!!quickAddPos}
-          position={quickAddPos || { x: 0, y: 0 }}
-          onClose={() => setQuickAddPos(null)}
-          onAddType={handleCreate}
-        />
-
-        {/* Existing Forms */}
-        {modalType === "meeting" && (
-          <AdminMeetingForm
-            open={modalOpen}
-            mode={modalMode}
-            meetingData={modalMode !== 'create' ? selectedItem : undefined}
-            calendarDate={formatDateForForm(selectedDateForAdd)}
-            users={users}
-            contacts={contacts}
-            companies={companies}
-            vendors={vendors}
-            onSave={(form) => handleSave(form, "meeting")}
-            onDelete={(id) => handleDelete(id, "meeting")}
-            onClose={() => setModalOpen(false)}
-          />
-        )}
-        {modalType === "task" && (
-          <AdminTaskForm
-            open={modalOpen}
-            mode={modalMode}
-            taskData={modalMode !== 'create' ? selectedItem : undefined}
-            calendarDate={formatDateForForm(selectedDateForAdd)}
-            users={users}
-            contacts={contacts}
-            companies={companies}
-            vendors={vendors}
-            onSave={(form) => handleSave(form, "task")}
-            onDelete={(id) => handleDelete(id, "task")}
-            onUpdate={fetchData}
-            onClose={() => setModalOpen(false)}
-          />
-        )}
       </div>
     </div>
   );
