@@ -2219,7 +2219,7 @@ function Deals() {
         </div>
       </div>
 
-      <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6 space-y-8">
+      <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pt-6 pb-6 space-y-8">
         {/* Filter Panel */}
         {showFilters && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 animate-slide-down">

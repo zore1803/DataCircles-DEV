@@ -1575,8 +1575,9 @@ function Companies() {
         {showHotlist ? (
           <Hotlist />
         ) : (
+          <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 mt-6">
           <div
-            className={`relative bg-white overflow-hidden border border-[#E1E4EA] rounded-lg mx-4 mt-6 ${loading ? "pointer-events-none opacity-60" : ""}`}
+            className={`relative bg-white overflow-hidden border border-[#E1E4EA] rounded-lg ${loading ? "pointer-events-none opacity-60" : ""}`}
           >
             <div className="overflow-x-auto overflow-y-visible">
               <table
@@ -1696,10 +1697,11 @@ function Companies() {
               </table>
             </div>
           </div>
+          </div>
         )}
 
         {!loading && !showHotlist && (
-          <div className="mx-4 pb-6">
+          <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6">
             <PaginationControls />
           </div>
         )}
