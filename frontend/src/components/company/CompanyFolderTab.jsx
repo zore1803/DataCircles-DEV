@@ -1,26 +1,11 @@
-import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useState } from "react";
 import { Files, Cloud, Upload, History } from "lucide-react";
-import API from "../../services/api";
 import Folder from "./Folder";
 
 const STORAGE_ALLOCATION_GB = 5;
 
 export default function CompanyFolderTab() {
-  const { id } = useParams();
   const [folders, setFolders] = useState([]);
-
-  useEffect(() => {
-    const fetchFolders = async () => {
-      try {
-        const res = await API.get("/folders", { params: { companyId: id } });
-        setFolders(res.data || []);
-      } catch (err) {
-        console.error("Failed to load folder stats:", err);
-      }
-    };
-    fetchFolders();
-  }, [id]);
 
   const allFiles = folders.flatMap((f) => f.files || []);
   const totalFiles = allFiles.length;
@@ -121,8 +106,10 @@ export default function CompanyFolderTab() {
         ))}
       </div>
 
+      <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
+
       {/* Existing folder UI (its own search/grid/upload) */}
-      <Folder />
+      <Folder onFoldersChange={setFolders} />
     </div>
   );
 }

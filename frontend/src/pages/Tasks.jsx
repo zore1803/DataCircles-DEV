@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import API from "../services/api";
 import TaskForm from "../components/Task/TaskForm";
 import AdminMeetingForm from "../components/admin/AdminMeetingForm";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   Search,
@@ -14,7 +14,6 @@ import {
   Edit2,
   Trash2,
   Plus,
-  Filter,
   Calendar,
   Users,
   X,
@@ -28,7 +27,6 @@ import {
   Upload,
   MoreVertical,
   CheckCircle,
-  List,
   Layout,
 } from "lucide-react";
 import BulkActions from "../components/BulkActions";
@@ -47,6 +45,33 @@ import {
   createColumnHelper,
 } from "@tanstack/react-table";
 import AppToaster from "../components/AppToaster";
+
+const TuneFilterIcon = (props) => (
+  <svg viewBox="433 15 24 24" width={16} height={16} fill="none" {...props}>
+    <path
+      d="M444.167 19.8346C444.167 19.1443 444.726 18.5846 445.417 18.5846C446.107 18.5846 446.667 19.1443 446.667 19.8346C446.667 20.525 446.107 21.0846 445.417 21.0846C444.726 21.0846 444.167 20.525 444.167 19.8346ZM445.417 16.918C443.806 16.918 442.5 18.2238 442.5 19.8346C442.5 21.4455 443.806 22.7513 445.417 22.7513C447.027 22.7513 448.333 21.4455 448.333 19.8346C448.333 18.2238 447.027 16.918 445.417 16.918ZM450 20.668H456.667V19.0013H450V20.668ZM453.333 28.168C453.333 27.4776 453.893 26.918 454.583 26.918C455.274 26.918 455.833 27.4776 455.833 28.168C455.833 28.8583 455.274 29.418 454.583 29.418C453.893 29.418 453.333 28.8583 453.333 28.168ZM454.583 25.2513C452.972 25.2513 451.667 26.5571 451.667 28.168C451.667 29.7788 452.972 31.0846 454.583 31.0846C456.194 31.0846 457.5 29.7788 457.5 28.168C457.5 26.5571 456.194 25.2513 454.583 25.2513ZM443.333 27.3346V29.0013H450V27.3346H443.333Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+const CustomListIcon = (props) => (
+  <svg viewBox="498.5 16.917 15 14.167" width={16} height={16} fill="none" {...props}>
+    <path
+      d="M502.667 17.3337H513.5V19.0003H502.667V17.3337ZM498.5 16.917H501V19.417H498.5V16.917ZM498.5 22.7503H501V25.2503H498.5V22.7503ZM498.5 28.5837H501V31.0837H498.5V28.5837ZM502.667 23.167H513.5V24.8337H502.667V23.167ZM502.667 29.0003H513.5V30.667H502.667V29.0003Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+const CustomKanbanIcon = (props) => (
+  <svg viewBox="538 14 20 20" width={16} height={16} fill="none" {...props}>
+    <path
+      d="M543.833 28.1667H545.5V19.8333H543.833V28.1667ZM550.5 26.5H552.167V19.8333H550.5V26.5ZM547.167 24H548.833V19.8333H547.167V24ZM542.167 31.5C541.708 31.5 541.316 31.3368 540.99 31.0104C540.663 30.684 540.5 30.2917 540.5 29.8333V18.1667C540.5 17.7083 540.663 17.316 540.99 16.9896C541.316 16.6632 541.708 16.5 542.167 16.5H553.833C554.292 16.5 554.684 16.6632 555.01 16.9896C555.337 17.316 555.5 17.7083 555.5 18.1667V29.8333C555.5 30.2917 555.337 30.684 555.01 31.0104C554.684 31.3368 554.292 31.5 553.833 31.5H542.167ZM542.167 29.8333H553.833V18.1667H542.167V29.8333Z"
+      fill="currentColor"
+    />
+  </svg>
+);
 
 // Task Status Dropdown Component
 const StatusSelect = ({ task, onUpdate }) => {
@@ -1633,80 +1658,242 @@ function Tasks() {
       />
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 mt-5 gap-4">
-        <div className="flex items-center gap-3">
-          <div className="mb-10 mt-10">
-            <div className="flex items-center gap-2 mb-1">
-              <Link
-                to="/"
-                className="text-gray-500 hover:text-gray-900 text-sm font-medium"
-              >
-                Dashboard
-              </Link>
-            </div>
-            <h1 className="font-bold text-3xl font-sf text-gray-900">
-              Tasks and Meetings
-            </h1>
-            <p className="text-sm text-gray-500 font-inter">
-              Manage your customer relationships
-            </p>
-          </div>
+      <div
+        className="flex flex-row justify-between items-center"
+        style={{
+          boxSizing: "border-box",
+          padding: "12px 24px",
+          gap: 16,
+          width: "100%",
+          height: 72,
+          background: "#FFFFFF",
+          borderBottom: "1px solid #E1E4EA",
+        }}
+      >
+        <div className="flex flex-col items-start" style={{ gap: 6 }}>
+          <span
+            style={{
+              fontFamily: "Inter",
+              fontWeight: 500,
+              fontSize: 16,
+              lineHeight: "120%",
+              letterSpacing: "-0.5px",
+              color: "#0E121B",
+            }}
+          >
+            Tasks & Meetings
+          </span>
+          <span
+            style={{
+              fontFamily: "Inter",
+              fontWeight: 400,
+              fontSize: 12,
+              lineHeight: "120%",
+              color: "#525866",
+            }}
+          >
+            Manage your Tasks & reminders
+          </span>
+        </div>
+        <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
+          <button
+            className="flex items-center justify-center flex-shrink-0"
+            style={{
+              width: 44,
+              height: 44,
+              background: "#FFFFFF",
+              border: "1px solid #E1E4EA",
+              borderRadius: 96,
+            }}
+          >
+            <MoreVertical size={20} style={{ color: "#1F2937" }} />
+          </button>
+          <button
+            className="flex items-center justify-center flex-shrink-0"
+            style={{
+              padding: 12,
+              gap: 6,
+              width: 146,
+              height: 44,
+              background: "#0085FF",
+              borderRadius: 96,
+            }}
+          >
+            <Plus size={20} style={{ color: "#FFFFFF" }} />
+            <span
+              style={{
+                fontFamily: "Inter",
+                fontWeight: 500,
+                fontSize: 14,
+                lineHeight: "20px",
+                color: "#FFFFFF",
+              }}
+            >
+              New Activity
+            </span>
+          </button>
         </div>
       </div>
 
       {/* Main Content Card */}
       <div className="bg-white overflow-hidden border-b border-gray-100">
-        {/* ======================= TABS ======================= */}
-        <div className="border-b border-gray-200 bg-white">
-          <nav className="flex px-4 sm:px-6 gap-6 overflow-x-auto">
+        {/* ======================= TABBING STRIP ======================= */}
+        <div
+          className="flex flex-row justify-between items-center"
+          style={{
+            boxSizing: "border-box",
+            padding: "0px 24px",
+            width: "100%",
+            height: 64,
+            background: "#FFFFFF",
+            borderBottom: "1px solid #F1F1F5",
+          }}
+        >
+          <div className="flex flex-row items-center flex-shrink-0" style={{ height: 64 }}>
             <button
               onClick={() => setActiveTab("tasks")}
-              className={`group flex items-center gap-2 py-4 px-1 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
-                activeTab === "tasks"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
+              className="flex flex-row justify-center items-center flex-shrink-0"
+              style={{
+                boxSizing: "border-box",
+                padding: "0px 16px",
+                gap: 10,
+                height: 64,
+                borderBottom: activeTab === "tasks" ? "3px solid #0085FF" : "3px solid transparent",
+                fontFamily: "Inter",
+                fontWeight: 600,
+                fontSize: 14,
+                lineHeight: "150%",
+                letterSpacing: "-0.02em",
+                color: activeTab === "tasks" ? "#0085FF" : "#44444A",
+                whiteSpace: "nowrap",
+              }}
             >
-              <List
-                className={`w-4 h-4 ${activeTab === "tasks" ? "text-blue-600" : "text-gray-400 group-hover:text-gray-500"}`}
-              />
               Tasks
             </button>
             <button
               onClick={() => setActiveTab("meetings")}
-              className={`group flex items-center gap-2 py-4 px-1 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
-                activeTab === "meetings"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
+              className="flex flex-row justify-center items-center flex-shrink-0"
+              style={{
+                boxSizing: "border-box",
+                padding: "0px 16px",
+                gap: 10,
+                height: 64,
+                borderBottom: activeTab === "meetings" ? "3px solid #0085FF" : "3px solid transparent",
+                fontFamily: "Inter",
+                fontWeight: 600,
+                fontSize: 14,
+                lineHeight: "150%",
+                letterSpacing: "-0.02em",
+                color: activeTab === "meetings" ? "#0085FF" : "#44444A",
+                whiteSpace: "nowrap",
+              }}
             >
-              <Calendar
-                className={`w-4 h-4 ${activeTab === "meetings" ? "text-blue-600" : "text-gray-400 group-hover:text-gray-500"}`}
-              />
               Meetings
             </button>
-          </nav>
+          </div>
+
+          <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
+            <div
+              className="flex flex-row items-center flex-shrink-0"
+              style={{
+                boxSizing: "border-box",
+                padding: "12px 14px",
+                gap: 10,
+                width: 416,
+                height: 44,
+                border: "1px solid rgba(31, 41, 55, 0.1)",
+                borderRadius: 95,
+              }}
+            >
+              <Search className="w-5 h-5 flex-shrink-0" style={{ color: "#1F2937", opacity: 0.5 }} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1 bg-transparent focus:outline-none"
+                style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 14, lineHeight: "20px", color: "#1F2937" }}
+                placeholder={
+                  activeTab === "tasks"
+                    ? "Search Task by Title or Description..."
+                    : "Search Meetings by Title..."
+                }
+              />
+            </div>
+
+            <button
+              onClick={() => {
+                setShowMobileFilters(!showMobileFilters);
+                toast("Filter options toggled", { icon: "🔍" });
+              }}
+              className="flex flex-row justify-center items-center flex-shrink-0"
+              style={{
+                boxSizing: "border-box",
+                padding: 12,
+                gap: 8,
+                width: 44,
+                height: 44,
+                background: "#FFFFFF",
+                border: "1px solid #E1E4EA",
+                borderRadius: 95,
+              }}
+            >
+              <TuneFilterIcon style={{ color: "#1F2937" }} />
+            </button>
+
+            {activeTab === "tasks" && (
+              <div
+                className="flex flex-row items-center flex-shrink-0"
+                style={{ padding: 4, gap: 4, width: 68, height: 44, background: "#F1F1F5", borderRadius: 95 }}
+              >
+                <button
+                  onClick={() => setShowKanban(false)}
+                  className="flex flex-row justify-center items-center flex-shrink-0"
+                  style={{
+                    padding: 5,
+                    gap: 10,
+                    width: 28,
+                    height: 28,
+                    background: !showKanban ? "#FFFFFF" : "transparent",
+                    boxShadow: !showKanban ? "0px 0px 6px rgba(0, 0, 0, 0.1)" : "none",
+                    borderRadius: 95,
+                  }}
+                >
+                  <CustomListIcon style={{ color: !showKanban ? "#0085FF" : "#525252" }} />
+                </button>
+                <button
+                  onClick={() => setShowKanban(true)}
+                  className="flex flex-row justify-center items-center flex-shrink-0"
+                  style={{
+                    padding: 5,
+                    gap: 10,
+                    width: 28,
+                    height: 28,
+                    background: showKanban ? "#FFFFFF" : "transparent",
+                    boxShadow: showKanban ? "0px 0px 6px rgba(0, 0, 0, 0.1)" : "none",
+                    borderRadius: 96,
+                  }}
+                >
+                  <CustomKanbanIcon style={{ color: showKanban ? "#0085FF" : "#525252" }} />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* ======================= SUB-HEADER (Search, Filter, View Toggle) ======================= */}
-        <div className="p-4 sm:p-6 mb-2">
-          <div className="flex flex-col gap-4">
-            {/* Search Row */}
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full sm:w-[70%] pl-10 pr-4 py-2.5 border border-[#E0E0E1] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-colors font-inter bg-gradient-to-r from-white to-blue-100"
-                  placeholder={
-                    activeTab === "tasks"
-                      ? "Search Task by Title or Description..."
-                      : "Search Meetings by Title..."
-                  }
-                />
-              </div>
+        {/* ======================= SUB-HEADER (New Task/Meeting, Export) ======================= */}
+        <div
+          className="border-b border-[#E1E4EA] flex items-center justify-end px-6"
+          style={{ height: 64, minHeight: 64, maxHeight: 64, boxSizing: "border-box" }}
+        >
+          <div className="flex flex-row items-center gap-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleExport}
+                className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </button>
 
               <button
                 onClick={
@@ -1717,59 +1904,6 @@ function Tasks() {
                 <Plus className="w-4 h-4" />
                 {activeTab === "tasks" ? "New Task" : "New Meeting"}
               </button>
-            </div>
-
-            {/* Second Row: View Toggle (Tasks Only) and Filters */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mt-2">
-              {/* Left: View Toggle */}
-              {activeTab === "tasks" ? (
-                <div className="flex space-x-6 border-b border-transparent">
-                  <button
-                    onClick={() => setShowKanban(false)}
-                    className={`pb-2 text-sm font-bold transition-colors relative ${
-                      !showKanban
-                        ? "text-blue-600 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-blue-600"
-                        : "text-gray-500 hover:text-gray-800"
-                    }`}
-                  >
-                    List View
-                  </button>
-                  <button
-                    onClick={() => setShowKanban(true)}
-                    className={`pb-2 text-sm font-bold transition-colors relative ${
-                      showKanban
-                        ? "text-blue-600 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-blue-600"
-                        : "text-gray-500 hover:text-gray-800"
-                    }`}
-                  >
-                    Kanban View
-                  </button>
-                </div>
-              ) : (
-                <div></div> /* Spacer for meetings tab */
-              )}
-
-              {/* Right: Filters / Import */}
-              <div className="flex items-center gap-4 self-end sm:self-auto">
-                <button
-                  onClick={handleExport}
-                  className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors cursor-pointer"
-                >
-                  <Download className="w-4 h-4" />
-                  Export
-                </button>
-
-                <button
-                  className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors cursor-pointer"
-                  onClick={() => {
-                    setShowMobileFilters(!showMobileFilters);
-                    toast("Filter options toggled", { icon: "🔍" });
-                  }}
-                >
-                  <Filter className="w-4 h-4" />
-                  Filter
-                </button>
-              </div>
             </div>
           </div>
         </div>

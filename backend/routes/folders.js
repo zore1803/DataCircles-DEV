@@ -20,8 +20,8 @@ router.post('/',
 router.post('/upload',
   requireAuth,
   subscriptionGate,
-  restrictByPlan('folders', 'write'),
   uploadMiddlewareS3().array('files', 10),
+  restrictByPlan('folders', 'write'),
   folderController.uploadFiles
 );
 

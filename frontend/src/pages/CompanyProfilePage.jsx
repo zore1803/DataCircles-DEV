@@ -56,7 +56,7 @@ const tabs = [
   "Notes",
   "Tasks",
   "Meetings",
-  "Folder",
+  "Folders",
   "Calendar",
 ];
 
@@ -705,7 +705,7 @@ const CompanyProfilePage = () => {
         )}
 
         {/* Separator */}
-        <div className="border-b border-gray-200 mb-4"></div>
+        <div className="border-b border-gray-200 mb-4 -mx-6"></div>
 
         {/* Tab Row: pill tab selector + switcher/New Entry */}
         <div className="flex items-center justify-between mb-4 gap-3">
@@ -1181,7 +1181,7 @@ const CompanyProfilePage = () => {
                       Key Files ({keyFiles.length})
                     </h3>
                     <button
-                      onClick={() => setActiveTab("Folder")}
+                      onClick={() => setActiveTab("Folders")}
                       className="text-xs font-medium text-blue-600 hover:text-blue-700"
                     >
                       View All
@@ -1246,7 +1246,7 @@ const CompanyProfilePage = () => {
                 setMeetings={setMeetings}
               />
             )}
-            {activeTab === "Folder" && <CompanyFolderTab />}
+            {activeTab === "Folders" && <CompanyFolderTab />}
             {activeTab === "Calendar" && <CompanyCalendar companyId={id} />}
         </div>
       </div>
