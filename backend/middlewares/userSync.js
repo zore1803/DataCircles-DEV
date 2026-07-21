@@ -28,6 +28,16 @@ module.exports = async (req, res, next) => {
   const provider = sub.split('|')[0];
   let updated = false;
 
+  if (provider === 'password') {
+    const userId = sub.split('|')[1];
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(401).json({ message: 'User not found' });
+    }
+    req.user = user;
+    return next();
+  }
+
   if (provider === 'phone') {
     const phone = sub.split('|')[1];
     let user = await User.findOne({ phone });

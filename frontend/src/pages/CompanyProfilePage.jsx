@@ -766,6 +766,8 @@ const CompanyProfilePage = () => {
           </div>
         </div>
 
+        <div className="border-b border-gray-200 mb-4 -mx-6"></div>
+
         {/* Summary Stats Row */}
         {showStats && activeTab === "Overview" && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">

@@ -64,6 +64,25 @@ module.exports = (req, res, next) => {
       console.error('Phone token validation failed:', err);
       return res.status(401).json({ message: 'Invalid phone token', error: err.message });
     }
+  } else if (decoded.sub && decoded.sub.startsWith('password|')) {
+    // Handle local email/password login tokens (sub starts with 'password|')
+    try {
+      const secret = process.env.JWT_SECRET;
+      if (!secret) {
+        console.error('JWT_SECRET is not defined');
+        return res.status(500).json({ message: 'Server configuration error' });
+      }
+
+      jsonwebtoken.verify(token, secret, {
+        algorithms: ['HS256'],
+      });
+
+      req.auth = decoded;
+      next();
+    } catch (err) {
+      console.error('Password token validation failed:', err);
+      return res.status(401).json({ message: 'Invalid token', error: err.message });
+    }
   } else {
     // Handle Auth0-based JWT tokens
     // console.log('Processing Auth0 token');

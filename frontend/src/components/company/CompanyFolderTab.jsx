@@ -97,7 +97,7 @@ export default function CompanyFolderTab() {
                 </p>
               </div>
               {tile.subtitle && (
-                <span className={`text-[11px] flex-shrink-0 whitespace-nowrap ${tile.subtitleClass}`}>
+                <span className={`text-[11px] truncate min-w-0 max-w-[55%] ${tile.subtitleClass}`}>
                   {tile.subtitle}
                 </span>
               )}

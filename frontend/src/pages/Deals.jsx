@@ -2174,8 +2174,8 @@ function Deals() {
       </div>
 
       <div
-        className="box-border -mx-4 sm:-mx-6 lg:-mx-8 flex flex-col justify-center items-start border-b border-[#E1E4EA]"
-        style={{ padding: "24px", gap: "24px", height: "120px" }}
+        className="box-border -mx-4 sm:-mx-6 lg:-mx-8 flex flex-col justify-start items-start border-b border-[#E1E4EA]"
+        style={{ paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24, height: "120px" }}
       >
         {/* KPI Strip */}
         <div className="flex flex-row items-center self-stretch" style={{ gap: "24px", height: "72px" }}>
@@ -2219,7 +2219,7 @@ function Deals() {
         </div>
       </div>
 
-      <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 py-6 space-y-8">
+      <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6 space-y-8">
         {/* Filter Panel */}
         {showFilters && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 animate-slide-down">
