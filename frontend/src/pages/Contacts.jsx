@@ -2432,7 +2432,7 @@ function Contacts() {
 
         {/* Content Area */}
         {showKanban ? (
-          <div className="flex gap-4 mx-4 sm:mx-6 mt-6 mb-2 overflow-x-auto">
+          <div className="flex gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-6 mt-6 mb-2 overflow-x-auto">
             {["New", "Contacted", "Interested", "Unqualified"].map((col) => {
               const count = sortedContacts.filter(
                 (c) => (c.stageStatus || "New") === col
@@ -2549,7 +2549,7 @@ function Contacts() {
           <>
             {/* Active Filters Display */}
             {statusFilter && (
-              <div className="mx-4 sm:mx-6 mt-4 mb-4 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="mx-6 mt-4 mb-4 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-blue-700 font-semibold">
                     Active Filter:
@@ -2567,7 +2567,8 @@ function Contacts() {
               </div>
             )}
 
-            <div className="border border-[#E1E4EA] rounded-lg mx-4 sm:mx-6 mt-6 mb-2 overflow-hidden">
+            <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 mt-6 mb-2">
+            <div className="border border-[#E1E4EA] rounded-lg overflow-hidden">
               <div className="flex" style={{ height: "56px" }}>
                 <div
                   className="flex items-center px-3 border-b border-[#E1E4EA] text-left"
@@ -2829,6 +2830,7 @@ function Contacts() {
                   </div>
                 ))
               )}
+            </div>
             </div>
 
             {!loading && <PaginationControls />}
