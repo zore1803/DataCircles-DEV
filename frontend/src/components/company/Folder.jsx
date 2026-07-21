@@ -11,6 +11,7 @@ import {
   File,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   Upload,
   Trash2,
   Download,
@@ -968,6 +969,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
   const companyId = propCompanyId || paramCompanyId;
   const [folders, setFolders] = useState([]);
   const [selectedFolderId, setSelectedFolderId] = useState("");
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [selectedFileNames, setSelectedFileNames] = useState([]);
   const [fileSearchTerm, setFileSearchTerm] = useState("");
   const [openFolderId, setOpenFolderId] = useState("");
@@ -1778,103 +1780,295 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
 
         {/* Upload Section */}
         {selectedFolderId && (
-          <div className="bg-white border border-gray-200 rounded-lg p-3 mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-sm font-medium text-gray-900">
-                  Add to: {selectedFolder?.name}
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+            onClick={() => {
+              setSelectedFolderId("");
+              setNewFiles([]);
+              setUploadMode("file");
+            }}
+          >
+            <div
+              className="flex flex-col items-start bg-white"
+              style={{
+                boxSizing: "border-box",
+                width: 400,
+                height: 444,
+                border: "1px solid #EBEBEB",
+                borderRadius: 8,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div
+                className="flex items-center flex-shrink-0"
+                style={{
+                  boxSizing: "border-box",
+                  width: 400,
+                  height: 52,
+                  padding: "16px 20px",
+                  gap: 12,
+                  borderBottom: "1px solid #EBEBEB",
+                }}
+              >
+                <p
+                  className="flex-1"
+                  style={{
+                    fontFamily: "Inter Tight",
+                    fontWeight: 500,
+                    fontSize: 16,
+                    lineHeight: "120%",
+                    color: "#171717",
+                  }}
+                >
+                  Upload Files
                 </p>
-                <p className="text-xs text-gray-600">
-                  Upload files or add links
-                </p>
+                <button
+                  onClick={() => {
+                    setSelectedFolderId("");
+                    setNewFiles([]);
+                    setUploadMode("file");
+                  }}
+                  className="hover:opacity-70 transition-opacity flex-shrink-0"
+                >
+                  <X size={20} style={{ color: "#5D5D5C" }} />
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  setSelectedFolderId("");
-                  setNewFiles([]);
-                  setUploadMode("file");
-                }}
-                className="p-1 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            {/* Mode Toggle */}
-            <div className="flex gap-2 mb-3">
-              <button
-                onClick={() => setUploadMode("file")}
-                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  uploadMode === "file"
-                    ? "bg-gray-900 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                <Upload className="w-4 h-4" />
-                Upload Files
-              </button>
-              <button
-                onClick={() => {
-                  setUploadMode("link");
-                  setLinkModalOpen(true);
-                }}
-                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  uploadMode === "link"
-                    ? "bg-gray-900 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                <LinkIcon className="w-4 h-4" />
-                Add Link
-              </button>
-            </div>
+              <div style={{ boxSizing: "border-box", width: 400, padding: "20px 20px 0" }}>
+                <div className="flex flex-col items-start self-stretch" style={{ width: 360, gap: 4 }}>
+                  <label
+                    style={{
+                      fontFamily: "Inter Tight",
+                      fontWeight: 500,
+                      fontSize: 14,
+                      lineHeight: "120%",
+                      color: "#171717",
+                    }}
+                  >
+                    Upload to
+                  </label>
+                  <div
+                    className="relative flex items-center self-stretch cursor-pointer"
+                    style={{
+                      boxSizing: "border-box",
+                      padding: "10px 10px 10px 12px",
+                      gap: 8,
+                      height: 40,
+                      background: "#FFFFFF",
+                      border: "1px solid #EBEBEB",
+                      boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
+                      borderRadius: 8,
+                    }}
+                    onClick={() => setFolderPickerOpen((prev) => !prev)}
+                  >
+                    <span
+                      className="flex-1 truncate"
+                      style={{
+                        fontFamily: "Inter Tight",
+                        fontWeight: 400,
+                        fontSize: 14,
+                        lineHeight: "120%",
+                        color: "#171717",
+                      }}
+                    >
+                      {selectedFolder?.name || "Select folder"}
+                    </span>
+                    <ChevronDown size={20} style={{ color: "#5C5C5C" }} />
 
-            {uploadMode === "file" && (
-              <div className="space-y-3">
-                <input
-                  type="file"
-                  multiple
-                  onChange={handleFileChange}
-                  className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 cursor-pointer"
-                />
-
-                {newFiles.length > 0 && (
-                  <div className="bg-gray-50 rounded p-2">
-                    <p className="text-xs font-medium text-gray-900 mb-1">
-                      {newFiles.length} file(s) selected
-                    </p>
-                    {newFiles.slice(0, 2).map((file, idx) => (
-                      <p key={idx} className="text-xs text-gray-600 truncate">
-                        {file.name}
-                      </p>
-                    ))}
-                    {newFiles.length > 2 && (
-                      <p className="text-xs text-gray-500">
-                        +{newFiles.length - 2} more
-                      </p>
+                    {folderPickerOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFolderPickerOpen(false);
+                          }}
+                        />
+                        <div
+                          className="absolute left-0 top-full mt-1 bg-white overflow-y-auto z-20"
+                          style={{
+                            boxSizing: "border-box",
+                            width: "100%",
+                            maxHeight: 4 * 40,
+                            border: "1px solid #EBEBEB",
+                            borderRadius: 8,
+                            boxShadow: "0px 4px 12px rgba(10, 13, 20, 0.08)",
+                          }}
+                        >
+                          {folders.map((f) => (
+                            <div
+                              key={f._id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedFolderId(f._id);
+                                setFolderPickerOpen(false);
+                              }}
+                              className="flex items-center hover:bg-gray-50 cursor-pointer truncate"
+                              style={{
+                                boxSizing: "border-box",
+                                height: 40,
+                                padding: "10px 12px",
+                                background: f._id === selectedFolderId ? "#F5F7FA" : "#FFFFFF",
+                                fontFamily: "Inter Tight",
+                                fontWeight: 400,
+                                fontSize: 14,
+                                color: "#171717",
+                              }}
+                            >
+                              {f.name}
+                            </div>
+                          ))}
+                        </div>
+                      </>
                     )}
                   </div>
-                )}
+                </div>
 
+                <label
+                  className="flex flex-col items-center justify-center self-stretch cursor-pointer"
+                  style={{
+                    boxSizing: "border-box",
+                    marginTop: 16,
+                    padding: "26px 16px",
+                    gap: 12,
+                    width: 360,
+                    height: 207,
+                    background: "#F7F7F7",
+                    border: "1px dashed #EBEBEB",
+                    boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
+                    borderRadius: 12,
+                  }}
+                >
+                  <input type="file" multiple onChange={handleFileChange} className="hidden" />
+                  <div
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{ width: 42, height: 42, background: "#EBEBEB", borderRadius: 10 }}
+                  >
+                    <NoFilesUploadIcon size={20} style={{ color: "#5C5D5C" }} />
+                  </div>
+                  <div className="flex flex-col items-center" style={{ width: "auto", maxWidth: "100%", gap: 4 }}>
+                    <p
+                      style={{
+                        fontFamily: "Inter Tight",
+                        fontWeight: 400,
+                        fontSize: 14,
+                        lineHeight: "120%",
+                        color: "#161617",
+                      }}
+                    >
+                      {newFiles.length > 0 ? `${newFiles.length} file(s) selected` : "Drop files here"}
+                    </p>
+                    <p
+                      className="text-center whitespace-nowrap"
+                      style={{
+                        fontFamily: "Inter Tight",
+                        fontWeight: 400,
+                        fontSize: 14,
+                        lineHeight: "120%",
+                        color: "#A3A3A3",
+                      }}
+                    >
+                      or click to browse your computer
+                    </p>
+                  </div>
+                  <div className="flex items-start flex-wrap justify-center" style={{ gap: 6 }}>
+                    {["PDF", "AI", "SVG", "PNG", "FIGMA", "ZIP"].map((ext) => (
+                      <span
+                        key={ext}
+                        className="flex items-center justify-center flex-shrink-0"
+                        style={{
+                          padding: "0 10px",
+                          height: 22,
+                          background: "#EBEBEB",
+                          borderRadius: 9999,
+                          fontFamily: "Inter Tight",
+                          fontWeight: 400,
+                          fontSize: 12,
+                          lineHeight: "120%",
+                          color: "#5C5C5C",
+                        }}
+                      >
+                        {ext}
+                      </span>
+                    ))}
+                  </div>
+                  <p
+                    style={{
+                      fontFamily: "Inter Tight",
+                      fontWeight: 400,
+                      fontSize: 14,
+                      lineHeight: "120%",
+                      color: "#A3A3A3",
+                    }}
+                  >
+                    Max 100MB per file
+                  </p>
+                </label>
+              </div>
+
+              {/* Modal Footer */}
+              <div
+                className="flex items-center justify-end flex-shrink-0"
+                style={{
+                  boxSizing: "border-box",
+                  width: 400,
+                  height: 72,
+                  padding: "16px 20px",
+                  gap: 12,
+                  borderTop: "1px solid #EBEBEB",
+                  marginTop: "auto",
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setSelectedFolderId("");
+                    setNewFiles([]);
+                    setUploadMode("file");
+                  }}
+                  className="flex items-center justify-center hover:bg-gray-50 transition-colors whitespace-nowrap"
+                  style={{
+                    boxSizing: "border-box",
+                    padding: "10px 12px",
+                    gap: 6,
+                    minWidth: 67,
+                    height: 40,
+                    background: "#FFFFFF",
+                    border: "1px solid #EBEBEB",
+                    boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
+                    borderRadius: 116,
+                    fontFamily: "Inter Tight",
+                    fontWeight: 500,
+                    fontSize: 14,
+                    lineHeight: "120%",
+                    color: "#171717",
+                  }}
+                >
+                  Cancel
+                </button>
                 <button
                   onClick={() => handleUpload()}
                   disabled={uploading || newFiles.length === 0}
-                  className="w-full px-3 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex items-center justify-center hover:opacity-90 transition-opacity whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    boxSizing: "border-box",
+                    padding: "10px 12px",
+                    gap: 6,
+                    minWidth: 113,
+                    height: 40,
+                    background: "#0085FF",
+                    borderRadius: 116,
+                    fontFamily: "Inter Tight",
+                    fontWeight: 500,
+                    fontSize: 14,
+                    lineHeight: "120%",
+                    color: "#FFFFFF",
+                  }}
                 >
-                  {uploading ? (
-                    <>
-                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-4 h-4" />
-                      Upload
-                    </>
-                  )}
+                  {uploading ? "Uploading..." : "Save & Upload"}
                 </button>
               </div>
-            )}
+            </div>
           </div>
         )}
 
