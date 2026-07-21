@@ -43,31 +43,6 @@ exports.createFolder = async (req, res) => {
   }
 };
 
-// Upload files to a folder
-exports.uploadFiles = async (req, res) => {
-  try {
-    const { folder, folderId } = req.body;
-    const files = req.files.map(file => ({
-      fileName: file.originalname,
-      fileType: file.mimetype,
-      fileUrl: req.fileLocation,
-      isLink: false,
-      uploadedAt: new Date()
-    }));
-
-    const updatedFolder = await Folder.findByIdAndUpdate(
-      folderId,
-      { $push: { files: { $each: files } } },
-      { new: true }
-    );
-
-    res.status(200).json({ message: 'Files uploaded successfully', folder: updatedFolder });
-  } catch (err) {
-    console.error('Upload error:', err);
-    res.status(500).json({ error: 'File upload failed' });
-  }
-};
-
 // NEW: Add hyperlink to folder
 exports.addLink = async (req, res) => {
   try {
@@ -160,16 +135,17 @@ const getFileSizeFromUrl = async (fileUrl) => {
 exports.uploadFiles = async (req, res) => {
   try {
     const { folderId } = req.body;
-    const uploadedSize = req.uploadSize; // Set by middleware
 
     const files = req.files.map(file => ({
       fileName: file.originalname,
       fileType: file.mimetype,
-      fileUrl: req.fileLocation || file.location,
+      fileUrl: `https://${process.env.CLOUDFRONT_DOMAIN}/${file.key}`,
       fileSize: file.size,
       isLink: false,
       uploadedAt: new Date()
     }));
+
+    const uploadedSize = req.uploadSize ?? files.reduce((sum, f) => sum + (f.fileSize || 0), 0);
 
     const updatedFolder = await Folder.findByIdAndUpdate(
       folderId,

@@ -395,6 +395,8 @@ export default function CompanyNotesTab() {
         ))}
       </div>
 
+      <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
+
       {/* Search + Controls */}
       <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
         <div className="relative flex-1 h-full">
