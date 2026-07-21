@@ -479,7 +479,7 @@ const Navbar = () => {
 
       {/* Sidebar */}
       <div
-        className={`fixed top-0 left-0 h-screen border-r border-gray-200 z-[9995] flex flex-col transition-all duration-300 ease-in-out lg:w-auto ${isMobileOpen
+        className={`fixed top-0 left-0 bottom-0 overflow-y-auto overflow-x-hidden border-r border-gray-200 z-[9995] flex flex-col transition-all duration-300 ease-in-out lg:w-auto ${isMobileOpen
           ? "w-72 translate-x-0"
           : "w-72 -translate-x-full lg:translate-x-0"
           }`}
@@ -509,7 +509,7 @@ const Navbar = () => {
           }
         }}
       >
-        <div className="h-16 flex items-center px-4 border-b border-gray-100 bg-white">
+        <div className="h-16 flex-shrink-0 flex items-center px-4 border-b border-gray-100 bg-white">
           <div className="flex items-center gap-3">
             {renderCompanyLogo()}
             {(isHovered || isMobileOpen) && (
@@ -519,7 +519,7 @@ const Navbar = () => {
             )}
           </div>
         </div>
-        <nav className="flex-1 overflow-y-auto pt-3 pb-2 bg-white flex flex-col">
+        <nav className="flex-1 min-h-0 overflow-y-auto pt-3 pb-2 bg-white flex flex-col">
           <ul className="flex-1 flex flex-col justify-evenly px-2  text-black">
             {(isSuperAdmin ? superAdminNavigation : navigation).map(
               (item, index) =>
@@ -642,57 +642,45 @@ const Navbar = () => {
 
         {/* Profile + Logout */}
         <div
-          className="sticky bottom-0 w-full py-3 bg-white border-t border-gray-200"
-          style={{
-            /*  background: "#16153C", */
-            borderTop: `1px solid rgba(126, 122, 232, 0.5)`,
-          }}
+          className="h-16 flex-shrink-0 flex items-center px-4 border-t border-gray-100 bg-white"
         >
-          <div className="px-2">
+          <div
+            className={`flex items-center gap-3 cursor-pointer p-2 rounded transition-all duration-300 w-full ${isHovered || isMobileOpen ? "" : "lg:justify-center"
+              }`}
+            onClick={() => {
+              navigate(isSuperAdmin ? "/super-admin-overview" : "/profile");
+              setIsMobileOpen(false);
+            }}
+          >
+            {renderProfileImage()}
+
             <div
-              className={`flex items-center gap-3 cursor-pointer p-2 rounded transition-all duration-300 ${isHovered || isMobileOpen ? "" : "lg:flex-col lg:justify-center"
+              className={`flex flex-col transition-opacity duration-300 ${isHovered || isMobileOpen
+                ? "opacity-100"
+                : "opacity-0 lg:hidden"
                 }`}
-              onClick={() => {
-                navigate(isSuperAdmin ? "/super-admin-overview" : "/profile");
-                setIsMobileOpen(false);
-              }}
             >
-              {renderProfileImage()}
-
-              <div
-                className={`flex flex-col transition-opacity duration-300 ${isHovered || isMobileOpen
-                  ? "opacity-100"
-                  : "opacity-0 lg:hidden"
-                  }`}
-              >
-                <span className="text-sm font-medium text-gray-900">
-                  {isSuperAdmin ? "Super Admin" : user?.name || "User"}
-                </span>
-                <span className="text-xs text-gray-600">
-                  {isSuperAdmin ? "Administrator" : user?.role || "Partner"}
-                </span>
-              </div>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleLogout();
-                }}
-                className={`transition-all duration-300 p-2 rounded-lg flex-shrink-0 hover:bg-gray-200 ${isHovered || isMobileOpen
-                  ? "ml-auto opacity-100"
-                  : "opacity-0 lg:hidden"
-                  }`}
-                /* style={{
-                  background:
-                    isHovered || isMobileOpen
-                      ? secondary.violet
-                      : "transparent",
-                }} */
-                title="Logout"
-              >
-                <LogOut size={18} color="#ff0000" />
-              </button>
+              <span className="text-sm font-medium text-gray-900 whitespace-nowrap">
+                {isSuperAdmin ? "Super Admin" : user?.name || "User"}
+              </span>
+              <span className="text-xs text-gray-600 whitespace-nowrap">
+                {isSuperAdmin ? "Administrator" : user?.role || "Partner"}
+              </span>
             </div>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleLogout();
+              }}
+              className={`transition-all duration-300 p-2 rounded-lg flex-shrink-0 hover:bg-gray-200 ${isHovered || isMobileOpen
+                ? "ml-auto opacity-100"
+                : "opacity-0 lg:hidden"
+                }`}
+              title="Logout"
+            >
+              <LogOut size={18} color="#ff0000" />
+            </button>
           </div>
         </div>
       </div>
