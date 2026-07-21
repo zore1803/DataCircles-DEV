@@ -27,6 +27,41 @@ import AppToaster from "../components/AppToaster";
 
 // --- Components ---
 
+const CustomMonthIcon = (props) => (
+  <svg viewBox="20 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M25.1665 15.667V19.0003" />
+    <path d="M31.8335 15.667V19.0003" />
+    <path d="M36 28.1663V18.9997C36 18.5576 35.8244 18.1337 35.5118 17.8212C35.1993 17.5086 34.7754 17.333 34.3333 17.333H22.6667C22.2246 17.333 21.8007 17.5086 21.4882 17.8212C21.1756 18.1337 21 18.5576 21 18.9997V30.6663C21 31.1084 21.1756 31.5323 21.4882 31.8449C21.8007 32.1574 22.2246 32.333 22.6667 32.333H31.8333L36 28.1663Z" />
+    <path d="M21 22.333H36" />
+    <path d="M31 32.333V28.9997C31 28.5576 31.1756 28.1337 31.4882 27.8212C31.8007 27.5086 32.2246 27.333 32.6667 27.333H36" />
+  </svg>
+);
+
+const CustomWeekIcon = (props) => (
+  <svg viewBox="112 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M117.167 15.667V19.0003" />
+    <path d="M123.833 15.667V19.0003" />
+    <path d="M126.333 17.333H114.667C113.746 17.333 113 18.0792 113 18.9997V30.6663C113 31.5868 113.746 32.333 114.667 32.333H126.333C127.254 32.333 128 31.5868 128 30.6663V18.9997C128 18.0792 127.254 17.333 126.333 17.333Z" />
+    <path d="M113 22.333H128" />
+    <path d="M117.167 25.667H117.175" />
+    <path d="M120.5 25.667H120.508" />
+    <path d="M123.833 25.667H123.842" />
+    <path d="M117.167 29H117.175" />
+    <path d="M120.5 29H120.508" />
+    <path d="M123.833 29H123.842" />
+  </svg>
+);
+
+const CustomDayIcon = (props) => (
+  <svg viewBox="210.5 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M218.167 25.667H219V29.0003" />
+    <path d="M222.333 15.667V19.0003" />
+    <path d="M211.5 22.333H226.5" />
+    <path d="M215.667 15.667V19.0003" />
+    <path d="M224.833 17.333H213.167C212.246 17.333 211.5 18.0792 211.5 18.9997V30.6663C211.5 31.5868 212.246 32.333 213.167 32.333H224.833C225.754 32.333 226.5 31.5868 226.5 30.6663V18.9997C226.5 18.0792 225.754 17.333 224.833 17.333Z" />
+  </svg>
+);
+
 const EntityIcon = ({ type, className = "w-3 h-3" }) => {
   switch (type) {
     case "Contact": return <User className={className} />;
@@ -288,8 +323,9 @@ const AdminCalendar = () => {
 
       const tasksByDate = {};
       tasksRes.data.forEach((t) => {
-        if (t.selectedDate) {
-          const key = new Date(t.selectedDate).toDateString();
+        const taskDate = t.dueDate || t.selectedDate;
+        if (taskDate) {
+          const key = new Date(taskDate).toDateString();
           if (!tasksByDate[key]) tasksByDate[key] = [];
           tasksByDate[key].push(t);
         }
@@ -360,6 +396,33 @@ const AdminCalendar = () => {
 
   const calendarDays = getCalendarDays();
   const today = new Date();
+
+  // --- Period counts (Meetings/Tasks visible in the current Month/Week/Day view) ---
+  const getPeriodDateKeys = () => {
+    if (view === "day") return [currentDate.toDateString()];
+    if (view === "week") {
+      const startDay = currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1;
+      const weekStart = new Date(currentDate);
+      weekStart.setDate(currentDate.getDate() - startDay);
+      return Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date(weekStart);
+        d.setDate(weekStart.getDate() + i);
+        return d.toDateString();
+      });
+    }
+    return calendarDays
+      .filter((d) => d.isCurrent)
+      .map((d) => d.date.toDateString());
+  };
+  const periodDateKeys = getPeriodDateKeys();
+  const periodMeetingsCount = periodDateKeys.reduce(
+    (sum, key) => sum + (meetings[key]?.length || 0),
+    0,
+  );
+  const periodTasksCount = periodDateKeys.reduce(
+    (sum, key) => sum + (tasks[key]?.length || 0),
+    0,
+  );
 
   // --- Handlers ---
   const handleDayClick = (e, date) => {
@@ -574,6 +637,412 @@ const AdminCalendar = () => {
           </button>
         </div>
       </div>
+      </div>
+
+      <div
+        className="box-border flex flex-col items-start flex-shrink-0 self-stretch mx-6 bg-white border border-[#E1E4EA] rounded-lg"
+        style={{ padding: 0, gap: 0, marginTop: 18 }}
+      >
+        {/* Filter bar */}
+        <div
+          className="relative box-border flex flex-row justify-between items-center flex-shrink-0 self-stretch"
+          style={{
+            padding: "6px 16px",
+            width: "100%",
+            height: 60,
+            borderBottom: "1px solid #E0E0E1",
+          }}
+        >
+          {/* Legend */}
+          <div
+            className="absolute flex flex-row items-center"
+            style={{
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              gap: 8,
+            }}
+          >
+            <div
+              className="flex flex-row justify-center items-center flex-shrink-0"
+              style={{ padding: "8px 24px", gap: 10, height: 30, borderRadius: 96 }}
+            >
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0085FF", flexShrink: 0 }} />
+              <span
+                className="whitespace-nowrap"
+                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#0085FF" }}
+              >
+                {periodMeetingsCount} Meeting{periodMeetingsCount !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <div
+              className="flex flex-row justify-center items-center flex-shrink-0"
+              style={{ padding: "8px 24px", gap: 10, height: 30, borderRadius: 96 }}
+            >
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#00C950", flexShrink: 0 }} />
+              <span
+                className="whitespace-nowrap"
+                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#00C950" }}
+              >
+                {periodTasksCount} Task{periodTasksCount !== 1 ? "s" : ""}
+              </span>
+            </div>
+          </div>
+
+          {/* Date navigator */}
+          <div
+            className="flex flex-row items-center flex-shrink-0"
+            style={{ height: 32 }}
+          >
+            <button
+              onClick={() => {
+                const d = new Date(currentDate);
+                if (view === "month") d.setMonth(d.getMonth() - 1);
+                else if (view === "week") d.setDate(d.getDate() - 7);
+                else d.setDate(d.getDate() - 1);
+                setCurrentDate(d);
+              }}
+              className="box-border flex flex-row justify-center items-center flex-shrink-0"
+              style={{
+                width: 48,
+                height: 32,
+                border: "1px solid #E0E0E1",
+                borderRadius: "95px 0px 0px 95px",
+              }}
+            >
+              <ChevronLeft size={20} style={{ color: "#111216" }} />
+            </button>
+            <div
+              className="box-border flex flex-row justify-center items-center flex-shrink-0"
+              style={{
+                padding: "0px 16px",
+                minWidth: 94,
+                height: 32,
+                borderWidth: "1px 0px",
+                borderStyle: "solid",
+                borderColor: "#E0E0E1",
+              }}
+            >
+              <span
+                className="whitespace-nowrap"
+                style={{
+                  fontFamily: "'SF Pro Display', Inter, sans-serif",
+                  fontWeight: 500,
+                  fontSize: 14,
+                  lineHeight: "17px",
+                  color: "#111216",
+                }}
+              >
+                {view === "day"
+                  ? currentDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                  : currentDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                const d = new Date(currentDate);
+                if (view === "month") d.setMonth(d.getMonth() + 1);
+                else if (view === "week") d.setDate(d.getDate() + 7);
+                else d.setDate(d.getDate() + 1);
+                setCurrentDate(d);
+              }}
+              className="box-border flex flex-row justify-center items-center flex-shrink-0"
+              style={{
+                width: 48,
+                height: 32,
+                border: "1px solid #E0E0E1",
+                borderRadius: "0px 95px 95px 0px",
+              }}
+            >
+              <ChevronRight size={20} style={{ color: "#111216" }} />
+            </button>
+          </div>
+
+          {/* View switcher */}
+          <div
+            className="box-border flex flex-row justify-center items-center flex-shrink-0"
+            style={{
+              padding: 4,
+              gap: 6,
+              width: 285,
+              height: 44,
+              background: "#FFFFFF",
+              border: "1px solid #E0E0E1",
+              boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.1)",
+              borderRadius: 96,
+            }}
+          >
+            {[
+              { v: "month", Icon: CustomMonthIcon },
+              { v: "week", Icon: CustomWeekIcon },
+              { v: "day", Icon: CustomDayIcon },
+            ].map(({ v, Icon }) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className="box-border flex flex-row justify-center items-center flex-1"
+                style={{
+                  padding: "8px 12px",
+                  gap: 6,
+                  height: 36,
+                  background: view === v ? "#FFFFFF" : "transparent",
+                  border: view === v ? "1px solid rgba(0, 133, 255, 0.2)" : "none",
+                  boxShadow: view === v ? "0px 0px 6px rgba(0, 0, 0, 0.1)" : "none",
+                  borderRadius: view === v ? 96 : 4,
+                }}
+              >
+                <Icon width={16} height={16} style={{ color: view === v ? "#0085FF" : "#48494C", flexShrink: 0 }} />
+                <span
+                  className="capitalize whitespace-nowrap"
+                  style={{
+                    fontFamily: "'SF Pro Display', Inter, sans-serif",
+                    fontWeight: 500,
+                    fontSize: 13,
+                    lineHeight: "17px",
+                    color: view === v ? "#0085FF" : "#48494C",
+                  }}
+                >
+                  {v}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Day-of-week header row */}
+        <div
+          className="flex flex-row items-start flex-shrink-0 self-stretch"
+        >
+          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => (
+            <div
+              key={day}
+              className="box-border flex flex-row justify-center items-center flex-shrink-0"
+              style={{
+                padding: 16,
+                gap: 10,
+                width: "14.2857%",
+                height: 40,
+                borderWidth: i === 6 ? "0px 0px 1px 0px" : "0px 1px 1px 0px",
+                borderStyle: "solid",
+                borderColor: "#E0E0E1",
+              }}
+            >
+              <span
+                className="whitespace-nowrap"
+                style={{
+                  fontFamily: "'SF Pro Display', Inter, sans-serif",
+                  fontWeight: 500,
+                  fontSize: 14,
+                  lineHeight: "17px",
+                  color: "#111216",
+                }}
+              >
+                {day}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Month/Week grid */}
+        {(view === "month" || view === "week" || view === "day") &&
+          Array.from({ length: 6 }).map((_, weekIdx) => {
+            const weekDays = calendarDays.slice(weekIdx * 7, weekIdx * 7 + 7);
+            const isCurrentWeek = weekDays.some(
+              (d) => d.date.toDateString() === currentDate.toDateString(),
+            );
+            const isOpenWeek = true;
+            const rowHeight = 158;
+
+            return (
+            <div
+              key={weekIdx}
+              className="flex flex-row items-start flex-shrink-0 self-stretch"
+              style={{ background: view === "week" && isCurrentWeek ? "#F5F8FF" : "transparent" }}
+            >
+              {weekDays.map((dayObj, i) => {
+                const dateKey = dayObj.date.toDateString();
+                const dayMeetings = meetings[dateKey] || [];
+                const dayTasks = tasks[dateKey] || [];
+                const priorityRank = { high: 3, medium: 2, low: 1 };
+                const allPriorities = dayTasks
+                  .map((item) => item.priority?.toLowerCase())
+                  .filter((p) => p && priorityRank[p]);
+                const topPriority = allPriorities.length
+                  ? allPriorities.reduce((a, b) => (priorityRank[b] > priorityRank[a] ? b : a))
+                  : null;
+                const priorityStyles = {
+                  high: { bg: "#FAEBEB", color: "#CD3636", label: "High Priority" },
+                  medium: { bg: "#FFF6E5", color: "#B77B00", label: "Medium Priority" },
+                  low: { bg: "#EAF7EE", color: "#2E9E4F", label: "Low Priority" },
+                };
+                const visibleMeetings = dayMeetings.slice(0, 2);
+                const overflowCount = dayMeetings.length - visibleMeetings.length;
+                const visibleTasks = dayTasks.slice(0, 2 - visibleMeetings.length);
+                const taskOverflowCount = dayTasks.length - visibleTasks.length;
+                const isLastCol = i === 6;
+                const isLastRow = weekIdx === 5;
+
+                return (
+                  <div
+                    key={i}
+                    onClick={(e) => handleDayClick(e, dayObj.date)}
+                    className="box-border flex flex-col items-start flex-shrink-0 cursor-pointer hover:bg-gray-50 transition-colors"
+                    style={{
+                      padding: 16,
+                      gap: 8,
+                      width: "14.2857%",
+                      height: rowHeight,
+                      borderWidth: isLastCol
+                        ? isLastRow
+                          ? "0px"
+                          : "0px 0px 1px 0px"
+                        : isLastRow
+                          ? "0px 1px 0px 0px"
+                          : "0px 1px 1px 0px",
+                      borderStyle: "solid",
+                      borderColor: "#E0E0E1",
+                      opacity: dayObj.isCurrent ? 1 : 0.4,
+                      background:
+                        view === "day" && dateKey === currentDate.toDateString()
+                          ? "#F5F8FF"
+                          : "transparent",
+                    }}
+                  >
+                    <div className="flex flex-row justify-between items-center w-full">
+                      <span
+                        style={{
+                          fontFamily: "'SF Pro Display', Inter, sans-serif",
+                          fontWeight: 500,
+                          fontSize: 14,
+                          lineHeight: "17px",
+                          color: "#111216",
+                        }}
+                      >
+                        {dayObj.date.getDate()}
+                      </span>
+                      {topPriority && (
+                        <div
+                          className="flex flex-row justify-center items-center"
+                          style={{
+                            padding: "2px 8px",
+                            gap: 4,
+                            background: priorityStyles[topPriority].bg,
+                            borderRadius: 100,
+                          }}
+                        >
+                          <span
+                            className="whitespace-nowrap"
+                            style={{
+                              fontFamily: "'SF Pro Display', Inter, sans-serif",
+                              fontWeight: 500,
+                              fontSize: 12,
+                              lineHeight: "18px",
+                              color: priorityStyles[topPriority].color,
+                            }}
+                          >
+                            {priorityStyles[topPriority].label}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {isOpenWeek && (
+                    <div className="flex flex-col items-start w-full" style={{ gap: 4 }}>
+                      {visibleMeetings.map((m) => (
+                        <div
+                          key={m._id}
+                          className="box-border flex flex-row items-center justify-between w-full"
+                          style={{
+                            padding: "10px 8px",
+                            height: 24,
+                            background: "#E7EFFF",
+                            border: "1px solid #E0E0E1",
+                            borderRadius: 4,
+                          }}
+                        >
+                          <span
+                            className="truncate"
+                            style={{
+                              fontFamily: "Inter",
+                              fontWeight: 500,
+                              fontSize: 8,
+                              letterSpacing: "-0.06em",
+                              color: "#0952E7",
+                            }}
+                          >
+                            {m.title || "Meeting"}
+                          </span>
+                          <span
+                            className="whitespace-nowrap flex-shrink-0"
+                            style={{
+                              fontFamily: "Inter",
+                              fontWeight: 500,
+                              fontSize: 8,
+                              letterSpacing: "-0.06em",
+                              color: "#0952E7",
+                            }}
+                          >
+                            {new Date(m.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                      ))}
+                      {visibleTasks.map((t) => (
+                        <div
+                          key={t._id}
+                          className="box-border flex flex-row items-center justify-between w-full"
+                          style={{
+                            padding: "10px 8px",
+                            height: 24,
+                            background: "#E9F9EF",
+                            border: "1px solid #E0E0E1",
+                            borderRadius: 4,
+                          }}
+                        >
+                          <span
+                            className="truncate"
+                            style={{
+                              fontFamily: "Inter",
+                              fontWeight: 500,
+                              fontSize: 8,
+                              letterSpacing: "-0.06em",
+                              color: "#00913D",
+                            }}
+                          >
+                            {t.title || "Task"}
+                          </span>
+                        </div>
+                      ))}
+                      {(overflowCount > 0 || taskOverflowCount > 0) && (
+                        <div
+                          className="flex flex-row justify-center items-center"
+                          style={{
+                            padding: "2px 8px",
+                            gap: 4,
+                            background: "#F5F6F6",
+                            borderRadius: 100,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: "'SF Pro Display', Inter, sans-serif",
+                              fontWeight: 500,
+                              fontSize: 12,
+                              lineHeight: "18px",
+                              color: "#111216",
+                            }}
+                          >
+                            +{overflowCount + taskOverflowCount} more
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            );
+          })}
       </div>
     </div>
   );
