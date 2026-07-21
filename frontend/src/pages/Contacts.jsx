@@ -2570,7 +2570,7 @@ function Contacts() {
             <div className="border border-[#E1E4EA] rounded-lg mx-4 sm:mx-6 mt-6 mb-2 overflow-hidden">
               <div className="flex" style={{ height: "56px" }}>
                 <div
-                  className="flex items-center px-3 border-b border-[#E1E4EA]"
+                  className="flex items-center px-3 border-b border-[#E1E4EA] text-left"
                   style={{ width: "50px", background: "#F5F7FA" }}
                 >
                   <input
@@ -2588,7 +2588,7 @@ function Contacts() {
                   />
                 </div>
                 <div
-                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors text-left"
                   style={{ width: contactColWidths.name, background: "#F5F7FA" }}
                   onClick={() => handleSort("name")}
                 >
@@ -2607,7 +2607,7 @@ function Contacts() {
                   />
                 </div>
                 <div
-                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors text-left"
                   style={{ width: contactColWidths.company, background: "#F5F7FA" }}
                   onClick={() => handleSort("company")}
                 >
@@ -2626,7 +2626,7 @@ function Contacts() {
                   />
                 </div>
                 <div
-                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors text-left"
                   style={{ width: contactColWidths.email, background: "#F5F7FA" }}
                   onClick={() => handleSort("email")}
                 >
@@ -2645,7 +2645,7 @@ function Contacts() {
                   />
                 </div>
                 <div
-                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors text-left"
                   style={{ width: contactColWidths.phone, background: "#F5F7FA" }}
                   onClick={() => handleSort("phone")}
                 >
@@ -2664,7 +2664,7 @@ function Contacts() {
                   />
                 </div>
                 <div
-                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors text-left"
                   style={{ width: contactColWidths.status, background: "#F5F7FA" }}
                   onClick={() => handleSort("status")}
                 >
@@ -2683,7 +2683,7 @@ function Contacts() {
                   />
                 </div>
                 <div
-                  className="flex items-center px-3 border-b border-[#E1E4EA] flex-1"
+                  className="flex items-center px-3 border-b border-[#E1E4EA] flex-1 text-left"
                   style={{ width: contactColWidths.actions, background: "#F5F7FA" }}
                 >
                   <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
@@ -2710,7 +2710,7 @@ function Contacts() {
                     onClick={() => navigate(`/contacts/${contact._id}`)}
                   >
                     <div
-                      className="flex items-center px-3 border-b border-gray-100"
+                      className="flex items-center px-3 border-b border-gray-100 text-left"
                       style={{ width: "50px" }}
                     >
                       <input
@@ -2725,7 +2725,7 @@ function Contacts() {
                       />
                     </div>
                     <div
-                      className="flex items-center gap-3 px-3 border-b border-gray-100"
+                      className="flex items-center gap-3 px-3 border-b border-gray-100 text-left"
                       style={{ width: contactColWidths.name }}
                     >
                       <ProfilePicture contact={contact} />
@@ -2738,7 +2738,7 @@ function Contacts() {
                       </span>
                     </div>
                     <div
-                      className="flex items-center px-3 border-b border-gray-100"
+                      className="flex items-center px-3 border-b border-gray-100 text-left"
                       style={{ width: contactColWidths.company }}
                     >
                       <span
@@ -2750,7 +2750,7 @@ function Contacts() {
                       </span>
                     </div>
                     <div
-                      className="flex items-center px-3 border-b border-gray-100"
+                      className="flex items-center px-3 border-b border-gray-100 text-left"
                       style={{ width: contactColWidths.email }}
                     >
                       <span
@@ -2762,7 +2762,7 @@ function Contacts() {
                       </span>
                     </div>
                     <div
-                      className="flex items-center px-3 border-b border-gray-100"
+                      className="flex items-center px-3 border-b border-gray-100 text-left"
                       style={{ width: contactColWidths.phone }}
                     >
                       <span
@@ -2774,7 +2774,7 @@ function Contacts() {
                       </span>
                     </div>
                     <div
-                      className="flex items-center px-3 border-b border-gray-100"
+                      className="flex items-center px-3 border-b border-gray-100 text-left"
                       style={{ width: contactColWidths.status }}
                     >
                       <span
@@ -2792,7 +2792,7 @@ function Contacts() {
                       </span>
                     </div>
                     <div
-                      className="flex items-center gap-2 px-3 border-b border-gray-100 flex-1"
+                      className="flex items-center gap-2 px-3 border-b border-gray-100 flex-1 text-left"
                       style={{ width: contactColWidths.actions }}
                     >
                       <button
