@@ -10,13 +10,13 @@ const { sendTrialStartedEmail } = require('../utils/trialEmails');
 const {
   findOrCreateRazorpayPlan,
   classifyAddonsForPlanChange,
-  calculateAddonProration,
-  calculatePlanUpgradeProration,
   scheduleAddonRemoval: scheduleAddonRemovalUtil,
   applyScheduledAddonRemovals,
 } = require('../utils/addonManagement');
 const { validateAndPriceCoupon, recordRedemption } = require('../utils/discountEngine');
-const { computeGST, buildPricingSnapshot, applyModifiers } = require('../utils/pricingEngine');
+const { calculateInvoice } = require('../utils/invoiceEngine');
+const BillingInvoice = require('../models/BillingInvoice');
+const CommercialTransaction = require('../models/CommercialTransaction');
 const Coupon = require('../models/Coupon');
 const { emitBillingEvent } = require('../utils/billingEvents');
 const Invited = require('../models/Invited');
@@ -25,8 +25,8 @@ const { generateInviteEmailHTML, generateReferralEmailHTML } = require('../contr
 const Referral = require('../models/Referral');
 const Reward = require('../models/Reward');
 const RewardUsage = require('../models/RewardUsage');
-const { rewardToModifier } = require('../utils/modifierResolver');
-const { reserveNextAvailableReward, consumeReservation, releaseReservation } = require('../utils/referralRewards');
+const { startAddonPurchase } = require('../utils/addonPurchaseLifecycle');
+const { consumeReservation, releaseReservation } = require('../utils/referralRewards');
 const RazorpayWebhookEvent = require('../models/RazorpayWebhookEvent');
 
 // ============================================================
@@ -125,19 +125,21 @@ exports.createSubscription = async (req, res) => {
       }
     }
 
-    // TODO(Phase 4): buildPricingSnapshot() is the pre-CAW pricing engine, reused
-    // here unchanged. calculateInvoice() (CAW_BILLING_DESIGN.md §4) is the
-    // designated single source of truth for all money calculation going
-    // forward — this call site must be migrated to it in Phase 4, not left
-    // computing money independently once that function exists.
-    const snapshot = buildPricingSnapshot({
-      plan,
-      billingCycle,
-      activeAddons,
-      couponDiscount: couponResult ? { totalDiscount: couponResult.discountAmount } : null,
+    // Phase 4: calculateInvoice() is now the pricing authority for this call
+    // site (CAW_BILLING_DESIGN.md §4) — the first production caller. Every
+    // other billing path (upgrades, add-ons, legacy) still uses
+    // buildPricingSnapshot directly until migrated in a later phase.
+    // calculateInvoice() takes a subscription-shaped object, not a `plan`
+    // doc — pricePerUser here is the plan's base price since the
+    // Subscription doesn't exist yet at this point in signup.
+    const invoice = calculateInvoice({
+      subscription: { planName: planId, billingCycle, pricePerUser: basePrice, activeAddons },
+      resolvedModifiers: couponResult
+        ? [{ type: 'coupon', value: { kind: 'fixed', amount: couponResult.discountAmount }, appliesTo: 'entire_invoice' }]
+        : [],
     });
-    const totalAmount = snapshot.totalAmount; // pre-GST, post-discount (rupees)
-    const firstInvoiceRupees = snapshot.grandTotal; // GST-inclusive (rupees) — what the customer is actually charged
+    const totalAmount = invoice.taxable; // pre-GST, post-discount (rupees) — same meaning as the old snapshot.totalAmount
+    const firstInvoiceRupees = invoice.total; // GST-inclusive (rupees) — what the customer is actually charged
 
     if (couponResult) {
       appliedCoupon = {
@@ -149,7 +151,7 @@ exports.createSubscription = async (req, res) => {
           cycles: couponResult.coupon.duration?.cycles ?? null,
         },
         discountAmount: couponResult.discountAmount,
-        baseSubtotal: snapshot.subtotal,
+        baseSubtotal: invoice.subtotal,
         recurringSubtotal: totalAmount,
         rulesApplied: couponResult.lineItems
           .filter((li) => li.discount > 0)
@@ -285,6 +287,46 @@ exports.createSubscription = async (req, res) => {
 
     await subscription.save();
 
+    // Phase 2 (IMPLEMENTATION_PLAN_V1.md §Part 3): additive-only persistence of
+    // the invoice already computed above by calculateInvoice() — the smallest,
+    // most self-contained caller, per the Phase 2 plan. This write is purely
+    // observational: it does not feed back into amountPaise, totalAmount, or
+    // anything already charged/persisted above. A failure here must never
+    // break signup (mirrors emitBillingEvent's own fire-and-forget discipline,
+    // utils/billingEvents.js) — old behavior remains fully authoritative until
+    // a later phase actually reads this collection back.
+    //
+    // ⚠ MIGRATION CONCESSION, NOT FINAL DESIGN: this try/catch is only correct
+    // while Subscription remains the sole authoritative commercial record
+    // (Phase 2). Once BillingInvoice/CommercialTransaction become authoritative
+    // (Phase 4/5, per the write-boundary table), a failed invoice write must
+    // become fatal to the request, not silently swallowed — remove this
+    // try/catch at that point rather than carrying it forward unexamined.
+    try {
+      await BillingInvoice.create({
+        organization: subscription.organization,
+        subscription: subscription._id,
+        reason: 'NEW_SUBSCRIPTION',
+        // Only identifier available at creation time — the mandate hasn't
+        // confirmed yet (Phase 3), so no orderId/paymentId exists. Stored now,
+        // cheaply, so Phase 3 never has to backfill/migrate historical
+        // invoices to add it later.
+        razorpay: { registrationLinkId: registrationLink.id },
+        lineItems: invoice.lines,
+        subtotal: invoice.subtotal,
+        discount: invoice.discount,
+        taxable: invoice.taxable,
+        gst: invoice.gst,
+        total: invoice.total,
+        generatedAt: invoice.generatedAt,
+      });
+    } catch (err) {
+      console.error(
+        `BillingInvoice persistence failed (non-fatal, Phase 2 observational write) — organization=${subscription.organization} subscription=${subscription._id}:`,
+        err.message
+      );
+    }
+
     await emitBillingEvent({
       organization: subscription.organization,
       subscription: subscription._id,
@@ -292,7 +334,7 @@ exports.createSubscription = async (req, res) => {
       status: 'completed',
       after: subscription,
       amounts: {
-        base: snapshot.subtotal,
+        base: invoice.subtotal,
         discount: appliedCoupon?.discountAmount || 0,
         recurringAfter: totalAmount,
       },
@@ -754,210 +796,10 @@ exports.startFreeTrial = async (req, res) => {
   }
 };
 
-// @deprecated LEGACY (Razorpay Subscriptions/Plans product — 401 on this
-// account, see CAW_BILLING_DESIGN.md §0). No longer exported/routed; the
-// public `createSubscription` name below is now the Charge-at-Will
-// implementation. Body kept, unexported, for reference until Phase 8 deletes
-// it — do not wire this to any route.
-async function legacyCreateSubscription_DEPRECATED(req, res) {
-  try {
-    const { planId, billingCycle, addons = [], couponCode } = req.body;
-    console.log(req.body);
-    // Check if organization already has a subscription
-    const existingSubscription = await Subscription.findOne({
-      organization: req.user.organization,
-    });
-
-    if (existingSubscription) {
-      // Update existing subscription instead of creating new one
-      return exports.updateSubscription(req, res);
-    }
-
-    if (!planId || !billingCycle) {
-      return res.status(400).json({
-        error: "Plan ID and billing cycle are required",
-      });
-    }
-
-    const plan = await PlanConfig.findOne({ planId, isActive: true });
-    if (!plan) {
-      return res.status(404).json({ error: "Plan not found" });
-    }
-
-    const basePrice = billingCycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
-
-    // Validate and price add-ons selected at signup
-    let addonEntries = [];
-    let activeAddons = [];
-
-    if (addons.length > 0) {
-      const addonKeys = addons.map((a) => a.addonKey);
-      addonEntries = await PlanAddon.find({ key: { $in: addonKeys }, isActive: true });
-
-      for (const requested of addons) {
-        const entry = addonEntries.find((e) => e.key === requested.addonKey);
-        if (!entry) {
-          return res.status(400).json({ error: `Add-on "${requested.addonKey}" does not exist or is not available.` });
-        }
-        const planAllowed = entry.availableOnPlans.length === 0 || entry.availableOnPlans.includes(planId);
-        if (!planAllowed) {
-          return res.status(400).json({ error: `Add-on "${entry.displayName}" is not available on the ${planId} plan.` });
-        }
-        const unitPrice = entry.price[billingCycle];
-        if (!unitPrice) {
-          return res.status(400).json({ error: `Add-on "${entry.displayName}" has no price configured for the ${billingCycle} cycle.` });
-        }
-        const qty = Number(requested.quantity) || 1;
-        activeAddons.push({ addonKey: requested.addonKey, quantity: qty, pricePerUnit: unitPrice, addedAt: new Date() });
-      }
-    }
-
-    // Coupon is applied per line item — a coupon scoped to specific add-ons
-    // must only discount those add-ons, not the whole order. Eligibility
-    // (a DB usage-limit check) happens here, before the pricing engine —
-    // the engine itself only prices an already-resolved discount, it never
-    // does I/O (see utils/pricingEngine.js).
-    let appliedCoupon = null;
-    let couponResult = null;
-    if (couponCode) {
-      const lineItems = [
-        { key: planId, type: 'plan', amount: basePrice },
-        ...activeAddons.map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
-      ];
-      couponResult = await validateAndPriceCoupon(couponCode, {
-        organizationId: req.user.organization,
-        planId,
-        billingCycle,
-        lineItems,
-      });
-      if (!couponResult.valid) {
-        return res.status(400).json({ error: couponResult.reason });
-      }
-    }
-
-    // NOTE: referral intent is NOT recorded here. A code entered via a
-    // shared link is recorded at organization REGISTRATION (authController
-    // completeRegistration) — the business event "we know this org was
-    // referred," independent of whether it ever reaches checkout. A code
-    // typed in manually on this page is applied immediately via its own
-    // Apply button (exports.applyReferralCode below), not folded into
-    // checkout submission — trial/payment must never gate Pending
-    // visibility. See backend/docs/REFERRAL_SYSTEM_DESIGN.md §3/§24.
-
-    const snapshot = buildPricingSnapshot({
-      plan,
-      billingCycle,
-      activeAddons,
-      couponDiscount: couponResult ? { totalDiscount: couponResult.discountAmount } : null,
-    });
-    const totalAmount = snapshot.totalAmount;
-
-    if (couponResult) {
-      appliedCoupon = {
-        couponId: couponResult.coupon._id,
-        code: couponResult.coupon.code,
-        name: couponResult.coupon.name,
-        duration: {
-          type: couponResult.coupon.duration?.type || 'lifetime',
-          cycles: couponResult.coupon.duration?.cycles ?? null,
-        },
-        discountAmount: couponResult.discountAmount,
-        baseSubtotal: snapshot.subtotal,
-        recurringSubtotal: totalAmount,
-        rulesApplied: couponResult.lineItems
-          .filter((li) => li.discount > 0)
-          .map((li) => ({
-            productType: li.type,
-            productKey: li.key,
-            discountType: li.discountType,
-            discountValue: li.discountValue,
-            discountAmount: li.discount,
-          })),
-      };
-    }
-
-    // Always create/find a GST-inclusive Razorpay plan for the total amount
-    const razorpayPlanId = await findOrCreateRazorpayPlan(totalAmount, billingCycle, planId);
-
-    // Create Razorpay subscription
-    const razorpaySubscription = await razorpay.subscriptions.create({
-      plan_id: razorpayPlanId,
-      customer_notify: 1,
-      quantity: 1,
-      total_count: billingCycle === "monthly" ? 12 : 1,
-      notes: {
-        organization_id: req.user.organization.toString(),
-        plan_name: planId,
-        billing_cycle: billingCycle,
-      },
-    });
-
-    // Create subscription with PENDING payment status
-    const subscription = new Subscription({
-      organization: req.user.organization,
-      razorpaySubscriptionId: razorpaySubscription.id,
-      razorpayPlanId,
-      planName: planId,
-      status: "created",
-      paymentStatus: "pending_payment",
-      isPaymentConfirmed: false,
-      billingCycle,
-      pricePerUser: basePrice,
-      userCount: 1,
-      totalAmount,
-      activeAddons,
-      appliedCoupon,
-      currentPeriodStart: new Date(razorpaySubscription.current_start * 1000),
-      currentPeriodEnd: new Date(razorpaySubscription.current_end * 1000),
-      nextBillingDate: new Date(razorpaySubscription.charge_at * 1000),
-    });
-
-    await subscription.save();
-
-    // Timeline: subscription created (pending payment). The PAYMENT_SUCCESS
-    // event is emitted separately when the charge actually clears.
-    await emitBillingEvent({
-      organization: subscription.organization,
-      subscription: subscription._id,
-      eventType: 'SUBSCRIPTION_CREATED',
-      status: 'completed',
-      after: subscription,
-      amounts: {
-        base: snapshot.subtotal,
-        discount: appliedCoupon?.discountAmount || 0,
-        recurringAfter: totalAmount,
-      },
-      razorpay: { subscriptionId: razorpaySubscription.id },
-      metadata: { planId, billingCycle, couponCode: appliedCoupon?.code || null },
-    });
-
-    res.json({
-      success: true,
-      subscription,
-      paymentDetails: {
-        key: process.env.RAZORPAY_KEY_ID,
-        subscription_id: razorpaySubscription.id,
-        name: req.user.name,
-        description: `${plan.name} Plan - ${billingCycle}`,
-        prefill: {
-          name: req.user.name,
-          email: req.user.email,
-          contact: req.user.phone || "",
-        },
-        theme: { color: "#3399cc" },
-        callback_url: `${process.env.FRONTEND_URL}/subscription/payment-success`,
-      },
-    });
-  } catch (error) {
-    console.error("Subscription creation error:", error);
-    const razorpayError = error.error?.description || error.error?.reason;
-    res.status(500).json({
-      error: razorpayError || error.message,
-      code: 'RAZORPAY_ERROR',
-      hint: razorpayError ? 'Razorpay rejected the request. Run scripts/createRazorpayPlans.js to create valid plan IDs.' : undefined,
-    });
-  }
-};
+// Phase 7 cleanup: legacyCreateSubscription_DEPRECATED removed here —
+// confirmed zero callers anywhere in the codebase (it was unexported,
+// unrouted, and explicitly marked for Phase 8 deletion; removed now as part
+// of the Phase 7 dead-code cleanup pass rather than waiting further).
 
 // Enhanced updateSubscription method
 exports.updateSubscription = async (req, res) => {
@@ -1048,12 +890,6 @@ exports.updateSubscription = async (req, res) => {
         const newAddonsTotal = newAddonPurchases.reduce((sum, a) => sum + a.quantity * a.pricePerUnit, 0);
         const newTotal = newBasePrice + carriedTotal + newAddonsTotal;
 
-        // Prorated charge = (newTotal − oldTotal) × remaining fraction of cycle
-        const proratedDiff = calculatePlanUpgradeProration(
-          oldTotal, newTotal,
-          subscription.currentPeriodStart, subscription.currentPeriodEnd
-        );
-
         // SAME-FLOW RECYCLE: if a PREVIOUS upgrade checkout for this org left a
         // reward reserved (opened but never paid), release it before reserving
         // again. Safe because we overwrite subscription.pendingPlanChange below,
@@ -1083,17 +919,68 @@ exports.updateSubscription = async (req, res) => {
           console.error('Referral reservation failed (proceeding at full price):', reserveErr.message);
         }
 
-        let discountedProratedDiff = proratedDiff;
         let upgradeReferralRewardUsageId = null;
+        const resolvedModifiers = [];
         if (upgradeReservation) {
-          const referralModifier = rewardToModifier(upgradeReservation.reward);
-          const applied = applyModifiers(proratedDiff, [referralModifier]);
-          discountedProratedDiff = applied.totalAmount;
+          resolvedModifiers.push(rewardToModifier(upgradeReservation.reward));
           upgradeReferralRewardUsageId = upgradeReservation.usage._id;
         }
 
-        // GST is collected on the prorated charge; Razorpay order carries the inclusive amount
-        const proratedDiffWithGST = discountedProratedDiff + computeGST(discountedProratedDiff);
+        // Phase 3 item 5a: proration is now priced through calculateInvoice()'s
+        // Stage 5 (PHASE3_DESIGN_NOTE_INVOICE_ENGINE.md), not a standalone
+        // calculatePlanUpgradeProration()+applyModifiers()+computeGST() chain.
+        // pricePerUser: 0 / activeAddons: [] — this invoice call represents ONLY
+        // the one-time upgrade charge, not a full plan invoice; oldTotal/newTotal
+        // (full totals including add-ons, exactly as passed to
+        // calculatePlanUpgradeProration before this migration) go in as
+        // oldBasePrice/newBasePrice — calculateCommercialAdjustments() only
+        // forwards them positionally, it doesn't interpret their meaning.
+        const upgradeInvoice = calculateInvoice({
+          subscription: { planName: planId, billingCycle, pricePerUser: 0, activeAddons: [] },
+          changeset: { pricePerUser: 0 },
+          adjustmentContext: {
+            type: 'plan_upgrade',
+            oldBasePrice: oldTotal,
+            newBasePrice: newTotal,
+            currentPeriodStart: subscription.currentPeriodStart,
+            currentPeriodEnd: subscription.currentPeriodEnd,
+          },
+          resolvedModifiers,
+        });
+        const proratedDiff = upgradeInvoice.adjustment; // Stage 5 amount, pre-discount — same meaning as before
+        const discountedProratedDiff = upgradeInvoice.taxable; // post-discount, pre-GST — same meaning as before
+        const proratedDiffWithGST = upgradeInvoice.total; // GST-inclusive — same meaning as before, what Razorpay actually charges
+
+        // CommercialTransaction: same VOID-on-recycle + create pattern as
+        // startAddonPurchase (utils/addonPurchaseLifecycle.js) — the same-flow
+        // recycle above already releases any orphaned referral reservation, so
+        // this VOIDs the matching orphaned transaction record too. Non-fatal:
+        // never blocks the upgrade if CommercialTransaction write fails.
+        let upgradeCommercialTransaction = null;
+        try {
+          await CommercialTransaction.updateMany(
+            {
+              organization: req.user.organization,
+              subscription: subscription._id,
+              type: 'UPGRADE',
+              status: { $in: ['CREATED', 'PRICED', 'AWAITING_PAYMENT', 'FAILED'] },
+            },
+            { $set: { status: 'VOID' } }
+          );
+          upgradeCommercialTransaction = await CommercialTransaction.create({
+            organization: req.user.organization,
+            subscription: subscription._id,
+            type: 'UPGRADE',
+            status: 'PRICED',
+            createdBy: req.user._id,
+            target: { newPlanName: planId, newBasePrice, oldTotal, newTotal },
+          });
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction creation failed (non-fatal) — organization=${req.user.organization} subscription=${subscription._id}:`,
+            ctErr.message
+          );
+        }
 
         // Create a one-time Order for the prorated difference + GST (UPI-compatible)
         let razorpayOrder;
@@ -1118,6 +1005,21 @@ exports.updateSubscription = async (req, res) => {
 
         if (upgradeReferralRewardUsageId) {
           await RewardUsage.updateOne({ _id: upgradeReferralRewardUsageId }, { $set: { invoiceId: razorpayOrder.id } });
+        }
+
+        if (upgradeCommercialTransaction) {
+          try {
+            upgradeCommercialTransaction.status = 'AWAITING_PAYMENT';
+            upgradeCommercialTransaction.target = { ...upgradeCommercialTransaction.target, orderId: razorpayOrder.id };
+            upgradeCommercialTransaction.attemptCount = 1;
+            upgradeCommercialTransaction.lastAttemptAt = new Date();
+            await upgradeCommercialTransaction.save();
+          } catch (ctErr) {
+            console.error(
+              `CommercialTransaction AWAITING_PAYMENT update failed (non-fatal) — organization=${req.user.organization} subscription=${subscription._id} transaction=${upgradeCommercialTransaction._id}:`,
+              ctErr.message
+            );
+          }
         }
 
         // Store pending change — everything below is applied on webhook confirmation
@@ -1312,13 +1214,20 @@ exports.updateSubscription = async (req, res) => {
       // the checkout page's own Apply button (manual entry) are the only
       // two creation points now.
 
-      const snapshot = buildPricingSnapshot({
-        plan,
-        billingCycle,
-        activeAddons,
-        couponDiscount: couponResult ? { totalDiscount: couponResult.discountAmount } : null,
+      // Phase 3 item 5c (Category A consolidation): this branch prices a
+      // fresh commercial state — no old-vs-new comparison, no period math —
+      // structurally identical to createSubscription's own calculateInvoice()
+      // call (same modifier construction, same coupon-only shape). Migrated
+      // onto the canonical engine for the same reason createSubscription was:
+      // one authoritative pricing computation, not a parallel
+      // buildPricingSnapshot() call for what is the same kind of event.
+      const snapshot = calculateInvoice({
+        subscription: { planName: planId, billingCycle, pricePerUser, activeAddons },
+        resolvedModifiers: couponResult
+          ? [{ type: 'coupon', value: { kind: 'fixed', amount: couponResult.discountAmount }, appliesTo: 'entire_invoice' }]
+          : [],
       });
-      const totalAmount = snapshot.totalAmount;
+      const totalAmount = snapshot.taxable; // pre-GST, post-discount — same meaning as the old snapshot.totalAmount
 
       if (couponResult) {
         appliedCoupon = {
@@ -1468,6 +1377,13 @@ exports.updateSubscription = async (req, res) => {
       newPlanPriority > currentPlanPriority ||
       (newPlanPriority === currentPlanPriority &&
         newTotalAmount > oldTotalAmount);
+    // A genuine tier downgrade, distinct from a same-tier billing-cycle-only
+    // change and from an upgrade-combined-with-a-cycle-change (both of which
+    // also fall into the `isBillingCycleChange || !isUpgrade` branch below).
+    // CommercialTransaction{type:'DOWNGRADE'} is only written for this exact
+    // case — see IMPLEMENTATION_PLAN_V1.md item 6 for why the other two cases
+    // in this branch are deliberately left unwired this pass.
+    const isGenuineDowngrade = newPlanPriority < currentPlanPriority;
 
     let message = "Subscription updated successfully!";
     let paymentDetails = null;
@@ -1509,6 +1425,42 @@ exports.updateSubscription = async (req, res) => {
       };
       // Do NOT set cancelAtPeriodEnd — the subscription continues; only the amount changes.
 
+      // CommercialTransaction — downgrade only (Chapter 18: a no-payment action
+      // still creates a transaction, but never enters AWAITING_PAYMENT since
+      // there is no payment step). CREATED->PRICED right here, once the target
+      // plan/effective date are known and pendingUpdate is about to be written.
+      // No existing recycle/release step for a re-submitted pendingUpdate to
+      // piggyback on (unlike upgrade's referral-reservation recycle) — the
+      // VOID-then-create here exists purely for CommercialTransaction
+      // consistency, not because a recycle mechanism already existed.
+      let downgradeCommercialTransaction = null;
+      if (isGenuineDowngrade) {
+        try {
+          await CommercialTransaction.updateMany(
+            {
+              organization: subscription.organization,
+              subscription: subscription._id,
+              type: 'DOWNGRADE',
+              status: { $in: ['CREATED', 'PRICED', 'AWAITING_PAYMENT', 'FAILED'] },
+            },
+            { $set: { status: 'VOID' } }
+          );
+          downgradeCommercialTransaction = await CommercialTransaction.create({
+            organization: subscription.organization,
+            subscription: subscription._id,
+            type: 'DOWNGRADE',
+            status: 'PRICED',
+            createdBy: req.user._id,
+            target: { newPlanName: planId, newPricePerUser, newTotalAmount, effectiveAt: subscription.currentPeriodEnd },
+          });
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
+            ctErr.message
+          );
+        }
+      }
+
       if (subscription.razorpaySubscriptionId) {
         try {
           // Create/find a GST-inclusive Razorpay plan for the new amount, then
@@ -1532,6 +1484,28 @@ exports.updateSubscription = async (req, res) => {
       scheduled = true;
 
       await subscription.save();
+
+      // CommercialTransaction: PRICED -> COMMITTED, immediately -> COMPLETED.
+      // No AWAITING_PAYMENT for this flow (no payment step, per Chapter 18) —
+      // COMMITTED fires the moment pendingUpdate is durably saved (the line
+      // above); COMPLETED fires immediately after, in the same request,
+      // since "completed" here means "the customer's decision was recorded
+      // and accepted," not "the downgrade has taken effect" (that's a future
+      // renewal-time event, out of scope for this wiring).
+      if (downgradeCommercialTransaction) {
+        try {
+          downgradeCommercialTransaction.status = 'COMMITTED';
+          downgradeCommercialTransaction.lastAttemptAt = new Date();
+          await downgradeCommercialTransaction.save();
+          downgradeCommercialTransaction.status = 'COMPLETED';
+          await downgradeCommercialTransaction.save();
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction COMMITTED/COMPLETED update failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id} transaction=${downgradeCommercialTransaction._id}:`,
+            ctErr.message
+          );
+        }
+      }
 
       // Timeline: scheduled, not yet in effect — top-level subscription
       // fields are still the CURRENT plan until cycle end, so `subscription`
@@ -1637,12 +1611,58 @@ exports.cancelSubscription = async (req, res) => {
       return res.status(404).json({ error: "No active subscription found" });
     }
 
+    // CommercialTransaction — cancellation, both branches below (trial and
+    // paid). No payment step either way, so no AWAITING_PAYMENT (Chapter 18,
+    // same reasoning as downgrade). No existing reactivate/undo-cancel
+    // endpoint was found in this file (only a message pointing the user
+    // elsewhere), so there is no existing recycle point to piggyback on —
+    // VOID-then-create exists purely for CommercialTransaction consistency.
+    let cancellationCommercialTransaction = null;
+    try {
+      await CommercialTransaction.updateMany(
+        {
+          organization: subscription.organization,
+          subscription: subscription._id,
+          type: 'CANCELLATION',
+          status: { $in: ['CREATED', 'PRICED', 'AWAITING_PAYMENT', 'FAILED'] },
+        },
+        { $set: { status: 'VOID' } }
+      );
+      cancellationCommercialTransaction = await CommercialTransaction.create({
+        organization: subscription.organization,
+        subscription: subscription._id,
+        type: 'CANCELLATION',
+        status: 'PRICED',
+        createdBy: req.user._id,
+        target: { cancelAtPeriodEnd, trial: !!subscription.isTrialActive },
+      });
+    } catch (ctErr) {
+      console.error(
+        `CommercialTransaction creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
+        ctErr.message
+      );
+    }
+
     // Trial cancellation — no Razorpay subscription exists to cancel
     if (subscription.isTrialActive) {
       subscription.isTrialActive = false;
       subscription.trialEnd = new Date();
       setAppStatus(subscription, "cancelled", "user cancelled during trial");
       await subscription.save();
+      if (cancellationCommercialTransaction) {
+        try {
+          cancellationCommercialTransaction.status = 'COMMITTED';
+          cancellationCommercialTransaction.lastAttemptAt = new Date();
+          await cancellationCommercialTransaction.save();
+          cancellationCommercialTransaction.status = 'COMPLETED';
+          await cancellationCommercialTransaction.save();
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction COMMITTED/COMPLETED update failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id} transaction=${cancellationCommercialTransaction._id}:`,
+            ctErr.message
+          );
+        }
+      }
       return res.json({
         success: true,
         message: "Trial cancelled successfully",
@@ -1656,6 +1676,21 @@ exports.cancelSubscription = async (req, res) => {
 
     subscription.cancelAtPeriodEnd = true;
     await subscription.save();
+
+    if (cancellationCommercialTransaction) {
+      try {
+        cancellationCommercialTransaction.status = 'COMMITTED';
+        cancellationCommercialTransaction.lastAttemptAt = new Date();
+        await cancellationCommercialTransaction.save();
+        cancellationCommercialTransaction.status = 'COMPLETED';
+        await cancellationCommercialTransaction.save();
+      } catch (ctErr) {
+        console.error(
+          `CommercialTransaction COMMITTED/COMPLETED update failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id} transaction=${cancellationCommercialTransaction._id}:`,
+          ctErr.message
+        );
+      }
+    }
 
     await emitBillingEvent({
       organization: subscription.organization,
@@ -2073,6 +2108,33 @@ async function handlePaymentCaptured(razorpayPayment) {
         return;
       }
 
+      // Phase 3 item 6: PRICED/AWAITING_PAYMENT -> COMMITTED. Correlated via
+      // the orderId stored in `target` at request time — this lookup is
+      // purely additive (observational write), never a dependency: settlement
+      // above/below is still driven entirely by `pending` (pendingAddonAddition).
+      // Payment confirmation is the commit point (BILLING_DOMAIN_SPECIFICATION.md
+      // Chapter 15) — right here, since the amount check above already passed.
+      let commercialTransaction = null;
+      try {
+        commercialTransaction = await CommercialTransaction.findOne({
+          organization: addonSubscription.organization,
+          subscription: addonSubscription._id,
+          type: 'ADDON_PURCHASE',
+          'target.orderId': razorpayPayment.order_id,
+          status: 'AWAITING_PAYMENT',
+        });
+        if (commercialTransaction) {
+          commercialTransaction.status = 'COMMITTED';
+          commercialTransaction.lastAttemptAt = new Date();
+          await commercialTransaction.save();
+        }
+      } catch (ctErr) {
+        console.error(
+          `CommercialTransaction COMMITTED update failed (non-fatal) — organization=${addonSubscription.organization} subscription=${addonSubscription._id} order=${razorpayPayment.order_id}:`,
+          ctErr.message
+        );
+      }
+
       // Apply add-on to activeAddons
       const activeAddons = (addonSubscription.activeAddons || []).map((a) => ({
         addonKey: a.addonKey,
@@ -2096,11 +2158,18 @@ async function handlePaymentCaptured(razorpayPayment) {
       }
 
       // Compute new combined recurring total (base + all addons)
-      const newTotal = buildPricingSnapshot({
-        plan,
-        billingCycle: addonSubscription.billingCycle,
-        activeAddons,
-      }).totalAmount;
+      // Phase 3 item 5c (Category C harmonization): matches the upgrade
+      // settlement branch above, which already prices its recurring baseline
+      // via calculateInvoice() — this add-on branch was the one asymmetry
+      // left (BUG report / IMPLEMENTATION_PLAN_V1.md), now closed the same way.
+      const newTotal = calculateInvoice({
+        subscription: {
+          planName: plan.planId,
+          billingCycle: addonSubscription.billingCycle,
+          pricePerUser: addonSubscription.billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice,
+          activeAddons,
+        },
+      }).taxable;
 
       // Update Razorpay subscription plan — takes effect NEXT billing cycle
       const newPlanId = await findOrCreateRazorpayPlan(newTotal, addonSubscription.billingCycle, plan.planId);
@@ -2124,6 +2193,20 @@ async function handlePaymentCaptured(razorpayPayment) {
       addonSubscription.totalAmount = newTotal;
       addonSubscription.pendingAddonAddition = undefined;
       await addonSubscription.save();
+
+      // Phase 3 item 6: COMMITTED -> COMPLETED, now that the commercial
+      // change has actually been applied and persisted.
+      if (commercialTransaction) {
+        try {
+          commercialTransaction.status = 'COMPLETED';
+          await commercialTransaction.save();
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction COMPLETED update failed (non-fatal) — organization=${addonSubscription.organization} subscription=${addonSubscription._id} transaction=${commercialTransaction._id}:`,
+            ctErr.message
+          );
+        }
+      }
 
       // Consume the reserved referral reward, if this checkout used one —
       // settlement is the only place a RewardUsage moves to 'consumed'
@@ -2239,6 +2322,33 @@ async function handlePaymentCaptured(razorpayPayment) {
       const newPlan = await PlanConfig.findOne({ planId: pending.newPlanName, isActive: true });
       if (!newPlan) { console.error(`New plan ${pending.newPlanName} not found`); return; }
 
+      // Phase 3 continued (upgrade): PRICED/AWAITING_PAYMENT -> COMMITTED.
+      // Correlated via the orderId stored in `target` at request time — this
+      // lookup is purely additive (observational write), never a dependency:
+      // settlement below is still driven entirely by `pending` (pendingPlanChange).
+      // Payment confirmation is the commit point (BILLING_DOMAIN_SPECIFICATION.md
+      // Chapter 15) — right here, since the amount check above already passed.
+      let upgradeCommercialTransaction = null;
+      try {
+        upgradeCommercialTransaction = await CommercialTransaction.findOne({
+          organization: upgradeSubscription.organization,
+          subscription: upgradeSubscription._id,
+          type: 'UPGRADE',
+          'target.orderId': razorpayPayment.order_id,
+          status: 'AWAITING_PAYMENT',
+        });
+        if (upgradeCommercialTransaction) {
+          upgradeCommercialTransaction.status = 'COMMITTED';
+          upgradeCommercialTransaction.lastAttemptAt = new Date();
+          await upgradeCommercialTransaction.save();
+        }
+      } catch (ctErr) {
+        console.error(
+          `CommercialTransaction COMMITTED update failed (non-fatal) — organization=${upgradeSubscription.organization} subscription=${upgradeSubscription._id} order=${razorpayPayment.order_id}:`,
+          ctErr.message
+        );
+      }
+
       // ENTITLEMENTS CHANGE NOW — planName drives restrictByPlan limits/modules
       upgradeSubscription.planName = pending.newPlanName;
       upgradeSubscription.pricePerUser = pending.newBasePrice;
@@ -2251,13 +2361,19 @@ async function handlePaymentCaptured(razorpayPayment) {
       // add-ons. incompatibleAddons are deliberately excluded from billing —
       // they're kept in activeAddons below only until pendingAddonRemovals
       // removes them at cycle end, not billed again this cycle.
-      const snapshot = buildPricingSnapshot({
-        plan: newPlan,
-        billingCycle: upgradeSubscription.billingCycle,
-        activeAddons: [...compatibleAddons, ...newAddonPurchases],
-        basePriceOverride: pending.newBasePrice,
+      // Phase 5: calculateInvoice() is now the pricing authority here (same
+      // equivalence guarantee as the Phase 4 createSubscription integration —
+      // it's still buildPricingSnapshot underneath, just via the single
+      // designated call path). No other call site in this function changed.
+      const invoice = calculateInvoice({
+        subscription: {
+          planName: pending.newPlanName,
+          billingCycle: upgradeSubscription.billingCycle,
+          pricePerUser: pending.newBasePrice,
+          activeAddons: [...compatibleAddons, ...newAddonPurchases],
+        },
       });
-      const newRecurringTotal = snapshot.totalAmount;
+      const newRecurringTotal = invoice.taxable; // pre-GST, post-discount — same meaning as the old snapshot.totalAmount
       upgradeSubscription.totalAmount = newRecurringTotal;
 
       // Rebuild activeAddons: compatible (possibly remapped), incompatible kept
@@ -2321,41 +2437,67 @@ async function handlePaymentCaptured(razorpayPayment) {
         upgradeSubscription.pendingAddonRemovals = pendingRemovals;
       }
 
-      // Try to update the Razorpay recurring plan (works on card, fails on UPI)
-      let syncedToRazorpay = false;
-      try {
-        const newPlanId = compatibleAddons.length > 0
-          ? await findOrCreateRazorpayPlan(newRecurringTotal, upgradeSubscription.billingCycle, pending.newPlanName)
-          : newPlan.razorpayPlanIds[upgradeSubscription.billingCycle];
-
-        await razorpay.subscriptions.update(upgradeSubscription.razorpaySubscriptionId, {
-          plan_id: newPlanId,
-          schedule_change_at: 'cycle_end',
-        });
-        upgradeSubscription.razorpayPlanId = newPlanId;
-        syncedToRazorpay = true;
-        console.log(`Razorpay subscription updated to ${newPlanId} at cycle_end`);
-      } catch (err) {
-        console.warn(`Could not update Razorpay recurring plan (likely UPI — syncs at renewal): ${err?.error?.description || err.message}`);
-      }
-
-      // Clear pending if synced; otherwise flag it for renewal-time reconciliation
-      if (syncedToRazorpay) {
+      // Phase 5: CAW subscriptions (mandateTokenId present) have no Razorpay-
+      // side "recurring plan" to sync at all — the persisted fields set above
+      // (planName/pricePerUser/totalAmount/activeAddons) ARE the source of
+      // truth the renewal engine (Phase 6) reads via calculateInvoice() each
+      // cycle. So there is nothing to call, nothing that can fail, and no
+      // needsRazorpaySync reconciliation ever needed for these subscriptions.
+      // Legacy (non-CAW) subscriptions keep the EXACT previous behavior,
+      // completely untouched, since they may still have a live Razorpay
+      // Subscription object to sync.
+      if (upgradeSubscription.mandateTokenId) {
         upgradeSubscription.pendingPlanChange = undefined;
       } else {
-        upgradeSubscription.pendingPlanChange = {
-          newPlanName: pending.newPlanName,
-          newBasePrice: pending.newBasePrice,
-          proratedDiffCharged: pending.proratedDiffCharged,
-          orderId: pending.orderId,
-          compatibleAddons: compatibleAddons,
-          newAddonPurchases: newAddonPurchases,
-          createdAt: pending.createdAt,
-          needsRazorpaySync: true,
-        };
+        // --- unchanged legacy path ---
+        let syncedToRazorpay = false;
+        try {
+          const newPlanId = compatibleAddons.length > 0
+            ? await findOrCreateRazorpayPlan(newRecurringTotal, upgradeSubscription.billingCycle, pending.newPlanName)
+            : newPlan.razorpayPlanIds[upgradeSubscription.billingCycle];
+
+          await razorpay.subscriptions.update(upgradeSubscription.razorpaySubscriptionId, {
+            plan_id: newPlanId,
+            schedule_change_at: 'cycle_end',
+          });
+          upgradeSubscription.razorpayPlanId = newPlanId;
+          syncedToRazorpay = true;
+          console.log(`Razorpay subscription updated to ${newPlanId} at cycle_end`);
+        } catch (err) {
+          console.warn(`Could not update Razorpay recurring plan (likely UPI — syncs at renewal): ${err?.error?.description || err.message}`);
+        }
+
+        if (syncedToRazorpay) {
+          upgradeSubscription.pendingPlanChange = undefined;
+        } else {
+          upgradeSubscription.pendingPlanChange = {
+            newPlanName: pending.newPlanName,
+            newBasePrice: pending.newBasePrice,
+            proratedDiffCharged: pending.proratedDiffCharged,
+            orderId: pending.orderId,
+            compatibleAddons: compatibleAddons,
+            newAddonPurchases: newAddonPurchases,
+            createdAt: pending.createdAt,
+            needsRazorpaySync: true,
+          };
+        }
       }
 
       await upgradeSubscription.save();
+
+      // Phase 3 continued (upgrade): COMMITTED -> COMPLETED, now that the
+      // commercial change has actually been applied and persisted.
+      if (upgradeCommercialTransaction) {
+        try {
+          upgradeCommercialTransaction.status = 'COMPLETED';
+          await upgradeCommercialTransaction.save();
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction COMPLETED update failed (non-fatal) — organization=${upgradeSubscription.organization} subscription=${upgradeSubscription._id} transaction=${upgradeCommercialTransaction._id}:`,
+            ctErr.message
+          );
+        }
+      }
 
       // Consume the reserved referral reward, if this upgrade used one —
       // atomic conditional update, idempotent against duplicate webhooks
@@ -3414,120 +3556,23 @@ exports.initiateAddonPurchase = async (req, res) => {
       return res.status(400).json({ error: `No price configured for "${catalogEntry.displayName}" on the ${subscription.billingCycle} billing cycle.` });
     }
 
-    const prorationAmount = calculateAddonProration(
-      quantity,
-      pricePerUnit,
-      subscription.currentPeriodStart,
-      subscription.currentPeriodEnd
-    );
-
-    // RESERVE-FIRST: atomically reserve an available referral reward BEFORE
-    // creating the discounted order. This ordering is deliberate and load-
-    // bearing — if we created the order first and reserved after, a reward
-    // consumed by a concurrent checkout in between would leave us charging a
-    // discounted amount with no reward actually spent (a free discount). By
-    // reserving first, the discount is only ever applied to an order backed
-    // by a reward we hold. reserveNextAvailableReward is race-safe via the
-    // partial unique index (see utils/referralRewards.js). Referral
-    // resolution must never break add-on purchase, so it's best-effort.
-    // Coupons don't apply to add-on purchases yet (known gap, §4.E).
-    //
-    // SAME-FLOW RECYCLE: release any reward reserved by a PREVIOUS, unpaid
-    // add-on checkout for this org before reserving again — we overwrite
-    // subscription.pendingAddonAddition below, making that old order
-    // unsettleable, so its reservation would otherwise stay locked for its
-    // 30-min TTL. Idempotent + guarded on status:'reserved', so a
-    // since-consumed reservation is untouched. Only this flow's own prior
-    // reservation, never an upgrade's — no cross-flow double-spend.
-    if (subscription.pendingAddonAddition?.referralRewardUsageId) {
-      try {
-        await releaseReservation(subscription.pendingAddonAddition.referralRewardUsageId);
-      } catch (relErr) {
-        console.error('Failed to release prior add-on reservation:', relErr.message);
-      }
-    }
-
-    let reservation = null;
-    try {
-      reservation = await reserveNextAvailableReward(req.user.organization, {
-        subscription: subscription._id,
-      });
-    } catch (reserveErr) {
-      console.error('Referral reservation failed (proceeding at full price):', reserveErr.message);
-    }
-
-    let discountedProrationAmount = prorationAmount;
-    let referralDiscountAmount = 0;
-    let referralRewardUsageId = null;
-    if (reservation) {
-      const referralModifier = rewardToModifier(reservation.reward);
-      const applied = applyModifiers(prorationAmount, [referralModifier]);
-      referralDiscountAmount = applied.discount;
-      discountedProrationAmount = applied.totalAmount;
-      referralRewardUsageId = reservation.usage._id;
-    }
-
-    // GST-inclusive amount for the actual Razorpay charge
-    const prorationAmountWithGST = discountedProrationAmount + computeGST(discountedProrationAmount);
-
-    let razorpayOrder;
-    try {
-      razorpayOrder = await razorpay.orders.create({
-        amount: prorationAmountWithGST * 100,
-        currency: 'INR',
-        receipt: `adn_${subscription._id.toString().slice(-8)}_${Date.now().toString().slice(-6)}`,
-        notes: {
-          organization_id: req.user.organization.toString(),
-          subscription_id: subscription._id.toString(),
-          addon_key: addonKey,
-          quantity: quantity.toString(),
-          price_per_unit: pricePerUnit.toString(),
-          type: 'addon_purchase',
-        },
-      });
-    } catch (orderErr) {
-      // The order we reserved the reward for was never created — release the
-      // reservation immediately so the reward is usable again, rather than
-      // waiting for it to expire.
-      if (referralRewardUsageId) await releaseReservation(referralRewardUsageId);
-      throw orderErr;
-    }
-
-    // Backfill the order id onto the reservation for traceability (reserved
-    // before the order existed, so invoiceId was null at reserve time).
-    if (referralRewardUsageId) {
-      await RewardUsage.updateOne({ _id: referralRewardUsageId }, { $set: { invoiceId: razorpayOrder.id } });
-    }
-
-    subscription.pendingAddonAddition = {
+    const result = await startAddonPurchase({
+      user: req.user,
+      organizationId: req.user.organization,
+      subscription,
+      plan,
+      catalogEntry,
       addonKey,
       quantity,
-      pricePerUnit,
-      prorationAmount: prorationAmountWithGST, // GST-inclusive — matches actual order amount
-      orderId: razorpayOrder.id,
-      createdAt: new Date(),
-      referralRewardUsageId,
-    };
-    await subscription.save();
+    });
+
+    subscription.pendingAddonAddition = result.subscription.pendingAddonAddition;
 
     res.json({
       success: true,
-      prorationAmount: discountedProrationAmount,
-      referralDiscountApplied: referralDiscountAmount || undefined,
-      paymentDetails: {
-        key: process.env.RAZORPAY_KEY_ID,
-        order_id: razorpayOrder.id,
-        amount: razorpayOrder.amount,
-        currency: 'INR',
-        name: req.user.name,
-        description: `${catalogEntry.displayName} ×${quantity} — pro-rated for remaining cycle`,
-        prefill: {
-          name: req.user.name,
-          email: req.user.email,
-          contact: req.user.phone || '',
-        },
-        theme: { color: '#3399cc' },
-      },
+      prorationAmount: result.discountedProrationAmount,
+      referralDiscountApplied: result.referralDiscountAmount || undefined,
+      paymentDetails: result.paymentDetails,
     });
   } catch (error) {
     console.error('initiateAddonPurchase error:', error);
