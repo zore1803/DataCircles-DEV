@@ -17,6 +17,7 @@ const { validateAndPriceCoupon, recordRedemption } = require('../utils/discountE
 const { calculateInvoice } = require('../utils/invoiceEngine');
 const BillingInvoice = require('../models/BillingInvoice');
 const CommercialTransaction = require('../models/CommercialTransaction');
+const ScheduledChange = require('../models/ScheduledChange');
 const Coupon = require('../models/Coupon');
 const { emitBillingEvent } = require('../utils/billingEvents');
 const Invited = require('../models/Invited');
@@ -1425,6 +1426,51 @@ exports.updateSubscription = async (req, res) => {
       };
       // Do NOT set cancelAtPeriodEnd — the subscription continues; only the amount changes.
 
+      // ScheduledChange — additive write-alongside, per IMPLEMENTATION_PLAN_V1.md's Phase 4
+      // design. Covers both genuine downgrade (PLAN_CHANGE) and non-UPI billing-cycle-change,
+      // bare or upgrade-combined (BILLING_CYCLE_CHANGE) — both reach this branch, and both are
+      // in ScheduledChange's scope (the UPI bypass never reaches here at all, per Step 0a).
+      // Not written for the remaining lateral edge case (same tier, same cycle, not an
+      // upgrade — a true no-op re-submission): that case isn't one of the four scoped action
+      // types and wasn't in the design table's rows — deliberately not invented here.
+      // Nothing reads this back yet — pendingUpdate above remains fully authoritative.
+      // Cancel any prior PENDING ScheduledChange of the same type first — pendingUpdate's own
+      // write above is a plain overwrite (no merge), so a repeated request here must not leave
+      // two PENDING ScheduledChange documents describing the same slot; see this session's
+      // structural-backstop note below for why an index isn't also added for this yet.
+      if (isGenuineDowngrade || isBillingCycleChange) {
+        try {
+          await ScheduledChange.updateMany(
+            {
+              organization: subscription.organization,
+              subscription: subscription._id,
+              type: isGenuineDowngrade ? 'PLAN_CHANGE' : 'BILLING_CYCLE_CHANGE',
+              status: 'PENDING',
+            },
+            { $set: { status: 'CANCELLED', reason: 'Superseded' } }
+          );
+          await ScheduledChange.create({
+            organization: subscription.organization,
+            subscription: subscription._id,
+            type: isGenuineDowngrade ? 'PLAN_CHANGE' : 'BILLING_CYCLE_CHANGE',
+            status: 'PENDING',
+            effectiveAt: subscription.currentPeriodEnd,
+            payload: {
+              planId,
+              pricePerUser: newPricePerUser,
+              billingCycle,
+              isBillingCycleChange,
+              isGenuineDowngrade,
+            },
+          });
+        } catch (scErr) {
+          console.error(
+            `ScheduledChange creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
+            scErr.message
+          );
+        }
+      }
+
       // CommercialTransaction — downgrade only (Chapter 18: a no-payment action
       // still creates a transaction, but never enters AWAITING_PAYMENT since
       // there is no payment step). CREATED->PRICED right here, once the target
@@ -1559,6 +1605,40 @@ exports.updateSubscription = async (req, res) => {
             }
             subscription.pendingAddonRemovals = pendingRemovals;
             await subscription.save();
+
+            // ScheduledChange — additive write-alongside, found by Step 5's whole-backend
+            // grep in the prior session (this site wasn't in the original Step 2 table).
+            // Matches this block's own skip-if-exists behavior (line ~1595 above), NOT
+            // scheduleAddonRemoval's merge/increment behavior — those are different
+            // shapes, confirmed by re-reading this block before wiring, not assumed
+            // identical. Only creates a record for an addonKey with no existing PENDING
+            // one; an addonKey already pending removal is left untouched here too.
+            for (const inc of incompatible) {
+              try {
+                const existingPending = await ScheduledChange.findOne({
+                  organization: subscription.organization,
+                  subscription: subscription._id,
+                  type: 'REMOVE_ADDON',
+                  status: 'PENDING',
+                  'payload.addonKey': inc.addonKey,
+                });
+                if (!existingPending) {
+                  await ScheduledChange.create({
+                    organization: subscription.organization,
+                    subscription: subscription._id,
+                    type: 'REMOVE_ADDON',
+                    status: 'PENDING',
+                    effectiveAt: subscription.currentPeriodEnd,
+                    payload: { addonKey: inc.addonKey, quantity: inc.quantity, reason: 'incompatible_with_downgrade_target_plan' },
+                  });
+                }
+              } catch (scErr) {
+                console.error(
+                  `ScheduledChange creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id} addonKey=${inc.addonKey}:`,
+                  scErr.message
+                );
+              }
+            }
           }
         } catch (err) {
           console.warn('Could not schedule incompatible add-on removals on downgrade:', err.message);
@@ -1676,6 +1756,39 @@ exports.cancelSubscription = async (req, res) => {
 
     subscription.cancelAtPeriodEnd = true;
     await subscription.save();
+
+    // ScheduledChange — additive write-alongside, paid path only. Not written for
+    // the trial-cancellation branch above: that path is immediate (trialEnd set to
+    // now, appStatus flipped to cancelled in the same request) — no future window
+    // exists for it to represent, same reasoning as the UPI bypass (Step 0a). Only
+    // this path is genuinely deferred (effective at currentPeriodEnd). Cancel any
+    // prior PENDING CANCELLATION/PLAN_CHANGE/BILLING_CYCLE_CHANGE ScheduledChange
+    // first — per Chapter 9's cancellation-precedence rule (Cancellation supersedes
+    // a pending downgrade/cycle-change), reflected here as bookkeeping only; no
+    // reader acts on this yet.
+    try {
+      await ScheduledChange.updateMany(
+        {
+          organization: subscription.organization,
+          subscription: subscription._id,
+          status: 'PENDING',
+        },
+        { $set: { status: 'CANCELLED', reason: 'Subscription Cancelled' } }
+      );
+      await ScheduledChange.create({
+        organization: subscription.organization,
+        subscription: subscription._id,
+        type: 'CANCELLATION',
+        status: 'PENDING',
+        effectiveAt: subscription.currentPeriodEnd,
+        payload: { cancelAtPeriodEnd },
+      });
+    } catch (scErr) {
+      console.error(
+        `ScheduledChange creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
+        scErr.message
+      );
+    }
 
     if (cancellationCommercialTransaction) {
       try {
@@ -2435,6 +2548,37 @@ async function handlePaymentCaptured(razorpayPayment) {
           }
         }
         upgradeSubscription.pendingAddonRemovals = pendingRemovals;
+
+        // ScheduledChange — additive write-alongside, found by Step 5's whole-backend
+        // grep in the prior session. Same skip-if-exists shape as the downgrade site
+        // above (not scheduleAddonRemoval's merge behavior) — confirmed by re-reading
+        // this block, not assumed identical just because both are "add-on removal."
+        for (const inc of incompatibleAddons) {
+          try {
+            const existingPending = await ScheduledChange.findOne({
+              organization: upgradeSubscription.organization,
+              subscription: upgradeSubscription._id,
+              type: 'REMOVE_ADDON',
+              status: 'PENDING',
+              'payload.addonKey': inc.addonKey,
+            });
+            if (!existingPending) {
+              await ScheduledChange.create({
+                organization: upgradeSubscription.organization,
+                subscription: upgradeSubscription._id,
+                type: 'REMOVE_ADDON',
+                status: 'PENDING',
+                effectiveAt: upgradeSubscription.currentPeriodEnd,
+                payload: { addonKey: inc.addonKey, quantity: inc.quantity, reason: 'incompatible_with_upgrade_target_plan' },
+              });
+            }
+          } catch (scErr) {
+            console.error(
+              `ScheduledChange creation failed (non-fatal) — organization=${upgradeSubscription.organization} subscription=${upgradeSubscription._id} addonKey=${inc.addonKey}:`,
+              scErr.message
+            );
+          }
+        }
       }
 
       // Phase 5: CAW subscriptions (mandateTokenId present) have no Razorpay-
