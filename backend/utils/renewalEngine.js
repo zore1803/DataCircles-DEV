@@ -49,192 +49,241 @@ const ScheduledChange = require('../models/ScheduledChange');
  *   { success: true, paymentId, orderId } or throw. Injected so this slice's
  *   own tests can stub it without touching real Razorpay.
  * @returns {Promise<RenewalResult>}
+ *
+ * PHASE 4B SLICE 2 — R13.5 idempotent repair-forward. Every step below checks
+ * "did this already happen?" against existing persisted state before acting,
+ * same philosophy as reconcileMandate (subscriptionController.js:1880) — not
+ * a Mongo transaction (the charge is an external, non-reversible side effect;
+ * no local transaction can roll it back), and not a new orchestrator. Calling
+ * this function twice for the same subscription+period, at any point after a
+ * partial failure, resumes from the first incomplete step instead of
+ * re-running completed ones — the mandate is charged at most once per period.
+ * @param {String} [_injectFailureAfter] - TEST ONLY, undefined in all production
+ *   call sites. Throws immediately after the named checkpoint's write
+ *   succeeds, so Step 6's verification scenarios can prove repair-forward
+ *   resumes correctly. One of 'CHARGE_COMMITTED' | 'INVOICE_PAID' |
+ *   'SUBSCRIPTION_ADVANCED'. No effect on any real code path when omitted.
  */
-async function renewSubscription(subscription, { chargeMandateFn } = {}) {
+async function renewSubscription(subscription, { chargeMandateFn, _injectFailureAfter } = {}) {
   if (!subscription.mandateTokenId) {
     return skippedNotImplemented();
   }
 
-  // R3 — build Effective Subscription. Trivial in this slice: this function's
-  // precondition (enforced by the caller, not re-checked here) is zero
-  // PENDING ScheduledChange records, so the Effective Subscription is simply
-  // the current Subscription's own commercial fields. Real ScheduledChange
-  // application is the next slice's work, not this one's.
-  const effective = {
-    planName: subscription.planName,
-    billingCycle: subscription.billingCycle,
-    pricePerUser: subscription.pricePerUser,
-    activeAddons: subscription.activeAddons || [],
-  };
-
-  // R7 (simplified, see file header) — reuse appliedCoupon as a flat
-  // fixed-amount modifier if present. Full duration/cycles-remaining
-  // validation is deferred, not built here.
-  const resolvedModifiers = [];
-  if (subscription.appliedCoupon?.discountAmount) {
-    resolvedModifiers.push({
-      type: 'coupon',
-      value: { kind: 'fixed', amount: subscription.appliedCoupon.discountAmount },
-      appliesTo: 'entire_invoice',
-    });
-  }
-  // R8 — no referral modifier constructed in this slice (see file header).
-
-  // R4-R9 — price via calculateInvoice(), no adjustmentContext (a renewal is a
-  // fresh full-period charge, same shape as createSubscription's own call).
-  const invoice = calculateInvoice({ subscription: effective, resolvedModifiers });
-
-  // R10 — persist BillingInvoice as PENDING_PAYMENT before charging, same
-  // additive, non-fatal pattern as BillingInvoice's signup rollout
-  // (subscriptionController.js:~307) — but here a failure IS fatal to the
-  // renewal (R13's commit needs a real invoice document to reference), unlike
-  // Phase 2's signup concession, since this is new construction, not a
-  // migration shadowing an already-authoritative legacy write.
-  // commercialTransaction linked below, after CommercialTransaction is created —
-  // BillingInvoice is created first (CommercialTransaction.target references
-  // its _id), so the link is set via a second write once both ids exist.
-  const billingInvoice = await BillingInvoice.create({
+  // Step 0 — resume check. The existing partial unique index on
+  // CommercialTransaction ({subscription:1, type:1}, non-terminal statuses)
+  // guarantees at most one non-terminal RENEWAL transaction per subscription
+  // at a time — so finding one here means this IS the in-progress attempt
+  // for the current period, not a stale one, and reusing it (rather than
+  // creating a second invoice/transaction) is exactly what avoids re-charging.
+  let commercialTransaction = await CommercialTransaction.findOne({
     organization: subscription.organization,
     subscription: subscription._id,
-    reason: 'RENEWAL',
-    lineItems: invoice.lines,
-    subtotal: invoice.subtotal,
-    discount: invoice.discount,
-    taxable: invoice.taxable,
-    gst: invoice.gst,
-    total: invoice.total,
-    generatedAt: invoice.generatedAt,
-    status: 'PENDING_PAYMENT',
+    type: 'RENEWAL',
+    status: { $in: ['PRICED', 'COMMITTED'] },
   });
 
-  // CommercialTransaction{type:'RENEWAL'} — CREATED/PRICED collapsed into one
-  // write (mirrors the add-on-purchase/upgrade pattern: "never lingers in
-  // CREATED", a request that reaches this point has already priced cleanly).
-  let commercialTransaction;
-  try {
+  let billingInvoice;
+  let newPeriodStart;
+  let newPeriodEnd;
+
+  if (commercialTransaction) {
+    // Resuming a prior attempt — reuse its invoice and target period rather
+    // than recomputing (recomputing pricing here would risk pricing drift if
+    // catalog prices changed between attempts; the original invoice is the
+    // one the customer was already charged against).
+    billingInvoice = await BillingInvoice.findById(commercialTransaction.latestInvoice);
+    newPeriodStart = new Date(commercialTransaction.target.newPeriodStart);
+    newPeriodEnd = new Date(commercialTransaction.target.newPeriodEnd);
+  } else {
+    // Fresh renewal — steps 1-3 of the original commit sequence, unchanged
+    // from Slice 1, except newPeriodStart/newPeriodEnd are now computed here
+    // (before charging) and stored in CommercialTransaction.target so a
+    // resumed run can know the target period without re-deriving it from a
+    // Subscription document that may have already been advanced.
+
+    // R3 — build Effective Subscription. Trivial in this slice: this
+    // function's precondition (enforced by the caller, not re-checked here)
+    // is zero PENDING ScheduledChange records, so the Effective Subscription
+    // is simply the current Subscription's own commercial fields. Real
+    // ScheduledChange application is a later slice's work, not this one's.
+    const effective = {
+      planName: subscription.planName,
+      billingCycle: subscription.billingCycle,
+      pricePerUser: subscription.pricePerUser,
+      activeAddons: subscription.activeAddons || [],
+    };
+
+    // R7 (simplified, see file header) — reuse appliedCoupon as a flat
+    // fixed-amount modifier if present. Full duration/cycles-remaining
+    // validation is deferred, not built here.
+    const resolvedModifiers = [];
+    if (subscription.appliedCoupon?.discountAmount) {
+      resolvedModifiers.push({
+        type: 'coupon',
+        value: { kind: 'fixed', amount: subscription.appliedCoupon.discountAmount },
+        appliesTo: 'entire_invoice',
+      });
+    }
+    // R8 — no referral modifier constructed in this slice (see file header).
+
+    // R4-R9 — price via calculateInvoice(), no adjustmentContext (a renewal
+    // is a fresh full-period charge, same shape as createSubscription's own
+    // call).
+    const invoice = calculateInvoice({ subscription: effective, resolvedModifiers });
+
+    newPeriodStart = subscription.currentPeriodEnd;
+    newPeriodEnd = computeNextPeriodEnd(subscription);
+
+    // R10 — persist BillingInvoice as PENDING_PAYMENT before charging. A
+    // failure here is fatal to the renewal (R13's commit needs a real
+    // invoice document to reference) — unlike Phase 2's signup concession,
+    // this is new construction, not a migration shadowing an
+    // already-authoritative legacy write.
+    billingInvoice = await BillingInvoice.create({
+      organization: subscription.organization,
+      subscription: subscription._id,
+      reason: 'RENEWAL',
+      lineItems: invoice.lines,
+      subtotal: invoice.subtotal,
+      discount: invoice.discount,
+      taxable: invoice.taxable,
+      gst: invoice.gst,
+      total: invoice.total,
+      generatedAt: invoice.generatedAt,
+      status: 'PENDING_PAYMENT',
+    });
+
+    // CommercialTransaction{type:'RENEWAL'} — CREATED/PRICED collapsed into
+    // one write (mirrors the add-on-purchase/upgrade pattern: "never lingers
+    // in CREATED"). target stores newPeriodStart/newPeriodEnd (existing
+    // Mixed field, same pattern every other CommercialTransaction call site
+    // already uses to store flow-specific data — no schema change) so a
+    // resumed run can recover the target period without depending on
+    // Subscription's own (mutable) currentPeriodEnd.
     commercialTransaction = await CommercialTransaction.create({
       organization: subscription.organization,
       subscription: subscription._id,
       type: 'RENEWAL',
       status: 'PRICED',
-      target: { billingInvoice: billingInvoice._id, total: invoice.total },
+      target: { billingInvoice: billingInvoice._id, total: invoice.total, newPeriodStart, newPeriodEnd },
       latestInvoice: billingInvoice._id,
     });
-  } catch (ctErr) {
-    console.error(
-      `CommercialTransaction creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
-      ctErr.message
-    );
+
+    // Link BillingInvoice -> CommercialTransaction now that both exist (the
+    // field was on the schema since Phase 1 but never populated for any
+    // invoice yet — signup's BillingInvoice write predates
+    // CommercialTransaction existing at all, so this is the first time this
+    // link is ever set).
+    billingInvoice.commercialTransaction = commercialTransaction._id;
+    await billingInvoice.save();
   }
 
-  // Link BillingInvoice -> CommercialTransaction now that both exist (the
-  // field was on the schema since Phase 1 but never populated for any invoice
-  // yet — signup's BillingInvoice write predates CommercialTransaction
-  // existing at all, so this is the first time this link is ever set).
-  if (commercialTransaction) {
+  // Step 4 — charge exactly once. Marker: commercialTransaction.status ===
+  // 'COMMITTED' means the charge already succeeded on a prior attempt — do
+  // NOT call chargeMandateFn again. This is the entire point of this slice.
+  if (commercialTransaction.status !== 'COMMITTED') {
+    // R11/R12 — charge the mandate. Injected so this slice's tests don't
+    // touch real Razorpay; the real charge call is whichever session wires
+    // actual Charge-at-Will invocation (already-proven pattern per R11's own
+    // explicit non-goal — not redesigned here).
+    let chargeResult;
     try {
-      billingInvoice.commercialTransaction = commercialTransaction._id;
-      await billingInvoice.save();
-    } catch (biErr) {
-      console.error(
-        `BillingInvoice.commercialTransaction link failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
-        biErr.message
-      );
+      chargeResult = await chargeMandateFn({
+        subscription,
+        amount: billingInvoice.total,
+      });
+    } catch (chargeErr) {
+      // R7's "Unknown -> Reconciliation Queue" branch — not implemented in
+      // this slice (happy-path only). Thrown explicitly, not returned as a
+      // structured result, so it's unambiguous in review that this is
+      // stubbed, not a real modeled outcome.
+      return reconciliationNeededNotImplemented(chargeErr);
+    }
+
+    if (!chargeResult?.success) {
+      // R12's real failure/past_due branch — not implemented in this slice.
+      return pastDueNotImplemented();
+    }
+
+    // Record charge success immediately, atomically, in its own write — this
+    // is the durable marker every future retry checks before charging again.
+    // Residual gap, stated precisely rather than overclaimed: if THIS exact
+    // write fails (the charge succeeded but this save throws before
+    // committing), there is still no durable record of the charge on a
+    // retry — no application-level check can close that specific instant
+    // without an independent confirmation channel (Razorpay's own webhook,
+    // R7's reconciliation branch), which real charging + reconciliation would
+    // provide and this slice's injected chargeMandateFn does not model. Every
+    // failure window AFTER this write succeeds is fully covered below.
+    commercialTransaction.status = 'COMMITTED';
+    commercialTransaction.lastAttemptAt = new Date();
+    commercialTransaction.target = {
+      ...commercialTransaction.target,
+      paymentId: chargeResult.paymentId,
+      orderId: chargeResult.orderId,
+    };
+    await commercialTransaction.save();
+    if (_injectFailureAfter === 'CHARGE_COMMITTED') {
+      throw new Error('TEST-INJECTED FAILURE after CHARGE_COMMITTED');
     }
   }
 
-  // R11/R12 — charge the mandate. Injected so this slice's tests don't touch
-  // real Razorpay; the real charge call is whichever session wires actual
-  // Charge-at-Will invocation (already-proven pattern per R11's own
-  // explicit non-goal — not redesigned here).
-  let chargeResult;
-  try {
-    chargeResult = await chargeMandateFn({
-      subscription,
-      amount: invoice.total,
-    });
-  } catch (chargeErr) {
-    // R7's "Unknown -> Reconciliation Queue" branch — not implemented in this
-    // slice (happy-path only). Thrown explicitly, not returned as a
-    // structured result, so it's unambiguous in review that this is stubbed,
-    // not a real modeled outcome.
-    return reconciliationNeededNotImplemented(chargeErr);
-  }
-
-  if (!chargeResult?.success) {
-    // R12's real failure/past_due branch — not implemented in this slice.
-    return pastDueNotImplemented();
-  }
-
-  // R13 — commit, one sequence, each step this slice's minimal version of
-  // "idempotent-checked" (real R13.5 idempotent-repair-forward is deferred).
-  if (commercialTransaction) {
-    try {
-      commercialTransaction.status = 'COMMITTED';
-      commercialTransaction.lastAttemptAt = new Date();
-      await commercialTransaction.save();
-    } catch (ctErr) {
-      console.error(
-        `CommercialTransaction COMMITTED update failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id} transaction=${commercialTransaction._id}:`,
-        ctErr.message
-      );
+  // Step 5 — invoice marked paid? Marker: billingInvoice.status === 'PAID'.
+  if (billingInvoice.status !== 'PAID') {
+    billingInvoice.status = 'PAID';
+    billingInvoice.paidAt = new Date();
+    billingInvoice.razorpay = {
+      ...billingInvoice.razorpay,
+      paymentId: commercialTransaction.target.paymentId,
+      orderId: commercialTransaction.target.orderId,
+    };
+    await billingInvoice.save();
+    if (_injectFailureAfter === 'INVOICE_PAID') {
+      throw new Error('TEST-INJECTED FAILURE after INVOICE_PAID');
     }
   }
 
-  billingInvoice.status = 'PAID';
-  billingInvoice.paidAt = new Date();
-  billingInvoice.razorpay = { ...billingInvoice.razorpay, paymentId: chargeResult.paymentId, orderId: chargeResult.orderId };
-  await billingInvoice.save();
+  // Step 6 — Subscription already advanced for this specific renewal?
+  // Marker: currentPeriodStart already equals the target period's start
+  // (captured in commercialTransaction.target before charging, not
+  // recomputed from Subscription's own mutable fields).
+  if (subscription.currentPeriodStart?.getTime() !== newPeriodStart.getTime()) {
+    subscription.currentPeriodStart = newPeriodStart;
+    subscription.currentPeriodEnd = newPeriodEnd;
+    subscription.nextBillingDate = newPeriodEnd;
+    await subscription.save();
+    if (_injectFailureAfter === 'SUBSCRIPTION_ADVANCED') {
+      throw new Error('TEST-INJECTED FAILURE after SUBSCRIPTION_ADVANCED');
+    }
+  }
 
-  // R13's own first bullet — "Effective Subscription becomes the real
-  // Subscription... advance Billing Cycle" — advancing the Subscription's own
-  // period is a distinct step from writing BillingCycle, and was missing from
-  // the first pass of this slice (caught on review, not shipped silently).
-  // Trivial in this slice specifically because Effective Subscription equals
-  // current Subscription (zero pending changes) — nothing beyond the period
-  // dates actually needs to change here; a slice that applies ScheduledChange
-  // would also write planName/activeAddons/etc. at this same point.
-  const newPeriodStart = subscription.currentPeriodEnd;
-  const newPeriodEnd = computeNextPeriodEnd(subscription);
-  subscription.currentPeriodStart = newPeriodStart;
-  subscription.currentPeriodEnd = newPeriodEnd;
-  subscription.nextBillingDate = newPeriodEnd;
-  await subscription.save();
-
-  // First-ever BillingCycle write (Step 2 of this slice's brief) — schema
-  // needed no field additions, confirmed by reading models/BillingCycle.js
-  // before this write: subscription/periodStart/periodEnd/invoice/status are
-  // exactly what's available and needed here. Uses the same newPeriodStart/
-  // newPeriodEnd just written to the Subscription, not a second computation —
-  // one date pair, two places it's recorded, not two independently-derived
-  // values that could drift apart. status set once at creation, mirroring
-  // billingInvoice.status per the model's own header comment ("mirrors
-  // BillingInvoice.status... never written independently" — this slice does
-  // not yet implement live mirroring on later invoice changes, since nothing
-  // changes billingInvoice.status after this point in the happy path).
-  const billingCycle = await BillingCycle.create({
+  // Step 7 — BillingCycle already written? Marker: a BillingCycle exists for
+  // this subscription+invoice pair. Schema needed no field additions,
+  // confirmed by reading models/BillingCycle.js: subscription/periodStart/
+  // periodEnd/invoice/status are exactly what's available and needed here.
+  let billingCycle = await BillingCycle.findOne({
     subscription: subscription._id,
-    periodStart: newPeriodStart,
-    periodEnd: newPeriodEnd,
     invoice: billingInvoice._id,
-    status: billingInvoice.status,
   });
+  if (!billingCycle) {
+    billingCycle = await BillingCycle.create({
+      subscription: subscription._id,
+      periodStart: newPeriodStart,
+      periodEnd: newPeriodEnd,
+      invoice: billingInvoice._id,
+      status: billingInvoice.status,
+    });
+  }
 
-  if (commercialTransaction) {
-    try {
-      commercialTransaction.status = 'COMPLETED';
-      await commercialTransaction.save();
-    } catch (ctErr) {
-      console.error(
-        `CommercialTransaction COMPLETED update failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id} transaction=${commercialTransaction._id}:`,
-        ctErr.message
-      );
-    }
+  // Step 8 — transaction completed? Marker: status === 'COMPLETED'.
+  if (commercialTransaction.status !== 'COMPLETED') {
+    commercialTransaction.status = 'COMPLETED';
+    await commercialTransaction.save();
   }
 
   // No ScheduledChange to mark EXECUTED in this slice (precondition: zero
   // PENDING records) — ScheduledChange.updateMany is intentionally not called
-  // here; the next slice's job once ScheduledChange application is real.
+  // here; a later slice's job once ScheduledChange application is real.
   void ScheduledChange; // referenced only to make the "not used yet" explicit, not a silent unused import
 
   return { outcome: 'RENEWED', invoice: billingInvoice._id, billingCycle: billingCycle._id };
