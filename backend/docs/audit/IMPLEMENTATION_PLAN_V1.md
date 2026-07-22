@@ -2226,12 +2226,103 @@ writing that transition. Not an oversight; a verified boundary.
 **Whole-backend grep confirms still exactly one entry point** (`renewSubscription`'s own definition,
 `module.exports`, and its own internal comments) — no cron, no scheduler, no second call site introduced.
 
-### Phase 6 — 🟥 Build the Retry Engine and its scheduler (net-new) — blocked on item 9.5 above landing first
-11. Implement the 3-attempt/24h-72h-120h retry cadence (§9) as its own module and scheduler job,
-    replacing the manually-triggered `POST /:id/retry-payment` as the *automatic* path (the manual
-    endpoint can remain as a customer/Support-initiated early-retry option, per Chapter 19's RT3).
+### Phase 6 — 🟥 Build the Retry Engine and its scheduler
+11. Implement the 3-attempt/24h-72h-120h retry cadence (§9) as its own module and scheduler job.
+    **✅ Slice 1 done — single-subscription `retryRenewal()`, no cron. See the Phase 4C Slice 1
+    subsection below.** ~~replacing the manually-triggered `POST /:id/retry-payment` as the *automatic*
+    path (the manual endpoint can remain as a customer/Support-initiated early-retry option, per Chapter
+    19's RT3)~~ — **this parenthetical is wrong, per the Phase 4C design session's Step 1 finding**:
+    `retry-payment` rejects any subscription with `isPaymentConfirmed:true`, so it cannot serve a
+    `past_due` renewal retry at all. Struck through rather than silently deleted — a real correction to
+    this plan's own prior text, not an update that erases the mistake.
 12. Add the Mandate Monitoring reconciliation job (§2.5) and the `RewardUsage` cleanup job (§2.6) in
     the same pass, since all three are small, independent, additive scheduler jobs.
+
+### Phase 4C Slice 1 — Retry Engine, single subscription, no cron
+
+**Scope: exactly what the slice brief specified.** Created only `backend/utils/retryEngine.js`.
+`renewalEngine.js` was not modified. No cron, no scheduler, no iteration over subscriptions,
+`ScheduledChange` untouched, `CommercialTransaction` schema untouched (only its existing `attemptCount`
+field is written, same as `addonPurchaseLifecycle.js`/`updateSubscription` already do for other
+transaction types), `retry-payment` not repurposed.
+
+**Step 0 — the open design question, resolved, one answer, not deferred again.** Re-read every
+`retrying`/`past_due` occurrence in Chapter 3.5: line 46 (Chapter 1's early sketch) and line 611 (R2's
+table, "Retry Engine owns `retrying`, full stop") both use `retrying` as if it were a real state; line
+837-841 (the same Chapter 3.5, ~200 lines later) states the access chain as `trial → active → past_due →
+suspended → cancelled/expired` with no `retrying` value, describing retry success/exhaustion as direct
+`past_due→active`/`past_due→suspended` transitions. **Contradiction identified, resolved by consistency
+with the rest of the specification, not by picking arbitrarily**: Chapter 9's entire RT interaction-matrix
+section (a later, independent audit pass) never references `retrying` as a value in any cell — RT1 says
+"Returns to active," RT2 says "Suspended," both implicitly from `past_due`. The real codebase independently
+confirms the same reading: `Subscription.appStatus`'s Mongoose enum, `setAppStatus`'s own hardcoded
+validation list, and `middlewares/subscriptionGate.js`'s access-control list all have no `retrying` value
+anywhere. **Decision: Option B.** `retrying` is documentation shorthand for "a `past_due` subscription
+currently inside its retry window," not a persisted `appStatus` value. `appStatus` stays `past_due`
+throughout; retry progress lives on `CommercialTransaction.attemptCount` (Step 4). Distinct, already-answered
+question, not conflated with the above: Chapter 3.5 line 841 explicitly assigns `past_due→active` (on
+retry success) to the **Retry Engine** — implemented in this slice. `past_due→suspended` is a **separate**
+scheduler job (Chapter 7 Job 3, "Suspension" — distinct from Job 2, "Retry") — not implemented or touched
+by this file; exhausting retries here does not suspend anything.
+
+**Step 1 — `retryRenewal({subscription, chargeMandateFn})`**, `backend/utils/retryEngine.js`. One
+subscription, one call, no iteration.
+
+**Step 2 — eligibility, only spec-supported rules, one real gap identified and reported rather than
+invented around:** (1) `appStatus === 'past_due'`, else `NOT_ELIGIBLE`; (2) a non-terminal
+(`status:'PRICED'`) `CommercialTransaction{type:'RENEWAL'}` must exist to resume — matches exactly the
+state Slice 3 leaves behind on a clean charge failure; (3) `attemptCount < 3` (`maxAttempts`, §9), else
+`RETRIES_EXHAUSTED`; (4) the retry window (`retryIntervals=[24h,72h,120h]` from the most recent
+`{to:'past_due'}` entry in `appStatusHistory` — existing, already-persisted data, no new field), else
+`NOT_YET_DUE`. **If `appStatusHistory` has no `past_due` entry at all** (a state that shouldn't occur given
+Slice 3 always writes one via `setAppStatus`, but checked rather than assumed impossible): returns
+`NOT_ELIGIBLE` with an explicit `MISSING_PAST_DUE_TIMESTAMP` reason instead of guessing a fallback window.
+
+**Step 3 — `renewSubscription()` called exactly once**, no duplicated pricing/invoice/`BillingCycle`/
+repair-forward/`ScheduledChange` logic. Confirmed by reading `retryEngine.js`'s own source: the only
+Renewal-Engine-owned work this file performs is interpreting the returned outcome.
+
+**Step 4 — bookkeeping: `CommercialTransaction.attemptCount` incremented immediately before calling
+`renewSubscription()`**, reusing the field exactly the way `addonPurchaseLifecycle.js`/`updateSubscription`
+already use it for other transaction types (`attemptCount = 1` at first order-creation) — no new counter,
+no schema change.
+
+**Step 5 — outcomes:**
+- `RENEWED` → `RETRY_SUCCEEDED`: `setAppStatus(subscription, 'active', 'Retry succeeded')`, saved. This is
+  this engine's own write, per Chapter 3.5 line 841 — confirmed in Slice 3 that `renewSubscription()`
+  deliberately does not do this itself.
+- `PAST_DUE` → returned as `{outcome:'PAST_DUE', attemptsMade, retriesRemaining, nextRetryAt}` — the "next
+  retry information" the brief asked for, nothing scheduled.
+- `RECONCILIATION_NEEDED`/`SKIPPED` → forwarded unchanged, no further action, no retry.
+
+**Step 6 — verified with six fixture scenarios, real values, real `appStatusHistory`/`CommercialTransaction`
+state produced by an actual prior `renewSubscription()` failure call (not hand-crafted), fixture dates
+relative to `new Date()` throughout, `past_due` timestamps back-dated only as an explicit fixture
+manipulation to avoid a real 24h wait, never a hardcoded past calendar date:**
+
+| Scenario | Result | Charge calls | Verified |
+|---|---|---|---|
+| Retry succeeds on first retry | `RETRY_SUCCEEDED`, `attemptsMade:1` | 1 | `appStatus→active`, `attemptCount:1`, transaction `COMPLETED` |
+| Retry fails again | `PAST_DUE`, `retriesRemaining:2` | 1 | `appStatus` stays `past_due`, `attemptCount:1`, transaction stays `PRICED` |
+| Retry limit reached (`attemptCount` pre-set to 3) | `RETRIES_EXHAUSTED` | **0** | `renewSubscription()` never called at all |
+| `chargeMandateFn` throws | `RECONCILIATION_NEEDED` | 1 | forwarded unchanged |
+| Not `past_due` at all | `NOT_ELIGIBLE`, `NOT_PAST_DUE` | 0 | — |
+| Retry window not yet elapsed | `NOT_YET_DUE` | 0 | — |
+
+No duplicate invoices, `BillingCycle`s, or `CommercialTransaction`s produced in any scenario (single
+`RENEWAL` transaction per subscription throughout, confirmed via direct lookup in each scenario). Test
+documents deleted immediately after each scenario; temp script deleted, not committed.
+
+**Step 7 — whole-backend grep**: `retryRenewal` — exactly one definition, no duplicate. `attemptCount` —
+used identically by `addonPurchaseLifecycle.js`, `updateSubscription`, and now `retryEngine.js`; no
+divergent second convention. `retry-payment` — confirmed still routed to
+`subscriptionController.retryPayment` (`routes/subscription.js:50`), **untouched, not repurposed**. Its
+scope is documented above (Phase 6 item 11's struck-through parenthetical) as a legacy signup-recovery
+endpoint that cannot serve a `past_due` renewal retry, per Step 1's original finding — restated here as a
+confirmed fact, not re-derived.
+
+**Confirmed: no cron, no scheduler, no automatic retries.** `retryRenewal` is not imported by
+`backend/jobs/subscriptionLifecycleJobs.js` or anywhere else — callable only.
 
 ### Phase 7 — Split and shrink `handlePaymentCaptured`
 13. Physically separate the legacy (`pendingUpgrade`-reading) branch from the CAW
