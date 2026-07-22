@@ -9,16 +9,27 @@
 // full Renewal Engine — it is the happy path only. NOT wired into any cron,
 // scheduler, or webhook. Not called from anywhere yet — callable, not running.
 //
-// Explicitly NOT built in this slice (see PAST_DUE/RECONCILIATION_NEEDED/
-// SKIPPED stubs below):
+// PHASE 4B SLICE 3 — all four outcomes (RENEWED/PAST_DUE/RECONCILIATION_NEEDED/
+// SKIPPED) are now structured returns, never throws, for expected business
+// cases. PAST_DUE is fully real: a clean charge failure sets appStatus to
+// past_due (via the existing setAppStatus helper) and leaves BillingInvoice/
+// CommercialTransaction untouched in their non-terminal state, so a Retry
+// Engine calling renewSubscription() again finds them and resumes via the
+// same R13.5 repair-forward logic already verified in Slice 2 — no new
+// idempotency work was needed for this. RECONCILIATION_NEEDED is a structured
+// return now too, but its actual reconciliation logic (querying Razorpay to
+// find out what really happened) is still not built — only the throw-vs-return
+// shape changed, per Phase 4C's Step 7 finding that this was the actual
+// blocker, not new idempotency work.
+//
+// Explicitly still NOT built:
 //   - ScheduledChange application (R3's actual "apply due changes" logic) —
 //     this slice's R3 is trivial (Effective Subscription = current
 //     Subscription) because the precondition is zero PENDING records.
-//   - Payment failure / past_due handling (R12's failure branch, R7's
-//     "Unknown -> Reconciliation Queue" branch).
-//   - Retry Engine interaction (R2's `retrying` ownership boundary) — the
-//     `retrying` appStatus value does not exist in the schema yet, deferred to
-//     whichever session builds retry/failure handling, per this slice's brief.
+//   - Real reconciliation logic behind RECONCILIATION_NEEDED (Razorpay query).
+//   - The Retry Engine itself, and whether `retrying` is a real appStatus
+//     value or derived shorthand over `past_due` — an open question named in
+//     the Phase 4C design subsection, not resolved here.
 //   - Coupon duration/cycles-remaining recalculation (R7) and Referral Engine
 //     re-application (R8) in full: this slice reuses `subscription.appliedCoupon`
 //     as a flat fixed-amount modifier if present, without validating whether
@@ -37,6 +48,9 @@ const BillingInvoice = require('../models/BillingInvoice');
 const BillingCycle = require('../models/BillingCycle');
 const CommercialTransaction = require('../models/CommercialTransaction');
 const ScheduledChange = require('../models/ScheduledChange');
+// Reused, not reimplemented — same helper subscriptionLifecycleJobs.js already
+// imports this way; appends to Subscription.appStatusHistory automatically.
+const { setAppStatus } = require('../controllers/subscriptionController');
 
 /**
  * @param {Object} subscription - a Subscription document, already confirmed:
@@ -66,7 +80,10 @@ const ScheduledChange = require('../models/ScheduledChange');
  */
 async function renewSubscription(subscription, { chargeMandateFn, _injectFailureAfter } = {}) {
   if (!subscription.mandateTokenId) {
-    return skippedNotImplemented();
+    // R1/R2 gating — SKIPPED. Structured return, not a throw (Phase 4B Slice
+    // 3): this is an expected business outcome (this subscription was never
+    // renewal-eligible in the first place), not an error condition.
+    return { outcome: 'SKIPPED', reason: 'NOT_RENEWABLE' };
   }
 
   // Step 0 — resume check. The existing partial unique index on
@@ -193,16 +210,36 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
         amount: billingInvoice.total,
       });
     } catch (chargeErr) {
-      // R7's "Unknown -> Reconciliation Queue" branch — not implemented in
-      // this slice (happy-path only). Thrown explicitly, not returned as a
-      // structured result, so it's unambiguous in review that this is
-      // stubbed, not a real modeled outcome.
-      return reconciliationNeededNotImplemented(chargeErr);
+      // R7's "Unknown -> Reconciliation Queue" branch. Structured return
+      // (Phase 4B Slice 3), not a throw — nothing is marked past_due here,
+      // deliberately: an ambiguous charge result must not be assumed failed
+      // (that risks the exact double-charge/wrongful-suspension this whole
+      // design phase exists to prevent). The BillingInvoice/CommercialTransaction
+      // are left exactly as they were (still PENDING_PAYMENT/PRICED) — real
+      // reconciliation logic (querying Razorpay to find out what actually
+      // happened) is still not built; only the throw-vs-return shape changed.
+      return { outcome: 'RECONCILIATION_NEEDED', reason: 'AMBIGUOUS_CHARGE_RESULT', error: chargeErr?.message };
     }
 
     if (!chargeResult?.success) {
-      // R12's real failure/past_due branch — not implemented in this slice.
-      return pastDueNotImplemented();
+      // R12's real failure/past_due branch — Phase 4B Slice 3. The mandate
+      // charge failed cleanly (chargeMandateFn resolved, success:false) —
+      // this is the one real business outcome this slice implements.
+      // BillingInvoice/CommercialTransaction are left exactly as they are
+      // (still PENDING_PAYMENT/PRICED) — not marked FAILED/VOID here,
+      // deliberately: per Step 7 of the Phase 4C design, a Retry Engine
+      // calling renewSubscription() again must find this same non-terminal
+      // transaction and resume, not discover a dead end. Only appStatus
+      // moves, per R12's own text ("Failure -> past_due only... zero
+      // commercial state touched").
+      setAppStatus(subscription, 'past_due', 'Renewal charge failed');
+      await subscription.save();
+      return {
+        outcome: 'PAST_DUE',
+        reason: 'CHARGE_FAILED',
+        invoice: billingInvoice._id,
+        transaction: commercialTransaction._id,
+      };
     }
 
     // Record charge success immediately, atomically, in its own write — this
@@ -298,22 +335,6 @@ function computeNextPeriodEnd(subscription) {
     next.setFullYear(next.getFullYear() + 1);
   }
   return next;
-}
-
-// The three non-happy-path outcomes from the Phase 4B design sketch —
-// deliberately stubbed as explicit throws, not partially-implemented return
-// values, so it's unambiguous in code review what's real vs. deferred in this
-// slice (per this slice's own Step 4).
-function skippedNotImplemented() {
-  throw new Error('SKIPPED branch (R1/R2 not-due/not-renewable) not implemented in this slice — Renewal Happy Path v1 is happy-path-only, per IMPLEMENTATION_PLAN_V1.md Phase 4B Slice 1. Caller must only invoke renewSubscription() for a subscription already confirmed due, renewable, and mandate-bearing.');
-}
-
-function reconciliationNeededNotImplemented(err) {
-  throw new Error(`RECONCILIATION_NEEDED branch (R7 ambiguous-charge-result) not implemented in this slice — Renewal Happy Path v1 is happy-path-only. Underlying error: ${err?.message}`);
-}
-
-function pastDueNotImplemented() {
-  throw new Error('PAST_DUE branch (R12 charge-failure) not implemented in this slice — Renewal Happy Path v1 is happy-path-only, per IMPLEMENTATION_PLAN_V1.md Phase 4B Slice 1.');
 }
 
 module.exports = { renewSubscription };
