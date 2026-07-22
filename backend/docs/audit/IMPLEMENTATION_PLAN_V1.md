@@ -1219,6 +1219,415 @@ response is not to wire `pendingUpdate` into `handleSubscriptionCharged` as that
 "every `ScheduledChange` with `effectiveDate <= today`," which cannot silently omit a change type the
 way four separate ad hoc pending-fields could.
 
+### Phase 4 tracing session — `pendingUpdate` full trace (oracle for `ScheduledChange`, no implementation this pass)
+
+**Scope of this subsection: tracing only, per the session brief. No `ScheduledChange` code was written.
+`CommercialTransaction` code was not touched.** This is the "know the old behavior precisely before
+building the new thing that must match it" discipline already used for every prior equivalence test in
+this project (5a/5c, add-on-purchase/upgrade/downgrade/cancellation).
+
+**Step 0 — is `BILLING_CYCLE_CHANGE` `pendingUpdate`-based or immediate/payment-gated? Answer: it's
+neither consistently — it depends on `paymentMode`, a real branching dimension not previously named as
+such.** Read `updateSubscription` directly rather than inferring from the domain spec:
+- **Non-UPI (mandate/card) subscriptions:** a same-tier billing-cycle-only change falls into the
+  `isBillingCycleChange || !isUpgrade` branch (`subscriptionController.js:1388` onward, the same branch
+  downgrade uses) and writes `subscription.pendingUpdate` — no Razorpay order, no charge now.
+- **UPI subscriptions:** the same request is intercepted *earlier* by the "UPI cancel-and-recreate"
+  branch (`subscriptionController.js:1093`, guarded by `paymentMode === 'upi' && subscription.isPaymentConfirmed
+  && !_isDowngrade` — `_isDowngrade` excludes only genuine downgrades, not billing-cycle-change or
+  upgrade+cycle-change combos). This branch cancels the existing Razorpay subscription immediately,
+  creates a **brand-new** Razorpay subscription and a **brand-new local state** on the *same* `Subscription`
+  document, and explicitly sets `subscription.pendingUpdate = null` (line 1132) — it never reads or
+  writes `pendingUpdate` for its own purposes at all. This is a second, independent scheduling-bypass
+  mechanism that was not visible from the domain spec's abstract description alone.
+
+**This is exactly the kind of hidden second mechanism the whole-backend search (`pendingUpdate`,
+`pendingAddon*`, `pendingPlan*`, `effectiveAt`, `scheduled`) was run to catch before assuming
+`pendingUpdate` is the only scheduling primitive — and it found one.** Classified below rather than
+merged into the `pendingUpdate` trace: the UPI branch is **not** a `ScheduledChange` candidate at all,
+since nothing is scheduled — it takes effect immediately, unconditionally, regardless of whether the
+requested change was a downgrade, an upgrade, or a pure cycle change. It is `Category A` in 5c's own
+sense (fresh state, no scheduling), just triggered from inside the "scheduled changes" code path by
+payment-mode branching rather than by the upgrade-interception check earlier in the function.
+
+**Answer to Step 0, stated plainly:** for non-UPI subscriptions, `BILLING_CYCLE_CHANGE` uses
+`pendingUpdate` (naturally covered by the same `ScheduledChange` migration as downgrade). For UPI
+subscriptions, it is immediate and bypasses `pendingUpdate` entirely (independently still open, unrelated
+to `ScheduledChange` — not wired into anything this session, per the hard constraint).
+
+**Step 1 — every `pendingUpdate` write/read/clear site, whole `backend/` directory, file:line:**
+
+| Action | Site | Fields touched | Trigger |
+|---|---|---|---|
+| Write | `subscriptionController.js:1403` (inside the `isBillingCycleChange \|\| !isUpgrade` branch) | `planName`, `pricePerUser`, `userCount` (hardcoded `1`), `totalAmount`, `billingCycle`, `scheduledAt` (= `currentPeriodEnd`), `carriedAddons[]`, `removedAddons[]` | A downgrade **or** a non-UPI same-tier billing-cycle-change request reaches `updateSubscription` |
+| Clear (null) | `subscriptionController.js:1132` | entire field set to `null` | The UPI cancel-and-recreate branch fires (Step 0) — clears defensively even though nothing upstream could have set it in the same request |
+| Clear (null) | `subscriptionController.js:1296` | entire field set to `null` | The "not payment confirmed" branch (Category A, first-ever paid conversion) — same defensive clear, unrelated to any actual pending downgrade |
+| Read | `subscriptionController.js:2860` (`handleSubscriptionCancelled`) | reads `planName`, `billingCycle`, `userCount`, `scheduledAt` to build a **brand-new** `Subscription` document via `razorpay.subscriptions.create()` | Fires only inside the legacy, non-CAW `subscription.cancelled` webhook handler — a cancel-and-recreate model predating Charge-at-Will |
+| **Never cleared after that read** | — | `subscription.pendingUpdate` is not set to `null`/`undefined` anywhere inside `handleSubscriptionCancelled` | Confirmed by reading the full function body (`subscriptionController.js:2835-2915`) — the read at line 2860 has no matching clear |
+| **Never read by renewal** | — | — | `handleSubscriptionCharged` (the actual renewal/charge webhook handler, `subscriptionController.js:2794` area) never references `pendingUpdate` at all — confirmed by grep, zero hits in that function. `backend/jobs/subscriptionLifecycleJobs.js` (the only cron file that exists) also has zero references. |
+
+**This is not a new discovery — it's a previously-documented, still-live gap (BUG-040 / the "downgrade
+never reconciled at renewal" finding), confirmed still true today by re-reading the code directly rather
+than trusting the existing docs' claim without checking.** `backend/docs/KNOWN_BILLING_GAPS.md` and this
+file's own §2.4 already named this: a scheduled downgrade's `pendingUpdate` is written but nothing in the
+real renewal path ever reads it, so the DB's `planName`/`totalAmount` silently keep showing the
+pre-downgrade plan forever (Razorpay itself did get the correct lower recurring amount via the
+`schedule_change_at: 'cycle_end'` call at write time — the *vendor* side is correct, only the *local DB
+state* never reconciles). `subscriptionController.js:2796-2804` carries an explicit in-code note that this
+is deliberately not fixed, pending a Razorpay support ticket response, since fixing it might require
+redesigning the reconciliation model — i.e., this may be intentionally left for `ScheduledChange`/the
+Renewal Engine to make moot, rather than patched in the legacy path. **Not fixed here, per the hard
+constraint — documented precisely and left alone.**
+
+**Contrast — `pendingAddonRemovals` (a related but structurally different field) is fully wired,
+confirming the read/clear gap above is specific to `pendingUpdate`, not a general "nothing reads
+pending-anything" problem:** `utils/addonManagement.js`'s `applyScheduledAddonRemovals()` reads
+`subscription.pendingAddonRemovals`, applies each due removal, and clears the array
+(`subscription.pendingAddonRemovals = []`, `addonManagement.js:314`) — and this function **is** called
+from the real renewal path (`subscriptionController.js:2814`, inside `handleSubscriptionCharged`). So the
+"nothing reads pending-x at renewal" gap is real for `pendingUpdate` specifically, not a repo-wide
+absence of renewal-time reconciliation.
+
+**Step 2 — single-slot vs. multiple-slot, checked directly against the schema, not assumed:**
+`subscription.pendingUpdate` is a **single embedded object** (`models/Subscription.js:150-176`) — a
+second downgrade/cycle-change request before the first takes effect would overwrite it entirely (no
+merge, no coexistence; confirmed no VOID/merge logic exists at the write site, matching the earlier
+`CommercialTransaction` downgrade wiring's own finding that no recycle mechanism exists here). By
+contrast, `pendingAddonRemovals` is already an **array** (`models/Subscription.js:251-260`) — genuinely
+supports multiple independent scheduled removals coexisting, which is exactly Chapter 16's
+`ScheduledChange` model (many independent documents, not one slot). **This confirms the single-slot
+limitation is real, and it is specific to the plan/cycle-change mechanism (`pendingUpdate`) — not true of
+every "pending" field on `Subscription`.** A subscription today cannot have a pending downgrade AND an
+independently-tracked pending billing-cycle-change coexisting as two separate records the way Chapter 16
+requires — only one `pendingUpdate` slot exists, and the current code already conflates both into that
+one write (Step 0/Step 1's write site handles both downgrade and cycle-change through the identical
+object shape). This is very likely the single biggest structural gap `ScheduledChange` must close for
+this mechanism specifically.
+
+**Dependency graph — one per commercial event that currently participates in `pendingUpdate`, plus the
+two mechanisms that deliberately do not:**
+
+```
+Downgrade (non-UPI)
+    │
+    ▼
+updateSubscription() — isGenuineDowngrade branch
+    │
+    ▼
+pendingUpdate written (subscriptionController.js:1403)
+    │
+    ▼
+Renewal processing — NONE EXISTS for this field
+    │                (handleSubscriptionCharged never reads it — confirmed gap, BUG-040)
+    ▼
+pendingUpdate never cleared by any renewal path
+    (only cleared defensively by unrelated branches — lines 1132, 1296 — never by the
+    branch that's supposed to consume it)
+```
+
+```
+Billing Cycle Change (non-UPI, same tier)
+    │
+    ▼
+updateSubscription() — same isBillingCycleChange || !isUpgrade branch as downgrade
+    │
+    ▼
+pendingUpdate written (identical object shape/site as downgrade — no separate field)
+    │
+    ▼
+Renewal processing — NONE EXISTS (same gap as downgrade, same write site)
+    │
+    ▼
+pendingUpdate never cleared by any renewal path
+```
+
+```
+Billing Cycle Change (UPI) / Upgrade+CycleChange (UPI)
+    │
+    ▼
+updateSubscription() — UPI cancel-and-recreate branch (line 1093)
+    │
+    ▼
+Immediate: Razorpay subscription cancelled + a brand-new one created,
+brand-new local state written directly (no scheduling at all)
+    │
+    ▼
+pendingUpdate explicitly nulled (line 1132) — was never the mechanism in play
+    │
+    ▼
+No ScheduledChange candidate here — independently open, unrelated, not touched this session
+```
+
+```
+Add-on Removal (any payment mode)
+    │
+    ▼
+scheduleAddonRemovalEndpoint / downgrade's incompatible-addon handling
+    │
+    ▼
+pendingAddonRemovals[] entry appended (array, not pendingUpdate)
+    │
+    ▼
+Renewal processing — applyScheduledAddonRemovals(), called from
+handleSubscriptionCharged (subscriptionController.js:2814) — WIRED, WORKING
+    │
+    ▼
+pendingAddonRemovals[] cleared to [] (addonManagement.js:314)
+```
+
+```
+Subscription Cancellation (legacy cancel-and-recreate webhook path only)
+    │
+    ▼
+handleSubscriptionCancelled() — reads pendingUpdate if present (line 2860)
+    │
+    ▼
+Builds an entirely new Subscription document (old pre-CAW cancel-and-recreate model)
+    │
+    ▼
+pendingUpdate on the OLD subscription document is never cleared
+    (dead-end read — this path is itself legacy, unrelated to the
+    CommercialTransaction{type:'CANCELLATION'} flow wired this rollout,
+    which operates on cancelAtPeriodEnd, not pendingUpdate, at all)
+```
+
+**Net effect for the next implementation session:** `ScheduledChange` for downgrade and non-UPI
+billing-cycle-change can be modeled as a direct 1:1 replacement of `pendingUpdate`'s write site (same
+trigger, same fields, minus the single-slot limitation) — but the **read/clear side has no working
+oracle to match against, because none exists today.** The Renewal Engine (Phase 5) will be the *first*
+real consumer of this data, not a migration of existing reconciliation logic — this is "net-new
+construction wearing existing-migration clothes" for the read/clear half specifically, exactly the same
+category of finding as §2.4's "Renewal Engine does not exist" conclusion, just rediscovered from the
+`pendingUpdate` angle instead of the cron-jobs angle. The UPI cancel-and-recreate path and the legacy
+cancel-and-recreate webhook path are both explicitly out of `ScheduledChange`'s scope — named here so a
+future session doesn't try to fold them in by assuming every "pending"-adjacent code path belongs to the
+same migration.
+
+### Phase 4 design session — `ScheduledChange` design boundaries (design-only, no implementation)
+
+**Scope: design-only, per the session brief. No model file created, no controller touched, no
+`CommercialTransaction` code touched.** This is a design session with *targeted* tracing — bounded to
+answering specific "?" cells, not another open-ended backend search.
+
+**Step 0 — completed table.** Payment-mode dependence checked directly by grepping every function this
+session's candidates run through (`updateSubscription`, `cancelSubscription`,
+`scheduleAddonRemovalEndpoint`/`scheduleAddonRemoval`, `startAddonPurchase`) for `paymentMode`/`upi`
+references — confirmed the only two `paymentMode` branch points in the entire backend are both inside
+`updateSubscription` (`subscriptionController.js:829`, `:1093`).
+
+| Commercial Action | Deferred? | Immediate? | Payment-Mode Dependent? | Evidence | `ScheduledChange` candidate? |
+|---|---|---|---|---|---|
+| Upgrade (same-cycle tier upgrade) | No | Yes (Order-based) | **No** — intercepted at `updateSubscription:851` before `paymentMode` is even read at that point in control flow; fires identically for UPI and non-UPI | `subscriptionController.js:851` | No |
+| Upgrade + billing-cycle-change (non-UPI) | **Yes** | No | Yes | Falls through the early intercept (`isBillingCycleChangeUpg` true), then reaches `:1093`'s UPI guard (false for non-UPI), then lands in the `:1388` `pendingUpdate` branch — same object/site as downgrade | **Yes** |
+| Upgrade + billing-cycle-change (UPI) | No | Yes (cancel-and-recreate) | Yes | `:1093` (`paymentMode==='upi' && !_isDowngrade`, true for this combo since it's not a downgrade) | No — permanent bypass, see Step 0a |
+| Billing-cycle-change only (non-UPI) | Yes | No | Yes | Same `:1388` `pendingUpdate` branch as above | **Yes** |
+| Billing-cycle-change only (UPI) | No | Yes (cancel-and-recreate) | Yes | `:1093` | No — permanent bypass, see Step 0a |
+| Downgrade (any billing-cycle combo) | Yes | No | **No** — `!_isDowngrade` in the `:1093` guard explicitly excludes every genuine downgrade from the UPI branch, so it always reaches `pendingUpdate` regardless of payment mode | `:1093` guard, `:1388`/`:1403` | Yes — already `CommercialTransaction`-wired (`isGenuineDowngrade`) |
+| Cancellation | Yes | No | **No** — `cancelSubscription` (`:1537-1586`) has zero `paymentMode`/UPI branching, confirmed by grep across the whole function | `cancelSubscription:1537-1586` | Yes — already `CommercialTransaction`-wired |
+| Add-on removal | Yes | No | **No** — `scheduleAddonRemovalEndpoint`/`scheduleAddonRemoval` have zero payment-mode branching, confirmed by grep | `subscriptionController.js:3583`, `addonManagement.js:209` | **Yes** |
+| Add-on purchase | No | Yes | No — `addonPurchaseLifecycle.js` has zero paymentMode branching, confirmed by grep | `addonPurchaseLifecycle.js` | No |
+
+**A genuinely new fork, beyond what the session's own draft table anticipated — stated explicitly rather
+than silently absorbed into the existing "billing cycle change" framing.** The UPI bypass is not scoped
+to "billing cycle change" as a category; it fires for *any* non-downgrade request that changes the
+billing cycle, including a tier upgrade combined with a cycle change. That means **`Upgrade` itself is
+payment-mode-bifurcated**, not uniformly immediate/payment-gated the way the original draft table
+assumed — only the same-cycle case is. Split into three rows above (not two) for exactly this reason:
+forcing "Upgrade" into one row would have repeated the `isGenuineDowngrade`-class mistake of one branch
+silently covering two different real behaviors.
+
+**Step 0a — the UPI-bypass rows: fully out of `ScheduledChange`'s scope, no `BYPASSED_IMMEDIATE` marker.**
+Reasoning, more specific than "it's immediate": this path is neither deferred nor payment-gated-immediate
+(the shape upgrade/add-on-purchase have, which await a webhook before completing) — it has **no payment
+step and no pending window at all**. `updateSubscription`'s UPI branch (`:1093-1154`) mutates the
+subscription document synchronously, in the same request/response cycle, with nothing ever placed in a
+pending state to represent. `ScheduledChange`'s entire model (Chapter 16) is "future work not yet
+applied"; this path never produces future work for anything to find or apply. Adding a
+`BYPASSED_IMMEDIATE` status would mean writing a `ScheduledChange` document whose entire lifecycle is
+"already done before it exists" — a contradiction of what the field means everywhere else in the model.
+If audit visibility into this bypass is wanted later, that belongs to `BillingEvent`/`CommercialTransaction`
+(a fact-of-record concern), not a reason to grow `ScheduledChange`'s schema.
+
+**Step 1 — targeted search, bounded to the table's "?" cells, not an open-ended audit.** Confirmed via
+grep that `paymentMode` (and the underlying `razorpaySubscription?.payment_method`/`mandate?.type` reads)
+appears nowhere in `cancelSubscription`, `scheduleAddonRemovalEndpoint`, `addonManagement.js`, or
+`addonPurchaseLifecycle.js` — only inside `updateSubscription`. This closed every "?" cell in the table
+above; no further search was performed beyond this, per the session's own scoping.
+
+**Step 2 — `ScheduledChange`'s responsibility, one paragraph.** `ScheduledChange` is responsible for
+representing future commercial intent for the four action-shapes that are genuinely deferred and
+payment-mode-uniform-or-explicitly-scoped-per-mode: downgrade, cancellation, add-on removal, and
+non-UPI billing-cycle-change (bare or combined with an upgrade). It is *not* responsible for: anything
+immediate/payment-gated (upgrade same-cycle, add-on purchase — those are `CommercialTransaction`'s
+domain, already built), the UPI cancel-and-recreate bypass (Step 0a — permanently out of scope, no
+representation of any kind), retry logic (Retry Engine, Phase 6), or UI state (derived from `Subscription`
+and `ScheduledChange` reads, not stored redundantly). One subscription may have multiple independent
+`ScheduledChange` records open at once (the single-slot limitation the tracing session found in
+`pendingUpdate` is exactly what this model exists to remove) — precedence between them (e.g., a
+cancellation superseding a pending downgrade) is Renewal Engine/Change Engine logic, not something
+`ScheduledChange`'s own schema needs to encode beyond `status`.
+
+**Step 3 — schema, adjusted from Chapter 16's scaffold with deltas justified, not silently adopted
+unmodified:**
+
+```js
+ScheduledChange
+  organization         ObjectId, ref Organization
+  subscription          ObjectId, ref Subscription
+  commercialTransaction  ObjectId, ref CommercialTransaction, nullable
+  type                   enum: PLAN_CHANGE | BILLING_CYCLE_CHANGE | REMOVE_ADDON | REDUCE_QUANTITY | CANCELLATION
+  status                 enum: PENDING | EXECUTED | CANCELLED   (default PENDING)
+  reason                 String  // e.g. "Customer Request", "Superseded", "Subscription Cancelled"
+  effectiveAt             Date
+  payload                 Mixed   // type-specific: target plan, addon key, quantity delta
+  createdAt / updatedAt   (timestamps)
+```
+
+**No field added for payment mode.** The instinct to add one (so the Renewal Engine could know whether to
+query `ScheduledChange` for a given subscription at all) was considered and rejected: payment mode is a
+property of the *subscription* (`razorpaySubscriptionId` present vs. `mandateTokenId` present), not of the
+*change*, and Step 0a already established the UPI bypass never creates a `ScheduledChange` record in the
+first place — so there is never a `ScheduledChange` document belonging to a subscription that "shouldn't"
+be queried. The Renewal Engine's query (`effectiveAt <= today`, per §2.4) is correct as originally
+specified; no schema change is needed to accommodate the UPI finding. This scaffold is adopted unmodified.
+
+**Edge case checked directly, not left as an unstated assumption: what if a subscription's payment method
+changes between a downgrade being scheduled and its effective date arriving?** Confirmed by re-reading
+the downgrade write site: this doesn't matter, and not because payment mode is assumed stable — because
+**downgrade's execution has no payment-mode-sensitive step at all.** It never creates a charge or a
+Razorpay order, at scheduling time or (per this project's own tracing finding) at renewal today. The only
+place `razorpaySubscriptionId` is read in the downgrade branch (`:1464`) is to *opportunistically* sync
+Razorpay's own recurring-plan object as a best-effort side effect — not a gate on whether the downgrade
+itself applies. So even if the customer's payment method changes mid-flight, there is no downgrade-specific
+logic that would need to behave differently. The Renewal Engine will read the subscription's *live*
+payment state at execution time for its own charging mechanics (a Renewal Engine concern), not because
+`ScheduledChange` needed to capture a snapshot of it. Framed more durably than "payment mode": what
+`ScheduledChange` actually needs to know is "I am due" — how a due change gets executed (which Razorpay
+mechanism, which mandate type, potentially a different provider entirely someday) is the Renewal Engine's
+decision to make at execution time, not something baked into the record describing what's due.
+
+**Step 4 note:** this table, the Step 0a decision, the one-paragraph ownership statement, and the
+adopted-unmodified schema are the complete design-session output. No model file was created, no migration
+code written, no controller touched, `CommercialTransaction` untouched — per the session's hard
+constraints. Implementation (the model file itself, then migrating `pendingUpdate`'s write sites) is the
+next session's work, not this one's.
+
+### Phase 4 implementation session — `ScheduledChange` model + additive write-alongside
+
+**Scope: additive writes only, per the session brief. Nothing reads `ScheduledChange` back.
+`pendingUpdate`/`pendingAddonRemovals` are unmodified and remain fully authoritative. The UPI bypass
+path, `CommercialTransaction` code, and the Renewal Engine were not touched.**
+
+**Model:** `backend/models/ScheduledChange.js` already existed from the Phase 1 schema-only pass and
+matches the design session's finalized scaffold exactly, field-for-field — confirmed by direct
+comparison, not assumed. Only the header comment was updated (was "inert until Phase 4," now states
+this collection is write-only as of this session, not yet read by anything).
+
+**Sites wired (three, not four — see the two findings below for why a fourth and fifth exist and
+weren't touched):**
+
+| Commercial action | Site | `type` | `payload` |
+|---|---|---|---|
+| Downgrade / non-UPI billing-cycle-change (bare or upgrade-combined) | `subscriptionController.js:1436` (right after the `pendingUpdate` object literal at `:1404`, inside the `isBillingCycleChange \|\| !isUpgrade` branch) | `PLAN_CHANGE` if `isGenuineDowngrade`, else `BILLING_CYCLE_CHANGE` | `planId`, `pricePerUser`, `billingCycle`, `isBillingCycleChange`, `isGenuineDowngrade` |
+| Cancellation (paid path only) | `subscriptionController.js:1745` (`cancelSubscription`, right after `subscription.cancelAtPeriodEnd = true; await subscription.save();`) | `CANCELLATION` | `cancelAtPeriodEnd` |
+| Add-on removal | `addonManagement.js:257` (`scheduleAddonRemoval`, right after `pendingAddonRemovals` is saved) | `REMOVE_ADDON` | `addonKey`, `quantity` |
+
+**A distinction the design table didn't split out, caught before writing code, not after: trial
+cancellation is immediate, not deferred.** `cancelSubscription`'s trial branch sets `trialEnd = new
+Date()` and flips `appStatus` to cancelled in the same request — no future window exists for it to
+represent, the same reasoning as the UPI bypass (Step 0a). Only the paid-subscription branch
+(`cancelAtPeriodEnd = true`, effective at `currentPeriodEnd`) is genuinely deferred. `ScheduledChange` is
+written only for the paid path — writing one for trial cancellation would have represented something
+already-completed as if it were still pending.
+
+**Invariant, checked per site, with the mechanism differing by how the underlying legacy write itself
+behaves — not applied uniformly by assumption:**
+- **Downgrade/billing-cycle-change and cancellation:** `pendingUpdate` is a plain overwrite (no merge) —
+  confirmed by re-reading the write site, not assumed. So a repeated request must not accumulate multiple
+  `PENDING` `ScheduledChange` records; each write first runs `updateMany({status:'PENDING', ...}, {$set:
+  {status:'CANCELLED'}})` before creating the new one. Cancellation's cancel-prior step is broader (any
+  type, not just `CANCELLATION`), reflecting Chapter 9's cancellation-precedence rule (cancellation
+  supersedes a pending downgrade/cycle-change) as bookkeeping only — no reader acts on this yet.
+- **Add-on removal:** `pendingAddonRemovals` *merges* quantity on a repeat request for the same add-on
+  (confirmed at `addonManagement.js:236` — `pendingRemovals[existingPendingIdx].quantity += quantity`),
+  a materially different semantics from the other two sites. Mirroring cancel-then-create here would have
+  been wrong — it would create a second `PENDING` record instead of reflecting the merge. Implemented
+  instead: find the existing `PENDING` `REMOVE_ADDON` record for that `addonKey` and increment its
+  `payload.quantity`; only create a new record if none exists.
+
+**Structural backstop (partial unique index) — considered, not added, reasoned explicitly:** Chapter
+16/§3.2 Rule 1 ("one Scheduled Change per target") is a real business rule, and the `CommercialTransaction`
+precedent (BUG-002-class fix) argues for enforcing "at most one non-terminal record per
+subscription+type+target" at the database level, not just in application logic. **Not added this
+session**, because today's underlying legacy fields make the violation impossible to trigger in the first
+place: `pendingUpdate` is a single embedded object (physically cannot hold two pending plan/cycle changes
+at once — the second write always replaces the first, in the same document, atomically via
+`subscription.save()`), and `pendingAddonRemovals`'s merge behavior means a repeat request updates the
+existing record's quantity rather than ever needing two records to coexist. A race condition analogous to
+`CommercialTransaction`'s (two concurrent requests both passing a VOID-then-create sequence) is a real
+future risk once `ScheduledChange`'s writes are no longer shadowing an atomically-overwritten legacy field
+— i.e., **once the read side migrates and `pendingUpdate` is retired, this index becomes necessary, not
+optional.** Tracked here explicitly so it isn't forgotten when that migration happens, rather than
+silently assumed to still be unnecessary at that point.
+
+**Step 4 — equivalence, run and printed, not assumed:** for all three sites, the new `ScheduledChange
+.effectiveAt` and the legacy `scheduledAt`/`effectiveAt` field read the identical `subscription
+.currentPeriodEnd` value in the same synchronous code path (no intervening computation, no async gap
+between the two reads). Verified with a fixture period genuinely spanning today (`currentPeriodStart` =
+10 days before `new Date()`, `currentPeriodEnd` = 20 days after) rather than a hardcoded past date —
+all three comparisons printed `Match: true`. This is a narrower equivalence claim than the pricing
+equivalence tests elsewhere in this project (there is no computation to diverge here, only two reads of
+one field), stated as such rather than dressed up as more than it is.
+
+**Step 5 — whole-backend grep, and it found two real gaps, not zero, reported rather than fixed inline
+per the hard constraint:**
+
+Searched all of `backend/` for `pendingUpdate`, `pendingAddonRemovals`, `ScheduledChange.create(`, and
+`new ScheduledChange(`. Result: **no duplicate `ScheduledChange` creation sites** (three total, matching
+the three sites wired above, plus zero anywhere `ScheduledChange` is read back — confirmed, nothing
+queries this collection). But two `pendingAddonRemovals` write sites exist that Step 2's table did not
+name and this session did **not** wire, found by the broader grep rather than the narrower per-site trace:
+
+1. **`subscriptionController.js:1584`** — inside the downgrade branch itself (`updateSubscription`,
+   guarded by `!isBillingCycleChange && !isUpgrade`), scheduling add-ons that are incompatible with the
+   new (downgraded) plan for removal at `currentPeriodEnd`.
+2. **`subscriptionController.js:2503-2516`** — inside `handlePaymentCaptured`'s upgrade-settlement branch,
+   scheduling add-ons incompatible with the new (upgraded) plan for removal at `currentPeriodEnd`, once
+   the upgrade payment is confirmed.
+
+Both are genuine, live `pendingAddonRemovals` writes for a real commercial event (downgrade/upgrade
+triggering an incompatible-add-on drop) that structurally belong in `ScheduledChange`'s `REMOVE_ADDON`
+scope, the same as the standalone add-on-removal endpoint already wired.
+
+**✅ Follow-up (same milestone) — both sites wired, after tracing their exact shape first rather than
+reusing `scheduleAddonRemoval`'s pattern by assumption.** Re-reading both blocks found they share the
+same shape *as each other* but differ from the already-wired endpoint: `scheduleAddonRemoval` **merges**
+(increments quantity on a repeat request for the same add-on), while both `:1584` and `:2503-2516` are
+**skip-if-exists** (`if (!pendingRemovals.find(...)) { push }`, no quantity merge at all) — confirmed by
+re-reading each block, not assumed identical just because all three are "add-on removal." Wired to match:
+for each incompatible add-on, look up an existing `PENDING` `REMOVE_ADDON` `ScheduledChange` for that
+`addonKey`; create one only if none exists; leave an existing one untouched otherwise (matching the local
+array's own skip behavior exactly). This same "check before create" query, run identically at all three
+sites (the endpoint, the downgrade branch, the upgrade-settlement branch), also prevents a genuine
+cross-site double-schedule — e.g. a customer's direct removal request and an upgrade's own incompatible-
+add-on scheduling landing on the same `addonKey` cannot produce two `PENDING` records, since whichever
+write happens second finds the first already there and skips.
+
+**Re-ran Step 5's whole-backend grep after wiring both.** Searched all of `backend/` again for
+`pendingUpdate`, `pendingAddonRemovals`, `ScheduledChange.create(`, `new ScheduledChange(`. Result: every
+`pendingUpdate` write site (one) and every `pendingAddonRemovals` write site (three: the standalone
+endpoint, the downgrade branch, the upgrade-settlement branch) now has an adjacent `ScheduledChange.create`
+call — five `ScheduledChange.create` sites total, matching five real scheduling events. No duplicate
+creation sites, no `ScheduledChange` reader introduced anywhere. **Every scheduled mutation in the backend
+now dual-writes `ScheduledChange`** — this closes the additive rollout completely, not partially.
+
+**Nothing reads `ScheduledChange` back.** No controller behavior changed for any customer — every
+existing `pendingUpdate`/`pendingAddonRemovals` write is untouched, and every new `ScheduledChange` write
+is non-fatal (try/catch, logged with `organization`+`subscription` context) and invisible to every
+existing code path. `pendingUpdate` and `pendingAddonRemovals` remain the sole authoritative runtime
+sources. `ScheduledChange`'s structural-backstop question (partial unique index) remains as reasoned
+above — not needed today, necessary once the read side migrates.
+
 ### Phase 5 — 🟥 Build the Renewal Engine and its scheduler (net-new, highest-priority build)
 9. Implement the R1–R13 renewal sequence (§3.5) as its own module: find due subscriptions → check
    mandate validity → build the Effective Subscription from all due `ScheduledChange` records → price

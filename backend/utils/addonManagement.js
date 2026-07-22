@@ -5,11 +5,12 @@ const RazorpayPriceCache = require('../models/RazorpayPriceCache');
 const User = require('../models/User');
 const Invited = require('../models/Invited');
 const razorpay = require('../config/razorpay');
-const { buildPricingSnapshot } = require('./pricingEngine');
+const ScheduledChange = require('../models/ScheduledChange');
+const { calculateInvoice } = require('./invoiceEngine');
 
-function calculateTotalPrice(plan, billingCycle, activeAddons = []) {
-  return buildPricingSnapshot({ plan, billingCycle, activeAddons }).totalAmount;
-}
+// Phase 7 cleanup: calculateTotalPrice() removed here — confirmed zero
+// remaining callers (its only caller, applyScheduledAddonRemovals below,
+// was migrated onto calculateInvoice() directly in Phase 3 item 5c).
 
 async function findOrCreateRazorpayPlan(amountRupees, billingCycle, planNameForLabel) {
   const amountPaise = Math.round(amountRupees * 1.18 * 100); // GST-inclusive
@@ -203,42 +204,6 @@ async function getSeatStatus(organizationId) {
 }
 
 /**
- * Calculates the prorated charge (in rupees) for adding addon units mid-cycle.
- * Pure calculation — does NOT call Razorpay or mutate anything.
- */
-function calculateAddonProration(quantity, pricePerUnit, currentPeriodStart, currentPeriodEnd) {
-  const now = new Date();
-  const periodStart = new Date(currentPeriodStart);
-  const periodEnd = new Date(currentPeriodEnd);
-  const totalPeriodMs = periodEnd - periodStart;
-  const remainingMs = periodEnd - now;
-  if (remainingMs <= 0) return 1; // period already ended — charge minimum
-  const prorationFactor = remainingMs / totalPeriodMs;
-  const fullCycleCharge = quantity * pricePerUnit;
-  return Math.max(1, Math.round(fullCycleCharge * prorationFactor));
-}
-
-/**
- * Calculates the prorated charge for the BASE PRICE DIFFERENCE when
- * upgrading plans mid-cycle. Only the difference between new and old
- * base price is prorated (add-ons are separate and untouched).
- * Returns rupees (not paise). Minimum ₹1.
- */
-function calculatePlanUpgradeProration(oldBasePrice, newBasePrice, currentPeriodStart, currentPeriodEnd) {
-  const now = new Date();
-  const periodStart = new Date(currentPeriodStart);
-  const periodEnd = new Date(currentPeriodEnd);
-
-  const totalMs = periodEnd - periodStart;
-  const remainingMs = periodEnd - now;
-  if (remainingMs <= 0 || totalMs <= 0) return Math.max(1, newBasePrice - oldBasePrice);
-
-  const factor = remainingMs / totalMs;
-  const diff = (newBasePrice - oldBasePrice) * factor;
-  return Math.max(1, Math.round(diff));
-}
-
-/**
  * Schedules an add-on removal for end of current billing cycle.
  * Does NOT call Razorpay. Does NOT immediately change activeAddons.
  */
@@ -284,6 +249,43 @@ async function scheduleAddonRemoval(organizationId, addonKey, quantity) {
   subscription.pendingAddonRemovals = pendingRemovals;
   await subscription.save();
 
+  // ScheduledChange — additive write-alongside. Unlike downgrade/cancellation's
+  // cancel-prior-then-create, pendingAddonRemovals MERGES quantity on a repeat
+  // request for the same add-on (line 236 above) rather than overwriting — so a
+  // repeat request here must increment the existing PENDING record's quantity,
+  // not cancel it and create a second one (that would violate "exactly one
+  // ScheduledChange per subscription+type+target"). Nothing reads this back yet.
+  try {
+    const existingPending = await ScheduledChange.findOne({
+      organization: subscription.organization,
+      subscription: subscription._id,
+      type: 'REMOVE_ADDON',
+      status: 'PENDING',
+      'payload.addonKey': addonKey,
+    });
+    if (existingPending) {
+      existingPending.payload = {
+        ...existingPending.payload,
+        quantity: (existingPending.payload.quantity || 0) + quantity,
+      };
+      await existingPending.save();
+    } else {
+      await ScheduledChange.create({
+        organization: subscription.organization,
+        subscription: subscription._id,
+        type: 'REMOVE_ADDON',
+        status: 'PENDING',
+        effectiveAt: subscription.currentPeriodEnd,
+        payload: { addonKey, quantity },
+      });
+    }
+  } catch (scErr) {
+    console.error(
+      `ScheduledChange creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
+      scErr.message
+    );
+  }
+
   return {
     subscription,
     effectiveAt: subscription.currentPeriodEnd,
@@ -322,7 +324,19 @@ async function applyScheduledAddonRemovals(subscription) {
     }
   }
 
-  const newTotal = calculateTotalPrice(plan, subscription.billingCycle, activeAddons);
+  // Phase 3 item 5c (fourth live buildPricingSnapshot() path, found by a
+  // whole-backend grep after the controller-level migrations — this one was
+  // reached indirectly via calculateTotalPrice(), not a direct call, which is
+  // why the earlier per-file audits missed it). Same shape as the other
+  // Category C migration: no coupon/modifiers involved here today.
+  const newTotal = calculateInvoice({
+    subscription: {
+      planName: plan.planId,
+      billingCycle: subscription.billingCycle,
+      pricePerUser: subscription.billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice,
+      activeAddons,
+    },
+  }).taxable;
   const newPlanId = activeAddons.length > 0
     ? await findOrCreateRazorpayPlan(newTotal, subscription.billingCycle, plan.planId)
     : plan.razorpayPlanIds[subscription.billingCycle];
@@ -342,13 +356,10 @@ async function applyScheduledAddonRemovals(subscription) {
 }
 
 module.exports = {
-  calculateTotalPrice,
   findOrCreateRazorpayPlan,
   calculateAddonBoost,
   getActiveCatalogEntries,
   classifyAddonsForPlanChange,
-  calculateAddonProration,
-  calculatePlanUpgradeProration,
   scheduleAddonRemoval,
   applyScheduledAddonRemovals,
   orgHasAddon,
