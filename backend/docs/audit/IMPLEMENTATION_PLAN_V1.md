@@ -1030,9 +1030,12 @@ still belongs to explicit review, not something implementation should proceed on
      Building that recovery path (and the webhook handler `FAILED` would need) is a real, separate
      future item — not fixed here, since it's a product gap the `CommercialTransaction` wiring merely
      exposed rather than caused.
-   - **Upgrade and seat-purchase are not wired yet** — only `initiateAddonPurchase` was done this pass,
-     deliberately one call site at a time. `updateSubscription`'s upgrade path and `authController.js`'s
-     seat-purchase endpoint still don't write `CommercialTransaction` at all.
+   - **Upgrade and seat-purchase were not wired yet as of this pass** — only `initiateAddonPurchase` was
+     done here, deliberately one call site at a time. (Superseded twice since: `authController.js`'s
+     seat-purchase endpoint was unified onto the same `startAddonPurchase()` helper as part of the
+     add-on-purchase-lifecycle consolidation — see the follow-up verification note under item 5c above —
+     so it already writes `CommercialTransaction` via that shared path, not a separate wiring pass.
+     Upgrade is now wired too — see the new ✅ entry immediately below.)
    - **`BillingInvoice` is not yet linked from `CommercialTransaction`** — `latestInvoice` stays unset;
      the add-on purchase flow doesn't currently persist a `BillingInvoice` at all (that's its own
      separate, not-yet-scoped item, distinct from this one).
@@ -1045,6 +1048,156 @@ still belongs to explicit review, not something implementation should proceed on
      work, or eventually the Renewal Engine), the "nothing depends on it yet" framing expires. Noted
      explicitly so it isn't mistaken for a permanent architecture the way `BillingInvoice`'s migration-
      concession comment had to warn against for its own try/catch.
+
+   **✅ Upgrade — wired, second call site, same pattern as add-on purchase, done in isolation.**
+
+   **Step 1 — traced fresh, not assumed to mirror add-on purchase.** Read `updateSubscription`'s
+   tier-upgrade branch (`subscriptionController.js`, request side — pricing via `calculateInvoice()`
+   with `adjustmentContext.type: 'plan_upgrade'`, Razorpay order creation, `pendingPlanChange` write)
+   and `handlePaymentCaptured`'s `pendingPlanChange`-branch (webhook side — amount verification,
+   plan/add-on commit, `pendingPlanChange` clear). Confirmed upgrade already has its own same-flow
+   recycle mechanism (release the prior `pendingPlanChange.referralRewardUsageId` reservation before a
+   new upgrade checkout overwrites it) — the `CommercialTransaction` VOID-then-create step was added
+   at the same point, reusing this existing recycle moment rather than inventing a new one.
+
+   **Step 2 — transition points, mapped to the actual code, not the add-on template blindly:**
+   - **Request time, right after `calculateInvoice()` prices the upgrade adjustment**: VOID any prior
+     non-terminal `UPGRADE` transaction for this subscription, then create a new one directly at
+     `PRICED` (`target: { newPlanName, newBasePrice, oldTotal, newTotal }`).
+   - **After the Razorpay order succeeds**: `PRICED → AWAITING_PAYMENT`, `attemptCount: 1`, `orderId`
+     merged into `target` — identical correlation-key pattern to add-on purchase.
+   - **Settlement, right after the existing amount-verification check passes**
+     (`handlePaymentCaptured`'s upgrade branch): looked up by `organization`/`subscription`/
+     `type: 'UPGRADE'`/`target.orderId`/`status: 'AWAITING_PAYMENT'` → `COMMITTED`.
+   - **Settlement, right after `upgradeSubscription.save()`**: `COMMITTED → COMPLETED`.
+   - No `VOID`/recycle mechanism was invented beyond what already existed — the pre-existing referral-
+     reservation recycle logic was the only same-flow-replacement pattern found for upgrade, and the
+     `CommercialTransaction` VOID step piggybacks on that same code path, not a new one.
+
+   **Step 3 — additive/non-fatal at every write**, matching the add-on-purchase precedent exactly
+   (try/catch around every `CommercialTransaction` read/write, logged with `organization` +
+   `subscription` context, never the bare id alone — the same gap that had to be fixed after the fact
+   for add-on purchase was not reintroduced here).
+
+   **Step 4 — no numeric equivalence test was run; this is a "pricing unchanged" determination, not a
+   check that ran and passed, and should not be read as the latter.** Upgrade's request-side pricing
+   has gone through `calculateInvoice()`'s Stage 5 since item 5a/5c; this pass's edit reads
+   `proratedDiff`/`discountedProratedDiff`/`proratedDiffWithGST` from the exact same `upgradeInvoice`
+   object at the exact same lines as before — zero pricing variables touched, confirmed by inspection
+   of the diff itself, not inferred from "pricing wasn't the goal of this task." No fixture was run, no
+   proration factor printed, no before/after numbers compared, unlike the 5a/5c/add-on-purchase
+   equivalence work. `node --check` clean on `subscriptionController.js` after the change.
+
+   **Step 5 — whole-backend grep, not scoped to the two touched files.** Searched all of `backend/`
+   for `CommercialTransaction.create(`, `CommercialTransaction.updateMany(`, `new CommercialTransaction(`,
+   and `type: 'UPGRADE'`. Exactly one creation site exists (`subscriptionController.js`'s
+   `updateSubscription`, this change) and exactly one settlement lookup site
+   (`subscriptionController.js`'s `handlePaymentCaptured`, this change) — no other file references
+   `type: 'UPGRADE'` for a `CommercialTransaction`. **No unintended duplicate implementation found.**
+
+   **Scope, precisely.** `FAILED` remains unreachable for upgrade for the same reason it does for
+   add-on purchase (no webhook handler covers a failed order-based payment for this correlation key —
+   the underlying product gap tracked above, not reintroduced here). `BillingInvoice` is still not
+   linked (`latestInvoice` unset) — same, separately-scoped gap as add-on purchase.
+
+   **✅ Downgrade and Cancellation — wired, final two flows of the CommercialTransaction rollout,
+   both no-payment/scheduled-or-immediate-intent flows, done together per the combined final-rollout
+   scoping (both touch the same `updateSubscription`/`cancelSubscription` request flows and the same
+   documentation section, so tracing them separately would have meant rereading the same controller
+   twice for no benefit).**
+
+   **Structural difference from add-on purchase/upgrade, confirmed by tracing the code first, not
+   assumed from Chapter 3.2/18 alone:** neither flow calls `calculateInvoice()` or creates a Razorpay
+   Order. Downgrade schedules a plan/price change via `subscription.pendingUpdate` (applied at
+   `currentPeriodEnd` by the renewal-side reconciliation, untouched here) and updates the Razorpay
+   *recurring* subscription's plan (`schedule_change_at: 'cycle_end'`) — no one-time charge exists at
+   all today, only arithmetic (`newPricePerUser + newAddonsTotal`), not an invoice computation.
+   Cancellation sets `cancelAtPeriodEnd`/ends a trial — no amount is computed anywhere in this flow.
+   **Confirms the brief's expectation exactly: `CREATED → PRICED → COMMITTED → COMPLETED`, `AWAITING_PAYMENT`
+   never entered, for both flows.**
+
+   **Downgrade — a real scoping discovery, reported rather than papered over.** The code branch that
+   handles downgrade (`isBillingCycleChange || !isUpgrade` in `updateSubscription`) is shared with two
+   other cases: a same-tier billing-cycle-only change, and a tier upgrade combined with a billing-cycle
+   change (both land here because the earlier immediate-upgrade intercept only fires for a same-cycle
+   tier upgrade). Writing `CommercialTransaction{type:'DOWNGRADE'}` unconditionally for this whole branch
+   would have mistyped those two other cases. **Resolution:** introduced `isGenuineDowngrade =
+   newPlanPriority < currentPlanPriority` and gated the `DOWNGRADE` transaction on that exact condition;
+   the billing-cycle-only and upgrade+cycle-change cases are left unwired, matching the existing,
+   already-tracked table entry ("Billing Cycle Change — 🔍 Not yet investigated") — not a new gap
+   introduced here, an existing one correctly not expanded into.
+
+   **Downgrade transition points:**
+   - **`PRICED`**: right after the target plan/price/effective-date are known and `pendingUpdate` is
+     about to be constructed, gated on `isGenuineDowngrade`.
+   - **`COMMITTED`**: right after `subscription.save()` persists `pendingUpdate`.
+   - **`COMPLETED`**: immediately after, same request — no separate future event to wait on; per
+     Chapter 18, "completed" means the customer's decision was recorded and accepted, not that the
+     downgrade has taken effect (that's a later renewal-time event, out of scope here).
+   - **`VOID`**: no existing recycle/release step exists for a re-submitted `pendingUpdate` to piggyback
+     on (unlike upgrade's referral-reservation recycle) — `subscription.pendingUpdate` is simply
+     overwritten today with no side effect to release. The VOID-then-create step was added purely for
+     `CommercialTransaction` consistency with the other flows, not because a recycle mechanism already
+     existed. Stated plainly rather than implied to be a reuse of an existing pattern.
+
+   **Cancellation transition points:** both the trial-cancellation branch and the paid-Razorpay-cancel
+   branch (`cancelSubscription`) create the transaction once, before either branch, then move it
+   `COMMITTED → COMPLETED` immediately after that branch's own persistence step
+   (`subscription.save()` for trial; `subscription.save()` after `razorpay.subscriptions.cancel()` for
+   paid) — same reasoning as downgrade's COMMITTED/COMPLETED pairing.
+
+   **Cancellation's state shape, checked against Chapter 4.2 directly, not carried over from downgrade
+   by pattern-matching.** The spec's own cancellation state path is `requested → scheduled →
+   effective_at_renewal → completed` (`BILLING_DOMAIN_SPECIFICATION.md` line 1514), stated explicitly as
+   "the same shape as the general Change state machine..., not a special case grafted on." This
+   independently confirms the no-payment/scheduled family this `CommercialTransaction` wiring assumes —
+   it was not simply assumed to mirror downgrade's already-checked shape.
+
+   **On `VOID`/reactivate — a precise distinction, not a generic "nothing found" note.** This is not "the
+   reactivate feature hasn't been built yet." Chapter 4.2 (line 1508) **explicitly decides**:
+   "there is no 'uncancel,' no resume... resubscribing after cancellation is a brand-new subscription" —
+   adopted spec (Change Proposal V1.1-001), not an unbuilt gap. So there is no `VOID`/recycle mechanism
+   for cancellation to piggyback on, and there deliberately never will be one at the Subscription level —
+   this is a settled design decision, not a missing feature to flag for later work. (This is unrelated to
+   Chapter 9 P16 — "cancel a *scheduled downgrade*" — which is about un-scheduling a *different* pending
+   commercial change, not un-cancelling the subscription itself; no claim is made here about that case,
+   since it isn't part of this session's scope.)
+
+   **Step 4 (equivalence), stated the same precise way as upgrade's corrected entry — not "verified,"
+   exactly what was and wasn't checked:** no numeric equivalence test was run for either flow, because
+   neither flow computes a chargeable amount today — confirmed by reading both code paths in full, not
+   inferred from the spec's "no payment" description alone (downgrade's `newTotalAmount` is plain
+   arithmetic feeding the *recurring* Razorpay plan sync, not a one-time charge; cancellation computes no
+   amount at all). `node --check` clean on `subscriptionController.js` after both changes.
+
+   **Step 5 (whole-backend duplicate grep), scope stated exactly, line numbers pinned down rather than
+   "confirmed one each."** Searched all of `backend/` for `CommercialTransaction.create(`,
+   `CommercialTransaction.updateMany(`, `new CommercialTransaction(`, `type: 'DOWNGRADE'`, and
+   `type: 'CANCELLATION'`. `DOWNGRADE`: `updateMany` at `subscriptionController.js:1439`, `create` at
+   line 1448 — one site. `CANCELLATION`: `updateMany` at `subscriptionController.js:1622`, `create` at
+   line 1631 — one site. No other file references either type for a `CommercialTransaction`.
+
+   **Sanity check on `isGenuineDowngrade` — a same-plan billing-cycle change (monthly → yearly on the
+   same tier) does not create a `DOWNGRADE` transaction, confirmed by re-reading the code, not inferred
+   from the variable's name.** `isGenuineDowngrade = newPlanPriority < currentPlanPriority`, where both
+   priorities are looked up only by `planId` (`{starter:1, growth:2, business:3}`) — billing cycle plays
+   no part in the comparison. For a same-plan cycle change, the requested `planId` equals
+   `subscription.planName`, so `newPlanPriority === currentPlanPriority` and `isGenuineDowngrade` is
+   `false`; no `CommercialTransaction` is written for that case, matching the already-stated scoping
+   (billing-cycle-only changes deliberately left unwired). **No
+   unintended duplicate implementation found.**
+
+   **CommercialTransaction rollout status, complete as of this pass:** `ADDON_PURCHASE`, `UPGRADE`,
+   `DOWNGRADE`, and `CANCELLATION` all now write `CommercialTransaction` at their respective request-time
+   decision point through to completion. Remaining, explicitly out of scope for this rollout (tracked
+   separately, not silently dropped): `BILLING_CYCLE_CHANGE` (the shared-branch ambiguity above) and
+   `NEW_PURCHASE`/`START_TRIAL`/`CORRECTION` (never in scope for this rollout to begin with — Category A
+   flows, per the 5c reframing). `BillingInvoice` linkage (`latestInvoice`) remains unset across all four
+   wired types. No `AWAITING_PAYMENT`-capable `FAILED` recovery path exists for any of the payment-gated
+   flows (`ADDON_PURCHASE`/`UPGRADE`) — same tracked product gap, not expanded here. This rollout is
+   correctly the boundary for "every existing commercial action creates a CommercialTransaction" — the
+   only remaining CommercialTransaction-shaped work is what Phase 4 (`ScheduledChange`) and the Renewal
+   Engine will themselves need to read/write, not additional rollout to existing controllers.
 
 7. `PaymentAttempt` (renamed from `SubscriptionPayment`) now populates its `invoice` field.
 
