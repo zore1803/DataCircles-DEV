@@ -1628,15 +1628,247 @@ existing code path. `pendingUpdate` and `pendingAddonRemovals` remain the sole a
 sources. `ScheduledChange`'s structural-backstop question (partial unique index) remains as reasoned
 above — not needed today, necessary once the read side migrates.
 
+### Phase 4B — Renewal Engine design (design-only, no implementation)
+
+**Scope: design-only, per the session brief. No module written, no cron job created, no code run
+against a real subscription. `CommercialTransaction`, `ScheduledChange` write sites, and the Invoice
+Engine were not touched.** Chapter 3.5 read in full for this session (the granular R1-R13 walkthrough,
+not the coarser R1-R7 sketch kept below it for continuity) — not summarized from earlier conversation.
+
+**Step 2 — R1-R13 data-availability table, each row checked against the actual schema, not assumed:**
+
+| Step | Needs | Where it lives | Available today? |
+|---|---|---|---|
+| R1 — due? | `renewalDate <= now` | **`Subscription.nextBillingDate`** (field exists — no separate `renewalDate` field; `nextBillingDate` is the field actually populated at signup/upgrade/downgrade write sites) | ✅ |
+| R2 — renewable? | `appStatus` in `{active, past_due}`, not `{trial, retrying, suspended, cancelled}` | `Subscription.appStatus` | **❌ Partial gap** — `Subscription.appStatus` enum is `['trial', 'active', 'past_due', 'cancelled', 'expired', 'suspended']` (`models/Subscription.js:74-76`) — **`retrying` does not exist in the enum.** R2's own ownership boundary ("Retry Engine owns `retrying`, full stop") cannot be enforced today because the state itself isn't representable yet. |
+| R3 — Effective Subscription | `ScheduledChange` where `effectiveAt <= today AND status = 'PENDING'`, applied in-memory only | `ScheduledChange` collection (Phase 4A, just completed) | ✅ — query is directly possible against the schema as built (`organization`/`subscription`/`status`/`effectiveAt` are all indexed-queryable fields); confirmed no code executes this query yet (Phase 4A's own invariant) |
+| R4 — resolution (position A vs B) | N/A — a design conclusion, not a data need | — | ✅ Already settled in the spec itself (Position B, materialize final state in one shot) — nothing to check |
+| R5 — component assembly | Current `Subscription.activeAddons` + R3's computed changes | `Subscription.activeAddons` | ✅ |
+| R6 — recurring charge subtotal | Plan price + add-on prices | `PlanConfig`, `PlanAddon` | ✅ |
+| R7 — Coupon Engine | `Subscription.appliedCoupon`, coupon duration/cycles-remaining logic | `Subscription.appliedCoupon`, `couponController.js`/`discountEngine.js` | ✅ — already used elsewhere (signup, upgrade migrations) |
+| R8 — Referral Engine | Active `RewardUsage` for this org, `rewardToModifier()` | `utils/referralRewards.js`, `utils/modifierResolver.js` | ✅ — already used identically in the add-on-purchase/upgrade flows |
+| R9 — GST | — | `calculateInvoice()`'s own Stage 9 | ✅ |
+| R10 — Invoice | `calculateInvoice()` output persisted as `BillingInvoice{reason:'RENEWAL'}` | `models/BillingInvoice.js` | **✅ model exists, schema already has `reason:'RENEWAL'` in its enum** (`models/BillingInvoice.js:33`) — but **only written for signup today** (`subscriptionController.js:307`, Phase 2). No renewal call site exists yet, confirmed by grep — this is new wiring, not a migration. |
+| R11 — can we charge? (mandate check) | `mandateStatus`, `mandateTokenId`, `mandateMaxAmount`, `mandateExpiresAt` | `Subscription` (all four fields exist) | ✅ — and `reconcileMandate()` (Phase 3B, proven live) is the existing pattern to reuse, not redesign, per R11's own explicit non-goal |
+| R12 — payment result | Charge-at-Will order/charge against the mandate token | `config/razorpay.js`, existing CAW charge pattern (`razorpay.orders.create` + token charge, already used in add-on/upgrade flows) | ✅ — mechanism already proven, just never called from a renewal context |
+| R13 — commit | One atomic transaction: Effective Subscription → real Subscription, advance `BillingCycle`, persist invoice or mark paid, persist payment, consume reward, increment coupon redemption, emit `BillingEvent`s, mark `ScheduledChange` → `EXECUTED` | `models/BillingCycle.js` (exists), `SubscriptionPayment`, `RewardUsage`, `CouponRedemption`, `BillingEvent`, `ScheduledChange` | **❌ Real gap — `BillingCycle` is never written anywhere in the codebase today**, confirmed by grep (`BillingCycle.create(`/`new BillingCycle(`: zero hits). It's schema-only, exactly like `ScheduledChange` was before Phase 4A. R13 also implies `CommercialTransaction{type:'RENEWAL'}`, but **`RENEWAL` is not in `CommercialTransaction`'s `type` enum** (`models/CommercialTransaction.js:21-22`: `NEW_PURCHASE, UPGRADE, DOWNGRADE, ADDON_PURCHASE, ADDON_REMOVAL, BILLING_CYCLE_CHANGE, CANCELLATION, START_TRIAL, CORRECTION` — no `RENEWAL`). |
+| R13.5 — partial-commit failure | Idempotent re-run, each step checks "did I already happen?" | Pattern proven in `reconcileMandate` (Phase 3B) | ✅ pattern exists and is reusable, but has never been applied to a renewal-shaped multi-step commit — this is new application of a proven pattern, not new invention |
+
+**Three real gaps found, named plainly, not built this session:**
+1. `Subscription.appStatus` enum is missing `retrying` — R2's Retry Engine ownership boundary has
+   nowhere to live yet.
+2. `CommercialTransaction.type` enum is missing `RENEWAL` — R13's commit step has no transaction type to
+   write.
+3. `BillingCycle` is completely unwritten (schema-only, same state `ScheduledChange` was in before
+   Phase 4A) — R13's "advance Billing Cycle" step has no existing call site to extend.
+
+None of these were fixed this session, per the hard constraint — they're the first concrete input to
+whatever session builds R13's commit step.
+
+**Step 3 — function signature sketch, no implementation:**
+
+```js
+// utils/renewalEngine.js (sketch only — not created this session)
+//
+// Renewal Engine — one atomic Commercial Renewal Transaction per subscription,
+// per Chapter 3.5's framing: input a due subscription, output either a
+// completed renewal or a past_due failure. Never touches a `retrying`
+// subscription (R2 — Retry Engine's exclusive ownership boundary, once the
+// enum gap above is closed).
+//
+// async function renewSubscription(subscriptionId) -> RenewalResult
+//
+// RenewalResult =
+//   | { outcome: 'RENEWED', invoice: BillingInvoiceId, billingCycle: BillingCycleId }
+//   | { outcome: 'PAST_DUE', reason: 'MANDATE_REQUIRED' | 'CHARGE_FAILED' }
+//   | { outcome: 'RECONCILIATION_NEEDED', reason: 'AMBIGUOUS_CHARGE_RESULT' }  // R7's "Unknown" branch
+//   | { outcome: 'SKIPPED', reason: 'NOT_DUE' | 'NOT_RENEWABLE' }              // R1/R2 short-circuits
+//
+// Internally: R1/R2 checks -> R3 build Effective Subscription (in-memory only)
+// -> R4-R9 price via calculateInvoice() -> R10 persist BillingInvoice(PENDING_PAYMENT)
+// -> R11/R12 charge via existing CAW mandate-charge pattern -> on success only,
+// R13 commit (Subscription fields, BillingCycle, payment record, reward/coupon
+// consumption, BillingEvents, ScheduledChange -> EXECUTED) as one sequence,
+// each step idempotent-checked per R13.5.
+```
+
+**Step 4 — explicit non-scope for this design (and for whatever session builds the first slice):**
+- **Retry logic is a separate engine (Phase 6), not built here.** A failed charge only sets
+  `appStatus: past_due` and stops; nothing about the 3-attempt/24h-72h-120h cadence is this engine's job.
+- **No cron/scheduler wiring.** This design describes a function callable for one subscription; "find
+  all due subscriptions and call it" is scheduler plumbing, deliberately separate.
+- **Legacy (non-CAW, Razorpay-Subscription-driven) renewal is completely untouched.** Those subscriptions
+  keep renewing exactly as they do today, via Razorpay's own recurring-subscription webhooks
+  (`handleSubscriptionCharged`) — this design is **CAW-only** (`mandateTokenId` present, no
+  `razorpaySubscriptionId`-driven recurring object). No shared code path between the two is assumed or
+  required.
+- **The three schema gaps above are not closed here.** Adding `retrying` to `appStatus`, adding
+  `RENEWAL` to `CommercialTransaction.type`, and writing the first `BillingCycle` document are all
+  scoped to whichever session builds R13's actual commit step, not this design pass.
+
+**Step 5 — smallest possible first implementation slice, identified but not built:**
+One subscription, due today (`nextBillingDate <= now`), **zero** `ScheduledChange` records pending (so
+R3's Effective Subscription equals the current Subscription unchanged — no downgrade/removal/quantity-
+change logic exercised at all), valid mandate, successful charge. This defers to later sessions: applying
+any `ScheduledChange` (R3's actual "apply due changes" logic), payment failure/`past_due` handling, and
+`RECONCILIATION_NEEDED`/ambiguous-charge handling. Even this narrowest slice still requires closing gap 2
+and gap 3 above (`CommercialTransaction{type:'RENEWAL'}`, first `BillingCycle` write) to complete R13 — so
+the very first implementation session's actual scope is: **the two schema enum/model gaps, plus the
+happy-path-only R1-R13 sequence for a subscription with nothing scheduled.** `ScheduledChange` application
+(the reason this migration exists) is explicitly the *second* implementation slice, not the first.
+
+### Phase 4B Slice 1 — Renewal Happy Path v1 (implementation, no cron, CAW-only)
+
+**🛑 KNOWN BLOCKING LIMITATION — read before any future session touches this file:**
+`renewSubscription()` is **not yet idempotent**. If execution fails after the mandate charge succeeds
+(any of `BillingInvoice.save()`, `Subscription.save()`, or `BillingCycle.create()` throwing), retrying
+the function will call `chargeMandateFn` again — a genuine **double-charge risk**, not a bookkeeping gap.
+**This function must not be invoked by any scheduler, cron, retry mechanism, or production workflow
+until R13.5's repair-forward/idempotency logic is implemented.** See the full trace under Step 6 below
+for the exact failure windows. This is a P0 blocker for production use, not a hardening nice-to-have.
+
+**Scope: exactly what the slice brief specified — one subscription, zero `PENDING` `ScheduledChange`
+records, valid mandate, successful charge. Nothing else.** Not wired into any cron, scheduler, or
+webhook — `renewSubscription()` is callable, not running. Legacy (non-CAW) renewal untouched.
+`retrying` deliberately **not** added to `Subscription.appStatus` this session — nothing in this
+slice's scope would ever set it (that only matters once payment-failure/retry handling exists),
+so adding an unused enum value now would be exactly the premature-schema-growth this project has
+avoided elsewhere (`resolveModifiers()`, the generic Credit Engine question).
+
+**Step 1 — `RENEWAL` added to `CommercialTransaction.type`'s enum** (`models/CommercialTransaction.js:22`).
+Confirmed by grep that the enum's value list is never pattern-matched against elsewhere in the codebase
+(no validation logic lists the types independently of the schema) — a one-line, self-contained change.
+
+**Step 2 — first `BillingCycle` write, schema needed no field additions, confirmed by reading
+`models/BillingCycle.js` before writing anything:** `subscription`/`periodStart`/`periodEnd`/`invoice`/
+`status` are exactly what this slice has available and needs. Reused `BillingInvoice`'s signup-rollout
+write pattern (`subscriptionController.js:~307`) as the template for shape/logging, but **not** its
+non-fatal try/catch: for a renewal, a failed invoice/cycle write is fatal to the operation (R13 needs a
+real invoice document to reference), unlike Phase 2's signup concession which was shadowing an
+already-authoritative legacy write. Stated explicitly in `utils/renewalEngine.js`'s own header comment
+so this isn't silently copied as "the same pattern" into a context where it means something different.
+
+**Step 3 — `utils/renewalEngine.js` created, happy path only.** `renewSubscription(subscription, {
+chargeMandateFn })`: R3 (trivial — Effective Subscription equals current Subscription, since the
+precondition is zero pending changes) → R7 (simplified: `appliedCoupon` reused as a flat fixed-amount
+modifier if present; full duration/cycles-remaining revalidation is real R7 engine work, deferred, stated
+explicitly in the file header, not silently skipped) → no R8 modifier constructed at all this slice
+(referral rewards in this codebase are one-time reservations consumed at purchase time, not a recurring
+per-cycle modifier — R8's full scope deferred) → R4-R9 priced via `calculateInvoice()` (real function,
+no adjustmentContext, same shape as `createSubscription`'s own call) → R10 `BillingInvoice` persisted
+`PENDING_PAYMENT` → `CommercialTransaction{type:'RENEWAL', status:'PRICED'}` → R11/R12 charge via an
+**injected** `chargeMandateFn` (real Razorpay wiring deferred to whichever session builds it — injected
+specifically so this slice's own tests never touch real Razorpay) → on success, R13 commit: transaction
+→ `COMMITTED`, invoice → `PAID`, first-ever `BillingCycle` document written, transaction → `COMPLETED`.
+No `ScheduledChange.updateMany` call exists in this file — nothing to mark `EXECUTED` under this slice's
+own precondition (zero pending records); left for the next slice, not silently omitted.
+
+**Step 4 — the other three outcomes stubbed as explicit throws, not partially-implemented return
+values**, so it's unambiguous what's real vs. deferred: `SKIPPED` (R1/R2 gating — this function doesn't
+re-check due/renewable/appStatus itself, the caller must; no dispatcher exists yet to be that caller),
+`RECONCILIATION_NEEDED` (R7's ambiguous-charge-result branch), `PAST_DUE` (R12's real failure branch).
+Each throws a named error identifying exactly which unbuilt branch was hit, rather than returning a
+structured-but-fake result.
+
+**Step 5 — verified with a real fixture, not against production.** Ran `renewSubscription()` against a
+**fake** organization/subscription (`mongoose.Types.ObjectId()`, not the real production subscription),
+with `currentPeriodEnd` = 3 days from `new Date()` (not a hardcoded past date), a real `activeAddons`
+array (extra_seat ×2 @ ₹80), and a mocked `chargeMandateFn` returning `{success:true}` — `calculateInvoice()`
+itself was the real function, not mocked, per the brief. All six checks passed: `outcome === 'RENEWED'`,
+`BillingInvoice.reason === 'RENEWAL'`, `BillingInvoice.status === 'PAID'`, `BillingCycle` written with
+`periodStart` exactly matching the fixture's `currentPeriodEnd`, `CommercialTransaction.status ===
+'COMPLETED'`. Test documents deleted immediately after the assertions ran, confirmed by the script's own
+cleanup step — no trace left in the database. The test script itself was a temporary file, deleted after
+the run, not committed.
+
+**Step 6 — whole-backend grep confirms this is genuinely the first and only writer for both**
+`BillingCycle.create(`/`new BillingCycle(` and `CommercialTransaction{type:'RENEWAL'}` — both resolve to
+exactly one site, inside `utils/renewalEngine.js` itself. No existing writer found, nothing to reconcile.
+
+**⚠ Two real gaps found on review, before committing — fixed, not shipped silently.** The first pass of
+this slice wrote `BillingInvoice`, `CommercialTransaction`, and `BillingCycle`, but missed two things
+R13 and the model schemas actually require:
+1. **The `Subscription` document itself never advanced.** `computeNextPeriodEnd()` was used to derive
+   `BillingCycle.periodEnd`, but `currentPeriodStart`/`currentPeriodEnd`/`nextBillingDate` were never
+   written back onto the `Subscription`, and `subscription.save()` was never called. R13's own text is
+   explicit that this is the *first* thing commit does ("Effective Subscription becomes the real
+   Subscription... advance Billing Cycle") — this was a real omission in the first pass, not an
+   intentionally-deferred item. **Fixed:** the same `newPeriodStart`/`newPeriodEnd` pair now written to
+   both `Subscription` and `BillingCycle` from one computation, not two independently-derived values that
+   could drift apart.
+2. **`BillingInvoice.commercialTransaction` was never set**, despite existing on the schema since Phase 1
+   and both ids being available at the point the invoice could have been linked. **Fixed:** linked
+   immediately after `CommercialTransaction` is created, in its own non-fatal try/catch.
+   (`BillingCycle` itself has no `commercialTransaction` field — checked against the original §1.6
+   scaffold, which only ever specified `invoice`, not a second direct ref — so this is correct as built,
+   not a third gap. The transaction remains reachable via `BillingCycle.invoice.commercialTransaction`.)
+
+**Re-verified after both fixes**, this time with a real `Subscription` Mongoose document (not a plain
+object — `subscription.save()` requires an actual document) created via `Subscription.create()` with a
+fake `organization`, fixture `currentPeriodEnd` = 3 days from `new Date()`. All ten checks passed this
+time, four more than the first pass: `outcome==='RENEWED'`, invoice `reason`/`status`, invoice→transaction
+link, `BillingCycle` written with the correct `periodStart`, transaction `COMPLETED`, **and** the
+subscription's `currentPeriodStart` now equals the old `currentPeriodEnd`, its new `currentPeriodEnd` is
+genuinely later, and `nextBillingDate` matches the new `currentPeriodEnd`. Test document (including the
+real `Subscription`) deleted immediately after assertions ran; temp script deleted, not committed.
+
+**🚩 Real, open gap — verified directly, not implemented, per explicit instruction: R13's commit sequence
+has no transaction and no idempotency guard.** Traced the exact code after the mandate charge succeeds
+(money has genuinely moved at that point): `commercialTransaction` → `COMMITTED` is best-effort
+(try/catch, logs and continues on failure), but **`billingInvoice.save()`, `subscription.save()`, and
+`BillingCycle.create()` are not wrapped in any try/catch or Mongo transaction.** An uncaught throw from
+any of the three propagates straight out of `renewSubscription()`. Three concrete failure windows,
+traced precisely:
+- Charge succeeds → `billingInvoice.save()` throws: `BillingInvoice` stays `PENDING_PAYMENT` forever,
+  nothing distinguishes "charged but uncommitted" from "never attempted."
+- `billingInvoice.save()` succeeds → `subscription.save()` throws: invoice `PAID`, transaction
+  `COMMITTED`, but the `Subscription`'s own period never advances and `BillingCycle` never gets created —
+  exactly the R13.5 scenario the spec names.
+- `subscription.save()` succeeds → `BillingCycle.create()` throws: commercially consistent, but the
+  audit-trail document is silently missing.
+
+**The more serious finding: there is no idempotency check anywhere in this function** — nothing asks "has
+this subscription already been renewed for this period?" before running. In the first two failure windows
+above, a naive retry of `renewSubscription()` would call `chargeMandateFn` again — a genuine **double-charge
+risk**, not just a bookkeeping gap. R13.5's own answer (idempotent repair-forward, each step checking "did
+I already happen?", the same pattern already proven live in `reconcileMandate`) is **not implemented in
+this file.** This is not a considered, documented deferral ("reconciliation is responsible for recovery") —
+it is a real gap this slice did not address, and it should be named as such rather than assumed covered.
+**Not fixed here, per explicit instruction to verify only** — this is the concrete scope of whatever
+session builds R13.5's idempotent-commit/reconciliation logic, and should be treated as a precondition for
+this engine ever running against real subscriptions, not an optional hardening pass.
+
+**Confirmed: no cron/scheduler exists calling this function.** `renewSubscription()` is not imported by
+`backend/jobs/subscriptionLifecycleJobs.js` or anywhere else — it is callable, not running, exactly per
+the hard constraint.
+
 ### Phase 5 — 🟥 Build the Renewal Engine and its scheduler (net-new, highest-priority build)
 9. Implement the R1–R13 renewal sequence (§3.5) as its own module: find due subscriptions → check
    mandate validity → build the Effective Subscription from all due `ScheduledChange` records → price
    via the Invoice Engine → charge → commit atomically on success, `past_due` on failure.
+   **✅ Slice 1 (Renewal Happy Path v1) done — see the Phase 4B Slice 1 subsection above. Not yet
+   idempotent — see that subsection's blocking-limitation note. Not called from anywhere.**
 10. Add the Renewal Scheduler cron job to `backend/jobs/` (a fourth job alongside the existing three),
     matching the "dumb dispatcher, no business logic" principle already used by the existing trial
-    jobs.
+    jobs. **Blocked — depends on item 9.5 below landing first (a cron calling a non-idempotent
+    function is exactly the double-charge risk this ordering exists to prevent).**
 
-### Phase 6 — 🟥 Build the Retry Engine and its scheduler (net-new)
+9.5. **🟥 Next — R13.5 idempotent repair-forward, before Retry, before cron, before any real
+     subscription is renewed.** Not "the happy path is broken" — the happy path (Slice 1, above) is
+     correct for what it claims. This is "the recovery path doesn't exist yet": nothing in
+     `renewSubscription()` today checks "has this subscription already been renewed for this period?"
+     before charging, so a retry after a partial failure (mandate charged, then a later write throws)
+     would charge the mandate a second time. The fix is **not** a MongoDB transaction — the first
+     mutation is an external charge, which no local transaction can roll back — it's the same
+     repair-forward pattern already proven live in `reconcileMandate` (Phase 3B): each step in R13's
+     commit sequence must check "did I already happen?" before acting, so a re-run of `renewSubscription()`
+     against a subscription that already has a `COMMITTED`/`PAID`/`PAID` trio for the current period
+     safely no-ops through to completion instead of re-charging. Sequencing reasoning, not just
+     preference: **Retry depends on this (a retry engine calling a non-idempotent renewal is the exact
+     failure mode being guarded against); cron depends on Retry; enabling this against real subscriptions
+     depends on all three.**
+
+### Phase 6 — 🟥 Build the Retry Engine and its scheduler (net-new) — blocked on item 9.5 above landing first
 11. Implement the 3-attempt/24h-72h-120h retry cadence (§9) as its own module and scheduler job,
     replacing the manually-triggered `POST /:id/retry-payment` as the *automatic* path (the manual
     endpoint can remain as a customer/Support-initiated early-retry option, per Chapter 19's RT3).
