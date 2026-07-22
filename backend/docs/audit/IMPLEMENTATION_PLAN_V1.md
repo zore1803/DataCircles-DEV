@@ -2324,6 +2324,67 @@ confirmed fact, not re-derived.
 **Confirmed: no cron, no scheduler, no automatic retries.** `retryRenewal` is not imported by
 `backend/jobs/subscriptionLifecycleJobs.js` or anywhere else — callable only.
 
+### Phase 4D Slice 1 — Cron orchestration (callable, not enabled)
+
+**Scope: exactly what the slice brief specified.** Created `backend/jobs/billingOrchestration.js`.
+`renewalEngine.js` and `retryEngine.js` were not modified. No `ScheduledChange` read-side migration, no
+cron registration, no production enablement, no Suspension implementation.
+
+**Step 0 — traced `subscriptionLifecycleJobs.js`, ownership documented, nothing modified:**
+- **Registration pattern**: three `cron.schedule('* * * * *', async () => {...})` calls fire
+  **at require-time** — the file self-registers when required, with `module.exports = {}` (nothing
+  callable is actually exported; the side effect *is* the module). Mounted once via
+  `require('./jobs/subscriptionLifecycleJobs')` in `server.js`.
+- **Helper utilities**: `getOrgAdminUser()` (org's admin/creator lookup for emails), `setAppStatus`
+  (imported from `subscriptionController.js`), `emitBillingEvent` — all reused, none reimplemented.
+- **Logging pattern**: `console.log`/`console.error`, each line prefixed `[subscriptionLifecycleJobs]`.
+- **Locking pattern**: **none** — no distributed lock, no "in progress" guard. Idempotency instead comes
+  from query filters that naturally exclude already-processed subscriptions (e.g.
+  `trialReminder48hSent: {$ne:true}`, or an `appStatus` check that's already moved past the trigger
+  condition).
+- **Batching pattern**: `Subscription.find({...})` then a plain `for...of` loop.
+- **A real inconsistency found while tracing, not fixed (out of scope — this file wasn't touched)**: Job 1
+  (trial reminders) wraps each subscription's body in its own try/catch — a failure for one subscription
+  doesn't stop the loop. **Job 3 (scheduled cancellations) does not** — only the outer try/catch wraps the
+  whole loop, so one throwing subscription there would currently abort the rest of that batch. Named here
+  as a real, existing gap in a file this slice didn't touch, not silently ignored.
+
+**Step 1-4 — `backend/jobs/billingOrchestration.js`, three exports, no billing logic of its own:**
+- `runRenewalJob({chargeMandateFn, now})` — finds `appStatus:'active'`, `mandateTokenId` present,
+  `nextBillingDate <= now` subscriptions. **One addition beyond the brief's literal flow, necessary and
+  explained rather than silently added**: excludes any subscription with a `PENDING` `ScheduledChange`
+  from this pass (`outcome:'SKIPPED_PENDING_SCHEDULED_CHANGE'`) — this is `renewSubscription()`'s own
+  already-documented precondition (zero pending records), so a due subscription with a real pending
+  change is *selected out*, not sent into an engine that can't handle it yet. This is selection, not a
+  `ScheduledChange` read-side migration (nothing is applied, only excluded).
+- `runRetryJob({chargeMandateFn})` — finds `appStatus:'past_due'` subscriptions, calls `retryRenewal()`
+  once each. Cron owns iteration only; every eligibility/cadence/exhaustion decision stays inside
+  `retryRenewal()`, untouched.
+- `runSuspensionJob()` — stub, throws `'not implemented'` naming Chapter 7 Job 3 explicitly, per the hard
+  constraint.
+
+**Step 5/6 — error isolation, verified with a scenario that actually exercises it, not just one that
+happens to pass.** Four fixture subscriptions in one `runRenewalJob` batch: (A) renews successfully, (B)
+charge fails cleanly → `PAST_DUE`, (C) `chargeMandateFn` throws → `RECONCILIATION_NEEDED` (**handled
+inside `renewSubscription()` itself**, not by this orchestration layer's try/catch — noted explicitly
+since an earlier draft of this test mistook this for exercising orchestration-level isolation when it
+wasn't), and (D) a genuine uncaught exception from `renewSubscription()` itself (a pre-existing
+non-terminal `RENEWAL` `CommercialTransaction` colliding with the model's own partial unique index,
+producing a real `MongoServerError` that propagates out of `renewSubscription()` uncaught). All four
+processed independently, batch returned all four results (`{subscriptionId, error}` for D, structured
+outcomes for A/B/C) — confirmed by direct inspection, not assumed from "no crash." A follow-up
+`runRetryJob` call against subscription B (retry window backdated via fixture manipulation, not a
+hardcoded past date) correctly retried it to `RETRY_SUCCEEDED`, `appStatus → active`. `runSuspensionJob()`
+confirmed to throw. Test documents deleted immediately after; temp script deleted, not committed.
+
+**Step 7 — whole-backend grep.** `renewSubscription()` is called from exactly two places:
+`billingOrchestration.js`'s `runRenewalJob` and `retryEngine.js`'s `retryRenewal` (both expected —
+Retry Engine reuses the Renewal Engine by design). `retryRenewal()` is called from exactly one place:
+`billingOrchestration.js`'s `runRetryJob`. No `cron.schedule(` call anywhere in
+`billingOrchestration.js`; confirmed not required by `server.js` — not mounted.
+
+**Confirmed: NOT registered with cron, NOT scheduled, callable only.**
+
 ### Phase 7 — Split and shrink `handlePaymentCaptured`
 13. Physically separate the legacy (`pendingUpgrade`-reading) branch from the CAW
     (`pendingPlanChange`-reading) branch into two distinct functions, now that Phases 3–4 have moved
