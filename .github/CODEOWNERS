@@ -8,74 +8,76 @@
 
 # =============================================================================
 # BILLING — architectural subsystem. Do not modify without discussing first.
+# No owner currently assigned. Add an owner below (path + @handle) to restore enforcement.
 # =============================================================================
-/backend/controllers/subscriptionController.js   @Chaityad97
-/backend/utils/addonManagement.js                @Chaityad97
-/backend/utils/pricingEngine.js                  @Chaityad97
-/backend/utils/modifierResolver.js               @Chaityad97
-/backend/utils/billingEvents.js                  @Chaityad97
-/backend/models/Subscription.js                  @Chaityad97
-/backend/models/PlanAddon.js                      @Chaityad97
-/backend/models/PlanConfig.js                     @Chaityad97
-/backend/models/Coupon.js                         @Chaityad97
-/backend/models/BillingEvent.js                   @Chaityad97
-/backend/models/Referral*                         @Chaityad97
-/backend/models/Reward*                           @Chaityad97
-/backend/routes/subscription.js                   @Chaityad97
-/backend/routes/superAdminRoutes.js               @Chaityad97
-/backend/middlewares/subscriptionGate.js          @Chaityad97
-/backend/middlewares/restrictByPlan.js            @Chaityad97
+# /backend/controllers/subscriptionController.js
+# /backend/utils/addonManagement.js
+# /backend/utils/pricingEngine.js
+# /backend/utils/modifierResolver.js
+# /backend/utils/billingEvents.js
+# /backend/models/Subscription.js
+# /backend/models/PlanAddon.js
+# /backend/models/PlanConfig.js
+# /backend/models/Coupon.js
+# /backend/models/BillingEvent.js
+# /backend/models/Referral*
+# /backend/models/Reward*
+# /backend/routes/subscription.js
+# /backend/routes/superAdminRoutes.js
+# /backend/middlewares/subscriptionGate.js
+# /backend/middlewares/restrictByPlan.js
 
-/frontend/src/components/settings/SubscriptionPlans.jsx      @Chaityad97
-/frontend/src/components/subscription/PlanCard.jsx           @Chaityad97
-/frontend/src/components/subscription/CheckoutSummaryModal.jsx @Chaityad97
-/frontend/src/components/settings/Billing*                   @Chaityad97
-/frontend/src/components/settings/Referrals.jsx               @Chaityad97
-/frontend/src/contexts/SubscriptionContext.jsx                @Chaityad97
-/frontend/src/services/subscriptionApi.js                     @Chaityad97
-/frontend/src/services/couponApi.js                           @Chaityad97
-/frontend/src/services/referralAdminApi.js                    @Chaityad97
+# /frontend/src/components/settings/SubscriptionPlans.jsx
+# /frontend/src/components/subscription/PlanCard.jsx
+# /frontend/src/components/subscription/CheckoutSummaryModal.jsx
+# /frontend/src/components/settings/Billing*
+# /frontend/src/components/settings/Referrals.jsx
+# /frontend/src/contexts/SubscriptionContext.jsx
+# /frontend/src/services/subscriptionApi.js
+# /frontend/src/services/couponApi.js
+# /frontend/src/services/referralAdminApi.js
 
 # =============================================================================
 # FORMS — architectural subsystem. Do not modify without discussing first.
+# No owner currently assigned. Add an owner below (path + @handle) to restore enforcement.
 # =============================================================================
 
 # Architecture docs (root-level today)
-/FORMS_ARCHITECTURE.md                    @Chaityad97
-/FORMS_SCHEMA.md                          @Chaityad97
-/FORMS_DOMAIN_MODEL.md                    @Chaityad97
-/FORMS_IMPLEMENTATION.md                  @Chaityad97
-/FORMS_SCHEMA_IMPLEMENTATION_NOTES.md     @Chaityad97
+# /FORMS_ARCHITECTURE.md
+# /FORMS_SCHEMA.md
+# /FORMS_DOMAIN_MODEL.md
+# /FORMS_IMPLEMENTATION.md
+# /FORMS_SCHEMA_IMPLEMENTATION_NOTES.md
 
 # Backend — Forms code is currently FLAT (no /forms/ subfolder yet). Listed by actual file today;
 # add new Forms files here as they're created rather than assuming a subfolder that doesn't exist.
-/backend/models/FormDefinition.js           @Chaityad97
-/backend/models/FormVersion.js              @Chaityad97
-/backend/models/FormSubmission.js           @Chaityad97
-/backend/models/SubmissionEvent.js          @Chaityad97
-/backend/models/DuplicateReview.js          @Chaityad97
-/backend/services/formPublishService.js     @Chaityad97
-/backend/services/formVersionService.js     @Chaityad97
-/backend/services/submissionService.js      @Chaityad97
-/backend/services/duplicateDetectionService.js   @Chaityad97
-/backend/services/duplicateResolutionService.js  @Chaityad97
-/backend/utils/systemFields.js               @Chaityad97
-/backend/controllers/publicFormController.js @Chaityad97
-/backend/routes/publicFormRoutes.js           @Chaityad97
+# /backend/models/FormDefinition.js
+# /backend/models/FormVersion.js
+# /backend/models/FormSubmission.js
+# /backend/models/SubmissionEvent.js
+# /backend/models/DuplicateReview.js
+# /backend/services/formPublishService.js
+# /backend/services/formVersionService.js
+# /backend/services/submissionService.js
+# /backend/services/duplicateDetectionService.js
+# /backend/services/duplicateResolutionService.js
+# /backend/utils/systemFields.js
+# /backend/controllers/publicFormController.js
+# /backend/routes/publicFormRoutes.js
 
 # Reserved — Forms backend/controllers/forms/**, backend/routes/forms/**, backend/models/forms/**,
-# and any future /forms/ subfolder do not exist yet. Kept here so ownership auto-applies the moment
-# they're created; harmless no-op glob until then.
-/backend/services/forms/**    @Chaityad97
-/backend/controllers/forms/** @Chaityad97
-/backend/routes/forms/**      @Chaityad97
-/backend/models/forms/**      @Chaityad97
+# and any future /forms/ subfolder do not exist yet. Kept here so ownership can be restored the
+# moment they're created; harmless no-op glob until then.
+# /backend/services/forms/**
+# /backend/controllers/forms/**
+# /backend/routes/forms/**
+# /backend/models/forms/**
 
 # Reserved — Forms Builder/Public Renderer frontend does NOT exist yet (no builder has been built).
 # Predicted structure per FORMS_ARCHITECTURE.md §2.6; update once the real paths land.
-/frontend/src/pages/forms/**       @Chaityad97
-/frontend/src/components/forms/**  @Chaityad97
-/frontend/forms/**                 @Chaityad97
+# /frontend/src/pages/forms/**
+# /frontend/src/components/forms/**
+# /frontend/forms/**
 
 # =============================================================================
 # EVERYTHING ELSE — no owner. CRM screens, Dashboard, Contacts/Companies/Deals/Tasks/Products/
