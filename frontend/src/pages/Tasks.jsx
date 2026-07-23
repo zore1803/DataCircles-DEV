@@ -2269,9 +2269,9 @@ function Tasks() {
         className={`relative bg-white overflow-hidden border border-[#E1E4EA] rounded-lg mx-6 ${loading ? "pointer-events-none opacity-60" : ""}`}
         style={{ marginTop: 24 }}
       >
-        <div className="overflow-x-auto overflow-y-visible">
+        <div className="overflow-x-auto">
           <table
-            className="w-full border-collapse text-left"
+            className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${taskTable.getTotalSize()}px`, tableLayout: "fixed" }}
           >
             <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
@@ -2344,9 +2344,9 @@ function Tasks() {
         className={`relative bg-white overflow-hidden border border-[#E1E4EA] rounded-lg mx-6 ${loading ? "pointer-events-none opacity-60" : ""}`}
         style={{ marginTop: 24 }}
       >
-        <div className="overflow-x-auto overflow-y-visible">
+        <div className="overflow-x-auto">
           <table
-            className="w-full border-collapse text-left"
+            className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${meetingTable.getTotalSize()}px`, tableLayout: "fixed" }}
           >
             <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">

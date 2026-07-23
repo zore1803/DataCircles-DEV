@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
+import QuickDealForm from "../deal/QuickDealForm";
 
 const TERMINAL_STATUSES = ["won", "lost"];
 
@@ -160,10 +161,11 @@ const KanbanColumn = ({ status, deals }) => {
   );
 };
 
-export default function CompanyDealsKanban({ deals, setDeals }) {
+export default function CompanyDealsKanban({ deals, setDeals, showStats = true, companyId, company, contacts = [] }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
+  const [showDealForm, setShowDealForm] = useState(false);
   const [statuses, setStatuses] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState("board");
@@ -356,29 +358,44 @@ export default function CompanyDealsKanban({ deals, setDeals }) {
     }
   };
 
+  const handleDealCreated = async () => {
+    try {
+      const res = await API.get("/deals");
+      setDeals(res.data.filter((d) => d.company?._id === companyId));
+      toast.success("Deal created successfully!");
+    } catch (err) {
+      toast.error("Failed to refresh deals list.");
+    }
+    setShowDealForm(false);
+  };
+
   return (
     <div>
       {/* KPI Tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-        {kpiTiles.map((tile) => (
-          <div
-            key={tile.label}
-            className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
-          >
-            <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-              <tile.icon size={20} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-              <p className="text-sm font-semibold text-gray-900 truncate">
-                {tile.value}
-              </p>
-            </div>
+      {showStats && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+            {kpiTiles.map((tile) => (
+              <div
+                key={tile.label}
+                className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
+              >
+                <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <tile.icon size={20} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {tile.value}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
+          <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
+        </>
+      )}
 
       {/* Search + Controls */}
       <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
@@ -419,15 +436,26 @@ export default function CompanyDealsKanban({ deals, setDeals }) {
             <ListIcon size={16} />
           </button>
         </div>
-        <Link
-          to="/deals"
+        <button
+          type="button"
+          onClick={() => setShowDealForm(true)}
           className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
           style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
           title="Add Deal"
         >
           <Plus size={20} />
-        </Link>
+        </button>
       </div>
+
+      {showDealForm && (
+        <QuickDealForm
+          companies={company ? [company] : []}
+          contacts={contacts}
+          initialCompanyId={companyId}
+          onDealCreated={handleDealCreated}
+          onRequestClose={() => setShowDealForm(false)}
+        />
+      )}
 
       {viewMode === "board" ? (
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
@@ -589,7 +617,7 @@ export default function CompanyDealsKanban({ deals, setDeals }) {
           </div>
 
           {totalCount > 0 && (
-            <div className="w-full bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+            <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
               <div className="flex-1 flex justify-between sm:hidden">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}

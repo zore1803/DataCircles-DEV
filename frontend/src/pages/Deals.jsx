@@ -2468,7 +2468,7 @@ function Deals() {
             )}
 
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="overflow-auto">
+              <div className="overflow-x-auto">
                 <DealsTable
                   sortedTableDeals={paginatedTableDeals}
                   selectedRows={selectedRows}
@@ -2494,7 +2494,7 @@ function Deals() {
             </div>
 
             {sortedTableDeals.length > 0 && (
-              <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+              <div className="bg-white px-4 py-3 flex items-center justify-between sm:px-6">
                 <div className="flex items-center space-x-2">
                   <p className="text-sm text-gray-700 font-inter">
                     Showing{" "}
