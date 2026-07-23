@@ -1574,7 +1574,27 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
         </div>
 
         {/* Folders List / Grid */}
-        {folderViewMode === "grid" ? (
+        {folderViewMode === "grid" && filteredFolders.length === 0 ? (
+          <button
+            onClick={() =>
+              setModalState({
+                isOpen: true,
+                editingId: null,
+                initialName: "",
+              })
+            }
+            className="flex flex-col items-center justify-center w-full text-gray-500 hover:text-blue-600 transition-colors bg-gray-50"
+            style={{
+              boxSizing: "border-box",
+              height: 420,
+              border: "1px solid #E1E4EA",
+              borderRadius: 8,
+            }}
+          >
+            <FolderIcon className="w-7 h-7 mb-2" />
+            <span className="text-sm font-medium">Create New Folder</span>
+          </button>
+        ) : folderViewMode === "grid" ? (
           <div
             className="w-full"
             style={{
@@ -1656,11 +1676,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
                 initialName: "",
               })
             }
-            className="flex flex-col items-center justify-center w-full text-gray-500 hover:text-blue-600 transition-colors"
+            className="flex flex-col items-center justify-center w-full text-gray-500 hover:text-blue-600 transition-colors bg-gray-50"
             style={{
               boxSizing: "border-box",
               height: 420,
-              background: "#FFFFFF",
               border: "1px solid #E1E4EA",
               borderRadius: 8,
             }}

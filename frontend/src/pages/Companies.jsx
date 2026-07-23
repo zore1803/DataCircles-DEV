@@ -1422,8 +1422,11 @@ function Companies() {
       {/* Main Content Card */}
       <div className="bg-white overflow-visible border-b border-gray-100">
         {/* Toolbar (Title + Search + Buttons) */}
-        <div className="h-14 px-4 border-b border-[#E1E4EA] flex items-center">
-          <div className="flex items-center gap-4 w-full">
+        <div
+          className="sticky h-16 px-6 border-b border-[#E1E4EA] bg-white flex items-center"
+          style={{ top: "64px", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
+        >
+          <div className="flex items-center gap-4 w-full h-full">
             <div className="flex-shrink-0 flex flex-col justify-center gap-1.5">
               <h1 className="m-0 leading-tight font-bold text-lg text-gray-900">Companies</h1>
               <p className="m-0 leading-tight text-xs text-gray-500 font-inter">

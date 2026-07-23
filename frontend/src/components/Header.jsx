@@ -743,7 +743,7 @@
 // export default Header;
 
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
   Plus,
@@ -759,6 +759,7 @@ import {
   Sparkles,
   Clock,
   HelpCircle,
+  LayoutDashboard,
 } from "lucide-react";
 import SearchResults from "./SearchResults";
 import QuickCompanyForm from "./company/QuickCompanyForm";
@@ -780,7 +781,24 @@ const BrandingShimmer = () => {
   );
 };
 
+const CRMIcon = ({ size = 20, style }) => (
+  <svg width={size} height={size} viewBox="0 0 13 15" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
+    <path d="M6.25 0L12.5 4.69542V14.0704H0V4.69542L6.25 0ZM7.8725 8.61063C8.31861 8.16521 8.54167 7.62438 8.54167 6.98813C8.54167 6.35174 8.31896 5.81056 7.87354 5.36458C7.42812 4.91847 6.88729 4.69542 6.25104 4.69542C5.61465 4.69542 5.07347 4.91813 4.6275 5.36354C4.18139 5.80896 3.95833 6.34979 3.95833 6.98604C3.95833 7.62243 4.18104 8.16361 4.62646 8.60958C5.07188 9.05569 5.61271 9.27875 6.24896 9.27875C6.88535 9.27875 7.42653 9.05604 7.8725 8.61063ZM5.51208 7.725C5.30958 7.52264 5.20833 7.27667 5.20833 6.98708C5.20833 6.6975 5.30958 6.45153 5.51208 6.24917C5.71444 6.04667 5.96042 5.94542 6.25 5.94542C6.53958 5.94542 6.78556 6.04667 6.98792 6.24917C7.19042 6.45153 7.29167 6.6975 7.29167 6.98708C7.29167 7.27667 7.19042 7.52264 6.98792 7.725C6.78556 7.9275 6.53958 8.02875 6.25 8.02875C5.96042 8.02875 5.71444 7.9275 5.51208 7.725ZM6.22854 11.7788C5.58799 11.7788 4.96479 11.8669 4.35896 12.0431C3.75313 12.2194 3.18049 12.4785 2.64104 12.8204H9.81896C9.28479 12.4785 8.71299 12.2194 8.10354 12.0431C7.49424 11.8669 6.86924 11.7788 6.22854 11.7788ZM1.25 5.32042V12.2756C1.96153 11.7126 2.74007 11.2806 3.58562 10.9798C4.43104 10.6791 5.31118 10.5288 6.22604 10.5288C7.15021 10.5288 8.03938 10.6778 8.89354 10.9758C9.74757 11.2739 10.5331 11.7044 11.25 12.2675V5.32042L6.25 1.57042L1.25 5.32042Z" fill={style?.color || "#1C1B1F"} />
+  </svg>
+);
+
+const InvoicesIcon = ({ size = 20, style }) => (
+  <svg width={size} height={size} viewBox="0 0 15 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
+    <path d="M0 15.6408V0L1.15396 1.02562L2.33979 0L3.52563 1.02562L4.71146 0L5.8975 1.02562L7.08333 0L8.26917 1.02562L9.45521 0L10.641 1.02562L11.8269 0L13.0127 1.02562L14.1667 0V15.6408L13.0127 14.6152L11.8269 15.6408L10.641 14.6152L9.45521 15.6408L8.26917 14.6152L7.08333 15.6408L5.8975 14.6152L4.71146 15.6408L3.52563 14.6152L2.33979 15.6408L1.15396 14.6152L0 15.6408ZM2.29167 11.5223H11.875V10.2723H2.29167V11.5223ZM2.29167 8.44542H11.875V7.19542H2.29167V8.44542ZM2.29167 5.36854H11.875V4.11854H2.29167V5.36854ZM1.25 13.7371H12.9167V1.90375H1.25V13.7371Z" fill={style?.color || "#1C1B1F"} />
+  </svg>
+);
+
 const Header = () => {
+  const [dashboardSearchParams, setDashboardSearchParams] = useSearchParams();
+  const activeDashboardTab = dashboardSearchParams.get("tab") || "Overview";
+  const setActiveDashboardTab = (tab) => {
+    setDashboardSearchParams(tab === "Overview" ? {} : { tab });
+  };
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -1274,30 +1292,69 @@ const Header = () => {
         className="fixed top-0 right-0 bg-white border-b border-gray-200 shadow-sm z-[9992] h-16 flex items-center justify-between px-4 lg:px-6 transition-all duration-300 ease-in-out"
         style={{ left: "var(--sidebar-width, 0px)" }}
       >
-        {/* Left Section: Breadcrumb */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            {getBreadcrumb().map((crumb, idx, arr) => {
-              const isLast = idx === arr.length - 1;
-              return (
-                <span key={idx} className="flex items-center gap-2">
-                  {isLast ? (
-                    <span className="text-base font-semibold text-gray-900">
-                      {crumb.label}
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => navigate(crumb.path)}
-                      className="text-base font-semibold text-gray-500 hover:text-gray-700 hover:underline transition-colors"
+        {/* Left Section: Breadcrumb / Dashboard tabs */}
+        <div className="flex items-center gap-4 h-full">
+          {location.pathname === "/" ? (
+            <div className="flex flex-row items-center h-full">
+              {[
+                { name: "Overview", icon: LayoutDashboard },
+                { name: "CRM", icon: CRMIcon },
+                { name: "Invoices", icon: InvoicesIcon },
+              ].map((tab) => {
+                const isActive = activeDashboardTab === tab.name;
+                return (
+                  <button
+                    key={tab.name}
+                    onClick={() => setActiveDashboardTab(tab.name)}
+                    className="box-border flex flex-row justify-center items-center flex-shrink-0 h-full"
+                    style={{
+                      padding: "0px 16px",
+                      gap: 10,
+                      borderBottom: isActive ? "3px solid #0A5AFE" : "3px solid transparent",
+                    }}
+                  >
+                    <tab.icon size={20} style={{ color: isActive ? "#1B66FE" : "#1C1B1F" }} />
+                    <span
+                      className="whitespace-nowrap"
+                      style={{
+                        fontFamily: "Inter",
+                        fontWeight: 600,
+                        fontSize: 14,
+                        lineHeight: "150%",
+                        letterSpacing: isActive ? "-0.04em" : "-0.02em",
+                        color: isActive ? "#0A5AFE" : "#1D1E22",
+                      }}
                     >
-                      {crumb.label}
-                    </button>
-                  )}
-                  {!isLast && <ChevronRight className="w-4 h-4 text-gray-400" />}
-                </span>
-              );
-            })}
-          </div>
+                      {tab.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              {getBreadcrumb().map((crumb, idx, arr) => {
+                const isLast = idx === arr.length - 1;
+                return (
+                  <span key={idx} className="flex items-center gap-2">
+                    {isLast ? (
+                      <span className="text-base font-semibold text-gray-900">
+                        {crumb.label}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => navigate(crumb.path)}
+                        className="text-base font-semibold text-gray-500 hover:text-gray-700 hover:underline transition-colors"
+                      >
+                        {crumb.label}
+                      </button>
+                    )}
+                    {!isLast && <ChevronRight className="w-4 h-4 text-gray-400" />}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Right Section: Promo Buttons, Search & Actions */}

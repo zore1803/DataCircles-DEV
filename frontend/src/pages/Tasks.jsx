@@ -1883,7 +1883,7 @@ function Tasks() {
       />
 
       <div
-        className="flex flex-row justify-between items-center"
+        className="sticky flex flex-row justify-between items-center"
         style={{
           boxSizing: "border-box",
           padding: "0px 24px 12px",
@@ -1892,6 +1892,8 @@ function Tasks() {
           background: "#FFFFFF",
           borderBottom: "1px solid #E1E4EA",
           borderRadius: 0,
+          top: "64px",
+          zIndex: 40,
         }}
       >
         <div

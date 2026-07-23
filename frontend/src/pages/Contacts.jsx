@@ -2077,7 +2077,10 @@ function Contacts() {
       />
 
       {/* Title Strip */}
-      <div className="-mt-6 -mx-4 sm:-mx-6 lg:-mx-8 flex items-center justify-between gap-3 px-6 pt-4 pb-3 bg-white border-b border-[#E5E5EC]">
+      <div
+        className="sticky -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 flex items-center justify-between gap-3 px-6 pt-4 pb-3 bg-white border-b border-[#E5E5EC]"
+        style={{ top: "64px", zIndex: 40, boxSizing: "border-box" }}
+      >
         <div className="flex flex-col gap-1.5">
           <h1
             className="m-0"

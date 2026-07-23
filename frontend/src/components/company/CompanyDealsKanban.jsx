@@ -5,6 +5,9 @@ import {
   closestCorners,
   useDraggable,
   useDroppable,
+  useSensor,
+  useSensors,
+  PointerSensor,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -158,6 +161,9 @@ const KanbanColumn = ({ status, deals }) => {
 };
 
 export default function CompanyDealsKanban({ deals, setDeals }) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
   const [statuses, setStatuses] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState("board");
@@ -424,7 +430,7 @@ export default function CompanyDealsKanban({ deals, setDeals }) {
       </div>
 
       {viewMode === "board" ? (
-        <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
           <div className="flex gap-4 overflow-x-auto pb-2">
             {statuses.map((status) => (
               <KanbanColumn
