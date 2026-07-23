@@ -501,12 +501,14 @@ const AdminCalendar = () => {
       <AppToaster />
 
       <div
-        className="flex flex-col flex-shrink-0 self-stretch"
+        className="sticky flex flex-col flex-shrink-0 self-stretch"
         style={{
           width: "100%",
           background: "#FFFFFF",
           borderBottom: "1px solid #E1E4EA",
           borderRadius: 0,
+          top: "64px",
+          zIndex: 40,
         }}
       >
       <div

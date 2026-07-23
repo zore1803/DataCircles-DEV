@@ -36,9 +36,8 @@ import {
 import {
   ResponsiveContainer,
   ComposedChart,
-  Line,
+  Area,
   Bar,
-  Cell,
   CartesianGrid,
   XAxis,
   YAxis,
@@ -160,6 +159,7 @@ const CompanyProfilePage = () => {
   const [showStats, setShowStats] = useState(true);
   const [activityFeedFilter, setActivityFeedFilter] = useState("All");
   const newEntryRef = useRef(null);
+  const incomeChartScrollRef = useRef(null);
 
   const [showSubsidiaryModal, setShowSubsidiaryModal] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
@@ -257,7 +257,7 @@ const CompanyProfilePage = () => {
   const monthlyIncomeData = (() => {
     const buckets = [];
     const now = new Date();
-    for (let i = 5; i >= 0; i--) {
+    for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       buckets.push({
         key: `${d.getFullYear()}-${d.getMonth()}`,
@@ -271,9 +271,47 @@ const CompanyProfilePage = () => {
       const d = new Date(invoiceDate);
       const key = `${d.getFullYear()}-${d.getMonth()}`;
       const bucket = buckets.find((b) => b.key === key);
-      if (bucket) bucket.income += invoice.amount || 0;
+      if (!bucket) return;
+      bucket.income += invoice.amount || 0;
+      const status = invoice.status?.toLowerCase();
+      if (status === "paid" || status === "accepted") bucket.hasPayment = true;
+    });
+    buckets.forEach((b) => {
+      b.paidHighlight = b.hasPayment ? b.income : null;
     });
     return buckets;
+  })();
+
+  // Draws the highlight as a "tent" that hugs the line's actual slope (interpolated
+  // from the neighboring points) instead of a flat-topped rectangle that pokes out
+  // past the diagonal line on either side.
+  const renderHighlightShape = (props) => {
+    const { x, y, width, height, payload, fill } = props;
+    if (payload?.paidHighlight == null || !height) return null;
+
+    const idx = monthlyIncomeData.findIndex((d) => d.key === payload.key);
+    const prev = monthlyIncomeData[idx - 1];
+    const next = monthlyIncomeData[idx + 1];
+    const current = payload.income || 0;
+    const pixelPerUnit = current > 0 ? height / current : 0;
+    const baseline = y + height;
+
+    const leftValue = prev ? (prev.income + current) / 2 : current;
+    const rightValue = next ? (current + next.income) / 2 : current;
+
+    const leftY = baseline - leftValue * pixelPerUnit;
+    const rightY = baseline - rightValue * pixelPerUnit;
+
+    const points = `${x},${leftY} ${x + width / 2},${y} ${x + width},${rightY} ${x + width},${baseline} ${x},${baseline}`;
+    return <polygon points={points} fill={fill} />;
+  };
+
+  // Shared Y-axis domain so the fixed axis and the scrollable plot stay numerically in sync.
+  const incomeYMax = (() => {
+    const max = Math.max(0, ...monthlyIncomeData.map((b) => b.income));
+    if (max === 0) return 100;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(max)));
+    return Math.ceil(max / magnitude) * magnitude;
   })();
 
   // Unified activity feed merged from deals/invoices/tasks/meetings — this app has no
@@ -515,6 +553,13 @@ const CompanyProfilePage = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Open the income chart already scrolled to the current month, not the oldest one.
+  useEffect(() => {
+    if (invoicesLoaded && incomeChartScrollRef.current) {
+      incomeChartScrollRef.current.scrollLeft = incomeChartScrollRef.current.scrollWidth;
+    }
+  }, [invoicesLoaded]);
+
   const handleEdit = () => {
     setForm({
       _id: company._id,
@@ -587,6 +632,7 @@ const CompanyProfilePage = () => {
 
   return (
     <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-6 px-6">
+      <style>{`.income-chart-scroll::-webkit-scrollbar { display: none; }`}</style>
       {showForm && (
         <CompanyForm
           form={form}
@@ -797,7 +843,7 @@ const CompanyProfilePage = () => {
             {activeTab === "Overview" && (
               <>
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_319px] gap-4">
-              <div className="space-y-4">
+              <div className="space-y-4 min-w-0">
                 {/* Deal Pipeline */}
                 <div className="h-[162px] bg-white border border-gray-200 rounded-lg p-5">
                   <div className="flex items-center justify-between mb-3">
@@ -806,25 +852,26 @@ const CompanyProfilePage = () => {
                     </h3>
                     <div className="flex items-center gap-2">
                       <button
-                        title="Toggle pipeline view"
+                        onClick={() => setActiveTab("Deals")}
+                        title="View Deals"
                         className="p-1.5 rounded-full text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
                       >
                         <Eye size={14} />
                       </button>
-                      <Link
-                        to="/deals"
+                      <button
+                        onClick={() => setActiveTab("Deals")}
                         title="Add Deal"
                         className="w-7 h-7 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-colors"
                       >
                         <Plus size={14} />
-                      </Link>
+                      </button>
                     </div>
                   </div>
                   <div className="flex h-[88px]">
                     {pipelineData.map((stage, idx) => (
                       <div
                         key={stage.key}
-                        className={`flex-1 flex flex-col justify-center px-5 ${stage.color} ${idx > 0 ? "-ml-3" : ""}`}
+                        className={`flex-1 flex flex-col justify-center ${stage.color} ${idx > 0 ? "-ml-3 pl-8 pr-5" : "pl-8 pr-5"}`}
                         style={{
                           clipPath:
                             idx === pipelineData.length - 1
@@ -845,8 +892,8 @@ const CompanyProfilePage = () => {
                 </div>
 
                 {/* Financial Overview */}
-                <div className="h-[607px] bg-white border border-gray-200 rounded-lg p-5">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                <div className="h-[607px] bg-white border border-gray-200 rounded-lg p-5 flex flex-col min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex-shrink-0">
                     Financial Overview
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
@@ -871,61 +918,98 @@ const CompanyProfilePage = () => {
                       </div>
                     ))}
                   </div>
-                  <ResponsiveContainer width="100%" height={438}>
-                    <ComposedChart data={monthlyIncomeData}>
-                      <defs>
-                        <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#0085FF" stopOpacity={0.9} />
-                          <stop offset="95%" stopColor="#0085FF" stopOpacity={0.15} />
-                        </linearGradient>
-                        <pattern
-                          id="hashPattern"
-                          patternUnits="userSpaceOnUse"
-                          width="4"
-                          height="8"
-                          patternTransform="rotate(90)"
-                        >
-                          <rect width="2" height="8" fill="#DCEBFF" />
-                        </pattern>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                      <XAxis
-                        dataKey="month"
-                        tick={{ fontSize: 12, fill: "#6b7280" }}
-                      />
-                      <YAxis tick={{ fontSize: 12, fill: "#6b7280" }} />
-                      <Tooltip
-                        formatter={(value) => [`₹${value.toLocaleString("en-IN")}`, "Income"]}
-                        contentStyle={{
-                          backgroundColor: "#1f2937",
-                          border: "none",
-                          borderRadius: "8px",
-                          color: "#fff",
-                        }}
-                        labelStyle={{ display: "none" }}
-                      />
-                      <Bar dataKey="income" barSize={22} radius={[4, 4, 0, 0]}>
-                        {monthlyIncomeData.map((entry, index) => (
-                          <Cell
-                            key={index}
-                            fill={
-                              index === monthlyIncomeData.length - 2
-                                ? "url(#colorIncome)"
-                                : "url(#hashPattern)"
-                            }
+
+                  <div className="flex min-w-0" style={{ flex: "1 1 0%", minHeight: 0 }}>
+                    {/* Fixed Y-axis, stays put while the plot below scrolls horizontally */}
+                    <div style={{ width: 64, height: "100%", flexShrink: 0 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={monthlyIncomeData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+                          <XAxis
+                            dataKey="month"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={false}
+                            padding={{ left: 0, right: 0 }}
                           />
-                        ))}
-                      </Bar>
-                      <Line
-                        type="monotone"
-                        dataKey="income"
-                        stroke="#0085FF"
-                        strokeWidth={2}
-                        dot={{ r: 3, fill: "#0085FF", strokeWidth: 0 }}
-                        activeDot={{ r: 5 }}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
+                          <YAxis
+                            domain={[0, incomeYMax]}
+                            tickLine={false}
+                            axisLine={false}
+                            allowDecimals={false}
+                            tickFormatter={(value) => value.toLocaleString("en-IN")}
+                            tick={{ fontSize: 12, fontFamily: "'DM Sans', sans-serif", fill: "rgba(33, 32, 31, 0.56)" }}
+                            width={64}
+                          />
+                          <Area type="linear" dataKey="income" stroke="none" fill="none" isAnimationActive={false} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div
+                      ref={incomeChartScrollRef}
+                      className="income-chart-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden"
+                      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                    >
+                      <div
+                        style={{ minWidth: Math.max(600, monthlyIncomeData.length * 110), height: "100%" }}
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart
+                            data={monthlyIncomeData}
+                            margin={{ top: 8, right: -(Math.max(600, monthlyIncomeData.length * 110) / monthlyIncomeData.length / 2), left: 0, bottom: 0 }}
+                          >
+                            <defs>
+                              <linearGradient id="hoverGradient" x1="0" y1="1" x2="0" y2="0">
+                                <stop offset="20.61%" stopColor="#0085FF" stopOpacity={0.6} />
+                                <stop offset="100%" stopColor="#FFFFFF" stopOpacity={0.024} />
+                              </linearGradient>
+                              <pattern id="hatchPattern" patternUnits="userSpaceOnUse" width="9" height="8">
+                                <rect width="1" height="8" fill="rgba(0, 133, 255, 0.3)" />
+                              </pattern>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E7E4E3" vertical={false} />
+                            <XAxis
+                              dataKey="month"
+                              tickLine={false}
+                              axisLine={false}
+                              padding={{ left: 0, right: 0 }}
+                              tick={{ fontSize: 12, fontFamily: "'DM Sans', sans-serif", fill: "rgba(33, 32, 31, 0.56)" }}
+                            />
+                            <YAxis domain={[0, incomeYMax]} hide />
+                            <Tooltip
+                              content={({ active, payload }) => {
+                                if (!active || !payload || payload.length === 0) return null;
+                                const income = payload[0]?.payload?.income || 0;
+                                return (
+                                  <div style={{ backgroundColor: "#1f2937", border: "none", borderRadius: 8, color: "#fff", padding: "8px 12px" }}>
+                                    <span>{`Income : ₹${income.toLocaleString("en-IN")}`}</span>
+                                  </div>
+                                );
+                              }}
+                            />
+                            <Area
+                              type="linear"
+                              dataKey="income"
+                              stroke="none"
+                              fill="url(#hatchPattern)"
+                              isAnimationActive={false}
+                            />
+                            <Bar dataKey="paidHighlight" barSize={40} fill="#FFFFFF" shape={renderHighlightShape} isAnimationActive={false} />
+                            <Bar dataKey="paidHighlight" barSize={40} fill="url(#hoverGradient)" shape={renderHighlightShape} isAnimationActive={false} />
+                            <Area
+                              type="linear"
+                              dataKey="income"
+                              stroke="#0085FF"
+                              strokeWidth={2}
+                              fill="none"
+                              dot={{ r: 3, fill: "#0085FF", strokeWidth: 0 }}
+                              activeDot={{ r: 5 }}
+                            />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 

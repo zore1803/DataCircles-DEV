@@ -7,6 +7,7 @@ import {
   PinOff,
   ChevronLeft,
   ChevronRight,
+  ListChecks,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
@@ -394,7 +395,16 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks }) {
         </button>
       </div>
 
-      {/* Task list */}
+      {/* Task list or empty state */}
+      {tasks.length === 0 ? (
+        <button
+          onClick={() => setShowTaskForm(true)}
+          className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
+        >
+          <ListChecks size={28} className="mb-2" />
+          <span className="text-sm font-medium">Add New Task</span>
+        </button>
+      ) : (
       <div
         className="box-border flex flex-col items-start w-full bg-white overflow-x-auto"
         style={{ border: "1px solid #E1E4EA", borderRadius: 8 }}
@@ -627,6 +637,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks }) {
           </tbody>
         </table>
       </div>
+      )}
 
       {listTotalCount > 0 && (
         <div className="w-full bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">

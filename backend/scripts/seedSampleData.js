@@ -130,7 +130,7 @@ const createdDeals = await Deal.insertMany(dealData);
         }
       ]
     }));
-    // const createdInvoices = await Invoice.insertMany(invoiceData);
+    await Invoice.insertMany(invoiceData);
 
     // Sample Tasks (linked to companies)
     const taskData = createdCompanies.map((company, index) => ({
