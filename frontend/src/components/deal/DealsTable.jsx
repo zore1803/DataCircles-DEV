@@ -488,12 +488,10 @@ export default function DealsTable({
 
   return (
     <div
-      className={`relative overflow-hidden bg-white border border-[#E1E4EA] rounded-lg ${loading ? "pointer-events-none opacity-60" : ""
-        }`}
+      className={`relative bg-white ${loading ? "pointer-events-none opacity-60" : ""}`}
     >
-      <div className="overflow-auto pb-4">
         <table
-          className="w-full text-sm text-gray-700 border-collapse text-left"
+          className="w-full text-sm text-gray-700 border-separate border-spacing-0 text-left"
           style={{
             width: "100%",
             minWidth: `${table.getTotalSize()}px`,
@@ -528,7 +526,7 @@ export default function DealsTable({
                         zIndex: isSticky ? 20 : 1,
                       }}
                       className={`px-3 font-medium text-[#525866] text-xs border-r border-[#E1E4EA] hover:bg-gray-100 transition-colors bg-[#F5F7FA] ${isRightMostSticky
-                        ? "border-r-2 border-r-gray-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
+                        ? "border-r-2 border-r-gray-300"
                         : "last:border-r-0"
                         }`}
                     >
@@ -567,10 +565,11 @@ export default function DealsTable({
                 </td>
               </tr>
             ) : (
-              table.getRowModel().rows.map((row) => {
+              table.getRowModel().rows.map((row, rowIndex) => {
                 const deal = row.original;
                 const isSelected = selectedRows.includes(deal._id);
                 const stale = isStale(deal.createdAt);
+                const isLastRow = rowIndex === table.getRowModel().rows.length - 1;
 
                 return (
                   <tr
@@ -625,9 +624,9 @@ export default function DealsTable({
                             zIndex: isSticky ? 10 : 1,
                           }}
                           className={`px-3 py-3 text-sm font-medium text-[#222530] align-middle bg-inherit ${isRightMostSticky
-                            ? "shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
+                            ? "border-r-2 border-r-gray-200"
                             : ""
-                            }`}
+                            } ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
@@ -642,7 +641,6 @@ export default function DealsTable({
             )}
           </tbody>
         </table>
-      </div>
     </div>
   );
 }

@@ -24,7 +24,6 @@ import {
   BriefcaseBusiness,
   Users,
   FileText,
-  SlidersHorizontal,
   Eye,
   Plus,
   Receipt,
@@ -32,6 +31,7 @@ import {
   Mail,
   Phone,
   File,
+  MoreVertical,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -80,12 +80,6 @@ const loadingMessages = [
 
 // Select a random message
 const randomMessage = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
-
-const SlidersIcon = ({ width = 14, height = 14 }) => (
-  <svg width={width} height={height} viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M1.66667 2.91667C1.66667 2.22631 2.22631 1.66667 2.91667 1.66667C3.60702 1.66667 4.16667 2.22631 4.16667 2.91667C4.16667 3.60703 3.60702 4.16667 2.91667 4.16667C2.22631 4.16667 1.66667 3.60703 1.66667 2.91667ZM2.91667 0C1.30583 0 0 1.30583 0 2.91667C0 4.5275 1.30583 5.83333 2.91667 5.83333C4.5275 5.83333 5.83333 4.5275 5.83333 2.91667C5.83333 1.30583 4.5275 0 2.91667 0ZM7.5 3.75H14.1667V2.08333H7.5V3.75ZM10.8333 11.25C10.8333 10.5597 11.393 10 12.0833 10C12.7737 10 13.3333 10.5597 13.3333 11.25C13.3333 11.9403 12.7737 12.5 12.0833 12.5C11.393 12.5 10.8333 11.9403 10.8333 11.25ZM12.0833 8.33333C10.4725 8.33333 9.16667 9.63917 9.16667 11.25C9.16667 12.8608 10.4725 14.1667 12.0833 14.1667C13.6942 14.1667 15 12.8608 15 11.25C15 9.63917 13.6942 8.33333 12.0833 8.33333ZM0.833333 10.4167V12.0833H7.5V10.4167H0.833333Z" fill="#1F2937" />
-  </svg>
-);
 
 const LifetimeRevenueIcon = ({ width = 18, height = 17 }) => (
   <svg width={width} height={height} viewBox="8 8 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -160,6 +154,9 @@ const CompanyProfilePage = () => {
   const [activityFeedFilter, setActivityFeedFilter] = useState("All");
   const newEntryRef = useRef(null);
   const incomeChartScrollRef = useRef(null);
+
+  const chartDotCursorSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><g filter="url(#filter0_dd_2154_683)"><rect x="4" y="2" width="12" height="12" rx="6" fill="white"/><rect x="5" y="3" width="10" height="10" rx="5" stroke="#0F0E0E" stroke-width="2"/></g><defs><filter id="filter0_dd_2154_683" x="0" y="0" width="20" height="20" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="2"/><feGaussianBlur stdDeviation="2"/><feColorMatrix type="matrix" values="0 0 0 0 0.196487 0 0 0 0 0.196487 0 0 0 0 0.279476 0 0 0 0.06 0"/><feBlend mode="multiply" in2="BackgroundImageFix" result="effect1_dropShadow_2154_683"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="2"/><feGaussianBlur stdDeviation="1"/><feColorMatrix type="matrix" values="0 0 0 0 0.196487 0 0 0 0 0.196487 0 0 0 0 0.279476 0 0 0 0.06 0"/><feBlend mode="multiply" in2="effect1_dropShadow_2154_683" result="effect2_dropShadow_2154_683"/><feBlend mode="normal" in="SourceGraphic" in2="effect2_dropShadow_2154_683" result="shape"/></filter></defs></svg>`;
+  const chartDotCursor = `url("data:image/svg+xml,${encodeURIComponent(chartDotCursorSvg)}") 10 10, auto`;
 
   const [showSubsidiaryModal, setShowSubsidiaryModal] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
@@ -749,6 +746,44 @@ const CompanyProfilePage = () => {
               <Instagram size={16} />
             </button>
 
+            {/* Stats Switcher */}
+            <button
+              onClick={() => setShowStats((prev) => !prev)}
+              title={showStats ? "Hide summary stats" : "Show summary stats"}
+              className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${showStats
+                ? "bg-gray-50 border-gray-200 text-gray-700"
+                : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+                }`}
+            >
+              <MoreVertical size={16} />
+            </button>
+
+            {/* New Entry Dropdown */}
+            <div className="relative" ref={newEntryRef}>
+              <button
+                onClick={() => setShowNewEntryMenu((prev) => !prev)}
+                className="flex items-center gap-1.5 h-8 px-4 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-full transition-colors"
+              >
+                New Entry
+                <ChevronDown size={14} />
+              </button>
+              {showNewEntryMenu && (
+                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+                  {newEntryOptions.map((option) => (
+                    <Link
+                      key={option.label}
+                      to={option.href}
+                      onClick={() => setShowNewEntryMenu(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <option.icon size={14} className="text-gray-400" />
+                      {option.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <button
               title="Edit"
               onClick={handleEdit}
@@ -771,7 +806,7 @@ const CompanyProfilePage = () => {
         {/* Separator */}
         <div className="border-b border-gray-200 mb-4 -mx-6"></div>
 
-        {/* Tab Row: pill tab selector + switcher/New Entry */}
+        {/* Tab Row: pill tab selector */}
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
             {tabs.map((tab) => (
@@ -786,47 +821,6 @@ const CompanyProfilePage = () => {
                 {tab}
               </button>
             ))}
-          </div>
-
-          {/* Right-side controls */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Stats Switcher */}
-            <button
-              onClick={() => setShowStats((prev) => !prev)}
-              title={showStats ? "Hide summary stats" : "Show summary stats"}
-              className={`w-11 h-11 flex items-center justify-center rounded-full border transition-colors ${showStats
-                ? "bg-gray-50 border-gray-200 text-gray-700"
-                : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
-                }`}
-            >
-              <SlidersIcon width={14} height={14} />
-            </button>
-
-            {/* New Entry Dropdown */}
-            <div className="relative" ref={newEntryRef}>
-              <button
-                onClick={() => setShowNewEntryMenu((prev) => !prev)}
-                className="flex items-center gap-1.5 h-11 px-4 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-full transition-colors"
-              >
-                New Entry
-                <ChevronDown size={14} />
-              </button>
-              {showNewEntryMenu && (
-                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
-                  {newEntryOptions.map((option) => (
-                    <Link
-                      key={option.label}
-                      to={option.href}
-                      onClick={() => setShowNewEntryMenu(false)}
-                      className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      <option.icon size={14} className="text-gray-400" />
-                      {option.label}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
@@ -966,7 +960,7 @@ const CompanyProfilePage = () => {
                     <div
                       ref={incomeChartScrollRef}
                       className="income-chart-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden"
-                      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                      style={{ scrollbarWidth: "none", msOverflowStyle: "none", cursor: chartDotCursor }}
                     >
                       <div
                         style={{ minWidth: Math.max(600, monthlyIncomeData.length * 110), height: "100%" }}
@@ -999,8 +993,24 @@ const CompanyProfilePage = () => {
                                 if (!active || !payload || payload.length === 0) return null;
                                 const income = payload[0]?.payload?.income || 0;
                                 return (
-                                  <div style={{ backgroundColor: "#1f2937", border: "none", borderRadius: 8, color: "#fff", padding: "8px 12px" }}>
-                                    <span>{`Income : ₹${income.toLocaleString("en-IN")}`}</span>
+                                  <div style={{ position: "relative", display: "inline-block" }}>
+                                    <svg
+                                      viewBox="0 0 86 62"
+                                      preserveAspectRatio="none"
+                                      style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+                                      fill="none"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                      <path fillRule="evenodd" clipRule="evenodd" d="M47.5426 60.1492C45.3504 62.6169 41.7962 62.6169 39.6041 60.1492L35.7402 56.4079C34.8076 55.5049 33.5603 55 32.2621 55H22.0494C14.3824 55 11.6021 54.3038 8.79913 52.9965C5.99616 51.6892 3.79638 49.7708 2.29734 47.3263C0.7983 44.8819 0 42.4573 0 35.7709V19.2291C0 12.5427 0.7983 10.1181 2.29734 7.67366C3.79638 5.22921 5.99616 3.3108 8.79913 2.0035C11.6021 0.696192 14.3824 0 22.0494 0H63.9506C71.6176 0 74.3979 0.696192 77.2009 2.0035C80.0038 3.3108 82.2036 5.22921 83.7027 7.67366C85.2017 10.1181 86 12.5427 86 19.2291V35.7709C86 42.4573 85.2017 44.8819 83.7027 47.3263C82.2036 49.7708 80.0038 51.6892 77.2009 52.9965C74.3979 54.3038 71.6176 55 63.9506 55H56.9085C54.3122 55 51.8177 56.0098 49.9524 57.8158L47.5426 60.1492Z" fill="#21201F" />
+                                    </svg>
+                                    <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "12px 16px 22px", gap: 2, whiteSpace: "nowrap" }}>
+                                      <span style={{ color: "#fff", fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>
+                                        {`₹${income.toLocaleString("en-IN")}`}
+                                      </span>
+                                      <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 500, lineHeight: 1.2 }}>
+                                        Income
+                                      </span>
+                                    </div>
                                   </div>
                                 );
                               }}
@@ -1322,13 +1332,21 @@ const CompanyProfilePage = () => {
               </>
             )}
             {activeTab === "Deals" && (
-              <CompanyDealsKanban deals={deals} setDeals={setDeals} />
+              <CompanyDealsKanban
+                deals={deals}
+                setDeals={setDeals}
+                showStats={showStats}
+                companyId={id}
+                company={company}
+                contacts={contacts}
+              />
             )}
             {activeTab === "Contacts" && (
               <CompanyContactsTab
                 contacts={contacts}
                 meetings={meetings}
                 tasks={tasks}
+                showStats={showStats}
               />
             )}
             {activeTab === "Invoices" && (
@@ -1336,17 +1354,19 @@ const CompanyProfilePage = () => {
                 invoices={invoices}
                 summary={invoiceSummary}
                 loading={invoicesLoading}
+                showStats={showStats}
               />
             )}
-            {activeTab === "Notes" && <CompanyNotesTab />}
+            {activeTab === "Notes" && <CompanyNotesTab showStats={showStats} />}
             {activeTab === "Tasks" && (
-              <CompanyTasksTab companyId={id} tasks={tasks} setTasks={setTasks} />
+              <CompanyTasksTab companyId={id} tasks={tasks} setTasks={setTasks} showStats={showStats} />
             )}
             {activeTab === "Meetings" && (
               <CompanyMeetingsTab
                 companyId={id}
                 meetings={meetings}
                 setMeetings={setMeetings}
+                showStats={showStats}
               />
             )}
             {activeTab === "Folders" && <CompanyFolderTab />}

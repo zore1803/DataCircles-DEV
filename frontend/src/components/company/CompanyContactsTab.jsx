@@ -50,7 +50,7 @@ const RecentInteractionsIcon = ({ size = 20, ...props }) => (
   </svg>
 );
 
-export default function CompanyContactsTab({ contacts, meetings = [], tasks = [] }) {
+export default function CompanyContactsTab({ contacts, meetings = [], tasks = [], showStats = true }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -164,24 +164,26 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
   return (
     <div>
       {/* KPI Tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        {kpiTiles.map((tile) => (
-          <div
-            key={tile.label}
-            className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
-          >
-            <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-              <tile.icon size={20} />
+      {showStats && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          {kpiTiles.map((tile) => (
+            <div
+              key={tile.label}
+              className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
+            >
+              <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                <tile.icon size={20} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
+                <p className="text-sm font-semibold text-gray-900 truncate">
+                  {tile.value}
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-              <p className="text-sm font-semibold text-gray-900 truncate">
-                {tile.value}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
 
@@ -337,7 +339,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
       </div>
 
       {totalCount > 0 && (
-        <div className="w-full bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+        <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
           <div className="flex-1 flex justify-between sm:hidden">
             <button
               onClick={() => handlePageChange(currentPage - 1)}

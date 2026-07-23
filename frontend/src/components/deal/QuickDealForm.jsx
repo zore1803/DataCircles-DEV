@@ -11,12 +11,13 @@ const QuickDealForm = ({
   contacts,
   onDealCreated,
   onRequestClose,
+  initialCompanyId = "",
 }) => {
   const [form, setForm] = useState({
     title: "",
     amount: "",
     status: "Open",
-    company: "",
+    company: initialCompanyId,
     contact: "",
   });
   const [additionalFieldValues, setAdditionalFieldValues] = useState({});

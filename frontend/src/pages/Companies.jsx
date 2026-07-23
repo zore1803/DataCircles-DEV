@@ -1120,7 +1120,7 @@ function Companies() {
     };
 
     return (
-      <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+      <div className="bg-white px-4 py-3 flex items-center justify-between sm:px-6">
         <div className="flex-1 flex justify-between sm:hidden">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
@@ -1420,7 +1420,7 @@ function Companies() {
       )}
 
       {/* Main Content Card */}
-      <div className="bg-white overflow-visible border-b border-gray-100">
+      <div className="bg-white overflow-visible">
         {/* Toolbar (Title + Search + Buttons) */}
         <div
           className="sticky h-16 px-6 border-b border-[#E1E4EA] bg-white flex items-center"
@@ -1582,9 +1582,9 @@ function Companies() {
           <div
             className={`relative bg-white overflow-hidden border border-[#E1E4EA] rounded-lg ${loading ? "pointer-events-none opacity-60" : ""}`}
           >
-            <div className="overflow-x-auto overflow-y-visible">
+            <div className="overflow-x-auto">
               <table
-                className="w-full border-collapse text-left"
+                className="w-full border-separate border-spacing-0 text-left"
                 style={{
                   minWidth: `${table.getTotalSize()}px`,
                   tableLayout: "fixed",
@@ -1613,7 +1613,7 @@ function Companies() {
                               zIndex: isSticky ? 20 : 1,
                             }}
                             className={`px-4 py-3 text-sm font-medium text-[#525866] border-r border-[#E1E4EA] hover:bg-gray-100 transition-colors bg-[#F5F7FA] ${isRightMostSticky
-                              ? "border-r-2 border-r-gray-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
+                              ? "border-r-2 border-r-gray-300"
                               : "last:border-r-0"
                               }`}
                           >
@@ -1652,7 +1652,7 @@ function Companies() {
                       </td>
                     </tr>
                   ) : (
-                    table.getRowModel().rows.map((row) => (
+                    table.getRowModel().rows.map((row, rowIndex) => (
                       <tr
                         key={row.id}
                         className={`bg-white hover:bg-blue-50 transition-colors ${selectedCompanies.includes(row.original._id) ? "!bg-blue-50" : ""}`}
@@ -1666,6 +1666,7 @@ function Companies() {
                           const colId = cell.column.id;
                           const isSticky = colId === "selection" || colId === pinnedColumn;
                           const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "selection";
+                          const isLastRow = rowIndex === table.getRowModel().rows.length - 1;
 
                           // Calculate left offset
                           let leftOffset = "auto";
@@ -1682,9 +1683,9 @@ function Companies() {
                                 zIndex: isSticky ? 10 : 1,
                               }}
                               className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit ${isRightMostSticky
-                                ? "shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
+                                ? "border-r-2 border-r-gray-200"
                                 : ""
-                                }`}
+                                } ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
                             >
                               {flexRender(
                                 cell.column.columnDef.cell,

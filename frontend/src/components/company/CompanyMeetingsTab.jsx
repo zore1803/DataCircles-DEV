@@ -65,7 +65,7 @@ const MoreVertIcon = ({ size = 20, ...props }) => (
   </svg>
 );
 
-export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetings }) {
+export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetings, showStats = true }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [users, setUsers] = useState([]);
   const [showMeetingForm, setShowMeetingForm] = useState(false);
@@ -296,35 +296,39 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
   return (
     <div>
       {/* KPI Tiles */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        {kpiTiles.map((tile) => (
-          <div
-            key={tile.label}
-            className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
-          >
-            <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-              <tile.icon size={20} />
-            </div>
-            <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-                <p
-                  className={`font-semibold text-gray-900 ${tile.valueSmall ? "text-sm" : "text-base"}`}
-                >
-                  {tile.value}
-                </p>
+      {showStats && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            {kpiTiles.map((tile) => (
+              <div
+                key={tile.label}
+                className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
+              >
+                <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <tile.icon size={20} />
+                </div>
+                <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
+                    <p
+                      className={`font-semibold text-gray-900 ${tile.valueSmall ? "text-sm" : "text-base"}`}
+                    >
+                      {tile.value}
+                    </p>
+                  </div>
+                  {tile.subtitle && (
+                    <span className={`text-[11px] flex-shrink-0 whitespace-nowrap ${tile.subtitleClass}`}>
+                      {tile.subtitle}
+                    </span>
+                  )}
+                </div>
               </div>
-              {tile.subtitle && (
-                <span className={`text-[11px] flex-shrink-0 whitespace-nowrap ${tile.subtitleClass}`}>
-                  {tile.subtitle}
-                </span>
-              )}
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
+          <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
+        </>
+      )}
 
       {/* Search + Controls */}
       <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
@@ -1166,7 +1170,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
       )}
 
       {viewMode === "list" && listTotalCount > 0 && (
-        <div className="w-full bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+        <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
           <div className="flex-1 flex justify-between sm:hidden">
             <button
               onClick={() => handleListPageChange(listPage - 1)}
