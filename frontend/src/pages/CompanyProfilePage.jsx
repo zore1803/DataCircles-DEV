@@ -286,7 +286,7 @@ const CompanyProfilePage = () => {
   // from the neighboring points) instead of a flat-topped rectangle that pokes out
   // past the diagonal line on either side.
   const renderHighlightShape = (props) => {
-    const { x, y, width, height, payload, fill } = props;
+    const { x, y, width, height, payload, background } = props;
     if (payload?.paidHighlight == null || !height) return null;
 
     const idx = monthlyIncomeData.findIndex((d) => d.key === payload.key);
@@ -296,14 +296,32 @@ const CompanyProfilePage = () => {
     const pixelPerUnit = current > 0 ? height / current : 0;
     const baseline = y + height;
 
-    const leftValue = prev ? (prev.income + current) / 2 : current;
-    const rightValue = next ? (current + next.income) / 2 : current;
+    // Bar is 40% of the category band, centered on it. Its edges sit inside the
+    // band (not at the true inter-category midpoint), so interpolate the line's
+    // value at that exact fraction of the distance to each neighbor's center —
+    // a plain 50/50 average would only be correct if the bar spanned the full band.
+    const bandX = background?.x ?? x;
+    const bandWidth = background?.width ?? width;
+    // The last bucket is the current, still-in-progress month — render it at
+    // half the usual width so it reads as ongoing rather than a full column.
+    const isOngoing = idx === monthlyIncomeData.length - 1;
+    const barWidth = bandWidth * (isOngoing ? 0.2 : 0.4);
+    const barX = bandX + (bandWidth - barWidth) / 2;
+    const edgeFraction = barWidth / 2 / bandWidth;
+
+    const leftValue = prev ? current + (prev.income - current) * edgeFraction : current;
+    const rightValue = next ? current + (next.income - current) * edgeFraction : current;
 
     const leftY = baseline - leftValue * pixelPerUnit;
     const rightY = baseline - rightValue * pixelPerUnit;
 
-    const points = `${x},${leftY} ${x + width / 2},${y} ${x + width},${rightY} ${x + width},${baseline} ${x},${baseline}`;
-    return <polygon points={points} fill={fill} />;
+    const points = `${barX},${leftY} ${barX + barWidth / 2},${y} ${barX + barWidth},${rightY} ${barX + barWidth},${baseline} ${barX},${baseline}`;
+    return (
+      <g>
+        <polygon points={points} fill="#FFFFFF" />
+        <polygon points={points} fill="url(#hoverGradient)" />
+      </g>
+    );
   };
 
   // Shared Y-axis domain so the fixed axis and the scrollable plot stay numerically in sync.
@@ -956,7 +974,7 @@ const CompanyProfilePage = () => {
                         <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart
                             data={monthlyIncomeData}
-                            margin={{ top: 8, right: -(Math.max(600, monthlyIncomeData.length * 110) / monthlyIncomeData.length / 2), left: 0, bottom: 0 }}
+                            margin={{ top: 8, right: -(Math.max(600, monthlyIncomeData.length * 110) / (monthlyIncomeData.length - 0.5) / 2), left: 0, bottom: 0 }}
                           >
                             <defs>
                               <linearGradient id="hoverGradient" x1="0" y1="1" x2="0" y2="0">
@@ -994,8 +1012,7 @@ const CompanyProfilePage = () => {
                               fill="url(#hatchPattern)"
                               isAnimationActive={false}
                             />
-                            <Bar dataKey="paidHighlight" barSize={40} fill="#FFFFFF" shape={renderHighlightShape} isAnimationActive={false} />
-                            <Bar dataKey="paidHighlight" barSize={40} fill="url(#hoverGradient)" shape={renderHighlightShape} isAnimationActive={false} />
+                            <Bar dataKey="paidHighlight" shape={renderHighlightShape} background={{ fill: "transparent" }} isAnimationActive={false} />
                             <Area
                               type="linear"
                               dataKey="income"
