@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import API from "../services/api";
 import { Link } from "react-router-dom";
 import logo from "/DataCircles.png";
@@ -22,8 +23,6 @@ import {
   FileText,
   CheckSquare,
   MoreVertical,
-  ChevronDown as ExpandIcon,
-  ChevronUp as CollapseIcon,
   Settings,
   FolderPlus,
   Download,
@@ -31,6 +30,7 @@ import {
   MoreHorizontal,
   SlidersHorizontal,
   Eye,
+  EyeOff,
   Pin,
   PinOff,
   Star,
@@ -98,6 +98,30 @@ import {
 import CompanyQuickView from "../components/company/CompanyQuickView";
 import AppToaster from "../components/AppToaster";
 
+const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>.
+const HighlightText = ({ text, query }) => {
+  const str = text === null || text === undefined ? "" : String(text);
+  const q = (query || "").trim();
+  if (!q) return <>{str}</>;
+
+  const parts = str.split(new RegExp(`(${escapeRegExp(q)})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="bg-yellow-200 text-inherit rounded-sm px-0.5">
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+};
+
 function Companies() {
   const [companies, setCompanies] = useState([]);
   const [form, setForm] = useState({
@@ -127,6 +151,9 @@ function Companies() {
   const searchInputRef = useRef(null);
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
   const rowActionsRef = useRef(null);
+  const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
+  const [columnMenuPos, setColumnMenuPos] = useState(null);
+  const columnMenuRef = useRef(null);
   const [quickHotlistCompanyId, setQuickHotlistCompanyId] = useState(null);
   const [starredCompanies, setStarredCompanies] = useState(() => {
     const saved = localStorage.getItem("starred_companies");
@@ -177,15 +204,20 @@ function Companies() {
   // Selection mode state
   const [selectionMode, setSelectionMode] = useState(true);
   const [longPressTimer, setLongPressTimer] = useState(null);
-  const [expandedRows, setExpandedRows] = useState([]);
 
   const [columnSizing, setColumnSizing] = useState({});
 
-  const [pinnedColumn, setPinnedColumn] = useState(null);
+  const [pinnedColumns, setPinnedColumns] = useState([]); // [{ key, side: 'left' | 'right' }]
 
-  const togglePinColumn = (colKey) => {
-    setPinnedColumn((prev) => (prev === colKey ? null : colKey));
+  const pinColumnToSide = (colKey, side) => {
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colKey), { key: colKey, side }]);
   };
+
+  const unpinColumn = (colKey) => {
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colKey));
+  };
+
+  const getColumnPinSide = (colKey) => pinnedColumns.find((p) => p.key === colKey)?.side || null;
 
   const {
     searchTerm,
@@ -289,10 +321,182 @@ function Companies() {
 
   const visibleColumns = useMemo(() => getVisibleColumns(), [columns]);
 
+  const [draggedColKey, setDraggedColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
+  const dragOverRef = useRef(null);
+
+  const startColumnDrag = (e, colId) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    e.preventDefault();
+    window.getSelection?.()?.removeAllRanges();
+
+    const th = e.currentTarget;
+    const rect = th.getBoundingClientRect();
+    const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
+    const previewRows = (sortedCompanies || [])
+      .map((c) => String(getFieldValue(c, colId) ?? "").trim() || "—");
+
+    dragOverRef.current = null;
+    setDraggedColKey(colId);
+    setDragOverColKey(null);
+    document.body.style.userSelect = "none";
+    setDragGhost({
+      label,
+      previewRows,
+      x: e.clientX,
+      y: e.clientY,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+    });
+
+    const handleMouseMove = (moveEvent) => {
+      setDragGhost((prev) => (prev ? { ...prev, x: moveEvent.clientX, y: moveEvent.clientY } : prev));
+
+      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) {
+        handleColumnReorder(colId, overKey);
+      }
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    if (!draggedKey || draggedKey === targetKey) return;
+    const sorted = [...columns].sort((a, b) => a.order - b.order);
+    const visibleSorted = sorted.filter((c) => c.visible);
+    const draggedIdx = visibleSorted.findIndex((c) => c.key === draggedKey);
+    const targetIdx = visibleSorted.findIndex((c) => c.key === targetKey);
+    if (draggedIdx === -1 || targetIdx === -1) return;
+
+    const reorderedVisible = [...visibleSorted];
+    const [moved] = reorderedVisible.splice(draggedIdx, 1);
+    reorderedVisible.splice(targetIdx, 0, moved);
+
+    let visibleCursor = 0;
+    const newColumns = sorted
+      .map((c) => (c.visible ? reorderedVisible[visibleCursor++] : c))
+      .map((c, idx) => ({ ...c, order: idx }));
+
+    saveColumns(newColumns);
+  };
+
   const columnHelper = createColumnHelper();
 
   // Sort companies so that starred ones always appear at the top
   const sortedCompanies = companies || [];
+
+  const renderRowActionsMenu = (company) => {
+    const isOpen = openRowActionsId === company._id;
+    return (
+      <div
+        className="relative flex-shrink-0"
+        ref={isOpen ? rowActionsRef : null}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenRowActionsId(isOpen ? null : company._id);
+          }}
+          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+          title="More actions"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+        {isOpen && (
+          <div className="absolute right-0 top-full z-[100] mt-1 w-[190px] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-2 animate-in fade-in zoom-in duration-150 origin-top-right pointer-events-auto">
+            <Link
+              to={`/companies/${company._id}`}
+              onClick={() => setOpenRowActionsId(null)}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+            >
+              <Eye className="w-4 h-4 text-[#1C1B1F]" />
+              View Company
+            </Link>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenRowActionsId(null);
+                handleEdit(company);
+              }}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+            >
+              <Edit2 className="w-4 h-4 text-[#1C1B1F]" />
+              Edit
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenRowActionsId(null);
+                setQuickHotlistCompanyId(company._id);
+              }}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+            >
+              <FolderPlus className="w-4 h-4 text-[#1C1B1F]" />
+              Move to a Folder
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenRowActionsId(null);
+                setQuickHotlistCompanyId(company._id);
+              }}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+            >
+              <FileText className="w-4 h-4 text-[#1C1B1F]" />
+              Add to Hotlist
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleStar(e, company._id);
+              }}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+            >
+              <Star className={`w-4 h-4 ${starredCompanies.includes(company._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
+              {starredCompanies.includes(company._id) ? "Unstar Company" : "Star Company"}
+            </button>
+            <div className="w-full border-t border-[#F1F1F5]" />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenRowActionsId(null);
+                handleDelete(company._id);
+              }}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
+            >
+              <Trash2 className="w-4 h-4 text-[#CD3636]" />
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const tableColumns = useMemo(() => {
     const cols = [];
@@ -333,75 +537,137 @@ function Companies() {
 
 
     // 2. Dynamic Data Columns
-    const pinnedFields = visibleColumns.filter((vc) => vc.key === pinnedColumn);
-    const unpinnedFields = visibleColumns.filter((vc) => vc.key !== pinnedColumn);
+    // visibleColumns is already sorted by `order` (see getVisibleColumns), so filtering
+    // preserves that sequencing within each group — dragging a header updates `order`,
+    // pin side just decides which sticky group (left/none/right) a column belongs to.
+    const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+    const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+    const leftPinnedFields = visibleColumns.filter((vc) => leftPinnedKeys.includes(vc.key));
+    const rightPinnedFields = visibleColumns.filter((vc) => rightPinnedKeys.includes(vc.key));
+    const unpinnedFields = visibleColumns.filter(
+      (vc) => !leftPinnedKeys.includes(vc.key) && !rightPinnedKeys.includes(vc.key),
+    );
 
-    [...pinnedFields, ...unpinnedFields].forEach((vc) => {
+    const orderedFields = [...leftPinnedFields, ...unpinnedFields, ...rightPinnedFields];
+    const lastColumnKey = orderedFields[orderedFields.length - 1]?.key;
+
+    orderedFields.forEach((vc) => {
       cols.push(
         columnHelper.accessor((row) => getFieldValue(row, vc.key), {
           id: vc.key,
           size: vc.key === "name" ? 220 : vc.key === "address" ? 250 : 150,
           header: () => {
-            const Icon = vc.icon;
             const isSortable = vc.sortable !== false;
-            const isPinned = pinnedColumn === vc.key;
+            const pinSide = getColumnPinSide(vc.key);
+            const isMenuOpen = openColumnMenuKey === vc.key;
 
             return (
-              <div
-                className={`flex items-center justify-between w-full group ${isSortable ? "cursor-pointer select-none" : ""
-                  }`}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  togglePinColumn(vc.key);
-                }}
-              >
-                <div
-                  className="flex items-center gap-2 flex-1 min-w-0"
-                  onClick={() => isSortable && handleSort(vc.key)}
+              <div className="flex items-center justify-between w-full group">
+                <span className="truncate flex-1 min-w-0" title={vc.label}>
+                  {vc.label}
+                </span>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isMenuOpen) {
+                      setOpenColumnMenuKey(null);
+                      setColumnMenuPos(null);
+                      return;
+                    }
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setColumnMenuPos({ top: rect.bottom + 4, left: rect.right - 190 });
+                    setOpenColumnMenuKey(vc.key);
+                  }}
+                  className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                  title="Column options"
                 >
-                  {Icon && <Icon className="w-4 h-4 inline flex-shrink-0" />}
-                  <span className="truncate" title={vc.label}>
-                    {vc.label}
-                  </span>
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
 
-                  {/* Pin Icon */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      togglePinColumn(vc.key);
-                    }}
-                    className={`p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned
-                      ? "opacity-100 text-blue-600"
-                      : "opacity-0 group-hover:opacity-100 text-gray-400"
-                      }`}
-                    title={isPinned ? "Unpin Column" : "Pin Column"}
-                  >
-                    {isPinned ? (
-                      <PinOff className="w-3.5 h-3.5" />
-                    ) : (
-                      <Pin className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </div>
+                {isMenuOpen && columnMenuPos && createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColumnMenuKey(null); setColumnMenuPos(null); }} />
+                    <div
+                      ref={columnMenuRef}
+                      style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
+                      className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                    >
+                      <button
+                        onClick={() => {
+                          setOpenColumnMenuKey(null);
+                          setColumnMenuPos(null);
+                          pinSide === "left" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "left");
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                      >
+                        {pinSide === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                        Pin to Left
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOpenColumnMenuKey(null);
+                          setColumnMenuPos(null);
+                          pinSide === "right" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "right");
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                      >
+                        {pinSide === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                        Pin to Right
+                      </button>
 
-                {isSortable && (
-                  <div
-                    className="flex flex-col ml-1 flex-shrink-0 cursor-pointer"
-                    onClick={() => handleSort(vc.key)}
-                  >
-                    <ChevronUp
-                      className={`w-3 h-3 ${sortConfig.key === vc.key && sortConfig.direction === "asc"
-                        ? "text-blue-600"
-                        : "text-gray-400"
-                        }`}
-                    />
-                    <ChevronDown
-                      className={`w-3 h-3 -mt-1 ${sortConfig.key === vc.key && sortConfig.direction === "desc"
-                        ? "text-blue-600"
-                        : "text-gray-400"
-                        }`}
-                    />
-                  </div>
+                      {isSortable && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setOpenColumnMenuKey(null);
+                              setColumnMenuPos(null);
+                              setSortConfig({ key: vc.key, direction: "asc" });
+                              setPagination((prev) => ({ ...prev, currentPage: 1 }));
+                            }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                            Sort Ascending
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpenColumnMenuKey(null);
+                              setColumnMenuPos(null);
+                              setSortConfig({ key: vc.key, direction: "desc" });
+                              setPagination((prev) => ({ ...prev, currentPage: 1 }));
+                            }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                            Sort Descending
+                          </button>
+                        </>
+                      )}
+
+                      <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+
+                      <button
+                        disabled={vc.required}
+                        onClick={() => {
+                          if (vc.required) return;
+                          setOpenColumnMenuKey(null);
+                          setColumnMenuPos(null);
+                          saveColumns(
+                            columns.map((c) => (c.key === vc.key ? { ...c, visible: false } : c)),
+                          );
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${vc.required
+                          ? "text-gray-300 cursor-not-allowed"
+                          : "text-[#161618] hover:bg-gray-50"
+                          }`}
+                      >
+                        <EyeOff className={`w-4 h-4 ${vc.required ? "text-gray-300" : "text-[#1C1B1F]"}`} />
+                        Hide Column
+                      </button>
+                    </div>
+                  </>,
+                  document.body,
                 )}
               </div>
             );
@@ -409,12 +675,12 @@ function Companies() {
           cell: ({ row, getValue }) => {
             // ... Keep all your existing cell rendering logic here exactly as it is ...
             const company = row.original;
-            const isExpanded = expandedRows.includes(company._id);
             const val = getValue();
+            let baseContent;
 
             if (vc.key === "name") {
               // ... your existing name cell logic
-              return (
+              baseContent = (
                 <div className="flex items-center justify-between w-full group relative">
                   <div className="flex items-center min-w-0 flex-1 pr-4">
                     <Link
@@ -422,7 +688,7 @@ function Companies() {
                       className="text-[#0085FF] font-semibold hover:underline truncate transition-all duration-150 ease-out group-hover:text-[#004CFF] min-w-0"
                       title={company.name}
                     >
-                      {company.name}
+                      <HighlightText text={company.name} query={searchTerm} />
                     </Link>
                     {starredCompanies.includes(company._id) && (
                       <Star className="flex-shrink-0 w-3.5 h-3.5 ml-1.5 text-yellow-400 fill-yellow-400" />
@@ -465,33 +731,22 @@ function Companies() {
               );
             }
             if (vc.key === "industry") {
-              return <div className="truncate text-sm text-gray-700 capitalize font-medium" title={company.industry}>{company.industry || "—"}</div>;
-            }
-            if (vc.key === "address") {
+              baseContent = <div className="truncate text-sm text-gray-700 capitalize font-medium" title={company.industry}>{company.industry ? <HighlightText text={company.industry} query={searchTerm} /> : "—"}</div>;
+            } else if (vc.key === "address") {
               const address = company.address;
-              return (
-                <div className="flex items-center gap-2 w-full">
-                  <div className={`${isExpanded ? "whitespace-normal" : "truncate"} text-sm text-gray-700`} title={address}>
-                    {isExpanded ? address || "—" : truncateText(address, 30)}
-                  </div>
-                  {address && address.length > 30 && (
-                    <button onClick={(e) => { e.stopPropagation(); toggleExpandRow(company._id); }} className="text-blue-600 hover:text-blue-700 flex-shrink-0">
-                      {isExpanded ? <CollapseIcon className="w-4 h-4" /> : <ExpandIcon className="w-4 h-4" />}
-                    </button>
-                  )}
+              baseContent = (
+                <div className="truncate text-sm text-gray-700" title={address}>
+                  <HighlightText text={truncateText(address, 30)} query={searchTerm} />
                 </div>
               );
-            }
-            if (vc.key === "website") {
-              return company.website ? (
-                <a href={company.website.startsWith("http") ? company.website : `https://${company.website}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate block w-full" title={company.website}>{company.website}</a>
+            } else if (vc.key === "website") {
+              baseContent = company.website ? (
+                <a href={company.website.startsWith("http") ? company.website : `https://${company.website}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate block w-full" title={company.website}><HighlightText text={company.website} query={searchTerm} /></a>
               ) : <span className="text-sm text-gray-400">—</span>;
-            }
-            if (vc.key === "gstin") {
-              return <div className="truncate text-sm text-gray-700 font-mono w-full" title={company.gstin}>{company.gstin || "—"}</div>;
-            }
-            if (vc.key === "documentSigned") {
-              return company.documentSigned ? (
+            } else if (vc.key === "gstin") {
+              baseContent = <div className="truncate text-sm text-gray-700 font-mono w-full" title={company.gstin}>{company.gstin ? <HighlightText text={company.gstin} query={searchTerm} /> : "—"}</div>;
+            } else if (vc.key === "documentSigned") {
+              baseContent = company.documentSigned ? (
                 <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
                   Accepted
                 </span>
@@ -500,99 +755,21 @@ function Companies() {
                   Pending
                 </span>
               );
+            } else if (vc.key === "leadSource") {
+              baseContent = <span className="truncate text-sm text-gray-700" title={company.leadSource}>{company.leadSource ? <HighlightText text={company.leadSource} query={searchTerm} /> : "—"}</span>;
+            } else if (baseContent === undefined) {
+              baseContent = <div className="truncate text-sm text-gray-700 w-full" title={String(val)}>{truncateText(String(val), 30)}</div>;
             }
-            if (vc.key === "leadSource") {
-              const isOpen = openRowActionsId === company._id;
+
+            if (vc.key === lastColumnKey) {
               return (
-                <div className="flex items-center justify-between w-full">
-                  <span className="truncate text-sm text-gray-700" title={company.leadSource}>{company.leadSource || "—"}</span>
-                  <div
-                    className="relative flex-shrink-0"
-                    ref={isOpen ? rowActionsRef : null}
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenRowActionsId(isOpen ? null : company._id);
-                      }}
-                      className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                      title="More actions"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                    {isOpen && (
-                      <div className="absolute right-0 top-full z-[100] mt-1 w-[190px] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-2 animate-in fade-in zoom-in duration-150 origin-top-right pointer-events-auto">
-                        <Link
-                          to={`/companies/${company._id}`}
-                          onClick={() => setOpenRowActionsId(null)}
-                          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                        >
-                          <Eye className="w-4 h-4 text-[#1C1B1F]" />
-                          View Company
-                        </Link>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenRowActionsId(null);
-                            handleEdit(company);
-                          }}
-                          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                        >
-                          <Edit2 className="w-4 h-4 text-[#1C1B1F]" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenRowActionsId(null);
-                            setQuickHotlistCompanyId(company._id);
-                          }}
-                          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                        >
-                          <FolderPlus className="w-4 h-4 text-[#1C1B1F]" />
-                          Move to a Folder
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenRowActionsId(null);
-                            setQuickHotlistCompanyId(company._id);
-                          }}
-                          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                        >
-                          <FileText className="w-4 h-4 text-[#1C1B1F]" />
-                          Add to Hotlist
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleStar(e, company._id);
-                          }}
-                          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                        >
-                          <Star className={`w-4 h-4 ${starredCompanies.includes(company._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
-                          {starredCompanies.includes(company._id) ? "Unstar Company" : "Star Company"}
-                        </button>
-                        <div className="w-full border-t border-[#F1F1F5]" />
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenRowActionsId(null);
-                            handleDelete(company._id);
-                          }}
-                          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
-                        >
-                          <Trash2 className="w-4 h-4 text-[#CD3636]" />
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                <div className="flex items-center justify-between w-full gap-2">
+                  <div className="min-w-0 flex-1">{baseContent}</div>
+                  {renderRowActionsMenu(company)}
                 </div>
               );
             }
-            return <div className="truncate text-sm text-gray-700 w-full" title={String(val)}>{truncateText(String(val), 30)}</div>;
+            return baseContent;
           },
         })
       );
@@ -605,10 +782,12 @@ function Companies() {
     selectedCompanies,
     sortedCompanies,
     sortConfig,
-    expandedRows,
-    pinnedColumn,
+    pinnedColumns,
     openRowActionsId,
     starredCompanies,
+    openColumnMenuKey,
+    columnMenuPos,
+    searchTerm,
   ]);
 
   const table = useReactTable({
@@ -680,15 +859,6 @@ function Companies() {
       clearTimeout(longPressTimer);
       setLongPressTimer(null);
     }
-  };
-
-  // Toggle expanded row
-  const toggleExpandRow = (companyId) => {
-    setExpandedRows((prev) =>
-      prev.includes(companyId)
-        ? prev.filter((id) => id !== companyId)
-        : [...prev, companyId],
-    );
   };
 
   // Truncate text
@@ -883,16 +1053,6 @@ function Companies() {
     }));
   };
 
-  // Sorting function
-  const handleSort = (key) => {
-    let direction = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc") {
-      direction = "desc";
-    }
-    setSortConfig({ key, direction });
-    setPagination((prev) => ({ ...prev, currentPage: 1 }));
-  };
-
   // Bulk selection and actions
   const handleSelectAll = () => {
     if (selectedCompanies.length === companies.length) {
@@ -1044,6 +1204,12 @@ function Companies() {
       ) {
         setOpenRowActionsId(null);
       }
+      if (
+        columnMenuRef.current &&
+        !columnMenuRef.current.contains(event.target)
+      ) {
+        setOpenColumnMenuKey(null);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () =>
@@ -1157,6 +1323,7 @@ function Companies() {
               <option value={20}>20 per page</option>
               <option value={50}>50 per page</option>
               <option value={100}>100 per page</option>
+              <option value={500}>500 per page</option>
             </select>
           </div>
 
@@ -1362,71 +1529,11 @@ function Companies() {
         />
       )}
 
-      {/* Selection Mode Banner */}
-      {selectionMode && selectedCompanies.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm gap-4">
-          {" "}
-          <div className="flex items-center gap-3">
-            <CheckSquare className="w-5 h-5 text-blue-600" />
-            <span className="text-blue-800 font-semibold font-inter">
-              {selectedCompanies.length} company
-              {selectedCompanies.length !== 1 ? "ies" : ""} selected
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-            {" "}
-            <button
-              onClick={() => setShowExportModal(true)}
-              className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </button>
-            <button
-              onClick={() => setShowBulkNoteModal(true)}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <StickyNote className="w-4 h-4 text-emerald-600" />
-              Add Note
-            </button>
-            <button
-              onClick={() => setShowAddToHotlistModal(true)}
-              className="px-4 py-2 bg-white border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <FolderPlus className="w-4 h-4" />
-              Add to Hotlist
-            </button>
-            <button
-              onClick={() => setShowBulkActions(true)}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <Edit2 className="w-4 h-4" />
-              Bulk Update
-            </button>
-            <button
-              onClick={() => setShowBulkDeleteModal(true)}
-              disabled={bulkLoading}
-              className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete
-            </button>
-            <button
-              onClick={exitSelectionMode}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Main Content Card */}
       <div className="bg-white overflow-visible">
         {/* Toolbar (Title + Search + Buttons) */}
         <div
-          className="fixed right-0 h-16 px-6 border-b border-[#E1E4EA] bg-white flex items-center"
+          className={`fixed right-0 h-16 px-6 border-b flex items-center ${selectionMode && selectedCompanies.length > 0 ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
           style={{
             top: "64px",
             left: "var(--sidebar-width, 0px)",
@@ -1436,6 +1543,61 @@ function Companies() {
             boxSizing: "border-box",
           }}
         >
+          {selectionMode && selectedCompanies.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 w-full h-full">
+              <div className="flex items-center gap-3">
+                <CheckSquare className="w-5 h-5 text-blue-600" />
+                <span className="text-blue-800 font-semibold font-inter">
+                  {selectedCompanies.length} compan{selectedCompanies.length !== 1 ? "ies" : "y"} selected
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Export
+                </button>
+                <button
+                  onClick={() => setShowBulkNoteModal(true)}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                >
+                  <StickyNote className="w-4 h-4 text-emerald-600" />
+                  Add Note
+                </button>
+                <button
+                  onClick={() => setShowAddToHotlistModal(true)}
+                  className="px-4 py-2 bg-white border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 focus:outline-none transition-colors flex items-center gap-2"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                  Add to Hotlist
+                </button>
+                <button
+                  onClick={() => setShowBulkActions(true)}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Bulk Update
+                </button>
+                <button
+                  onClick={() => setShowBulkDeleteModal(true)}
+                  disabled={bulkLoading}
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete
+                </button>
+                <button
+                  onClick={exitSelectionMode}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
           <div className="flex items-center gap-4 w-full h-full">
             <div className="flex-shrink-0 flex flex-col justify-center gap-1.5">
               <h1 className="m-0 leading-tight font-bold text-lg text-gray-900">Companies</h1>
@@ -1595,6 +1757,7 @@ function Companies() {
               {showForm ? "Cancel" : "New Company"}
             </button>
           </div>
+          )}
         </div>
 
         <div
@@ -1620,43 +1783,81 @@ function Companies() {
                   tableLayout: "fixed",
                 }}
               >
-                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30">
+                {(() => {
+                  const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+                  const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+                  const allHeaders = table.getHeaderGroups()[0]?.headers || [];
+
+                  const pinnedLeftOffsets = {};
+                  let cumulativeLeft = 0;
+                  allHeaders.forEach((h) => {
+                    const isLeftStickyCol = h.column.id === "selection" || leftPinnedKeys.includes(h.column.id);
+                    if (isLeftStickyCol) {
+                      pinnedLeftOffsets[h.column.id] = cumulativeLeft;
+                      cumulativeLeft += h.getSize();
+                    }
+                  });
+
+                  const pinnedRightOffsets = {};
+                  let cumulativeRight = 0;
+                  [...allHeaders].reverse().forEach((h) => {
+                    if (rightPinnedKeys.includes(h.column.id)) {
+                      pinnedRightOffsets[h.column.id] = cumulativeRight;
+                      cumulativeRight += h.getSize();
+                    }
+                  });
+
+                  const lastLeftPinnedKey = leftPinnedKeys.length > 0 ? leftPinnedKeys[leftPinnedKeys.length - 1] : null;
+                  const firstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
+
+                  return (
+                <>
+                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
                   {table.getHeaderGroups().map((headerGroup) => (
                     <tr key={headerGroup.id}>
                       {headerGroup.headers.map((header) => {
                         const colId = header.column.id;
-                        const isSticky = colId === "selection" || colId === pinnedColumn;
-                        const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "selection";
-
-                        // Calculate left offset
-                        let leftOffset = "auto";
-                        if (colId === "selection") leftOffset = 0;
-                        if (colId === pinnedColumn) leftOffset = selectionMode ? 60 : 0;
+                        const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                        const isRightSticky = rightPinnedKeys.includes(colId);
+                        const isSticky = isLeftSticky || isRightSticky;
+                        const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                        const isRightBoundary = colId === firstRightPinnedKey;
+                        const isDraggable = colId !== "selection";
+                        const isDragging = draggedColKey === colId;
+                        const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
 
                         return (
                           <th
                             key={header.id}
+                            data-col-id={colId}
+                            onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
                             style={{
                               width: header.getSize(),
                               position: isSticky ? "sticky" : "relative",
-                              left: leftOffset,
+                              left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                              right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                               zIndex: isSticky ? 20 : 1,
+                              opacity: isDragging ? 0.35 : 1,
                             }}
-                            className={`px-4 py-3 text-sm font-medium text-[#525866] border-r border-[#E1E4EA] hover:bg-gray-100 transition-colors bg-[#F5F7FA] ${isRightMostSticky
+                            className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
                               ? "border-r-2 border-r-gray-300"
                               : "last:border-r-0"
-                              }`}
+                              } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                           >
-                            <div className="truncate w-full">
+                            <div className="w-full min-w-0">
                               {flexRender(
                                 header.column.columnDef.header,
                                 header.getContext(),
                               )}
                             </div>
 
-                            {header.column.getCanResize() && (
+                            {colId !== "selection" && header.column.getCanResize() && (
                               <div
-                                onMouseDown={header.getResizeHandler()}
+                                data-resize-handle="true"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  header.getResizeHandler()(e);
+                                }}
                                 onTouchStart={header.getResizeHandler()}
                                 className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
                               />
@@ -1694,13 +1895,12 @@ function Companies() {
                       >
                         {row.getVisibleCells().map((cell) => {
                           const colId = cell.column.id;
-                          const isSticky = colId === "selection" || colId === pinnedColumn;
-                          const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "selection";
-
-                          // Calculate left offset
-                          let leftOffset = "auto";
-                          if (colId === "selection") leftOffset = 0;
-                          if (colId === pinnedColumn) leftOffset = selectionMode ? 60 : 0;
+                          const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                          const isRightSticky = rightPinnedKeys.includes(colId);
+                          const isSticky = isLeftSticky || isRightSticky;
+                          const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                          const isRightBoundary = colId === firstRightPinnedKey;
+                          const isColDragging = draggedColKey === colId;
 
                           return (
                             <td
@@ -1708,13 +1908,15 @@ function Companies() {
                               style={{
                                 width: cell.column.getSize(),
                                 position: isSticky ? "sticky" : "static",
-                                left: leftOffset,
+                                left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                 zIndex: isSticky ? 10 : 1,
+                                opacity: isColDragging ? 0.35 : 1,
                               }}
-                              className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isRightMostSticky
+                              className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
                                 ? "border-r-2 border-r-gray-200"
                                 : "last:border-r-0"
-                                }`}
+                                } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
                             >
                               {flexRender(
                                 cell.column.columnDef.cell,
@@ -1727,10 +1929,41 @@ function Companies() {
                     ))
                   )}
                 </tbody>
+                </>
+                  );
+                })()}
               </table>
           </div>
         )}
         </div>
+
+        {dragGhost && createPortal(
+          <div
+            style={{
+              position: "fixed",
+              top: dragGhost.y - dragGhost.offsetY,
+              left: dragGhost.x - dragGhost.offsetX,
+              width: dragGhost.width,
+              maxHeight: Math.max(100, window.innerHeight - (dragGhost.y - dragGhost.offsetY) - 72),
+              zIndex: 10000,
+              pointerEvents: "none",
+            }}
+            className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+          >
+            <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+              <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+            </div>
+            {dragGhost.previewRows.map((rowVal, i) => (
+              <div
+                key={i}
+                className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0"
+              >
+                <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+              </div>
+            ))}
+          </div>,
+          document.body,
+        )}
 
         {!loading && !showHotlist && (
           <div
