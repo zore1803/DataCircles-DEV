@@ -7,18 +7,36 @@ import {
   PinOff,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   ListChecks,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import CompanyTaskForm from "./CompanyTaskForm";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
+import FilterIcon from "../common/FilterIcon";
+import CompanyFilterPanel from "./CompanyFilterPanel";
+import { applyColumnFilters } from "../../utils/advancedFilters";
 
-const SlidersIcon = ({ size = 14, ...props }) => (
-  <svg width={size} height={size} viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M1.66667 2.91667C1.66667 2.22631 2.22631 1.66667 2.91667 1.66667C3.60702 1.66667 4.16667 2.22631 4.16667 2.91667C4.16667 3.60703 3.60702 4.16667 2.91667 4.16667C2.22631 4.16667 1.66667 3.60703 1.66667 2.91667ZM2.91667 0C1.30583 0 0 1.30583 0 2.91667C0 4.5275 1.30583 5.83333 2.91667 5.83333C4.5275 5.83333 5.83333 4.5275 5.83333 2.91667C5.83333 1.30583 4.5275 0 2.91667 0ZM7.5 3.75H14.1667V2.08333H7.5V3.75ZM10.8333 11.25C10.8333 10.5597 11.393 10 12.0833 10C12.7737 10 13.3333 10.5597 13.3333 11.25C13.3333 11.9403 12.7737 12.5 12.0833 12.5C11.393 12.5 10.8333 11.9403 10.8333 11.25ZM12.0833 8.33333C10.4725 8.33333 9.16667 9.63917 9.16667 11.25C9.16667 12.8608 10.4725 14.1667 12.0833 14.1667C13.6942 14.1667 15 12.8608 15 11.25C15 9.63917 13.6942 8.33333 12.0833 8.33333ZM0.833333 10.4167V12.0833H7.5V10.4167H0.833333Z" fill="#1F2937" />
-  </svg>
-);
+const TASK_STATUS_OPTIONS = ["Completed", "In-Progress"];
+const TASK_PRIORITY_OPTIONS = ["Low", "Medium", "High"];
+const daysAgo = (date) => Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
+const DATE_RANGES = [
+  { label: "Today", test: (d) => daysAgo(d) < 1 },
+  { label: "This Week", test: (d) => daysAgo(d) < 7 },
+  { label: "This Month", test: (d) => daysAgo(d) < 30 },
+  { label: "Older", test: (d) => daysAgo(d) >= 30 },
+];
+const getDateRangeLabel = (date) => {
+  if (!date) return "";
+  return DATE_RANGES.find((r) => r.test(date))?.label || "";
+};
+const TASK_FILTER_COLUMNS = [
+  { key: "status", label: "Status", options: TASK_STATUS_OPTIONS },
+  { key: "priority", label: "Priority", options: TASK_PRIORITY_OPTIONS },
+  { key: "dueDate", label: "Due Date", options: DATE_RANGES.map((r) => r.label) },
+];
 
 const TotalTasksIcon = ({ size = 24, ...props }) => (
   <svg width={size} height={size} viewBox="24 24 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -209,16 +227,97 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     setShowTaskForm(true);
   };
 
-  const filteredTasks = useMemo(() => {
-    if (!searchTerm.trim()) return tasks;
-    const q = searchTerm.toLowerCase();
-    return tasks.filter((t) => (t.title || "").toLowerCase().includes(q));
-  }, [tasks, searchTerm]);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const handleSort = (key) => {
+    setSortConfig((prev) =>
+      prev.key === key
+        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" },
+    );
+  };
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState({});
 
   const [listPage, setListPage] = useState(1);
   const [listLimit, setListLimit] = useState(10);
 
-  const listTotalCount = filteredTasks.length;
+  const formatTaskDueLabel = (dateString) => {
+    if (!dateString) return { day: "—", time: "" };
+    const date = new Date(dateString);
+    const now = new Date();
+    const isSameDay = (a, b) =>
+      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+
+    const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+
+    if (isSameDay(date, now)) return { day: "Today.", time };
+    if (isSameDay(date, tomorrow)) return { day: "Tomorrow", time };
+    return {
+      day: date.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }),
+      time: date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+  };
+
+  const getTaskAssignees = (task) => {
+    if (!Array.isArray(task.users) || task.users.length === 0) return [];
+    return task.users.filter((u) => typeof u === "object" && u?.name);
+  };
+
+  const getTaskProgress = (task) => (task.status === "Completed" ? 100 : 0);
+
+  const getTaskFieldValue = (task, key) => {
+    switch (key) {
+      case "title":
+        return task.title || "Untitled Task";
+      case "assignedTo":
+        return getTaskAssignees(task)[0]?.name || "";
+      case "status":
+        return task.status === "Completed" ? "Completed" : "In-Progress";
+      case "priority":
+        return task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : "";
+      case "dueDate":
+        return getDateRangeLabel(task.dueDate);
+      case "progress":
+        return getTaskProgress(task);
+      default:
+        return task[key];
+    }
+  };
+
+  const filteredTasks = useMemo(() => {
+    let result = tasks;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter((t) => (t.title || "").toLowerCase().includes(q));
+    }
+    return applyColumnFilters(result, selectedFilters, getTaskFieldValue);
+  }, [tasks, searchTerm, selectedFilters]);
+
+  const sortedTasks = useMemo(() => {
+    if (!sortConfig.key) return filteredTasks;
+    return [...filteredTasks].sort((a, b) => {
+      let aVal = getTaskFieldValue(a, sortConfig.key);
+      let bVal = getTaskFieldValue(b, sortConfig.key);
+      if (sortConfig.key === "dueDate") {
+        aVal = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+        bVal = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      }
+      const aCmp = typeof aVal === "number" ? aVal : (aVal || "").toString().toLowerCase();
+      const bCmp = typeof bVal === "number" ? bVal : (bVal || "").toString().toLowerCase();
+      if (aCmp < bCmp) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aCmp > bCmp) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredTasks, sortConfig]);
+
+  const paginatedTasks = useMemo(
+    () => sortedTasks.slice((listPage - 1) * listLimit, listPage * listLimit),
+    [sortedTasks, listPage, listLimit],
+  );
+
+  const listTotalCount = sortedTasks.length;
   const listTotalPages = Math.max(1, Math.ceil(listTotalCount / listLimit));
   const listStartItem = listTotalCount === 0 ? 0 : (listPage - 1) * listLimit + 1;
   const listEndItem = Math.min(listPage * listLimit, listTotalCount);
@@ -249,37 +348,6 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     else if (listTotalPages > 1) rangeWithDots.push(listTotalPages);
     return rangeWithDots.filter((item, index, arr) => index === 0 || arr[index - 1] !== item);
   };
-
-  const paginatedTasks = useMemo(
-    () => filteredTasks.slice((listPage - 1) * listLimit, listPage * listLimit),
-    [filteredTasks, listPage, listLimit],
-  );
-
-  const formatTaskDueLabel = (dateString) => {
-    if (!dateString) return { day: "—", time: "" };
-    const date = new Date(dateString);
-    const now = new Date();
-    const isSameDay = (a, b) =>
-      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(now.getDate() + 1);
-
-    const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-
-    if (isSameDay(date, now)) return { day: "Today.", time };
-    if (isSameDay(date, tomorrow)) return { day: "Tomorrow", time };
-    return {
-      day: date.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }),
-      time: date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-  };
-
-  const getTaskAssignees = (task) => {
-    if (!Array.isArray(task.users) || task.users.length === 0) return [];
-    return task.users.filter((u) => typeof u === "object" && u?.name);
-  };
-
-  const getTaskProgress = (task) => (task.status === "Completed" ? 100 : 0);
 
   const total = tasks.length;
   const pending = tasks.filter((t) => t.status !== "Completed").length;
@@ -383,11 +451,28 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
           />
         </div>
         <button
-          className="flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
-          style={{ height: "44px", borderColor: "#E1E4EA" }}
+          onClick={() => setShowFilterPanel(true)}
+          className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+          style={{
+            height: "44px",
+            borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
+          }}
         >
-          <SlidersIcon size={16} />
+          <FilterIcon size={16} />
           Filter
+          {Object.values(selectedFilters).flat().length > 0 && (
+            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+              {Object.values(selectedFilters).flat().length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setShowTaskForm(true)}
+          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
+          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
+          title="Add Task"
+        >
+          <Plus size={20} />
         </button>
       </div>
 
@@ -429,25 +514,42 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                       col.id === "title" ? "pl-6 pr-3" : "px-3"
                     }`}
                   >
-                    {col.pinnable ? (
-                      <div
-                        className="relative flex items-center justify-start w-full group cursor-pointer select-none"
-                        onDoubleClick={() => togglePinColumn(col.id)}
-                      >
-                        <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                          <span className="truncate">{col.label}</span>
-                        </div>
-                        <button
-                          onClick={() => togglePinColumn(col.id)}
-                          className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${
-                            isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
-                          }`}
-                          title={isPinned ? "Unpin Column" : "Pin Column"}
+                    <div className="flex items-center justify-between w-full">
+                      {col.pinnable ? (
+                        <div
+                          className="relative flex items-center justify-start flex-1 group cursor-pointer select-none min-w-0"
+                          onDoubleClick={() => togglePinColumn(col.id)}
                         >
-                          {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
-                        </button>
-                      </div>
-                    ) : null}
+                          <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
+                            <span className="truncate">{col.label}</span>
+                          </div>
+                          <button
+                            onClick={() => togglePinColumn(col.id)}
+                            className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${
+                              isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
+                            }`}
+                            title={isPinned ? "Unpin Column" : "Pin Column"}
+                          >
+                            {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      ) : null}
+                      <button
+                        onClick={() => handleSort(col.id)}
+                        className="ml-1 p-0.5 rounded hover:bg-gray-200 flex-shrink-0"
+                        title="Sort"
+                      >
+                        {sortConfig.key === col.id ? (
+                          sortConfig.direction === "asc" ? (
+                            <ChevronUp className="w-3.5 h-3.5 text-blue-600" />
+                          ) : (
+                            <ChevronDown className="w-3.5 h-3.5 text-blue-600" />
+                          )
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5 text-gray-300" />
+                        )}
+                      </button>
+                    </div>
                     <div
                       onMouseDown={(e) => startResize(e, col.id)}
                       className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${
@@ -717,6 +819,18 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
           </div>
         </div>
       )}
+
+      <CompanyFilterPanel
+        isOpen={showFilterPanel}
+        onClose={() => setShowFilterPanel(false)}
+        columns={TASK_FILTER_COLUMNS}
+        data={tasks}
+        getFieldValue={getTaskFieldValue}
+        selected={selectedFilters}
+        onApply={setSelectedFilters}
+        title="Filter Tasks"
+        subtitle="Filter this list by column"
+      />
 
       <CompanyTaskForm
         open={showTaskForm}

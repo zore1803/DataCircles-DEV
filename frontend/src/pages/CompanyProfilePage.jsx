@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import API from "../services/api";
 import CompanyDealsKanban from "../components/company/CompanyDealsKanban";
@@ -35,6 +35,7 @@ import {
   StickyNote,
   Calendar,
   FolderOpen,
+  LayoutGrid,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -169,8 +170,11 @@ const CompanyProfilePage = () => {
   const [invoicesLoaded, setInvoicesLoaded] = useState(false);
   const [showNewEntryMenu, setShowNewEntryMenu] = useState(false);
   const [showStats, setShowStats] = useState(true);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [dealsViewMode, setDealsViewMode] = useState("board");
   const [activityFeedFilter, setActivityFeedFilter] = useState("All");
   const newEntryRef = useRef(null);
+  const actionsMenuRef = useRef(null);
   const incomeChartScrollRef = useRef(null);
 
   const chartDotCursorSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><g filter="url(#filter0_dd_2154_683)"><rect x="4" y="2" width="12" height="12" rx="6" fill="white"/><rect x="5" y="3" width="10" height="10" rx="5" stroke="#0F0E0E" stroke-width="2"/></g><defs><filter id="filter0_dd_2154_683" x="0" y="0" width="20" height="20" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="2"/><feGaussianBlur stdDeviation="2"/><feColorMatrix type="matrix" values="0 0 0 0 0.196487 0 0 0 0 0.196487 0 0 0 0 0.279476 0 0 0 0.06 0"/><feBlend mode="multiply" in2="BackgroundImageFix" result="effect1_dropShadow_2154_683"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="2"/><feGaussianBlur stdDeviation="1"/><feColorMatrix type="matrix" values="0 0 0 0 0.196487 0 0 0 0 0.196487 0 0 0 0 0.279476 0 0 0 0.06 0"/><feBlend mode="multiply" in2="effect1_dropShadow_2154_683" result="effect2_dropShadow_2154_683"/><feBlend mode="normal" in="SourceGraphic" in2="effect2_dropShadow_2154_683" result="shape"/></filter></defs></svg>`;
@@ -559,27 +563,31 @@ const CompanyProfilePage = () => {
     fetchData();
   }, [id]);
 
-  useEffect(() => {
-    const fetchInvoices = async () => {
-      setInvoicesLoading(true);
-      try {
-        const res = await API.get(`/invoices/company/${id}`);
-        setInvoices(res.data.invoices || []);
-        setInvoiceSummary(res.data.summary || null);
-        setInvoicesLoaded(true);
-      } catch (err) {
-        console.error("Failed to load invoices:", err);
-      } finally {
-        setInvoicesLoading(false);
-      }
-    };
-    fetchInvoices();
+  const fetchInvoices = useCallback(async () => {
+    setInvoicesLoading(true);
+    try {
+      const res = await API.get(`/invoices/company/${id}`);
+      setInvoices(res.data.invoices || []);
+      setInvoiceSummary(res.data.summary || null);
+      setInvoicesLoaded(true);
+    } catch (err) {
+      console.error("Failed to load invoices:", err);
+    } finally {
+      setInvoicesLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (newEntryRef.current && !newEntryRef.current.contains(event.target)) {
         setShowNewEntryMenu(false);
+      }
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
+        setShowActionsMenu(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -642,7 +650,7 @@ const CompanyProfilePage = () => {
 
   if (!company) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center -mt-6 -mx-4 sm:-mx-6 lg:-mx-8">
         <div className="flex flex-col items-center justify-center">
           <img
             src={logo}
@@ -764,17 +772,45 @@ const CompanyProfilePage = () => {
               <Instagram size={16} strokeWidth={2} />
             </button>
 
-            {/* Stats Switcher */}
-            <button
-              onClick={() => setShowStats((prev) => !prev)}
-              title={showStats ? "Hide summary stats" : "Show summary stats"}
-              className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${showStats
-                ? "bg-gray-50 border-gray-200 text-gray-800"
-                : "bg-white border-gray-200 text-gray-800 hover:bg-gray-50"
-                }`}
-            >
-              <MoreVertical size={16} strokeWidth={2.5} />
-            </button>
+            {/* Actions Menu */}
+            <div className="relative" ref={actionsMenuRef}>
+              <button
+                onClick={() => setShowActionsMenu((prev) => !prev)}
+                title="More actions"
+                className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${showActionsMenu
+                  ? "bg-gray-50 border-gray-200 text-gray-800"
+                  : "bg-white border-gray-200 text-gray-800 hover:bg-gray-50"
+                  }`}
+              >
+                <MoreVertical size={16} strokeWidth={2.5} />
+              </button>
+              {showActionsMenu && (
+                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+                  <button
+                    onClick={() => {
+                      setShowStats((prev) => !prev);
+                      setShowActionsMenu(false);
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                  >
+                    <Eye size={14} className="text-gray-400" />
+                    {showStats ? "Hide KPIs" : "Unhide KPIs"}
+                  </button>
+                  {activeTab === "Deals" && (
+                    <button
+                      onClick={() => {
+                        setDealsViewMode((prev) => (prev === "board" ? "list" : "board"));
+                        setShowActionsMenu(false);
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                    >
+                      <LayoutGrid size={14} className="text-gray-400" />
+                      {dealsViewMode === "board" ? "List View" : "Kanban View"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* New Entry Dropdown */}
             <div className="relative" ref={newEntryRef}>
@@ -1372,6 +1408,8 @@ const CompanyProfilePage = () => {
                 companyId={id}
                 company={company}
                 contacts={contacts}
+                viewMode={dealsViewMode}
+                setViewMode={setDealsViewMode}
               />
             )}
             {activeTab === "Contacts" && (
@@ -1380,6 +1418,9 @@ const CompanyProfilePage = () => {
                 meetings={meetings}
                 tasks={tasks}
                 showStats={showStats}
+                companyId={id}
+                company={company}
+                setContacts={setContacts}
               />
             )}
             {activeTab === "Invoices" && (
@@ -1388,6 +1429,8 @@ const CompanyProfilePage = () => {
                 summary={invoiceSummary}
                 loading={invoicesLoading}
                 showStats={showStats}
+                deals={deals}
+                refreshInvoices={fetchInvoices}
               />
             )}
             {activeTab === "Notes" && <CompanyNotesTab showStats={showStats} />}

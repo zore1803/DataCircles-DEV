@@ -6,12 +6,12 @@ import QuickCompanyForm from "../company/QuickCompanyForm";
 import { Plus } from "lucide-react";
 import toast from "react-hot-toast";
 
-const QuickContactForm = ({ companies, onContactCreated, onRequestClose }) => {
+const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initialCompanyId = "" }) => {
   const [form, setForm] = useState({
     name: "",
     email: "",
     phone: "",
-    company: "",
+    company: initialCompanyId,
   });
   const [additionalFields, setAdditionalFields] = useState({});
   const [fieldDefinitions, setFieldDefinitions] = useState([]);
