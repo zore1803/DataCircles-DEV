@@ -27,6 +27,8 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Pin,
   PinOff,
   FileText,
@@ -38,14 +40,59 @@ import {
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import QuickDealForm from "../deal/QuickDealForm";
+import FilterIcon from "../common/FilterIcon";
+import CompanyFilterPanel from "./CompanyFilterPanel";
+import { applyColumnFilters } from "../../utils/advancedFilters";
+
+const AMOUNT_RANGES = [
+  { label: "Under ₹10,000", test: (v) => v < 10000 },
+  { label: "₹10,000 – ₹50,000", test: (v) => v >= 10000 && v < 50000 },
+  { label: "₹50,000 – ₹1,00,000", test: (v) => v >= 50000 && v < 100000 },
+  { label: "Above ₹1,00,000", test: (v) => v >= 100000 },
+];
+
+const getAmountRangeLabel = (amount) => {
+  const num = Number(amount) || 0;
+  return AMOUNT_RANGES.find((r) => r.test(num))?.label || "";
+};
+
+const daysAgo = (date) =>
+  Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
+
+const DATE_RANGES = [
+  { label: "Today", test: (d) => daysAgo(d) < 1 },
+  { label: "This Week", test: (d) => daysAgo(d) < 7 },
+  { label: "This Month", test: (d) => daysAgo(d) < 30 },
+  { label: "Older", test: (d) => daysAgo(d) >= 30 },
+];
+
+const getDateRangeLabel = (date) => {
+  if (!date) return "";
+  return DATE_RANGES.find((r) => r.test(date))?.label || "";
+};
+
+const DEAL_FILTER_COLUMNS = (statuses) => [
+  { key: "stage", label: "Stage", options: statuses },
+  { key: "amount", label: "Amount", options: AMOUNT_RANGES.map((r) => r.label) },
+  { key: "lastUpdated", label: "Last Updated", options: DATE_RANGES.map((r) => r.label) },
+];
+
+const getDealFieldValue = (deal, key) => {
+  switch (key) {
+    case "contact":
+      return deal.contact?.name || "";
+    case "stage":
+      return deal.status || "";
+    case "amount":
+      return getAmountRangeLabel(deal.amount);
+    case "lastUpdated":
+      return getDateRangeLabel(deal.updatedAt);
+    default:
+      return deal[key];
+  }
+};
 
 const TERMINAL_STATUSES = ["won", "lost"];
-
-const SlidersIcon = ({ size = 14, ...props }) => (
-  <svg width={size} height={size} viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M1.66667 2.91667C1.66667 2.22631 2.22631 1.66667 2.91667 1.66667C3.60702 1.66667 4.16667 2.22631 4.16667 2.91667C4.16667 3.60703 3.60702 4.16667 2.91667 4.16667C2.22631 4.16667 1.66667 3.60703 1.66667 2.91667ZM2.91667 0C1.30583 0 0 1.30583 0 2.91667C0 4.5275 1.30583 5.83333 2.91667 5.83333C4.5275 5.83333 5.83333 4.5275 5.83333 2.91667C5.83333 1.30583 4.5275 0 2.91667 0ZM7.5 3.75H14.1667V2.08333H7.5V3.75ZM10.8333 11.25C10.8333 10.5597 11.393 10 12.0833 10C12.7737 10 13.3333 10.5597 13.3333 11.25C13.3333 11.9403 12.7737 12.5 12.0833 12.5C11.393 12.5 10.8333 11.9403 10.8333 11.25ZM12.0833 8.33333C10.4725 8.33333 9.16667 9.63917 9.16667 11.25C9.16667 12.8608 10.4725 14.1667 12.0833 14.1667C13.6942 14.1667 15 12.8608 15 11.25C15 9.63917 13.6942 8.33333 12.0833 8.33333ZM0.833333 10.4167V12.0833H7.5V10.4167H0.833333Z" fill="#1F2937" />
-  </svg>
-);
 
 const Avatar = ({ name, className = "" }) => (
   <div
@@ -161,14 +208,36 @@ const KanbanColumn = ({ status, deals }) => {
   );
 };
 
-export default function CompanyDealsKanban({ deals, setDeals, showStats = true, companyId, company, contacts = [] }) {
+export default function CompanyDealsKanban({
+  deals,
+  setDeals,
+  showStats = true,
+  companyId,
+  company,
+  contacts = [],
+  viewMode: controlledViewMode,
+  setViewMode: setControlledViewMode,
+}) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
   const [showDealForm, setShowDealForm] = useState(false);
   const [statuses, setStatuses] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [viewMode, setViewMode] = useState("board");
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  const handleSort = (key) => {
+    setSortConfig((prev) =>
+      prev.key === key
+        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" },
+    );
+  };
+  const [localViewMode, setLocalViewMode] = useState("board");
+  const viewMode = controlledViewMode ?? localViewMode;
+  const setViewMode = setControlledViewMode ?? setLocalViewMode;
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [pinnedColumn, setPinnedColumn] = useState(null);
@@ -230,12 +299,37 @@ export default function CompanyDealsKanban({ deals, setDeals, showStats = true, 
   }, []);
 
   const filteredDeals = useMemo(() => {
-    if (!searchTerm.trim()) return deals;
-    const q = searchTerm.toLowerCase();
-    return deals.filter((d) => (d.title || "").toLowerCase().includes(q));
-  }, [deals, searchTerm]);
+    let result = deals;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter((d) => (d.title || "").toLowerCase().includes(q));
+    }
+    return applyColumnFilters(result, selectedFilters, getDealFieldValue);
+  }, [deals, searchTerm, selectedFilters]);
 
-  const totalCount = filteredDeals.length;
+  const sortedDeals = useMemo(() => {
+    if (!sortConfig.key) return filteredDeals;
+    const sorted = [...filteredDeals].sort((a, b) => {
+      let aVal = getDealFieldValue(a, sortConfig.key);
+      let bVal = getDealFieldValue(b, sortConfig.key);
+      if (sortConfig.key === "amount") {
+        aVal = a.amount || 0;
+        bVal = b.amount || 0;
+      } else if (sortConfig.key === "lastUpdated") {
+        aVal = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        bVal = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      } else {
+        aVal = (aVal || "").toString().toLowerCase();
+        bVal = (bVal || "").toString().toLowerCase();
+      }
+      if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [filteredDeals, sortConfig]);
+
+  const totalCount = sortedDeals.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
   const startItem = totalCount === 0 ? 0 : (currentPage - 1) * limit + 1;
   const endItem = Math.min(currentPage * limit, totalCount);
@@ -268,8 +362,8 @@ export default function CompanyDealsKanban({ deals, setDeals, showStats = true, 
   };
 
   const paginatedDeals = useMemo(
-    () => filteredDeals.slice((currentPage - 1) * limit, currentPage * limit),
-    [filteredDeals, currentPage, limit],
+    () => sortedDeals.slice((currentPage - 1) * limit, currentPage * limit),
+    [sortedDeals, currentPage, limit],
   );
 
   const dealsByStatus = useMemo(() => {
@@ -414,11 +508,20 @@ export default function CompanyDealsKanban({ deals, setDeals, showStats = true, 
           />
         </div>
         <button
-          className="flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
-          style={{ height: "44px", borderColor: "#E1E4EA" }}
+          onClick={() => setShowFilterPanel(true)}
+          className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+          style={{
+            height: "44px",
+            borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
+          }}
         >
-          <SlidersIcon size={16} />
+          <FilterIcon size={16} />
           Filter
+          {Object.values(selectedFilters).flat().length > 0 && (
+            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+              {Object.values(selectedFilters).flat().length}
+            </span>
+          )}
         </button>
         <div className="flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0" style={{ height: "44px" }}>
           <button
@@ -436,6 +539,15 @@ export default function CompanyDealsKanban({ deals, setDeals, showStats = true, 
             <ListIcon size={16} />
           </button>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowDealForm(true)}
+          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
+          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
+          title="Add Deal"
+        >
+          <Plus size={20} />
+        </button>
       </div>
 
       {showDealForm && (
@@ -447,6 +559,18 @@ export default function CompanyDealsKanban({ deals, setDeals, showStats = true, 
           onRequestClose={() => setShowDealForm(false)}
         />
       )}
+
+      <CompanyFilterPanel
+        isOpen={showFilterPanel}
+        onClose={() => setShowFilterPanel(false)}
+        columns={DEAL_FILTER_COLUMNS(statuses)}
+        data={deals}
+        getFieldValue={getDealFieldValue}
+        selected={selectedFilters}
+        onApply={setSelectedFilters}
+        title="Filter Deals"
+        subtitle="Filter this list by column"
+      />
 
       {viewMode === "board" ? (
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
@@ -488,30 +612,50 @@ export default function CompanyDealsKanban({ deals, setDeals, showStats = true, 
                         className={`px-3 py-2.5 font-medium text-[#525866] text-xs ${col.id === "lastUpdated" ? "" : "border-r border-[#E1E4EA]"
                           }`}
                       >
-                        {col.pinnable ? (
-                          <div
-                            className="relative flex items-center justify-start w-full group cursor-pointer select-none"
-                            onDoubleClick={() => togglePinColumn(col.id)}
-                          >
-                            <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                              <col.icon className="w-3.5 h-3.5 flex-shrink-0" />
-                              <span className="truncate">{col.label}</span>
-                            </div>
-                            <button
-                              onClick={() => togglePinColumn(col.id)}
-                              className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
-                                }`}
-                              title={isPinned ? "Unpin Column" : "Pin Column"}
+                        <div className="flex items-center justify-between w-full">
+                          {col.pinnable ? (
+                            <div
+                              className="relative flex items-center justify-start flex-1 min-w-0 group cursor-pointer select-none"
+                              onDoubleClick={() => togglePinColumn(col.id)}
                             >
-                              {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
-                            </button>
+                              <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
+                                <col.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                                <span className="truncate">{col.label}</span>
+                              </div>
+                              <button
+                                onClick={() => togglePinColumn(col.id)}
+                                className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
+                                  }`}
+                                title={isPinned ? "Unpin Column" : "Pin Column"}
+                              >
+                                {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-start gap-1.5 whitespace-nowrap flex-1 min-w-0">
+                              {col.icon && <col.icon className="w-3.5 h-3.5 flex-shrink-0" />}
+                              <span>{col.label}</span>
+                            </div>
+                          )}
+
+                          <div
+                            className="flex flex-col ml-1 flex-shrink-0 cursor-pointer"
+                            onClick={() => handleSort(col.id)}
+                          >
+                            <ChevronUp
+                              className={`w-3 h-3 ${sortConfig.key === col.id && sortConfig.direction === "asc"
+                                ? "text-blue-600"
+                                : "text-gray-400"
+                                }`}
+                            />
+                            <ChevronDown
+                              className={`w-3 h-3 -mt-1 ${sortConfig.key === col.id && sortConfig.direction === "desc"
+                                ? "text-blue-600"
+                                : "text-gray-400"
+                                }`}
+                            />
                           </div>
-                        ) : (
-                          <div className="flex items-center justify-start gap-1.5 whitespace-nowrap">
-                            {col.icon && <col.icon className="w-3.5 h-3.5 flex-shrink-0" />}
-                            <span>{col.label}</span>
-                          </div>
-                        )}
+                        </div>
 
                         {col.id !== "actions" && (
                           <div

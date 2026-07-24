@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import API from "../services/api";
 import { Link } from "react-router-dom";
 import logo from "/DataCircles.png";
+import FilterIcon from "../components/common/FilterIcon";
 import {
   Plus,
   X,
@@ -1122,7 +1123,7 @@ function Companies() {
     };
 
     return (
-      <div className="bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+      <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
         <div className="flex-1 flex justify-between sm:hidden">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
@@ -1425,8 +1426,15 @@ function Companies() {
       <div className="bg-white overflow-visible">
         {/* Toolbar (Title + Search + Buttons) */}
         <div
-          className="sticky h-16 px-6 border-b border-[#E1E4EA] bg-white flex items-center"
-          style={{ top: "64px", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
+          className="fixed right-0 h-16 px-6 border-b border-[#E1E4EA] bg-white flex items-center"
+          style={{
+            top: "64px",
+            left: "var(--sidebar-width, 0px)",
+            zIndex: 40,
+            minHeight: "64px",
+            maxHeight: "64px",
+            boxSizing: "border-box",
+          }}
         >
           <div className="flex items-center gap-4 w-full h-full">
             <div className="flex-shrink-0 flex flex-col justify-center gap-1.5">
@@ -1554,9 +1562,7 @@ function Companies() {
               className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
               title="Filters"
             >
-              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M4.16667 5.83464C4.16667 5.14428 4.72631 4.58464 5.41667 4.58464C6.10702 4.58464 6.66667 5.14428 6.66667 5.83464C6.66667 6.52499 6.10702 7.08464 5.41667 7.08464C4.72631 7.08464 4.16667 6.52499 4.16667 5.83464ZM5.41667 2.91797C3.80583 2.91797 2.5 4.2238 2.5 5.83464C2.5 7.44547 3.80583 8.7513 5.41667 8.7513C7.0275 8.7513 8.33333 7.44547 8.33333 5.83464C8.33333 4.2238 7.0275 2.91797 5.41667 2.91797ZM10 6.66797H16.6667V5.0013H10V6.66797ZM13.3333 14.168C13.3333 13.4776 13.893 12.918 14.5833 12.918C15.2737 12.918 15.8333 13.4776 15.8333 14.168C15.8333 14.8583 15.2737 15.418 14.5833 15.418C13.893 15.418 13.3333 14.8583 13.3333 14.168ZM14.5833 11.2513C12.9725 11.2513 11.6667 12.5571 11.6667 14.168C11.6667 15.7788 12.9725 17.0846 14.5833 17.0846C16.1942 17.0846 17.5 15.7788 17.5 14.168C17.5 12.5571 16.1942 11.2513 14.5833 11.2513ZM3.33333 13.3346V15.0013H10V13.3346H3.33333Z" fill="#1F2937" />
-              </svg>
+              <FilterIcon size={16} />
               {activeFilters.length > 0 && (
                 <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                   {activeFilters.length}
@@ -1591,14 +1597,22 @@ function Companies() {
           </div>
         </div>
 
+        <div
+          className="overflow-x-auto overflow-y-auto"
+          style={{
+            position: "fixed",
+            top: 128,
+            left: "var(--sidebar-width, 0px)",
+            right: 0,
+            bottom: !loading && !showHotlist ? 64 : 0,
+          }}
+        >
         {showHotlist ? (
           <Hotlist />
         ) : (
-          <div className="mx-6 mt-6">
           <div
-            className={`relative bg-white overflow-hidden border border-[#E1E4EA] rounded-lg ${loading ? "pointer-events-none opacity-60" : ""}`}
+            className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
           >
-            <div className="overflow-x-auto">
               <table
                 className="w-full border-separate border-spacing-0 text-left"
                 style={{
@@ -1606,7 +1620,7 @@ function Companies() {
                   tableLayout: "fixed",
                 }}
               >
-                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30">
                   {table.getHeaderGroups().map((headerGroup) => (
                     <tr key={headerGroup.id}>
                       {headerGroup.headers.map((header) => {
@@ -1654,7 +1668,7 @@ function Companies() {
                   ))}
                 </thead>
 
-                <tbody className="divide-y divide-[#E1E4EA] bg-white">
+                <tbody className="bg-white">
                   {loading && companies.length === 0 ? (
                     <tr>
                       <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center">
@@ -1668,7 +1682,7 @@ function Companies() {
                       </td>
                     </tr>
                   ) : (
-                    table.getRowModel().rows.map((row, rowIndex) => (
+                    table.getRowModel().rows.map((row) => (
                       <tr
                         key={row.id}
                         className={`bg-white hover:bg-blue-50 transition-colors ${selectedCompanies.includes(row.original._id) ? "!bg-blue-50" : ""}`}
@@ -1682,7 +1696,6 @@ function Companies() {
                           const colId = cell.column.id;
                           const isSticky = colId === "selection" || colId === pinnedColumn;
                           const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "selection";
-                          const isLastRow = rowIndex === table.getRowModel().rows.length - 1;
 
                           // Calculate left offset
                           let leftOffset = "auto";
@@ -1698,10 +1711,10 @@ function Companies() {
                                 left: leftOffset,
                                 zIndex: isSticky ? 10 : 1,
                               }}
-                              className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit ${isRightMostSticky
+                              className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isRightMostSticky
                                 ? "border-r-2 border-r-gray-200"
-                                : ""
-                                } ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
+                                : "last:border-r-0"
+                                }`}
                             >
                               {flexRender(
                                 cell.column.columnDef.cell,
@@ -1715,13 +1728,15 @@ function Companies() {
                   )}
                 </tbody>
               </table>
-            </div>
-          </div>
           </div>
         )}
+        </div>
 
         {!loading && !showHotlist && (
-          <div className="mx-6 pb-6">
+          <div
+            className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
+            style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+          >
             <PaginationControls />
           </div>
         )}

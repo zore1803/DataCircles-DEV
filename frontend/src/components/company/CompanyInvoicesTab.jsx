@@ -1,5 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
+import InvoiceForm from "../invoice/InvoiceForm";
+import FilterIcon from "../common/FilterIcon";
+import CompanyFilterPanel from "./CompanyFilterPanel";
+import { applyColumnFilters } from "../../utils/advancedFilters";
 import {
   Search,
   Filter,
@@ -11,6 +16,8 @@ import {
   MoreVertical,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 
 const InvoiceNumberIcon = ({ size = 20, ...props }) => (
@@ -61,11 +68,6 @@ const AmountCollectedIcon = ({ size = 20, ...props }) => (
   </svg>
 );
 
-const SlidersIcon = ({ size = 14, ...props }) => (
-  <svg width={size} height={size} viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M1.66667 2.91667C1.66667 2.22631 2.22631 1.66667 2.91667 1.66667C3.60702 1.66667 4.16667 2.22631 4.16667 2.91667C4.16667 3.60703 3.60702 4.16667 2.91667 4.16667C2.22631 4.16667 1.66667 3.60703 1.66667 2.91667ZM2.91667 0C1.30583 0 0 1.30583 0 2.91667C0 4.5275 1.30583 5.83333 2.91667 5.83333C4.5275 5.83333 5.83333 4.5275 5.83333 2.91667C5.83333 1.30583 4.5275 0 2.91667 0ZM7.5 3.75H14.1667V2.08333H7.5V3.75ZM10.8333 11.25C10.8333 10.5597 11.393 10 12.0833 10C12.7737 10 13.3333 10.5597 13.3333 11.25C13.3333 11.9403 12.7737 12.5 12.0833 12.5C11.393 12.5 10.8333 11.9403 10.8333 11.25ZM12.0833 8.33333C10.4725 8.33333 9.16667 9.63917 9.16667 11.25C9.16667 12.8608 10.4725 14.1667 12.0833 14.1667C13.6942 14.1667 15 12.8608 15 11.25C15 9.63917 13.6942 8.33333 12.0833 8.33333ZM0.833333 10.4167V12.0833H7.5V10.4167H0.833333Z" fill="#1F2937" />
-  </svg>
-);
 
 const OutstandingAmountIcon = ({ size = 20, ...props }) => (
   <svg width={size} height={size} viewBox="0 0 17 19" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -79,8 +81,51 @@ const OverdueInvoicesIcon = ({ size = 20, ...props }) => (
   </svg>
 );
 
-export default function CompanyInvoicesTab({ invoices, summary, loading, showStats = true }) {
+const INVOICE_STATUS_OPTIONS = ["Draft", "Sent", "Paid", "Accepted", "Rejected", "Delivered", "Void"];
+
+const AMOUNT_RANGES = [
+  { label: "Under ₹10,000", test: (v) => v < 10000 },
+  { label: "₹10,000 – ₹50,000", test: (v) => v >= 10000 && v < 50000 },
+  { label: "₹50,000 – ₹1,00,000", test: (v) => v >= 50000 && v < 100000 },
+  { label: "Above ₹1,00,000", test: (v) => v >= 100000 },
+];
+const getAmountRangeLabel = (amount) => {
+  const num = Number(amount) || 0;
+  return AMOUNT_RANGES.find((r) => r.test(num))?.label || "";
+};
+
+const daysAgo = (date) => Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
+const DATE_RANGES = [
+  { label: "Today", test: (d) => daysAgo(d) < 1 },
+  { label: "This Week", test: (d) => daysAgo(d) < 7 },
+  { label: "This Month", test: (d) => daysAgo(d) < 30 },
+  { label: "Older", test: (d) => daysAgo(d) >= 30 },
+];
+const getDateRangeLabel = (date) => {
+  if (!date) return "";
+  return DATE_RANGES.find((r) => r.test(date))?.label || "";
+};
+
+const INVOICE_FILTER_COLUMNS = [
+  { key: "status", label: "Status", options: INVOICE_STATUS_OPTIONS },
+  { key: "amount", label: "Amount", options: AMOUNT_RANGES.map((r) => r.label) },
+  { key: "dueDate", label: "Due Date", options: DATE_RANGES.map((r) => r.label) },
+];
+
+export default function CompanyInvoicesTab({ invoices, summary, loading, showStats = true, deals = [], refreshInvoices }) {
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState({});
+
+  const handleSort = (key) => {
+    setSortConfig((prev) =>
+      prev.key === key
+        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" },
+    );
+  };
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [pinnedColumn, setPinnedColumn] = useState(null);
@@ -127,16 +172,56 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
     document.addEventListener("mouseup", onMouseUp);
   };
 
+  const getInvoiceFieldValue = (invoice, key) => {
+    switch (key) {
+      case "deal":
+        return invoice.deal?.title || "";
+      case "issueDate":
+        return invoice.issueDate ? new Date(invoice.issueDate).getTime() : 0;
+      case "dueDate":
+        return getDateRangeLabel(invoice.dueDate);
+      case "amount":
+        return getAmountRangeLabel(invoice.amount);
+      case "status":
+        return invoice.status || "Draft";
+      default:
+        return invoice[key];
+    }
+  };
+
   const filteredInvoices = useMemo(() => {
-    if (!searchTerm.trim()) return invoices;
-    const q = searchTerm.toLowerCase();
-    return invoices.filter(
-      (inv) =>
-        (inv.invoiceNumber || "").toLowerCase().includes(q) ||
-        (inv.status || "").toLowerCase().includes(q) ||
-        (inv.deal?.title || "").toLowerCase().includes(q),
-    );
-  }, [invoices, searchTerm]);
+    let result = invoices;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter(
+        (inv) =>
+          (inv.invoiceNumber || "").toLowerCase().includes(q) ||
+          (inv.status || "").toLowerCase().includes(q) ||
+          (inv.deal?.title || "").toLowerCase().includes(q),
+      );
+    }
+    return applyColumnFilters(result, selectedFilters, getInvoiceFieldValue);
+  }, [invoices, searchTerm, selectedFilters]);
+
+  const sortedInvoices = useMemo(() => {
+    if (!sortConfig.key) return filteredInvoices;
+    return [...filteredInvoices].sort((a, b) => {
+      let aVal = getInvoiceFieldValue(a, sortConfig.key);
+      let bVal = getInvoiceFieldValue(b, sortConfig.key);
+      if (sortConfig.key === "amount") {
+        aVal = a.amount || 0;
+        bVal = b.amount || 0;
+      } else if (sortConfig.key === "dueDate") {
+        aVal = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+        bVal = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      }
+      const aCmp = typeof aVal === "number" ? aVal : (aVal || "").toString().toLowerCase();
+      const bCmp = typeof bVal === "number" ? bVal : (bVal || "").toString().toLowerCase();
+      if (aCmp < bCmp) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aCmp > bCmp) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredInvoices, sortConfig]);
 
   const totalInvoiced = summary?.totalAmount || 0;
   const totalCount = summary?.totalInvoices || invoices.length;
@@ -185,8 +270,8 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
   };
 
   const paginatedInvoices = useMemo(
-    () => filteredInvoices.slice((currentPage - 1) * limit, currentPage * limit),
-    [filteredInvoices, currentPage, limit],
+    () => sortedInvoices.slice((currentPage - 1) * limit, currentPage * limit),
+    [sortedInvoices, currentPage, limit],
   );
 
   const statusPillStyle = (status) => {
@@ -283,11 +368,29 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
           />
         </div>
         <button
-          className="flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
-          style={{ height: "44px", borderColor: "#E1E4EA" }}
+          onClick={() => setShowFilterPanel(true)}
+          className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+          style={{
+            height: "44px",
+            borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
+          }}
         >
-          <SlidersIcon size={16} />
+          <FilterIcon size={16} />
           Filter
+          {Object.values(selectedFilters).flat().length > 0 && (
+            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+              {Object.values(selectedFilters).flat().length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowInvoiceForm(true)}
+          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
+          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
+          title="Add Invoice"
+        >
+          <Plus size={20} />
         </button>
       </div>
 
@@ -317,30 +420,50 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                     className={`px-3 py-2.5 font-medium text-[#525866] text-xs ${col.id === "amount" ? "" : "border-r border-[#E1E4EA]"
                       }`}
                   >
-                    {col.pinnable ? (
-                      <div
-                        className="relative flex items-center justify-start w-full group cursor-pointer select-none"
-                        onDoubleClick={() => togglePinColumn(col.id)}
-                      >
-                        <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                          <col.icon className="w-4 h-4 flex-shrink-0" />
-                          <span className="truncate">{col.label}</span>
-                        </div>
-                        <button
-                          onClick={() => togglePinColumn(col.id)}
-                          className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
-                            }`}
-                          title={isPinned ? "Unpin Column" : "Pin Column"}
+                    <div className="flex items-center justify-between w-full">
+                      {col.pinnable ? (
+                        <div
+                          className="relative flex items-center justify-start flex-1 min-w-0 group cursor-pointer select-none"
+                          onDoubleClick={() => togglePinColumn(col.id)}
                         >
-                          {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
-                        </button>
+                          <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
+                            <col.icon className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate">{col.label}</span>
+                          </div>
+                          <button
+                            onClick={() => togglePinColumn(col.id)}
+                            className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
+                              }`}
+                            title={isPinned ? "Unpin Column" : "Pin Column"}
+                          >
+                            {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-start gap-1.5 whitespace-nowrap flex-1 min-w-0">
+                          {col.icon && <col.icon className="w-4 h-4 flex-shrink-0" />}
+                          <span>{col.label}</span>
+                        </div>
+                      )}
+
+                      <div
+                        className="flex flex-col ml-1 flex-shrink-0 cursor-pointer"
+                        onClick={() => handleSort(col.id)}
+                      >
+                        <ChevronUp
+                          className={`w-3 h-3 ${sortConfig.key === col.id && sortConfig.direction === "asc"
+                            ? "text-blue-600"
+                            : "text-gray-400"
+                            }`}
+                        />
+                        <ChevronDown
+                          className={`w-3 h-3 -mt-1 ${sortConfig.key === col.id && sortConfig.direction === "desc"
+                            ? "text-blue-600"
+                            : "text-gray-400"
+                            }`}
+                        />
                       </div>
-                    ) : (
-                      <div className="flex items-center justify-start gap-1.5 whitespace-nowrap">
-                        {col.icon && <col.icon className="w-4 h-4 flex-shrink-0" />}
-                        <span>{col.label}</span>
-                      </div>
-                    )}
+                    </div>
 
                     <div
                       onMouseDown={(e) => startResize(e, col.id)}
@@ -514,6 +637,31 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
             </div>
           </div>
         </div>
+      )}
+
+      <CompanyFilterPanel
+        isOpen={showFilterPanel}
+        onClose={() => setShowFilterPanel(false)}
+        columns={INVOICE_FILTER_COLUMNS}
+        data={invoices}
+        getFieldValue={getInvoiceFieldValue}
+        selected={selectedFilters}
+        onApply={setSelectedFilters}
+        title="Filter Invoices"
+        subtitle="Filter this list by column"
+      />
+
+      {showInvoiceForm && (
+        <InvoiceForm
+          deals={deals}
+          isOpen={showInvoiceForm}
+          onClose={() => setShowInvoiceForm(false)}
+          fetchData={() => refreshInvoices?.()}
+          editingInvoice={null}
+          onPreview={() => {
+            toast("Preview is available from the main Invoices page.");
+          }}
+        />
       )}
     </div>
   );

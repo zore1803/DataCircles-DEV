@@ -2,7 +2,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Search,
-  Filter,
   X,
   ChevronDown,
   SortAsc,
@@ -11,6 +10,7 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { autoTable } from "jspdf-autotable";
+import FilterIcon from "./common/FilterIcon";
 
 const TableFilters = ({
   data = [],
@@ -338,7 +338,7 @@ const TableFilters = ({
                     : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                <Filter className="w-4 h-4" />
+                <FilterIcon size={16} />
                 Filters
                 {Object.keys(columnFilters).some(
                   (key) => columnFilters[key] && columnFilters[key] !== "all"

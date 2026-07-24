@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import API from "../services/api";
 import { formatNumberToIndian } from "../utils/numberFormatter";
+import FilterIcon from "../components/common/FilterIcon";
 import {
   DndContext,
   DragOverlay,
@@ -622,8 +623,6 @@ function Deals() {
   const exportButtonRef = useRef(null);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
-  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-  const searchInputRef = useRef(null);
 
   // Add these states at the top of your Deals component
   const [selectionMode, setSelectionMode] = useState(false);
@@ -2012,36 +2011,8 @@ function Deals() {
         </div>
 
         <div className="relative flex-1 flex items-center justify-end">
-          <div
-            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full`}
-          >
-            <Search
-              strokeWidth={2.5}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
-              onClick={() => {
-                setIsSearchExpanded(true);
-                searchInputRef.current?.focus();
-              }}
-            />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={filters.searchTerm}
-              onChange={(e) =>
-                setFilters({ ...filters, searchTerm: e.target.value })
-              }
-              onFocus={() => setIsSearchExpanded(true)}
-              onBlur={() => {
-                if (!filters.searchTerm) setIsSearchExpanded(false);
-              }}
-              className={`w-full h-full pl-9 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
-              placeholder="Search deals by title, company, or status..."
-            />
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3">
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3">
           {/* More options */}
           <div className="relative" ref={moreMenuRef}>
             <button
@@ -2121,37 +2092,6 @@ function Deals() {
             )}
           </div>
 
-          {/* Filters */}
-          <button
-            onClick={() => setShowFilters((prev) => !prev)}
-            className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
-            title="Filters"
-          >
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M1.66667 2.91667C1.66667 2.22631 2.22631 1.66667 2.91667 1.66667C3.60702 1.66667 4.16667 2.22631 4.16667 2.91667C4.16667 3.60703 3.60702 4.16667 2.91667 4.16667C2.22631 4.16667 1.66667 3.60703 1.66667 2.91667ZM2.91667 0C1.30583 0 0 1.30583 0 2.91667C0 4.5275 1.30583 5.83333 2.91667 5.83333C4.5275 5.83333 5.83333 4.5275 5.83333 2.91667C5.83333 1.30583 4.5275 0 2.91667 0ZM7.5 3.75H14.1667V2.08333H7.5V3.75ZM10.8333 11.25C10.8333 10.5597 11.393 10 12.0833 10C12.7737 10 13.3333 10.5597 13.3333 11.25C13.3333 11.9403 12.7737 12.5 12.0833 12.5C11.393 12.5 10.8333 11.9403 10.8333 11.25ZM12.0833 8.33333C10.4725 8.33333 9.16667 9.63917 9.16667 11.25C9.16667 12.8608 10.4725 14.1667 12.0833 14.1667C13.6942 14.1667 15 12.8608 15 11.25C15 9.63917 13.6942 8.33333 12.0833 8.33333ZM0.833333 10.4167V12.0833H7.5V10.4167H0.833333Z" fill="#1F2937" />
-            </svg>
-          </button>
-
-          {/* List / Kanban Toggle */}
-          <div className="flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0">
-            <button
-              onClick={() => setShowKanban(false)}
-              className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-              title="List View"
-            >
-              <List className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setShowKanban(true)}
-              className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-              title="Kanban View"
-            >
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="currentColor" />
-              </svg>
-            </button>
-          </div>
-
           {/* Add Deal Button */}
           <button
             onClick={toggleForm}
@@ -2160,6 +2100,7 @@ function Deals() {
             <Plus className="w-4 h-4" />
             {showForm ? "Cancel" : "New Deal"}
           </button>
+          </div>
         </div>
       </div>
 
@@ -2225,7 +2166,54 @@ function Deals() {
         </div>
       </div>
 
-      <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pt-6 pb-6 space-y-8">
+      {/* Third Strip: Search, Filter, Switcher */}
+      <div className="-mx-4 sm:-mx-6 lg:-mx-8 bg-white flex items-center justify-between gap-3 px-6 py-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <input
+            type="text"
+            value={filters.searchTerm}
+            onChange={(e) =>
+              setFilters({ ...filters, searchTerm: e.target.value })
+            }
+            className="w-full h-10 pl-9 pr-4 border border-[#E1E4EA] rounded-full text-sm focus:outline-none focus:border-[#0085FF] transition-colors font-inter bg-white"
+            placeholder="Search deals by title, company, or status..."
+          />
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Filters */}
+          <button
+            onClick={() => setShowFilters((prev) => !prev)}
+            className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+            title="Filters"
+          >
+            <FilterIcon size={15} />
+          </button>
+
+          {/* List / Kanban Toggle */}
+          <div className="flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0">
+            <button
+              onClick={() => setShowKanban(false)}
+              className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              title="List View"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setShowKanban(true)}
+              className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              title="Kanban View"
+            >
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="currentColor" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pt-2 pb-6 space-y-8">
         {/* Filter Panel */}
         {showFilters && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 animate-slide-down">
@@ -2400,7 +2388,7 @@ function Deals() {
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <div className="overflow-x-auto overflow-y-hidden scrollbar-hide -mx-6" style={{ padding: "24px" }}>
+            <div className="overflow-x-auto overflow-y-hidden scrollbar-hide -mx-6" style={{ padding: "24px", paddingTop: 0 }}>
               <div className="flex min-w-max" style={{ gap: "16px" }}>
                 {statuses?.map((status) => {
                   const columnDeals = sortedTableDeals.filter((d) => d.status === status);

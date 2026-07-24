@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Filter, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import API from "../../services/api";
 import QuickContactForm from "../contact/QuickContactForm";
 import toast from "react-hot-toast";
+import FilterIcon from "../common/FilterIcon";
 
 const CompanyContacts = ({ contacts, companyId, setContacts }) => {
   const [showContactForm, setShowContactForm] = useState(false);
@@ -63,7 +64,7 @@ const CompanyContacts = ({ contacts, companyId, setContacts }) => {
             onClick={() => setShowFilters(!showFilters)}
             className="flex items-center gap-1 text-gray-700 hover:text-gray-900 text-sm font-medium transition-colors px-3 py-2 border border-gray-200 rounded-md hover:bg-gray-50"
           >
-            <Filter className="w-4 h-4" />
+            <FilterIcon size={16} />
             Filter
           </button>
           <button

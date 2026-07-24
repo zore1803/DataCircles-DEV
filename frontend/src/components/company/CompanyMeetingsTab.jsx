@@ -6,6 +6,8 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Pin,
   PinOff,
   MoreVertical,
@@ -16,12 +18,28 @@ import toast from "react-hot-toast";
 import API from "../../services/api";
 import CompanyMeetingForm from "./CompanyMeetingForm";
 import MeetingDetailsModal from "./MeetingDetailsModal";
+import FilterIcon from "../common/FilterIcon";
+import CompanyFilterPanel from "./CompanyFilterPanel";
+import { applyColumnFilters } from "../../utils/advancedFilters";
 
-const SlidersIcon = ({ size = 14, ...props }) => (
-  <svg width={size} height={size} viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M1.66667 2.91667C1.66667 2.22631 2.22631 1.66667 2.91667 1.66667C3.60702 1.66667 4.16667 2.22631 4.16667 2.91667C4.16667 3.60703 3.60702 4.16667 2.91667 4.16667C2.22631 4.16667 1.66667 3.60703 1.66667 2.91667ZM2.91667 0C1.30583 0 0 1.30583 0 2.91667C0 4.5275 1.30583 5.83333 2.91667 5.83333C4.5275 5.83333 5.83333 4.5275 5.83333 2.91667C5.83333 1.30583 4.5275 0 2.91667 0ZM7.5 3.75H14.1667V2.08333H7.5V3.75ZM10.8333 11.25C10.8333 10.5597 11.393 10 12.0833 10C12.7737 10 13.3333 10.5597 13.3333 11.25C13.3333 11.9403 12.7737 12.5 12.0833 12.5C11.393 12.5 10.8333 11.9403 10.8333 11.25ZM12.0833 8.33333C10.4725 8.33333 9.16667 9.63917 9.16667 11.25C9.16667 12.8608 10.4725 14.1667 12.0833 14.1667C13.6942 14.1667 15 12.8608 15 11.25C15 9.63917 13.6942 8.33333 12.0833 8.33333ZM0.833333 10.4167V12.0833H7.5V10.4167H0.833333Z" fill="#1F2937" />
-  </svg>
-);
+const MEETING_TYPE_LABELS = { "in-person": "In-person", "video-call": "Video Call", "phone-call": "Phone Call" };
+const MEETING_STATUS_LABELS = { scheduled: "Scheduled", completed: "Completed", cancelled: "Cancelled", "no-show": "No-show" };
+const daysAgo = (date) => Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
+const DATE_RANGES = [
+  { label: "Today", test: (d) => daysAgo(d) < 1 },
+  { label: "This Week", test: (d) => daysAgo(d) < 7 },
+  { label: "This Month", test: (d) => daysAgo(d) < 30 },
+  { label: "Older", test: (d) => daysAgo(d) >= 30 },
+];
+const getDateRangeLabel = (date) => {
+  if (!date) return "";
+  return DATE_RANGES.find((r) => r.test(date))?.label || "";
+};
+const MEETING_FILTER_COLUMNS = [
+  { key: "type", label: "Type", options: Object.values(MEETING_TYPE_LABELS) },
+  { key: "status", label: "Status", options: Object.values(MEETING_STATUS_LABELS) },
+  { key: "dateTime", label: "Date & Time", options: DATE_RANGES.map((r) => r.label) },
+];
 
 const DayViewIcon = ({ size = 20, ...props }) => (
   <svg width={size} height={size} viewBox="12 14 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -178,11 +196,65 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     setIsDetailsOpen(true);
   };
 
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const handleSort = (key) => {
+    setSortConfig((prev) =>
+      prev.key === key
+        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" },
+    );
+  };
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState({});
+
+  const getMeetingFieldValue = (meeting, key) => {
+    switch (key) {
+      case "title":
+        return meeting.title || "Untitled Meeting";
+      case "type":
+        return MEETING_TYPE_LABELS[meeting.meetingType] || meeting.meetingType || "General";
+      case "dateTime":
+        return getDateRangeLabel(meeting.scheduledAt);
+      case "duration":
+        return meeting.duration || 0;
+      case "attendees":
+        return meeting.participants?.length || 0;
+      case "organiser":
+        return typeof meeting.createdBy === "object" ? meeting.createdBy?.name || "" : "";
+      case "relatedTo":
+        return meeting.dealCode || meeting.company?.name || "";
+      case "status":
+        return MEETING_STATUS_LABELS[meeting.status] || meeting.status || "Scheduled";
+      default:
+        return meeting[key];
+    }
+  };
+
   const filteredMeetings = useMemo(() => {
-    if (!searchTerm.trim()) return meetings;
-    const q = searchTerm.toLowerCase();
-    return meetings.filter((m) => (m.title || "").toLowerCase().includes(q));
-  }, [meetings, searchTerm]);
+    let result = meetings;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter((m) => (m.title || "").toLowerCase().includes(q));
+    }
+    return applyColumnFilters(result, selectedFilters, getMeetingFieldValue);
+  }, [meetings, searchTerm, selectedFilters]);
+
+  const sortedMeetings = useMemo(() => {
+    if (!sortConfig.key) return filteredMeetings;
+    return [...filteredMeetings].sort((a, b) => {
+      let aVal = getMeetingFieldValue(a, sortConfig.key);
+      let bVal = getMeetingFieldValue(b, sortConfig.key);
+      if (sortConfig.key === "dateTime") {
+        aVal = a.scheduledAt ? new Date(a.scheduledAt).getTime() : 0;
+        bVal = b.scheduledAt ? new Date(b.scheduledAt).getTime() : 0;
+      }
+      const aCmp = typeof aVal === "number" ? aVal : (aVal || "").toString().toLowerCase();
+      const bCmp = typeof bVal === "number" ? bVal : (bVal || "").toString().toLowerCase();
+      if (aCmp < bCmp) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aCmp > bCmp) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredMeetings, sortConfig]);
 
   const [listPage, setListPage] = useState(1);
   const [listLimit, setListLimit] = useState(10);
@@ -220,8 +292,8 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
   };
 
   const paginatedMeetings = useMemo(
-    () => filteredMeetings.slice((listPage - 1) * listLimit, listPage * listLimit),
-    [filteredMeetings, listPage, listLimit],
+    () => sortedMeetings.slice((listPage - 1) * listLimit, listPage * listLimit),
+    [sortedMeetings, listPage, listLimit],
   );
 
   const now = new Date();
@@ -344,11 +416,20 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           />
         </div>
         <button
-          className="flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
-          style={{ height: "44px", borderColor: "#E1E4EA" }}
+          onClick={() => setShowFilterPanel(true)}
+          className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+          style={{
+            height: "44px",
+            borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
+          }}
         >
-          <SlidersIcon size={16} />
+          <FilterIcon size={16} />
           Filter
+          {Object.values(selectedFilters).flat().length > 0 && (
+            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+              {Object.values(selectedFilters).flat().length}
+            </span>
+          )}
         </button>
         <div className="flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0" style={{ height: "44px" }}>
           <button
@@ -374,6 +455,14 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
             <ListViewIcon size={15} />
           </button>
         </div>
+        <button
+          onClick={() => setShowMeetingForm(true)}
+          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
+          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
+          title="Add Meeting"
+        >
+          <Plus size={20} />
+        </button>
       </div>
 
       {/* Meeting list or empty state */}
@@ -412,21 +501,38 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                         col.firstCol ? "pl-6 pr-3" : "px-3"
                       }`}
                     >
-                      <div
-                        className="relative flex items-center justify-start w-full group cursor-pointer select-none"
-                        onDoubleClick={() => togglePinColumn(col.id)}
-                      >
-                        <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                          <span className="truncate">{col.label}</span>
+                      <div className="flex items-center justify-between w-full">
+                        <div
+                          className="relative flex items-center justify-start flex-1 group cursor-pointer select-none min-w-0"
+                          onDoubleClick={() => togglePinColumn(col.id)}
+                        >
+                          <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
+                            <span className="truncate">{col.label}</span>
+                          </div>
+                          <button
+                            onClick={() => togglePinColumn(col.id)}
+                            className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${
+                              isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
+                            }`}
+                            title={isPinned ? "Unpin Column" : "Pin Column"}
+                          >
+                            {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+                          </button>
                         </div>
                         <button
-                          onClick={() => togglePinColumn(col.id)}
-                          className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${
-                            isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
-                          }`}
-                          title={isPinned ? "Unpin Column" : "Pin Column"}
+                          onClick={() => handleSort(col.id)}
+                          className="ml-1 p-0.5 rounded hover:bg-gray-200 flex-shrink-0"
+                          title="Sort"
                         >
-                          {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+                          {sortConfig.key === col.id ? (
+                            sortConfig.direction === "asc" ? (
+                              <ChevronUp className="w-3.5 h-3.5 text-blue-600" />
+                            ) : (
+                              <ChevronDown className="w-3.5 h-3.5 text-blue-600" />
+                            )
+                          ) : (
+                            <ChevronDown className="w-3.5 h-3.5 text-gray-300" />
+                          )}
                         </button>
                       </div>
                       <div
@@ -1243,6 +1349,18 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           </div>
         </div>
       )}
+
+      <CompanyFilterPanel
+        isOpen={showFilterPanel}
+        onClose={() => setShowFilterPanel(false)}
+        columns={MEETING_FILTER_COLUMNS}
+        data={meetings}
+        getFieldValue={getMeetingFieldValue}
+        selected={selectedFilters}
+        onApply={setSelectedFilters}
+        title="Filter Meetings"
+        subtitle="Filter this list by column"
+      />
 
       {showMeetingForm && (
         <CompanyMeetingForm

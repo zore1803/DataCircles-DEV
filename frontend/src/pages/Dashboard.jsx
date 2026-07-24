@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, Fragment } from "react";
-import { TrendingUp, TrendingDown, Search, SlidersHorizontal, MoreVertical, ChevronUp, ChevronDown, Eye, Edit2, Trash2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Search, MoreVertical, ChevronUp, ChevronDown, Eye, Edit2, Trash2 } from "lucide-react";
+import FilterIcon from "../components/common/FilterIcon";
 
 const yAxisLabels = ["₹180k", "₹160k", "₹140k", "₹120k", "₹100k", "₹80k", "₹60k", "₹40k", "₹20k", "0"];
 
@@ -850,7 +851,7 @@ function Dashboard() {
               className="box-border flex flex-row justify-center items-center flex-shrink-0"
               style={{ padding: 12, gap: 8, width: 44, height: 44, background: "#FFFFFF", border: "1px solid #E1E4EA", borderRadius: 95 }}
             >
-              <SlidersHorizontal size={20} style={{ color: "#1F2937" }} />
+              <FilterIcon size={20} style={{ color: "#1F2937" }} />
             </button>
 
             <button
