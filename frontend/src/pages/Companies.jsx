@@ -194,6 +194,9 @@ function Companies() {
 
   // Bulk selection
   const [selectedCompanies, setSelectedCompanies] = useState([]);
+  // O(1) membership checks instead of .includes() array scans repeated per row.
+  const selectedCompaniesSet = useMemo(() => new Set(selectedCompanies), [selectedCompanies]);
+  const starredCompaniesSet = useMemo(() => new Set(starredCompanies), [starredCompanies]);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -325,6 +328,7 @@ function Companies() {
   const [dragOverColKey, setDragOverColKey] = useState(null);
   const [dragGhost, setDragGhost] = useState(null);
   const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
 
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
@@ -338,24 +342,38 @@ function Companies() {
     const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
     const previewRows = (sortedCompanies || [])
       .map((c) => String(getFieldValue(c, colId) ?? "").trim() || "—");
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
 
     dragOverRef.current = null;
     setDraggedColKey(colId);
     setDragOverColKey(null);
     document.body.style.userSelect = "none";
+    // Only the label/previewRows/dimensions go through React state (set once).
+    // x/y position is mutated directly on the DOM node below so mousemove never
+    // triggers a re-render of the whole (up to 500-row) table.
     setDragGhost({
       label,
       previewRows,
-      x: e.clientX,
-      y: e.clientY,
-      offsetX: e.clientX - rect.left,
-      offsetY: e.clientY - rect.top,
+      offsetX,
+      offsetY,
       width: rect.width,
       height: rect.height,
     });
 
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const top = clientY - offsetY;
+      el.style.top = `${top}px`;
+      el.style.left = `${clientX - offsetX}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - top - 72)}px`;
+    };
+    // Position immediately so the ghost doesn't flash at (0,0) before the first mousemove.
+    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
+
     const handleMouseMove = (moveEvent) => {
-      setDragGhost((prev) => (prev ? { ...prev, x: moveEvent.clientX, y: moveEvent.clientY } : prev));
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
 
       const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
       const thAtPoint = elAtPoint?.closest("th[data-col-id]");
@@ -477,8 +495,8 @@ function Companies() {
               }}
               className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
             >
-              <Star className={`w-4 h-4 ${starredCompanies.includes(company._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
-              {starredCompanies.includes(company._id) ? "Unstar Company" : "Star Company"}
+              <Star className={`w-4 h-4 ${starredCompaniesSet.has(company._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
+              {starredCompaniesSet.has(company._id) ? "Unstar Company" : "Star Company"}
             </button>
             <div className="w-full border-t border-[#F1F1F5]" />
             <button
@@ -525,7 +543,7 @@ function Companies() {
             <div className="flex justify-center items-center gap-1 w-full">
               <input
                 type="checkbox"
-                checked={selectedCompanies.includes(row.original._id)}
+                checked={selectedCompaniesSet.has(row.original._id)}
                 onChange={() => handleSelectCompany(row.original._id)}
                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
               />
@@ -690,7 +708,7 @@ function Companies() {
                     >
                       <HighlightText text={company.name} query={searchTerm} />
                     </Link>
-                    {starredCompanies.includes(company._id) && (
+                    {starredCompaniesSet.has(company._id) && (
                       <Star className="flex-shrink-0 w-3.5 h-3.5 ml-1.5 text-yellow-400 fill-yellow-400" />
                     )}
                   </div>
@@ -779,12 +797,12 @@ function Companies() {
   }, [
     selectionMode,
     visibleColumns,
-    selectedCompanies,
+    selectedCompaniesSet,
     sortedCompanies,
     sortConfig,
     pinnedColumns,
     openRowActionsId,
-    starredCompanies,
+    starredCompaniesSet,
     openColumnMenuKey,
     columnMenuPos,
     searchTerm,
@@ -1886,7 +1904,7 @@ function Companies() {
                     table.getRowModel().rows.map((row) => (
                       <tr
                         key={row.id}
-                        className={`bg-white hover:bg-blue-50 transition-colors ${selectedCompanies.includes(row.original._id) ? "!bg-blue-50" : ""}`}
+                        className={`bg-white hover:bg-blue-50 transition-colors ${selectedCompaniesSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
                         onMouseDown={() => handleMouseDown(row.original._id)}
                         onMouseUp={handleMouseUp}
                         onMouseLeave={handleMouseUp}
@@ -1939,12 +1957,12 @@ function Companies() {
 
         {dragGhost && createPortal(
           <div
+            ref={ghostElRef}
             style={{
               position: "fixed",
-              top: dragGhost.y - dragGhost.offsetY,
-              left: dragGhost.x - dragGhost.offsetX,
+              top: -9999,
+              left: -9999,
               width: dragGhost.width,
-              maxHeight: Math.max(100, window.innerHeight - (dragGhost.y - dragGhost.offsetY) - 72),
               zIndex: 10000,
               pointerEvents: "none",
             }}
