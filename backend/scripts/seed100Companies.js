@@ -1,5 +1,5 @@
-// One-off script: adds 100 more companies to the organization of a specific user.
-// Usage: node scripts/seed100Companies.js [email]
+// One-off script: adds more companies to the organization of a specific user.
+// Usage: node scripts/seed100Companies.js [email] [count]
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const User = require("../models/User");
@@ -8,6 +8,7 @@ const Company = require("../models/Company");
 dotenv.config({ quiet: true });
 
 const TARGET_EMAIL = process.argv[2] || "rohit.zore@datacircles.in";
+const COUNT = parseInt(process.argv[3], 10) || 100;
 
 const INDUSTRIES = [
   "Technology",
@@ -78,10 +79,12 @@ async function seed100Companies() {
       process.exit(1);
     }
 
-    console.log(`Seeding companies for organization: ${user.organization}`);
+    console.log(`Seeding ${COUNT} companies for organization: ${user.organization}`);
+
+    const existingCount = await Company.countDocuments({ organization: user.organization });
 
     const companyData = [];
-    for (let i = 0; i < 100; i++) {
+    for (let i = existingCount; i < existingCount + COUNT; i++) {
       const prefix = pick(NAME_PREFIXES, i);
       const suffix = pick(NAME_SUFFIXES, Math.floor(i / NAME_PREFIXES.length) + i);
       const name = `${prefix} ${suffix} ${i + 1}`;

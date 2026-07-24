@@ -131,7 +131,7 @@ function PrivateRoute({ children }) {
       isAuthorized === null)
   ) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 -mt-6 -mx-4 sm:-mx-6 lg:-mx-8">
         <div className="flex flex-col items-center justify-center">
           <img
             src={logo}
@@ -169,7 +169,7 @@ function PrivateRoute({ children }) {
   // Show error state with manual retry option
   if (!isAuthorized && isAuthorized !== null) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 -mt-6 -mx-4 sm:-mx-6 lg:-mx-8">
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8 text-center max-w-md w-full">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg

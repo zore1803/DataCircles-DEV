@@ -31,6 +31,7 @@ const getAllCompanies = async (req, res) => {
         { gstin: { $regex: search, $options: "i" } },
         { website: { $regex: search, $options: "i" } },
         { address: { $regex: search, $options: "i" } },
+        { leadSource: { $regex: search, $options: "i" } },
         { "additionalFields.value": { $regex: search, $options: "i" } },
       ];
     }
@@ -49,7 +50,7 @@ const getAllCompanies = async (req, res) => {
 const getAllCompaniesPaginated = async (req, res) => {
   try {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 500);
     const skip = (page - 1) * limit;
 
     const {
