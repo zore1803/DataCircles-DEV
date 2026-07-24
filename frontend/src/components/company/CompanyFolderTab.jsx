@@ -4,7 +4,7 @@ import Folder from "./Folder";
 
 const STORAGE_ALLOCATION_GB = 5;
 
-export default function CompanyFolderTab() {
+export default function CompanyFolderTab({ showStats = true }) {
   const [folders, setFolders] = useState([]);
 
   const allFiles = folders.flatMap((f) => f.files || []);
@@ -80,33 +80,37 @@ export default function CompanyFolderTab() {
   return (
     <div>
       {/* KPI Tiles */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        {kpiTiles.map((tile) => (
-          <div
-            key={tile.label}
-            className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
-          >
-            <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-              <tile.icon size={20} />
-            </div>
-            <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-                <p className="text-base font-semibold text-gray-900">
-                  {tile.value}
-                </p>
+      {showStats && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            {kpiTiles.map((tile) => (
+              <div
+                key={tile.label}
+                className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
+              >
+                <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <tile.icon size={20} />
+                </div>
+                <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
+                    <p className="text-base font-semibold text-gray-900">
+                      {tile.value}
+                    </p>
+                  </div>
+                  {tile.subtitle && (
+                    <span className={`text-[11px] truncate min-w-0 max-w-[55%] ${tile.subtitleClass}`}>
+                      {tile.subtitle}
+                    </span>
+                  )}
+                </div>
               </div>
-              {tile.subtitle && (
-                <span className={`text-[11px] truncate min-w-0 max-w-[55%] ${tile.subtitleClass}`}>
-                  {tile.subtitle}
-                </span>
-              )}
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
+          <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
+        </>
+      )}
 
       {/* Existing folder UI (its own search/grid/upload) */}
       <Folder onFoldersChange={setFolders} />

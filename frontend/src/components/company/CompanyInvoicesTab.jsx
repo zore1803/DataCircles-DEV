@@ -289,14 +289,6 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
           <SlidersIcon size={16} />
           Filter
         </button>
-        <Link
-          to="/invoices?tab=tax"
-          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
-          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
-          title="Add Invoice"
-        >
-          <Plus size={20} />
-        </Link>
       </div>
 
       <div

@@ -436,15 +436,6 @@ export default function CompanyDealsKanban({ deals, setDeals, showStats = true, 
             <ListIcon size={16} />
           </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowDealForm(true)}
-          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
-          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
-          title="Add Deal"
-        >
-          <Plus size={20} />
-        </button>
       </div>
 
       {showDealForm && (

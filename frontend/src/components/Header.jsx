@@ -833,19 +833,24 @@ const Header = () => {
   const [dynamicCrumbName, setDynamicCrumbName] = useState("");
 
   useEffect(() => {
-    const match = location.pathname.match(/^\/companies\/([^/]+)$/);
+    const companyMatch = location.pathname.match(/^\/companies\/([^/]+)$/);
+    const contactMatch = location.pathname.match(/^\/contacts\/([^/]+)$/);
+    const match = companyMatch || contactMatch;
     if (!match) {
       setDynamicCrumbName("");
       return;
     }
-    const companyId = match[1];
-    const cached = companies.find((c) => c._id === companyId);
+    const entityId = match[1];
+    const isContact = !!contactMatch;
+    const list = isContact ? contacts : companies;
+    const endpoint = isContact ? "contacts" : "companies";
+    const cached = list.find((c) => c._id === entityId);
     if (cached) {
       setDynamicCrumbName(cached.name);
       return;
     }
     let cancelled = false;
-    API.get(`/companies/${companyId}`)
+    API.get(`/${endpoint}/${entityId}`)
       .then((res) => {
         if (!cancelled) setDynamicCrumbName(res.data?.name || "");
       })
@@ -855,7 +860,7 @@ const Header = () => {
     return () => {
       cancelled = true;
     };
-  }, [location.pathname, companies]);
+  }, [location.pathname, companies, contacts]);
 
   const ROUTE_LABELS = {
     "/": "Dashboard",
@@ -886,10 +891,7 @@ const Header = () => {
     if (path === "/" || path === "") return [{ label: "Dashboard", path: "/" }];
     const firstSegment = "/" + path.split("/").filter(Boolean)[0];
     const label = ROUTE_LABELS[firstSegment] || firstSegment.slice(1);
-    const crumbs = [
-      { label: "Dashboard", path: "/" },
-      { label, path: firstSegment },
-    ];
+    const crumbs = [{ label, path: firstSegment }];
     if (dynamicCrumbName) crumbs.push({ label: dynamicCrumbName, path });
     return crumbs;
   };

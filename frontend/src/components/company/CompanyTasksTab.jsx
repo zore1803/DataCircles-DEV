@@ -389,14 +389,6 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
           <SlidersIcon size={16} />
           Filter
         </button>
-        <button
-          onClick={() => setShowTaskForm(true)}
-          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
-          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
-          title="Add Task"
-        >
-          <Plus size={20} />
-        </button>
       </div>
 
       {/* Task list or empty state */}

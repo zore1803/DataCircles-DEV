@@ -122,6 +122,8 @@ function Companies() {
   const [showAddToHotlistModal, setShowAddToHotlistModal] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
   const rowActionsRef = useRef(null);
   const [quickHotlistCompanyId, setQuickHotlistCompanyId] = useState(null);
@@ -1435,13 +1437,27 @@ function Companies() {
             </div>
 
             <div className="relative flex-1 flex items-center justify-end">
-              <div className="relative w-[416px] max-w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <div
+                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full`}
+              >
+                <Search
+                  strokeWidth={2.5}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+                  onClick={() => {
+                    setIsSearchExpanded(true);
+                    searchInputRef.current?.focus();
+                  }}
+                />
                 <input
+                  ref={searchInputRef}
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full h-10 pl-9 pr-4 border border-[#E1E4EA] rounded-full text-sm focus:outline-none focus:border-[#0085FF] transition-colors font-inter bg-white"
+                  onFocus={() => setIsSearchExpanded(true)}
+                  onBlur={() => {
+                    if (!searchTerm) setIsSearchExpanded(false);
+                  }}
+                  className={`w-full h-full pl-9 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
                   placeholder="Search companies by name, industry, or location..."
                 />
               </div>
@@ -1451,10 +1467,10 @@ function Companies() {
             <div className="relative" ref={moreMenuRef}>
               <button
                 onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-                className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+                className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
                 title="More options"
               >
-                <MoreVertical className="w-4 h-4" />
+                <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
                 {filterIndustry && (
                   <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
                 )}

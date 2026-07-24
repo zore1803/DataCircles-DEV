@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import API from "../services/api";
 import CompanyDealsKanban from "../components/company/CompanyDealsKanban";
 import CompanyContactsTab from "../components/company/CompanyContactsTab";
@@ -32,6 +32,9 @@ import {
   Phone,
   File,
   MoreVertical,
+  StickyNote,
+  Calendar,
+  FolderOpen,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -60,9 +63,12 @@ const tabs = [
 ];
 
 const newEntryOptions = [
-  { label: "New Deal", icon: BriefcaseBusiness, href: "/deals" },
-  { label: "New Contact", icon: Users, href: "/contacts" },
-  { label: "New Invoice", icon: FileText, href: "/invoices?tab=tax" },
+  { label: "New Deal", icon: BriefcaseBusiness, tab: "Deals" },
+  { label: "New Contact", icon: Users, tab: "Contacts" },
+  { label: "New Invoice", icon: FileText, tab: "Invoices" },
+  { label: "New Notes", icon: StickyNote, tab: "Notes" },
+  { label: "New Meetings", icon: Calendar, tab: "Meetings" },
+  { label: "New Folders", icon: FolderOpen, tab: "Folders" },
 ];
 
 // Array of cool loading messages
@@ -138,13 +144,25 @@ const CollectedIcon = ({ width = 21, height = 23 }) => (
 const CompanyProfilePage = () => {
   const { id } = useParams(); // company ID
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [company, setCompany] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [deals, setDeals] = useState([]);
   const [meetings, setMeetings] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [folders, setFolders] = useState([]);
-  const [activeTab, setActiveTab] = useState("Overview");
+  const tabFromUrl = searchParams.get("tab");
+  const [activeTab, setActiveTabState] = useState(
+    tabs.includes(tabFromUrl) ? tabFromUrl : "Overview",
+  );
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", tab);
+      return next;
+    }, { replace: true });
+  };
   const [invoices, setInvoices] = useState([]);
   const [invoiceSummary, setInvoiceSummary] = useState(null);
   const [invoicesLoading, setInvoicesLoading] = useState(false);
@@ -698,7 +716,7 @@ const CompanyProfilePage = () => {
             <button
               disabled={!hasSocialLink("twitter")}
               className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("twitter")
-                ? "border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 cursor-pointer"
+                ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
                 : "border-gray-200 text-gray-300 cursor-not-allowed"
                 }`}
               onClick={() => openSocialLink("twitter")}
@@ -708,14 +726,14 @@ const CompanyProfilePage = () => {
                   : "No Twitter/X link available"
               }
             >
-              <Twitter size={16} />
+              <Twitter size={16} strokeWidth={2} />
             </button>
 
             {/* LinkedIn */}
             <button
               disabled={!hasSocialLink("linkedin")}
               className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("linkedin")
-                ? "border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 cursor-pointer"
+                ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
                 : "border-gray-200 text-gray-300 cursor-not-allowed"
                 }`}
               onClick={() => openSocialLink("linkedin")}
@@ -725,7 +743,7 @@ const CompanyProfilePage = () => {
                   : "No LinkedIn link available"
               }
             >
-              <Linkedin size={16} />
+              <Linkedin size={16} strokeWidth={2} />
             </button>
 
             {/* Instagram — maps to the company's "facebook" social field (no dedicated
@@ -733,7 +751,7 @@ const CompanyProfilePage = () => {
             <button
               disabled={!hasSocialLink("facebook")}
               className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("facebook")
-                ? "border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 cursor-pointer"
+                ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
                 : "border-gray-200 text-gray-300 cursor-not-allowed"
                 }`}
               onClick={() => openSocialLink("facebook")}
@@ -743,7 +761,7 @@ const CompanyProfilePage = () => {
                   : "No Instagram link available"
               }
             >
-              <Instagram size={16} />
+              <Instagram size={16} strokeWidth={2} />
             </button>
 
             {/* Stats Switcher */}
@@ -751,11 +769,11 @@ const CompanyProfilePage = () => {
               onClick={() => setShowStats((prev) => !prev)}
               title={showStats ? "Hide summary stats" : "Show summary stats"}
               className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${showStats
-                ? "bg-gray-50 border-gray-200 text-gray-700"
-                : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+                ? "bg-gray-50 border-gray-200 text-gray-800"
+                : "bg-white border-gray-200 text-gray-800 hover:bg-gray-50"
                 }`}
             >
-              <MoreVertical size={16} />
+              <MoreVertical size={16} strokeWidth={2.5} />
             </button>
 
             {/* New Entry Dropdown */}
@@ -769,17 +787,32 @@ const CompanyProfilePage = () => {
               </button>
               {showNewEntryMenu && (
                 <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
-                  {newEntryOptions.map((option) => (
-                    <Link
-                      key={option.label}
-                      to={option.href}
-                      onClick={() => setShowNewEntryMenu(false)}
-                      className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      <option.icon size={14} className="text-gray-400" />
-                      {option.label}
-                    </Link>
-                  ))}
+                  {newEntryOptions.map((option) =>
+                    option.tab ? (
+                      <button
+                        key={option.label}
+                        type="button"
+                        onClick={() => {
+                          setActiveTab(option.tab);
+                          setShowNewEntryMenu(false);
+                        }}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                      >
+                        <option.icon size={14} className="text-gray-400" />
+                        {option.label}
+                      </button>
+                    ) : (
+                      <Link
+                        key={option.label}
+                        to={option.href}
+                        onClick={() => setShowNewEntryMenu(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <option.icon size={14} className="text-gray-400" />
+                        {option.label}
+                      </Link>
+                    ),
+                  )}
                 </div>
               )}
             </div>
@@ -1369,7 +1402,7 @@ const CompanyProfilePage = () => {
                 showStats={showStats}
               />
             )}
-            {activeTab === "Folders" && <CompanyFolderTab />}
+            {activeTab === "Folders" && <CompanyFolderTab showStats={showStats} />}
             {activeTab === "Calendar" && <CompanyCalendar companyId={id} />}
         </div>
       </div>

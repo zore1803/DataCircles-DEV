@@ -127,6 +127,8 @@ function Contacts() {
   const [showImport, setShowImport] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutsideMoreMenu = (event) => {
@@ -2081,22 +2083,98 @@ function Contacts() {
         className="sticky -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 flex items-center justify-between gap-3 px-6 pt-4 pb-3 bg-white border-b border-[#E5E5EC]"
         style={{ top: "64px", zIndex: 40, boxSizing: "border-box" }}
       >
-        <div className="flex flex-col gap-1.5">
-          <h1
-            className="m-0"
-            style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "16px", lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
-          >
-            Contacts
-          </h1>
-          <p
-            className="m-0"
-            style={{ fontFamily: "Inter", fontWeight: 400, fontSize: "12px", lineHeight: "120%", color: "#525866" }}
-          >
-            Manage your customer relationships
-          </p>
-        </div>
+        <nav className="flex items-stretch h-11 overflow-x-auto flex-shrink-0">
+          {[
+            { id: "All", label: "All" },
+            { id: "Leads", label: "Leads" },
+            { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
+            { id: "Customers", label: "Customers" },
+            { id: "Hotlist", label: "Hotlist" },
+          ].map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => handleTabChange(id)}
+              className="flex items-center justify-center px-4 h-full whitespace-nowrap"
+              style={{
+                fontFamily: "Inter",
+                fontWeight: 600,
+                fontSize: "14px",
+                letterSpacing: "-0.04em",
+                color: activeTab === id ? "#0085FF" : "#44444A",
+                borderBottom: activeTab === id ? "3px solid #0085FF" : "3px solid transparent",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          {activeTab !== "Hotlist" && (
+            <>
+              <div
+                className={`relative h-11 flex items-center border border-[rgba(31,41,55,0.1)] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-11"} max-w-full`}
+              >
+                <Search
+                  strokeWidth={2.5}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+                  onClick={() => {
+                    setIsSearchExpanded(true);
+                    searchInputRef.current?.focus();
+                  }}
+                />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onFocus={() => setIsSearchExpanded(true)}
+                  onBlur={() => {
+                    if (!searchTerm) setIsSearchExpanded(false);
+                  }}
+                  className={`w-full h-full pl-10 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                  placeholder="Search by contact by name, company, or status..."
+                />
+              </div>
+
+              <button
+                onClick={() => setShowAdvancedFilters(true)}
+                className="relative flex items-center justify-center w-11 h-11 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
+                title="Filters"
+              >
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M1.66667 2.91667C1.66667 2.22631 2.22631 1.66667 2.91667 1.66667C3.60702 1.66667 4.16667 2.22631 4.16667 2.91667C4.16667 3.60703 3.60702 4.16667 2.91667 4.16667C2.22631 4.16667 1.66667 3.60703 1.66667 2.91667ZM2.91667 0C1.30583 0 0 1.30583 0 2.91667C0 4.5275 1.30583 5.83333 2.91667 5.83333C4.5275 5.83333 5.83333 4.5275 5.83333 2.91667C5.83333 1.30583 4.5275 0 2.91667 0ZM7.5 3.75H14.1667V2.08333H7.5V3.75ZM10.8333 11.25C10.8333 10.5597 11.393 10 12.0833 10C12.7737 10 13.3333 10.5597 13.3333 11.25C13.3333 11.9403 12.7737 12.5 12.0833 12.5C11.393 12.5 10.8333 11.9403 10.8333 11.25ZM12.0833 8.33333C10.4725 8.33333 9.16667 9.63917 9.16667 11.25C9.16667 12.8608 10.4725 14.1667 12.0833 14.1667C13.6942 14.1667 15 12.8608 15 11.25C15 9.63917 13.6942 8.33333 12.0833 8.33333ZM0.833333 10.4167V12.0833H7.5V10.4167H0.833333Z" fill="#1F2937" />
+                </svg>
+                {activeFilters.length > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                    {activeFilters.length}
+                  </span>
+                )}
+              </button>
+
+              <div className="flex items-center gap-1.5 bg-[#F1F1F5] rounded-full p-1 flex-shrink-0">
+                <button
+                  onClick={() => setShowKanban(false)}
+                  className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors ${!showKanban ? "bg-white text-[#0085FF] shadow-[0_0_6px_rgba(0,0,0,0.1)]" : "text-[#525252]"
+                    }`}
+                  title="List View"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setShowKanban(true)}
+                  className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showKanban ? "bg-white text-[#0085FF] shadow-[0_0_6px_rgba(0,0,0,0.1)]" : "text-[#525252]"
+                    }`}
+                  title="Kanban View"
+                >
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={showKanban ? "#0085FF" : "#525252"} />
+                  </svg>
+                </button>
+              </div>
+            </>
+          )}
+
           <div className="relative" ref={moreMenuRef}>
             <button
               onClick={() => setIsMoreMenuOpen((prev) => !prev)}
@@ -2326,113 +2404,7 @@ function Contacts() {
       )}
 
       {/* Main Content Card */}
-      <div className="bg-white overflow-visible border-b border-gray-100">
-        {/* Tabs */}
-        {/* <div className="border-b border-gray-200 bg-white">
-          <nav className="flex px-4 sm:px-6 overflow-x-auto">
-            {[
-              "All",
-              "Leads",
-              "Sales Qualified Lead",
-              "Customers",
-              "Hotlist",
-            ].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`cursor-pointer px-4 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === tab
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300"
-                  }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </nav>
-        </div> */}
-
-        <div
-          className="flex items-center justify-between border-b border-[#F1F1F5] bg-white px-6 -mx-4 sm:-mx-6 lg:-mx-8"
-          style={{ height: "64px" }}
-        >
-          <nav className="flex items-stretch h-full overflow-x-auto">
-            {[
-              { id: "All", label: "All" },
-              { id: "Leads", label: "Leads" },
-              { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
-              { id: "Customers", label: "Customers" },
-              { id: "Hotlist", label: "Hotlist" },
-            ].map(({ id, label }) => (
-              <button
-                key={id}
-                onClick={() => handleTabChange(id)}
-                className="flex items-center justify-center px-4 h-full whitespace-nowrap"
-                style={{
-                  fontFamily: "Inter",
-                  fontWeight: 600,
-                  fontSize: "14px",
-                  letterSpacing: "-0.04em",
-                  color: activeTab === id ? "#0085FF" : "#44444A",
-                  borderBottom: activeTab === id ? "3px solid #0085FF" : "3px solid transparent",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-
-          {activeTab !== "Hotlist" && (
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <div className="relative w-[416px] max-w-full">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 opacity-50" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full h-11 pl-10 pr-4 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF] transition-colors font-inter"
-                  placeholder="Search by contact by name, company, or status..."
-                />
-              </div>
-
-              <button
-                onClick={() => setShowAdvancedFilters(true)}
-                className="relative flex items-center justify-center w-11 h-11 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
-                title="Filters"
-              >
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M1.66667 2.91667C1.66667 2.22631 2.22631 1.66667 2.91667 1.66667C3.60702 1.66667 4.16667 2.22631 4.16667 2.91667C4.16667 3.60703 3.60702 4.16667 2.91667 4.16667C2.22631 4.16667 1.66667 3.60703 1.66667 2.91667ZM2.91667 0C1.30583 0 0 1.30583 0 2.91667C0 4.5275 1.30583 5.83333 2.91667 5.83333C4.5275 5.83333 5.83333 4.5275 5.83333 2.91667C5.83333 1.30583 4.5275 0 2.91667 0ZM7.5 3.75H14.1667V2.08333H7.5V3.75ZM10.8333 11.25C10.8333 10.5597 11.393 10 12.0833 10C12.7737 10 13.3333 10.5597 13.3333 11.25C13.3333 11.9403 12.7737 12.5 12.0833 12.5C11.393 12.5 10.8333 11.9403 10.8333 11.25ZM12.0833 8.33333C10.4725 8.33333 9.16667 9.63917 9.16667 11.25C9.16667 12.8608 10.4725 14.1667 12.0833 14.1667C13.6942 14.1667 15 12.8608 15 11.25C15 9.63917 13.6942 8.33333 12.0833 8.33333ZM0.833333 10.4167V12.0833H7.5V10.4167H0.833333Z" fill="#1F2937" />
-                </svg>
-                {activeFilters.length > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                    {activeFilters.length}
-                  </span>
-                )}
-              </button>
-
-              <div className="flex items-center gap-1.5 bg-[#F1F1F5] rounded-full p-1 flex-shrink-0">
-                <button
-                  onClick={() => setShowKanban(false)}
-                  className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors ${!showKanban ? "bg-white text-[#0085FF] shadow-[0_0_6px_rgba(0,0,0,0.1)]" : "text-[#525252]"
-                    }`}
-                  title="List View"
-                >
-                  <List className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setShowKanban(true)}
-                  className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showKanban ? "bg-white text-[#0085FF] shadow-[0_0_6px_rgba(0,0,0,0.1)]" : "text-[#525252]"
-                    }`}
-                  title="Kanban View"
-                >
-                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={showKanban ? "#0085FF" : "#525252"} />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
+      <div className="bg-white overflow-visible">
         {/* Content Area */}
         {showKanban ? (
           <div className="flex gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-6 mt-6 mb-2 overflow-x-auto">
@@ -2547,7 +2519,9 @@ function Contacts() {
             })}
           </div>
         ) : activeTab === "Hotlist" ? (
-          <ContactFolder />
+          <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 mt-6">
+            <ContactFolder />
+          </div>
         ) : (
           <>
             {/* Active Filters Display */}
