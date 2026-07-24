@@ -445,14 +445,6 @@ export default function CompanyNotesTab({ showStats = true }) {
           <SlidersIcon size={16} />
           Filter
         </button>
-        <button
-          onClick={() => setIsEditorOpen(true)}
-          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
-          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
-          title="Add Note"
-        >
-          <Plus size={20} />
-        </button>
       </div>
 
       {/* Notes list or empty state */}

@@ -374,14 +374,6 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
             <ListViewIcon size={15} />
           </button>
         </div>
-        <button
-          onClick={() => setShowMeetingForm(true)}
-          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
-          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
-          title="Add Meeting"
-        >
-          <Plus size={20} />
-        </button>
       </div>
 
       {/* Meeting list or empty state */}

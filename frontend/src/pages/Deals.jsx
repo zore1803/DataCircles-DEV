@@ -622,6 +622,8 @@ function Deals() {
   const exportButtonRef = useRef(null);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
 
   // Add these states at the top of your Deals component
   const [selectionMode, setSelectionMode] = useState(false);
@@ -2010,15 +2012,29 @@ function Deals() {
         </div>
 
         <div className="relative flex-1 flex items-center justify-end">
-          <div className="relative w-[416px] max-w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <div
+            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full`}
+          >
+            <Search
+              strokeWidth={2.5}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+              onClick={() => {
+                setIsSearchExpanded(true);
+                searchInputRef.current?.focus();
+              }}
+            />
             <input
+              ref={searchInputRef}
               type="text"
               value={filters.searchTerm}
               onChange={(e) =>
                 setFilters({ ...filters, searchTerm: e.target.value })
               }
-              className="w-full h-10 pl-9 pr-4 border border-[#E1E4EA] rounded-full text-sm focus:outline-none focus:border-[#0085FF] transition-colors font-inter bg-white"
+              onFocus={() => setIsSearchExpanded(true)}
+              onBlur={() => {
+                if (!filters.searchTerm) setIsSearchExpanded(false);
+              }}
+              className={`w-full h-full pl-9 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
               placeholder="Search deals by title, company, or status..."
             />
           </div>

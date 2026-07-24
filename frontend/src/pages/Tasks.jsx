@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo } from "react";
+﻿import React, { useEffect, useState, useMemo, useRef } from "react";
 import API from "../services/api";
 import TaskForm from "../components/Task/TaskForm";
 import AdminMeetingForm from "../components/admin/AdminMeetingForm";
@@ -386,6 +386,8 @@ function Tasks() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
   const [filterStatus, setFilterStatus] = useState("");
   const [debouncedFilterStatus, setDebouncedFilterStatus] = useState("");
 
@@ -2028,23 +2030,37 @@ function Tasks() {
 
         <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
           <div
-            className="flex flex-row items-center flex-shrink-0"
+            className="relative flex flex-row items-center flex-shrink-0 transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:hover:bg-white"
             style={{
               boxSizing: "border-box",
               padding: "12px 14px",
               gap: 10,
-              width: 416,
+              width: isSearchExpanded ? 416 : 44,
               height: 44,
-              border: "1px solid rgba(31, 41, 55, 0.1)",
+              border: `1px solid ${isSearchExpanded ? "#0085FF" : "rgba(31, 41, 55, 0.1)"}`,
               borderRadius: 95,
+              background: "#fff",
             }}
           >
-            <Search className="w-5 h-5 flex-shrink-0" style={{ color: "#1F2937", opacity: 0.5 }} />
+            <Search
+              strokeWidth={2.5}
+              className="w-5 h-5 flex-shrink-0 cursor-pointer"
+              style={{ color: "#1F2937" }}
+              onClick={() => {
+                setIsSearchExpanded(true);
+                searchInputRef.current?.focus();
+              }}
+            />
             <input
+              ref={searchInputRef}
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1 bg-transparent focus:outline-none"
+              onFocus={() => setIsSearchExpanded(true)}
+              onBlur={() => {
+                if (!searchTerm) setIsSearchExpanded(false);
+              }}
+              className={`flex-1 bg-transparent focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
               style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 14, lineHeight: "20px", color: "#1F2937" }}
               placeholder={
                 activeTab === "tasks"

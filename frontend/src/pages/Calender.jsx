@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import API from "../services/api";
 import AdminMeetingForm from "../components/admin/AdminMeetingForm";
 import AdminTaskForm from "../components/admin/AdminTaskForm";
@@ -299,6 +299,8 @@ const AdminCalendar = () => {
 
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState("");
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
   const [filters, setFilters] = useState({
     meetings: true,
     tasks: true,
@@ -555,32 +557,48 @@ const AdminCalendar = () => {
           style={{ gap: 12, height: 44 }}
         >
           <div
-            className="box-border flex flex-row items-center flex-shrink"
+            className="relative box-border flex flex-row items-center flex-shrink transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:hover:bg-white"
             style={{
               padding: "12px 14px",
               gap: 10,
-              width: 416,
+              width: isSearchExpanded ? 416 : 44,
               maxWidth: "40vw",
-              minWidth: 120,
+              minWidth: isSearchExpanded ? 120 : 44,
               height: 44,
-              border: "1px solid rgba(31, 41, 55, 0.1)",
+              border: `1px solid ${isSearchExpanded ? "#0085FF" : "rgba(31, 41, 55, 0.1)"}`,
               borderRadius: 95,
+              background: "#fff",
             }}
           >
-            <Search size={20} style={{ color: "#1F2937", opacity: 0.5 }} />
-            <span
-              className="truncate"
+            <Search
+              size={20}
+              strokeWidth={2.5}
+              className="flex-shrink-0 cursor-pointer"
+              style={{ color: "#1F2937" }}
+              onClick={() => {
+                setIsSearchExpanded(true);
+                searchInputRef.current?.focus();
+              }}
+            />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onFocus={() => setIsSearchExpanded(true)}
+              onBlur={() => {
+                if (!searchTerm) setIsSearchExpanded(false);
+              }}
+              className={`flex-1 bg-transparent focus:outline-none truncate transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
               style={{
                 fontFamily: "Inter",
                 fontWeight: 400,
                 fontSize: 14,
                 lineHeight: "20px",
                 color: "#1F2937",
-                opacity: 0.5,
               }}
-            >
-              Search by events by name, task, or meeting...
-            </span>
+              placeholder="Search by events by name, task, or meeting..."
+            />
           </div>
 
           <button
