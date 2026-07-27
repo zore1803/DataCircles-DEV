@@ -17,9 +17,10 @@ const crypto = require("crypto");
 const mongoose = require("mongoose");
 const sendGridMail = require("../utils/sendGridMail.js");
 const bcrypt = require("bcrypt");
-const { getSeatStatus, calculateAddonProration } = require('../utils/addonManagement');
-const { computeGST } = require('../utils/pricingEngine');
+const { getSeatStatus } = require('../utils/addonManagement');
+const { calculateInvoice } = require('../utils/invoiceEngine');
 const PlanAddon = require("../models/PlanAddon");
+const { startAddonPurchase } = require('../utils/addonPurchaseLifecycle');
 
 // TempOTP Model Definition
 const TempOTP = mongoose.model(
@@ -401,6 +402,34 @@ exports.updateProfile = async (req, res) => {
   try {
     const user = req.user;
 
+    // Billing (Charge-at-Will) requires both email and phone on the customer
+    // record, but signup only ever collects one of the two — this lets the
+    // subscription page's "Complete Billing Profile" flow fill in whichever
+    // one is missing, without touching signup/auth. Only ever fills a blank
+    // field; never overwrites an existing email/phone.
+    const { email, phone } = req.body;
+    if (email && !user.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "Please enter a valid email address" });
+      }
+      const existing = await User.findOne({ email });
+      if (existing) {
+        return res.status(400).json({ error: "This email is already in use." });
+      }
+      user.email = email;
+    }
+    if (phone && !user.phone) {
+      if (!/^\d{10}$/.test(phone)) {
+        return res.status(400).json({ error: "Please enter a valid 10-digit phone number" });
+      }
+      const existing = await User.findOne({ phone });
+      if (existing) {
+        return res.status(400).json({ error: "This phone number is already in use." });
+      }
+      user.phone = phone;
+    }
+
     // If a file was uploaded via multer-s3
     if (req.file && req.fileLocation) {
       // Delete old profile picture from S3 if it exists
@@ -560,6 +589,12 @@ exports.inviteUser = async (req, res) => {
     const { plan, subscription: seatSubscription } = seatStatus;
     const billingCycle = seatSubscription.billingCycle;
 
+    if (seatSubscription.cancelAtPeriodEnd) {
+      return res.status(400).json({
+        message: "Cannot purchase add-ons when subscription is pending cancellation.",
+      });
+    }
+
     if (seatSubscription.pendingAddonAddition?.orderId) {
       return res.status(400).json({
         message: "A previous seat purchase is still pending payment. Complete or cancel it first.",
@@ -579,36 +614,20 @@ exports.inviteUser = async (req, res) => {
       });
     }
 
-    const prorationAmount = calculateAddonProration(
-      1,
-      pricePerUnit,
-      seatSubscription.currentPeriodStart,
-      seatSubscription.currentPeriodEnd
-    );
-    const prorationAmountWithGST = prorationAmount + computeGST(prorationAmount);
-
-    const razorpayOrder = await razorpay.orders.create({
-      amount: prorationAmountWithGST * 100,
-      currency: 'INR',
-      receipt: `seat_${seatSubscription._id.toString().slice(-8)}_${Date.now().toString().slice(-6)}`,
-      notes: {
-        organization_id: req.user.organization.toString(),
-        subscription_id: seatSubscription._id.toString(),
-        addon_key: 'extra_seat',
-        quantity: '1',
-        price_per_unit: pricePerUnit.toString(),
-        type: 'addon_purchase',
+    const result = await startAddonPurchase({
+      user: req.user,
+      organizationId: req.user.organization,
+      subscription: seatSubscription,
+      plan,
+      catalogEntry: {
+        ...catalogEntry,
+        displayName: catalogEntry.displayName || 'Extra seat',
       },
-    });
-
-    seatSubscription.pendingAddonAddition = {
       addonKey: 'extra_seat',
       quantity: 1,
-      pricePerUnit,
-      prorationAmount: prorationAmountWithGST,
-      orderId: razorpayOrder.id,
-      createdAt: new Date(),
-    };
+    });
+
+    seatSubscription.pendingAddonAddition = result.subscription.pendingAddonAddition;
     await seatSubscription.save();
 
     // Record intent for this invite — finalized (email sent) only when the
@@ -633,11 +652,17 @@ exports.inviteUser = async (req, res) => {
     });
 
     return res.status(402).json({
-      message: `No free seat available. An extra seat costs ₹${prorationAmount} (pro-rated for the remaining cycle).`,
+      message: `No free seat available. An extra seat costs ₹${result.discountedProrationAmount} (pro-rated for the remaining cycle).`,
+      // Split by source — see subscriptionController.js's initiateAddonPurchase
+      // for why (this field used to silently mean "combined" under a
+      // referral-only name).
+      couponDiscountApplied: result.couponDiscountAmount || undefined,
+      referralDiscountApplied: result.referralDiscountAmount || undefined,
+      totalDiscountApplied: result.totalDiscountAmount || undefined,
       paymentDetails: {
         key: process.env.RAZORPAY_KEY_ID,
-        order_id: razorpayOrder.id,
-        amount: razorpayOrder.amount,
+        order_id: result.orderId,
+        amount: result.paymentDetails.amount,
         currency: 'INR',
         name: req.user.name,
         description: `Extra seat — pro-rated for remaining cycle`,
