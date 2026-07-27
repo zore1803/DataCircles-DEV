@@ -980,8 +980,8 @@ export default function CompanyDealsKanban({
           >
             <div className="w-full overflow-x-auto overflow-y-auto" style={{ maxHeight: "596px" }}>
             <table
-              className="text-sm text-left border-collapse"
-              style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%" }}
+              className="text-sm text-left border-separate"
+              style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%", borderSpacing: 0 }}
             >
               <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
                 <tr>
