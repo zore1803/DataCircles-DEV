@@ -46,18 +46,18 @@ export const getBadgeColor = (column) => {
         case "Unqualified":
         case "Lost":
         case "Lost Lead":
-            return "bg-red-500";
+            return "bg-red-50 text-red-600";
         case "Contacted":
-            return "bg-amber-500";
+            return "bg-amber-50 text-amber-600";
         case "Interested":
         case "Qualified":
-            return "bg-blue-500";
+            return "bg-blue-50 text-blue-600";
         case "Won":
         case "Won Lead":
-            return "bg-green-500";
+            return "bg-green-50 text-green-600";
         case "Churned":
-            return "bg-gray-500";
+            return "bg-gray-100 text-gray-600";
         default:
-            return "bg-gray-500";
+            return "bg-gray-100 text-gray-600";
     }
 };
