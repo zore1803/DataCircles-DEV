@@ -20,13 +20,14 @@ const EMPTY_DRAFT = {
   usageLimits: { maxRedemptions: "", maxRedemptionsPerOrganization: "" },
 };
 
-// Only lifetime/until_cancelled are enforced today (see backend Coupon model
-// comment) — the others are shown so admins know what's coming, but selecting
-// them is blocked with an explanation rather than silently doing nothing.
+// lifetime/until_cancelled/first_payment are enforced today (see backend
+// Coupon model comment + utils/couponRenewalEligibility.js) — fixed_cycles/
+// until_date are shown so admins know what's coming, but selecting them is
+// blocked with an explanation rather than silently doing nothing.
 const DURATION_OPTIONS = [
   { value: "lifetime", label: "Lifetime", enabled: true },
   { value: "until_cancelled", label: "Until cancelled by Super Admin", enabled: true },
-  { value: "first_payment", label: "First payment only (not yet supported)", enabled: false },
+  { value: "first_payment", label: "First payment only", enabled: true },
   { value: "fixed_cycles", label: "Fixed number of billing cycles (not yet supported)", enabled: false },
   { value: "until_date", label: "Until a specific date (not yet supported)", enabled: false },
 ];
@@ -517,9 +518,10 @@ const CouponManagement = () => {
               </Field>
 
               {/* Duration — how long the discount stays in effect on a
-                  subscription once applied. Only Lifetime/Until cancelled are
-                  actually enforced; the others exist so admins can see what's
-                  planned, but are blocked with an explanation if selected. */}
+                  subscription once applied. Lifetime/Until cancelled/First
+                  payment only are actually enforced; Fixed cycles/Until a
+                  date exist so admins can see what's planned, but are
+                  blocked with an explanation if selected. */}
               <Field label="Duration">
                 <select
                   value={draft.duration.type}
