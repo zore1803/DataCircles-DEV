@@ -98,6 +98,19 @@ import {
 import CompanyQuickView from "../components/company/CompanyQuickView";
 import AppToaster from "../components/AppToaster";
 
+// The app is rendered inside #root which carries a CSS `zoom` (0.75 on desktop).
+// getBoundingClientRect() returns UNSCALED layout coordinates, while portal overlays
+// mounted on document.body render in visual (un-zoomed) space and mouse clientX/Y are
+// visual too. So any rect-derived position/size fed to a body-portal must be multiplied
+// by this zoom factor to line up on screen.
+const getRootZoom = () => {
+  if (typeof window === "undefined") return 1;
+  const el = document.getElementById("root");
+  if (!el) return 1;
+  const z = parseFloat(getComputedStyle(el).zoom);
+  return z && !Number.isNaN(z) ? z : 1;
+};
+
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>.
@@ -342,8 +355,9 @@ function Companies() {
     const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
     const previewRows = (sortedCompanies || [])
       .map((c) => String(getFieldValue(c, colId) ?? "").trim() || "—");
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+    const z = getRootZoom();
+    const offsetX = e.clientX - rect.left * z;
+    const offsetY = e.clientY - rect.top * z;
 
     dragOverRef.current = null;
     setDraggedColKey(colId);
@@ -357,8 +371,8 @@ function Companies() {
       previewRows,
       offsetX,
       offsetY,
-      width: rect.width,
-      height: rect.height,
+      width: rect.width * z,
+      height: rect.height * z,
     });
 
     const positionGhost = (clientX, clientY) => {
@@ -594,7 +608,8 @@ function Companies() {
                       return;
                     }
                     const rect = e.currentTarget.getBoundingClientRect();
-                    setColumnMenuPos({ top: rect.bottom + 4, left: rect.right - 190 });
+                    const z = getRootZoom();
+                    setColumnMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
                     setOpenColumnMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -1341,7 +1356,7 @@ function Companies() {
               <option value={20}>20 per page</option>
               <option value={50}>50 per page</option>
               <option value={100}>100 per page</option>
-              <option value={500}>500 per page</option>
+              <option value={150}>150 per page</option>
             </select>
           </div>
 

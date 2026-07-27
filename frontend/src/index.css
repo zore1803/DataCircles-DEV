@@ -4,6 +4,17 @@
 /* Keep your existing CSS exactly as-is */
 @import "tailwindcss";
 
+/* Force a 75% zoom on desktop so the app always renders at the same
+   density regardless of the user's browser zoom. Scoped to >=1024px so
+   phones/tablets keep their native scale. Applied to #root (not body) so
+   that portal overlays mounted on document.body — drag ghost, column and
+   row-action menus — are NOT double-scaled and stay aligned to the cursor. */
+@media (min-width: 1024px) {
+  #root {
+    zoom: 0.75;
+  }
+}
+
 ::-webkit-scrollbar {
     display: none;
 }
