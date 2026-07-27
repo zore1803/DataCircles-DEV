@@ -432,8 +432,8 @@ const ModernKanbanColumn = ({
 
   return (
     <div
-      className="flex flex-col items-start flex-shrink-0 bg-white"
-      style={{ width: "340px", height: "510px", border: "1px solid #E7E7E9", borderRadius: "12px", overflow: "hidden" }}
+      className="dc-kanban-col flex flex-col items-start flex-shrink-0 bg-white"
+      style={{ width: "340px", border: "1px solid #E7E7E9", borderRadius: "12px", overflow: "hidden" }}
     >
       {/* Header */}
       <div
@@ -478,14 +478,10 @@ const ModernKanbanColumn = ({
 
       <div className="w-full flex-shrink-0" style={{ height: "1px", background: "#E7E7E9" }} />
 
-      {/* Body */}
-      <div
-        className="flex flex-col items-start w-full flex-1 overflow-y-auto"
-        style={{ padding: "20px", gap: "14px" }}
-      >
-        {/* Summary Card */}
+      {/* Summary Card - fixed / always visible */}
+      <div className="w-full flex-shrink-0" style={{ padding: "20px 20px 0" }}>
         <div
-          className="box-border flex flex-row justify-between items-center w-full flex-shrink-0"
+          className="box-border flex flex-row justify-between items-center w-full"
           style={{
             padding: "16px",
             gap: "10px",
@@ -515,30 +511,32 @@ const ModernKanbanColumn = ({
             {trendPct >= 0 ? "+" : ""}{trendPct}%
           </span>
         </div>
+      </div>
 
-        {/* Droppable Area */}
+      {/* Scrollable Deals Area */}
+      <div className="w-full flex-1 overflow-y-auto" style={{ padding: "14px 20px 20px" }}>
         <div
           ref={setNodeRef}
-          className="flex flex-col items-start w-full flex-1"
+          className="flex flex-col items-start w-full"
           style={{ gap: "14px" }}
         >
-        <SortableContext
-          id={status}
-          items={dealIds}
-          strategy={verticalListSortingStrategy}
-        >
-          {deals.map((deal) => (
-            <ModernDealCard
-              key={deal._id}
-              deal={deal}
-              onClick={handleEditDeal}
-              isStale={isStale}
-              colorTheme={colorTheme}
-            />
-          ))}
-        </SortableContext>
-        {/* Spacer for easier dropping at bottom */}
-        <div className="h-10 w-full" />
+          <SortableContext
+            id={status}
+            items={dealIds}
+            strategy={verticalListSortingStrategy}
+          >
+            {deals.map((deal) => (
+              <ModernDealCard
+                key={deal._id}
+                deal={deal}
+                onClick={handleEditDeal}
+                isStale={isStale}
+                colorTheme={colorTheme}
+              />
+            ))}
+          </SortableContext>
+          {/* Spacer for easier dropping at bottom */}
+          <div className="h-10 w-full" />
         </div>
       </div>
     </div>
@@ -1812,7 +1810,7 @@ function Deals() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className="fixed bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center z-20" style={{ top: 64, left: "var(--sidebar-width, 0px)", right: 0, bottom: 0 }}>
         <div className="flex flex-col items-center justify-center">
           <img
             src={logo}
@@ -2192,17 +2190,21 @@ function Deals() {
           </button>
 
           {/* List / Kanban Toggle */}
-          <div className="flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0">
+          <div className="relative flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
+            <span
+              className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+              style={{ left: showKanban ? 36 : 4 }}
+            />
             <button
               onClick={() => setShowKanban(false)}
-              className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
               title="List View"
             >
               <List className="w-4 h-4" />
             </button>
             <button
               onClick={() => setShowKanban(true)}
-              className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
               title="Kanban View"
             >
               <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">

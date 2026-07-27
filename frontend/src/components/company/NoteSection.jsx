@@ -186,7 +186,7 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-end z-[10001] p-4 animate-in fade-in duration-300">
-      <div className="bg-white rounded-[26px] w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 flex flex-col animate-in slide-in-from-right duration-300">
+      <div className="bg-white rounded-[26px] dc-panel-w max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 flex flex-col animate-in slide-in-from-right duration-300">
         {/* Header */}
         <div
           className="flex flex-row justify-between items-center flex-shrink-0"

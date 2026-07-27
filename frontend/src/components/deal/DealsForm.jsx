@@ -525,14 +525,14 @@ const DealsForm = ({
 
       {/* Backdrop */}
       <div
-        className="fixed top-0 left-0 w-screen h-screen bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
+        className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
         style={{ opacity: isOpen ? 1 : 0 }}
         onClick={handleClose}
       />
 
       {/* Modal Container */}
       <div
-        className={`fixed top-0 right-0 h-screen z-[10001] w-full md:w-[600px] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-full"
+ className={`fixed top-0 right-0 h-screen z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-full"
           }`}
       >
         <form onSubmit={handleSubmit} className="p-8">

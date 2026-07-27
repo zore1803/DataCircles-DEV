@@ -523,17 +523,21 @@ export default function CompanyDealsKanban({
             </span>
           )}
         </button>
-        <div className="flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0" style={{ height: "44px" }}>
+        <div className="relative flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0 overflow-hidden" style={{ height: "44px" }}>
+          <span
+            className="absolute top-1 w-9 h-9 rounded-full bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
+            style={{ left: viewMode === "list" ? 46 : 4 }}
+          />
           <button
             onClick={() => setViewMode("board")}
-            className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "board" ? "bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.1)] text-blue-600" : "text-gray-500"
+            className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "board" ? "text-blue-600" : "text-gray-500"
               }`}
           >
             <LayoutGrid size={16} />
           </button>
           <button
             onClick={() => setViewMode("list")}
-            className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "list" ? "bg-white shadow-sm text-blue-600" : "text-gray-500"
+            className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "list" ? "text-blue-600" : "text-gray-500"
               }`}
           >
             <ListIcon size={16} />

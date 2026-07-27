@@ -411,7 +411,7 @@ const AdminTaskForm = ({
         onClick={onClose}
       />
       <div
-        className={`fixed inset-y-0 right-0 w-full sm:w-[600px] lg:w-[700px] z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out ${
+ className={`fixed inset-y-0 right-0 dc-panel-w z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out ${
           isSliding ? "translate-x-0" : "translate-x-full"
         }`}
       >

@@ -380,7 +380,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
       onClick={onClose}
     >
       <div
-        className="fixed inset-y-0 right-0 w-full sm:w-[700px] lg:w-[800px] z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out overflow-hidden"
+ className="fixed inset-y-0 right-0 dc-panel-w z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out overflow-hidden"
         style={{ transform: isSliding ? 'translateX(0)' : 'translateX(100%)' }}
         onClick={(e) => e.stopPropagation()}
       >

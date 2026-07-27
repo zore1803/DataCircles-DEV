@@ -2424,10 +2424,14 @@ function Contacts() {
                 )}
               </button>
 
-              <div className="flex items-center gap-1.5 bg-[#F1F1F5] rounded-full p-1 flex-shrink-0">
+              <div className="relative flex items-center gap-1.5 bg-[#F1F1F5] rounded-full p-1 flex-shrink-0 overflow-hidden">
+                <span
+                  className="absolute top-1 w-9 h-9 rounded-full bg-white shadow-[0_0_6px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
+                  style={{ left: showKanban ? 46 : 4 }}
+                />
                 <button
                   onClick={() => setShowKanban(false)}
-                  className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors ${!showKanban ? "bg-white text-[#0085FF] shadow-[0_0_6px_rgba(0,0,0,0.1)]" : "text-[#525252]"
+                  className={`relative z-10 flex items-center justify-center w-9 h-9 rounded-full transition-colors ${!showKanban ? "text-[#0085FF]" : "text-[#525252]"
                     }`}
                   title="List View"
                 >
@@ -2435,7 +2439,7 @@ function Contacts() {
                 </button>
                 <button
                   onClick={() => setShowKanban(true)}
-                  className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showKanban ? "bg-white text-[#0085FF] shadow-[0_0_6px_rgba(0,0,0,0.1)]" : "text-[#525252]"
+                  className={`relative z-10 flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showKanban ? "text-[#0085FF]" : "text-[#525252]"
                     }`}
                   title="Kanban View"
                 >

@@ -185,7 +185,7 @@ export default function AdvancedFilterPanel({
         onClick={onClose}
       />
 
-      <div className="fixed right-0 top-0 h-full w-[450px] bg-white shadow-2xl z-50 flex flex-col animate-slide-in-right">
+      <div className="fixed right-0 top-0 h-full dc-panel-w bg-white shadow-2xl z-50 flex flex-col animate-slide-in-right">
         <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50/50">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg">

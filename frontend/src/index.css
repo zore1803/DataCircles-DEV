@@ -12,6 +12,49 @@
 @media (min-width: 1024px) {
   #root {
     zoom: 0.75;
+    /* CSS `zoom` makes #root the containing block for fixed descendants, so
+       drawers/backdrops/loaders are sized to #root, not the viewport. Force
+       #root to always be >= one visual viewport tall (100vh / 0.75) so those
+       full-screen overlays reach the bottom of the screen on short pages. */
+    min-height: 133.334vh;
+  }
+}
+
+/* Standard width for right-anchored slide-in panels/cards across the app.
+   Full width on small screens; one third of the screen on desktop (>=1024px,
+   matching Tailwind's lg breakpoint). Applied via the `dc-panel-w` class so
+   the standard lives in one place. */
+/* Full-viewport loader height. Under the desktop #root zoom (0.75), a plain
+   100vh box only fills 75% of the real screen, leaving a bottom gutter — so
+   compensate by dividing by the zoom factor at >=1024px. */
+.dc-loader-fill {
+  min-height: 100vh;
+}
+@media (min-width: 1024px) {
+  .dc-loader-fill {
+    min-height: 133.34vh;
+  }
+}
+
+/* Kanban column height: fill from its top down to the bottom of the page.
+   Desktop compensates for the #root 0.75 zoom (100vh renders at 75%). */
+.dc-kanban-col {
+  height: 520px;
+}
+@media (min-width: 1024px) {
+  .dc-kanban-col {
+    height: calc(133.333vh - 22rem);
+  }
+}
+
+.dc-panel-w {
+  width: 100%;
+}
+@media (min-width: 1024px) {
+  .dc-panel-w {
+    width: 33.333vw;
+    min-width: 440px;
+    max-width: 100%;
   }
 }
 

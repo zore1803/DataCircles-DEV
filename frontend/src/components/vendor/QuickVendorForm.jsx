@@ -503,7 +503,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
       />
 
       <div
-        className={`fixed inset-y-0 right-0 z-[10002] w-full sm:w-[500px] md:w-[700px] max-w-full bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-full"
+ className={`fixed inset-y-0 right-0 z-[10002] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-full"
           }`}
       >
         <form onSubmit={handleSubmit} className="p-8">

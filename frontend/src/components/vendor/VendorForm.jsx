@@ -554,7 +554,7 @@ const VendorForm = ({
 
       {/* Sliding Side Panel */}
       <div
-        className={`fixed inset-y-0 right-0 z-[10001] w-full md:w-[700px] bg-white shadow-2xl transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"
+ className={`fixed inset-y-0 right-0 z-[10001] dc-panel-w bg-white shadow-2xl transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"
           }`}
       >
         <form onSubmit={handleSubmit} className="flex flex-col h-full">

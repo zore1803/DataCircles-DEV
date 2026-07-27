@@ -471,13 +471,17 @@ export default function CompanyNotesTab({ showStats = true }) {
             style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
           />
         </div>
-        <div className="flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0" style={{ height: "44px" }}>
+        <div className="relative flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0 overflow-hidden" style={{ height: "44px" }}>
+          <span
+            className="absolute top-1 w-9 h-9 rounded-full bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
+            style={{ left: viewMode === "list" ? 46 : 4 }}
+          />
           <button
             onClick={() => setViewMode("grid")}
             title="Grid view"
-            className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
+            className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
               viewMode === "grid"
-                ? "bg-white text-[#0085FF] shadow-[0px_4px_4px_rgba(0,0,0,0.1)]"
+                ? "text-[#0085FF]"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
@@ -486,9 +490,9 @@ export default function CompanyNotesTab({ showStats = true }) {
           <button
             onClick={() => setViewMode("list")}
             title="List view"
-            className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
+            className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
               viewMode === "list"
-                ? "bg-white text-[#0085FF] shadow-sm"
+                ? "text-[#0085FF]"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
