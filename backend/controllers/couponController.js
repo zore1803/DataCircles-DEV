@@ -71,18 +71,24 @@ function validateRules(rules) {
   return null;
 }
 
-// Only 'lifetime' and 'until_cancelled' are actually enforceable today — the
-// discount is baked into a fixed-price recurring Razorpay Plan at signup and
-// never revisited. 'first_payment'/'fixed_cycles'/'until_date' would need an
-// auto-revert-after-N-cycles mechanism that doesn't exist yet (see the note
-// on Coupon.duration in the model). Rejecting these explicitly at creation
-// time is safer than silently treating them as 'lifetime' when the chosen
-// label promises something the system doesn't actually do.
-const ENFORCEABLE_DURATIONS = ['lifetime', 'until_cancelled'];
+// 'lifetime'/'until_cancelled' apply indefinitely — no revisiting needed
+// beyond the Renewal Engine's own R7 gate (utils/couponRenewalEligibility.js),
+// which reapplies the snapshot's discountAmount every renewal. 'first_payment'
+// is also now enforceable: R7's eligibility gate correctly excludes it from
+// every renewal (it only ever applies to the signup/first-purchase invoice,
+// where discountAmount is priced once via calculateInvoice() and never
+// revisited past that). 'fixed_cycles'/'until_date' remain rejected — both
+// need persistent state that doesn't exist yet (a cycles-consumed counter;
+// an expiry field on the appliedCoupon snapshot itself) — see
+// utils/couponRenewalEligibility.js's file header for the full trace.
+// Rejecting these explicitly at creation time is safer than silently
+// treating them as 'lifetime' when the chosen label promises something the
+// system doesn't actually do.
+const ENFORCEABLE_DURATIONS = ['lifetime', 'until_cancelled', 'first_payment'];
 function validateDuration(duration) {
   const type = duration?.type || 'lifetime';
   if (!ENFORCEABLE_DURATIONS.includes(type)) {
-    return `Duration "${type}" isn't supported yet — the system can't auto-revert a subscription's price after a set number of cycles or a specific date. Use "Lifetime" or "Until cancelled" for now.`;
+    return `Duration "${type}" isn't supported yet — the system can't auto-revert a subscription's price after a set number of cycles or a specific date. Use "Lifetime", "Until cancelled", or "First payment only" for now.`;
   }
   return null;
 }
