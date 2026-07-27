@@ -34,6 +34,8 @@ const getAllCompanies = async (req, res) => {
         { leadSource: { $regex: search, $options: "i" } },
         { "additionalFields.value": { $regex: search, $options: "i" } },
       ];
+      if ("accepted".includes(search.toLowerCase())) query.$or.push({ documentSigned: true });
+      if ("pending".includes(search.toLowerCase())) query.$or.push({ documentSigned: false });
     }
 
     const companies = await Company.find(query)
@@ -70,8 +72,11 @@ const getAllCompaniesPaginated = async (req, res) => {
         { gstin: { $regex: search, $options: "i" } },
         { address: { $regex: search, $options: "i" } },
         { website: { $regex: search, $options: "i" } },
+        { leadSource: { $regex: search, $options: "i" } },
         { "additionalFields.value": { $regex: search, $options: "i" } },
       ];
+      if ("accepted".includes(search.toLowerCase())) query.$or.push({ documentSigned: true });
+      if ("pending".includes(search.toLowerCase())) query.$or.push({ documentSigned: false });
     }
 
     if (industry) {

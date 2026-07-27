@@ -259,14 +259,7 @@ function BrandSettings() {
 
   if (loading && !form.companyName) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">
-            Loading Brand settings...
-          </p>
-        </div>
-      </div>
+      <PageSkeleton variant="generic" />
     );
   }
 
@@ -722,3 +715,4 @@ function BrandSettings() {
 }
 
 export default BrandSettings;
+import PageSkeleton from "../common/PageSkeleton";

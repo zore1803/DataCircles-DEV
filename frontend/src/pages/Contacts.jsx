@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
+import TableSkeletonRows from "../components/common/TableSkeletonRows";
+import useMinDelay from "../hooks/useMinDelay";
 import { createPortal } from "react-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
@@ -110,6 +112,20 @@ const getRootZoom = () => {
   return z && !Number.isNaN(z) ? z : 1;
 };
 
+// Effective zoom applied to an element's ancestor chain. Used to correct
+// coordinates SET on a document.body portal (the drag-ghost), which is painted
+// inside the dynamic <html> zoom, back into the visual space of clientX/getBoundingClientRect.
+const getAncestorZoom = (el) => {
+  let z = 1;
+  let node = el;
+  while (node && node.nodeType === 1) {
+    const cz = parseFloat(getComputedStyle(node).zoom);
+    if (cz && !Number.isNaN(cz)) z *= cz;
+    node = node.parentElement;
+  }
+  return z || 1;
+};
+
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>.
@@ -152,6 +168,7 @@ function Contacts() {
   });
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(false);
+  const showLoadingSkeleton = useMinDelay(loading && contacts.length === 0, 300);
   const [contactFieldList, setContactFieldList] = useState([]);
   const [additionalValues, setAdditionalValues] = useState({});
   const [permission, setPermission] = useState("");
@@ -279,9 +296,12 @@ function Contacts() {
     const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
     const previewRows = (sortedContacts || [])
       .map((c) => String(getFieldValue(c, colId) ?? "").trim() || "—");
-    const z = getRootZoom();
-    const offsetX = e.clientX - rect.left * z;
-    const offsetY = e.clientY - rect.top * z;
+    // Grab offset is measured in visual space (rect + clientX both visual) — no
+    // correction. `zGhost` scales the values we SET on the body-portal ghost so
+    // they map back to visual space (the ghost is painted inside the <html> zoom).
+    const zGhost = getAncestorZoom(document.body);
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
 
     dragOverRef.current = null;
     setDraggedColKey(colId);
@@ -292,17 +312,18 @@ function Contacts() {
       previewRows,
       offsetX,
       offsetY,
-      width: rect.width * z,
-      height: rect.height * z,
+      width: rect.width / zGhost,
+      height: rect.height / zGhost,
     });
 
     const positionGhost = (clientX, clientY) => {
       const el = ghostElRef.current;
       if (!el) return;
-      const top = clientY - offsetY;
-      el.style.top = `${top}px`;
-      el.style.left = `${clientX - offsetX}px`;
-      el.style.maxHeight = `${Math.max(100, window.innerHeight - top - 72)}px`;
+      const visualTop = clientY - offsetY;
+      const visualLeft = clientX - offsetX;
+      el.style.top = `${visualTop / zGhost}px`;
+      el.style.left = `${visualLeft / zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
     };
     requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
 
@@ -972,7 +993,7 @@ function Contacts() {
                       contact.stageStatus,
                     )}`}
                   >
-                    {contact.stageStatus || "New"}
+                    <HighlightText text={contact.stageStatus || "New"} query={searchTerm} />
                   </span>
                 </div>
               );
@@ -2921,12 +2942,8 @@ function Contacts() {
                 </thead>
 
                 <tbody className="bg-white">
-                  {loading && sortedContacts.length === 0 ? (
-                    <tr>
-                      <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center">
-                        <p>Loading Contacts...</p>
-                      </td>
-                    </tr>
+                  {showLoadingSkeleton ? (
+                    <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox />
                   ) : sortedContacts.length === 0 ? (
                     <tr>
                       <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">

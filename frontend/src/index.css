@@ -37,13 +37,19 @@
 }
 
 /* Kanban column height: fill from its top down to the bottom of the page.
-   Desktop compensates for the #root 0.75 zoom (100vh renders at 75%). */
+   `vh` does NOT scale with CSS `zoom` (it stays relative to the physical
+   viewport), so we compensate for both zoom layers purely in CSS: the fixed
+   #root zoom (0.75) and the dynamic <html> zoom applied in App.jsx, exposed
+   live as --dynamic-zoom. Pure calc() reacts instantly to that variable —
+   no JS measurement, no timing race with when the zoom gets applied.
+   --kanban-top-offset (set by each caller) accounts for the header content
+   sitting above the kanban row on that particular page. */
 .dc-kanban-col {
   height: 520px;
 }
 @media (min-width: 1024px) {
   .dc-kanban-col {
-    height: calc(133.333vh - 22rem);
+    height: calc((100vh - var(--kanban-top-offset, 20rem)) / (var(--dynamic-zoom, 1) * 0.75));
   }
 }
 

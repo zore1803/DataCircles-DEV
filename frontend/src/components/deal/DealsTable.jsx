@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
 import {
   Edit2,
@@ -10,11 +11,17 @@ import {
   Calendar,
   Building2,
   ChevronsUpDown,
+  ChevronUp,
+  ChevronDown,
   Eye,
   Pin,
   PinOff,
+  EyeOff,
+  MoreVertical,
 } from "lucide-react";
 import CustomDropdown from "../common/CustomDropdown";
+import TableSkeletonRows from "../common/TableSkeletonRows";
+import useMinDelay from "../../hooks/useMinDelay";
 
 // TanStack Table
 import {
@@ -23,6 +30,55 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
+
+// The app renders inside #root which carries a CSS `zoom` (0.75 on desktop).
+// getBoundingClientRect() returns UNSCALED layout coordinates while portal overlays on
+// document.body render in visual space, so rect-derived positions must be multiplied by
+// this zoom factor to line up on screen.
+const getRootZoom = () => {
+  if (typeof window === "undefined") return 1;
+  const el = document.getElementById("root");
+  if (!el) return 1;
+  const z = parseFloat(getComputedStyle(el).zoom);
+  return z && !Number.isNaN(z) ? z : 1;
+};
+
+// Same ancestor-zoom walk as the shared DataTable component's drag-ghost, so the
+// portal-mounted ghost tracks the cursor 1:1 regardless of window size / zoom.
+const getAncestorZoom = (el) => {
+  let z = 1;
+  let node = el;
+  while (node && node.nodeType === 1) {
+    const cz = parseFloat(getComputedStyle(node).zoom);
+    if (cz && !Number.isNaN(cz)) z *= cz;
+    node = node.parentElement;
+  }
+  return z || 1;
+};
+
+const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>.
+const HighlightText = ({ text, query }) => {
+  const str = text === null || text === undefined ? "" : String(text);
+  const q = (query || "").trim();
+  if (!q) return <>{str}</>;
+
+  const parts = str.split(new RegExp(`(${escapeRegExp(q)})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="bg-yellow-200 text-inherit rounded-sm px-0.5">
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+};
 
 export default function DealsTable({
   sortedTableDeals = [],
@@ -43,19 +99,276 @@ export default function DealsTable({
   handleSort,
   selectionMode = false,
   loading = false,
+  skeletonRows = 12,
   setQuickViewDealId,
-  starredDeals = [], // Added
+  starredDeals = [],
   toggleStar,
+  searchTerm = "",
 }) {
   const [columnSizing, setColumnSizing] = useState({});
 
-  const [pinnedColumn, setPinnedColumn] = useState(null);
+  // Multi-column pinning, independent left/right sides: [{ key, side }]
+  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const [hiddenColumns, setHiddenColumns] = useState([]);
 
-  const togglePinColumn = (colKey) => {
-    setPinnedColumn((prev) => (prev === colKey ? null : colKey));
+  const pinColumnToSide = (colKey, side) => {
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colKey), { key: colKey, side }]);
+  };
+  const unpinColumn = (colKey) => {
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colKey));
+  };
+  const getColumnPinSide = (colKey) => pinnedColumns.find((p) => p.key === colKey)?.side || null;
+  const hideColumn = (colKey) => setHiddenColumns((prev) => [...prev, colKey]);
+
+  // Drag-to-reorder columns — same portal drag-ghost approach as the shared
+  // DataTable component (used by the Dashboard "Top Invoices" table) for parity.
+  const [columnOrder, setColumnOrder] = useState([]);
+  const [draggedColKey, setDraggedColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
+  const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
+
+  const reorderColumns = (draggedKey, targetKey, fallbackOrder) => {
+    if (!draggedKey || !targetKey || draggedKey === targetKey) return;
+    const base = columnOrder.length ? columnOrder : fallbackOrder;
+    const order = base.includes(draggedKey) ? [...base] : [...base, draggedKey];
+    const from = order.indexOf(draggedKey);
+    const to = order.indexOf(targetKey);
+    if (from === -1 || to === -1) return;
+    order.splice(from, 1);
+    order.splice(to, 0, draggedKey);
+    setColumnOrder(order);
   };
 
+  const COLUMN_LABELS = {
+    dealId: "Deal ID",
+    title: "Deal Name",
+    company: "Company",
+    contact: "Contact",
+    status: "Stage",
+    amount: "Amount",
+    dueDate: "Due Date",
+  };
+
+  const getColumnPreviewValue = (deal, colId) => {
+    switch (colId) {
+      case "dealId":
+        return `DL-${deal._id.slice(-5).toUpperCase()}`;
+      case "title":
+        return deal.title || "-";
+      case "company":
+        return deal.company?.name || "-";
+      case "contact":
+        return deal.contact?.name || "-";
+      case "status":
+        return deal.status || "-";
+      case "amount":
+        return `₹${formatNumberToIndian(parseInt(deal.amount || 0))}`;
+      case "dueDate": {
+        const dueDateField = deal.additionalFields?.find((f) => f.key === "Expected Close Date");
+        return dueDateField?.value
+          ? new Date(dueDateField.value).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })
+          : "-";
+      }
+      default:
+        return "-";
+    }
+  };
+
+  const startColumnDrag = (e, colId) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    e.preventDefault();
+    window.getSelection?.()?.removeAllRanges();
+
+    const th = e.currentTarget;
+    const rect = th.getBoundingClientRect();
+    const label = COLUMN_LABELS[colId] || colId;
+    const previewRows = sortedTableDeals.map((d) => String(getColumnPreviewValue(d, colId)));
+    const zGhost = getAncestorZoom(document.body);
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    dragOverRef.current = null;
+    setDraggedColKey(colId);
+    setDragOverColKey(null);
+    document.body.style.userSelect = "none";
+    setDragGhost({
+      label,
+      previewRows,
+      offsetX,
+      offsetY,
+      width: rect.width / zGhost,
+      height: rect.height / zGhost,
+    });
+
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const visualTop = clientY - offsetY;
+      const visualLeft = clientX - offsetX;
+      el.style.top = `${visualTop / zGhost}px`;
+      el.style.left = `${visualLeft / zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+    };
+    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
+
+    const handleMouseMove = (moveEvent) => {
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) {
+        reorderColumns(colId, overKey, middleColIds);
+      }
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const [openColMenuKey, setOpenColMenuKey] = useState(null);
+  const [colMenuPos, setColMenuPos] = useState(null);
+  const colMenuRef = useRef(null);
+
+  const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const [rowActionsPos, setRowActionsPos] = useState(null);
+  const rowActionsRef = useRef(null);
+
   const columnHelper = createColumnHelper();
+
+  // Reusable header: icon + label (sortable via click) + dropdown-menu trigger
+  // (Pin Left / Pin Right / Sort Asc / Sort Desc / Hide Column), matching the
+  // Dashboard "Top Invoices" table exactly.
+  const renderHeaderMenu = (colKey, label, Icon, { sortable = true } = {}) => {
+    const isMenuOpen = openColMenuKey === colKey;
+    const pinSide = getColumnPinSide(colKey);
+    return (
+      <div className="flex items-center justify-between w-full group">
+        <div
+          className="flex items-center gap-2 flex-1 overflow-hidden cursor-pointer select-none"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (sortable) handleSort(colKey);
+          }}
+        >
+          {Icon && <Icon className="w-4 h-4 flex-shrink-0" />}
+          <span className="truncate" title={label}>{label}</span>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isMenuOpen) {
+              setOpenColMenuKey(null);
+              setColMenuPos(null);
+              return;
+            }
+            const rect = e.currentTarget.getBoundingClientRect();
+            const z = getRootZoom();
+            setColMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+            setOpenColMenuKey(colKey);
+          }}
+          className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+          title="Column options"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
+
+        {isMenuOpen && colMenuPos && createPortal(
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColMenuKey(null); setColMenuPos(null); }} />
+            <div
+              ref={colMenuRef}
+              style={{ position: "fixed", top: colMenuPos.top, left: colMenuPos.left }}
+              className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+            >
+              <button
+                onClick={() => {
+                  setOpenColMenuKey(null);
+                  setColMenuPos(null);
+                  pinSide === "left" ? unpinColumn(colKey) : pinColumnToSide(colKey, "left");
+                }}
+                className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+              >
+                {pinSide === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                Pin to Left
+              </button>
+              <button
+                onClick={() => {
+                  setOpenColMenuKey(null);
+                  setColMenuPos(null);
+                  pinSide === "right" ? unpinColumn(colKey) : pinColumnToSide(colKey, "right");
+                }}
+                className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+              >
+                {pinSide === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                Pin to Right
+              </button>
+
+              {sortable && (
+                <>
+                  <button
+                    onClick={() => {
+                      setOpenColMenuKey(null);
+                      setColMenuPos(null);
+                      handleSort(colKey);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                    Sort Ascending
+                  </button>
+                  <button
+                    onClick={() => {
+                      setOpenColMenuKey(null);
+                      setColMenuPos(null);
+                      handleSort(colKey);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                    Sort Descending
+                  </button>
+                </>
+              )}
+
+              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+
+              <button
+                onClick={() => {
+                  setOpenColMenuKey(null);
+                  setColMenuPos(null);
+                  hideColumn(colKey);
+                }}
+                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <EyeOff className="w-4 h-4 text-[#1C1B1F]" />
+                Hide Column
+              </button>
+            </div>
+          </>,
+          document.body,
+        )}
+      </div>
+    );
+  };
 
   const columns = useMemo(() => {
     const baseCols = [
@@ -99,17 +412,12 @@ export default function DealsTable({
       columnHelper.display({
         id: "dealId",
         size: 127,
-        enableResizing: false,
-        header: () => (
-          <div className="flex items-center gap-2 w-full">
-            <span className="truncate" title="Deal ID">Deal ID</span>
-          </div>
-        ),
+        header: () => renderHeaderMenu("dealId", "Deal ID", null, { sortable: false }),
         cell: ({ row }) => {
           const shortId = row.original._id.slice(-5).toUpperCase();
           return (
             <span className="text-sm font-medium text-[#525866] truncate" title={`DL-${shortId}`}>
-              DL-{shortId}
+              <HighlightText text={`DL-${shortId}`} query={searchTerm} />
             </span>
           );
         },
@@ -119,33 +427,7 @@ export default function DealsTable({
       columnHelper.accessor("title", {
         id: "title",
         size: 185,
-        header: () => {
-          const isPinned = pinnedColumn === "title";
-          return (
-            <div
-              className="flex items-center justify-between w-full group cursor-pointer select-none"
-              onDoubleClick={(e) => { e.stopPropagation(); togglePinColumn("title"); }}
-            >
-              <div
-                className="flex items-center gap-2 flex-1 overflow-hidden"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleSort("title");
-                }}
-              >
-                <FileText className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate" title="Deal Name">Deal Name</span>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); togglePinColumn("title"); }}
-                className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"}`}
-                title={isPinned ? "Unpin Column" : "Pin Column"}
-              >
-                {isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          );
-        },
+        header: () => renderHeaderMenu("title", "Deal Name", FileText),
         cell: ({ row, getValue }) => {
           const deal = row.original;
           return (
@@ -156,44 +438,8 @@ export default function DealsTable({
                 className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-all duration-150 ease-out truncate flex-1 pr-4"
                 title={getValue()}
               >
-                {getValue()}
+                <HighlightText text={getValue()} query={searchTerm} />
               </Link>
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-150 ease-out pointer-events-none group-hover:pointer-events-auto bg-white/80 backdrop-blur-[2px] rounded-lg">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setQuickViewDealId(deal._id);
-                  }}
-                  className="p-1.5 rounded-md bg-white shadow-sm border border-gray-200 hover:bg-blue-50 text-blue-600 transition-colors"
-                  title="Quick view"
-                >
-                  <Eye size={15} />
-                </button>
-                {permission === "read-write" && (
-                  <>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditDeal(deal);
-                      }}
-                      className="p-1.5 rounded-md hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
-                      title="Edit Deal"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteDeal(deal._id);
-                      }}
-                      className="p-1.5 rounded-md hover:bg-red-50 text-gray-500 hover:text-red-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
-                      title="Delete Deal"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </>
-                )}
-              </div>
             </div>
           );
         },
@@ -203,34 +449,12 @@ export default function DealsTable({
       columnHelper.accessor((row) => row.company?.name, {
         id: "company",
         size: 150,
-        header: () => {
-          const isPinned = pinnedColumn === "company";
-          return (
-            <div
-              className="flex items-center justify-between w-full group cursor-pointer select-none"
-              onDoubleClick={(e) => { e.stopPropagation(); togglePinColumn("company"); }}
-            >
-              <div
-                className="flex items-center gap-2 flex-1 overflow-hidden"
-                onClick={(e) => { e.stopPropagation(); handleSort("company"); }}
-              >
-                <Building2 className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate" title="Company">Company</span>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); togglePinColumn("company"); }}
-                className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"}`}
-              >
-                {isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          );
-        },
+        header: () => renderHeaderMenu("company", "Company", Building2),
         cell: ({ row }) => {
           const companyName = row.original.company?.name || "-";
           return (
             <span className="text-sm text-gray-900 truncate block" title={companyName}>
-              {companyName}
+              <HighlightText text={companyName} query={searchTerm} />
             </span>
           );
         },
@@ -240,16 +464,12 @@ export default function DealsTable({
       columnHelper.accessor((row) => row.contact?.name, {
         id: "contact",
         size: 150,
-        header: () => (
-          <div className="flex items-center gap-2 w-full">
-            <span className="truncate" title="Contact">Contact</span>
-          </div>
-        ),
+        header: () => renderHeaderMenu("contact", "Contact", null),
         cell: ({ row }) => {
           const contactName = row.original.contact?.name || "-";
           return (
             <span className="text-sm text-gray-900 truncate block" title={contactName}>
-              {contactName}
+              <HighlightText text={contactName} query={searchTerm} />
             </span>
           );
         },
@@ -259,29 +479,7 @@ export default function DealsTable({
       columnHelper.accessor("status", {
         id: "status",
         size: 131,
-        header: () => {
-          const isPinned = pinnedColumn === "status";
-          return (
-            <div
-              className="flex items-center justify-between w-full group cursor-pointer select-none"
-              onDoubleClick={(e) => { e.stopPropagation(); togglePinColumn("status"); }}
-            >
-              <div
-                className="flex items-center gap-2 flex-1 overflow-hidden"
-                onClick={(e) => { e.stopPropagation(); handleSort("status"); }}
-              >
-                <Tag className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate" title="Stage">Stage</span>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); togglePinColumn("status"); }}
-                className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"}`}
-              >
-                {isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          );
-        },
+        header: () => renderHeaderMenu("status", "Stage", Tag),
         cell: ({ row }) => {
           const dealStatus = row.original.status;
           return (
@@ -305,7 +503,7 @@ export default function DealsTable({
                       className="px-3 py-[5px] rounded-full font-medium text-xs truncate"
                       style={pillStyle}
                     >
-                      {value}
+                      <HighlightText text={value} query={searchTerm} />
                     </span>
                   );
                 }}
@@ -320,35 +518,13 @@ export default function DealsTable({
       columnHelper.accessor("amount", {
         id: "amount",
         size: 123,
-        header: () => {
-          const isPinned = pinnedColumn === "amount";
-          return (
-            <div
-              className="flex items-center justify-between w-full group cursor-pointer select-none"
-              onDoubleClick={(e) => { e.stopPropagation(); togglePinColumn("amount"); }}
-            >
-              <div
-                className="flex items-center gap-2 flex-1 overflow-hidden"
-                onClick={(e) => { e.stopPropagation(); handleSort("amount"); }}
-              >
-                <IndianRupee className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate" title="Amount">Amount</span>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); togglePinColumn("amount"); }}
-                className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"}`}
-              >
-                {isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          );
-        },
+        header: () => renderHeaderMenu("amount", "Amount", IndianRupee),
         cell: ({ getValue }) => {
           const val = parseInt(getValue() || 0);
           const formatted = `₹${formatNumberToIndian(val)}`;
           return (
             <h6 className="text-sm font-semibold text-gray-900 truncate" title={formatted}>
-              {formatted}
+              <HighlightText text={formatted} query={searchTerm} />
             </h6>
           );
         },
@@ -358,12 +534,7 @@ export default function DealsTable({
       columnHelper.display({
         id: "dueDate",
         size: 171,
-        header: () => (
-          <div className="flex items-center gap-2 w-full">
-            <Calendar className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate" title="Due Date">Due Date</span>
-          </div>
-        ),
+        header: () => renderHeaderMenu("dueDate", "Due Date", Calendar, { sortable: false }),
         cell: ({ row }) => {
           const dueDateField = row.original.additionalFields?.find(
             (f) => f.key === "Expected Close Date"
@@ -378,76 +549,137 @@ export default function DealsTable({
           });
           return (
             <div className="text-sm text-gray-600 truncate" title={formattedDate}>
-              {formattedDate}
+              <HighlightText text={formattedDate} query={searchTerm} />
             </div>
           );
         },
       }),
 
-      // Actions
-      columnHelper.display({
-        id: "actions",
-        size: 120,
-        enableResizing: false,
-        header: () => (
-          <div className="flex items-center gap-2 w-full">
-            <span className="truncate" title="Actions">Actions</span>
-          </div>
-        ),
-        cell: ({ row }) => {
-          const deal = row.original;
-          return (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setQuickViewDealId(deal._id);
-                }}
-                className="text-gray-500 hover:text-blue-600 transition-colors"
-                title="Quick view"
-              >
-                <Eye className="w-4 h-4" />
-              </button>
-              {permission === "read-write" && (
-                <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditDeal(deal);
-                    }}
-                    className="text-gray-500 hover:text-blue-600 transition-colors"
-                    title="Edit Deal"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteDeal(deal._id);
-                    }}
-                    className="text-red-500 hover:text-red-700 transition-colors"
-                    title="Delete Deal"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </>
-              )}
-            </div>
-          );
-        },
-      }),
     ];
 
-    // Reorder logic: Move pinned column to index 2 (right after selection and star)
-    if (pinnedColumn) {
-      const pinnedIndex = baseCols.findIndex(col => col.id === pinnedColumn);
-      if (pinnedIndex > 1) { // 0 is Selection, 1 is Star
-        const [pinned] = baseCols.splice(pinnedIndex, 1);
-        baseCols.splice(2, 0, pinned);
-      }
+    const visibleCols = baseCols.filter((col) => !hiddenColumns.includes(col.id) || col.id === "selection");
+
+    // Reorder: left-pinned first (after selection), then unpinned, then right-pinned.
+    const selectionCol = visibleCols.find((c) => c.id === "selection");
+    let middle = visibleCols.filter((c) => c.id !== "selection");
+    if (columnOrder.length) {
+      const rank = (id) => {
+        const idx = columnOrder.indexOf(id);
+        return idx === -1 ? columnOrder.length + middle.findIndex((c) => c.id === id) : idx;
+      };
+      middle = [...middle].sort((a, b) => rank(a.id) - rank(b.id));
+    }
+    const leftPinned = middle.filter((c) => getColumnPinSide(c.id) === "left");
+    const rightPinned = middle.filter((c) => getColumnPinSide(c.id) === "right");
+    const unpinned = middle.filter((c) => !getColumnPinSide(c.id));
+
+    const orderedCols = [selectionCol, ...leftPinned, ...unpinned, ...rightPinned].filter(Boolean);
+
+    // Merge the row-actions three-dot menu into the last visible data column instead
+    // of giving it a dedicated column.
+    const lastIdx = orderedCols.length - 1;
+    if (lastIdx >= 0 && orderedCols[lastIdx].id !== "selection") {
+      const lastCol = orderedCols[lastIdx];
+      const originalCell = lastCol.cell;
+      orderedCols[lastIdx] = {
+        ...lastCol,
+        cell: (ctx) => {
+          const deal = ctx.row.original;
+          const isActionsOpen = openRowActionsId === deal._id;
+          return (
+            <div className="flex items-center justify-between gap-2 w-full">
+              <div className="min-w-0 flex-1">
+                {typeof originalCell === "function" ? originalCell(ctx) : originalCell}
+              </div>
+              <div
+                className="relative flex items-center justify-center flex-shrink-0"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isActionsOpen) {
+                      setOpenRowActionsId(null);
+                      setRowActionsPos(null);
+                      return;
+                    }
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const z = getRootZoom();
+                    const menuHeight = 128;
+                    const wouldOverflow = rect.bottom * z + 4 + menuHeight > window.innerHeight;
+                    setRowActionsPos({
+                      top: wouldOverflow ? rect.top * z - menuHeight - 4 : rect.bottom * z + 4,
+                      left: rect.right * z - 160,
+                    });
+                    setOpenRowActionsId(deal._id);
+                  }}
+                  className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="More actions"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+                {isActionsOpen && rowActionsPos && createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+                    <div
+                      ref={rowActionsRef}
+                      style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+                      className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenRowActionsId(null);
+                          setRowActionsPos(null);
+                          setQuickViewDealId(deal._id);
+                        }}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                        Quick View
+                      </button>
+                      {permission === "read-write" && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenRowActionsId(null);
+                              setRowActionsPos(null);
+                              handleEditDeal(deal);
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                            Edit Deal
+                          </button>
+                          <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenRowActionsId(null);
+                              setRowActionsPos(null);
+                              handleDeleteDeal(deal._id);
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete Deal
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </>,
+                  document.body,
+                )}
+              </div>
+            </div>
+          );
+        },
+      };
     }
 
-    return baseCols;
+    return orderedCols;
   }, [
     selectedRows,
     sortedTableDeals.length,
@@ -460,8 +692,15 @@ export default function DealsTable({
     handleStatusChange,
     handleEditDeal,
     handleDeleteDeal,
-    pinnedColumn,
+    pinnedColumns,
+    hiddenColumns,
+    columnOrder,
     starredDeals,
+    searchTerm,
+    openColMenuKey,
+    colMenuPos,
+    openRowActionsId,
+    rowActionsPos,
   ]);
 
   const table = useReactTable({
@@ -473,6 +712,8 @@ export default function DealsTable({
     columnResizeMode: "onChange",
     enableColumnResizing: true,
   });
+
+  const middleColIds = columns.filter((c) => c.id !== "selection").map((c) => c.id);
 
   const isInteractiveElement = (target) => {
     return (
@@ -486,10 +727,13 @@ export default function DealsTable({
     );
   };
 
+  const showLoadingSkeleton = useMinDelay(loading && sortedTableDeals.length === 0, 300);
+
+  const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+  const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+
   return (
-    <div
-      className={`relative bg-white ${loading ? "pointer-events-none opacity-60" : ""}`}
-    >
+    <div className="relative bg-white">
         <table
           className="w-full text-sm text-gray-700 border-separate border-spacing-0 text-left"
           style={{
@@ -498,37 +742,36 @@ export default function DealsTable({
             tableLayout: "fixed",
           }}
         >
-          <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+          <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   const colId = header.column.id;
 
-                  // Selection, Star, and Pinned columns are all sticky
-                  const isSticky = colId === "selection" || colId === pinnedColumn;
-                  const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "selection";
-
-                  // Calculate left offsets incrementally
-                  let leftOffset = "auto";
-                  if (colId === "selection") leftOffset = 0;
-                  if (colId === pinnedColumn) leftOffset = 60; // selection width
+                  const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                  const isRightSticky = colId === "actions" || rightPinnedKeys.includes(colId);
+                  const isSticky = isLeftSticky || isRightSticky;
+                  const isDraggable = colId !== "selection";
+                  const isDragging = draggedColKey === colId;
+                  const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
 
                   return (
                     <th
                       key={header.id}
+                      data-col-id={colId}
+                      onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
                       style={{
                         width: header.getSize(),
                         minWidth: header.getSize(),
                         maxWidth: header.getSize(),
                         height: "56px",
                         position: isSticky ? "sticky" : "relative",
-                        left: leftOffset,
+                        left: isLeftSticky ? (colId === "selection" ? 0 : 60) : "auto",
+                        right: isRightSticky ? 0 : "auto",
                         zIndex: isSticky ? 20 : 1,
+                        opacity: isDragging ? 0.35 : 1,
                       }}
-                      className={`px-3 font-medium text-[#525866] text-xs border-r border-[#E1E4EA] hover:bg-gray-100 transition-colors bg-[#F5F7FA] ${isRightMostSticky
-                        ? "border-r-2 border-r-gray-300"
-                        : "last:border-r-0"
-                        }`}
+                      className={`px-3 font-medium text-[#525866] text-xs border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
                       <div className="truncate w-full">
                         {flexRender(
@@ -539,7 +782,11 @@ export default function DealsTable({
 
                       {header.column.getCanResize() && (
                         <div
-                          onMouseDown={header.getResizeHandler()}
+                          data-resize-handle="true"
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            header.getResizeHandler()(e);
+                          }}
                           onTouchStart={header.getResizeHandler()}
                           className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 ${header.column.getIsResizing()
                             ? "bg-blue-500"
@@ -554,8 +801,10 @@ export default function DealsTable({
             ))}
           </thead>
 
-          <tbody className="divide-y divide-[#E1E4EA] bg-white">
-            {sortedTableDeals.length === 0 ? (
+          <tbody className="bg-white">
+            {showLoadingSkeleton ? (
+              <TableSkeletonRows numRows={skeletonRows} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox />
+            ) : sortedTableDeals.length === 0 ? (
               <tr>
                 <td
                   colSpan={table.getAllColumns().length}
@@ -594,7 +843,6 @@ export default function DealsTable({
                       if (isInteractiveElement(e.target)) return;
                       handleRowTouchEnd();
                     }}
-                    // Added bg-white to ensure content behind sticky columns is hidden
                     className={`bg-white transition-colors ${stale ? "bg-red-50" : ""} cursor-pointer ${isSelected
                       ? "bg-blue-100 border-l-4 border-blue-500"
                       : "hover:bg-gray-50"
@@ -603,13 +851,9 @@ export default function DealsTable({
                     {row.getVisibleCells().map((cell) => {
                       const colId = cell.column.id;
 
-                      // Apply same stickiness calculation as the header
-                      const isSticky = colId === "selection" || colId === pinnedColumn;
-                      const isRightMostSticky = pinnedColumn ? colId === pinnedColumn : colId === "selection";
-
-                      let leftOffset = "auto";
-                      if (colId === "selection") leftOffset = 0;
-                      if (colId === pinnedColumn) leftOffset = 60;
+                      const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                      const isRightSticky = colId === "actions" || rightPinnedKeys.includes(colId);
+                      const isSticky = isLeftSticky || isRightSticky;
 
                       return (
                         <td
@@ -620,13 +864,11 @@ export default function DealsTable({
                             maxWidth: cell.column.getSize(),
                             height: "54px",
                             position: isSticky ? "sticky" : "static",
-                            left: leftOffset,
+                            left: isLeftSticky ? (colId === "selection" ? 0 : 60) : "auto",
+                            right: isRightSticky ? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
                           }}
-                          className={`px-3 py-3 text-sm font-medium text-[#222530] align-middle bg-inherit ${isRightMostSticky
-                            ? "border-r-2 border-r-gray-200"
-                            : ""
-                            } ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
+                          className={`px-3 py-3 text-sm font-medium text-[#222530] align-middle bg-inherit border-r border-b border-[#E1E4EA] ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
@@ -641,6 +883,31 @@ export default function DealsTable({
             )}
           </tbody>
         </table>
+
+        {dragGhost && createPortal(
+          <div
+            ref={ghostElRef}
+            style={{
+              position: "fixed",
+              top: -9999,
+              left: -9999,
+              width: dragGhost.width,
+              zIndex: 10000,
+              pointerEvents: "none",
+            }}
+            className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+          >
+            <div className="px-3 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+              <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+            </div>
+            {dragGhost.previewRows.map((rowVal, i) => (
+              <div key={i} className="px-3 py-2 border-b border-[#F1F1F5] last:border-b-0">
+                <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+              </div>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
