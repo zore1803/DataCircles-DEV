@@ -196,6 +196,29 @@ async function buildReferralOverview(organizationId) {
   };
 }
 
+// Resolves a pending referral for an organization about to price its FIRST
+// invoice (createSubscription) into a pricing-ready shape, or null if there
+// isn't one / it's no longer eligible. Deliberately NOT a Reward and NOT a
+// RewardUsage reservation — the referee has no earned Reward yet (that only
+// ever gets created for the REFERRER, at settlement, per maybeQualifyReferral).
+// The referee's benefit is applied directly to their first invoice's pricing,
+// once, and is never reserved-then-consumed the way every other referral
+// modifier in this codebase works (R8's upgrade/add-on/renewal wiring, all
+// built from an already-reserved RewardUsage). This is a genuinely different
+// code path, not a new caller of that primitive.
+//
+// program.enabled is checked here (not just at settlement) so a program
+// disabled between registration and checkout doesn't apply a discount that
+// won't be honored — mirrors maybeQualifyReferral's own "still recorded, no
+// reward" handling for the referrer's side.
+async function findPendingReferralForSignup(organizationId) {
+  const referral = await Referral.findOne({ referredOrganization: organizationId, status: 'pending' });
+  if (!referral) return null;
+  const program = await getOrCreateReferralProgram(referral.referrerOrganization);
+  if (!program.enabled) return null;
+  return { referral, program };
+}
+
 module.exports = {
   generateUniqueReferralCode,
   getOrCreateReferralProgram,
@@ -204,4 +227,5 @@ module.exports = {
   orgAlreadyHasReferrer,
   buildReferralOverview,
   recordReferralIntent,
+  findPendingReferralForSignup,
 };
