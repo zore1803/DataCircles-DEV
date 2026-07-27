@@ -63,6 +63,8 @@ const getAllContacts = async (req, res) => {
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } },
+        { stageStatus: { $regex: search, $options: "i" } },
+        { lifecycleStage: { $regex: search, $options: "i" } },
         { "additionalFields.value": { $regex: search, $options: "i" } },
       ];
     }
@@ -93,7 +95,7 @@ const getAllContactsPaginated = async (req, res) => {
   try {
     // Pagination parameters
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 500);
     const skip = (page - 1) * limit;
 
     // Filter parameters - updated for lifecycle stages
@@ -116,6 +118,8 @@ const getAllContactsPaginated = async (req, res) => {
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } },
+        { stageStatus: { $regex: search, $options: "i" } },
+        { lifecycleStage: { $regex: search, $options: "i" } },
         { "additionalFields.value": { $regex: search, $options: "i" } },
       ];
     }
