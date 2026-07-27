@@ -431,13 +431,17 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
             </span>
           )}
         </button>
-        <div className="flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0" style={{ height: "44px" }}>
+        <div className="relative flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0 overflow-hidden" style={{ height: "44px" }}>
+          <span
+            className="absolute top-1 w-9 h-9 rounded-full bg-white shadow-[0px_0px_6px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
+            style={{ left: viewMode === "list" ? 46 : 4 }}
+          />
           <button
             onClick={() => setViewMode("day")}
             title="Day view"
-            className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
+            className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
               viewMode === "day"
-                ? "bg-white text-[#0085FF] shadow-[0px_0px_6px_rgba(0,0,0,0.1)]"
+                ? "text-[#0085FF]"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
@@ -446,9 +450,9 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           <button
             onClick={() => setViewMode("list")}
             title="List view"
-            className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
+            className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
               viewMode === "list"
-                ? "bg-white text-[#0085FF] shadow-[0px_0px_6px_rgba(0,0,0,0.1)]"
+                ? "text-[#0085FF]"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >

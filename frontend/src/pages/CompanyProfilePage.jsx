@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from "react";
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import API from "../services/api";
 import CompanyDealsKanban from "../components/company/CompanyDealsKanban";
@@ -164,6 +164,21 @@ const CompanyProfilePage = () => {
       return next;
     }, { replace: true });
   };
+
+  // Sliding pill indicator for the section-switcher tab bar
+  const tabRefs = useRef({});
+  const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
+  useLayoutEffect(() => {
+    const el = tabRefs.current[activeTab];
+    if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+    const onResize = () => {
+      const cur = tabRefs.current[activeTab];
+      if (cur) setTabIndicator({ left: cur.offsetLeft, width: cur.offsetWidth });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [activeTab]);
+
   const [invoices, setInvoices] = useState([]);
   const [invoiceSummary, setInvoiceSummary] = useState(null);
   const [invoicesLoading, setInvoicesLoading] = useState(false);
@@ -650,7 +665,7 @@ const CompanyProfilePage = () => {
 
   if (!company) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center -mt-6 -mx-4 sm:-mx-6 lg:-mx-8">
+      <div className="fixed bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center z-20" style={{ top: 64, left: "var(--sidebar-width, 0px)", right: 0, bottom: 0 }}>
         <div className="flex flex-col items-center justify-center">
           <img
             src={logo}
@@ -877,13 +892,18 @@ const CompanyProfilePage = () => {
 
         {/* Tab Row: pill tab selector */}
         <div className="flex items-center justify-between mb-4 gap-3">
-          <div className="inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
+          <div className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
+            <span
+              className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+              style={{ left: tabIndicator.left, width: tabIndicator.width }}
+            />
             {tabs.map((tab) => (
               <button
                 key={tab}
+                ref={(el) => (tabRefs.current[tab] = el)}
                 onClick={() => setActiveTab(tab)}
-                className={`flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab
-                  ? "bg-white text-[#0085FF] shadow-sm"
+                className={`relative z-10 flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab
+                  ? "text-[#0085FF]"
                   : "text-gray-700 hover:text-gray-900"
                   }`}
               >

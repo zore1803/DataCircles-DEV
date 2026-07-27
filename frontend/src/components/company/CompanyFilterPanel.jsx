@@ -86,7 +86,7 @@ export default function CompanyFilterPanel({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-[26px] w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 flex flex-col animate-in slide-in-from-right duration-300"
+        className="bg-white rounded-[26px] dc-panel-w max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 flex flex-col animate-in slide-in-from-right duration-300"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 pt-5 pb-6 bg-gray-50/50 flex-shrink-0">

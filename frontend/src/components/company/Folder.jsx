@@ -1565,36 +1565,32 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
           </button>
 
           <div
-            className="flex flex-row items-center flex-shrink-0"
+            className="relative flex flex-row items-center flex-shrink-0"
             style={{ padding: 4, gap: 6, width: 86, height: 44, background: "#E9EAEB", borderRadius: 95 }}
           >
-            <button
-              onClick={() => setFolderViewMode("list")}
-              className="flex items-center justify-center flex-shrink-0"
+            <span
+              className="absolute transition-all duration-300 ease-out pointer-events-none"
               style={{
-                padding: 8,
-                gap: 10,
+                top: 4,
+                left: folderViewMode === "grid" ? 46 : 4,
                 width: 36,
                 height: 36,
-                background: folderViewMode === "list" ? "#FFFFFF" : "transparent",
-                boxShadow: folderViewMode === "list" ? "0px 4px 4px rgba(0, 0, 0, 0.05)" : "none",
+                background: "#FFFFFF",
+                boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.05)",
                 borderRadius: 107,
               }}
+            />
+            <button
+              onClick={() => setFolderViewMode("list")}
+              className="relative z-10 flex items-center justify-center flex-shrink-0"
+              style={{ padding: 8, gap: 10, width: 36, height: 36, borderRadius: 107 }}
             >
               <List size={20} style={{ color: folderViewMode === "list" ? "#0085FF" : "#404040" }} />
             </button>
             <button
               onClick={() => setFolderViewMode("grid")}
-              className="flex items-center justify-center flex-shrink-0"
-              style={{
-                padding: 8,
-                gap: 10,
-                width: 36,
-                height: 36,
-                background: folderViewMode === "grid" ? "#FFFFFF" : "transparent",
-                boxShadow: folderViewMode === "grid" ? "0px 4px 4px rgba(0, 0, 0, 0.05)" : "none",
-                borderRadius: 107,
-              }}
+              className="relative z-10 flex items-center justify-center flex-shrink-0"
+              style={{ padding: 8, gap: 10, width: 36, height: 36, borderRadius: 107 }}
             >
               <LayoutGrid size={20} style={{ color: folderViewMode === "grid" ? "#0085FF" : "#404040" }} />
             </button>

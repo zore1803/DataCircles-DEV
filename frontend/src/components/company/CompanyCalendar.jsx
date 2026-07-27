@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import API from "../../services/api";
 import CompanyMeetingForm from "./CompanyMeetingForm";
 import CompanyTaskForm from "./CompanyTaskForm";
@@ -180,6 +180,13 @@ const ActivityListPopup = ({
 const CompanyCalendar = ({ companyId }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState("month");
+  // Sliding pill indicator for the month/week/day switcher
+  const viewRefs = useRef({});
+  const [viewIndicator, setViewIndicator] = useState({ left: 0, width: 0 });
+  useLayoutEffect(() => {
+    const el = viewRefs.current[viewMode];
+    if (el) setViewIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+  }, [viewMode]);
   const [meetings, setMeetings] = useState({});
   const [tasks, setTasks] = useState({});
   const [modalOpen, setModalOpen] = useState(false);
@@ -501,13 +508,18 @@ const CompanyCalendar = ({ companyId }) => {
           />
         </div>
 
-        <div className="flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0">
+        <div className="relative flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
+          <span
+            className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+            style={{ left: viewIndicator.left, width: viewIndicator.width }}
+          />
           {["month", "week", "day"].map((mode) => (
             <button
               key={mode}
+              ref={(el) => (viewRefs.current[mode] = el)}
               onClick={() => setViewMode(mode)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${viewMode === mode
-                ? "bg-white text-blue-600 shadow-sm"
+              className={`relative z-10 px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${viewMode === mode
+                ? "text-blue-600"
                 : "text-gray-500 hover:text-gray-700"
                 }`}
             >
@@ -557,7 +569,7 @@ const CompanyCalendar = ({ companyId }) => {
               <div
                 key={key + idx}
                 className={`
-                  min-h-[110px] p-1 border-b border-r border-gray-200 last:border-r-0 relative transition-all
+                  min-h-[148px] p-1 border-b border-r border-gray-200 last:border-r-0 relative transition-all
                   ${!isCurrentMonth
                     ? "bg-gray-50 text-gray-400"
                     : "bg-white text-gray-900"
@@ -657,7 +669,7 @@ const CompanyCalendar = ({ companyId }) => {
               );
             })}
           </div>
-          <div className="grid grid-cols-7 min-h-[600px]">
+          <div className="grid grid-cols-7 min-h-[740px]">
             {weekDays.map((date, idx) => {
               const key = date.toDateString();
               const isFuture = date >= today;
@@ -707,7 +719,7 @@ const CompanyCalendar = ({ companyId }) => {
         const hasEvents = filteredMeetings.length > 0 || filteredTasks.length > 0;
 
         return (
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden min-h-[600px] p-4">
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden min-h-[740px] p-4">
             {!hasEvents ? (
               <div className="flex flex-col items-center justify-center h-full py-16 text-gray-400">
                 <Calendar className="w-8 h-8 mb-2" />

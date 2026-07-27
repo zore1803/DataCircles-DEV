@@ -99,7 +99,7 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
       {/* Slide-in Panel */}
       <div
         className={`
-          fixed top-0 right-0 h-full w-full lg:w-[45vw] xl:w-[40vw] 2xl:w-[35vw]
+          fixed top-0 right-0 h-full dc-panel-w
           bg-white shadow-2xl z-[9999] transform transition-transform duration-300
           overflow-y-auto
           ${company ? "translate-x-0" : "translate-x-full"}

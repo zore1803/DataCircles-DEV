@@ -231,7 +231,7 @@ const ColumnSettingsPanel = ({
       />
 
       {/* Slide-in Panel */}
-      <div className="fixed inset-y-0 right-0 w-full sm:w-[450px] bg-white shadow-2xl z-[9999] flex flex-col animate-slideInRight">
+      <div className="fixed inset-y-0 right-0 dc-panel-w bg-white shadow-2xl z-[9999] flex flex-col animate-slideInRight">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">

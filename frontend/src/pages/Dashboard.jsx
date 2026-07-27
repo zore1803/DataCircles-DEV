@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, Fragment } from "react";
-import { TrendingUp, TrendingDown, Search, MoreVertical, ChevronUp, ChevronDown, Eye, Edit2, Trash2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Search, MoreVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2 } from "lucide-react";
 import FilterIcon from "../components/common/FilterIcon";
 
 const yAxisLabels = ["₹180k", "₹160k", "₹140k", "₹120k", "₹100k", "₹80k", "₹60k", "₹40k", "₹20k", "0"];
@@ -61,6 +61,9 @@ function Dashboard() {
   const [invoices, setInvoices] = useState([]);
 
   const [selectedInvoices, setSelectedInvoices] = useState([]);
+  const [invoiceSearchTerm, setInvoiceSearchTerm] = useState("");
+  const [invoicePage, setInvoicePage] = useState(1);
+  const invoicesPerPage = 8;
   const [invoiceSortConfig, setInvoiceSortConfig] = useState({ key: null, direction: "asc" });
   const [invoiceColWidths, setInvoiceColWidths] = useState({
     invoiceId: 160,
@@ -106,7 +109,16 @@ function Dashboard() {
   };
 
   const sortedInvoices = useMemo(() => {
-    if (!invoiceSortConfig.key) return invoices;
+    const term = invoiceSearchTerm.trim().toLowerCase();
+    const filtered = term
+      ? invoices.filter((inv) =>
+          [inv.invoiceNumber, inv.deal?.company?.name, inv.deal?.title]
+            .filter(Boolean)
+            .some((v) => v.toLowerCase().includes(term)),
+        )
+      : invoices;
+
+    if (!invoiceSortConfig.key) return filtered;
     const getVal = (inv) => {
       switch (invoiceSortConfig.key) {
         case "invoiceId": return inv.invoiceNumber || "";
@@ -120,14 +132,28 @@ function Dashboard() {
         default: return "";
       }
     };
-    return [...invoices].sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       const va = getVal(a);
       const vb = getVal(b);
       if (va < vb) return invoiceSortConfig.direction === "asc" ? -1 : 1;
       if (va > vb) return invoiceSortConfig.direction === "asc" ? 1 : -1;
       return 0;
     });
-  }, [invoices, invoiceSortConfig]);
+  }, [invoices, invoiceSortConfig, invoiceSearchTerm]);
+
+  const invoiceTotalPages = Math.max(1, Math.ceil(sortedInvoices.length / invoicesPerPage));
+  const paginatedInvoices = useMemo(() => {
+    const start = (invoicePage - 1) * invoicesPerPage;
+    return sortedInvoices.slice(start, start + invoicesPerPage);
+  }, [sortedInvoices, invoicePage]);
+
+  useEffect(() => {
+    setInvoicePage(1);
+  }, [invoiceSearchTerm, invoiceSortConfig]);
+
+  useEffect(() => {
+    if (invoicePage > invoiceTotalPages) setInvoicePage(invoiceTotalPages);
+  }, [invoiceTotalPages, invoicePage]);
 
   const [totalClients, setTotalClients] = useState(0);
   const [activeDeals, setActiveDeals] = useState(0);
@@ -838,13 +864,15 @@ function Dashboard() {
               className="box-border flex flex-row items-center flex-1"
               style={{ padding: "12px 14px", gap: 10, height: 44, border: "1px solid rgba(31, 41, 55, 0.1)", borderRadius: 95 }}
             >
-              <Search size={20} style={{ opacity: 0.5, color: "#1F2937" }} />
-              <span
-                className="whitespace-nowrap"
-                style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 14, lineHeight: "20px", color: "#1F2937", opacity: 0.5 }}
-              >
-                Search invoice by number, client, or deal...
-              </span>
+              <Search size={20} style={{ opacity: 0.5, color: "#1F2937", flexShrink: 0 }} />
+              <input
+                type="text"
+                value={invoiceSearchTerm}
+                onChange={(e) => setInvoiceSearchTerm(e.target.value)}
+                placeholder="Search invoice by number, client, or deal..."
+                className="w-full bg-transparent outline-none"
+                style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 14, lineHeight: "20px", color: "#1F2937" }}
+              />
             </div>
 
             <button
@@ -868,14 +896,13 @@ function Dashboard() {
           style={{
             padding: 0,
             width: "100%",
-            height: 488,
             background: "#FFFFFF",
             border: "1px solid #E1E4EA",
             borderRadius: 8,
             marginTop: 16,
           }}
         >
-          <div className="w-full overflow-x-auto overflow-y-auto" style={{ height: "100%" }}>
+          <div className="w-full overflow-x-auto">
             <div className="flex" style={{ height: "44px", minWidth: "fit-content" }}>
               <div className="flex items-center px-3 border-b border-[#E1E4EA] flex-shrink-0" style={{ width: "50px", background: "#F5F7FA" }}>
                 <input
@@ -924,7 +951,7 @@ function Dashboard() {
               </div>
             </div>
 
-            {sortedInvoices.map((inv) => {
+            {paginatedInvoices.map((inv) => {
               const isPaid = inv.status?.toLowerCase() === "paid" || inv.status?.toLowerCase() === "accepted";
               return (
                 <div key={inv._id} className="flex hover:bg-gray-50 transition-colors" style={{ height: "52px", minWidth: "fit-content" }}>
@@ -1001,6 +1028,63 @@ function Dashboard() {
                 </div>
               );
             })}
+            {paginatedInvoices.length === 0 && (
+              <div className="flex items-center justify-center text-sm text-gray-400" style={{ height: 120 }}>
+                No invoices found
+              </div>
+            )}
+          </div>
+
+          {/* Pagination - contained within the card */}
+          <div
+            className="flex items-center justify-between flex-shrink-0"
+            style={{ padding: "12px 16px", borderTop: "1px solid #E1E4EA" }}
+          >
+            <span style={{ fontFamily: "Inter", fontSize: 12, color: "#6B7280" }}>
+              {sortedInvoices.length === 0
+                ? "0 results"
+                : `Showing ${(invoicePage - 1) * invoicesPerPage + 1}-${Math.min(invoicePage * invoicesPerPage, sortedInvoices.length)} of ${sortedInvoices.length}`}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
+                disabled={invoicePage === 1}
+                className="flex items-center justify-center w-8 h-8 rounded-full text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              {(() => {
+                const items = [1];
+                if (invoicePage > 2) items.push("left-dots");
+                if (invoicePage !== 1 && invoicePage !== invoiceTotalPages) items.push(invoicePage);
+                if (invoicePage < invoiceTotalPages - 1) items.push("right-dots");
+                if (invoiceTotalPages > 1) items.push(invoiceTotalPages);
+                return items.map((item, idx) =>
+                  item === "left-dots" || item === "right-dots" ? (
+                    <span key={`${item}-${idx}`} className="flex items-center justify-center w-8 h-8 text-sm text-gray-400 select-none">
+                      ....
+                    </span>
+                  ) : (
+                    <button
+                      key={`p-${item}`}
+                      onClick={() => setInvoicePage(item)}
+                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
+                        item === invoicePage ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ),
+                );
+              })()}
+              <button
+                onClick={() => setInvoicePage((p) => Math.min(invoiceTotalPages, p + 1))}
+                disabled={invoicePage === invoiceTotalPages}
+                className="flex items-center justify-center w-8 h-8 rounded-full text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1240,13 +1324,14 @@ function Dashboard() {
         </div>
       </div>
 
-      <div className="flex flex-row" style={{ gap: 16, marginTop: 16 }}>
+      <div className="flex flex-row" style={{ gap: 16, marginTop: 16, width: "100%" }}>
         <div
           className="box-border flex flex-col items-start"
           style={{
             padding: 18,
             gap: 16,
-            width: 426,
+            flex: "1 1 0",
+            minWidth: 0,
             height: 390,
             background: "#FFFFFF",
             border: "1px solid #E1E4EA",
@@ -1368,13 +1453,13 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="flex flex-col self-stretch" style={{ gap: 12, width: 426 }}>
+        <div className="flex flex-col self-stretch" style={{ gap: 12, flex: "1 1 0", minWidth: 0 }}>
           <div
             className="box-border flex flex-col items-start self-stretch flex-shrink-0"
             style={{
               padding: 18,
               gap: 8,
-              width: 426,
+              width: "100%",
               height: 150,
               background: "#FFFFFF",
               border: "1px solid #E0E3E9",
@@ -1444,7 +1529,7 @@ function Dashboard() {
             style={{
               padding: 18,
               gap: 8,
-              width: 426,
+              width: "100%",
               height: 228,
               background: "#FFFFFF",
               border: "1px solid #E0E3E9",
@@ -1515,7 +1600,8 @@ function Dashboard() {
           style={{
             padding: 18,
             gap: 16,
-            width: 426,
+            flex: "1 1 0",
+            minWidth: 0,
             height: 390,
             background: "#FFFFFF",
             border: "1px solid #E1E4EA",

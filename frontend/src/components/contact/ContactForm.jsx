@@ -526,7 +526,7 @@ const ContactForm = ({
       />
 
       <div
-        className={`fixed inset-y-0 right-0 z-[10001] w-full sm:w-[500px] md:w-[600px] lg:w-[700px] xl:w-[800px] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 font-inter ${isOpen ? "translate-x-0" : "translate-x-full"
+ className={`fixed inset-y-0 right-0 z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 font-inter ${isOpen ? "translate-x-0" : "translate-x-full"
           }`}
       >
         <form onSubmit={handleSubmit} className="p-8">

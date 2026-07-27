@@ -212,8 +212,7 @@ const DealQuickView = ({ dealId, onClose, onEdit }) => {
       {/* Slide-in Panel */}
       <div
         className={`
-          fixed top-0 right-0 h-full 
-          w-full sm:w-5/6 md:w-4/5 lg:w-[50vw] xl:w-[45vw] 2xl:w-[40vw]
+          fixed top-0 right-0 h-full dc-panel-w
           bg-white shadow-2xl z-[9999]
           transform transition-transform duration-300 ease-in-out
           overflow-hidden
