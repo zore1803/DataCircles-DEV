@@ -23,21 +23,65 @@
 // blocker, not new idempotency work.
 //
 // Explicitly still NOT built:
-//   - ScheduledChange application (R3's actual "apply due changes" logic) —
-//     this slice's R3 is trivial (Effective Subscription = current
-//     Subscription) because the precondition is zero PENDING records.
+//   - ScheduledChange application is now real (Phase 4E) — R3 queries
+//     PENDING ScheduledChange records with effectiveAt <= now and folds
+//     them into the Effective Subscription via buildEffectiveSubscription().
+//     A due CANCELLATION short-circuits into its own CANCELLED outcome
+//     before any pricing/charge step. REDUCE_QUANTITY has no real-world
+//     writer yet and throws rather than guessing its shape.
 //   - Real reconciliation logic behind RECONCILIATION_NEEDED (Razorpay query).
 //   - The Retry Engine itself, and whether `retrying` is a real appStatus
 //     value or derived shorthand over `past_due` — an open question named in
 //     the Phase 4C design subsection, not resolved here.
-//   - Coupon duration/cycles-remaining recalculation (R7) and Referral Engine
-//     re-application (R8) in full: this slice reuses `subscription.appliedCoupon`
-//     as a flat fixed-amount modifier if present, without validating whether
-//     the coupon's duration/cycles-remaining still applies at this renewal —
-//     that validation is real R7 engine work, deferred, not built here. No
-//     referral modifier is constructed in this slice at all (referral rewards
-//     in this codebase are one-time reservations consumed at purchase time,
-//     not a recurring per-cycle modifier) — R8's full scope is deferred.
+//
+// R7 — Coupon revalidation at renewal (§3.6a, Chapter 19 C2/C4, Chapter 17).
+// utils/couponRenewalEligibility.js gates the coupon modifier on
+// `appliedCoupon.duration.type`. Only `lifetime`/`until_cancelled`/
+// `first_payment` are handled — verified by tracing the actual creation
+// validation (couponController.js's ENFORCEABLE_DURATIONS) that these are
+// the only reachable-in-production types today (`fixed_cycles`/`until_date`
+// are rejected at coupon creation). `fixed_cycles` (needs a cycles-consumed
+// counter — confirmed by grep, none exists anywhere) and `until_date` (needs
+// an expiry field on the SNAPSHOT itself, which also doesn't exist — the
+// live Coupon.validity.expiryDate must never be read here per this file's
+// own snapshot-immutability rule) are both explicitly NOT implemented,
+// fail-closed, same 🟩 triage class as this session's other
+// declared-but-unbacked-state findings. Not a live bug either way: both
+// types are unreachable in production today.
+//
+// R8 — Referral reward as a renewal-time modifier (§3.6b, RF1/RF3/RF6). Wired
+// in below, reusing the exact same reservation/consumption primitives already
+// proven live at the upgrade and add-on/seat-purchase call sites — no new
+// business logic, no new schema:
+//   - Reservation happens once, in the fresh-renewal branch only (never on a
+//     resumed attempt — see the `rewardUsageId` handling in both branches
+//     below), mirroring startAddonPurchase()'s reservation step.
+//   - The reserved RewardUsage's id is stored in
+//     CommercialTransaction.target.rewardUsageId (same pattern already used
+//     for orderId/period dates) so a resumed run (R13.5) recovers it without
+//     re-reserving.
+//   - Consumption happens inside this function's own commit sequence, right
+//     after the charge is recorded COMMITTED — NOT in a webhook handler, since
+//     unlike an Order-based purchase, renewal's charge result is known
+//     synchronously here. consumeReservation() is already a status-guarded
+//     atomic update (verified safe against duplicate calls in this project's
+//     reservation-lifecycle audit), so calling it again on a resumed renewal
+//     is safe by construction — no extra guard needed at this call site.
+//   - PAST_DUE (clean charge failure): the reservation is deliberately left
+//     `reserved`, not released — same "leave it, let the resumed/retried
+//     attempt reuse it" philosophy R13.5 already applies to
+//     BillingInvoice/CommercialTransaction. A purchase-flow reservation
+//     releases on outright decline because there's no repair-forward retry
+//     for that flow; renewal has one, so releasing here would let a
+//     concurrent, unrelated reservation attempt steal the reward out from
+//     under a retry that's about to succeed.
+//   - RECONCILIATION_NEEDED (ambiguous charge result): same reasoning — left
+//     untouched, exactly like BillingInvoice/CommercialTransaction are.
+//   - The VOID-and-replace interaction (RF6 — a concurrent commercial action,
+//     e.g. an upgrade, voids this renewal's pending invoice before payment
+//     resolves) is NOT handled inside this file — it lives wherever that
+//     void-and-replace logic runs (see the RENEWAL-type addition next to
+//     subscriptionController.js's existing UPGRADE VOID-on-recycle block).
 //
 // CAW-only. Legacy (non-CAW, Razorpay-Subscription-driven) renewal is
 // completely untouched — those subscriptions keep renewing via
@@ -48,16 +92,19 @@ const BillingInvoice = require('../models/BillingInvoice');
 const BillingCycle = require('../models/BillingCycle');
 const CommercialTransaction = require('../models/CommercialTransaction');
 const ScheduledChange = require('../models/ScheduledChange');
+const { reserveNextAvailableReward, consumeReservation } = require('./referralRewards');
+const { rewardToModifier } = require('./modifierResolver');
+const { isCouponStillEligibleForRenewal } = require('./couponRenewalEligibility');
 // Reused, not reimplemented — same helper subscriptionLifecycleJobs.js already
 // imports this way; appends to Subscription.appStatusHistory automatically.
 const { setAppStatus } = require('../controllers/subscriptionController');
 
 /**
  * @param {Object} subscription - a Subscription document, already confirmed:
- *   due (nextBillingDate <= now), appStatus renewable, mandateTokenId present,
- *   zero PENDING ScheduledChange records for it. This function does NOT
- *   itself perform R1/R2's due/renewable checks or the ScheduledChange query —
- *   those are the caller's job in this slice (no cron/dispatcher exists yet).
+ *   due (nextBillingDate <= now), appStatus renewable, mandateTokenId present.
+ *   This function does NOT itself perform R1/R2's due/renewable checks —
+ *   those are the caller's job. It DOES perform its own ScheduledChange
+ *   query (R3) — see buildEffectiveSubscription().
  * @param {Function} chargeMandateFn - injected CAW charge call, real signature
  *   TBD by whichever session wires actual Razorpay charging; must resolve to
  *   { success: true, paymentId, orderId } or throw. Injected so this slice's
@@ -102,6 +149,12 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
   let billingInvoice;
   let newPeriodStart;
   let newPeriodEnd;
+  let appliedScheduledChangeIds;
+  // R8 — the RewardUsage (if any) reserved for THIS renewal attempt. Set from
+  // the resumed transaction's own target on resume, or freshly reserved
+  // below on a first attempt — never both, so a resumed run never reserves a
+  // second reward for the same renewal.
+  let rewardUsageId;
 
   if (commercialTransaction) {
     // Resuming a prior attempt — reuse its invoice and target period rather
@@ -111,6 +164,8 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
     billingInvoice = await BillingInvoice.findById(commercialTransaction.latestInvoice);
     newPeriodStart = new Date(commercialTransaction.target.newPeriodStart);
     newPeriodEnd = new Date(commercialTransaction.target.newPeriodEnd);
+    appliedScheduledChangeIds = commercialTransaction.target.appliedScheduledChangeIds || [];
+    rewardUsageId = commercialTransaction.target.rewardUsageId || null;
   } else {
     // Fresh renewal — steps 1-3 of the original commit sequence, unchanged
     // from Slice 1, except newPeriodStart/newPeriodEnd are now computed here
@@ -118,30 +173,65 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
     // resumed run can know the target period without re-deriving it from a
     // Subscription document that may have already been advanced.
 
-    // R3 — build Effective Subscription. Trivial in this slice: this
-    // function's precondition (enforced by the caller, not re-checked here)
-    // is zero PENDING ScheduledChange records, so the Effective Subscription
-    // is simply the current Subscription's own commercial fields. Real
-    // ScheduledChange application is a later slice's work, not this one's.
-    const effective = {
-      planName: subscription.planName,
-      billingCycle: subscription.billingCycle,
-      pricePerUser: subscription.pricePerUser,
-      activeAddons: subscription.activeAddons || [],
-    };
+    // INVARIANT: as of this migration, renewSubscription() reads exclusively
+    // from ScheduledChange for R3. It must never also read pendingUpdate or
+    // pendingAddonRemovals — those become write-only compatibility fields for
+    // any other code path still using them, not a second input to renewal
+    // decisions. If a future change needs to consult both, that is itself a
+    // sign the migration is incomplete, not a reason to merge the two here.
+    const now = new Date();
+    const { effective, appliedIds, cancellation } = await buildEffectiveSubscription(subscription, now);
+    appliedScheduledChangeIds = appliedIds;
 
-    // R7 (simplified, see file header) — reuse appliedCoupon as a flat
-    // fixed-amount modifier if present. Full duration/cycles-remaining
-    // validation is deferred, not built here.
+    if (cancellation) {
+      // A due CANCELLATION takes priority over renewal — no pricing, no charge.
+      // Detection belongs here, not in a caller: R3's ScheduledChange query is
+      // already this function's own responsibility, and a due cancellation is
+      // only detectable by that same query — pushing detection to a caller
+      // would duplicate the query and reopen a staleness race between the two.
+      setAppStatus(subscription, 'cancelled', 'Scheduled cancellation executed at renewal boundary');
+      await subscription.save();
+      cancellation.status = 'EXECUTED';
+      await cancellation.save();
+      // Cancellation is marked EXECUTED here, not via Step 9's
+      // appliedScheduledChangeIds mechanism below, because this branch returns
+      // before CommercialTransaction is ever created — there is no
+      // repair-forward resumption to protect (nothing was charged, nothing
+      // partially committed). The two mechanisms are intentionally different:
+      // appliedScheduledChangeIds exists specifically to survive a
+      // crash-and-resume between charge and commit, a risk that doesn't exist
+      // for a cancellation that never charges.
+      return { outcome: 'CANCELLED', reason: 'SCHEDULED_CANCELLATION', scheduledChange: cancellation._id };
+    }
+
+    // R7 — reuse appliedCoupon as a flat fixed-amount modifier, gated on
+    // isCouponStillEligibleForRenewal() (utils/couponRenewalEligibility.js).
+    // Evaluated fresh, right here, every renewal — same pipeline position as
+    // R8's reward check below, per C2's timing rule ("eligibility evaluated
+    // at the exact moment the invoice is generated, no grace window"), not
+    // read from a cached/stale value computed earlier.
     const resolvedModifiers = [];
-    if (subscription.appliedCoupon?.discountAmount) {
+    if (subscription.appliedCoupon?.discountAmount && isCouponStillEligibleForRenewal(subscription.appliedCoupon)) {
       resolvedModifiers.push({
         type: 'coupon',
         value: { kind: 'fixed', amount: subscription.appliedCoupon.discountAmount },
         appliesTo: 'entire_invoice',
       });
     }
-    // R8 — no referral modifier constructed in this slice (see file header).
+
+    // R8 — referral reward as a renewal-time modifier. Same
+    // reserveNextAvailableReward()/rewardToModifier() primitives already
+    // proven live at the upgrade and add-on/seat-purchase call sites — a new
+    // caller, not new reservation logic. Reserved once, here, only on a
+    // fresh attempt (see the `rewardUsageId` declaration above for why a
+    // resumed attempt never re-reserves).
+    const rewardReservation = await reserveNextAvailableReward(subscription.organization, {
+      subscription: subscription._id,
+    });
+    if (rewardReservation) {
+      resolvedModifiers.push(rewardToModifier(rewardReservation.reward));
+      rewardUsageId = rewardReservation.usage._id;
+    }
 
     // R4-R9 — price via calculateInvoice(), no adjustmentContext (a renewal
     // is a fresh full-period charge, same shape as createSubscription's own
@@ -182,7 +272,10 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
       subscription: subscription._id,
       type: 'RENEWAL',
       status: 'PRICED',
-      target: { billingInvoice: billingInvoice._id, total: invoice.total, newPeriodStart, newPeriodEnd },
+      // rewardUsageId (R8): stored so a resumed attempt (R13.5) recovers the
+      // already-reserved reward instead of reserving a second one — same
+      // pattern as orderId/period dates already stored here.
+      target: { billingInvoice: billingInvoice._id, total: invoice.total, newPeriodStart, newPeriodEnd, appliedScheduledChangeIds: appliedIds, rewardUsageId },
       latestInvoice: billingInvoice._id,
     });
 
@@ -218,6 +311,11 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
       // are left exactly as they were (still PENDING_PAYMENT/PRICED) — real
       // reconciliation logic (querying Razorpay to find out what actually
       // happened) is still not built; only the throw-vs-return shape changed.
+      // R8: any reward reservation for this attempt (rewardUsageId) is
+      // deliberately left 'reserved', not released — same reasoning as
+      // BillingInvoice/CommercialTransaction being left untouched: a resumed
+      // attempt must find and reuse it, not lose it to an unrelated
+      // concurrent reservation.
       return { outcome: 'RECONCILIATION_NEEDED', reason: 'AMBIGUOUS_CHARGE_RESULT', error: chargeErr?.message };
     }
 
@@ -231,7 +329,8 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
       // calling renewSubscription() again must find this same non-terminal
       // transaction and resume, not discover a dead end. Only appStatus
       // moves, per R12's own text ("Failure -> past_due only... zero
-      // commercial state touched").
+      // commercial state touched"). R8: same treatment for rewardUsageId —
+      // left 'reserved' for the retry to reuse, not released.
       setAppStatus(subscription, 'past_due', 'Renewal charge failed');
       await subscription.save();
       return {
@@ -260,6 +359,28 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
       orderId: chargeResult.orderId,
     };
     await commercialTransaction.save();
+
+    // R8 — consume the reserved reward now that the charge is confirmed
+    // committed. Deliberately inline here, not in a webhook handler: unlike
+    // an Order-based purchase, renewal's charge result is known synchronously
+    // inside this function, so there's no separate confirmation step to hang
+    // this off of — same reasoning BillingCycle/BillingInvoice are written
+    // directly in this commit sequence rather than in a webhook. consumeReservation()
+    // is already a status-guarded atomic update (verified safe against a
+    // duplicate call in this project's reservation-lifecycle audit), so a
+    // resumed renewal calling this again for the same rewardUsageId is safe
+    // by construction — no extra guard needed at this call site.
+    if (rewardUsageId) {
+      try {
+        await consumeReservation(rewardUsageId);
+      } catch (rewardErr) {
+        console.error(
+          `Failed to consume referral reward usage at renewal — subscription=${subscription._id} rewardUsageId=${rewardUsageId}:`,
+          rewardErr.message
+        );
+      }
+    }
+
     if (_injectFailureAfter === 'CHARGE_COMMITTED') {
       throw new Error('TEST-INJECTED FAILURE after CHARGE_COMMITTED');
     }
@@ -318,18 +439,25 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
     await commercialTransaction.save();
   }
 
-  // No ScheduledChange to mark EXECUTED in this slice (precondition: zero
-  // PENDING records) — ScheduledChange.updateMany is intentionally not called
-  // here; a later slice's job once ScheduledChange application is real.
-  void ScheduledChange; // referenced only to make the "not used yet" explicit, not a silent unused import
+  if (appliedScheduledChangeIds.length > 0) {
+    // status: 'PENDING' guard, not just _id — if a record was concurrently
+    // superseded/cancelled elsewhere between R3's read and this write, this
+    // must not clobber that outcome back to EXECUTED.
+    await ScheduledChange.updateMany(
+      { _id: { $in: appliedScheduledChangeIds }, status: 'PENDING' },
+      { $set: { status: 'EXECUTED' } }
+    );
+  }
 
   return { outcome: 'RENEWED', invoice: billingInvoice._id, billingCycle: billingCycle._id };
 }
 
-function computeNextPeriodEnd(subscription) {
-  const start = new Date(subscription.currentPeriodEnd);
-  const next = new Date(start);
-  if (subscription.billingCycle === 'monthly') {
+// Single source of truth for "one billing cycle from this date" — used both
+// for renewal (computeNextPeriodEnd, below) and CAW activation (the initial
+// currentPeriodStart -> currentPeriodEnd), so the two never drift apart.
+function addBillingCycle(date, billingCycle) {
+  const next = new Date(date);
+  if (billingCycle === 'monthly') {
     next.setMonth(next.getMonth() + 1);
   } else {
     next.setFullYear(next.getFullYear() + 1);
@@ -337,4 +465,106 @@ function computeNextPeriodEnd(subscription) {
   return next;
 }
 
-module.exports = { renewSubscription };
+function computeNextPeriodEnd(subscription) {
+  return addBillingCycle(subscription.currentPeriodEnd, subscription.billingCycle);
+}
+
+function applyScheduledChange(effective, change) {
+  switch (change.type) {
+    case 'PLAN_CHANGE':
+      effective.planName = change.payload.planId;
+      effective.pricePerUser = change.payload.pricePerUser;
+      // Replace activeAddons with the carry-forward decision actually made
+      // when this downgrade was scheduled — NOT the current subscription's
+      // present-day addons. Without this, a customer who reduced/dropped an
+      // addon during the downgrade wizard would see it silently resurrected
+      // in every "what happens at renewal" projection (Manage Subscription's
+      // "Scheduled" card, Timeline, Billing's "Becomes" total), because
+      // those all reuse buildEffectiveSubscription/applyScheduledChange,
+      // which otherwise never touches activeAddons for a plan change at all.
+      // Falls back to leaving activeAddons untouched only for legacy records
+      // written before this field existed (payload.carriedAddons undefined).
+      if (change.payload.carriedAddons) {
+        effective.activeAddons = change.payload.carriedAddons;
+      }
+      break;
+    case 'BILLING_CYCLE_CHANGE':
+      // Current write sites never use PLAN_CHANGE to alter billingCycle, and
+      // this branch is the one that owns billingCycle changes instead — that
+      // split is an artifact of today's writers (isGenuineDowngrade branches
+      // PLAN_CHANGE vs BILLING_CYCLE_CHANGE, never both), not an inherent
+      // property of either type. If a future writer changes that, this
+      // handler must be revisited, not assumed still correct.
+      effective.billingCycle = change.payload.billingCycle;
+      effective.pricePerUser = change.payload.pricePerUser;
+      break;
+    case 'REMOVE_ADDON': {
+      const idx = effective.activeAddons.findIndex(a => a.addonKey === change.payload.addonKey);
+      if (idx === -1) break;
+      const remaining = effective.activeAddons[idx].quantity - change.payload.quantity;
+      if (remaining <= 0) effective.activeAddons.splice(idx, 1);
+      else effective.activeAddons[idx] = { ...effective.activeAddons[idx], quantity: remaining };
+      break;
+    }
+    case 'REDUCE_QUANTITY':
+      // No writer exists anywhere in the codebase (confirmed by grep, per
+      // IMPLEMENTATION_PLAN_V1.md Phase 4 design session). Shape is unverified
+      // against real data — throw loudly rather than guess.
+      throw new Error(`REDUCE_QUANTITY ScheduledChange encountered with no verified handling — id=${change._id}`);
+    default:
+      throw new Error(`Unhandled ScheduledChange type in renewal: ${change.type}`);
+  }
+  return effective;
+}
+
+// buildEffectiveSubscription() never mutates the Subscription document or any
+// ScheduledChange document — it only builds a transient in-memory pricing
+// model. Persisting anything (advancing the subscription, marking records
+// EXECUTED) happens later, only after a successful charge — see Step 6/Step 9
+// in renewSubscription() below.
+async function buildEffectiveSubscription(subscription, now) {
+  const effective = {
+    planName: subscription.planName,
+    billingCycle: subscription.billingCycle,
+    pricePerUser: subscription.pricePerUser,
+    // .toObject(), not object-spread — subscription.activeAddons entries are
+    // real Mongoose subdocuments whose schema-path fields (quantity,
+    // pricePerUnit, ...) are not reliably captured by `{...a}`; spreading
+    // silently produced undefined fields that turned into NaN pricing.
+    activeAddons: (subscription.activeAddons || []).map(a => (typeof a.toObject === 'function' ? a.toObject() : { ...a })),
+  };
+
+  const due = await ScheduledChange.find({
+    organization: subscription.organization,
+    subscription: subscription._id,
+    status: 'PENDING',
+    effectiveAt: { $lte: now },
+  });
+
+  const cancellation = due.find(c => c.type === 'CANCELLATION');
+  const applied = due.filter(c => c.type !== 'CANCELLATION');
+
+  // Ordering is arithmetically inert given current handler scope — PLAN_CHANGE/
+  // BILLING_CYCLE_CHANGE touch only planName/billingCycle/pricePerUser;
+  // REMOVE_ADDON/REDUCE_QUANTITY touch only activeAddons. Sorted by
+  // effectiveAt only for deterministic replay, not because order changes the
+  // result. If BILLING_DOMAIN_SPECIFICATION.md Chapter 16 specifies an
+  // explicit order for audit-log reasons, this comparator must be updated
+  // to match — not assumed equivalent just because today's math is order-independent.
+  applied.sort((a, b) => a.effectiveAt - b.effectiveAt);
+
+  for (const change of applied) applyScheduledChange(effective, change);
+
+  return { effective, appliedIds: applied.map(c => c._id), cancellation };
+}
+
+// Exported so preview/read paths (getScheduledChanges, scheduling-event
+// emission) can compute "what will this subscription look like once every
+// currently-PENDING ScheduledChange executes" using the EXACT same logic
+// the Renewal Engine itself will use — never a second, hand-rolled
+// approximation. buildEffectiveSubscription's own `now` gating (only
+// `effectiveAt <= now`) is still the caller's to control: pass an actual
+// current time to ask "what's due today" (renewal's own use), or a
+// sufficiently-far-future time to ask "what will this become once
+// everything currently scheduled has executed" (preview's use).
+module.exports = { renewSubscription, buildEffectiveSubscription, applyScheduledChange, addBillingCycle };

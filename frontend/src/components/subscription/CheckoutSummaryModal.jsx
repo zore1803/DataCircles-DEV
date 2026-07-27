@@ -6,7 +6,7 @@ import { X, ShoppingCart, AlertTriangle, CheckCircle2 } from "lucide-react";
 // customer sees the discount ripple across every plan/add-on card before
 // they even open checkout. This modal only DISPLAYS the already-applied
 // coupon's effect — no apply/remove controls here.
-const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, processing }) => {
+const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwardChange, onDowngradeResolutionChange, processing }) => {
   if (!checkoutData) return null;
 
   const {
@@ -14,15 +14,27 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, processing })
     type, addonChanges, currentTotal, newTotal,
     compatibleCarryForward = [], incompatibleDropped = [],
     // addon_removal fields
-    addonKey, displayName, quantity: removalQty, pricePerUnit,
+    displayName, quantity: removalQty, pricePerUnit,
     newRecurringTotal, effectiveAt,
     // plan_upgrade / plan_downgrade shared fields
     proratedAmount, incompatibleAddons = [], carriedForwardAddons = [], newAddonsList = [],
-    // referral reward already applied to proratedAmount by the backend; shown here so
-    // the customer can see WHY the charge is lower (proratedAmount is post-discount).
+    maxCarryForward = {},
+    // Discount already applied to proratedAmount by the backend; shown here so
+    // the customer can see WHY the charge is lower (proratedAmount is
+    // post-discount). Split by source — each field means exactly what its
+    // name says (a real bug, found and fixed: this used to be one
+    // referral-only-named field silently containing a coupon+referral
+    // combined total for add-on purchases).
+    couponDiscountApplied = 0,
     referralDiscountApplied = 0,
+    totalDiscountApplied = 0,
     // plan_downgrade fields
     newBasePrice, periodEnd,
+    // Downgrade compatibility checks (validateDowngrade contract) — generic
+    // {type, status, ...} list. This component renders purely by `status`,
+    // never by `type` — new validators (storage, pipelines, ...) need zero
+    // changes here to show up correctly.
+    downgradeChecks = [], hasHardBlocker = false, resolutionAddons = {}, resolutionAddonCatalog = {},
     // coupon (new-subscription checkout only)
     appliedCoupon,
   } = checkoutData;
@@ -88,6 +100,76 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, processing })
         {/* Line items */}
         {isPlanDowngrade ? (
           <div className="space-y-3 mb-4">
+            {/* Compatibility checks — generic renderer over downgradeChecks,
+                no business-rule knowledge here. Shown FIRST (wizard step 1):
+                validate before configuring/reviewing pricing. */}
+            {downgradeChecks.length > 0 && (
+              <div className="space-y-2 pb-3 border-b border-gray-100">
+                <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Compatibility check</div>
+                {downgradeChecks.map((check, idx) => {
+                  if (check.status === "PASS") {
+                    return (
+                      <div key={idx} className="flex items-center gap-2 text-sm text-green-700">
+                        <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                        <span>{prettyKey(check.type)} — no action required</span>
+                      </div>
+                    );
+                  }
+                  if (check.status === "AUTO_FIXABLE") {
+                    const qty = resolutionAddons[check.requiredAddon] ?? check.minimumQuantity;
+                    const unitPrice = resolutionAddonCatalog[check.requiredAddon]?.pricePerUnit ?? check.pricePerUnit ?? 0;
+                    const minimum = check.minimumQuantity;
+                    return (
+                      <div key={idx} className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div className="flex items-start gap-2 mb-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-amber-800">{check.message || `${prettyKey(check.type)} needs attention.`}</p>
+                        </div>
+                        <div className="flex items-center justify-between pl-6">
+                          <span className="text-sm text-gray-700">{prettyKey(check.requiredAddon)}</span>
+                          <div className="flex items-center gap-3">
+                            {onDowngradeResolutionChange ? (
+                              <div className="flex items-center gap-2 border border-gray-200 rounded-md px-1.5 py-0.5 bg-white">
+                                <button
+                                  type="button"
+                                  onClick={() => onDowngradeResolutionChange(check.requiredAddon, qty - 1)}
+                                  disabled={processing || qty <= minimum}
+                                  className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                                  aria-label={`Decrease ${prettyKey(check.requiredAddon)}`}
+                                >
+                                  −
+                                </button>
+                                <span className="text-sm text-gray-800 w-4 text-center">{qty}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => onDowngradeResolutionChange(check.requiredAddon, qty + 1)}
+                                  disabled={processing}
+                                  className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                                  aria-label={`Increase ${prettyKey(check.requiredAddon)}`}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-800">×{qty}</span>
+                            )}
+                            <span className="text-sm text-gray-600 w-20 text-right">{formatPrice(qty * unitPrice)}/{cycleLabel}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  // MANUAL_ACTION / BLOCKING — stop the flow, no way to resolve here.
+                  return (
+                    <div key={idx} className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-red-800">{check.message || `${prettyKey(check.type)} is not compatible with this plan.`}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* New base plan */}
             <div className="flex items-start justify-between">
               <div>
@@ -96,21 +178,56 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, processing })
               <span className="text-sm font-semibold text-gray-800">{formatPrice(newBasePrice)}/{cycleLabel}</span>
             </div>
 
-            {/* Carry-forward addons */}
-            {carriedForwardAddons.length > 0 && (
+            {/* Carry-forward addons — editable, same stepper as upgrade */}
+            {Object.keys(maxCarryForward).length > 0 && (
               <div>
-                <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Carrying forward</div>
-                {carriedForwardAddons.map((a) => (
-                  <div key={a.addonKey} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">
-                      {prettyKey(a.addonKey)}{a.quantity > 1 && <span className="text-gray-400 ml-1">×{a.quantity}</span>}
-                      {a.remappedFrom && a.remappedFrom !== a.addonKey && (
-                        <span className="text-gray-400 ml-1">(was {prettyKey(a.remappedFrom)})</span>
-                      )}
-                    </span>
-                    <span className="text-sm text-gray-600">{formatPrice(a.quantity * a.pricePerUnit)}/{cycleLabel}</span>
-                  </div>
-                ))}
+                <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Will continue after downgrade</div>
+                {Object.keys(maxCarryForward).map((addonKey) => {
+                  const current = carriedForwardAddons.find((a) => a.addonKey === addonKey);
+                  const quantity = current?.quantity ?? 0;
+                  const unitPrice = current?.pricePerUnit ?? 0;
+                  const remappedFrom = current?.remappedFrom;
+                  const max = maxCarryForward[addonKey];
+                  return (
+                    <div key={addonKey} className="flex items-center justify-between py-1">
+                      <span className="text-sm text-gray-700">
+                        {prettyKey(addonKey)}
+                        {remappedFrom && remappedFrom !== addonKey && (
+                          <span className="text-gray-400 ml-1">(was {prettyKey(remappedFrom)})</span>
+                        )}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        {onCarryForwardChange ? (
+                          <div className="flex items-center gap-2 border border-gray-200 rounded-md px-1.5 py-0.5">
+                            <button
+                              type="button"
+                              onClick={() => onCarryForwardChange(addonKey, quantity - 1)}
+                              disabled={processing || quantity <= 0}
+                              className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                              aria-label={`Decrease ${prettyKey(addonKey)}`}
+                            >
+                              −
+                            </button>
+                            <span className="text-sm text-gray-800 w-4 text-center">{quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => onCarryForwardChange(addonKey, quantity + 1)}
+                              disabled={processing || quantity >= max}
+                              className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                              aria-label={`Increase ${prettyKey(addonKey)}`}
+                            >
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          quantity > 1 && <span className="text-gray-400">×{quantity}</span>
+                        )}
+                        <span className="text-sm text-gray-600 w-20 text-right">{formatPrice(quantity * unitPrice)}/{cycleLabel}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <p className="text-xs text-gray-400 mt-1">Reducing a quantity schedules its removal for the same date.</p>
               </div>
             )}
 
@@ -183,20 +300,55 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, processing })
               <span className="text-base font-bold text-blue-700">{formatPrice(proratedAmount)}</span>
             </div>
 
-            {carriedForwardAddons.length > 0 && (
+            {Object.keys(maxCarryForward).length > 0 && (
               <div>
-                <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Carrying forward</div>
-                {carriedForwardAddons.map((a) => (
-                  <div key={a.addonKey} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">
-                      {prettyKey(a.addonKey)}{a.quantity > 1 && <span className="text-gray-400 ml-1">×{a.quantity}</span>}
-                      {a.remappedFrom && a.remappedFrom !== a.addonKey && (
-                        <span className="text-gray-400 ml-1">(was {prettyKey(a.remappedFrom)})</span>
-                      )}
-                    </span>
-                    <span className="text-sm text-gray-600">{formatPrice(a.quantity * a.pricePerUnit)}/{cycleLabel}</span>
-                  </div>
-                ))}
+                <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Will continue after upgrade</div>
+                {Object.keys(maxCarryForward).map((addonKey) => {
+                  const current = carriedForwardAddons.find((a) => a.addonKey === addonKey);
+                  const quantity = current?.quantity ?? 0;
+                  const unitPrice = current?.pricePerUnit ?? 0;
+                  const remappedFrom = current?.remappedFrom;
+                  const max = maxCarryForward[addonKey];
+                  return (
+                    <div key={addonKey} className="flex items-center justify-between py-1">
+                      <span className="text-sm text-gray-700">
+                        {prettyKey(addonKey)}
+                        {remappedFrom && remappedFrom !== addonKey && (
+                          <span className="text-gray-400 ml-1">(was {prettyKey(remappedFrom)})</span>
+                        )}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        {onCarryForwardChange ? (
+                          <div className="flex items-center gap-2 border border-gray-200 rounded-md px-1.5 py-0.5">
+                            <button
+                              type="button"
+                              onClick={() => onCarryForwardChange(addonKey, quantity - 1)}
+                              disabled={processing || quantity <= 0}
+                              className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                              aria-label={`Decrease ${prettyKey(addonKey)}`}
+                            >
+                              −
+                            </button>
+                            <span className="text-sm text-gray-800 w-4 text-center">{quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => onCarryForwardChange(addonKey, quantity + 1)}
+                              disabled={processing || quantity >= max}
+                              className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                              aria-label={`Increase ${prettyKey(addonKey)}`}
+                            >
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          quantity > 1 && <span className="text-gray-400">×{quantity}</span>
+                        )}
+                        <span className="text-sm text-gray-600 w-20 text-right">{formatPrice(quantity * unitPrice)}/{cycleLabel}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <p className="text-xs text-gray-400 mt-1">Reducing a quantity schedules its removal for your next renewal.</p>
               </div>
             )}
 
@@ -471,23 +623,35 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, processing })
           const chargeTotal = proratedAmount + chargeGST;
           const recurringGST = Math.round(newRecurringTotal * 0.18);
           const recurringTotal = newRecurringTotal + recurringGST;
-          // proratedAmount is ALREADY post-discount (backend applied the reward).
-          // Reconstruct the pre-discount figure only for display.
-          const hasReferralReward = referralDiscountApplied > 0;
-          const originalProrated = proratedAmount + referralDiscountApplied;
+          // proratedAmount is ALREADY post-discount (backend applied whichever
+          // modifiers matched). Reconstruct the pre-discount figure only for
+          // display. Split by source — each field means exactly what its name
+          // says (a real bug, found and fixed: this block used to show
+          // referral-specific copy for what could be a coupon-only discount).
+          const hasCoupon = couponDiscountApplied > 0;
+          const hasReferral = referralDiscountApplied > 0;
+          const hasDiscount = hasCoupon || hasReferral;
+          const combinedDiscount = couponDiscountApplied + referralDiscountApplied;
+          const originalProrated = proratedAmount + combinedDiscount;
           return (
             <>
-              {hasReferralReward && (
+              {hasReferral && (
                 <div className="mb-3 rounded-lg bg-purple-50 border border-purple-100 px-3 py-2.5 text-xs text-purple-700">
                   🎉 <span className="font-semibold">Referral reward applied</span> — you saved {formatPrice(referralDiscountApplied)} on this purchase.
                 </div>
               )}
+              {hasCoupon && (
+                <div className="mb-3 rounded-lg bg-green-50 border border-green-100 px-3 py-2.5 text-xs text-green-700">
+                  🎟️ <span className="font-semibold">Coupon applied</span> — you saved {formatPrice(couponDiscountApplied)} on this purchase.
+                </div>
+              )}
               <div className="text-xs text-gray-500 mb-6 space-y-1 bg-gray-50 rounded-lg p-3">
-                {hasReferralReward ? (
+                {hasDiscount ? (
                   <>
                     <p className="font-semibold text-gray-700">Charged today (incl. GST)</p>
                     <div className="flex justify-between"><span>Prorated upgrade</span><span>{formatPrice(originalProrated)}</span></div>
-                    <div className="flex justify-between text-purple-700"><span>Referral reward</span><span>−{formatPrice(referralDiscountApplied)}</span></div>
+                    {hasCoupon && <div className="flex justify-between text-green-700"><span>Coupon</span><span>−{formatPrice(couponDiscountApplied)}</span></div>}
+                    {hasReferral && <div className="flex justify-between text-purple-700"><span>Referral reward</span><span>−{formatPrice(referralDiscountApplied)}</span></div>}
                     <div className="flex justify-between border-t border-gray-200 pt-1"><span>Subtotal</span><span>{formatPrice(proratedAmount)}</span></div>
                     <div className="flex justify-between"><span>GST (18%)</span><span>{formatPrice(chargeGST)}</span></div>
                     <div className="flex justify-between border-t border-gray-200 pt-1 font-bold text-gray-900"><span>Pay today</span><span>{formatPrice(chargeTotal)}</span></div>
@@ -511,7 +675,7 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, processing })
         <div className="space-y-3">
           <button
             onClick={onConfirm}
-            disabled={processing}
+            disabled={processing || (isPlanDowngrade && hasHardBlocker)}
             className={`w-full py-3 px-4 rounded-lg font-medium disabled:opacity-50 transition-colors text-white ${isAddonRemoval || isPlanDowngrade ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700"}`}
           >
             {processing ? (

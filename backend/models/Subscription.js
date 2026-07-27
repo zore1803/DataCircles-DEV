@@ -2,11 +2,15 @@
 const mongoose = require('mongoose');
 
 const subscriptionSchema = new mongoose.Schema({
-  organization: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Organization', 
+  organization: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Organization',
     required: true,
-    unique: true 
+    // NOT unique here — see the partial index below (BUG-002). A hard unique
+    // index on organization would make it impossible for an org to ever hold
+    // a second Subscription record after a prior one is cancelled/expired,
+    // which Chapter 12 of the domain spec explicitly allows (many historical,
+    // at most one current).
   },
   // ============================================================
   // @deprecated LEGACY (Subscriptions product) — slated for removal in Phase 8.
@@ -141,6 +145,23 @@ const subscriptionSchema = new mongoose.Schema({
         discountAmount: Number,
       },
     ],
+    // The coupon's COMPLETE rule set at the moment it was applied — every
+    // rule, matched or not, not just the ones that priced the signup order
+    // (that's rulesApplied above, filtered to discount>0 — left untouched,
+    // still used for display/redemption history). Needed so a LATER
+    // commercial action (upgrade, add-on purchase) can ask "does this coupon
+    // cover this item" without ever reading the live Coupon document — same
+    // snapshot-immutability principle as `duration` above: an admin editing
+    // the coupon's rules later must not retroactively change what an
+    // existing subscriber locked in.
+    fullRulesSnapshot: [
+      {
+        productType: String, // 'plan' | 'addon'
+        productKey: String,
+        discountType: String, // 'percentage' | 'fixed'
+        discountValue: Number,
+      },
+    ],
     redeemed: { type: Boolean, default: false },
   },
   pendingUpdate: {
@@ -167,6 +188,16 @@ const subscriptionSchema = new mongoose.Schema({
         addonKey: String,
         quantity: Number,
         pricePerUnit: Number,
+      },
+    ],
+    // How much THIS downgrade added to pendingAddonRemovals (a delta, not a
+    // total) — cancelScheduledDowngrade subtracts this back out. See the
+    // write site (subscriptionController.js updateSubscription) for why a
+    // delta, not a resulting total, is the only safe thing to reverse.
+    reducedAddonDeltas: [
+      {
+        addonKey: String,
+        quantity: Number,
       },
     ],
   },
@@ -220,6 +251,20 @@ const subscriptionSchema = new mongoose.Schema({
         addonKey: String,
         quantity: Number,
         pricePerUnit: Number,
+        remappedFrom: String,
+      },
+    ],
+    // User-reduced carry-forward quantities from the editable carry-forward
+    // checkout step — settlement schedules a REMOVE_ADDON for each at commit
+    // time. quantity here is the AMOUNT REDUCED (i.e. to remove), not the
+    // resulting carried quantity.
+    reducedAddons: [
+      {
+        addonKey: String,
+        displayName: String,
+        quantity: Number,
+        pricePerUnit: Number,
+        remappedFrom: String,
       },
     ],
     incompatibleAddons: [
@@ -228,6 +273,7 @@ const subscriptionSchema = new mongoose.Schema({
         displayName: String,
         quantity: Number,
         pricePerUnit: Number,
+        remappedFrom: String,
       },
     ],
     newAddonPurchases: [
@@ -284,6 +330,29 @@ const subscriptionSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-// subscriptionSchema.index({ organization: 1 });
+// BUG-002 fix: at most one "current" Subscription per organization, while
+// still allowing unlimited historical (cancelled/expired/suspended) ones.
+//
+// `suspended` is deliberately EXCLUDED from this filter, even though it is
+// not terminal in Chapter 2's general state machine. Per Chapter 12's
+// resolution (BILLING_DOMAIN_SPECIFICATION.md — "trial may be started again"
+// tension, resolved during this BUG-002 work): the Registration Engine must
+// transition any SUSPENDED subscription to CANCELLED *before* creating a new
+// one for the same organization, so a SUSPENDED row is never actually
+// current at the moment a second Subscription would be inserted. That
+// precondition transition is NOT YET WIRED into startFreeTrial/registration
+// (tracked in IMPLEMENTATION_PLAN_V1.md §1.1) — until it is, this index will
+// correctly REJECT a new Subscription for an org that still has a
+// not-yet-cancelled SUSPENDED one on file, surfacing the gap loudly rather
+// than silently allowing two current records.
+subscriptionSchema.index(
+  { organization: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      appStatus: { $in: ['trial', 'active', 'past_due'] },
+    },
+  }
+);
 
 module.exports = mongoose.model('Subscription', subscriptionSchema);
