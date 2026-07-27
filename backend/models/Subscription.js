@@ -49,6 +49,13 @@ const subscriptionSchema = new mongoose.Schema({
   },
   mandateMaxAmount: { type: Number }, // cap in the same unit as totalAmount; charges above it hard-fail
   mandateExpiresAt: { type: Date },
+  // Set only if the organization's OWN already-earned referral Reward (as a
+  // referrer) was reserved against this first CAW invoice — createSubscription
+  // (fresh signup, never trialed) and updateSubscription's trial-conversion
+  // branch (the common case — see comment there) both write this. Consumed
+  // by runFirstPaymentSettlement / released on payment.failed, same
+  // reserve-then-settle pattern as pendingPlanChange.referralRewardUsageId.
+  pendingReferralRewardUsageId: { type: mongoose.Schema.Types.ObjectId, ref: 'RewardUsage' },
   // TODO(Phase 7): `appStatus` will gain a `retrying` state and reconcile with the
   // mandate state machine in CAW_BILLING_DESIGN.md §7. Not changed here — that is
   // the retry engine's phase, not the schema phase.

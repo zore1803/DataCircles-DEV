@@ -29,7 +29,7 @@ const Reward = require('../models/Reward');
 const RewardUsage = require('../models/RewardUsage');
 const { startAddonPurchase } = require('../utils/addonPurchaseLifecycle');
 const { consumeReservation, releaseReservation, reserveNextAvailableReward } = require('../utils/referralRewards');
-const { rewardToModifier } = require('../utils/modifierResolver');
+const { rewardToModifier, referralModifierFromPendingProgram } = require('../utils/modifierResolver');
 const RazorpayWebhookEvent = require('../models/RazorpayWebhookEvent');
 
 // ============================================================
@@ -128,6 +128,33 @@ exports.createSubscription = async (req, res) => {
       }
     }
 
+    // Referee's immediate first-invoice discount (§3.6b) — corrects an
+    // earlier design conclusion. Previously, BOTH sides of a qualifying
+    // referral got a deferred Reward for their own next purchase, because
+    // pre-CAW, a fresh signup was a fixed recurring Razorpay Plan with no way
+    // to discount it (see maybeQualifyReferral's own comment, now stale).
+    // Post-CAW, createSubscription prices through calculateInvoice() with
+    // real resolvedModifiers — so the referee's benefit is applied directly,
+    // right here, once, to the invoice that's actually being priced. Built
+    // from the pending Referral's program config directly, NOT a Reward/
+    // RewardUsage reservation (none exists yet — that mechanism stays
+    // exclusive to the referrer's side, unchanged, at settlement).
+    const { findPendingReferralForSignup } = require('../utils/referralUtils');
+    const pendingReferral = await findPendingReferralForSignup(req.user.organization);
+
+    // This org may ALSO already hold an earned referral Reward of its own
+    // (as a referrer — someone they invited already paid, before this org
+    // ever created a subscription itself). Reserve-first, same pattern as
+    // the upgrade path (line ~1110) — never spend a Reward that hasn't been
+    // atomically claimed. Non-fatal on failure: proceed at full price rather
+    // than block signup over a reservation race.
+    let signupRewardReservation = null;
+    try {
+      signupRewardReservation = await reserveNextAvailableReward(req.user.organization);
+    } catch (reserveErr) {
+      console.error('Referral reservation failed at signup (proceeding at full price):', reserveErr.message);
+    }
+
     // Phase 4: calculateInvoice() is now the pricing authority for this call
     // site (CAW_BILLING_DESIGN.md §4) — the first production caller. Every
     // other billing path (upgrades, add-ons, legacy) still uses
@@ -135,11 +162,25 @@ exports.createSubscription = async (req, res) => {
     // calculateInvoice() takes a subscription-shaped object, not a `plan`
     // doc — pricePerUser here is the plan's base price since the
     // Subscription doesn't exist yet at this point in signup.
+    const signupResolvedModifiers = couponResult
+      ? [{ type: 'coupon', value: { kind: 'fixed', amount: couponResult.discountAmount }, appliesTo: 'entire_invoice' }]
+      : [];
+    // Coupon before referral — Stage 6 -> Stage 7 (§3.3), same as every other
+    // modifier-construction site tonight; the actual sort is enforced inside
+    // calculateInvoice()/buildPricingSnapshot() regardless of push order.
+    // A pendingReferral (this org as REFEREE) and an earned Reward (this org
+    // as REFERRER) are not mutually exclusive — an org can be both at once —
+    // so both are pushed independently; calculateInvoice sums same-type
+    // modifiers rather than one clobbering the other.
+    if (pendingReferral) {
+      signupResolvedModifiers.push(referralModifierFromPendingProgram(pendingReferral.program));
+    }
+    if (signupRewardReservation) {
+      signupResolvedModifiers.push(rewardToModifier(signupRewardReservation.reward));
+    }
     const invoice = calculateInvoice({
       subscription: { planName: planId, billingCycle, pricePerUser: basePrice, activeAddons },
-      resolvedModifiers: couponResult
-        ? [{ type: 'coupon', value: { kind: 'fixed', amount: couponResult.discountAmount }, appliesTo: 'entire_invoice' }]
-        : [],
+      resolvedModifiers: signupResolvedModifiers,
     });
     const totalAmount = invoice.taxable; // pre-GST, post-discount (rupees) — same meaning as the old snapshot.totalAmount
     const firstInvoiceRupees = invoice.total; // GST-inclusive (rupees) — what the customer is actually charged
@@ -294,6 +335,7 @@ exports.createSubscription = async (req, res) => {
       totalAmount,
       activeAddons,
       appliedCoupon,
+      pendingReferralRewardUsageId: signupRewardReservation?.usage._id || undefined,
     });
 
     await subscription.save();
@@ -364,6 +406,13 @@ exports.createSubscription = async (req, res) => {
     });
   } catch (error) {
     console.error("CAW onboarding error:", error);
+    if (typeof signupRewardReservation !== 'undefined' && signupRewardReservation) {
+      try {
+        await releaseReservation(signupRewardReservation.usage._id, 'SIGNUP_FAILED');
+      } catch (relErr) {
+        console.error('Failed to release signup reward reservation after signup error:', relErr.message);
+      }
+    }
     const razorpayError = error.error?.description || error.error?.reason;
     res.status(500).json({
       error: razorpayError || error.message,
@@ -393,18 +442,28 @@ async function maybeRecordCouponRedemption(subscription) {
   await subscription.save();
 }
 
-// Qualifies a pending Referral into TWO immutable Rewards the moment the
-// REFERRED organization's first payment is confirmed — one for the
-// referrer (Alice, the one who shared the code) and one for the referred
-// org itself (Bob, the one who entered it). Both sides use the same
-// program config/value — this is the ONLY place a Reward may be created
-// for source: 'REFERRAL' (settlement owns this, never the signup
-// code-entry step — see backend/docs/REFERRAL_SYSTEM_DESIGN.md §3/§16).
+// Qualifies a pending Referral the moment the REFERRED organization's first
+// payment is confirmed, and creates ONE immutable Reward — for the referrer
+// (Alice, the one who shared the code) only. This is the ONLY place a Reward
+// may be created for source: 'REFERRAL' (settlement owns this, never the
+// signup code-entry step — see backend/docs/REFERRAL_SYSTEM_DESIGN.md §3/§16).
 //
-// Bob's reward can't apply to the signup payment that just happened (new
-// subscriptions are a fixed recurring Razorpay Plan, not a discountable
-// one-time Order — see PROJECT_STATE.md §11) but IS usable on Bob's own
-// next add-on purchase or upgrade, same as any referrer's reward.
+// CORRECTED (previously created a second Reward here for the referred org,
+// Bob, deferred to Bob's own next purchase — a workaround from when a fresh
+// signup was a fixed recurring Razorpay Plan with no way to discount it, per
+// the old PROJECT_STATE.md §11 comment this replaced). Post-CAW, Bob's
+// benefit is applied directly to his own first invoice at signup pricing
+// time (createSubscription, via utils/referralUtils.js's
+// findPendingReferralForSignup() + utils/modifierResolver.js's
+// referralModifierFromPendingProgram()) — a real discount on real money he
+// pays, not a free unlock. Creating a second deferred Reward for Bob here
+// would double his benefit (immediate signup discount AND a future-purchase
+// reward from the same referral) — one benefit per participant: the
+// referrer gets a deferred Reward, the referee's immediate signup discount
+// IS their reward. Confirmed by grep: no other backend/frontend code
+// assumes exactly two Reward rows per qualified referral — admin
+// grant/revoke and the org-facing dashboard both operate generically over
+// however many Reward documents exist.
 //
 // Mirrors maybeRecordCouponRedemption's idempotency: called from all three
 // racing payment-confirmation paths (verifyPayment, subscription.authenticated,
@@ -430,7 +489,6 @@ async function maybeQualifyReferral(subscription) {
 
   const rewardRecipients = [
     { organization: referral.referrerOrganization, role: 'referrer' },
-    { organization: referral.referredOrganization, role: 'referee' },
   ];
 
   for (const recipient of rewardRecipients) {
@@ -487,6 +545,20 @@ async function runFirstPaymentSettlement(subscription) {
   } catch (err) {
     console.error(`runFirstPaymentSettlement: referral qualification failed for ${subscription._id}:`, err.message);
   }
+  // Consumes this org's OWN earned-reward reservation (reserved as referrer,
+  // at createSubscription or trial-conversion pricing time — see
+  // pendingReferralRewardUsageId's model comment). Idempotent via
+  // consumeReservation's own guard, so safe across the same racing
+  // confirmation paths as the two settlement steps above.
+  if (subscription.pendingReferralRewardUsageId) {
+    try {
+      await consumeReservation(subscription.pendingReferralRewardUsageId);
+      subscription.pendingReferralRewardUsageId = undefined;
+      await subscription.save();
+    } catch (err) {
+      console.error(`runFirstPaymentSettlement: reward consumption failed for ${subscription._id}:`, err.message);
+    }
+  }
 }
 // ============================================================
 // 1. Add this helper near the top of subscriptionController.js
@@ -496,6 +568,10 @@ async function runFirstPaymentSettlement(subscription) {
 // which qualifies referrals stranded by the pre-fix settlement race. Not a
 // route handler — kept internal to the settlement flow otherwise.
 exports.maybeQualifyReferral = maybeQualifyReferral;
+// Exported for the same reason — fixture verification of settlement
+// (coupon redemption + referral qualification + earned-reward consumption)
+// without needing a live Razorpay webhook round-trip.
+exports.runFirstPaymentSettlement = runFirstPaymentSettlement;
 
 /**
  * Single source of truth for app-level subscription status.
@@ -1395,18 +1471,47 @@ exports.updateSubscription = async (req, res) => {
       // the checkout page's own Apply button (manual entry) are the only
       // two creation points now.
 
+      // CORRECTION: this branch — not createSubscription — is what actually
+      // runs for "the most common 'new subscriber' moment" (every org starts
+      // on a trial; see the SUBSCRIPTION_CREATED comment a few lines below,
+      // which already said so). The referee-immediate-discount and
+      // earned-reward-reservation wiring were originally built only into
+      // createSubscription, which most real signups never call — added here
+      // too, mirroring both createSubscription's referee-discount construction
+      // and the upgrade path's reserve-first pattern (line ~1110) for an
+      // already-earned Reward.
+      const { findPendingReferralForSignup: findPendingReferralForTrialConversion } = require('../utils/referralUtils');
+      const pendingReferralAtConversion = await findPendingReferralForTrialConversion(req.user.organization);
+
+      let conversionRewardReservation = null;
+      try {
+        conversionRewardReservation = await reserveNextAvailableReward(req.user.organization, {
+          subscription: subscription._id,
+        });
+      } catch (reserveErr) {
+        console.error('Referral reservation failed at trial conversion (proceeding at full price):', reserveErr.message);
+      }
+
       // Phase 3 item 5c (Category A consolidation): this branch prices a
       // fresh commercial state — no old-vs-new comparison, no period math —
       // structurally identical to createSubscription's own calculateInvoice()
-      // call (same modifier construction, same coupon-only shape). Migrated
-      // onto the canonical engine for the same reason createSubscription was:
-      // one authoritative pricing computation, not a parallel
-      // buildPricingSnapshot() call for what is the same kind of event.
+      // call (same modifier construction, same coupon-only shape, now also
+      // the same referral wiring). Migrated onto the canonical engine for the
+      // same reason createSubscription was: one authoritative pricing
+      // computation, not a parallel buildPricingSnapshot() call for what is
+      // the same kind of event.
+      const conversionResolvedModifiers = couponResult
+        ? [{ type: 'coupon', value: { kind: 'fixed', amount: couponResult.discountAmount }, appliesTo: 'entire_invoice' }]
+        : [];
+      if (pendingReferralAtConversion) {
+        conversionResolvedModifiers.push(referralModifierFromPendingProgram(pendingReferralAtConversion.program));
+      }
+      if (conversionRewardReservation) {
+        conversionResolvedModifiers.push(rewardToModifier(conversionRewardReservation.reward));
+      }
       const snapshot = calculateInvoice({
         subscription: { planName: planId, billingCycle, pricePerUser, activeAddons },
-        resolvedModifiers: couponResult
-          ? [{ type: 'coupon', value: { kind: 'fixed', amount: couponResult.discountAmount }, appliesTo: 'entire_invoice' }]
-          : [],
+        resolvedModifiers: conversionResolvedModifiers,
       });
       const totalAmount = snapshot.taxable; // pre-GST, post-discount — same meaning as the old snapshot.totalAmount
 
@@ -1477,6 +1582,7 @@ exports.updateSubscription = async (req, res) => {
       subscription.totalAmount = totalAmount;
       subscription.activeAddons = activeAddons;
       subscription.appliedCoupon = appliedCoupon;
+      subscription.pendingReferralRewardUsageId = conversionRewardReservation?.usage._id || undefined;
       subscription.razorpaySubscriptionId = undefined;
       subscription.razorpayPlanId = undefined;
       subscription.currentPeriodStart = undefined;
@@ -2357,6 +2463,17 @@ async function handleCAWPaymentFailed(paymentEntity, razorpayEventId) {
     attemptedAt: new Date(),
     status: paymentEntity.status,
   };
+  // Release rather than leave occupied for the full 30-min TTL — a failed
+  // first-payment attempt (as opposed to one still awaiting confirmation)
+  // frees the reward back up immediately, mirroring RF6's release pattern.
+  if (subscription.pendingReferralRewardUsageId) {
+    try {
+      await releaseReservation(subscription.pendingReferralRewardUsageId, 'PAYMENT_FAILED');
+      subscription.pendingReferralRewardUsageId = undefined;
+    } catch (err) {
+      console.error(`handleCAWPaymentFailed: reward release failed for ${subscription._id}:`, err.message);
+    }
+  }
   await subscription.save();
 }
 
