@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
 import {
@@ -31,6 +32,7 @@ import {
   FolderPlus,
   StickyNote,
   Eye,
+  EyeOff,
   Pin,
   PinOff,
   Star,
@@ -96,6 +98,30 @@ const useIsMobile = () => {
   return isMobile;
 };
 
+const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>.
+const HighlightText = ({ text, query }) => {
+  const str = text === null || text === undefined ? "" : String(text);
+  const q = (query || "").trim();
+  if (!q) return <>{str}</>;
+
+  const parts = str.split(new RegExp(`(${escapeRegExp(q)})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="bg-yellow-200 text-inherit rounded-sm px-0.5">
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+};
+
 function Contacts() {
   const [contacts, setContacts] = useState([]);
   const [form, setForm] = useState({
@@ -118,6 +144,8 @@ function Contacts() {
   const [additionalValues, setAdditionalValues] = useState({});
   const [permission, setPermission] = useState("");
   const [selectedContacts, setSelectedContacts] = useState([]);
+  const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const rowActionsRef = useRef(null);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
@@ -135,6 +163,12 @@ function Contacts() {
     const handleClickOutsideMoreMenu = (event) => {
       if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
         setIsMoreMenuOpen(false);
+      }
+      if (rowActionsRef.current && !rowActionsRef.current.contains(event.target)) {
+        setOpenRowActionsId(null);
+      }
+      if (columnMenuRef.current && !columnMenuRef.current.contains(event.target)) {
+        setOpenColumnMenuKey(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutsideMoreMenu);
@@ -196,10 +230,114 @@ function Contacts() {
     document.addEventListener("mouseup", onMouseUp);
   };
 
-  const [pinnedColumn, setPinnedColumn] = useState(null);
+  const [pinnedColumns, setPinnedColumns] = useState([]); // [{ key, side: 'left' | 'right' }]
 
-  const togglePinColumn = (colKey) => {
-    setPinnedColumn((prev) => (prev === colKey ? null : colKey));
+  const pinColumnToSide = (colKey, side) => {
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colKey), { key: colKey, side }]);
+  };
+
+  const unpinColumn = (colKey) => {
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colKey));
+  };
+
+  const getColumnPinSide = (colKey) => pinnedColumns.find((p) => p.key === colKey)?.side || null;
+
+  const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
+  const [columnMenuPos, setColumnMenuPos] = useState(null);
+  const columnMenuRef = useRef(null);
+
+  const [draggedColKey, setDraggedColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
+  const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
+
+  const startColumnDrag = (e, colId) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    e.preventDefault();
+    window.getSelection?.()?.removeAllRanges();
+
+    const th = e.currentTarget;
+    const rect = th.getBoundingClientRect();
+    const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
+    const previewRows = (sortedContacts || [])
+      .map((c) => String(getFieldValue(c, colId) ?? "").trim() || "—");
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    dragOverRef.current = null;
+    setDraggedColKey(colId);
+    setDragOverColKey(null);
+    document.body.style.userSelect = "none";
+    setDragGhost({
+      label,
+      previewRows,
+      offsetX,
+      offsetY,
+      width: rect.width,
+      height: rect.height,
+    });
+
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const top = clientY - offsetY;
+      el.style.top = `${top}px`;
+      el.style.left = `${clientX - offsetX}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - top - 72)}px`;
+    };
+    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
+
+    const handleMouseMove = (moveEvent) => {
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+
+      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) {
+        handleColumnReorder(colId, overKey);
+      }
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    if (!draggedKey || draggedKey === targetKey) return;
+    const sorted = [...columns].sort((a, b) => a.order - b.order);
+    const visibleSorted = sorted.filter((c) => c.visible);
+    const draggedIdx = visibleSorted.findIndex((c) => c.key === draggedKey);
+    const targetIdx = visibleSorted.findIndex((c) => c.key === targetKey);
+    if (draggedIdx === -1 || targetIdx === -1) return;
+
+    const reorderedVisible = [...visibleSorted];
+    const [moved] = reorderedVisible.splice(draggedIdx, 1);
+    reorderedVisible.splice(targetIdx, 0, moved);
+
+    let visibleCursor = 0;
+    const newColumns = sorted
+      .map((c) => (c.visible ? reorderedVisible[visibleCursor++] : c))
+      .map((c, idx) => ({ ...c, order: idx }));
+
+    saveColumns(newColumns);
   };
 
   const [starredContacts, setStarredContacts] = useState(() => {
@@ -493,6 +631,91 @@ function Contacts() {
     });
   }, [contacts, starredContacts]);
 
+  // O(1) membership checks instead of .includes() array scans repeated per row.
+  const selectedContactsSet = useMemo(() => new Set(selectedContacts), [selectedContacts]);
+  const starredContactsSet = useMemo(() => new Set(starredContacts), [starredContacts]);
+
+  const renderRowActionsMenu = (contact) => {
+    const isOpen = openRowActionsId === contact._id;
+    return (
+      <div
+        className="relative flex-shrink-0"
+        ref={isOpen ? rowActionsRef : null}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenRowActionsId(isOpen ? null : contact._id);
+          }}
+          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+          title="More actions"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+        {isOpen && (
+          <div className="absolute right-0 top-full z-[100] mt-1 w-[190px] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-2 animate-in fade-in zoom-in duration-150 origin-top-right pointer-events-auto">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenRowActionsId(null);
+                setQuickViewContactId(contact._id);
+              }}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+            >
+              <Eye className="w-4 h-4 text-[#1C1B1F]" />
+              Quick View
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenRowActionsId(null);
+                handleEditContact(contact);
+              }}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+            >
+              <Edit2 className="w-4 h-4 text-[#1C1B1F]" />
+              Edit
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenRowActionsId(null);
+                openAddToFolderModal(contact);
+              }}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+            >
+              <FolderPlus className="w-4 h-4 text-[#1C1B1F]" />
+              Add to Folder
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleStar(e, contact._id);
+              }}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+            >
+              <Star className={`w-4 h-4 ${starredContactsSet.has(contact._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
+              {starredContactsSet.has(contact._id) ? "Unstar Contact" : "Star Contact"}
+            </button>
+            <div className="w-full border-t border-[#F1F1F5]" />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenRowActionsId(null);
+                handleDelete(contact._id);
+              }}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
+            >
+              <Trash2 className="w-4 h-4 text-[#CD3636]" />
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const tableColumns = useMemo(() => {
     const cols = [];
 
@@ -508,7 +731,7 @@ function Contacts() {
               <input
                 type="checkbox"
                 checked={
-                  selectedContacts.length === contacts.length &&
+                  selectedContactsSet.size === contacts.length &&
                   contacts.length > 0
                 }
                 onChange={handleSelectAll}
@@ -520,7 +743,7 @@ function Contacts() {
             <div className="flex justify-center items-center w-full">
               <input
                 type="checkbox"
-                checked={selectedContacts.includes(row.original._id)}
+                checked={selectedContactsSet.has(row.original._id)}
                 onChange={() => handleSelectContact(row.original._id)}
                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
               />
@@ -530,123 +753,22 @@ function Contacts() {
       );
     }
 
-    cols.push(
-      columnHelper.display({
-        id: "star",
-        size: 40,
-        enableResizing: false,
-        header: () => (
-          <div className="flex justify-center items-center w-full">
-            <Star className="w-4 h-4 text-gray-400" />
-          </div>
-        ),
-        cell: ({ row }) => {
-          const isStarred = starredContacts.includes(row.original._id);
-          return (
-            <div className="flex justify-center items-center w-full">
-              <button
-                onClick={(e) => toggleStar(e, row.original._id)}
-                className="focus:outline-none hover:scale-110 transition-transform"
-                title={isStarred ? "Unstar" : "Star"}
-              >
-                <Star
-                  className={`w-4 h-4 transition-colors ${isStarred
-                    ? "text-yellow-400 fill-yellow-400"
-                    : "text-gray-300 hover:text-yellow-400"
-                    }`}
-                />
-              </button>
-            </div>
-          );
-        },
-      })
+    // 2. Dynamic Data Columns
+    // visibleColumns is already sorted by `order` (see getVisibleColumns), so filtering
+    // preserves that sequencing within each group — dragging a header updates `order`,
+    // pin side just decides which sticky group (left/none/right) a column belongs to.
+    const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+    const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+    const leftPinnedFields = visibleColumns.filter((vc) => leftPinnedKeys.includes(vc.key));
+    const rightPinnedFields = visibleColumns.filter((vc) => rightPinnedKeys.includes(vc.key));
+    const unpinnedFields = visibleColumns.filter(
+      (vc) => !leftPinnedKeys.includes(vc.key) && !rightPinnedKeys.includes(vc.key),
     );
 
-    // --- 2. DEFINE ACTIONS COLUMN ---
-    const isActionsPinned = pinnedColumn === "actions";
-    const actionsColumnDef = columnHelper.display({
-      id: "actions",
-      size: 152,
-      enableResizing: false,
-      header: () => (
-        <div
-          className="flex items-center justify-between w-full group select-none cursor-pointer"
-          onDoubleClick={(e) => {
-            e.stopPropagation();
-            togglePinColumn("actions");
-          }}
-        >
-          <span>Actions</span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePinColumn("actions");
-            }}
-            className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isActionsPinned
-              ? "opacity-100 text-blue-600"
-              : "opacity-0 group-hover:opacity-100 text-gray-400"
-              }`}
-            title={isActionsPinned ? "Unpin Column" : "Pin Column"}
-          >
-            {isActionsPinned ? (
-              <PinOff className="w-3.5 h-3.5" />
-            ) : (
-              <Pin className="w-3.5 h-3.5" />
-            )}
-          </button>
-        </div>
-      ),
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              openAddToFolderModal(row.original);
-            }}
-            className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
-            title="Add to Folder"
-          >
-            <FolderPlus className="w-4 h-4" />
-          </button>
-          <div className="relative inline-block text-left group/action">
-            <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
-              <MoreVertical className="w-4 h-4" />
-            </button>
-            <div className="hidden group-hover/action:block absolute right-0 mt-0 w-32 bg-white rounded-lg shadow-lg border border-gray-100 z-10 py-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleEditContact(row.original);
-                }}
-                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600"
-              >
-                Edit
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(row.original._id);
-                }}
-                className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      ),
-    });
+    const orderedFields = [...leftPinnedFields, ...unpinnedFields, ...rightPinnedFields];
+    const lastColumnKey = orderedFields[orderedFields.length - 1]?.key;
 
-    // --- 3. PUSH ACTIONS (IF PINNED) ---
-    if (isActionsPinned) {
-      cols.push(actionsColumnDef);
-    }
-
-    // --- 4. DYNAMIC DATA COLUMNS ---
-    const pinnedFields = visibleColumns.filter((vc) => vc.key === pinnedColumn);
-    const unpinnedFields = visibleColumns.filter((vc) => vc.key !== pinnedColumn);
-
-    [...pinnedFields, ...unpinnedFields].forEach((vc) => {
+    orderedFields.forEach((vc) => {
       cols.push(
         columnHelper.accessor((row) => getFieldValue(row, vc.key), {
           id: vc.key,
@@ -663,71 +785,127 @@ function Contacts() {
                       ? 198
                       : 150,
           header: () => {
-            const Icon = vc.icon;
             const isSortable = vc.sortable !== false;
-            const isPinned = pinnedColumn === vc.key;
+            const pinSide = getColumnPinSide(vc.key);
+            const isMenuOpen = openColumnMenuKey === vc.key;
 
             return (
-              <div
-                className={`flex items-center justify-between w-full group ${isSortable ? "cursor-pointer select-none" : ""
-                  }`}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  togglePinColumn(vc.key);
-                }}
-              >
-                <div
-                  className="flex items-center gap-2 flex-1 min-w-0"
-                  onClick={() => isSortable && handleSort(vc.key)}
-                >
-                  {Icon && <Icon className="w-4 h-4 inline flex-shrink-0" />}
-                  <span className="truncate" title={vc.label}>
-                    {vc.label}
-                  </span>
-                  {isSortable && (
-                    <div className="flex flex-col ml-1 flex-shrink-0">
-                      <ChevronUp
-                        className={`w-3 h-3 ${sortConfig.key === vc.key && sortConfig.direction === "asc"
-                          ? "text-blue-600"
-                          : "text-gray-400"
-                          }`}
-                      />
-                      <ChevronDown
-                        className={`w-3 h-3 -mt-1 ${sortConfig.key === vc.key && sortConfig.direction === "desc"
-                          ? "text-blue-600"
-                          : "text-gray-400"
-                          }`}
-                      />
-                    </div>
-                  )}
-                </div>
+              <div className="flex items-center justify-between w-full group">
+                <span className="truncate flex-1 min-w-0" title={vc.label}>
+                  {vc.label}
+                </span>
 
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    togglePinColumn(vc.key);
+                    if (isMenuOpen) {
+                      setOpenColumnMenuKey(null);
+                      setColumnMenuPos(null);
+                      return;
+                    }
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setColumnMenuPos({ top: rect.bottom + 4, left: rect.right - 190 });
+                    setOpenColumnMenuKey(vc.key);
                   }}
-                  className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned
-                    ? "opacity-100 text-blue-600"
-                    : "opacity-0 group-hover:opacity-100 text-gray-400"
-                    }`}
-                  title={isPinned ? "Unpin Column" : "Pin Column"}
+                  className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                  title="Column options"
                 >
-                  {isPinned ? (
-                    <PinOff className="w-3.5 h-3.5" />
-                  ) : (
-                    <Pin className="w-3.5 h-3.5" />
-                  )}
+                  <ChevronDown className="w-3.5 h-3.5" />
                 </button>
+
+                {isMenuOpen && columnMenuPos && createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColumnMenuKey(null); setColumnMenuPos(null); }} />
+                    <div
+                      ref={columnMenuRef}
+                      style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
+                      className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                    >
+                      <button
+                        onClick={() => {
+                          setOpenColumnMenuKey(null);
+                          setColumnMenuPos(null);
+                          pinSide === "left" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "left");
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                      >
+                        {pinSide === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                        Pin to Left
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOpenColumnMenuKey(null);
+                          setColumnMenuPos(null);
+                          pinSide === "right" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "right");
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                      >
+                        {pinSide === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                        Pin to Right
+                      </button>
+
+                      {isSortable && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setOpenColumnMenuKey(null);
+                              setColumnMenuPos(null);
+                              setSortConfig({ key: vc.key, direction: "asc" });
+                              setPagination((prev) => ({ ...prev, currentPage: 1 }));
+                            }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                            Sort Ascending
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpenColumnMenuKey(null);
+                              setColumnMenuPos(null);
+                              setSortConfig({ key: vc.key, direction: "desc" });
+                              setPagination((prev) => ({ ...prev, currentPage: 1 }));
+                            }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                            Sort Descending
+                          </button>
+                        </>
+                      )}
+
+                      <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+
+                      <button
+                        disabled={vc.required}
+                        onClick={() => {
+                          if (vc.required) return;
+                          setOpenColumnMenuKey(null);
+                          saveColumns(
+                            columns.map((c) => (c.key === vc.key ? { ...c, visible: false } : c)),
+                          );
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${vc.required
+                          ? "text-gray-300 cursor-not-allowed"
+                          : "text-[#161618] hover:bg-gray-50"
+                          }`}
+                      >
+                        <EyeOff className={`w-4 h-4 ${vc.required ? "text-gray-300" : "text-[#1C1B1F]"}`} />
+                        Hide Column
+                      </button>
+                    </div>
+                  </>,
+                  document.body,
+                )}
               </div>
             );
           },
           cell: ({ row, getValue }) => {
             const contact = row.original;
             const val = getValue();
+            let baseContent;
 
             if (vc.key === "name") {
-              return (
+              baseContent = (
                 <div className="flex items-center space-x-3 truncate w-full">
                   <div className="flex-shrink-0">
                     <ProfilePicture contact={contact} />
@@ -737,23 +915,24 @@ function Contacts() {
                     className="text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-all duration-150 ease-out"
                     title={contact.name}
                   >
-                    {contact.name}
+                    <HighlightText text={contact.name} query={searchTerm} />
                   </Link>
+                  {starredContactsSet.has(contact._id) && (
+                    <Star className="flex-shrink-0 w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                  )}
                 </div>
               );
-            }
-            if (vc.key === "company") {
-              return (
+            } else if (vc.key === "company") {
+              baseContent = (
                 <div
                   className="truncate text-sm text-gray-700 font-medium w-full"
                   title={contact.company?.name}
                 >
-                  {contact.company?.name || "—"}
+                  {contact.company?.name ? <HighlightText text={contact.company.name} query={searchTerm} /> : "—"}
                 </div>
               );
-            }
-            if (vc.key === "status") {
-              return (
+            } else if (vc.key === "status") {
+              baseContent = (
                 <div
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
@@ -778,65 +957,71 @@ function Contacts() {
                   )}
                 </div>
               );
-            }
-            if (vc.key === "email") {
-              return (
+            } else if (vc.key === "email") {
+              baseContent = (
                 <div className="truncate w-full" title={contact.email}>
                   <a
                     href={`mailto:${contact.email}`}
                     className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
                   >
-                    {contact.email}
+                    <HighlightText text={contact.email} query={searchTerm} />
                   </a>
                 </div>
               );
-            }
-            if (vc.key === "phone") {
-              return (
+            } else if (vc.key === "phone") {
+              baseContent = (
                 <div className="truncate w-full" title={contact.phone}>
                   {contact.phone ? (
                     <a
                       href={`tel:${contact.phone}`}
                       className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
                     >
-                      {contact.phone}
+                      <HighlightText text={contact.phone} query={searchTerm} />
                     </a>
                   ) : (
                     <span className="text-sm text-gray-400">—</span>
                   )}
                 </div>
               );
+            } else if (baseContent === undefined) {
+              baseContent = (
+                <div
+                  className="truncate text-sm text-gray-700 w-full"
+                  title={String(val)}
+                >
+                  <HighlightText text={String(val)} query={searchTerm} />
+                </div>
+              );
             }
 
-            return (
-              <div
-                className="truncate text-sm text-gray-700 w-full"
-                title={String(val)}
-              >
-                {String(val)}
-              </div>
-            );
+            if (vc.key === lastColumnKey) {
+              return (
+                <div className="flex items-center justify-between w-full gap-2">
+                  <div className="min-w-0 flex-1">{baseContent}</div>
+                  {renderRowActionsMenu(contact)}
+                </div>
+              );
+            }
+            return baseContent;
           },
         })
       );
     });
 
-    // --- 5. PUSH ACTIONS (IF NOT PINNED) ---
-    if (!isActionsPinned) {
-      cols.push(actionsColumnDef);
-    }
-
     return cols;
   }, [
     selectionMode,
     visibleColumns,
-    selectedContacts,
+    selectedContactsSet,
     sortedContacts,
     sortConfig,
     permission,
     openDropdownId,
-    pinnedColumn, // <-- Make sure this is added to dependencies
-    starredContacts,
+    pinnedColumns,
+    starredContactsSet,
+    openColumnMenuKey,
+    columnMenuPos,
+    searchTerm,
   ]);
 
   const table = useReactTable({
@@ -1485,7 +1670,7 @@ function Contacts() {
     };
 
     return (
-      <div className="bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+      <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
         <div className="flex-1 flex justify-between sm:hidden">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
@@ -1518,6 +1703,7 @@ function Contacts() {
               <option value={20}>20 per page</option>
               <option value={50}>50 per page</option>
               <option value={100}>100 per page</option>
+              <option value={500}>500 per page</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
@@ -2081,9 +2267,65 @@ function Contacts() {
 
       {/* Title Strip */}
       <div
-        className="sticky -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 flex items-center justify-between gap-3 px-6 pt-4 pb-3 bg-white border-b border-[#E5E5EC]"
-        style={{ top: "64px", zIndex: 40, boxSizing: "border-box" }}
+        className={`fixed right-0 h-16 flex items-center justify-between gap-3 px-6 border-b ${selectionMode && selectedContacts.length > 0 ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
+        style={{ top: "64px", left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
       >
+        {selectionMode && selectedContacts.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 w-full h-full">
+            <div className="flex items-center gap-3">
+              <CheckSquare className="w-5 h-5 text-blue-600" />
+              <span className="text-blue-800 font-semibold font-inter">
+                {selectedContacts.length} contact{selectedContacts.length !== 1 ? "s" : ""} selected
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </button>
+              <button
+                onClick={() => setShowBulkNoteModal(true)}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <StickyNote className="w-4 h-4 text-emerald-600" />
+                Add Note
+              </button>
+              <button
+                onClick={() => setShowAddToHotlistModal(true)}
+                className="px-4 py-2 bg-white border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <FolderPlus className="w-4 h-4" />
+                Add to Folder
+              </button>
+              <button
+                onClick={() => setShowBulkActions(true)}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <Edit2 className="w-4 h-4" />
+                Bulk Update
+              </button>
+              <button
+                onClick={() => setShowBulkDeleteModal(true)}
+                disabled={loading}
+                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+              <button
+                onClick={exitSelectionMode}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+        <>
         <nav className="flex items-stretch h-11 overflow-x-auto flex-shrink-0">
           {[
             { id: "All", label: "All" },
@@ -2260,6 +2502,8 @@ function Contacts() {
             )}
           </button>
         </div>
+        </>
+        )}
       </div>
 
       <ImportContacts
@@ -2404,9 +2648,19 @@ function Contacts() {
 
       {/* Main Content Card */}
       <div className="bg-white overflow-visible">
+        <div
+          className="overflow-x-auto overflow-y-auto"
+          style={{
+            position: "fixed",
+            top: 128,
+            left: "var(--sidebar-width, 0px)",
+            right: 0,
+            bottom: !showKanban && activeTab !== "Hotlist" && !loading ? 64 : 0,
+          }}
+        >
         {/* Content Area */}
         {showKanban ? (
-          <div className="flex gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-6 mt-6 mb-2 overflow-x-auto">
+          <div className="flex gap-4 px-6 pt-6 pb-2 overflow-x-auto">
             {["New", "Contacted", "Interested", "Unqualified"].map((col) => {
               const count = sortedContacts.filter(
                 (c) => (c.stageStatus || "New") === col
@@ -2518,299 +2772,206 @@ function Contacts() {
             })}
           </div>
         ) : activeTab === "Hotlist" ? (
-          <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 mt-6">
+          <div className="px-6 pt-6">
             <ContactFolder />
           </div>
         ) : (
-          <>
-            {/* Active Filters Display */}
-            {statusFilter && (
-              <div className="mx-6 mt-4 mb-4 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-blue-700 font-semibold">
-                    Active Filter:
-                  </span>
-                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-blue-100 text-blue-800 font-medium">
-                    Status: {statusFilter}
-                    <button
-                      onClick={() => setStatusFilter("")}
-                      className="text-blue-600 hover:text-blue-800 hover:bg-blue-200 rounded-full p-0.5"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                </div>
-              </div>
-            )}
+          <div
+            className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
+          >
+              <table
+                className="w-full border-separate border-spacing-0 text-left"
+                style={{
+                  minWidth: `${table.getTotalSize()}px`,
+                  tableLayout: "fixed",
+                }}
+              >
+                {(() => {
+                  const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+                  const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+                  const allHeaders = table.getHeaderGroups()[0]?.headers || [];
 
-            <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 mt-6 mb-2">
-            <div className="border border-[#E1E4EA] rounded-lg overflow-hidden">
-              <div className="flex" style={{ height: "56px" }}>
-                <div
-                  className="flex items-center px-3 border-b border-[#E1E4EA] text-left"
-                  style={{ width: "50px", background: "#F5F7FA" }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={
-                      contacts.length > 0 &&
-                      selectedContacts.length === contacts.length
+                  const pinnedLeftOffsets = {};
+                  let cumulativeLeft = 0;
+                  allHeaders.forEach((h) => {
+                    const isLeftStickyCol = h.column.id === "selection" || leftPinnedKeys.includes(h.column.id);
+                    if (isLeftStickyCol) {
+                      pinnedLeftOffsets[h.column.id] = cumulativeLeft;
+                      cumulativeLeft += h.getSize();
                     }
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      handleSelectAll();
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                  />
-                </div>
-                <div
-                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors text-left"
-                  style={{ width: contactColWidths.name, background: "#F5F7FA" }}
-                  onClick={() => handleSort("name")}
-                >
-                  <User className="w-5 h-5 text-[#525252]" />
-                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
-                    Contact Name
-                  </span>
-                  <div className="flex flex-col">
-                    <ChevronUp className={`w-3 h-3 -mb-1 ${sortConfig.key === "name" && sortConfig.direction === "asc" ? "text-blue-600" : "text-gray-300"}`} />
-                    <ChevronDown className={`w-3 h-3 ${sortConfig.key === "name" && sortConfig.direction === "desc" ? "text-blue-600" : "text-gray-300"}`} />
-                  </div>
-                  <div
-                    onMouseDown={handleContactColResizeStart("name")}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 bg-transparent"
-                  />
-                </div>
-                <div
-                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors text-left"
-                  style={{ width: contactColWidths.company, background: "#F5F7FA" }}
-                  onClick={() => handleSort("company")}
-                >
-                  <Building2 className="w-5 h-5 text-[#525252]" />
-                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
-                    Company
-                  </span>
-                  <div className="flex flex-col">
-                    <ChevronUp className={`w-3 h-3 -mb-1 ${sortConfig.key === "company" && sortConfig.direction === "asc" ? "text-blue-600" : "text-gray-300"}`} />
-                    <ChevronDown className={`w-3 h-3 ${sortConfig.key === "company" && sortConfig.direction === "desc" ? "text-blue-600" : "text-gray-300"}`} />
-                  </div>
-                  <div
-                    onMouseDown={handleContactColResizeStart("company")}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 bg-transparent"
-                  />
-                </div>
-                <div
-                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors text-left"
-                  style={{ width: contactColWidths.email, background: "#F5F7FA" }}
-                  onClick={() => handleSort("email")}
-                >
-                  <Mail className="w-5 h-5 text-[#525252]" />
-                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
-                    Email
-                  </span>
-                  <div className="flex flex-col">
-                    <ChevronUp className={`w-3 h-3 -mb-1 ${sortConfig.key === "email" && sortConfig.direction === "asc" ? "text-blue-600" : "text-gray-300"}`} />
-                    <ChevronDown className={`w-3 h-3 ${sortConfig.key === "email" && sortConfig.direction === "desc" ? "text-blue-600" : "text-gray-300"}`} />
-                  </div>
-                  <div
-                    onMouseDown={handleContactColResizeStart("email")}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 bg-transparent"
-                  />
-                </div>
-                <div
-                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors text-left"
-                  style={{ width: contactColWidths.phone, background: "#F5F7FA" }}
-                  onClick={() => handleSort("phone")}
-                >
-                  <Phone className="w-5 h-5 text-[#525252]" />
-                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
-                    Phone
-                  </span>
-                  <div className="flex flex-col">
-                    <ChevronUp className={`w-3 h-3 -mb-1 ${sortConfig.key === "phone" && sortConfig.direction === "asc" ? "text-blue-600" : "text-gray-300"}`} />
-                    <ChevronDown className={`w-3 h-3 ${sortConfig.key === "phone" && sortConfig.direction === "desc" ? "text-blue-600" : "text-gray-300"}`} />
-                  </div>
-                  <div
-                    onMouseDown={handleContactColResizeStart("phone")}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 bg-transparent"
-                  />
-                </div>
-                <div
-                  className="relative flex items-center gap-3 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors text-left"
-                  style={{ width: contactColWidths.status, background: "#F5F7FA" }}
-                  onClick={() => handleSort("status")}
-                >
-                  <Target className="w-5 h-5 text-[#525252]" />
-                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
-                    Status
-                  </span>
-                  <div className="flex flex-col">
-                    <ChevronUp className={`w-3 h-3 -mb-1 ${sortConfig.key === "status" && sortConfig.direction === "asc" ? "text-blue-600" : "text-gray-300"}`} />
-                    <ChevronDown className={`w-3 h-3 ${sortConfig.key === "status" && sortConfig.direction === "desc" ? "text-blue-600" : "text-gray-300"}`} />
-                  </div>
-                  <div
-                    onMouseDown={handleContactColResizeStart("status")}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 bg-transparent"
-                  />
-                </div>
-                <div
-                  className="flex items-center px-3 border-b border-[#E1E4EA] flex-1 text-left"
-                  style={{ width: contactColWidths.actions, background: "#F5F7FA" }}
-                >
-                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
-                    Actions
-                  </span>
-                </div>
+                  });
+
+                  const pinnedRightOffsets = {};
+                  let cumulativeRight = 0;
+                  [...allHeaders].reverse().forEach((h) => {
+                    if (rightPinnedKeys.includes(h.column.id)) {
+                      pinnedRightOffsets[h.column.id] = cumulativeRight;
+                      cumulativeRight += h.getSize();
+                    }
+                  });
+
+                  const lastLeftPinnedKey = leftPinnedKeys.length > 0 ? leftPinnedKeys[leftPinnedKeys.length - 1] : null;
+                  const firstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
+
+                  return (
+                <>
+                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => {
+                        const colId = header.column.id;
+                        const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                        const isRightSticky = rightPinnedKeys.includes(colId);
+                        const isSticky = isLeftSticky || isRightSticky;
+                        const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                        const isRightBoundary = colId === firstRightPinnedKey;
+                        const isDraggable = colId !== "selection";
+                        const isDragging = draggedColKey === colId;
+                        const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+
+                        return (
+                          <th
+                            key={header.id}
+                            data-col-id={colId}
+                            onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
+                            style={{
+                              width: header.getSize(),
+                              position: isSticky ? "sticky" : "relative",
+                              left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                              right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                              zIndex: isSticky ? 20 : 1,
+                              opacity: isDragging ? 0.35 : 1,
+                            }}
+                            className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
+                              ? "border-r-2 border-r-gray-300"
+                              : "last:border-r-0"
+                              } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                          >
+                            <div className="w-full min-w-0">
+                              {flexRender(
+                                header.column.columnDef.header,
+                                header.getContext(),
+                              )}
+                            </div>
+
+                            {colId !== "selection" && header.column.getCanResize() && (
+                              <div
+                                data-resize-handle="true"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  header.getResizeHandler()(e);
+                                }}
+                                onTouchStart={header.getResizeHandler()}
+                                className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
+                              />
+                            )}
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </thead>
+
+                <tbody className="bg-white">
+                  {loading && sortedContacts.length === 0 ? (
+                    <tr>
+                      <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center">
+                        <p>Loading Contacts...</p>
+                      </td>
+                    </tr>
+                  ) : sortedContacts.length === 0 ? (
+                    <tr>
+                      <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
+                        <p className="font-medium">No contacts found</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    table.getRowModel().rows.map((row) => (
+                      <tr
+                        key={row.id}
+                        className={`bg-white hover:bg-blue-50 transition-colors cursor-pointer ${selectedContactsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                        onClick={() => navigate(`/contacts/${row.original._id}`)}
+                      >
+                        {row.getVisibleCells().map((cell) => {
+                          const colId = cell.column.id;
+                          const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                          const isRightSticky = rightPinnedKeys.includes(colId);
+                          const isSticky = isLeftSticky || isRightSticky;
+                          const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                          const isRightBoundary = colId === firstRightPinnedKey;
+                          const isColDragging = draggedColKey === colId;
+
+                          return (
+                            <td
+                              key={cell.id}
+                              onClick={(e) => { if (colId === "selection") e.stopPropagation(); }}
+                              style={{
+                                width: cell.column.getSize(),
+                                position: isSticky ? "sticky" : "static",
+                                left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                zIndex: isSticky ? 10 : 1,
+                                opacity: isColDragging ? 0.35 : 1,
+                              }}
+                              className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
+                                ? "border-r-2 border-r-gray-200"
+                                : "last:border-r-0"
+                                } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
+                            >
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext(),
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                </>
+                  );
+                })()}
+              </table>
+          </div>
+        )}
+        </div>
+
+        {dragGhost && createPortal(
+          <div
+            ref={ghostElRef}
+            style={{
+              position: "fixed",
+              top: -9999,
+              left: -9999,
+              width: dragGhost.width,
+              zIndex: 10000,
+              pointerEvents: "none",
+            }}
+            className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+          >
+            <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+              <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+            </div>
+            {dragGhost.previewRows.map((rowVal, i) => (
+              <div
+                key={i}
+                className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0"
+              >
+                <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
               </div>
+            ))}
+          </div>,
+          document.body,
+        )}
 
-              {loading && sortedContacts.length === 0 ? (
-                <div className="flex items-center justify-center py-12 text-gray-500">
-                  Loading Contacts...
-                </div>
-              ) : sortedContacts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                  <Users className="w-12 h-12 text-gray-300 mb-3" />
-                  <p className="font-medium">No contacts found</p>
-                </div>
-              ) : (
-                sortedContacts.map((contact) => (
-                  <div
-                    key={contact._id}
-                    className="flex bg-white hover:bg-blue-50 transition-colors cursor-pointer"
-                    style={{ height: "54px" }}
-                    onClick={() => navigate(`/contacts/${contact._id}`)}
-                  >
-                    <div
-                      className="flex items-center px-3 border-b border-gray-100 text-left"
-                      style={{ width: "50px" }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedContacts.includes(contact._id)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleSelectContact(contact._id);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                      />
-                    </div>
-                    <div
-                      className="flex items-center gap-3 px-3 border-b border-gray-100 text-left"
-                      style={{ width: contactColWidths.name }}
-                    >
-                      <ProfilePicture contact={contact} />
-                      <span
-                        className="truncate"
-                        style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "14px", lineHeight: "20px", color: "#222530" }}
-                        title={contact.name}
-                      >
-                        {contact.name}
-                      </span>
-                    </div>
-                    <div
-                      className="flex items-center px-3 border-b border-gray-100 text-left"
-                      style={{ width: contactColWidths.company }}
-                    >
-                      <span
-                        className="truncate"
-                        style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "14px", lineHeight: "20px", color: "#525866" }}
-                        title={contact.company?.name}
-                      >
-                        {contact.company?.name || "—"}
-                      </span>
-                    </div>
-                    <div
-                      className="flex items-center px-3 border-b border-gray-100 text-left"
-                      style={{ width: contactColWidths.email }}
-                    >
-                      <span
-                        className="truncate"
-                        style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "14px", lineHeight: "20px", color: "#222530" }}
-                        title={contact.email}
-                      >
-                        {contact.email || "—"}
-                      </span>
-                    </div>
-                    <div
-                      className="flex items-center px-3 border-b border-gray-100 text-left"
-                      style={{ width: contactColWidths.phone }}
-                    >
-                      <span
-                        className="truncate"
-                        style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "14px", lineHeight: "20px", color: "#525866" }}
-                        title={contact.phone}
-                      >
-                        {contact.phone || "—"}
-                      </span>
-                    </div>
-                    <div
-                      className="flex items-center px-3 border-b border-gray-100 text-left"
-                      style={{ width: contactColWidths.status }}
-                    >
-                      <span
-                        className="inline-flex items-center justify-center px-3 py-[5px] rounded-full"
-                        style={{
-                          fontFamily: "Inter",
-                          fontWeight: 500,
-                          fontSize: "12px",
-                          lineHeight: "120%",
-                          background: "rgba(0, 133, 255, 0.1)",
-                          color: "#0085FF",
-                        }}
-                      >
-                        {contact.stageStatus || "New"}
-                      </span>
-                    </div>
-                    <div
-                      className="flex items-center gap-2 px-3 border-b border-gray-100 flex-1 text-left"
-                      style={{ width: contactColWidths.actions }}
-                    >
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setQuickViewContactId(contact._id);
-                        }}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
-                        title="Quick view"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditContact(contact);
-                        }}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
-                        title="Edit Contact"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(contact._id);
-                        }}
-                        className="p-1.5 text-red-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors"
-                        title="Delete Contact"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            </div>
-
-            {!loading && <PaginationControls />}
-          </>
+        {!showKanban && activeTab !== "Hotlist" && !loading && (
+          <div
+            className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
+            style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+          >
+            <PaginationControls />
+          </div>
         )}
       </div>
 
@@ -2964,9 +3125,7 @@ function Contacts() {
           contactId={quickViewContactId}
           onClose={() => setQuickViewContactId(null)}
           onEdit={(contact) => {
-            handleEdit(contact);
-            // optionally close quick view
-            // setQuickViewContactId(null);
+            handleEditContact(contact);
           }}
         />
       )}
