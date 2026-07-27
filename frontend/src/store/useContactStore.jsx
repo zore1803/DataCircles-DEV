@@ -12,7 +12,7 @@ const useContactStore = create((set, get) => ({
     currentPage: 1,
     totalPages: 0,
     totalCount: 0,
-    limit: 10,
+    limit: 50,
     hasNextPage: false,
     hasPrevPage: false,
   },

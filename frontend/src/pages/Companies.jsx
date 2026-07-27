@@ -164,6 +164,8 @@ function Companies() {
   const searchInputRef = useRef(null);
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
   const rowActionsRef = useRef(null);
+  const [editingPage, setEditingPage] = useState(false);
+  const [pageInput, setPageInput] = useState("");
   const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
   const [columnMenuPos, setColumnMenuPos] = useState(null);
   const columnMenuRef = useRef(null);
@@ -1289,38 +1291,6 @@ function Companies() {
     const startItem = (currentPage - 1) * limit + 1;
     const endItem = Math.min(currentPage * limit, totalCount);
 
-    const getPageNumbers = () => {
-      const delta = 2;
-      const range = [];
-      const rangeWithDots = [];
-
-      for (
-        let i = Math.max(2, currentPage - delta);
-        i <= Math.min(totalPages - 1, currentPage + delta);
-        i++
-      ) {
-        range.push(i);
-      }
-
-      if (currentPage - delta > 2) {
-        rangeWithDots.push(1, "...");
-      } else {
-        rangeWithDots.push(1);
-      }
-
-      rangeWithDots.push(...range);
-
-      if (currentPage + delta < totalPages - 1) {
-        rangeWithDots.push("...", totalPages);
-      } else {
-        rangeWithDots.push(totalPages);
-      }
-
-      return rangeWithDots.filter(
-        (item, index, arr) => index === 0 || arr[index - 1] !== item,
-      );
-    };
-
     return (
       <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
         <div className="flex-1 flex justify-between sm:hidden">
@@ -1369,28 +1339,70 @@ function Companies() {
               <ChevronLeft className="h-4 w-4" />
             </button>
 
-            {totalPages > 0 &&
-              getPageNumbers().map((pageNum, index) =>
-                pageNum === "..." ? (
-                  <span
-                    key={`dots-${index}`}
-                    className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
-                  >
-                    ...
-                  </span>
-                ) : (
+            {(() => {
+              const commitPage = () => {
+                const n = parseInt(pageInput, 10);
+                if (!Number.isNaN(n)) handlePageChange(Math.min(Math.max(n, 1), totalPages));
+                setEditingPage(false);
+              };
+              const items = [1];
+              if (currentPage > 2) items.push("left-dots");
+              if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
+              if (currentPage < totalPages - 1) items.push("right-dots");
+              if (totalPages > 1) items.push(totalPages);
+
+              return items.map((item, index) => {
+                if (item === "left-dots" || item === "right-dots") {
+                  return (
+                    <span
+                      key={`${item}-${index}`}
+                      className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none"
+                    >
+                      ....
+                    </span>
+                  );
+                }
+                const isCurrent = item === currentPage;
+                if (isCurrent && editingPage) {
+                  return (
+                    <input
+                      key="page-edit"
+                      autoFocus
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      value={pageInput}
+                      onChange={(e) => setPageInput(e.target.value)}
+                      onBlur={commitPage}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitPage();
+                        if (e.key === "Escape") setEditingPage(false);
+                      }}
+                      className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                  );
+                }
+                return (
                   <button
-                    key={`page-${pageNum}`}
-                    onClick={() => handlePageChange(pageNum)}
-                    className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${pageNum === currentPage
+                    key={`page-${item}`}
+                    onClick={() => handlePageChange(item)}
+                    onDoubleClick={() => {
+                      if (isCurrent) {
+                        setPageInput(String(currentPage));
+                        setEditingPage(true);
+                      }
+                    }}
+                    title={isCurrent ? "Double-click to type a page number" : undefined}
+                    className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${isCurrent
                       ? "bg-blue-600 text-white"
                       : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
                       }`}
                   >
-                    {pageNum}
+                    {item}
                   </button>
-                ),
-              )}
+                );
+              });
+            })()}
 
             <button
               onClick={() => handlePageChange(currentPage + 1)}
@@ -2003,7 +2015,7 @@ function Companies() {
             className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
             style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
           >
-            <PaginationControls />
+            {PaginationControls()}
           </div>
         )}
       </div>
