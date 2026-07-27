@@ -98,6 +98,18 @@ const useIsMobile = () => {
   return isMobile;
 };
 
+// The app renders inside #root which carries a CSS `zoom` (0.75 on desktop).
+// getBoundingClientRect() returns UNSCALED layout coordinates while portal overlays on
+// document.body render in visual space, so rect-derived positions must be multiplied by
+// this zoom factor to line up on screen.
+const getRootZoom = () => {
+  if (typeof window === "undefined") return 1;
+  const el = document.getElementById("root");
+  if (!el) return 1;
+  const z = parseFloat(getComputedStyle(el).zoom);
+  return z && !Number.isNaN(z) ? z : 1;
+};
+
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>.
@@ -145,6 +157,7 @@ function Contacts() {
   const [permission, setPermission] = useState("");
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -637,80 +650,96 @@ function Contacts() {
 
   const renderRowActionsMenu = (contact) => {
     const isOpen = openRowActionsId === contact._id;
+    const closeMenu = () => {
+      setOpenRowActionsId(null);
+      setRowActionsPos(null);
+    };
     return (
-      <div
-        className="relative flex-shrink-0"
-        ref={isOpen ? rowActionsRef : null}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className="relative flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
         <button
           onClick={(e) => {
             e.stopPropagation();
-            setOpenRowActionsId(isOpen ? null : contact._id);
+            if (isOpen) {
+              closeMenu();
+              return;
+            }
+            const rect = e.currentTarget.getBoundingClientRect();
+            const z = getRootZoom();
+            setRowActionsPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+            setOpenRowActionsId(contact._id);
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="More actions"
         >
           <MoreVertical className="w-4 h-4" />
         </button>
-        {isOpen && (
-          <div className="absolute right-0 top-full z-[100] mt-1 w-[190px] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-2 animate-in fade-in zoom-in duration-150 origin-top-right pointer-events-auto">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenRowActionsId(null);
-                setQuickViewContactId(contact._id);
-              }}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+        {isOpen && rowActionsPos && createPortal(
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={closeMenu} onMouseDown={(e) => e.stopPropagation()} />
+            <div
+              ref={rowActionsRef}
+              style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-2 animate-in fade-in zoom-in duration-150 origin-top-right"
             >
-              <Eye className="w-4 h-4 text-[#1C1B1F]" />
-              Quick View
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenRowActionsId(null);
-                handleEditContact(contact);
-              }}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-            >
-              <Edit2 className="w-4 h-4 text-[#1C1B1F]" />
-              Edit
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenRowActionsId(null);
-                openAddToFolderModal(contact);
-              }}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-            >
-              <FolderPlus className="w-4 h-4 text-[#1C1B1F]" />
-              Add to Folder
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleStar(e, contact._id);
-              }}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-            >
-              <Star className={`w-4 h-4 ${starredContactsSet.has(contact._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
-              {starredContactsSet.has(contact._id) ? "Unstar Contact" : "Star Contact"}
-            </button>
-            <div className="w-full border-t border-[#F1F1F5]" />
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenRowActionsId(null);
-                handleDelete(contact._id);
-              }}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
-            >
-              <Trash2 className="w-4 h-4 text-[#CD3636]" />
-              Delete
-            </button>
-          </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeMenu();
+                  setQuickViewContactId(contact._id);
+                }}
+                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <Eye className="w-4 h-4 text-[#1C1B1F]" />
+                Quick View
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeMenu();
+                  handleEditContact(contact);
+                }}
+                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <Edit2 className="w-4 h-4 text-[#1C1B1F]" />
+                Edit
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeMenu();
+                  openAddToFolderModal(contact);
+                }}
+                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <FolderPlus className="w-4 h-4 text-[#1C1B1F]" />
+                Add to Folder
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleStar(e, contact._id);
+                }}
+                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <Star className={`w-4 h-4 ${starredContactsSet.has(contact._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
+                {starredContactsSet.has(contact._id) ? "Unstar Contact" : "Star Contact"}
+              </button>
+              <div className="w-full border-t border-[#F1F1F5]" />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeMenu();
+                  handleDelete(contact._id);
+                }}
+                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
+              >
+                <Trash2 className="w-4 h-4 text-[#CD3636]" />
+                Delete
+              </button>
+            </div>
+          </>,
+          document.body,
         )}
       </div>
     );
@@ -804,7 +833,8 @@ function Contacts() {
                       return;
                     }
                     const rect = e.currentTarget.getBoundingClientRect();
-                    setColumnMenuPos({ top: rect.bottom + 4, left: rect.right - 190 });
+                    const z = getRootZoom();
+                    setColumnMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
                     setOpenColumnMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -1021,6 +1051,8 @@ function Contacts() {
     starredContactsSet,
     openColumnMenuKey,
     columnMenuPos,
+    openRowActionsId,
+    rowActionsPos,
     searchTerm,
   ]);
 
@@ -1703,7 +1735,7 @@ function Contacts() {
               <option value={20}>20 per page</option>
               <option value={50}>50 per page</option>
               <option value={100}>100 per page</option>
-              <option value={500}>500 per page</option>
+              <option value={150}>150 per page</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
@@ -2332,7 +2364,6 @@ function Contacts() {
             { id: "Leads", label: "Leads" },
             { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
             { id: "Customers", label: "Customers" },
-            { id: "Hotlist", label: "Hotlist" },
           ].map(({ id, label }) => (
             <button
               key={id}
@@ -2483,6 +2514,19 @@ function Contacts() {
               </div>
             )}
           </div>
+
+          <button
+            onClick={() => handleTabChange(activeTab === "Hotlist" ? "All" : "Hotlist")}
+            className={`inline-flex items-center gap-2 h-11 px-4 rounded-full text-sm font-semibold transition-colors flex-shrink-0 ${activeTab === "Hotlist"
+              ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
+              : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
+              }`}
+          >
+            <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={activeTab === "Hotlist" ? "#1D4ED8" : "#1F2937"} />
+            </svg>
+            <span className="font-medium">Hotlist</span>
+          </button>
 
           <button
             onClick={toggleForm}
