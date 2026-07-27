@@ -1,6 +1,47 @@
-import { useEffect, useState, useMemo, Fragment } from "react";
-import { TrendingUp, TrendingDown, Search, MoreVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2 } from "lucide-react";
+import { useEffect, useState, useMemo, useRef, Fragment } from "react";
+import { createPortal } from "react-dom";
+import { createColumnHelper } from "@tanstack/react-table";
+import { TrendingUp, TrendingDown, Search, MoreVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2, Pin, PinOff, EyeOff, Download, X, CheckSquare } from "lucide-react";
 import FilterIcon from "../components/common/FilterIcon";
+import DataTable from "../components/common/DataTable";
+import InvoiceQuickView from "../components/invoice/InvoiceQuickView";
+
+const getRootZoom = () => {
+  if (typeof window === "undefined") return 1;
+  const el = document.getElementById("root");
+  if (!el) return 1;
+  const z = parseFloat(getComputedStyle(el).zoom);
+  return z && !Number.isNaN(z) ? z : 1;
+};
+
+// Default column config for the Invoices table (order + visibility + pin state
+// are managed in component state, mirroring the Companies list).
+const defaultInvoiceColumns = [
+  { key: "invoiceId", label: "Invoice Id", visible: true, order: 0, sortable: true },
+  { key: "client", label: "Client", visible: true, order: 1, sortable: true },
+  { key: "contact", label: "Contact", visible: true, order: 2, sortable: true },
+  { key: "deal", label: "Deal", visible: true, order: 3, sortable: true },
+  { key: "invoiceDate", label: "Invoice Date", visible: true, order: 4, sortable: true },
+  { key: "amount", label: "Amount", visible: true, order: 5, sortable: true },
+  { key: "dueDate", label: "Due Date", visible: true, order: 6, sortable: true },
+  { key: "status", label: "Status", visible: true, order: 7, sortable: true },
+];
+
+const getInvoiceFieldValue = (inv, key) => {
+  switch (key) {
+    case "invoiceId": return inv.invoiceNumber || "";
+    case "client": return inv.deal?.company?.name || "";
+    case "contact": return inv.deal?.contact?.name || "";
+    case "deal": return inv.deal?.title || "";
+    case "invoiceDate": return inv.date ? new Date(inv.date).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }) : "";
+    case "amount": return inv.amount != null ? `₹${Math.round(inv.amount).toLocaleString("en-IN")}` : "";
+    case "dueDate": return inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }) : "";
+    case "status": return inv.status || "";
+    default: return "";
+  }
+};
+
+const invoiceColumnHelper = createColumnHelper();
 
 const yAxisLabels = ["₹180k", "₹160k", "₹140k", "₹120k", "₹100k", "₹80k", "₹60k", "₹40k", "₹20k", "0"];
 
@@ -10,6 +51,7 @@ const InvoicesIcon = ({ size = 20, style }) => (
   </svg>
 );
 import API from "../services/api";
+import toast from "react-hot-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import TaskAndMeeting, { TasksCard } from "../components/dashboard/TaskAndMeeting";
 import ClientsAndDeals from "../components/dashboard/ClientsAndDeals";
@@ -63,41 +105,59 @@ function Dashboard() {
   const [selectedInvoices, setSelectedInvoices] = useState([]);
   const [invoiceSearchTerm, setInvoiceSearchTerm] = useState("");
   const [invoicePage, setInvoicePage] = useState(1);
-  const invoicesPerPage = 8;
+  const [invoicesPerPage, setInvoicesPerPage] = useState(10);
+  const [invoiceEditingPage, setInvoiceEditingPage] = useState(false);
+  const [invoicePageInput, setInvoicePageInput] = useState("");
   const [invoiceSortConfig, setInvoiceSortConfig] = useState({ key: null, direction: "asc" });
-  const [invoiceColWidths, setInvoiceColWidths] = useState({
-    invoiceId: 160,
-    client: 150,
-    contact: 150,
-    deal: 160,
-    invoiceDate: 130,
-    amount: 130,
-    dueDate: 130,
-    status: 120,
-    actions: 120,
-  });
 
-  const handleInvoiceSort = (key) => {
-    setInvoiceSortConfig((prev) => ({
-      key,
-      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
-    }));
+  // Invoices table (Companies-style): column sizing, pin state, column config
+  // (order/visibility) and the per-column header menu.
+  const [invoiceColumnSizing, setInvoiceColumnSizing] = useState({});
+  const [invoicePinnedColumns, setInvoicePinnedColumns] = useState([]); // [{ key, side }]
+  const [invoiceColumnsConfig, setInvoiceColumnsConfig] = useState(defaultInvoiceColumns);
+  const [openInvoiceColMenuKey, setOpenInvoiceColMenuKey] = useState(null);
+  const [openInvoiceActionsId, setOpenInvoiceActionsId] = useState(null);
+  const [invoiceActionsPos, setInvoiceActionsPos] = useState(null);
+  const invoiceActionsRef = useRef(null);
+  // Invoice view/edit slide-over: { invoice, mode: "view" | "edit" }
+  const [invoiceQuickView, setInvoiceQuickView] = useState(null);
+  const [invoiceColMenuPos, setInvoiceColMenuPos] = useState(null);
+  const invoiceColMenuRef = useRef(null);
+  const selectedInvoicesSet = useMemo(() => new Set(selectedInvoices), [selectedInvoices]);
+
+  const invoiceVisibleColumns = useMemo(
+    () => [...invoiceColumnsConfig].filter((c) => c.visible).sort((a, b) => a.order - b.order),
+    [invoiceColumnsConfig],
+  );
+
+  const invoicePinColumnToSide = (colKey, side) =>
+    setInvoicePinnedColumns((prev) => [...prev.filter((p) => p.key !== colKey), { key: colKey, side }]);
+  const invoiceUnpinColumn = (colKey) =>
+    setInvoicePinnedColumns((prev) => prev.filter((p) => p.key !== colKey));
+  const getInvoicePinSide = (colKey) => invoicePinnedColumns.find((p) => p.key === colKey)?.side || null;
+
+  const handleInvoiceColumnReorder = (draggedKey, targetKey) => {
+    if (!draggedKey || draggedKey === targetKey) return;
+    const sorted = [...invoiceColumnsConfig].sort((a, b) => a.order - b.order);
+    const visibleSorted = sorted.filter((c) => c.visible);
+    const draggedIdx = visibleSorted.findIndex((c) => c.key === draggedKey);
+    const targetIdx = visibleSorted.findIndex((c) => c.key === targetKey);
+    if (draggedIdx === -1 || targetIdx === -1) return;
+    const reordered = [...visibleSorted];
+    const [moved] = reordered.splice(draggedIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    let cursor = 0;
+    setInvoiceColumnsConfig(
+      sorted.map((c) => (c.visible ? reordered[cursor++] : c)).map((c, idx) => ({ ...c, order: idx })),
+    );
   };
 
-  const handleInvoiceColResizeStart = (key) => (e) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = invoiceColWidths[key];
-    const onMouseMove = (moveEvent) => {
-      const newWidth = Math.max(80, startWidth + (moveEvent.clientX - startX));
-      setInvoiceColWidths((prev) => ({ ...prev, [key]: newWidth }));
-    };
-    const onMouseUp = () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+  const handleInvoiceSort = (key, direction) => {
+    setInvoiceSortConfig((prev) =>
+      direction
+        ? { key, direction }
+        : { key, direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc" },
+    );
   };
 
   const handleSelectAllInvoices = () => {
@@ -106,6 +166,102 @@ function Dashboard() {
 
   const handleSelectInvoice = (id) => {
     setSelectedInvoices((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const [showBulkInvoiceDeleteModal, setShowBulkInvoiceDeleteModal] = useState(false);
+  const [showBulkInvoiceStatusModal, setShowBulkInvoiceStatusModal] = useState(false);
+  const [bulkInvoiceStatus, setBulkInvoiceStatus] = useState("Paid");
+  const [bulkInvoiceLoading, setBulkInvoiceLoading] = useState(false);
+
+  const handleBulkDeleteInvoices = async () => {
+    setBulkInvoiceLoading(true);
+    try {
+      await Promise.all(selectedInvoices.map((id) => API.delete(`/invoices/${id}`)));
+      setInvoices((prev) => prev.filter((i) => !selectedInvoices.includes(i._id)));
+      toast.success(`${selectedInvoices.length} invoice(s) deleted`);
+      setSelectedInvoices([]);
+      setShowBulkInvoiceDeleteModal(false);
+    } catch (err) {
+      console.error("Bulk invoice delete failed:", err);
+      toast.error(err.response?.data?.message || "Bulk delete failed");
+    } finally {
+      setBulkInvoiceLoading(false);
+    }
+  };
+
+  const handleBulkUpdateInvoiceStatus = async () => {
+    setBulkInvoiceLoading(true);
+    try {
+      await Promise.all(
+        selectedInvoices.map((id) => API.put(`/invoices/status/${id}`, { status: bulkInvoiceStatus })),
+      );
+      setInvoices((prev) =>
+        prev.map((i) => (selectedInvoices.includes(i._id) ? { ...i, status: bulkInvoiceStatus } : i)),
+      );
+      toast.success(`${selectedInvoices.length} invoice(s) updated`);
+      setSelectedInvoices([]);
+      setShowBulkInvoiceStatusModal(false);
+    } catch (err) {
+      console.error("Bulk invoice status update failed:", err);
+      toast.error(err.response?.data?.message || "Bulk update failed");
+    } finally {
+      setBulkInvoiceLoading(false);
+    }
+  };
+
+  const handleExportSelectedInvoices = () => {
+    const rows = invoices.filter((i) => selectedInvoices.includes(i._id));
+    const header = ["Invoice Id", "Client", "Deal", "Invoice Date", "Amount", "Due Date", "Status"];
+    const csvRows = rows.map((inv) =>
+      [
+        inv.invoiceNumber || "",
+        inv.deal?.company?.name || "",
+        inv.deal?.title || "",
+        inv.date ? new Date(inv.date).toLocaleDateString("en-IN") : "",
+        inv.amount || 0,
+        inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN") : "",
+        inv.status || "",
+      ]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(","),
+    );
+    const csv = [header.join(","), ...csvRows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "invoices-export.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleViewInvoice = (inv) => {
+    setInvoiceQuickView({ invoice: inv, mode: "view" });
+  };
+
+  const handleEditInvoice = (inv) => {
+    setInvoiceQuickView({ invoice: inv, mode: "edit" });
+  };
+
+  const [invoiceToDelete, setInvoiceToDelete] = useState(null);
+
+  const handleDeleteInvoice = (inv) => {
+    setInvoiceToDelete(inv);
+  };
+
+  const confirmDeleteInvoice = async () => {
+    const inv = invoiceToDelete;
+    if (!inv) return;
+    setInvoiceToDelete(null);
+    try {
+      await API.delete(`/invoices/${inv._id}`);
+      setInvoices((prev) => prev.filter((i) => i._id !== inv._id));
+      setSelectedInvoices((prev) => prev.filter((id) => id !== inv._id));
+      toast.success("Invoice deleted");
+    } catch (err) {
+      console.error("Failed to delete invoice:", err);
+      toast.error(err.response?.data?.message || "Failed to delete invoice");
+    }
   };
 
   const sortedInvoices = useMemo(() => {
@@ -145,15 +301,310 @@ function Dashboard() {
   const paginatedInvoices = useMemo(() => {
     const start = (invoicePage - 1) * invoicesPerPage;
     return sortedInvoices.slice(start, start + invoicesPerPage);
-  }, [sortedInvoices, invoicePage]);
+  }, [sortedInvoices, invoicePage, invoicesPerPage]);
 
   useEffect(() => {
     setInvoicePage(1);
-  }, [invoiceSearchTerm, invoiceSortConfig]);
+  }, [invoiceSearchTerm, invoiceSortConfig, invoicesPerPage]);
 
   useEffect(() => {
     if (invoicePage > invoiceTotalPages) setInvoicePage(invoiceTotalPages);
   }, [invoiceTotalPages, invoicePage]);
+
+  // Lock background scroll while a row-actions / column popup is open so the
+  // page underneath can't move until the menu is dismissed.
+  useEffect(() => {
+    const menuOpen = openInvoiceActionsId != null || openInvoiceColMenuKey != null;
+    if (!menuOpen) return;
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, [openInvoiceActionsId, openInvoiceColMenuKey]);
+
+  const getInvoiceGhostPreview = (colId) =>
+    (sortedInvoices || []).map((inv) => String(getInvoiceFieldValue(inv, colId) ?? "").trim() || "—");
+
+  // Build the TanStack column defs for the Invoices table (selection + data
+  // columns + per-column header menu with pin/sort/hide), grouped by pin side.
+  const invoiceTableColumns = useMemo(() => {
+    const cols = [];
+
+    cols.push(
+      invoiceColumnHelper.display({
+        id: "selection",
+        size: 60,
+        enableResizing: false,
+        header: () => (
+          <div className="flex justify-center items-center w-full">
+            <input
+              type="checkbox"
+              checked={invoices.length > 0 && selectedInvoices.length === invoices.length}
+              onChange={handleSelectAllInvoices}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-center items-center w-full">
+            <input
+              type="checkbox"
+              checked={selectedInvoicesSet.has(row.original._id)}
+              onChange={() => handleSelectInvoice(row.original._id)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
+      }),
+    );
+
+    const leftPinnedKeys = invoicePinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+    const rightPinnedKeys = invoicePinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+    const leftFields = invoiceVisibleColumns.filter((vc) => leftPinnedKeys.includes(vc.key));
+    const rightFields = invoiceVisibleColumns.filter((vc) => rightPinnedKeys.includes(vc.key));
+    const unpinnedFields = invoiceVisibleColumns.filter(
+      (vc) => !leftPinnedKeys.includes(vc.key) && !rightPinnedKeys.includes(vc.key),
+    );
+    const orderedFields = [...leftFields, ...unpinnedFields, ...rightFields];
+    const lastColumnKey = orderedFields[orderedFields.length - 1]?.key;
+
+    orderedFields.forEach((vc) => {
+      cols.push(
+        invoiceColumnHelper.accessor((row) => getInvoiceFieldValue(row, vc.key), {
+          id: vc.key,
+          size: vc.key === "invoiceId" || vc.key === "deal" ? 170 : 150,
+          header: () => {
+            const isSortable = vc.sortable !== false;
+            const pinSide = getInvoicePinSide(vc.key);
+            const isMenuOpen = openInvoiceColMenuKey === vc.key;
+            return (
+              <div className="flex items-center justify-between w-full group">
+                <span className="truncate flex-1 min-w-0" title={vc.label}>{vc.label}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isMenuOpen) {
+                      setOpenInvoiceColMenuKey(null);
+                      setInvoiceColMenuPos(null);
+                      return;
+                    }
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const z = getRootZoom();
+                    setInvoiceColMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+                    setOpenInvoiceColMenuKey(vc.key);
+                  }}
+                  className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                  title="Column options"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+
+                {isMenuOpen && invoiceColMenuPos && createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenInvoiceColMenuKey(null); setInvoiceColMenuPos(null); }} />
+                    <div
+                      ref={invoiceColMenuRef}
+                      style={{ position: "fixed", top: invoiceColMenuPos.top, left: invoiceColMenuPos.left }}
+                      className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                    >
+                      <button
+                        onClick={() => {
+                          setOpenInvoiceColMenuKey(null);
+                          setInvoiceColMenuPos(null);
+                          pinSide === "left" ? invoiceUnpinColumn(vc.key) : invoicePinColumnToSide(vc.key, "left");
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                      >
+                        {pinSide === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                        Pin to Left
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOpenInvoiceColMenuKey(null);
+                          setInvoiceColMenuPos(null);
+                          pinSide === "right" ? invoiceUnpinColumn(vc.key) : invoicePinColumnToSide(vc.key, "right");
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                      >
+                        {pinSide === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                        Pin to Right
+                      </button>
+
+                      {isSortable && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setOpenInvoiceColMenuKey(null);
+                              setInvoiceColMenuPos(null);
+                              handleInvoiceSort(vc.key, "asc");
+                            }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                            Sort Ascending
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpenInvoiceColMenuKey(null);
+                              setInvoiceColMenuPos(null);
+                              handleInvoiceSort(vc.key, "desc");
+                            }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                            Sort Descending
+                          </button>
+                        </>
+                      )}
+
+                      <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+
+                      <button
+                        onClick={() => {
+                          setOpenInvoiceColMenuKey(null);
+                          setInvoiceColMenuPos(null);
+                          setInvoiceColumnsConfig((prev) =>
+                            prev.map((c) => (c.key === vc.key ? { ...c, visible: false } : c)),
+                          );
+                        }}
+                        className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                      >
+                        <EyeOff className="w-4 h-4 text-[#1C1B1F]" />
+                        Hide Column
+                      </button>
+                    </div>
+                  </>,
+                  document.body,
+                )}
+              </div>
+            );
+          },
+          cell: ({ row, getValue }) => {
+            const inv = row.original;
+            let baseContent;
+
+            if (vc.key === "invoiceId") {
+              baseContent = <span className="text-sm font-semibold text-[#1F2937] truncate block" title={inv.invoiceNumber}>{inv.invoiceNumber || "—"}</span>;
+            } else if (vc.key === "amount") {
+              baseContent = <span className="text-sm font-medium text-[#1F2937]">{inv.amount != null ? `₹${Math.round(inv.amount).toLocaleString("en-IN")}` : "—"}</span>;
+            } else if (vc.key === "status") {
+              const isPaid = inv.status?.toLowerCase() === "paid" || inv.status?.toLowerCase() === "accepted";
+              baseContent = (
+                <span
+                  className="inline-flex items-center justify-center px-3 py-[5px] rounded-full text-xs font-medium"
+                  style={{
+                    background: isPaid ? "rgba(0, 201, 80, 0.1)" : "rgba(254, 89, 25, 0.1)",
+                    color: isPaid ? "#00C950" : "#FE5919",
+                  }}
+                >
+                  {inv.status || "—"}
+                </span>
+              );
+            } else {
+              const val = String(getValue() ?? "").trim();
+              baseContent = <span className="text-sm text-gray-700 truncate block" title={val}>{val || "—"}</span>;
+            }
+
+            if (vc.key === lastColumnKey) {
+              const isActionsOpen = openInvoiceActionsId === inv._id;
+              return (
+                <div className="flex items-center justify-between w-full gap-2">
+                  <div className="min-w-0 flex-1">{baseContent}</div>
+                  <div className="relative flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isActionsOpen) {
+                          setOpenInvoiceActionsId(null);
+                          setInvoiceActionsPos(null);
+                          return;
+                        }
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const z = getRootZoom();
+                        setInvoiceActionsPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+                        setOpenInvoiceActionsId(inv._id);
+                      }}
+                      className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="More actions"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                    {isActionsOpen && invoiceActionsPos && createPortal(
+                      <>
+                        <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenInvoiceActionsId(null); setInvoiceActionsPos(null); }} />
+                        <div
+                          ref={invoiceActionsRef}
+                          style={{ position: "fixed", top: invoiceActionsPos.top, left: invoiceActionsPos.left }}
+                          className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                        >
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenInvoiceActionsId(null);
+                              setInvoiceActionsPos(null);
+                              handleViewInvoice(inv);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <Eye className="w-4 h-4 text-[#1C1B1F]" />
+                            View Invoice
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenInvoiceActionsId(null);
+                              setInvoiceActionsPos(null);
+                              handleEditInvoice(inv);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <Edit2 className="w-4 h-4 text-[#1C1B1F]" />
+                            Edit Invoice
+                          </button>
+                          <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenInvoiceActionsId(null);
+                              setInvoiceActionsPos(null);
+                              handleDeleteInvoice(inv);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 whitespace-nowrap"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete Invoice
+                          </button>
+                        </div>
+                      </>,
+                      document.body,
+                    )}
+                  </div>
+                </div>
+              );
+            }
+            return baseContent;
+          },
+        }),
+      );
+    });
+
+    return cols;
+  }, [
+    invoices.length,
+    selectedInvoices,
+    selectedInvoicesSet,
+    invoiceVisibleColumns,
+    invoicePinnedColumns,
+    invoiceSortConfig,
+    openInvoiceColMenuKey,
+    invoiceColMenuPos,
+    openInvoiceActionsId,
+    invoiceActionsPos,
+  ]);
 
   const [totalClients, setTotalClients] = useState(0);
   const [activeDeals, setActiveDeals] = useState(0);
@@ -491,14 +942,19 @@ function Dashboard() {
     return (
       <div style={{ marginTop: -16 }}>
         <div
-          className="box-border flex flex-row justify-between items-center flex-shrink-0 self-stretch -mx-4 sm:-mx-6 lg:-mx-8"
+          className="box-border flex flex-row justify-between items-center"
           style={{
+            position: "fixed",
+            top: 64,
+            left: "var(--sidebar-width, 0px)",
+            right: 0,
+            zIndex: 40,
             padding: "0px 24px",
             gap: 16,
             height: 56,
             background: "#FFFFFF",
             borderBottom: "1px solid #E1E4EA",
-            borderRadius: 0,
+            boxSizing: "border-box",
           }}
         >
           <div
@@ -530,6 +986,8 @@ function Dashboard() {
             </span>
           </div>
         </div>
+        {/* Spacer to offset the fixed header bar */}
+        <div style={{ height: 56 }} />
 
         {/* KPI Cards */}
         <div
@@ -846,6 +1304,49 @@ function Dashboard() {
           </div>
         </div>
 
+        {selectedInvoices.length > 0 ? (
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4"
+            style={{ width: "100%", minHeight: 64, marginTop: 24 }}
+          >
+            <div className="flex items-center gap-3">
+              <CheckSquare className="w-5 h-5 text-blue-600" />
+              <span className="text-blue-800 font-semibold font-inter text-sm">
+                {selectedInvoices.length} invoice{selectedInvoices.length !== 1 ? "s" : ""} selected
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 py-2">
+              <button
+                onClick={handleExportSelectedInvoices}
+                className="px-3.5 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 transition-colors flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </button>
+              <button
+                onClick={() => setShowBulkInvoiceStatusModal(true)}
+                className="px-3.5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <Edit2 className="w-4 h-4" />
+                Bulk Update
+              </button>
+              <button
+                onClick={() => setShowBulkInvoiceDeleteModal(true)}
+                className="px-3.5 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+              <button
+                onClick={() => setSelectedInvoices([])}
+                className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
         <div
           className="flex flex-row justify-between items-center"
           style={{ gap: 16, width: "100%", height: 44, marginTop: 24 }}
@@ -890,9 +1391,10 @@ function Dashboard() {
             </button>
           </div>
         </div>
+        )}
 
         <div
-          className="box-border flex flex-col items-start self-stretch overflow-hidden"
+          className="box-border overflow-hidden"
           style={{
             padding: 0,
             width: "100%",
@@ -902,191 +1404,250 @@ function Dashboard() {
             marginTop: 16,
           }}
         >
-          <div className="w-full overflow-x-auto">
-            <div className="flex" style={{ height: "44px", minWidth: "fit-content" }}>
-              <div className="flex items-center px-3 border-b border-[#E1E4EA] flex-shrink-0" style={{ width: "50px", background: "#F5F7FA" }}>
-                <input
-                  type="checkbox"
-                  checked={invoices.length > 0 && selectedInvoices.length === invoices.length}
-                  onChange={handleSelectAllInvoices}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                />
-              </div>
+          <DataTable
+            variant="card"
+            maxHeight={440}
+            data={paginatedInvoices}
+            columns={invoiceTableColumns}
+            columnSizing={invoiceColumnSizing}
+            onColumnSizingChange={setInvoiceColumnSizing}
+            pinnedColumns={invoicePinnedColumns}
+            visibleColumns={invoiceVisibleColumns}
+            onColumnReorder={handleInvoiceColumnReorder}
+            getGhostPreview={getInvoiceGhostPreview}
+            rowClassName={(inv) => (selectedInvoicesSet.has(inv._id) ? "!bg-blue-50" : "")}
+            emptyContent={<p className="font-medium">No invoices found</p>}
+          />
 
-              {[
-                { key: "invoiceId", label: "Invoice Id" },
-                { key: "client", label: "Client" },
-                { key: "contact", label: "Contact" },
-                { key: "deal", label: "Deal" },
-                { key: "invoiceDate", label: "Invoice Date" },
-                { key: "amount", label: "Amount" },
-                { key: "dueDate", label: "Due Date" },
-                { key: "status", label: "Status" },
-              ].map((col) => (
-                <div
-                  key={col.key}
-                  className="relative flex items-center gap-2 px-3 border-b border-[#E1E4EA] cursor-pointer select-none hover:bg-gray-100 transition-colors flex-shrink-0"
-                  style={{ width: invoiceColWidths[col.key], background: "#F5F7FA" }}
-                  onClick={() => handleInvoiceSort(col.key)}
+          {/* Pagination - Companies-style, contained within the card (not a fixed bottom navbar) */}
+          {sortedInvoices.length > 0 && (
+            <div
+              className="w-full bg-white px-4 py-3 flex items-center justify-between flex-shrink-0"
+              style={{ borderTop: "1px solid #E1E4EA" }}
+            >
+              <div className="flex items-center space-x-2">
+                <p className="text-sm text-gray-700 font-inter">
+                  Showing <span className="font-semibold">{(invoicePage - 1) * invoicesPerPage + 1}</span> to{" "}
+                  <span className="font-semibold">{Math.min(invoicePage * invoicesPerPage, sortedInvoices.length)}</span> of{" "}
+                  <span className="font-semibold">{sortedInvoices.length}</span> results
+                </p>
+                <select
+                  value={invoicesPerPage}
+                  onChange={(e) => setInvoicesPerPage(parseInt(e.target.value))}
+                  className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
                 >
-                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
-                    {col.label}
-                  </span>
-                  <div className="flex flex-col">
-                    <ChevronUp className={`w-3 h-3 -mb-1 ${invoiceSortConfig.key === col.key && invoiceSortConfig.direction === "asc" ? "text-blue-600" : "text-gray-300"}`} />
-                    <ChevronDown className={`w-3 h-3 ${invoiceSortConfig.key === col.key && invoiceSortConfig.direction === "desc" ? "text-blue-600" : "text-gray-300"}`} />
-                  </div>
-                  <div
-                    onMouseDown={handleInvoiceColResizeStart(col.key)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 bg-transparent"
-                  />
-                </div>
-              ))}
+                  <option value={10}>10 per page</option>
+                  <option value={20}>20 per page</option>
+                  <option value={50}>50 per page</option>
+                  <option value={100}>100 per page</option>
+                  <option value={150}>150 per page</option>
+                </select>
+              </div>
 
-              <div className="flex items-center px-3 border-b border-[#E1E4EA] flex-shrink-0" style={{ width: invoiceColWidths.actions, background: "#F5F7FA" }}>
-                <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525866" }}>
-                  Actions
-                </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
+                  disabled={invoicePage === 1}
+                  className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+
+                {(() => {
+                  const commitPage = () => {
+                    const n = parseInt(invoicePageInput, 10);
+                    if (!Number.isNaN(n)) setInvoicePage(Math.min(Math.max(n, 1), invoiceTotalPages));
+                    setInvoiceEditingPage(false);
+                  };
+                  const items = [1];
+                  if (invoicePage > 2) items.push("left-dots");
+                  if (invoicePage !== 1 && invoicePage !== invoiceTotalPages) items.push(invoicePage);
+                  if (invoicePage < invoiceTotalPages - 1) items.push("right-dots");
+                  if (invoiceTotalPages > 1) items.push(invoiceTotalPages);
+
+                  return items.map((item, index) => {
+                    if (item === "left-dots" || item === "right-dots") {
+                      return (
+                        <span
+                          key={`${item}-${index}`}
+                          className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none"
+                        >
+                          ....
+                        </span>
+                      );
+                    }
+                    const isCurrent = item === invoicePage;
+                    if (isCurrent && invoiceEditingPage) {
+                      return (
+                        <input
+                          key="page-edit"
+                          autoFocus
+                          type="number"
+                          min={1}
+                          max={invoiceTotalPages}
+                          value={invoicePageInput}
+                          onChange={(e) => setInvoicePageInput(e.target.value)}
+                          onBlur={commitPage}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitPage();
+                            if (e.key === "Escape") setInvoiceEditingPage(false);
+                          }}
+                          className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        />
+                      );
+                    }
+                    return (
+                      <button
+                        key={`page-${item}`}
+                        onClick={() => setInvoicePage(item)}
+                        onDoubleClick={() => {
+                          if (isCurrent) {
+                            setInvoicePageInput(String(invoicePage));
+                            setInvoiceEditingPage(true);
+                          }
+                        }}
+                        title={isCurrent ? "Double-click to type a page number" : undefined}
+                        className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
+                          isCurrent
+                            ? "bg-blue-600 text-white"
+                            : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    );
+                  });
+                })()}
+
+                <button
+                  onClick={() => setInvoicePage((p) => Math.min(invoiceTotalPages, p + 1))}
+                  disabled={invoicePage === invoiceTotalPages}
+                  className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
               </div>
             </div>
-
-            {paginatedInvoices.map((inv) => {
-              const isPaid = inv.status?.toLowerCase() === "paid" || inv.status?.toLowerCase() === "accepted";
-              return (
-                <div key={inv._id} className="flex hover:bg-gray-50 transition-colors" style={{ height: "52px", minWidth: "fit-content" }}>
-                  <div className="flex items-center px-3 border-b border-gray-100 flex-shrink-0" style={{ width: "50px" }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedInvoices.includes(inv._id)}
-                      onChange={() => handleSelectInvoice(inv._id)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="flex items-center px-3 border-b border-gray-100 flex-shrink-0" style={{ width: invoiceColWidths.invoiceId }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", color: "#1F2937" }}>
-                      {inv.invoiceNumber || "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-center px-3 border-b border-gray-100 flex-shrink-0" style={{ width: invoiceColWidths.client }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: "12px", color: "#1F2937" }}>
-                      {inv.deal?.company?.name || "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-center px-3 border-b border-gray-100 flex-shrink-0" style={{ width: invoiceColWidths.contact }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: "12px", color: "#1F2937" }}>
-                      {inv.deal?.contact?.name || "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-center px-3 border-b border-gray-100 flex-shrink-0" style={{ width: invoiceColWidths.deal }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: "12px", color: "#1F2937" }}>
-                      {inv.deal?.title || "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-center px-3 border-b border-gray-100 flex-shrink-0" style={{ width: invoiceColWidths.invoiceDate }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: "12px", color: "#1F2937" }}>
-                      {inv.date ? new Date(inv.date).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }) : "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-center px-3 border-b border-gray-100 flex-shrink-0" style={{ width: invoiceColWidths.amount }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", color: "#1F2937" }}>
-                      {`₹${Math.round(inv.amount || 0).toLocaleString("en-IN")}`}
-                    </span>
-                  </div>
-                  <div className="flex items-center px-3 border-b border-gray-100 flex-shrink-0" style={{ width: invoiceColWidths.dueDate }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: "12px", color: "#1F2937" }}>
-                      {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }) : "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-center px-3 border-b border-gray-100 flex-shrink-0" style={{ width: invoiceColWidths.status }}>
-                    <span
-                      className="inline-flex items-center justify-center px-3 py-[5px] rounded-full"
-                      style={{
-                        fontFamily: "Inter",
-                        fontWeight: 500,
-                        fontSize: "12px",
-                        lineHeight: "120%",
-                        background: isPaid ? "rgba(0, 201, 80, 0.1)" : "rgba(254, 89, 25, 0.1)",
-                        color: isPaid ? "#00C950" : "#FE5919",
-                      }}
-                    >
-                      {inv.status || "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 px-3 border-b border-gray-100 flex-shrink-0" style={{ width: invoiceColWidths.actions }}>
-                    <button className="p-1.5 text-gray-400 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors" title="View Invoice">
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button className="p-1.5 text-gray-400 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors" title="Edit Invoice">
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button className="p-1.5 text-red-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors" title="Delete Invoice">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            {paginatedInvoices.length === 0 && (
-              <div className="flex items-center justify-center text-sm text-gray-400" style={{ height: 120 }}>
-                No invoices found
-              </div>
-            )}
-          </div>
-
-          {/* Pagination - contained within the card */}
-          <div
-            className="flex items-center justify-between flex-shrink-0"
-            style={{ padding: "12px 16px", borderTop: "1px solid #E1E4EA" }}
-          >
-            <span style={{ fontFamily: "Inter", fontSize: 12, color: "#6B7280" }}>
-              {sortedInvoices.length === 0
-                ? "0 results"
-                : `Showing ${(invoicePage - 1) * invoicesPerPage + 1}-${Math.min(invoicePage * invoicesPerPage, sortedInvoices.length)} of ${sortedInvoices.length}`}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
-                disabled={invoicePage === 1}
-                className="flex items-center justify-center w-8 h-8 rounded-full text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {(() => {
-                const items = [1];
-                if (invoicePage > 2) items.push("left-dots");
-                if (invoicePage !== 1 && invoicePage !== invoiceTotalPages) items.push(invoicePage);
-                if (invoicePage < invoiceTotalPages - 1) items.push("right-dots");
-                if (invoiceTotalPages > 1) items.push(invoiceTotalPages);
-                return items.map((item, idx) =>
-                  item === "left-dots" || item === "right-dots" ? (
-                    <span key={`${item}-${idx}`} className="flex items-center justify-center w-8 h-8 text-sm text-gray-400 select-none">
-                      ....
-                    </span>
-                  ) : (
-                    <button
-                      key={`p-${item}`}
-                      onClick={() => setInvoicePage(item)}
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
-                        item === invoicePage ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      {item}
-                    </button>
-                  ),
-                );
-              })()}
-              <button
-                onClick={() => setInvoicePage((p) => Math.min(invoiceTotalPages, p + 1))}
-                disabled={invoicePage === invoiceTotalPages}
-                className="flex items-center justify-center w-8 h-8 rounded-full text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+          )}
         </div>
+
+        {invoiceQuickView && (
+          <InvoiceQuickView
+            invoice={invoiceQuickView.invoice}
+            mode={invoiceQuickView.mode}
+            onClose={() => setInvoiceQuickView(null)}
+            onUpdated={(updated) => {
+              setInvoices((prev) => prev.map((i) => (i._id === updated._id ? { ...i, ...updated } : i)));
+              setInvoiceQuickView((prev) => (prev ? { ...prev, invoice: { ...prev.invoice, ...updated } } : prev));
+            }}
+          />
+        )}
+
+        {showBulkInvoiceDeleteModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+              <div className="p-6 text-center">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
+                  Confirm Delete
+                </h3>
+                <p className="text-sm text-gray-500 font-inter mb-6">
+                  Delete {selectedInvoices.length} selected invoice{selectedInvoices.length !== 1 ? "s" : ""}? This action cannot be undone.
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={() => setShowBulkInvoiceDeleteModal(false)}
+                    disabled={bulkInvoiceLoading}
+                    className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleBulkDeleteInvoices}
+                    disabled={bulkInvoiceLoading}
+                    className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                  >
+                    {bulkInvoiceLoading ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showBulkInvoiceStatusModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden">
+              <div className="p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-1 font-sf">
+                  Bulk Update Status
+                </h3>
+                <p className="text-sm text-gray-500 font-inter mb-4">
+                  Set status for {selectedInvoices.length} selected invoice{selectedInvoices.length !== 1 ? "s" : ""}.
+                </p>
+                <select
+                  value={bulkInvoiceStatus}
+                  onChange={(e) => setBulkInvoiceStatus(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-6"
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="Paid">Paid</option>
+                  <option value="Overdue">Overdue</option>
+                </select>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setShowBulkInvoiceStatusModal(false)}
+                    disabled={bulkInvoiceLoading}
+                    className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleBulkUpdateInvoiceStatus}
+                    disabled={bulkInvoiceLoading}
+                    className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                  >
+                    {bulkInvoiceLoading ? "Updating..." : "Update"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {invoiceToDelete && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+              <div className="p-6 text-center">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
+                  Confirm Delete
+                </h3>
+                <p className="text-sm text-gray-500 font-inter mb-6">
+                  Delete invoice {invoiceToDelete.invoiceNumber || ""}? This action cannot be undone.
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={() => setInvoiceToDelete(null)}
+                    className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDeleteInvoice}
+                    className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1095,14 +1656,19 @@ function Dashboard() {
   return (
     <div style={{ marginTop: -16 }}>
       <div
-        className="box-border flex flex-row justify-between items-center flex-shrink-0 self-stretch -mx-4 sm:-mx-6 lg:-mx-8"
+        className="box-border flex flex-row justify-between items-center"
         style={{
+          position: "fixed",
+          top: 64,
+          left: "var(--sidebar-width, 0px)",
+          right: 0,
+          zIndex: 40,
           padding: "0px 24px",
           gap: 16,
           height: 56,
           background: "#FFFFFF",
           borderBottom: "1px solid #E1E4EA",
-          borderRadius: 0,
+          boxSizing: "border-box",
         }}
       >
         <div
@@ -1134,6 +1700,8 @@ function Dashboard() {
           </span>
         </div>
       </div>
+      {/* Spacer to offset the fixed header bar */}
+      <div style={{ height: 56 }} />
 
       {/* KPI Cards */}
       <div
@@ -1225,11 +1793,11 @@ function Dashboard() {
 
       <div
         className="box-border flex flex-row items-end self-stretch"
-        style={{ padding: 12, gap: 16, height: 505, border: "1px solid #E1E4EA", borderRadius: 12, marginTop: 16, flexGrow: 1 }}
+        style={{ padding: 12, gap: 16, height: 760, border: "1px solid #E1E4EA", borderRadius: 12, marginTop: 16, flexGrow: 1 }}
       >
         <div
           className="flex flex-col justify-between items-start self-stretch flex-shrink-0"
-          style={{ padding: "0px 0px 22px", gap: 16, width: 34, height: 481 }}
+          style={{ padding: "0px 0px 22px", gap: 16, width: 34, height: 736 }}
         >
           {yAxisLabels.map((label) => (
             <span
@@ -1253,7 +1821,7 @@ function Dashboard() {
           <svg
             className="flex-1 self-stretch"
             width="100%"
-            height="481"
+            height="736"
             viewBox="0 0 1253 445"
             fill="none"
             preserveAspectRatio="none"
