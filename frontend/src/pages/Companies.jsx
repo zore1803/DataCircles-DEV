@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
+import TableSkeletonRows from "../components/common/TableSkeletonRows";
+import useMinDelay from "../hooks/useMinDelay";
 import { createPortal } from "react-dom";
 import API from "../services/api";
 import { Link } from "react-router-dom";
@@ -165,6 +167,7 @@ function Companies() {
   const [additionalFields, setAdditionalFields] = useState({});
   const [companyFieldNames, setCompanyFieldNames] = useState([]);
   const [loading, setLoading] = useState(false);
+  const showLoadingSkeleton = useMinDelay(loading && companies.length === 0, 300);
   const [industries, setIndustries] = useState([]);
   const [industriesLoading, setIndustriesLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -177,6 +180,7 @@ function Companies() {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const searchInputRef = useRef(null);
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
   const [editingPage, setEditingPage] = useState(false);
   const [pageInput, setPageInput] = useState("");
@@ -472,54 +476,73 @@ function Companies() {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            setOpenRowActionsId(isOpen ? null : company._id);
+            if (isOpen) {
+              setOpenRowActionsId(null);
+              setRowActionsPos(null);
+              return;
+            }
+            const rect = e.currentTarget.getBoundingClientRect();
+            const z = getRootZoom();
+            const menuHeight = 260;
+            const wouldOverflow = rect.bottom * z + 4 + menuHeight > window.innerHeight;
+            setRowActionsPos({
+              top: wouldOverflow ? rect.top * z - menuHeight - 4 : rect.bottom * z + 4,
+              left: rect.right * z - 160,
+            });
+            setOpenRowActionsId(company._id);
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="More actions"
         >
           <MoreVertical className="w-4 h-4" />
         </button>
-        {isOpen && (
-          <div className="absolute right-0 top-full z-[100] mt-1 w-[190px] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-2 animate-in fade-in zoom-in duration-150 origin-top-right pointer-events-auto">
+        {isOpen && rowActionsPos && createPortal(
+          <div
+            style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+            className="z-[9999] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right pointer-events-auto"
+          >
             <Link
               to={`/companies/${company._id}`}
-              onClick={() => setOpenRowActionsId(null)}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
             >
-              <Eye className="w-4 h-4 text-[#1C1B1F]" />
+              <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
               View Company
             </Link>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setOpenRowActionsId(null);
+                setRowActionsPos(null);
                 handleEdit(company);
               }}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
             >
-              <Edit2 className="w-4 h-4 text-[#1C1B1F]" />
+              <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
               Edit
             </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setOpenRowActionsId(null);
+                setRowActionsPos(null);
                 setQuickHotlistCompanyId(company._id);
               }}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
             >
-              <FolderPlus className="w-4 h-4 text-[#1C1B1F]" />
+              <FolderPlus className="w-3.5 h-3.5 text-[#1C1B1F]" />
               Move to a Folder
             </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setOpenRowActionsId(null);
+                setRowActionsPos(null);
                 setQuickHotlistCompanyId(company._id);
               }}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
             >
-              <FileText className="w-4 h-4 text-[#1C1B1F]" />
+              <FileText className="w-3.5 h-3.5 text-[#1C1B1F]" />
               Add to Hotlist
             </button>
             <button
@@ -527,24 +550,26 @@ function Companies() {
                 e.stopPropagation();
                 toggleStar(e, company._id);
               }}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
             >
-              <Star className={`w-4 h-4 ${starredCompaniesSet.has(company._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
+              <Star className={`w-3.5 h-3.5 ${starredCompaniesSet.has(company._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
               {starredCompaniesSet.has(company._id) ? "Unstar Company" : "Star Company"}
             </button>
-            <div className="w-full border-t border-[#F1F1F5]" />
+            <div className="w-full border-t border-[#F1F1F5] my-0.5" />
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setOpenRowActionsId(null);
+                setRowActionsPos(null);
                 handleDelete(company._id);
               }}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
             >
-              <Trash2 className="w-4 h-4 text-[#CD3636]" />
+              <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
               Delete
             </button>
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
     );
@@ -801,17 +826,22 @@ function Companies() {
             } else if (vc.key === "documentSigned") {
               baseContent = company.documentSigned ? (
                 <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
-                  Accepted
+                  <HighlightText text="Accepted" query={searchTerm} />
                 </span>
               ) : (
                 <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-50 text-gray-500 border border-gray-200">
-                  Pending
+                  <HighlightText text="Pending" query={searchTerm} />
                 </span>
               );
             } else if (vc.key === "leadSource") {
               baseContent = <span className="truncate text-sm text-gray-700" title={company.leadSource}>{company.leadSource ? <HighlightText text={company.leadSource} query={searchTerm} /> : "—"}</span>;
             } else if (baseContent === undefined) {
-              baseContent = <div className="truncate text-sm text-gray-700 w-full" title={String(val)}>{truncateText(String(val), 30)}</div>;
+              const truncated = truncateText(String(val), 30);
+              baseContent = (
+                <div className="truncate text-sm text-gray-700 w-full" title={String(val)}>
+                  {truncated ? <HighlightText text={truncated} query={searchTerm} /> : "—"}
+                </div>
+              );
             }
 
             if (vc.key === lastColumnKey) {
@@ -1242,6 +1272,39 @@ function Companies() {
     return industries; // Return the fetched industries
   };
 
+  // Lock page scroll while the row-actions menu is open so the background can't shift/scroll.
+  // Any scroll/wheel/touch/keyboard-scroll attempt closes the menu instead of moving the page.
+  useEffect(() => {
+    if (!openRowActionsId) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const SCROLL_KEYS = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "];
+    const closeMenu = () => {
+      setOpenRowActionsId(null);
+      setRowActionsPos(null);
+    };
+    const handleWheel = (e) => {
+      e.preventDefault();
+      closeMenu();
+    };
+    const handleTouchMove = () => closeMenu();
+    const handleKeyDown = (e) => {
+      if (SCROLL_KEYS.includes(e.key)) closeMenu();
+    };
+
+    window.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: true, capture: true });
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("wheel", handleWheel, { capture: true });
+      window.removeEventListener("touchmove", handleTouchMove, { capture: true });
+      window.removeEventListener("keydown", handleKeyDown, { capture: true });
+    };
+  }, [openRowActionsId]);
+
   // Click outside listener for the overflow menu
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1256,6 +1319,7 @@ function Companies() {
         !rowActionsRef.current.contains(event.target)
       ) {
         setOpenRowActionsId(null);
+        setRowActionsPos(null);
       }
       if (
         columnMenuRef.current &&
@@ -1933,12 +1997,8 @@ function Companies() {
                 </thead>
 
                 <tbody className="bg-white">
-                  {loading && companies.length === 0 ? (
-                    <tr>
-                      <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center">
-                        <p>Loading Companies...</p>
-                      </td>
-                    </tr>
+                  {showLoadingSkeleton ? (
+                    <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox />
                   ) : companies.length === 0 ? (
                     <tr>
                       <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">

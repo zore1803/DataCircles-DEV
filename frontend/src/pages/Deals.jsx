@@ -403,7 +403,8 @@ const ModernKanbanColumn = ({
   colorTheme = "blue",
   onAddClick,
   handleEditDeal,
-  isStale
+  isStale,
+  loading = false,
 }) => {
   const { setNodeRef } = useDroppable({ id: status });
   const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
@@ -432,7 +433,7 @@ const ModernKanbanColumn = ({
 
   return (
     <div
-      className="dc-kanban-col flex flex-col items-start flex-shrink-0 bg-white"
+      className="flex flex-col items-start flex-shrink-0 bg-white"
       style={{ width: "340px", border: "1px solid #E7E7E9", borderRadius: "12px", overflow: "hidden" }}
     >
       {/* Header */}
@@ -464,7 +465,7 @@ const ModernKanbanColumn = ({
               color: "#161618",
             }}
           >
-            {deals.length}
+            {loading ? <Skeleton width={14} height={12} /> : deals.length}
           </span>
         </div>
         <button
@@ -490,53 +491,66 @@ const ModernKanbanColumn = ({
             borderRadius: "10px",
           }}
         >
-          <span
-            className="truncate"
-            style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "22px", lineHeight: "150%", letterSpacing: "-0.03em", color: "#48494C", minWidth: 0 }}
-          >
-            ₹{formattedTotal}
-          </span>
-          <span
-            className="flex-shrink-0"
-            style={{
-              fontFamily: "Inter",
-              fontWeight: 500,
-              fontSize: "12px",
-              lineHeight: "15px",
-              letterSpacing: "-0.02em",
-              color: trendPct >= 0 ? "#0747A6" : "#E82222",
-              marginLeft: "auto",
-            }}
-          >
-            {trendPct >= 0 ? "+" : ""}{trendPct}%
-          </span>
+          {loading ? (
+            <Skeleton width={90} height={22} />
+          ) : (
+            <span
+              className="truncate"
+              style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "22px", lineHeight: "150%", letterSpacing: "-0.03em", color: "#48494C", minWidth: 0 }}
+            >
+              ₹{formattedTotal}
+            </span>
+          )}
+          {!loading && (
+            <span
+              className="flex-shrink-0"
+              style={{
+                fontFamily: "Inter",
+                fontWeight: 500,
+                fontSize: "12px",
+                lineHeight: "15px",
+                letterSpacing: "-0.02em",
+                color: trendPct >= 0 ? "#0747A6" : "#E82222",
+                marginLeft: "auto",
+              }}
+            >
+              {trendPct >= 0 ? "+" : ""}{trendPct}%
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Scrollable Deals Area */}
-      <div className="w-full flex-1 overflow-y-auto" style={{ padding: "14px 20px 20px" }}>
+      {/* Scrollable Deals Area — capped to ~7 cards tall (7*132 + 6*14 gaps),
+          any additional cards scroll internally instead of growing the page. */}
+      <div className="w-full overflow-y-auto" style={{ padding: "14px 20px 20px", maxHeight: "1042px" }}>
         <div
           ref={setNodeRef}
           className="flex flex-col items-start w-full"
           style={{ gap: "14px" }}
         >
-          <SortableContext
-            id={status}
-            items={dealIds}
-            strategy={verticalListSortingStrategy}
-          >
-            {deals.map((deal) => (
-              <ModernDealCard
-                key={deal._id}
-                deal={deal}
-                onClick={handleEditDeal}
-                isStale={isStale}
-                colorTheme={colorTheme}
-              />
-            ))}
-          </SortableContext>
-          {/* Spacer for easier dropping at bottom */}
-          <div className="h-10 w-full" />
+          {loading ? (
+            Array.from({ length: 3 }).map((_, i) => <DealCardSkeleton key={i} />)
+          ) : (
+            <>
+              <SortableContext
+                id={status}
+                items={dealIds}
+                strategy={verticalListSortingStrategy}
+              >
+                {deals.map((deal) => (
+                  <ModernDealCard
+                    key={deal._id}
+                    deal={deal}
+                    onClick={handleEditDeal}
+                    isStale={isStale}
+                    colorTheme={colorTheme}
+                  />
+                ))}
+              </SortableContext>
+              {/* Spacer for easier dropping at bottom */}
+              <div className="h-10 w-full" />
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -576,9 +590,12 @@ function Deals() {
   });
   const [loading, setLoading] = useState(false);
   const [statuses, setStatuses] = useState([]);
+  const showKanbanSkeleton = useMinDelay(loading && deals.length === 0, 300);
   const [showFilters, setShowFilters] = useState(false);
   const [dealsCurrentPage, setDealsCurrentPage] = useState(1);
   const [dealsPerPage, setDealsPerPage] = useState(10);
+  const [dealsEditingPage, setDealsEditingPage] = useState(false);
+  const [dealsPageInput, setDealsPageInput] = useState("");
   const [filters, setFilters] = useState({
     status: "All",
     company: "All",
@@ -1810,22 +1827,7 @@ function Deals() {
 
   if (loading) {
     return (
-      <div className="fixed bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center z-20" style={{ top: 64, left: "var(--sidebar-width, 0px)", right: 0, bottom: 0 }}>
-        <div className="flex flex-col items-center justify-center">
-          <img
-            src={logo}
-            alt="Loading..."
-            className="animate-spin-smooth drop-shadow-lg"
-            style={{
-              width: "48px",
-              height: "48px",
-              animationDuration: "1.8s",
-              filter: "invert(100%)",
-            }}
-          />
-          <p className="mt-3 text-gray-600 font-medium">{randomMessage}</p>
-        </div>
-      </div>
+      <PageSkeleton variant="kanban" />
     );
   }
 
@@ -2390,7 +2392,7 @@ function Deals() {
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <div className="overflow-x-auto overflow-y-hidden scrollbar-hide -mx-6" style={{ padding: "24px", paddingTop: 0 }}>
+            <div className="overflow-x-auto overflow-y-hidden scrollbar-hide -mx-6" style={{ padding: "24px", paddingTop: 0, "--kanban-top-offset": "20rem" }}>
               <div className="flex min-w-max" style={{ gap: "16px" }}>
                 {statuses?.map((status) => {
                   const columnDeals = sortedTableDeals.filter((d) => d.status === status);
@@ -2405,6 +2407,7 @@ function Deals() {
                       onAddClick={toggleForm}
                       handleEditDeal={handleEditDeal}
                       isStale={isStale}
+                      loading={showKanbanSkeleton}
                     />
                   );
                 })}
@@ -2474,7 +2477,7 @@ function Deals() {
             )}
 
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "866px" }}>
                 <DealsTable
                   sortedTableDeals={paginatedTableDeals}
                   selectedRows={selectedRows}
@@ -2495,6 +2498,9 @@ function Deals() {
                   setQuickViewDealId={setQuickViewDealId}
                   starredDeals={starredDeals}
                   toggleStar={toggleStar}
+                  loading={loading}
+                  skeletonRows={dealsPerPage}
+                  searchTerm={filters.searchTerm}
                 />
               </div>
             </div>
@@ -2537,18 +2543,64 @@ function Deals() {
                     <ChevronLeft className="h-4 w-4" />
                   </button>
 
-                  {Array.from({ length: dealsTotalPages }, (_, i) => i + 1).map((page) => (
-                    <button
-                      key={page}
-                      onClick={() => setDealsCurrentPage(page)}
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${page === dealsCurrentPageClamped
-                        ? "bg-blue-600 text-white"
-                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                        }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
+                  {(() => {
+                    const commitPage = () => {
+                      const n = parseInt(dealsPageInput, 10);
+                      if (!Number.isNaN(n)) setDealsCurrentPage(Math.min(Math.max(n, 1), dealsTotalPages));
+                      setDealsEditingPage(false);
+                    };
+                    const items = [1];
+                    if (dealsCurrentPageClamped > 2) items.push("left-dots");
+                    if (dealsCurrentPageClamped !== 1 && dealsCurrentPageClamped !== dealsTotalPages) items.push(dealsCurrentPageClamped);
+                    if (dealsCurrentPageClamped < dealsTotalPages - 1) items.push("right-dots");
+                    if (dealsTotalPages > 1) items.push(dealsTotalPages);
+
+                    return items.map((item, index) => {
+                      if (item === "left-dots" || item === "right-dots") {
+                        return (
+                          <span key={`${item}-${index}`} className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none">
+                            ....
+                          </span>
+                        );
+                      }
+                      const isCurrent = item === dealsCurrentPageClamped;
+                      if (isCurrent && dealsEditingPage) {
+                        return (
+                          <input
+                            key="page-edit"
+                            autoFocus
+                            type="number"
+                            min={1}
+                            max={dealsTotalPages}
+                            value={dealsPageInput}
+                            onChange={(e) => setDealsPageInput(e.target.value)}
+                            onBlur={commitPage}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitPage();
+                              if (e.key === "Escape") setDealsEditingPage(false);
+                            }}
+                            className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                        );
+                      }
+                      return (
+                        <button
+                          key={`page-${item}`}
+                          onClick={() => setDealsCurrentPage(item)}
+                          onDoubleClick={() => {
+                            if (isCurrent) {
+                              setDealsPageInput(String(dealsCurrentPageClamped));
+                              setDealsEditingPage(true);
+                            }
+                          }}
+                          title={isCurrent ? "Double-click to type a page number" : undefined}
+                          className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${isCurrent ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+                        >
+                          {item}
+                        </button>
+                      );
+                    });
+                  })()}
 
                   <button
                     onClick={() => setDealsCurrentPage((p) => Math.min(dealsTotalPages, p + 1))}
@@ -2636,3 +2688,7 @@ function Deals() {
 }
 
 export default Deals;
+import PageSkeleton from "../components/common/PageSkeleton";
+import Skeleton from "../components/common/Skeleton";
+import DealCardSkeleton from "../components/common/DealCardSkeleton";
+import useMinDelay from "../hooks/useMinDelay";

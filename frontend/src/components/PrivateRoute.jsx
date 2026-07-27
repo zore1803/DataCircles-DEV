@@ -131,29 +131,19 @@ function PrivateRoute({ children }) {
       isAuthorized === null)
   ) {
     return (
-      <div className="fixed flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 z-20" style={{ top: 64, left: "var(--sidebar-width, 0px)", right: 0, bottom: 0 }}>
-        <div className="flex flex-col items-center justify-center">
-          <img
-            src={logo}
-            alt="Loading..."
-            className="animate-spin-smooth drop-shadow-lg"
-            style={{
-              width: "48px",
-              height: "48px",
-              animationDuration: "1.8s",
-              filter: "invert(100%)",
-            }}
-          />
-          <p className="mt-4 text-gray-600 font-medium text-center max-w-md px-4">
-            {randomMessage}
-          </p>
-          {retryCount > 0 && (
-            <p className="mt-2 text-sm text-gray-500">
+      <>
+        <PageSkeleton variant="generic" />
+        {retryCount > 0 && (
+          <div
+            className="fixed z-30 flex justify-center"
+            style={{ top: 80, left: "var(--sidebar-width, 0px)", right: 0 }}
+          >
+            <p className="rounded-full bg-white px-4 py-1.5 text-sm text-gray-500 shadow">
               Retrying connection... ({retryCount}/2)
             </p>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -219,3 +209,4 @@ function PrivateRoute({ children }) {
 }
 
 export default PrivateRoute;
+import PageSkeleton from "./common/PageSkeleton";

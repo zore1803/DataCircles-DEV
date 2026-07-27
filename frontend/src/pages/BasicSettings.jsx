@@ -209,22 +209,7 @@ const BasicSettings = () => {
   // Loading State
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="flex flex-col items-center justify-center">
-          <img
-            src={logo}
-            alt="Loading..."
-            className="animate-spin-smooth drop-shadow-lg"
-            style={{
-              width: "48px",
-              height: "48px",
-              animationDuration: "1.8s",
-              filter: "invert(100%)",
-            }}
-          />
-          <p className="mt-3 text-gray-600 font-medium">{randomMessage}</p>
-        </div>
-      </div>
+      <PageSkeleton variant="generic" />
     );
   }
 
@@ -449,3 +434,4 @@ const BasicSettings = () => {
 };
 
 export default BasicSettings;
+import PageSkeleton from "../components/common/PageSkeleton";

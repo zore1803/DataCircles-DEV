@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, Search, MoreVertical, ChevronUp, ChevronDown,
 import FilterIcon from "../components/common/FilterIcon";
 import DataTable from "../components/common/DataTable";
 import InvoiceQuickView from "../components/invoice/InvoiceQuickView";
+import Skeleton from "../components/common/Skeleton";
 
 const getRootZoom = () => {
   if (typeof window === "undefined") return 1;
@@ -26,6 +27,30 @@ const defaultInvoiceColumns = [
   { key: "dueDate", label: "Due Date", visible: true, order: 6, sortable: true },
   { key: "status", label: "Status", visible: true, order: 7, sortable: true },
 ];
+
+const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>.
+const HighlightText = ({ text, query }) => {
+  const str = text === null || text === undefined ? "" : String(text);
+  const q = (query || "").trim();
+  if (!q) return <>{str}</>;
+
+  const parts = str.split(new RegExp(`(${escapeRegExp(q)})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="bg-yellow-200 text-inherit rounded-sm px-0.5">
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+};
 
 const getInvoiceFieldValue = (inv, key) => {
   switch (key) {
@@ -109,6 +134,10 @@ function Dashboard() {
   const [invoiceEditingPage, setInvoiceEditingPage] = useState(false);
   const [invoicePageInput, setInvoicePageInput] = useState("");
   const [invoiceSortConfig, setInvoiceSortConfig] = useState({ key: null, direction: "asc" });
+
+  // "Earnings Performance" widget — quarter picker
+  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  const [showQuarterMenu, setShowQuarterMenu] = useState(false);
 
   // Invoices table (Companies-style): column sizing, pin state, column config
   // (order/visibility) and the per-column header menu.
@@ -268,7 +297,8 @@ function Dashboard() {
     const term = invoiceSearchTerm.trim().toLowerCase();
     const filtered = term
       ? invoices.filter((inv) =>
-          [inv.invoiceNumber, inv.deal?.company?.name, inv.deal?.title]
+          ["invoiceId", "client", "contact", "deal", "invoiceDate", "amount", "dueDate", "status"]
+            .map((key) => String(getInvoiceFieldValue(inv, key) ?? "").trim())
             .filter(Boolean)
             .some((v) => v.toLowerCase().includes(term)),
         )
@@ -488,9 +518,21 @@ function Dashboard() {
             let baseContent;
 
             if (vc.key === "invoiceId") {
-              baseContent = <span className="text-sm font-semibold text-[#1F2937] truncate block" title={inv.invoiceNumber}>{inv.invoiceNumber || "—"}</span>;
+              baseContent = (
+                <span className="text-sm font-semibold text-[#1F2937] truncate block" title={inv.invoiceNumber}>
+                  {inv.invoiceNumber ? <HighlightText text={inv.invoiceNumber} query={invoiceSearchTerm} /> : "—"}
+                </span>
+              );
             } else if (vc.key === "amount") {
-              baseContent = <span className="text-sm font-medium text-[#1F2937]">{inv.amount != null ? `₹${Math.round(inv.amount).toLocaleString("en-IN")}` : "—"}</span>;
+              baseContent = (
+                <span className="text-sm font-medium text-[#1F2937]">
+                  {inv.amount != null ? (
+                    <HighlightText text={`₹${Math.round(inv.amount).toLocaleString("en-IN")}`} query={invoiceSearchTerm} />
+                  ) : (
+                    "—"
+                  )}
+                </span>
+              );
             } else if (vc.key === "status") {
               const isPaid = inv.status?.toLowerCase() === "paid" || inv.status?.toLowerCase() === "accepted";
               baseContent = (
@@ -501,12 +543,16 @@ function Dashboard() {
                     color: isPaid ? "#00C950" : "#FE5919",
                   }}
                 >
-                  {inv.status || "—"}
+                  {inv.status ? <HighlightText text={inv.status} query={invoiceSearchTerm} /> : "—"}
                 </span>
               );
             } else {
               const val = String(getValue() ?? "").trim();
-              baseContent = <span className="text-sm text-gray-700 truncate block" title={val}>{val || "—"}</span>;
+              baseContent = (
+                <span className="text-sm text-gray-700 truncate block" title={val}>
+                  {val ? <HighlightText text={val} query={invoiceSearchTerm} /> : "—"}
+                </span>
+              );
             }
 
             if (vc.key === lastColumnKey) {
@@ -604,6 +650,7 @@ function Dashboard() {
     invoiceColMenuPos,
     openInvoiceActionsId,
     invoiceActionsPos,
+    invoiceSearchTerm,
   ]);
 
   const [totalClients, setTotalClients] = useState(0);
@@ -806,6 +853,57 @@ function Dashboard() {
     };
   }, [deals, invoices]);
 
+  // "Earnings Performance" widget — revenue (paid invoices) + profit (won deals)
+  // for the selected quarter of the current year, plus the quarter-over-quarter change.
+  const quarterlyEarnings = useMemo(() => {
+    const qIndex = { Q1: 0, Q2: 1, Q3: 2, Q4: 3 }[selectedQuarter];
+    const year = new Date().getFullYear();
+    const inQuarter = (dateStr, q, yr) => {
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
+      if (isNaN(d)) return false;
+      return Math.floor(d.getMonth() / 3) === q && d.getFullYear() === yr;
+    };
+    const revenueFor = (q, yr) =>
+      (invoices || [])
+        .filter((inv) => (inv.status?.toLowerCase() === "paid" || inv.status?.toLowerCase() === "accepted") && inQuarter(inv.date, q, yr))
+        .reduce((sum, inv) => sum + (inv.amount || 0), 0);
+    const profitFor = (q, yr) =>
+      (deals || [])
+        .filter((d) => d.status === "Won" && inQuarter(d.createdAt, q, yr))
+        .reduce((sum, d) => sum + (d.amount || 0), 0);
+
+    const revenue = revenueFor(qIndex, year);
+    const profit = profitFor(qIndex, year);
+    const total = revenue + profit;
+
+    const prevQIndex = qIndex === 0 ? 3 : qIndex - 1;
+    const prevYear = qIndex === 0 ? year - 1 : year;
+    const prevTotal = revenueFor(prevQIndex, prevYear) + profitFor(prevQIndex, prevYear);
+    const pctChange = prevTotal === 0 ? (total > 0 ? 100 : 0) : Math.round(((total - prevTotal) / prevTotal) * 100);
+
+    const scoreBasis = Math.max(total, 1);
+    const revenueScore = Math.round((revenue / scoreBasis) * 100) / 10;
+    const profitScore = Math.round((profit / scoreBasis) * 100) / 10;
+
+    return { revenue, profit, total, pctChange, revenueScore, profitScore };
+  }, [deals, invoices, selectedQuarter]);
+
+  // "Recent Deals" widget — highest-value deal + most recently created deals
+  const recentDealsWidget = useMemo(() => {
+    const list = deals || [];
+    const topDeal = [...list].sort((a, b) => (b.amount || 0) - (a.amount || 0))[0] || null;
+    const recent = [...list]
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+      .slice(0, 6)
+      .map((d) => ({
+        client: d.company?.name || d.contact?.name || "—",
+        deal: d.title || "Untitled Deal",
+        amount: `${Math.round(d.amount || 0).toLocaleString("en-IN")} INR`,
+      }));
+    return { topDeal, recent };
+  }, [deals]);
+
   const invoiceKpiTrends = useMemo(() => {
     const paidInvoices = invoices.filter((inv) => inv.status?.toLowerCase() === "paid" || inv.status?.toLowerCase() === "accepted");
     const pendingInvoices = invoices.filter((inv) => inv.status?.toLowerCase() === "sent" || inv.status?.toLowerCase() === "pending");
@@ -821,6 +919,65 @@ function Dashboard() {
       due: getMonthOverMonthChange(dueInvoices, "dueDate", "amount"),
     };
   }, [invoices]);
+
+  // "Total Invoices Issued" card — top client (by invoiced amount) summary +
+  // last-7-months paid-amount trend for the sparkline underneath it.
+  const totalInvoicesCard = useMemo(() => {
+    const clearedPct = invoiceStats.total > 0
+      ? Math.round((invoiceStats.accepted / invoiceStats.total) * 100)
+      : 0;
+
+    const dealsById = {};
+    (deals || []).forEach((d) => { dealsById[d._id] = d; });
+
+    const byCompany = {};
+    invoices.forEach((inv) => {
+      const dealId = inv.deal?._id || inv.deal;
+      const fullDeal = dealsById[dealId];
+      const companyName = fullDeal?.company?.name || inv.deal?.company?.name;
+      if (!companyName) return;
+      const isPaid = inv.status?.toLowerCase() === "accepted";
+      if (!byCompany[companyName]) {
+        byCompany[companyName] = { companyName, dealTitle: "", total: 0, paidAmount: 0, count: 0, paidCount: 0 };
+      }
+      const entry = byCompany[companyName];
+      entry.total += inv.amount || 0;
+      entry.count += 1;
+      if (isPaid) {
+        entry.paidAmount += inv.amount || 0;
+        entry.paidCount += 1;
+      }
+      entry.dealTitle = inv.deal?.title || fullDeal?.title || entry.dealTitle;
+    });
+    const topClient = Object.values(byCompany).sort((a, b) => b.total - a.total)[0] || null;
+    const topClientPct = topClient && topClient.total > 0
+      ? Math.round((topClient.paidAmount / topClient.total) * 100)
+      : 0;
+
+    const months = [];
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ key: `${d.getFullYear()}-${d.getMonth()}`, month: d.toLocaleDateString("en-US", { month: "short" }), amount: 0 });
+    }
+    invoices.forEach((inv) => {
+      if (inv.status?.toLowerCase() !== "accepted") return;
+      const date = inv.date || inv.createdAt;
+      if (!date) return;
+      const d = new Date(date);
+      const bucket = months.find((m) => m.key === `${d.getFullYear()}-${d.getMonth()}`);
+      if (bucket) bucket.amount += inv.amount || 0;
+    });
+    const maxAmount = Math.max(1, ...months.map((m) => m.amount));
+    const xStep = 362 / (months.length - 1);
+    const points = months.map((m, i) => ({
+      x: 1 + i * xStep,
+      y: 119 - (m.amount / maxAmount) * 117,
+    }));
+    const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+
+    return { clearedPct, topClient, topClientPct, points, linePath, months: months.map((m) => m.month) };
+  }, [invoices, deals, invoiceStats]);
 
   // ------------------- Auth Check ---------------------
   useEffect(() => {
@@ -1016,20 +1173,30 @@ function Dashboard() {
                   <span className="whitespace-nowrap" style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}>
                     {label}
                   </span>
-                  <span className="whitespace-nowrap" style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 18, lineHeight: "120%", color: "#0E121B" }}>
-                    {value}
-                  </span>
+                  {loading ? (
+                    <Skeleton width={70} height={18} />
+                  ) : (
+                    <span className="whitespace-nowrap" style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 18, lineHeight: "120%", color: "#0E121B" }}>
+                      {value}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex flex-row items-center flex-shrink-0 absolute" style={{ gap: 4, right: 16, bottom: 16 }}>
-                {trendUp ? (
-                  <TrendingUp size={14} style={{ color: "#00C950" }} />
+                {loading ? (
+                  <Skeleton width={60} height={12} />
                 ) : (
-                  <TrendingDown size={14} style={{ color: "#E82222" }} />
+                  <>
+                    {trendUp ? (
+                      <TrendingUp size={14} style={{ color: "#00C950" }} />
+                    ) : (
+                      <TrendingDown size={14} style={{ color: "#E82222" }} />
+                    )}
+                    <span className="whitespace-nowrap" style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}>
+                      {trend}
+                    </span>
+                  </>
                 )}
-                <span className="whitespace-nowrap" style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}>
-                  {trend}
-                </span>
               </div>
             </div>
           ))}
@@ -1217,7 +1384,8 @@ function Dashboard() {
               </span>
 
               <button
-                className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                onClick={() => navigate("/invoices")}
+                className="box-border flex flex-row justify-center items-center flex-shrink-0 hover:bg-gray-50 transition-colors"
                 style={{ padding: 12, gap: 8, width: 84, height: 32, background: "#FFFFFF", border: "1px solid rgba(31, 41, 55, 0.3)", borderRadius: 96 }}
               >
                 <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#1F2937" }}>
@@ -1253,7 +1421,7 @@ function Dashboard() {
 
               <div className="self-stretch flex-shrink-0" style={{ width: "100%", height: 1, background: "#1F2937", opacity: 0.1 }} />
 
-              <div className="flex flex-col items-start self-stretch min-h-0 overflow-y-auto" style={{ gap: 2, width: "100%", flex: 1 }}>
+              <div className="flex flex-col items-start self-stretch min-h-0 overflow-y-auto dc-card-scroll" style={{ gap: 2, width: "100%", flex: 1 }}>
                 {invoices.map((inv, idx) => {
                   const isPaid = inv.status?.toLowerCase() === "paid" || inv.status?.toLowerCase() === "accepted";
                   return (
@@ -1687,17 +1855,21 @@ function Dashboard() {
           >
             Overview
           </span>
-          <span
-            style={{
-              fontFamily: "Inter",
-              fontWeight: 400,
-              fontSize: 12,
-              lineHeight: "120%",
-              color: "#525866",
-            }}
-          >
-            Visual summary of key lead performance metrics and your data
-          </span>
+          {loading ? (
+            <Skeleton width={260} height={12} />
+          ) : (
+            <span
+              style={{
+                fontFamily: "Inter",
+                fontWeight: 400,
+                fontSize: 12,
+                lineHeight: "120%",
+                color: "#525866",
+              }}
+            >
+              Visual summary of key lead performance metrics and your data
+            </span>
+          )}
         </div>
       </div>
       {/* Spacer to offset the fixed header bar */}
@@ -1706,7 +1878,7 @@ function Dashboard() {
       {/* KPI Cards */}
       <div
         className="flex flex-row items-stretch -mx-4 sm:-mx-6 lg:-mx-8 px-6"
-        style={{ gap: 16, marginTop: 24 }}
+        style={{ display: "flex", flexDirection: "row", alignItems: "stretch", flexWrap: "nowrap", gap: 16, marginTop: 24, width: "auto" }}
       >
         {[
           { icon: TotalIncomeIcon, label: "Total Income", value: `₹${Math.round(overviewKpis.totalIncome).toLocaleString("en-IN")}`, trend: `${overviewKpis.totalIncomeTrend.pct}% this month`, trendUp: overviewKpis.totalIncomeTrend.up },
@@ -1718,59 +1890,81 @@ function Dashboard() {
             key={i}
             className="box-border flex flex-row justify-between items-start relative"
             style={{
+              display: "flex",
               padding: 16,
+              minWidth: 200,
               width: 313.5,
               height: 72,
               background: "#FFFFFF",
               border: "1px solid #E1E4EA",
               borderRadius: 12,
               flexGrow: 1,
+              flexShrink: 1,
+              flexBasis: 0,
             }}
           >
             <div className="flex flex-row items-center" style={{ gap: 14 }}>
-              <div
-                className="box-border flex items-center justify-center flex-shrink-0"
-                style={{
-                  width: 40,
-                  height: 40,
-                  padding: 8,
-                  background: "rgba(255, 255, 255, 0.1)",
-                  border: "1px solid #E1E4EA",
-                  borderRadius: 6,
-                }}
-              >
-                <Icon size={24} style={{ color: "#0085FF" }} />
-              </div>
+              {loading ? (
+                <Skeleton width={40} height={40} />
+              ) : (
+                <div
+                  className="box-border flex items-center justify-center flex-shrink-0"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    padding: 8,
+                    background: "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid #E1E4EA",
+                    borderRadius: 6,
+                  }}
+                >
+                  <Icon size={24} style={{ color: "#0085FF" }} />
+                </div>
+              )}
               <div className="flex flex-col items-start" style={{ gap: 4 }}>
-                <span
-                  className="whitespace-nowrap"
-                  style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}
-                >
-                  {label}
-                </span>
-                <span
-                  className="whitespace-nowrap"
-                  style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 18, lineHeight: "120%", color: "#0E121B" }}
-                >
-                  {value}
-                </span>
+                {loading ? (
+                  <Skeleton width={90} height={10} />
+                ) : (
+                  <span
+                    className="whitespace-nowrap"
+                    style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}
+                  >
+                    {label}
+                  </span>
+                )}
+                {loading ? (
+                  <Skeleton width={70} height={16} />
+                ) : (
+                  <span
+                    className="whitespace-nowrap"
+                    style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 18, lineHeight: "120%", color: "#0E121B" }}
+                  >
+                    {value}
+                  </span>
+                )}
               </div>
             </div>
             <div
               className="flex flex-row items-center flex-shrink-0 absolute"
               style={{ gap: 4, right: 16, bottom: 16 }}
             >
-              {trendUp ? (
-                <TrendingUp size={14} style={{ color: "#00C950" }} />
+              {loading ? (
+                <Skeleton width={60} height={11} />
               ) : (
-                <TrendingDown size={14} style={{ color: "#E82222" }} />
+                <>
+                  {trendUp ? (
+                    <TrendingUp size={14} style={{ color: "#00C950" }} />
+                  ) : (
+                    <TrendingDown size={14} style={{ color: "#E82222" }} />
+                  )}
+                  <span
+                    className="whitespace-nowrap"
+                    style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
+                  >
+                    {trend}
+                  </span>
+                </>
               )}
-              <span
-                className="whitespace-nowrap"
-                style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-              >
-                {trend}
-              </span>
             </div>
           </div>
         ))}
@@ -1793,30 +1987,37 @@ function Dashboard() {
 
       <div
         className="box-border flex flex-row items-end self-stretch"
-        style={{ padding: 12, gap: 16, height: 760, border: "1px solid #E1E4EA", borderRadius: 12, marginTop: 16, flexGrow: 1 }}
+        style={{ padding: 12, gap: 16, height: 760, maxHeight: 760, border: "1px solid #E1E4EA", borderRadius: 12, marginTop: 16, flexGrow: loading ? 0 : 1, flexShrink: 0 }}
       >
         <div
           className="flex flex-col justify-between items-start self-stretch flex-shrink-0"
           style={{ padding: "0px 0px 22px", gap: 16, width: 34, height: 736 }}
         >
-          {yAxisLabels.map((label) => (
-            <span
-              key={label}
-              className="mx-auto whitespace-nowrap"
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 400,
-                fontSize: 12,
-                lineHeight: "140%",
-                textAlign: "center",
-                color: "rgba(33, 32, 31, 0.56)",
-              }}
-            >
-              {label}
-            </span>
-          ))}
+          {loading
+            ? yAxisLabels.map((label, i) => <Skeleton key={label} width={28} height={10} className="mx-auto" style={{ opacity: 1 - i * 0.03 }} />)
+            : yAxisLabels.map((label) => (
+              <span
+                key={label}
+                className="mx-auto whitespace-nowrap"
+                style={{
+                  fontFamily: "Inter",
+                  fontWeight: 400,
+                  fontSize: 12,
+                  lineHeight: "140%",
+                  textAlign: "center",
+                  color: "rgba(33, 32, 31, 0.56)",
+                }}
+              >
+                {label}
+              </span>
+            ))}
         </div>
 
+        {loading ? (
+          <div className="flex-1" style={{ height: 736, maxHeight: 736, flexShrink: 0 }}>
+            <Skeleton width="100%" height={736} shape="rect" className="rounded-lg" />
+          </div>
+        ) : (
         <div className="flex flex-col flex-1 self-stretch" style={{ gap: 0 }}>
           <svg
             className="flex-1 self-stretch"
@@ -1890,6 +2091,7 @@ function Dashboard() {
             ))}
           </div>
         </div>
+        )}
       </div>
 
       <div className="flex flex-row" style={{ gap: 16, marginTop: 16, width: "100%" }}>
@@ -1907,117 +2109,141 @@ function Dashboard() {
             borderRadius: 12,
           }}
         >
-          <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ gap: 16, width: 390, height: 88 }}>
+          <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ gap: 16, width: "100%", height: 88 }}>
             <div className="flex flex-col items-start flex-1" style={{ gap: 8, height: 76 }}>
+              {loading ? (
+                <Skeleton width={110} height={12} />
+              ) : (
               <span
                 className="self-stretch"
                 style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
               >
                 Total Invoices Issued
               </span>
-              <span
-                className="self-stretch"
-                style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 600, fontSize: 24, lineHeight: "120%", color: "#000000" }}
-              >
-                19,38,493 INR
-              </span>
-              <span
-                className="self-stretch"
-                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}
-              >
-                20% Cleared
-              </span>
+              )}
+              {loading ? (
+                <Skeleton width={140} height={24} />
+              ) : (
+                <span
+                  className="self-stretch"
+                  style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 600, fontSize: 24, lineHeight: "120%", color: "#000000" }}
+                >
+                  ₹{Math.round(invoiceStats.total).toLocaleString("en-IN")}
+                </span>
+              )}
+              {loading ? (
+                <Skeleton width={80} height={12} />
+              ) : (
+                <span
+                  className="self-stretch"
+                  style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}
+                >
+                  {totalInvoicesCard.clearedPct}% Cleared
+                </span>
+              )}
             </div>
 
             <div className="flex-shrink-0 self-stretch" style={{ width: 1, background: "#1F2937", opacity: 0.1 }} />
 
             <div className="flex flex-col items-start flex-1" style={{ gap: 8, height: 88 }}>
-              <span
-                className="self-stretch"
-                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
-              >
-                DataCircles
-              </span>
+              {loading ? (
+                <Skeleton width={80} height={12} />
+              ) : (
+                <span
+                  className="self-stretch truncate"
+                  style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
+                >
+                  {totalInvoicesCard.topClient?.companyName || "No invoices yet"}
+                </span>
+              )}
 
-              <div
-                className="box-border flex flex-col items-start self-stretch flex-shrink-0"
-                style={{ padding: 6, gap: 6, height: 66, background: "#F8FAFC", borderRadius: 6 }}
-              >
-                <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0" style={{ gap: 8, height: 12 }}>
-                  <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
-                    Website Project
-                  </span>
-                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#1F2937" }}>
-                    60%
-                  </span>
-                </div>
+              {loading ? (
+                <Skeleton width="100%" height={66} shape="rect" className="rounded-md" />
+              ) : (
+                <div
+                  className="box-border flex flex-col items-start self-stretch flex-shrink-0"
+                  style={{ padding: 6, gap: 6, height: 66, background: "#F8FAFC", borderRadius: 6 }}
+                >
+                  <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0" style={{ gap: 8, height: 12 }}>
+                    <span className="truncate" style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
+                      {totalInvoicesCard.topClient?.dealTitle || "—"}
+                    </span>
+                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#1F2937" }}>
+                      {totalInvoicesCard.topClientPct}%
+                    </span>
+                  </div>
 
-                <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ gap: 2, height: 18 }}>
-                  {[
-                    ...Array(27).fill("#0085FF"),
-                    ...Array(5).fill("#E2E5E8"),
-                    ...Array(7).fill("rgba(31, 41, 55, 0.1)"),
-                  ].map((color, idx) => (
-                    <div key={idx} className="flex-1" style={{ width: 2.32, height: 18, background: color }} />
-                  ))}
-                </div>
+                  <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ gap: 2, height: 18 }}>
+                    {Array.from({ length: 39 }).map((_, idx) => (
+                      <div
+                        key={idx}
+                        className="flex-1"
+                        style={{
+                          width: 2.32,
+                          height: 18,
+                          background: idx < Math.round((totalInvoicesCard.topClientPct / 100) * 39) ? "#0085FF" : "#E2E5E8",
+                        }}
+                      />
+                    ))}
+                  </div>
 
-                <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0" style={{ gap: 8, height: 12 }}>
-                  <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
-                    Invoices Paid
-                  </span>
-                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#1F2937" }}>
-                    1 of 3
-                  </span>
+                  <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0" style={{ gap: 8, height: 12 }}>
+                    <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
+                      Invoices Paid
+                    </span>
+                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#1F2937" }}>
+                      {totalInvoicesCard.topClient?.paidCount || 0} of {totalInvoicesCard.topClient?.count || 0}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
-          <div className="self-stretch flex-shrink-0" style={{ width: 390, height: 1, background: "#1F2937", opacity: 0.1 }} />
+          <div className="self-stretch flex-shrink-0" style={{ width: "100%", height: 1, background: "#1F2937", opacity: 0.1 }} />
 
           <div
             className="box-border flex flex-col items-start self-stretch flex-shrink-0"
-            style={{ padding: 8, gap: 6, isolation: "isolate", width: 390, height: 233, background: "#F8FAFC", borderRadius: 6 }}
+            style={{ padding: 8, gap: 6, isolation: "isolate", width: "100%", height: 233, background: "#F8FAFC", borderRadius: 6 }}
           >
+            {loading ? (
+              <Skeleton width={130} height={12} />
+            ) : (
             <span
               className="self-stretch"
               style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}
             >
               Payment Progress
             </span>
+            )}
 
-            <div className="relative flex flex-row items-center self-stretch flex-shrink-0" style={{ height: 197 }}>
-              {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"].map((month) => (
-                <div
-                  key={month}
-                  className="flex flex-col justify-center items-center self-stretch flex-1"
-                  style={{ gap: 6 }}
-                >
-                  <div className="flex-1" style={{ width: 1, background: "rgba(31, 41, 55, 0.1)" }} />
-                  <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
-                    {month}
-                  </span>
+            {loading ? (
+              <Skeleton width="100%" height={197} shape="rect" className="rounded-md" />
+            ) : (
+              <div className="relative flex flex-row items-center self-stretch flex-shrink-0" style={{ height: 197 }}>
+                {totalInvoicesCard.points.map((p, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-col justify-center items-center self-stretch flex-1"
+                    style={{ gap: 6 }}
+                  >
+                    <div className="flex-1" style={{ width: 1, background: "rgba(31, 41, 55, 0.1)" }} />
+                    <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+                      {totalInvoicesCard.months[idx]}
+                    </span>
+                  </div>
+                ))}
+
+                <div className="absolute" style={{ width: 374, height: 124, right: 8, top: 29 }}>
+                  <svg width="374" height="124" viewBox="0 0 374 124" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d={totalInvoicesCard.linePath} stroke="#0085FF" strokeWidth="2" fill="none" />
+                    {totalInvoicesCard.points.map((p, idx) => (
+                      <circle key={idx} cx={p.x} cy={p.y} r={2.5} fill="#FFFFFF" stroke="#0085FF" strokeWidth="1" />
+                    ))}
+                  </svg>
                 </div>
-              ))}
-
-              <div className="absolute" style={{ width: 374, height: 124, right: 8, top: 29 }}>
-                <svg width="374" height="124" viewBox="0 0 374 124" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M1 119 L58.55 105.6 L119.75 87.35 L180.5 66.35 L241.5 45.35 L302.5 22.35 L363 2" stroke="#0085FF" strokeWidth="2" fill="none" />
-                  {[
-                    [1.5, 121.5],
-                    [60.5, 107],
-                    [122, 88],
-                    [182.5, 67],
-                    [243.5, 46],
-                    [304.5, 23],
-                    [365, 3.5],
-                  ].map(([cx, cy], idx) => (
-                    <circle key={idx} cx={cx} cy={cy} r={2.5} fill="#FFFFFF" stroke="#0085FF" strokeWidth="1" />
-                  ))}
-                </svg>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -2035,61 +2261,81 @@ function Dashboard() {
               borderRadius: 12,
             }}
           >
-            <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ gap: 16, width: 390, height: 76 }}>
+            <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ gap: 16, width: "100%", height: 76 }}>
               <div className="flex flex-col items-start flex-1" style={{ gap: 8, height: 76 }}>
+                {loading ? <Skeleton width={80} height={12} /> : (
                 <span
                   className="self-stretch"
                   style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
                 >
-                  Q1 Earnings
+                  {selectedQuarter} Earnings
                 </span>
+                )}
+                {loading ? <Skeleton width={130} height={24} /> : (
                 <span
                   className="self-stretch"
                   style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 24, lineHeight: "120%", color: "#1F2937" }}
                 >
-                  5,39,200 INR
+                  {Math.round(quarterlyEarnings.total).toLocaleString("en-IN")} INR
                 </span>
+                )}
+                {loading ? <Skeleton width={110} height={12} /> : (
                 <span
                   className="self-stretch"
                   style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}
                 >
-                  6.4% from last quarter
+                  {quarterlyEarnings.pctChange >= 0 ? "+" : ""}{quarterlyEarnings.pctChange}% from last quarter
                 </span>
+                )}
               </div>
 
               <div className="flex-shrink-0 self-stretch" style={{ width: 1, background: "#1F2937", opacity: 0.1 }} />
 
               <div className="flex flex-col justify-center items-start flex-1" style={{ gap: 8, height: 68 }}>
-                {[
-                  { label: "Revenue", value: "₹3,49,000" },
-                  { label: "Profit", value: "₹1,23,000" },
-                ].map((item) => (
-                  <div
-                    key={item.label}
-                    className="box-border flex flex-col items-start self-stretch flex-shrink-0"
-                    style={{ padding: 8, gap: 6, width: 178.5, height: 30, background: "#F8FAFC", borderRadius: 6 }}
-                  >
-                    <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0" style={{ gap: 8, height: 14 }}>
-                      <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
-                        {item.label}
-                      </span>
-                      <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}>
-                        {item.value}
-                      </span>
+                {loading ? (
+                  <>
+                    <Skeleton width="100%" height={30} shape="rect" className="rounded-md" />
+                    <Skeleton width="100%" height={30} shape="rect" className="rounded-md" />
+                  </>
+                ) : (
+                  [
+                    { label: "Revenue", value: `₹${Math.round(quarterlyEarnings.revenue).toLocaleString("en-IN")}` },
+                    { label: "Profit", value: `₹${Math.round(quarterlyEarnings.profit).toLocaleString("en-IN")}` },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="box-border flex flex-col items-start self-stretch flex-shrink-0"
+                      style={{ padding: 8, gap: 6, width: 178.5, height: 30, background: "#F8FAFC", borderRadius: 6 }}
+                    >
+                      <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0" style={{ gap: 8, height: 14 }}>
+                        <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+                          {item.label}
+                        </span>
+                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}>
+                          {item.value}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 
-            <div
-              className="box-border flex flex-col items-start self-stretch flex-shrink-0"
-              style={{ padding: 8, gap: 6, width: 390, height: 30, background: "rgba(0, 133, 255, 0.1)", borderRadius: 6 }}
-            >
-              <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#0085FF" }}>
-                Outperforming benchmark by 2.5%
-              </span>
-            </div>
+            {loading ? (
+              <Skeleton width="100%" height={30} shape="rect" className="rounded-md" />
+            ) : (
+              <div
+                className="box-border flex flex-col items-start self-stretch flex-shrink-0"
+                style={{
+                  padding: 8, gap: 6, width: "100%", height: 30, borderRadius: 6,
+                  background: quarterlyEarnings.pctChange >= 0 ? "rgba(0, 133, 255, 0.1)" : "rgba(232, 34, 34, 0.1)",
+                }}
+              >
+                <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: quarterlyEarnings.pctChange >= 0 ? "#0085FF" : "#E82222" }}>
+                  {quarterlyEarnings.pctChange >= 0 ? "Outperforming" : "Underperforming"} last quarter by {Math.abs(quarterlyEarnings.pctChange)}%
+                </span>
+              </div>
+            )}
           </div>
 
           <div
@@ -2105,47 +2351,100 @@ function Dashboard() {
               borderRadius: 12,
             }}
           >
-            <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0" style={{ gap: 8, width: 390, height: 28 }}>
+            <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0" style={{ gap: 8, width: "100%", height: 28 }}>
+              {loading ? <Skeleton width={140} height={14} /> : (
               <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
                 Earnings Performance
               </span>
+              )}
 
-              <div
-                className="box-border flex flex-row justify-center items-center flex-shrink-0"
-                style={{ padding: "4px 6px 4px 12px", gap: 6, width: 64, height: 28, border: "1px solid rgba(31, 41, 55, 0.3)", borderRadius: 4 }}
-              >
-                <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 16, lineHeight: "20px", color: "#1F2937" }}>
-                  Q1
-                </span>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M5.5 7.5L10 12L14.5 7.5" stroke="#1F2937" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+              {loading ? (
+                <Skeleton width={64} height={28} shape="rect" style={{ borderRadius: 4 }} />
+              ) : (
+              <div className="relative flex-shrink-0">
+                <button
+                  onClick={() => setShowQuarterMenu((v) => !v)}
+                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                  style={{ padding: "4px 6px 4px 12px", gap: 6, width: 64, height: 28, border: "1px solid rgba(31, 41, 55, 0.3)", borderRadius: 4, background: "#FFFFFF", cursor: "pointer" }}
+                >
+                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 16, lineHeight: "20px", color: "#1F2937" }}>
+                    {selectedQuarter}
+                  </span>
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M5.5 7.5L10 12L14.5 7.5" stroke="#1F2937" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {showQuarterMenu && (
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setShowQuarterMenu(false)} />
+                    <div
+                      className="absolute right-0 top-full mt-1 z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1 flex flex-col gap-0.5"
+                      style={{ width: 64 }}
+                    >
+                      {["Q1", "Q2", "Q3", "Q4"].map((q) => (
+                        <button
+                          key={q}
+                          onClick={() => {
+                            setSelectedQuarter(q);
+                            setShowQuarterMenu(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded-md text-sm font-medium ${q === selectedQuarter ? "bg-blue-50 text-blue-700" : "text-[#1F2937] hover:bg-gray-50"}`}
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
+              )}
             </div>
 
-            <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ gap: 8, width: 390, height: 134 }}>
+            <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ gap: 8, width: "100%", height: 134 }}>
               <div className="flex flex-col justify-center items-center self-stretch flex-shrink-0" style={{ gap: 8, width: 248, height: 134 }}>
+                {loading ? <Skeleton width={70} height={14} /> : (
                 <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
                   Revenue
                 </span>
-                <div className="self-stretch flex-shrink-0" style={{ width: 248, height: 24, background: "#0085FF", borderRadius: 4 }} />
+                )}
+                {loading ? (
+                  <Skeleton width="100%" height={60} shape="rect" style={{ borderRadius: 4 }} />
+                ) : (
+                <div className="self-stretch flex-shrink-0" style={{ width: `${Math.max(8, quarterlyEarnings.revenueScore * 10)}%`, height: 24, background: "#0085FF", borderRadius: 4 }} />
+                )}
+                {loading ? <Skeleton width={24} height={14} /> : (
                 <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
-                  8.1
+                  {quarterlyEarnings.revenueScore}
                 </span>
+                )}
               </div>
 
               <div className="flex flex-col justify-center items-center self-stretch flex-shrink-0 flex-1" style={{ gap: 8, height: 134 }}>
+                {loading ? <Skeleton width={50} height={14} /> : (
                 <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
                   Profit
                 </span>
-                <div className="self-stretch flex-shrink-0" style={{ width: 134, height: 24, background: "#0AA43E", borderRadius: 4 }} />
+                )}
+                {loading ? (
+                  <Skeleton width="100%" height={90} shape="rect" style={{ borderRadius: 4 }} />
+                ) : (
+                <div className="self-stretch flex-shrink-0" style={{ width: `${Math.max(8, quarterlyEarnings.profitScore * 10)}%`, height: 24, background: "#0AA43E", borderRadius: 4 }} />
+                )}
+                {loading ? <Skeleton width={24} height={14} /> : (
                 <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
-                  6.2
+                  {quarterlyEarnings.profitScore}
                 </span>
+                )}
               </div>
             </div>
 
-            <div className="flex flex-row justify-center items-center self-stretch flex-shrink-0" style={{ gap: 16, width: 390, height: 14 }}>
+            {loading ? (
+              <div className="flex flex-row justify-center items-center self-stretch flex-shrink-0" style={{ gap: 16, width: "100%", height: 14 }}>
+                <Skeleton width={70} height={14} />
+                <Skeleton width={52} height={14} />
+              </div>
+            ) : (
+            <div className="flex flex-row justify-center items-center self-stretch flex-shrink-0" style={{ gap: 16, width: "100%", height: 14 }}>
               <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 4, width: 70, height: 14 }}>
                 <div className="flex-shrink-0" style={{ width: 16, height: 8, background: "#0085FF", borderRadius: 4 }} />
                 <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}>
@@ -2160,6 +2459,7 @@ function Dashboard() {
                 </span>
               </div>
             </div>
+            )}
           </div>
         </div>
 
@@ -2177,7 +2477,7 @@ function Dashboard() {
             borderRadius: 12,
           }}
         >
-          <div className="flex flex-col items-start self-stretch flex-shrink-0" style={{ gap: 8, width: 402, height: 81 }}>
+          <div className="flex flex-col items-start self-stretch flex-shrink-0" style={{ gap: 8, width: "100%", height: 81 }}>
             <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0" style={{ gap: 8, height: 22 }}>
               <span
                 style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
@@ -2195,30 +2495,38 @@ function Dashboard() {
               </div>
             </div>
 
+            {loading ? <Skeleton width={150} height={24} /> : (
             <span
               className="self-stretch"
               style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 600, fontSize: 24, lineHeight: "120%", color: "#000000" }}
             >
-              Cottson Clothing
+              {recentDealsWidget.topDeal
+                ? (recentDealsWidget.topDeal.company?.name || recentDealsWidget.topDeal.title || "—")
+                : "No deals yet"}
             </span>
+            )}
 
+            {loading ? <Skeleton width={130} height={12} /> : (
             <span
               className="self-stretch"
               style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}
             >
-              INR 1,39,200 deal value
+              {recentDealsWidget.topDeal
+                ? `INR ${Math.round(recentDealsWidget.topDeal.amount || 0).toLocaleString("en-IN")} deal value`
+                : "—"}
             </span>
+            )}
           </div>
 
-          <div className="self-stretch flex-shrink-0" style={{ width: 402, height: 1, background: "#1F2937", opacity: 0.1 }} />
+          <div className="self-stretch flex-shrink-0" style={{ width: "100%", height: 1, background: "#1F2937", opacity: 0.1 }} />
 
           <div
-            className="box-border flex flex-col items-start self-stretch flex-shrink-0"
-            style={{ padding: 8, gap: 6, width: 402, height: 240, background: "#F8FAFC", borderRadius: 6 }}
+            className="box-border flex flex-col items-start self-stretch"
+            style={{ padding: 8, gap: 6, width: "100%", flex: "1 1 auto", minHeight: 0, background: "#F8FAFC", borderRadius: 6 }}
           >
             <div
               className="flex flex-row items-start self-stretch flex-shrink-0"
-              style={{ width: 386, height: 22, background: "#FFFFFF", borderRadius: 6 }}
+              style={{ width: "100%", height: 22, background: "#FFFFFF", borderRadius: 6 }}
             >
               {["Client", "Deal", "Amount"].map((label, idx) => (
                 <div
@@ -2233,19 +2541,27 @@ function Dashboard() {
               ))}
             </div>
 
-            <div className="flex flex-col items-start self-stretch flex-shrink-0" style={{ gap: 2, width: 386, height: 208 }}>
-              <div className="self-stretch flex-shrink-0" style={{ width: 386, height: 1, background: "#1F2937", opacity: 0.1 }} />
+            <div className="flex flex-col items-start self-stretch justify-between" style={{ gap: 2, width: "100%", flex: "1 1 auto", minHeight: 0 }}>
+              <div className="self-stretch flex-shrink-0" style={{ width: "100%", height: 1, background: "#1F2937", opacity: 0.1 }} />
 
-              {[
-                { client: "Cottson Clothing", deal: "Website Project", amount: "1,39,200 INR" },
-                { client: "Asterisks.Inc", deal: "Digital Product", amount: "40,100 INR" },
-                { client: "DataCircles", deal: "Branding", amount: "41,000 INR" },
-                { client: "DataCircles", deal: "Branding", amount: "41,000 INR" },
-                { client: "DataCircles", deal: "Branding", amount: "41,000 INR" },
-                { client: "Cottson Clothing", deal: "Clothing", amount: "41,500 INR" },
-              ].map((row, idx) => (
+              {loading
+                ? Array.from({ length: 6 }).map((_, idx) => (
+                  <div key={idx} className="flex flex-col items-start self-stretch flex-shrink-0">
+                    <div className="flex flex-row items-center self-stretch flex-shrink-0" style={{ width: "100%", height: 30, gap: 10 }}>
+                      <div className="flex-1" style={{ padding: "0 6px" }}><Skeleton width="70%" height={11} /></div>
+                      <div className="flex-1" style={{ padding: "0 6px" }}><Skeleton width="60%" height={11} /></div>
+                      <div className="flex-1 flex justify-end" style={{ padding: "0 6px" }}><Skeleton width="50%" height={11} /></div>
+                    </div>
+                    <div className="self-stretch flex-shrink-0" style={{ width: "100%", height: 1, background: "#1F2937", opacity: 0.1 }} />
+                  </div>
+                ))
+                : recentDealsWidget.recent.length === 0 ? (
+                  <div className="flex items-center justify-center self-stretch" style={{ padding: "20px 0" }}>
+                    <span style={{ fontFamily: "Inter", fontSize: 12, color: "#6B7280" }}>No deals yet</span>
+                  </div>
+                ) : recentDealsWidget.recent.map((row, idx) => (
                 <div key={idx} className="flex flex-col items-start self-stretch flex-shrink-0">
-                  <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ width: 386, height: 30 }}>
+                  <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ width: "100%", height: 30 }}>
                     <div className="flex flex-row justify-start items-center flex-1" style={{ padding: "8px 6px", gap: 10, height: 30 }}>
                       <span className="self-stretch" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}>
                         {row.client}
@@ -2262,7 +2578,7 @@ function Dashboard() {
                       </span>
                     </div>
                   </div>
-                  <div className="self-stretch flex-shrink-0" style={{ width: 386, height: 1, background: "#1F2937", opacity: 0.1 }} />
+                  <div className="self-stretch flex-shrink-0" style={{ width: "100%", height: 1, background: "#1F2937", opacity: 0.1 }} />
                 </div>
               ))}
             </div>

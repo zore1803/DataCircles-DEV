@@ -50,6 +50,8 @@ import {
 import CompanyForm from "../components/company/CompanyForm";
 import SubsidiaryModal from "../components/company/SubsidiaryModal";
 import MergeCompanyModal from "../components/company/MergeCompanyModal";
+import StatTileSkeleton from "../components/common/StatTileSkeleton";
+import useMinDelay from "../hooks/useMinDelay";
 
 const tabs = [
   "Overview",
@@ -183,6 +185,7 @@ const CompanyProfilePage = () => {
   const [invoiceSummary, setInvoiceSummary] = useState(null);
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [invoicesLoaded, setInvoicesLoaded] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [showNewEntryMenu, setShowNewEntryMenu] = useState(false);
   const [showStats, setShowStats] = useState(true);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
@@ -572,11 +575,16 @@ const CompanyProfilePage = () => {
       } catch (err) {
         console.error("Failed to load company profile:", err);
         toast.error("Failed to load company profile.");
+      } finally {
+        setDataLoaded(true);
       }
     };
 
     fetchData();
   }, [id]);
+
+  const showOverviewSkeleton = useMinDelay(!dataLoaded || !invoicesLoaded, 300);
+  const showDealsSkeleton = useMinDelay(!dataLoaded, 300);
 
   const fetchInvoices = useCallback(async () => {
     setInvoicesLoading(true);
@@ -663,29 +671,6 @@ const CompanyProfilePage = () => {
     }
   };
 
-  if (!company) {
-    return (
-      <div className="fixed bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center z-20" style={{ top: 64, left: "var(--sidebar-width, 0px)", right: 0, bottom: 0 }}>
-        <div className="flex flex-col items-center justify-center">
-          <img
-            src={logo}
-            alt="Loading..."
-            className="animate-spin-smooth drop-shadow-lg"
-            style={{
-              width: "48px",
-              height: "48px",
-              animationDuration: "1.8s",
-              filter: "invert(100%)",
-            }}
-          />
-          <p className="mt-3 text-gray-600 font-medium">
-            {randomMessage}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-6 px-6">
       <style>{`.income-chart-scroll::-webkit-scrollbar { display: none; }`}</style>
@@ -711,24 +696,36 @@ const CompanyProfilePage = () => {
           {/* LEFT: Logo + Name + Address */}
           <div className="flex items-center gap-3">
             {/* Logo using ProfilePicture component */}
-            <ProfilePicture
-              contact={{
-                name: company.name,
-                avatar: company.profilePicture,
-              }}
-              size="w-9 h-9"
-              textSize="text-sm"
-            />
+            {company ? (
+              <ProfilePicture
+                contact={{
+                  name: company.name,
+                  avatar: company.profilePicture,
+                }}
+                size="w-9 h-9"
+                textSize="text-sm"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-gray-200 animate-pulse flex-shrink-0" />
+            )}
 
             {/* Title + Address */}
             <div>
-              <h1 className="text-base font-semibold text-gray-900">
-                {company.name}
-              </h1>
-              {company.address && (
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {company.address}
-                </p>
+              {company ? (
+                <h1 className="text-base font-semibold text-gray-900">
+                  {company.name}
+                </h1>
+              ) : (
+                <Skeleton width={140} height={16} className="mb-1" />
+              )}
+              {company ? (
+                company.address && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {company.address}
+                  </p>
+                )
+              ) : (
+                <Skeleton width={100} height={11} />
               )}
             </div>
           </div>
@@ -880,7 +877,7 @@ const CompanyProfilePage = () => {
         </div>
 
         {/* Location */}
-        {company.location && (
+        {company?.location && (
           <div className="flex items-center gap-2 text-gray-600 mb-3">
             <MapPin size={16} className="text-gray-400" />
             <span className="text-xs">{company.location}</span>
@@ -918,24 +915,26 @@ const CompanyProfilePage = () => {
         {/* Summary Stats Row */}
         {showStats && activeTab === "Overview" && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-            {statTiles.map((tile) => (
-              <div
-                key={tile.label}
-                className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
-              >
-                <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <tile.icon width={22} height={21} />
+            {showOverviewSkeleton
+              ? Array.from({ length: 6 }).map((_, i) => <StatTileSkeleton key={i} />)
+              : statTiles.map((tile) => (
+                <div
+                  key={tile.label}
+                  className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
+                >
+                  <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <tile.icon width={22} height={21} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-500 truncate">
+                      {tile.label}
+                    </p>
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {tile.value}
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] text-gray-500 truncate">
-                    {tile.label}
-                  </p>
-                  <p className="text-sm font-semibold text-gray-900 truncate">
-                    {tile.value}
-                  </p>
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         )}
 
@@ -949,77 +948,106 @@ const CompanyProfilePage = () => {
                 <div className="h-[162px] bg-white border border-gray-200 rounded-lg p-5">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-900">
-                      Deal Pipeline ({deals.length})
+                      {showOverviewSkeleton ? <Skeleton width={110} height={14} /> : <>Deal Pipeline ({deals.length})</>}
                     </h3>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setActiveTab("Deals")}
-                        title="View Deals"
-                        className="p-1.5 rounded-full text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
-                      >
-                        <Eye size={14} />
-                      </button>
-                      <button
-                        onClick={() => setActiveTab("Deals")}
-                        title="Add Deal"
-                        className="w-7 h-7 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex h-[88px]">
-                    {pipelineData.map((stage, idx) => (
-                      <div
-                        key={stage.key}
-                        className={`flex-1 flex flex-col justify-center ${stage.color} ${idx > 0 ? "-ml-3 pl-8 pr-5" : "pl-8 pr-5"}`}
-                        style={{
-                          clipPath:
-                            idx === pipelineData.length - 1
-                              ? "polygon(0 0, 100% 0, 100% 100%, 0 100%, 20px 50%)"
-                              : "polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%, 20px 50%)",
-                        }}
-                      >
-                        <p className="text-xs font-medium">{stage.label}</p>
-                        <p className="text-[11px] opacity-70">
-                          {stage.count} Deal{stage.count !== 1 ? "s" : ""}
-                        </p>
-                        <p className="text-sm font-semibold">
-                          ₹{stage.amount.toLocaleString("en-IN")}
-                        </p>
+                    {showOverviewSkeleton ? (
+                      <div className="flex items-center gap-2">
+                        <Skeleton shape="circle" width={28} height={28} />
+                        <Skeleton shape="circle" width={28} height={28} />
                       </div>
-                    ))}
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setActiveTab("Deals")}
+                          title="View Deals"
+                          className="p-1.5 rounded-full text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          onClick={() => setActiveTab("Deals")}
+                          title="Add Deal"
+                          className="w-7 h-7 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
+                  {showOverviewSkeleton ? (
+                    <div className="flex h-[88px] gap-1">
+                      {pipelineStages.map((stage) => (
+                        <Skeleton key={stage.key} width="100%" height="100%" shape="rect" className="rounded-md flex-1" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex h-[88px]">
+                      {pipelineData.map((stage, idx) => (
+                        <div
+                          key={stage.key}
+                          className={`flex-1 flex flex-col justify-center ${stage.color} ${idx > 0 ? "-ml-3 pl-8 pr-5" : "pl-8 pr-5"}`}
+                          style={{
+                            clipPath:
+                              idx === pipelineData.length - 1
+                                ? "polygon(0 0, 100% 0, 100% 100%, 0 100%, 20px 50%)"
+                                : "polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%, 20px 50%)",
+                          }}
+                        >
+                          <p className="text-xs font-medium">{stage.label}</p>
+                          <p className="text-[11px] opacity-70">
+                            {stage.count} Deal{stage.count !== 1 ? "s" : ""}
+                          </p>
+                          <p className="text-sm font-semibold">
+                            ₹{stage.amount.toLocaleString("en-IN")}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Financial Overview */}
-                <div className="h-[607px] bg-white border border-gray-200 rounded-lg p-5 flex flex-col min-w-0">
+                <div
+                  className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col min-w-0"
+                  style={{ height: 607, maxHeight: 607, minHeight: 607, flexShrink: 0, flexGrow: 0 }}
+                >
                   <h3 className="text-sm font-semibold text-gray-900 mb-3 flex-shrink-0">
-                    Financial Overview
+                    {showOverviewSkeleton ? <Skeleton width={130} height={14} /> : "Financial Overview"}
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                    {financialTiles.map((tile) => (
-                      <div
-                        key={tile.label}
-                        className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl"
-                      >
-                        <div className="w-10 h-10 bg-white text-gray-500 rounded-lg flex items-center justify-center flex-shrink-0 border border-gray-200">
-                          <tile.icon width={20} height={20} />
+                    {showOverviewSkeleton
+                      ? Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
+                      : financialTiles.map((tile) => (
+                        <div
+                          key={tile.label}
+                          className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl"
+                        >
+                          <div className="w-10 h-10 bg-white text-gray-500 rounded-lg flex items-center justify-center flex-shrink-0 border border-gray-200">
+                            <tile.icon width={20} height={20} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[11px] text-gray-500 truncate">
+                              {tile.label}
+                            </p>
+                            <p
+                              className={`text-sm font-semibold truncate ${tile.valueClassName || "text-gray-900"}`}
+                            >
+                              {tile.value}
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-[11px] text-gray-500 truncate">
-                            {tile.label}
-                          </p>
-                          <p
-                            className={`text-sm font-semibold truncate ${tile.valueClassName || "text-gray-900"}`}
-                          >
-                            {tile.value}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
 
+                  {showOverviewSkeleton ? (
+                    <Skeleton
+                      width="100%"
+                      height="100%"
+                      shape="rect"
+                      className="rounded-lg"
+                      style={{ flex: "1 1 0%", minHeight: 0, maxHeight: 439, flexShrink: 1, flexGrow: 1 }}
+                    />
+                  ) : (
                   <div className="flex min-w-0" style={{ flex: "1 1 0%", minHeight: 0 }}>
                     {/* Fixed Y-axis, stays put while the plot below scrolls horizontally */}
                     <div style={{ width: 64, height: "100%", flexShrink: 0 }}>
@@ -1126,6 +1154,7 @@ const CompanyProfilePage = () => {
                       </div>
                     </div>
                   </div>
+                  )}
                 </div>
               </div>
 
@@ -1134,24 +1163,39 @@ const CompanyProfilePage = () => {
                 {/* Activity Timeline */}
                 <div className="h-[267px] flex flex-col bg-white border border-gray-200 rounded-lg p-5">
                   <h3 className="text-sm font-semibold text-gray-900 mb-3 flex-shrink-0">
-                    Activity Timeline
+                    {showOverviewSkeleton ? <Skeleton width={110} height={14} /> : "Activity Timeline"}
                   </h3>
                   <div className="flex items-center gap-1 mb-4 flex-wrap flex-shrink-0">
-                    {activityFeedTabs.map((tab) => (
-                      <button
-                        key={tab}
-                        onClick={() => setActivityFeedFilter(tab)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${activityFeedFilter === tab
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                          }`}
-                      >
-                        {tab}
-                      </button>
-                    ))}
+                    {showOverviewSkeleton
+                      ? Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} width={i === 0 ? 36 : 56} height={24} className="rounded-full" />
+                      ))
+                      : activityFeedTabs.map((tab) => (
+                        <button
+                          key={tab}
+                          onClick={() => setActivityFeedFilter(tab)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${activityFeedFilter === tab
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            }`}
+                        >
+                          {tab}
+                        </button>
+                      ))}
                   </div>
                   <div className="space-y-3 overflow-y-auto flex-1 pr-2 -mr-2">
-                    {filteredActivityFeed.length === 0 ? (
+                    {showOverviewSkeleton ? (
+                      Array.from({ length: 4 }).map((_, idx) => (
+                        <div key={idx} className="flex items-start gap-2.5">
+                          <Skeleton shape="circle" width={28} height={28} className="flex-shrink-0" />
+                          <div className="min-w-0 flex-1 flex flex-col gap-1">
+                            <Skeleton width="80%" height={11} />
+                            <Skeleton width="40%" height={10} />
+                          </div>
+                          <Skeleton width={36} height={11} className="flex-shrink-0" />
+                        </div>
+                      ))
+                    ) : filteredActivityFeed.length === 0 ? (
                       <p className="text-sm text-gray-400 text-center py-4">
                         No recent activity.
                       </p>
@@ -1190,46 +1234,66 @@ const CompanyProfilePage = () => {
                 <div className="bg-white border border-gray-200 rounded-lg p-5">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-900">
-                      Calendar
+                      {showOverviewSkeleton ? <Skeleton width={70} height={14} /> : "Calendar"}
                     </h3>
-                    <button
-                      onClick={() => setActiveTab("Calendar")}
-                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                    >
-                      View Calendar
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-7 gap-1 mb-2">
-                    {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
-                      <div
-                        key={d}
-                        className="text-[10px] text-gray-400 text-center font-medium"
+                    {showOverviewSkeleton ? (
+                      <Skeleton width={70} height={12} />
+                    ) : (
+                      <button
+                        onClick={() => setActiveTab("Calendar")}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-700"
                       >
-                        {d}
-                      </div>
-                    ))}
+                        View Calendar
+                      </button>
+                    )}
                   </div>
-                  <div className="grid grid-cols-7 gap-1">
-                    {miniCalendar.days.map((day, idx) => (
-                      <div
-                        key={idx}
-                        className={`text-[11px] text-center py-1 rounded-full ${day === miniCalendar.today
-                          ? "bg-blue-600 text-white font-semibold"
-                          : day
-                            ? "text-gray-700"
-                            : ""
-                          }`}
-                      >
-                        {day || ""}
+                  {showOverviewSkeleton ? (
+                    <Skeleton width="100%" height={220} />
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-7 gap-1 mb-2">
+                        {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
+                          <div
+                            key={d}
+                            className="text-[10px] text-gray-400 text-center font-medium"
+                          >
+                            {d}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                      <div className="grid grid-cols-7 gap-1">
+                        {miniCalendar.days.map((day, idx) => (
+                          <div
+                            key={idx}
+                            className={`text-[11px] text-center py-1 rounded-full ${day === miniCalendar.today
+                              ? "bg-blue-600 text-white font-semibold"
+                              : day
+                                ? "text-gray-700"
+                                : ""
+                              }`}
+                          >
+                            {day || ""}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
 
                   <h4 className="text-xs font-semibold text-gray-900 mt-4 mb-2">
-                    Upcoming
+                    {showOverviewSkeleton ? <Skeleton width={70} height={12} /> : "Upcoming"}
                   </h4>
                   <div className="space-y-2">
-                    {upcomingItems.length === 0 ? (
+                    {showOverviewSkeleton ? (
+                      Array.from({ length: 5 }).map((_, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <Skeleton shape="circle" width={6} height={6} className="mt-1 flex-shrink-0" />
+                          <div className="min-w-0 flex-1 flex flex-col gap-1">
+                            <Skeleton width="75%" height={11} />
+                            <Skeleton width="35%" height={10} />
+                          </div>
+                        </div>
+                      ))
+                    ) : upcomingItems.length === 0 ? (
                       <p className="text-xs text-gray-400">Nothing upcoming.</p>
                     ) : (
                       upcomingItems.map((item, idx) => (
@@ -1266,17 +1330,35 @@ const CompanyProfilePage = () => {
                 <div className="bg-white border border-gray-200 rounded-lg p-5">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-900">
-                      Key Contacts ({contacts.length})
+                      {showOverviewSkeleton ? (
+                        <Skeleton width={110} height={14} />
+                      ) : (
+                        <>Key Contacts ({contacts.length})</>
+                      )}
                     </h3>
-                    <button
-                      onClick={() => setActiveTab("Contacts")}
-                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                    >
-                      View All
-                    </button>
+                    {showOverviewSkeleton ? (
+                      <Skeleton width={50} height={12} />
+                    ) : (
+                      <button
+                        onClick={() => setActiveTab("Contacts")}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        View All
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-3">
-                    {contacts.length === 0 ? (
+                    {showOverviewSkeleton ? (
+                      Array.from({ length: 3 }).map((_, idx) => (
+                        <div key={idx} className="flex items-center gap-2.5">
+                          <Skeleton shape="circle" width={32} height={32} className="flex-shrink-0" />
+                          <div className="min-w-0 flex-1 flex flex-col gap-1">
+                            <Skeleton width="70%" height={11} />
+                            <Skeleton width="90%" height={10} />
+                          </div>
+                        </div>
+                      ))
+                    ) : contacts.length === 0 ? (
                       <p className="text-xs text-gray-400">No contacts yet.</p>
                     ) : (
                       contacts.slice(0, 3).map((contact) => (
@@ -1315,16 +1397,32 @@ const CompanyProfilePage = () => {
                 {/* Tasks */}
                 <div className="bg-white border border-gray-200 rounded-lg p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-900">Tasks</h3>
-                    <button
-                      onClick={() => setActiveTab("Tasks")}
-                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                    >
-                      View All
-                    </button>
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      {showOverviewSkeleton ? <Skeleton width={50} height={14} /> : "Tasks"}
+                    </h3>
+                    {showOverviewSkeleton ? (
+                      <Skeleton width={50} height={12} />
+                    ) : (
+                      <button
+                        onClick={() => setActiveTab("Tasks")}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        View All
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-3">
-                    {upcomingTasksList.length === 0 ? (
+                    {showOverviewSkeleton ? (
+                      Array.from({ length: 3 }).map((_, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <Skeleton shape="circle" width={14} height={14} className="flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1 flex flex-col gap-1">
+                            <Skeleton width="75%" height={11} />
+                            <Skeleton width="45%" height={10} />
+                          </div>
+                        </div>
+                      ))
+                    ) : upcomingTasksList.length === 0 ? (
                       <p className="text-xs text-gray-400">No open tasks.</p>
                     ) : (
                       upcomingTasksList.map((task) => (
@@ -1347,16 +1445,32 @@ const CompanyProfilePage = () => {
                 {/* Meetings */}
                 <div className="bg-white border border-gray-200 rounded-lg p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-900">Meetings</h3>
-                    <button
-                      onClick={() => setActiveTab("Meetings")}
-                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                    >
-                      View All
-                    </button>
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      {showOverviewSkeleton ? <Skeleton width={65} height={14} /> : "Meetings"}
+                    </h3>
+                    {showOverviewSkeleton ? (
+                      <Skeleton width={50} height={12} />
+                    ) : (
+                      <button
+                        onClick={() => setActiveTab("Meetings")}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        View All
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-3">
-                    {upcomingMeetingsList.length === 0 ? (
+                    {showOverviewSkeleton ? (
+                      Array.from({ length: 3 }).map((_, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <Skeleton shape="circle" width={14} height={14} className="flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1 flex flex-col gap-1">
+                            <Skeleton width="70%" height={11} />
+                            <Skeleton width="40%" height={10} />
+                          </div>
+                        </div>
+                      ))
+                    ) : upcomingMeetingsList.length === 0 ? (
                       <p className="text-xs text-gray-400">No upcoming meetings.</p>
                     ) : (
                       upcomingMeetingsList.map((meeting) => (
@@ -1380,17 +1494,35 @@ const CompanyProfilePage = () => {
                 <div className="bg-white border border-gray-200 rounded-lg p-5">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-900">
-                      Key Files ({keyFiles.length})
+                      {showOverviewSkeleton ? (
+                        <Skeleton width={90} height={14} />
+                      ) : (
+                        <>Key Files ({keyFiles.length})</>
+                      )}
                     </h3>
-                    <button
-                      onClick={() => setActiveTab("Folders")}
-                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                    >
-                      View All
-                    </button>
+                    {showOverviewSkeleton ? (
+                      <Skeleton width={50} height={12} />
+                    ) : (
+                      <button
+                        onClick={() => setActiveTab("Folders")}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        View All
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-3">
-                    {keyFiles.length === 0 ? (
+                    {showOverviewSkeleton ? (
+                      Array.from({ length: 3 }).map((_, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <Skeleton shape="circle" width={14} height={14} className="flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1 flex flex-col gap-1">
+                            <Skeleton width="65%" height={11} />
+                            <Skeleton width="35%" height={10} />
+                          </div>
+                        </div>
+                      ))
+                    ) : keyFiles.length === 0 ? (
                       <p className="text-xs text-gray-400">No files uploaded.</p>
                     ) : (
                       keyFiles.map((file, idx) => (
@@ -1430,6 +1562,7 @@ const CompanyProfilePage = () => {
                 contacts={contacts}
                 viewMode={dealsViewMode}
                 setViewMode={setDealsViewMode}
+                isLoading={showDealsSkeleton}
               />
             )}
             {activeTab === "Contacts" && (
@@ -1490,3 +1623,4 @@ const CompanyProfilePage = () => {
 };
 
 export default CompanyProfilePage;
+import Skeleton from "../components/common/Skeleton";

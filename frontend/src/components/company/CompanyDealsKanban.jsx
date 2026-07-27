@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useMemo, useState, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import {
   DndContext,
   closestCorners,
@@ -31,6 +32,10 @@ import {
   ChevronDown,
   Pin,
   PinOff,
+  EyeOff,
+  Eye,
+  Edit2,
+  Trash2,
   FileText,
   User,
   Tag,
@@ -43,6 +48,9 @@ import QuickDealForm from "../deal/QuickDealForm";
 import FilterIcon from "../common/FilterIcon";
 import CompanyFilterPanel from "./CompanyFilterPanel";
 import { applyColumnFilters } from "../../utils/advancedFilters";
+import StatTileSkeleton from "../common/StatTileSkeleton";
+import DealCardSkeleton from "../common/DealCardSkeleton";
+import Skeleton from "../common/Skeleton";
 
 const AMOUNT_RANGES = [
   { label: "Under ₹10,000", test: (v) => v < 10000 },
@@ -93,6 +101,42 @@ const getDealFieldValue = (deal, key) => {
 };
 
 const TERMINAL_STATUSES = ["won", "lost"];
+
+// The app renders inside #root which carries a CSS `zoom` (0.75 on desktop).
+// getBoundingClientRect() returns UNSCALED layout coordinates while portal overlays on
+// document.body render in visual space, so rect-derived positions must be multiplied by
+// this zoom factor to line up on screen.
+const getRootZoom = () => {
+  if (typeof window === "undefined") return 1;
+  const el = document.getElementById("root");
+  if (!el) return 1;
+  const z = parseFloat(getComputedStyle(el).zoom);
+  return z && !Number.isNaN(z) ? z : 1;
+};
+
+const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>.
+const HighlightText = ({ text, query }) => {
+  const str = text === null || text === undefined ? "" : String(text);
+  const q = (query || "").trim();
+  if (!q) return <>{str}</>;
+
+  const parts = str.split(new RegExp(`(${escapeRegExp(q)})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="bg-yellow-200 text-inherit rounded-sm px-0.5">
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+};
 
 const Avatar = ({ name, className = "" }) => (
   <div
@@ -177,11 +221,10 @@ const KanbanColumn = ({ status, deals }) => {
 
   return (
     <div
-      ref={setNodeRef}
-      className={`flex-shrink-0 w-[340px] bg-white border border-gray-200 rounded-xl transition-colors ${isOver ? "bg-blue-50 border-blue-300" : ""
+      className={`flex flex-col flex-shrink-0 w-[340px] bg-white border border-gray-200 rounded-xl transition-colors ${isOver ? "bg-blue-50 border-blue-300" : ""
         }`}
     >
-      <div className="h-[46px] flex items-center justify-between px-[18px] bg-gray-50 rounded-t-xl border-b border-gray-200">
+      <div className="h-[46px] flex items-center justify-between px-[18px] bg-gray-50 rounded-t-xl border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center gap-2">
           <h4 className="text-sm font-semibold text-gray-900">{status}</h4>
           <span className="w-5 h-5 flex items-center justify-center text-[11px] font-bold bg-white text-gray-600 rounded-full">
@@ -190,14 +233,19 @@ const KanbanColumn = ({ status, deals }) => {
         </div>
         <MoreVertical size={14} className="text-gray-300" />
       </div>
-      <div className="px-[18px] pb-[18px] pt-5">
-        {deals.length > 0 && (
-          <div className="h-[67px] flex items-center justify-between bg-white bg-gradient-to-br from-white to-[#B3CCFF]/20 border border-[#E1E4EA] rounded-[10px] px-4 mb-3">
+
+      {deals.length > 0 && (
+        <div className="px-[18px] pt-5 flex-shrink-0">
+          <div className="h-[67px] flex items-center justify-between bg-white bg-gradient-to-br from-white to-[#B3CCFF]/20 border border-[#E1E4EA] rounded-[10px] px-4">
             <p className="text-lg font-bold text-gray-900">
               ₹{total.toLocaleString("en-IN")}
             </p>
           </div>
-        )}
+        </div>
+      )}
+
+      {/* Capped to ~7 cards tall (7*132 + 6*12 gaps); further deals scroll internally. */}
+      <div ref={setNodeRef} className="overflow-y-auto dc-card-scroll px-[18px] pb-[18px] pt-3" style={{ maxHeight: "1030px" }}>
         <div className="min-h-[80px]">
           {deals.map((deal) => (
             <DealCard key={deal._id} deal={deal} />
@@ -217,10 +265,12 @@ export default function CompanyDealsKanban({
   contacts = [],
   viewMode: controlledViewMode,
   setViewMode: setControlledViewMode,
+  isLoading = false,
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
+
   const [showDealForm, setShowDealForm] = useState(false);
   const [statuses, setStatuses] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -239,8 +289,273 @@ export default function CompanyDealsKanban({
   const viewMode = controlledViewMode ?? localViewMode;
   const setViewMode = setControlledViewMode ?? setLocalViewMode;
   const [currentPage, setCurrentPage] = useState(1);
+  const [editingPage, setEditingPage] = useState(false);
+  const [pageInput, setPageInput] = useState("");
   const [limit, setLimit] = useState(10);
-  const [pinnedColumn, setPinnedColumn] = useState(null);
+  const navigate = useNavigate();
+
+  // Multi-column pinning, independent left/right sides: [{ key, side }]
+  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const [hiddenColumns, setHiddenColumns] = useState([]);
+  const pinColumnToSide = (colKey, side) => {
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colKey), { key: colKey, side }]);
+  };
+  const unpinColumn = (colKey) => {
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colKey));
+  };
+  const getColumnPinSide = (colKey) => pinnedColumns.find((p) => p.key === colKey)?.side || null;
+  const hideColumn = (colKey) => setHiddenColumns((prev) => [...prev, colKey]);
+
+  // Drag-to-reorder columns — same portal drag-ghost approach as the shared
+  // DataTable component (used by the Dashboard "Top Invoices" table) for parity.
+  const [columnOrder, setColumnOrder] = useState([]);
+  const [draggedColKey, setDraggedColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
+  const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
+
+  const reorderColumns = (draggedKey, targetKey, fallbackOrder) => {
+    if (!draggedKey || !targetKey || draggedKey === targetKey) return;
+    const base = columnOrder.length ? columnOrder : fallbackOrder;
+    const order = base.includes(draggedKey) ? [...base] : [...base, draggedKey];
+    const from = order.indexOf(draggedKey);
+    const to = order.indexOf(targetKey);
+    if (from === -1 || to === -1) return;
+    order.splice(from, 1);
+    order.splice(to, 0, draggedKey);
+    setColumnOrder(order);
+  };
+
+  const getDealColumnPreviewValue = (deal, colId) => {
+    switch (colId) {
+      case "dealId":
+        return `DL-${deal._id.slice(-5).toUpperCase()}`;
+      case "title":
+        return deal.title || "-";
+      case "contact":
+        return deal.contact?.name || "-";
+      case "stage":
+        return deal.status || "-";
+      case "amount":
+        return `₹${(deal.amount || 0).toLocaleString("en-IN")}`;
+      case "lastUpdated":
+        return deal.updatedAt
+          ? new Date(deal.updatedAt).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })
+          : "-";
+      default:
+        return "-";
+    }
+  };
+
+  const startColumnDrag = (e, colId, label, fallbackOrder) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    e.preventDefault();
+    window.getSelection?.()?.removeAllRanges();
+
+    const th = e.currentTarget;
+    const rect = th.getBoundingClientRect();
+    const previewRows = paginatedDeals.map((d) => String(getDealColumnPreviewValue(d, colId)));
+    const zGhost = getRootZoom();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    dragOverRef.current = null;
+    setDraggedColKey(colId);
+    setDragOverColKey(null);
+    document.body.style.userSelect = "none";
+    setDragGhost({
+      label,
+      previewRows,
+      offsetX,
+      offsetY,
+      width: rect.width / zGhost,
+      height: rect.height / zGhost,
+    });
+
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const visualTop = clientY - offsetY;
+      const visualLeft = clientX - offsetX;
+      el.style.top = `${visualTop / zGhost}px`;
+      el.style.left = `${visualLeft / zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+    };
+    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
+
+    const handleMouseMove = (moveEvent) => {
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) {
+        reorderColumns(colId, overKey, fallbackOrder);
+      }
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const [openColMenuKey, setOpenColMenuKey] = useState(null);
+  const [colMenuPos, setColMenuPos] = useState(null);
+  const colMenuRef = useRef(null);
+
+  const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const [rowActionsPos, setRowActionsPos] = useState(null);
+  const rowActionsRef = useRef(null);
+
+  // Lock page scroll while a portal menu is open so the background can't shift/scroll
+  // out from under the fixed-position menu (its position is only computed once, on open).
+  // Any scroll/wheel/touch/keyboard-scroll attempt closes the menu instead of moving the page.
+  useEffect(() => {
+    if (!openRowActionsId && !openColMenuKey) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const SCROLL_KEYS = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "];
+    const closeMenus = () => {
+      setOpenRowActionsId(null);
+      setRowActionsPos(null);
+      setOpenColMenuKey(null);
+      setColMenuPos(null);
+    };
+    const handleWheel = (e) => {
+      e.preventDefault();
+      closeMenus();
+    };
+    const handleTouchMove = () => closeMenus();
+    const handleKeyDown = (e) => {
+      if (SCROLL_KEYS.includes(e.key)) closeMenus();
+    };
+
+    window.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: true, capture: true });
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("wheel", handleWheel, { capture: true });
+      window.removeEventListener("touchmove", handleTouchMove, { capture: true });
+      window.removeEventListener("keydown", handleKeyDown, { capture: true });
+    };
+  }, [openRowActionsId, openColMenuKey]);
+
+  const [dealToDelete, setDealToDelete] = useState(null);
+  const [deletingDeal, setDeletingDeal] = useState(false);
+
+  const handleDeleteDealConfirmed = async () => {
+    if (!dealToDelete) return;
+    setDeletingDeal(true);
+    try {
+      await API.delete(`/deals/${dealToDelete._id}`);
+      setDeals((prev) => prev.filter((d) => d._id !== dealToDelete._id));
+      toast.success("Deal deleted");
+      setDealToDelete(null);
+    } catch (err) {
+      console.error("Failed to delete deal:", err);
+      toast.error(err.response?.data?.message || "Failed to delete deal");
+    } finally {
+      setDeletingDeal(false);
+    }
+  };
+
+  // Row selection + bulk actions
+  const [selectedDeals, setSelectedDeals] = useState([]);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState("Open");
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const handleSelectAllDeals = () => {
+    setSelectedDeals((prev) =>
+      prev.length === paginatedDeals.length ? [] : paginatedDeals.map((d) => d._id),
+    );
+  };
+  const handleSelectDeal = (id) => {
+    setSelectedDeals((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const handleBulkDeleteDeals = async () => {
+    setBulkLoading(true);
+    try {
+      await Promise.all(selectedDeals.map((id) => API.delete(`/deals/${id}`)));
+      setDeals((prev) => prev.filter((d) => !selectedDeals.includes(d._id)));
+      toast.success(`${selectedDeals.length} deal(s) deleted`);
+      setSelectedDeals([]);
+      setShowBulkDeleteModal(false);
+    } catch (err) {
+      console.error("Bulk deal delete failed:", err);
+      toast.error(err.response?.data?.message || "Bulk delete failed");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkUpdateDealStatus = async () => {
+    setBulkLoading(true);
+    try {
+      await Promise.all(
+        selectedDeals.map((id) => {
+          const deal = deals.find((d) => d._id === id);
+          return API.post(`/deals/${id}/status`, { oldStatus: deal?.status || "Open", newStatus: bulkStatus });
+        }),
+      );
+      setDeals((prev) => prev.map((d) => (selectedDeals.includes(d._id) ? { ...d, status: bulkStatus } : d)));
+      toast.success(`${selectedDeals.length} deal(s) updated`);
+      setSelectedDeals([]);
+      setShowBulkStatusModal(false);
+    } catch (err) {
+      console.error("Bulk deal status update failed:", err);
+      toast.error(err.response?.data?.message || "Bulk update failed");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleExportSelectedDeals = () => {
+    const rows = deals.filter((d) => selectedDeals.includes(d._id));
+    const header = ["Deal ID", "Deal Name", "Contact", "Stage", "Amount", "Last Updated"];
+    const csvRows = rows.map((d) =>
+      [
+        `DL-${d._id.slice(-5).toUpperCase()}`,
+        d.title || "",
+        d.contact?.name || "",
+        d.status || "",
+        d.amount || 0,
+        d.updatedAt ? new Date(d.updatedAt).toLocaleDateString("en-IN") : "",
+      ]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(","),
+    );
+    const csv = [header.join(","), ...csvRows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "deals-export.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const [colWidths, setColWidths] = useState({
     dealId: 127,
     title: 185,
@@ -257,10 +572,6 @@ export default function CompanyDealsKanban({
     [colWidths],
   );
 
-  const togglePinColumn = (colId) => {
-    setPinnedColumn((prev) => (prev === colId ? null : colId));
-  };
-
   const startResize = (e, colId) => {
     e.preventDefault();
     e.stopPropagation();
@@ -270,7 +581,12 @@ export default function CompanyDealsKanban({
     const onMouseMove = (moveEvent) => {
       if (!resizingRef.current) return;
       const { colId: id, startX, startWidth } = resizingRef.current;
-      const newWidth = Math.max(60, startWidth + (moveEvent.clientX - startX));
+      // clientX deltas arrive in real screen (zoomed/visual) pixels, but colWidths
+      // are unscaled layout px rendered inside the zoomed #root (see getRootZoom
+      // above) — divide the delta by zoom so the column edge tracks the cursor
+      // 1:1 instead of lagging behind it under the 0.75 desktop zoom.
+      const z = getRootZoom();
+      const newWidth = Math.max(60, startWidth + (moveEvent.clientX - startX) / z);
       setColWidths((prev) => ({ ...prev, [id]: newWidth }));
     };
 
@@ -302,7 +618,17 @@ export default function CompanyDealsKanban({
     let result = deals;
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      result = result.filter((d) => (d.title || "").toLowerCase().includes(q));
+      result = result.filter((d) =>
+        [
+          `DL-${d._id.slice(-5).toUpperCase()}`,
+          d.title,
+          d.contact?.name,
+          d.status,
+          `₹${(d.amount || 0).toLocaleString("en-IN")}`,
+        ]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q)),
+      );
     }
     return applyColumnFilters(result, selectedFilters, getDealFieldValue);
   }, [deals, searchTerm, selectedFilters]);
@@ -346,20 +672,6 @@ export default function CompanyDealsKanban({
     setCurrentPage(1);
   };
 
-  const getPageNumbers = () => {
-    const delta = 2;
-    const range = [];
-    const rangeWithDots = [];
-    for (let i = Math.max(2, currentPage - delta); i <= Math.min(totalPages - 1, currentPage + delta); i++) {
-      range.push(i);
-    }
-    if (currentPage - delta > 2) rangeWithDots.push(1, "...");
-    else rangeWithDots.push(1);
-    rangeWithDots.push(...range);
-    if (currentPage + delta < totalPages - 1) rangeWithDots.push("...", totalPages);
-    else if (totalPages > 1) rangeWithDots.push(totalPages);
-    return rangeWithDots.filter((item, index, arr) => index === 0 || arr[index - 1] !== item);
-  };
 
   const paginatedDeals = useMemo(
     () => sortedDeals.slice((currentPage - 1) * limit, currentPage * limit),
@@ -469,29 +781,76 @@ export default function CompanyDealsKanban({
       {showStats && (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-            {kpiTiles.map((tile) => (
-              <div
-                key={tile.label}
-                className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
-              >
-                <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <tile.icon size={20} />
+            {isLoading
+              ? Array.from({ length: 6 }).map((_, i) => <StatTileSkeleton key={i} />)
+              : kpiTiles.map((tile) => (
+                <div
+                  key={tile.label}
+                  className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
+                >
+                  <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <tile.icon size={20} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {tile.value}
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-                  <p className="text-sm font-semibold text-gray-900 truncate">
-                    {tile.value}
-                  </p>
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
 
           <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
         </>
       )}
 
-      {/* Search + Controls */}
+      {/* Search + Controls (replaced by a bulk-actions strip when rows are selected) */}
+      {isLoading ? (
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+          <Skeleton width="100%" height={44} shape="rounded" className="!rounded-full flex-1" />
+          <Skeleton width={90} height={44} shape="rounded" className="!rounded-full flex-shrink-0" />
+          <Skeleton width={88} height={44} shape="rounded" className="!rounded-full flex-shrink-0" />
+          <Skeleton width={44} height={44} shape="circle" className="flex-shrink-0" />
+        </div>
+      ) : viewMode === "list" && selectedDeals.length > 0 ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4"
+          style={{ minHeight: 44 }}
+        >
+          <div className="flex items-center gap-3 py-2">
+            <span className="text-blue-800 font-semibold text-sm">
+              {selectedDeals.length} deal{selectedDeals.length !== 1 ? "s" : ""} selected
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 py-2">
+            <button
+              onClick={handleExportSelectedDeals}
+              className="px-3.5 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 transition-colors"
+            >
+              Export
+            </button>
+            <button
+              onClick={() => setShowBulkStatusModal(true)}
+              className="px-3.5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Bulk Update
+            </button>
+            <button
+              onClick={() => setShowBulkDeleteModal(true)}
+              className="px-3.5 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => setSelectedDeals([])}
+              className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
         <div className="relative flex-1 h-full">
           <Search
@@ -502,7 +861,7 @@ export default function CompanyDealsKanban({
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by deal name..."
+            placeholder="Search deals by name, contact, or status..."
             className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
             style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
           />
@@ -553,6 +912,7 @@ export default function CompanyDealsKanban({
           <Plus size={20} />
         </button>
       </div>
+      )}
 
       {showDealForm && (
         <QuickDealForm
@@ -577,8 +937,31 @@ export default function CompanyDealsKanban({
       />
 
       {viewMode === "board" ? (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+        isLoading || statuses.length === 0 ? (
           <div className="flex gap-4 overflow-x-auto pb-2">
+            {(statuses.length ? statuses : ["Open", "Won", "Lost"]).map((status) => (
+              <div key={status} className="w-[340px] flex-shrink-0 rounded-xl border border-gray-200 bg-white overflow-hidden">
+                <div className="flex items-center justify-between px-[18px]" style={{ height: 46, background: "#F5F7FA" }}>
+                  <div className="flex items-center gap-1.5">
+                    <Skeleton width={60} height={12} />
+                    <Skeleton shape="circle" width={20} height={20} />
+                  </div>
+                  <Skeleton shape="circle" width={14} height={14} />
+                </div>
+                <div className="px-[18px] pt-5">
+                  <Skeleton width="100%" height={67} shape="rect" className="rounded-[10px]" />
+                </div>
+                <div className="flex flex-col items-start gap-3.5 px-[18px] py-5">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <DealCardSkeleton key={i} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+          <div className="flex gap-4 overflow-x-auto pb-2" style={{ "--kanban-top-offset": "16rem" }}>
             {statuses.map((status) => (
               <KanbanColumn
                 key={status}
@@ -588,95 +971,188 @@ export default function CompanyDealsKanban({
             ))}
           </div>
         </DndContext>
+        )
       ) : (
         <>
           <div
-            className="box-border flex flex-col items-start bg-white self-stretch overflow-x-auto"
+            className="box-border flex flex-col items-stretch bg-white self-stretch"
             style={{ border: "1px solid #E1E4EA", borderRadius: "8px" }}
           >
+            <div className="w-full overflow-x-auto overflow-y-auto" style={{ maxHeight: "596px" }}>
             <table
               className="text-sm text-left border-collapse"
               style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%" }}
             >
-              <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+              <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
                 <tr>
-                  {[
-                    { id: "dealId", label: "Deal ID", width: 127 },
-                    { id: "title", label: "Deal Name", width: 185, icon: FileText, pinnable: true },
-                    { id: "contact", label: "Contact", width: 150, icon: User, pinnable: true },
-                    { id: "stage", label: "Stage", width: 131, icon: Tag, pinnable: true },
-                    { id: "amount", label: "Amount", width: 123, icon: IndianRupee, pinnable: true },
-                    { id: "lastUpdated", label: "Last Updated", width: 171, icon: Calendar },
-                  ].map((col) => {
-                    const isPinned = pinnedColumn === col.id;
+                  <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-[#E1E4EA]">
+                    <div className="flex justify-center items-center w-full">
+                      <input
+                        type="checkbox"
+                        checked={selectedDeals.length === paginatedDeals.length && paginatedDeals.length > 0}
+                        onChange={handleSelectAllDeals}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                      />
+                    </div>
+                  </th>
+                  {(() => {
+                    const allCols = [
+                      { id: "dealId", label: "Deal ID", width: 127, sortable: false },
+                      { id: "title", label: "Deal Name", width: 185, icon: FileText },
+                      { id: "contact", label: "Contact", width: 150, icon: User },
+                      { id: "stage", label: "Stage", width: 131, icon: Tag },
+                      { id: "amount", label: "Amount", width: 123, icon: IndianRupee },
+                      { id: "lastUpdated", label: "Last Updated", width: 171, icon: Calendar, sortable: false },
+                    ].filter((col) => !hiddenColumns.includes(col.id));
+                    const orderRank = (id) => {
+                      const idx = columnOrder.indexOf(id);
+                      return idx === -1 ? columnOrder.length + allCols.findIndex((c) => c.id === id) : idx;
+                    };
+                    const fallbackOrder = allCols.map((c) => c.id);
+                    return allCols
+                      .slice()
+                      .sort((a, b) => {
+                        const rank = (id) => (getColumnPinSide(id) === "left" ? 0 : getColumnPinSide(id) === "right" ? 2 : 1);
+                        const pinDiff = rank(a.id) - rank(b.id);
+                        if (pinDiff !== 0) return pinDiff;
+                        return orderRank(a.id) - orderRank(b.id);
+                      })
+                      .map((col) => {
+                    const isMenuOpen = openColMenuKey === col.id;
+                    const pinSide = getColumnPinSide(col.id);
+                    const isDragging = draggedColKey === col.id;
+                    const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
                     return (
                       <th
                         key={col.id}
-                        style={{ width: colWidths[col.id], height: 56, position: "relative" }}
-                        className={`px-3 py-2.5 font-medium text-[#525866] text-xs ${col.id === "lastUpdated" ? "" : "border-r border-[#E1E4EA]"
-                          }`}
+                        data-col-id={col.id}
+                        onMouseDown={(e) => startColumnDrag(e, col.id, col.label, fallbackOrder)}
+                        style={{ width: colWidths[col.id], height: 56, position: "relative", opacity: isDragging ? 0.35 : 1 }}
+                        className={`px-3 py-2.5 font-medium text-[#525866] text-xs border-r border-[#E1E4EA] cursor-grab active:cursor-grabbing transition-colors ${isDragOver ? "bg-blue-100" : ""}`}
                       >
-                        <div className="flex items-center justify-between w-full">
-                          {col.pinnable ? (
-                            <div
-                              className="relative flex items-center justify-start flex-1 min-w-0 group cursor-pointer select-none"
-                              onDoubleClick={() => togglePinColumn(col.id)}
-                            >
-                              <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                                <col.icon className="w-3.5 h-3.5 flex-shrink-0" />
-                                <span className="truncate">{col.label}</span>
-                              </div>
-                              <button
-                                onClick={() => togglePinColumn(col.id)}
-                                className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
-                                  }`}
-                                title={isPinned ? "Unpin Column" : "Pin Column"}
-                              >
-                                {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-start gap-1.5 whitespace-nowrap flex-1 min-w-0">
-                              {col.icon && <col.icon className="w-3.5 h-3.5 flex-shrink-0" />}
-                              <span>{col.label}</span>
-                            </div>
-                          )}
-
+                        <div className="flex items-center justify-between w-full group">
                           <div
-                            className="flex flex-col ml-1 flex-shrink-0 cursor-pointer"
-                            onClick={() => handleSort(col.id)}
+                            className="flex items-center gap-1.5 flex-1 overflow-hidden cursor-pointer select-none"
+                            onClick={() => col.sortable !== false && handleSort(col.id)}
                           >
-                            <ChevronUp
-                              className={`w-3 h-3 ${sortConfig.key === col.id && sortConfig.direction === "asc"
-                                ? "text-blue-600"
-                                : "text-gray-400"
-                                }`}
-                            />
-                            <ChevronDown
-                              className={`w-3 h-3 -mt-1 ${sortConfig.key === col.id && sortConfig.direction === "desc"
-                                ? "text-blue-600"
-                                : "text-gray-400"
-                                }`}
-                            />
+                            {col.icon && <col.icon className="w-3.5 h-3.5 flex-shrink-0" />}
+                            <span className="truncate">{col.label}</span>
                           </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isMenuOpen) {
+                                setOpenColMenuKey(null);
+                                setColMenuPos(null);
+                                return;
+                              }
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const z = getRootZoom();
+                              setColMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+                              setOpenColMenuKey(col.id);
+                            }}
+                            className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                            title="Column options"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+
+                          {isMenuOpen && colMenuPos && createPortal(
+                            <>
+                              <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColMenuKey(null); setColMenuPos(null); }} />
+                              <div
+                                ref={colMenuRef}
+                                style={{ position: "fixed", top: colMenuPos.top, left: colMenuPos.left }}
+                                className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                              >
+                                <button
+                                  onClick={() => {
+                                    setOpenColMenuKey(null);
+                                    setColMenuPos(null);
+                                    pinSide === "left" ? unpinColumn(col.id) : pinColumnToSide(col.id, "left");
+                                  }}
+                                  className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                                >
+                                  {pinSide === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                                  Pin to Left
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setOpenColMenuKey(null);
+                                    setColMenuPos(null);
+                                    pinSide === "right" ? unpinColumn(col.id) : pinColumnToSide(col.id, "right");
+                                  }}
+                                  className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                                >
+                                  {pinSide === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                                  Pin to Right
+                                </button>
+
+                                {col.sortable !== false && (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setOpenColMenuKey(null);
+                                        setColMenuPos(null);
+                                        handleSort(col.id);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                    >
+                                      <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                                      Sort Ascending
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setOpenColMenuKey(null);
+                                        setColMenuPos(null);
+                                        handleSort(col.id);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                    >
+                                      <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                                      Sort Descending
+                                    </button>
+                                  </>
+                                )}
+
+                                <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+
+                                <button
+                                  onClick={() => {
+                                    setOpenColMenuKey(null);
+                                    setColMenuPos(null);
+                                    hideColumn(col.id);
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                >
+                                  <EyeOff className="w-4 h-4 text-[#1C1B1F]" />
+                                  Hide Column
+                                </button>
+                              </div>
+                            </>,
+                            document.body,
+                          )}
                         </div>
 
-                        {col.id !== "actions" && (
-                          <div
-                            onMouseDown={(e) => startResize(e, col.id)}
-                            className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"
-                              }`}
-                          />
-                        )}
+                        <div
+                          data-resize-handle="true"
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            startResize(e, col.id);
+                          }}
+                          className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"
+                            }`}
+                        />
                       </th>
                     );
-                  })}
+                  });
+                  })()}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E1E4EA] bg-white">
                 {paginatedDeals.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500 font-medium">
+                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500 font-medium">
                       No deals found.
                     </td>
                   </tr>
@@ -695,68 +1171,186 @@ export default function CompanyDealsKanban({
                         : deal.status === "Lost"
                           ? { backgroundColor: "rgba(232, 34, 34, 0.1)", color: "#E82222" }
                           : { backgroundColor: "rgba(0, 133, 255, 0.1)", color: "#0085FF" };
+                    const isActionsOpen = openRowActionsId === deal._id;
+                    const dealIdShort = `DL-${deal._id.slice(-5).toUpperCase()}`;
+                    const isSelected = selectedDeals.includes(deal._id);
                     return (
-                      <tr key={deal._id} className="hover:bg-gray-50 transition-colors group">
-                        <td
-                          style={{ height: 54 }}
-                          className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
-                        >
-                          DL-{deal._id.slice(-5).toUpperCase()}
+                      <tr key={deal._id} className={`hover:bg-gray-50 transition-colors group ${isSelected ? "!bg-blue-50" : ""}`}>
+                        <td style={{ height: 54, width: 44 }} className="px-3 border-r border-[#E1E4EA]">
+                          <div className="flex justify-center items-center w-full">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleSelectDeal(deal._id)}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                            />
+                          </div>
                         </td>
-                        <td style={{ height: 54 }} className="px-3 text-left">
-                          <Link
-                            to={`/deals/${deal._id}`}
-                            className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
+                        {!hiddenColumns.includes("dealId") && (
+                          <td
+                            style={{ height: 54 }}
+                            className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left border-r border-[#E1E4EA]"
                           >
-                            {deal.title || "Deal Name"}
-                          </Link>
-                        </td>
-                        <td
-                          style={{ height: 54 }}
-                          className="px-3 text-[14px] leading-5 font-medium text-[#222530] truncate text-left"
-                        >
-                          {deal.contact?.name || "-"}
-                        </td>
-                        <td style={{ height: 54 }} className="px-3">
-                          <div className="flex items-center justify-start">
-                            <span
-                              style={{ width: 80, height: 24, padding: "5px 12px", borderRadius: 53, ...pillStyle }}
-                              className="inline-flex items-center justify-center text-xs font-medium"
+                            <HighlightText text={dealIdShort} query={searchTerm} />
+                          </td>
+                        )}
+                        {!hiddenColumns.includes("title") && (
+                          <td style={{ height: 54 }} className="px-3 text-left border-r border-[#E1E4EA]">
+                            <Link
+                              to={`/deals/${deal._id}`}
+                              className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
                             >
-                              {deal.status || "Open"}
-                            </span>
-                          </div>
-                        </td>
-                        <td
-                          style={{ height: 54 }}
-                          className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
-                        >
-                          ₹{(deal.amount || 0).toLocaleString("en-IN")}
-                        </td>
-                        <td
-                          style={{ height: 54 }}
-                          className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap"
-                        >
-                          <div className="relative flex items-center justify-start">
-                            <span>{lastUpdated}</span>
-                            <button
-                              className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                              title="More options"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
+                              <HighlightText text={deal.title || "Deal Name"} query={searchTerm} />
+                            </Link>
+                          </td>
+                        )}
+                        {!hiddenColumns.includes("contact") && (
+                          <td
+                            style={{ height: 54 }}
+                            className="px-3 text-[14px] leading-5 font-medium text-[#222530] truncate text-left border-r border-[#E1E4EA]"
+                          >
+                            <HighlightText text={deal.contact?.name || "-"} query={searchTerm} />
+                          </td>
+                        )}
+                        {!hiddenColumns.includes("stage") && (
+                          <td style={{ height: 54 }} className="px-3 border-r border-[#E1E4EA]">
+                            <div className="flex items-center justify-start">
+                              <span
+                                style={{ width: 80, height: 24, padding: "5px 12px", borderRadius: 53, ...pillStyle }}
+                                className="inline-flex items-center justify-center text-xs font-medium"
+                              >
+                                <HighlightText text={deal.status || "Open"} query={searchTerm} />
+                              </span>
+                            </div>
+                          </td>
+                        )}
+                        {!hiddenColumns.includes("amount") && (
+                          <td
+                            style={{ height: 54 }}
+                            className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left border-r border-[#E1E4EA]"
+                          >
+                            <HighlightText text={`₹${(deal.amount || 0).toLocaleString("en-IN")}`} query={searchTerm} />
+                          </td>
+                        )}
+                        {!hiddenColumns.includes("lastUpdated") && (
+                          <td
+                            style={{ height: 54 }}
+                            className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap"
+                          >
+                            <div className="flex items-center justify-between gap-2" onMouseDown={(e) => e.stopPropagation()}>
+                              <HighlightText text={lastUpdated} query={searchTerm} />
+                              <div className="relative flex items-center justify-center flex-shrink-0">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isActionsOpen) {
+                                      setOpenRowActionsId(null);
+                                      setRowActionsPos(null);
+                                      return;
+                                    }
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const z = getRootZoom();
+                                    const menuHeight = 128;
+                                    const wouldOverflow = rect.bottom * z + 4 + menuHeight > window.innerHeight;
+                                    setRowActionsPos({
+                                      top: wouldOverflow ? rect.top * z - menuHeight - 4 : rect.bottom * z + 4,
+                                      left: rect.right * z - 160,
+                                    });
+                                    setOpenRowActionsId(deal._id);
+                                  }}
+                                  className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                                  title="More actions"
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+                                {isActionsOpen && rowActionsPos && createPortal(
+                              <>
+                                <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+                                <div
+                                  ref={rowActionsRef}
+                                  style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+                                  className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                                >
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenRowActionsId(null);
+                                      setRowActionsPos(null);
+                                      navigate(`/deals/${deal._id}`);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                  >
+                                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                    View Deal
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenRowActionsId(null);
+                                      setRowActionsPos(null);
+                                      navigate(`/deals/${deal._id}`);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                    Edit Deal
+                                  </button>
+                                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenRowActionsId(null);
+                                      setRowActionsPos(null);
+                                      setDealToDelete(deal);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Delete Deal
+                                  </button>
+                                </div>
+                              </>,
+                              document.body,
+                            )}
+                              </div>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })
                 )}
               </tbody>
             </table>
-          </div>
+            </div>
 
-          {totalCount > 0 && (
-            <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+            {dragGhost && createPortal(
+              <div
+                ref={ghostElRef}
+                style={{
+                  position: "fixed",
+                  top: -9999,
+                  left: -9999,
+                  width: dragGhost.width,
+                  zIndex: 10000,
+                  pointerEvents: "none",
+                }}
+                className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+              >
+                <div className="px-3 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+                  <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+                </div>
+                {dragGhost.previewRows.map((rowVal, i) => (
+                  <div key={i} className="px-3 py-2 border-b border-[#F1F1F5] last:border-b-0">
+                    <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+                  </div>
+                ))}
+              </div>,
+              document.body,
+            )}
+
+            {totalCount > 0 && (
+            <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6 border-t border-[#E1E4EA] rounded-b-lg">
               <div className="flex-1 flex justify-between sm:hidden">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
@@ -802,28 +1396,64 @@ export default function CompanyDealsKanban({
                     <ChevronLeft className="h-4 w-4" />
                   </button>
 
-                  {totalPages > 0 &&
-                    getPageNumbers().map((pageNum, index) =>
-                      pageNum === "..." ? (
-                        <span
-                          key={`dots-${index}`}
-                          className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
-                        >
-                          ...
-                        </span>
-                      ) : (
+                  {(() => {
+                    const commitPage = () => {
+                      const n = parseInt(pageInput, 10);
+                      if (!Number.isNaN(n)) handlePageChange(Math.min(Math.max(n, 1), totalPages));
+                      setEditingPage(false);
+                    };
+                    const items = [1];
+                    if (currentPage > 2) items.push("left-dots");
+                    if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
+                    if (currentPage < totalPages - 1) items.push("right-dots");
+                    if (totalPages > 1) items.push(totalPages);
+
+                    return items.map((item, index) => {
+                      if (item === "left-dots" || item === "right-dots") {
+                        return (
+                          <span key={`${item}-${index}`} className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none">
+                            ....
+                          </span>
+                        );
+                      }
+                      const isCurrent = item === currentPage;
+                      if (isCurrent && editingPage) {
+                        return (
+                          <input
+                            key="page-edit"
+                            autoFocus
+                            type="number"
+                            min={1}
+                            max={totalPages}
+                            value={pageInput}
+                            onChange={(e) => setPageInput(e.target.value)}
+                            onBlur={commitPage}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitPage();
+                              if (e.key === "Escape") setEditingPage(false);
+                            }}
+                            className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                        );
+                      }
+                      return (
                         <button
-                          key={`page-${pageNum}`}
-                          onClick={() => handlePageChange(pageNum)}
-                          className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${pageNum === currentPage
-                            ? "bg-blue-600 text-white"
-                            : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                            }`}
+                          key={`page-${item}`}
+                          onClick={() => handlePageChange(item)}
+                          onDoubleClick={() => {
+                            if (isCurrent) {
+                              setPageInput(String(currentPage));
+                              setEditingPage(true);
+                            }
+                          }}
+                          title={isCurrent ? "Double-click to type a page number" : undefined}
+                          className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${isCurrent ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
                         >
-                          {pageNum}
+                          {item}
                         </button>
-                      ),
-                    )}
+                      );
+                    });
+                  })()}
 
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
@@ -835,8 +1465,113 @@ export default function CompanyDealsKanban({
                 </div>
               </div>
             </div>
-          )}
+            )}
+          </div>
         </>
+      )}
+
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">Confirm Delete</h3>
+              <p className="text-sm text-gray-500 font-inter mb-6">
+                Delete {selectedDeals.length} selected deal{selectedDeals.length !== 1 ? "s" : ""}? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDeleteDeals}
+                  disabled={bulkLoading}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkLoading ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBulkStatusModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden">
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-1 font-sf">Bulk Update Stage</h3>
+              <p className="text-sm text-gray-500 font-inter mb-4">
+                Set stage for {selectedDeals.length} selected deal{selectedDeals.length !== 1 ? "s" : ""}.
+              </p>
+              <select
+                value={bulkStatus}
+                onChange={(e) => setBulkStatus(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-6"
+              >
+                {(statuses.length ? statuses : ["Open", "Won", "Lost"]).map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowBulkStatusModal(false)}
+                  disabled={bulkLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkUpdateDealStatus}
+                  disabled={bulkLoading}
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkLoading ? "Updating..." : "Update"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dealToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
+                Confirm Delete
+              </h3>
+              <p className="text-sm text-gray-500 font-inter mb-6">
+                Delete deal "{dealToDelete.title || "Deal"}"? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setDealToDelete(null)}
+                  disabled={deletingDeal}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteDealConfirmed}
+                  disabled={deletingDeal}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {deletingDeal ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

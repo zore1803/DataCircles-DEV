@@ -341,6 +341,7 @@ function App() {
     const applyZoom = () => {
       if (window.innerWidth < 1024) {
         document.documentElement.style.zoom = "";
+        document.documentElement.style.setProperty("--dynamic-zoom", "1");
         return;
       }
       const zoom = Math.min(
@@ -348,6 +349,10 @@ function App() {
         Math.max(MIN_ZOOM, window.innerWidth / DESIGN_WIDTH),
       );
       document.documentElement.style.zoom = zoom;
+      // Exposed as a CSS custom property so layout that needs to compensate
+      // for this zoom (e.g. calc()-based full-height panels) can react to it
+      // purely in CSS — no JS measurement/timing races.
+      document.documentElement.style.setProperty("--dynamic-zoom", zoom);
     };
 
     applyZoom();

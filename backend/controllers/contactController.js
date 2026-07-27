@@ -59,6 +59,11 @@ const getAllContacts = async (req, res) => {
     let query = { organization: req.user.organization };
 
     if (search) {
+      const matchingCompanies = await Company.find({
+        organization: req.user.organization,
+        name: { $regex: search, $options: "i" },
+      }).select("_id");
+
       query.$or = [
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
@@ -66,6 +71,7 @@ const getAllContacts = async (req, res) => {
         { stageStatus: { $regex: search, $options: "i" } },
         { lifecycleStage: { $regex: search, $options: "i" } },
         { "additionalFields.value": { $regex: search, $options: "i" } },
+        { company: { $in: matchingCompanies.map((c) => c._id) } },
       ];
     }
 
@@ -114,6 +120,11 @@ const getAllContactsPaginated = async (req, res) => {
 
     // Search functionality
     if (search) {
+      const matchingCompanies = await Company.find({
+        organization: req.user.organization,
+        name: { $regex: search, $options: "i" },
+      }).select("_id");
+
       query.$or = [
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
@@ -121,6 +132,7 @@ const getAllContactsPaginated = async (req, res) => {
         { stageStatus: { $regex: search, $options: "i" } },
         { lifecycleStage: { $regex: search, $options: "i" } },
         { "additionalFields.value": { $regex: search, $options: "i" } },
+        { company: { $in: matchingCompanies.map((c) => c._id) } },
       ];
     }
 

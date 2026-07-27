@@ -1101,12 +1101,7 @@ const FormDetailPage = () => {
 
   if (loading || !form) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="flex flex-col items-center justify-center">
-          <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-          <p className="mt-3 text-gray-600 font-medium">{randomMessage}</p>
-        </div>
-      </div>
+      <PageSkeleton variant="generic" />
     );
   }
 
@@ -1206,3 +1201,4 @@ const FormDetailPage = () => {
 };
 
 export default FormDetailPage;
+import PageSkeleton from "../components/common/PageSkeleton";
