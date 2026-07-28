@@ -583,8 +583,14 @@ const CompanyProfilePage = () => {
     fetchData();
   }, [id]);
 
+  // Overview renders invoice-derived tiles alongside deal/task data, so it
+  // legitimately has to wait for both fetches.
   const showOverviewSkeleton = useMinDelay(!dataLoaded || !invoicesLoaded, 300);
-  const showDealsSkeleton = useMinDelay(!dataLoaded, 300);
+  // Everything that comes out of the single fetchData batch — contacts, deals,
+  // meetings, tasks, folders. Deliberately NOT gated on invoicesLoaded: those
+  // tabs don't render invoice data, so waiting on that request would leave
+  // their skeletons up long after their own data had arrived.
+  const showRecordsSkeleton = useMinDelay(!dataLoaded, 300);
 
   const fetchInvoices = useCallback(async () => {
     setInvoicesLoading(true);
@@ -1562,7 +1568,7 @@ const CompanyProfilePage = () => {
                 contacts={contacts}
                 viewMode={dealsViewMode}
                 setViewMode={setDealsViewMode}
-                isLoading={showDealsSkeleton}
+                isLoading={showRecordsSkeleton}
               />
             )}
             {activeTab === "Contacts" && (
@@ -1574,7 +1580,7 @@ const CompanyProfilePage = () => {
                 companyId={id}
                 company={company}
                 setContacts={setContacts}
-                isLoading={showOverviewSkeleton}
+                isLoading={showRecordsSkeleton}
               />
             )}
             {activeTab === "Invoices" && (
@@ -1589,7 +1595,7 @@ const CompanyProfilePage = () => {
             )}
             {activeTab === "Notes" && <CompanyNotesTab showStats={showStats} />}
             {activeTab === "Tasks" && (
-              <CompanyTasksTab companyId={id} tasks={tasks} setTasks={setTasks} showStats={showStats} />
+              <CompanyTasksTab companyId={id} tasks={tasks} setTasks={setTasks} showStats={showStats} isLoading={showRecordsSkeleton} />
             )}
             {activeTab === "Meetings" && (
               <CompanyMeetingsTab
@@ -1597,9 +1603,10 @@ const CompanyProfilePage = () => {
                 meetings={meetings}
                 setMeetings={setMeetings}
                 showStats={showStats}
+                isLoading={showRecordsSkeleton}
               />
             )}
-            {activeTab === "Folders" && <CompanyFolderTab showStats={showStats} />}
+            {activeTab === "Folders" && <CompanyFolderTab showStats={showStats} isLoading={showRecordsSkeleton} />}
             {activeTab === "Calendar" && <CompanyCalendar companyId={id} />}
         </div>
       </div>

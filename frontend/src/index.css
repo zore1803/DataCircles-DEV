@@ -61,6 +61,22 @@
    different magic number per breakpoint per state and still drifted.
    Use `hooks/useFillToBottom.js` instead, which measures the real position. */
 
+/* Right-anchored slide-in panels (Create Deal / Invoice / Contact) render as an
+   inset, rounded CARD instead of a full-bleed square flush to the viewport edges.
+   Height is whatever is left after the inset, so it always fits the screen and the
+   body scrolls internally — the global scrollbar rules below already hide the bar in
+   both WebKit and Firefox, so no extra utility is needed here.
+   NOTE: these values land inside #root's 0.75 desktop zoom, so 1.5rem paints as
+   ~18px on screen. Pair with translate-x-[calc(100%+2rem)] for the closed state —
+   plain translate-x-full only moves the panel by its own width and would leave the
+   right-hand inset visible as a sliver. */
+.dc-panel-card {
+  top: 1.5rem;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  border-radius: 16px;
+}
+
 .dc-panel-w {
   width: 100%;
 }

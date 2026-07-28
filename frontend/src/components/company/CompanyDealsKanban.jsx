@@ -3,14 +3,22 @@ import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
   DndContext,
+  DragOverlay,
   closestCorners,
-  useDraggable,
   useDroppable,
   useSensor,
   useSensors,
   PointerSensor,
+  KeyboardSensor,
 } from "@dnd-kit/core";
+import {
+  useSortable,
+  SortableContext,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { getAncestorZoom } from "../../utils/domUtils";
 import {
   Search,
   Filter,
@@ -51,6 +59,7 @@ import { applyColumnFilters } from "../../utils/advancedFilters";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import DealCardSkeleton from "../common/DealCardSkeleton";
 import Skeleton from "../common/Skeleton";
+import { formatNumberToIndian } from "../../utils/numberFormatter";
 
 const AMOUNT_RANGES = [
   { label: "Under ₹10,000", test: (v) => v < 10000 },
@@ -147,32 +156,25 @@ const Avatar = ({ name, className = "" }) => (
   </div>
 );
 
-const DealCard = ({ deal }) => {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: deal._id });
+// Card geometry/appearance lives here once so the sortable card and the drag
+// overlay can never drift apart. Unchanged from the previous implementation.
+const DEAL_CARD_BOX = {
+  width: "300px",
+  height: "132px",
+  padding: "16px",
+  gap: "16px",
+  borderColor: "#E5E5EC",
+};
+const DEAL_CARD_CLASS =
+  "box-border flex flex-col items-start bg-white border rounded-[10px] mb-3 hover:shadow-sm transition-shadow overflow-hidden";
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.5 : 1,
-    width: "300px",
-    height: "132px",
-    padding: "16px",
-    gap: "16px",
-    borderColor: "#E5E5EC",
-  };
-
+// Inner markup only — no drag wiring, no navigation. Rendered by both shells below.
+const DealCardContent = ({ deal }) => {
   const tagLabel = deal.company?.name || deal.company?.industry || deal.contact?.name;
   const avatarNames = [deal.contact?.name, deal.user?.name].filter(Boolean);
 
   return (
-    <Link
-      to={`/deals/${deal._id}`}
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      className="box-border flex flex-col items-start bg-white border rounded-[10px] mb-3 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow overflow-hidden"
-    >
+    <>
       <div className="flex flex-col items-start gap-2 w-full">
         <div className="flex items-center justify-between w-full">
           <span
@@ -211,45 +213,186 @@ const DealCard = ({ deal }) => {
           </div>
         )}
       </div>
+    </>
+  );
+};
+
+// The in-list card. Still a <Link>, so a plain click navigates exactly as before —
+// the sensor's 8px activation constraint means a click never starts a drag, and a
+// drag never fires the link. `transition` (which useDraggable did not provide) is
+// what lets neighbouring cards glide aside instead of snapping.
+const DealCard = ({ deal }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: deal._id });
+
+  const style = {
+    ...DEAL_CARD_BOX,
+    transform: CSS.Transform.toString(transform),
+    transition,
+    // The original stays in place, faded, while the overlay follows the cursor.
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <Link
+      to={`/deals/${deal._id}`}
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      className={`${DEAL_CARD_CLASS} cursor-grab active:cursor-grabbing`}
+    >
+      <DealCardContent deal={deal} />
     </Link>
   );
 };
 
-const KanbanColumn = ({ status, deals }) => {
+// The floating preview. Deliberately a plain <div>, not a <Link>: it must never be
+// clickable or navigable, and pointer-events-none keeps it from stealing hit-testing
+// from the columns underneath it during the drag.
+const DealCardOverlay = ({ deal }) => (
+  <div
+    style={{ ...DEAL_CARD_BOX, cursor: "grabbing" }}
+    className={`${DEAL_CARD_CLASS} shadow-lg pointer-events-none`}
+  >
+    <DealCardContent deal={deal} />
+  </div>
+);
+
+// Presentation ported verbatim from ModernKanbanColumn in pages/Deals.jsx so the
+// company-profile Deals tab and the standalone /deals board look identical:
+// same 340px shell, #F5F7FA header, pill counter, per-status tinted summary card
+// and week-over-week trend badge.
+const KanbanColumn = ({ status, deals, colorTheme = "blue", onAddClick, loading = false }) => {
   const { setNodeRef, isOver } = useDroppable({ id: status });
-  const total = deals.reduce((sum, d) => sum + (d.amount || 0), 0);
+  const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
+
+  const totalAmount = deals.reduce((sum, deal) => sum + (parseInt(deal.amount) || 0), 0);
+  const formattedTotal = formatNumberToIndian(totalAmount);
+
+  const trendPct = useMemo(() => {
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+    const thisWeekStart = now - 7 * oneDay;
+    const lastWeekStart = now - 14 * oneDay;
+    const inRange = (deal, start, end) => {
+      const t = new Date(deal.createdAt).getTime();
+      return t >= start && t < end;
+    };
+    const sumAmount = (list) => list.reduce((sum, d) => sum + (parseInt(d.amount) || 0), 0);
+    const thisWeek = sumAmount(deals.filter((d) => inRange(d, thisWeekStart, now)));
+    const lastWeek = sumAmount(deals.filter((d) => inRange(d, lastWeekStart, thisWeekStart)));
+    if (lastWeek === 0) return thisWeek === 0 ? 0 : 100;
+    return Math.max(-999, Math.min(999, Math.round(((thisWeek - lastWeek) / lastWeek) * 100)));
+  }, [deals]);
+
+  const tintColor =
+    colorTheme === "green" ? "0, 201, 80" : colorTheme === "red" ? "232, 34, 34" : "179, 204, 255";
 
   return (
     <div
-      className={`flex flex-col flex-shrink-0 w-[340px] bg-white border border-gray-200 rounded-xl transition-colors ${isOver ? "bg-blue-50 border-blue-300" : ""
-        }`}
+      className="flex flex-col items-start flex-shrink-0 bg-white"
+      style={{ width: "340px", border: "1px solid #E7E7E9", borderRadius: "12px", overflow: "hidden" }}
     >
-      <div className="h-[46px] flex items-center justify-between px-[18px] bg-gray-50 rounded-t-xl border-b border-gray-200 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <h4 className="text-sm font-semibold text-gray-900">{status}</h4>
-          <span className="w-5 h-5 flex items-center justify-center text-[11px] font-bold bg-white text-gray-600 rounded-full">
-            {deals.length}
+      {/* Header */}
+      <div
+        className="flex flex-row justify-between items-center w-full flex-shrink-0"
+        style={{ height: "46px", padding: "0 18px", background: "#F5F7FA" }}
+      >
+        <div className="flex items-center gap-1.5">
+          <span
+            className="truncate"
+            style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}
+          >
+            {status}
+          </span>
+          <span
+            className="flex items-center justify-center flex-shrink-0"
+            style={{
+              width: "22px",
+              height: "22px",
+              background: "#FFFFFF",
+              border: "1px solid #E5E5EC",
+              boxShadow: "0px 1px 2px rgba(82, 88, 102, 0.06)",
+              borderRadius: "20px",
+              fontFamily: "Inter",
+              fontWeight: 600,
+              fontSize: "12px",
+              lineHeight: "15px",
+              letterSpacing: "-0.02em",
+              color: "#161618",
+            }}
+          >
+            {loading ? <Skeleton width={14} height={12} /> : deals.length}
           </span>
         </div>
-        <MoreVertical size={14} className="text-gray-300" />
+        <button
+          onClick={onAddClick}
+          className="flex items-center justify-center cursor-pointer hover:opacity-70 transition-opacity flex-shrink-0"
+          title="Add deal"
+        >
+          <Plus className="w-4 h-4" style={{ color: "#BEBEC8" }} />
+        </button>
       </div>
 
-      {deals.length > 0 && (
-        <div className="px-[18px] pt-5 flex-shrink-0">
-          <div className="h-[67px] flex items-center justify-between bg-white bg-gradient-to-br from-white to-[#B3CCFF]/20 border border-[#E1E4EA] rounded-[10px] px-4">
-            <p className="text-lg font-bold text-gray-900">
-              ₹{total.toLocaleString("en-IN")}
-            </p>
-          </div>
-        </div>
-      )}
+      <div className="w-full flex-shrink-0" style={{ height: "1px", background: "#E7E7E9" }} />
 
-      {/* Capped to ~7 cards tall (7*132 + 6*12 gaps); further deals scroll internally. */}
-      <div ref={setNodeRef} className="overflow-y-auto dc-card-scroll px-[18px] pb-[18px] pt-3" style={{ maxHeight: "1030px" }}>
+      {/* Summary card — always visible, unlike the old version which hid it when empty */}
+      <div className="w-full flex-shrink-0" style={{ padding: "20px 20px 0" }}>
+        <div
+          className="box-border flex flex-row justify-between items-center w-full"
+          style={{
+            padding: "16px",
+            gap: "10px",
+            background: `linear-gradient(94.22deg, rgba(255, 255, 255, 0) -7.06%, rgba(${tintColor}, 0.2) 101.14%), #FFFFFF`,
+            border: "1px solid #E5E5EC",
+            borderRadius: "10px",
+          }}
+        >
+          {loading ? (
+            <Skeleton width={90} height={22} />
+          ) : (
+            <span
+              className="truncate"
+              style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "22px", lineHeight: "150%", letterSpacing: "-0.03em", color: "#48494C", minWidth: 0 }}
+            >
+              ₹{formattedTotal}
+            </span>
+          )}
+          {!loading && (
+            <span
+              className="flex-shrink-0"
+              style={{
+                fontFamily: "Inter",
+                fontWeight: 500,
+                fontSize: "12px",
+                lineHeight: "15px",
+                letterSpacing: "-0.02em",
+                color: trendPct >= 0 ? "#0747A6" : "#E82222",
+                marginLeft: "auto",
+              }}
+            >
+              {trendPct >= 0 ? "+" : ""}{trendPct}%
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Cards — capped to ~7 tall, then scrolls internally. */}
+      <div
+        ref={setNodeRef}
+        className={`overflow-y-auto dc-card-scroll w-full px-[18px] pb-[18px] pt-3 transition-colors ${isOver ? "bg-blue-50/40" : ""}`}
+        style={{ maxHeight: "1030px" }}
+      >
         <div className="min-h-[80px]">
-          {deals.map((deal) => (
-            <DealCard key={deal._id} deal={deal} />
-          ))}
+          <SortableContext id={status} items={dealIds} strategy={verticalListSortingStrategy}>
+            {deals.map((deal) => (
+              <DealCard key={deal._id} deal={deal} />
+            ))}
+          </SortableContext>
+          {/* Slack below the last card so dropping at the end of a long column
+              doesn't require hitting the final card precisely. */}
+          <div className="h-10 w-full" />
         </div>
       </div>
     </div>
@@ -267,9 +410,17 @@ export default function CompanyDealsKanban({
   setViewMode: setControlledViewMode,
   isLoading = false,
 }) {
+  // 8px of travel before a drag begins. This is what keeps a plain click on a card
+  // navigating to the deal instead of being swallowed as a drag — do not lower it.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
+  // The deal being dragged, captured on drag start. Serves two purposes: it feeds
+  // the DragOverlay, and it preserves the ORIGINAL status — which onDragOver
+  // overwrites in `deals` as soon as the pointer crosses into another column.
+  const [activeDeal, setActiveDeal] = useState(null);
 
   const [showDealForm, setShowDealForm] = useState(false);
   const [statuses, setStatuses] = useState([]);
@@ -733,21 +884,66 @@ export default function CompanyDealsKanban({
     },
   ];
 
-  const handleDragEnd = async (event) => {
-    const { active, over } = event;
+  // `over.id` is a column id when hovering the column body, but another deal's id
+  // when hovering a card — sortable items are droppables too. Both handlers below
+  // need the same resolution, so it lives in one place.
+  const resolveDropStatus = (overId) => {
+    if (!overId) return null;
+    const id = overId.toString();
+    if (statuses.includes(id)) return id;
+    const overDeal = deals.find((d) => d._id.toString() === id);
+    return overDeal ? overDeal.status || "Open" : null;
+  };
+
+  const handleDragStart = ({ active }) => {
+    const deal = deals.find((d) => d._id.toString() === active.id.toString());
+    // Shallow COPY, not a reference. Today every setDeals call replaces objects via
+    // map+spread so a reference would survive intact, but the snapshot is the only
+    // record of the pre-drag status (used for persistence and rollback) — copying
+    // makes that guarantee independent of how state happens to be updated.
+    setActiveDeal(deal ? { ...deal } : null);
+  };
+
+  // Optimistically move the deal into the hovered column mid-drag. The column
+  // counts, totals and trend badges are all derived from `deals`, so this is what
+  // makes them update live; it also lets the destination column open a real gap,
+  // because the card genuinely joins that column's SortableContext.
+  const handleDragOver = ({ active, over }) => {
     if (!over) return;
+    const activeId = active.id.toString();
+    if (activeId === over.id.toString()) return;
 
-    const dealId = active.id.toString();
-    const newStatus = over.id.toString();
-    const deal = deals.find((d) => d._id.toString() === dealId);
-    if (!deal || deal.status === newStatus) return;
+    const dragged = deals.find((d) => d._id.toString() === activeId);
+    if (!dragged) return;
 
-    const oldStatus = deal.status || "Open";
+    const overStatus = resolveDropStatus(over.id);
+    // Same column: dnd-kit handles the reordering animation itself, nothing to do.
+    if (!overStatus || (dragged.status || "Open") === overStatus) return;
 
     setDeals((prev) =>
-      prev.map((d) =>
-        d._id.toString() === dealId ? { ...d, status: newStatus } : d,
-      ),
+      prev.map((d) => (d._id.toString() === activeId ? { ...d, status: overStatus } : d)),
+    );
+  };
+
+  const handleDragCancel = () => setActiveDeal(null);
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    const dragged = activeDeal;
+    setActiveDeal(null);
+    if (!over || !dragged) return;
+
+    const dealId = active.id.toString();
+    const newStatus = resolveDropStatus(over.id);
+    // Read the original status from the drag-start snapshot, NOT from `deals` —
+    // handleDragOver has already rewritten it there.
+    const oldStatus = dragged.status || "Open";
+    if (!newStatus || newStatus === oldStatus) return;
+
+    // handleDragOver has usually applied this already, but not if the drop landed
+    // without an intervening over event — keep it idempotent.
+    setDeals((prev) =>
+      prev.map((d) => (d._id.toString() === dealId ? { ...d, status: newStatus } : d)),
     );
 
     try {
@@ -960,16 +1156,50 @@ export default function CompanyDealsKanban({
             ))}
           </div>
         ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
           <div className="flex gap-4 overflow-x-auto pb-2" style={{ "--kanban-top-offset": "16rem" }}>
             {statuses.map((status) => (
               <KanbanColumn
                 key={status}
                 status={status}
                 deals={dealsByStatus[status] || []}
+                colorTheme={status === "Won" ? "green" : status === "Lost" ? "red" : "blue"}
+                onAddClick={() => setShowDealForm(true)}
               />
             ))}
           </div>
+
+          {/* Floating preview that tracks the cursor. Rendered as a plain div, never
+              a <Link>, so it can't navigate or capture clicks.
+
+              PORTALED TO document.body ON PURPOSE. #root carries `zoom: 0.75`, and
+              CSS `zoom` makes #root the containing block for position:fixed. dnd-kit
+              positions the overlay from getBoundingClientRect() (visual px) and then
+              applies a translate — but painted inside #root both get multiplied by
+              0.75, so the card drifts above the cursor, increasingly so the further
+              you drag. document.body sits outside that zoom, so the coordinates line
+              up 1:1. createPortal keeps the React tree (and DndContext) intact.
+
+              The inner wrapper re-applies the same zoom, because dnd-kit sizes the
+              overlay to the source card's VISUAL rect (225x99, not 300x132) — without
+              it the floating card would render a third larger than the real ones. */}
+          {createPortal(
+            <DragOverlay dropAnimation={null}>
+              {activeDeal ? (
+                <div style={{ zoom: getAncestorZoom(document.getElementById("root")) }}>
+                  <DealCardOverlay deal={activeDeal} />
+                </div>
+              ) : null}
+            </DragOverlay>,
+            document.body,
+          )}
         </DndContext>
         )
       ) : (

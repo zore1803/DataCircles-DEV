@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import { createPortal } from "react-dom";
+import { getAncestorZoom } from "../../utils/domUtils";
 import {
   Search,
   Filter,
@@ -19,8 +21,13 @@ import API from "../../services/api";
 import CompanyMeetingForm from "./CompanyMeetingForm";
 import MeetingDetailsModal from "./MeetingDetailsModal";
 import FilterIcon from "../common/FilterIcon";
+import HighlightText from "../common/HighlightText";
 import CompanyFilterPanel from "./CompanyFilterPanel";
 import { applyColumnFilters } from "../../utils/advancedFilters";
+import TableSkeletonRows from "../common/TableSkeletonRows";
+import Skeleton from "../common/Skeleton";
+import StatTileSkeleton from "../common/StatTileSkeleton";
+import useFillToBottom from "../../hooks/useFillToBottom";
 
 const MEETING_TYPE_LABELS = { "in-person": "In-person", "video-call": "Video Call", "phone-call": "Phone Call" };
 const MEETING_STATUS_LABELS = { scheduled: "Scheduled", completed: "Completed", cancelled: "Cancelled", "no-show": "No-show" };
@@ -55,7 +62,7 @@ const TotalMeetingsIcon = ({ size = 20, ...props }) => (
 
 const UpcomingMeetingsIcon = ({ size = 20, ...props }) => (
   <svg width={size} height={size} viewBox="361.5 24 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M374.557 41.328C374.109 40.8798 373.885 40.3346 373.885 39.6923C373.885 39.0499 374.109 38.5048 374.557 38.0568C375.005 37.6088 375.55 37.3848 376.192 37.3848C376.835 37.3848 377.38 37.6088 377.828 38.0568C378.276 38.5048 378.5 39.0499 378.5 39.6923C378.5 40.3346 378.276 40.8798 377.828 41.328C377.38 41.776 376.835 42 376.192 42C375.55 42 375.005 41.776 374.557 41.328ZM366.808 45.5C366.303 45.5 365.875 45.325 365.525 44.975C365.175 44.625 365 44.1974 365 43.6923V30.3078C365 29.8026 365.175 29.375 365.525 29.025C365.875 28.675 366.303 28.5 366.808 28.5H368.192V26.3848H369.731V28.5H377.308V26.3848H378.808V28.5H380.192C380.697 28.5 381.125 28.675 381.475 29.025C381.825 29.375 382 29.8026 382 30.3078V43.6923C382 44.1974 381.825 44.625 381.475 44.975C381.125 45.325 380.697 45.5 380.192 45.5H366.808ZM366.808 44H380.192C380.269 44 380.34 43.9679 380.404 43.9038C380.468 43.8398 380.5 43.7693 380.5 43.6923V34.3078H366.5V43.6923C366.5 43.7693 366.532 43.8398 366.596 43.9038C366.66 43.9679 366.731 44 366.808 44ZM366.5 32.8078H380.5V30.3078C380.5 30.2308 380.468 30.1603 380.404 30.0963C380.34 30.0321 380.269 30 380.192 30H366.808C366.731 30 366.66 30.0321 366.596 30.0963C366.532 30.1603 366.5 30.2308 366.5 30.3078V32.8078Z" fill="#0085FF" />
+    <path d="M374.557 41.328C374.109 40.8798 373.885 40.3346 373.885 39.6923C373.885 39.0499 374.109 38.5048 374.557 38.0568C375.005 37.6088 375.55 37.3848 376.192 37.3848C376.835 37.3848 377.38 37.6088 377.828 38.0568C378.276 38.5048 378.5 39.0499 378.5 39.6923C378.5 40.3346 378.276 40.8798 377.828 41.328C377.38 41.776 376.835 42 376.192 42C375.55 42 375.005 41.776 374.557 41.328ZM366.808 45.5C366.303 45.5 365.875 45.325 365.525 44.975C365.175 44.625 365 44.1974 365 43.6923V30.3078C365 29.8026 365.175 29.375 365.525 29.025C365.875 28.675 366.303 28.5 366.808 28.5H368.192V26.3848H369.731V28.5H377.308V26.3848H378.808V28.5H380.192C380.697 28.5 381.125 28.675 381.475 29.025C381.825 29.375 382 29.8026 382 30.3078V43.6923C382 44.1974 381.825 44.625 381.475 44.975C381.125 45.325 380.697 45.5 380.192 45.5H366.808ZM366.808 44H380.192C380.269 44 380.34 43.9679 380.404 43.9038C380.468 43.8398 380.5 43.7693 380.5 43.6923V34.3078H366.5V43.6923C366.5 43.7693 366.532 43.8398 366.596 43.9038C366.66 43.9679 366.731 44 366.808 44ZM366.5 32.8078H380.5V30.3078C380.5 30.2308 380.468 30.1603 380.404 30.0963C380.34 30.0321 380.269 30 380.192 30H366.808C366.731 30 366.66 30.0321 366.596 30.0963C366.532 30.2308 366.5 30.3078V32.8078Z" fill="#0085FF" />
   </svg>
 );
 
@@ -83,15 +90,177 @@ const MoreVertIcon = ({ size = 20, ...props }) => (
   </svg>
 );
 
-export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetings, showStats = true }) {
+export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetings, showStats = true, isLoading = false }) {
   const [searchTerm, setSearchTerm] = useState("");
+  const {
+    containerRef: fillContainerRef,
+    footerRef: fillFooterRef,
+    style: fillStyle,
+  } = useFillToBottom();
   const [users, setUsers] = useState([]);
   const [showMeetingForm, setShowMeetingForm] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [editingMeeting, setEditingMeeting] = useState(null);
   const [viewMode, setViewMode] = useState("list");
-  const [pinnedColumn, setPinnedColumn] = useState(null);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [leftPinned, setLeftPinned] = useState(new Set());
+  const [rightPinned, setRightPinned] = useState(new Set());
+  const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
+  const [columnMenuPos, setColumnMenuPos] = useState(null);
+  const columnMenuRef = useRef(null);
+
+  const BASE_COLUMNS = useMemo(() => [
+    { id: "title", label: "Meeting Title", pinnable: true, firstCol: true },
+    { id: "type", label: "Type", pinnable: true, firstCol: true },
+    { id: "dateTime", label: "Date & Time", pinnable: true },
+    { id: "duration", label: "Duration", pinnable: true },
+    { id: "attendees", label: "Attendees", pinnable: true },
+    { id: "organiser", label: "Organiser", pinnable: true },
+    { id: "relatedTo", label: "₹ Related to", pinnable: true },
+    { id: "status", label: "Status", pinnable: true },
+  ], []);
+
+  const [columnOrder, setColumnOrder] = useState(() => BASE_COLUMNS.map(c => c.id));
+  const [draggedColKey, setDraggedColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
+  const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
+
+  const orderedColumns = useMemo(() => {
+    const sortedBase = [...BASE_COLUMNS].sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
+    const visible = sortedBase.filter((c) => !hiddenColumns.has(c.id));
+    const left = visible.filter((c) => leftPinned.has(c.id));
+    const right = visible.filter((c) => rightPinned.has(c.id));
+    const unpinned = visible.filter((c) => !leftPinned.has(c.id) && !rightPinned.has(c.id));
+    return [...left, ...unpinned, ...right];
+  }, [BASE_COLUMNS, hiddenColumns, leftPinned, rightPinned, columnOrder]);
+
+  const pinColumnToSide = (colId, side) => {
+    if (side === "left") {
+      setLeftPinned((prev) => new Set(prev).add(colId));
+      setRightPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+    } else {
+      setRightPinned((prev) => new Set(prev).add(colId));
+      setLeftPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+    }
+  };
+
+  const unpinColumn = (colId) => {
+    setLeftPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+    setRightPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+  };
+
+  const toggleHideColumn = (colId) => {
+    setHiddenColumns((prev) => { const next = new Set(prev); next.add(colId); return next; });
+  };
+
+  const getColumnPinSide = (colId) => {
+    if (leftPinned.has(colId)) return "left";
+    if (rightPinned.has(colId)) return "right";
+    return null;
+  };
+
+  const startColumnDrag = (e, colId) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    e.preventDefault();
+    window.getSelection?.()?.removeAllRanges();
+
+    const th = e.currentTarget;
+    const rect = th.getBoundingClientRect();
+    const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
+    
+    const previewRows = (meetings || []).slice(0, 10).map((m) => {
+      let val = m[colId];
+      if (typeof val === 'object' && val !== null) val = val?.name || val?.title || "";
+      return String(val ?? "").trim() || "—";
+    });
+
+    const zGhost = getAncestorZoom(document.body);
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    dragOverRef.current = null;
+    setDraggedColKey(colId);
+    setDragOverColKey(null);
+    document.body.style.userSelect = "none";
+
+    setDragGhost({
+      label,
+      previewRows,
+      offsetX,
+      offsetY,
+      width: rect.width / zGhost,
+      height: rect.height / zGhost,
+    });
+
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const visualTop = clientY - offsetY;
+      const visualLeft = clientX - offsetX;
+      el.style.top = `${visualTop / zGhost}px`;
+      el.style.left = `${visualLeft / zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+    };
+    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
+
+    const handleMouseMove = (moveEvent) => {
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) {
+        handleColumnReorder(colId, overKey);
+      }
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    if (!draggedKey || draggedKey === targetKey) return;
+    setColumnOrder((prev) => {
+      const newOrder = [...prev];
+      const draggedIdx = newOrder.indexOf(draggedKey);
+      const targetIdx = newOrder.indexOf(targetKey);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedKey);
+      return newOrder;
+    });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(e.target)) {
+        setOpenColumnMenuKey(null);
+        setColumnMenuPos(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const [colWidths, setColWidths] = useState({
     title: 212,
     type: 160,
@@ -110,7 +279,8 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
   );
 
   const togglePinColumn = (colId) => {
-    setPinnedColumn((prev) => (prev === colId ? null : colId));
+    if (getColumnPinSide(colId)) unpinColumn(colId);
+    else pinColumnToSide(colId, "left");
   };
 
   const startResize = (e, colId) => {
@@ -197,7 +367,8 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
   };
 
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
-  const handleSort = (key) => {
+  const handleSort = (key, direction) => {
+    if (direction) { setSortConfig({ key, direction }); return; }
     setSortConfig((prev) =>
       prev.key === key
         ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
@@ -230,11 +401,30 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     }
   };
 
+  // Every column the table renders, flattened to one searchable string. Built from
+  // BASE_COLUMNS + getMeetingFieldValue (the accessor the columns and sorting use) so
+  // a new column can't silently drop out of search, plus what the cells show that the
+  // accessor doesn't: the raw meetingType, all participant names, the formatted
+  // date/time, "<n> min" duration, and the amount.
+  const getMeetingSearchText = (meeting) => {
+    const parts = BASE_COLUMNS.map((c) => getMeetingFieldValue(meeting, c.id));
+    parts.push(meeting.meetingType || "General");
+    parts.push(meeting.participants?.map((p) => p?.name || "").join(" ") || "");
+    if (meeting.scheduledAt) {
+      const d = new Date(meeting.scheduledAt);
+      parts.push(d.toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }));
+      parts.push(d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }));
+    }
+    if (meeting.duration) parts.push(`${meeting.duration} min`);
+    if (meeting.amount) parts.push(`₹${Number(meeting.amount).toLocaleString("en-IN")}`);
+    return parts.filter((v) => v !== null && v !== undefined && v !== "").join(" ").toLowerCase();
+  };
+
   const filteredMeetings = useMemo(() => {
     let result = meetings;
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      result = result.filter((m) => (m.title || "").toLowerCase().includes(q));
+      result = result.filter((m) => getMeetingSearchText(m).includes(q));
     }
     return applyColumnFilters(result, selectedFilters, getMeetingFieldValue);
   }, [meetings, searchTerm, selectedFilters]);
@@ -277,18 +467,12 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
   };
 
   const getListPageNumbers = () => {
-    const delta = 2;
-    const range = [];
-    const rangeWithDots = [];
-    for (let i = Math.max(2, listPage - delta); i <= Math.min(listTotalPages - 1, listPage + delta); i++) {
-      range.push(i);
-    }
-    if (listPage - delta > 2) rangeWithDots.push(1, "...");
-    else rangeWithDots.push(1);
-    rangeWithDots.push(...range);
-    if (listPage + delta < listTotalPages - 1) rangeWithDots.push("...", listTotalPages);
-    else if (listTotalPages > 1) rangeWithDots.push(listTotalPages);
-    return rangeWithDots.filter((item, index, arr) => index === 0 || arr[index - 1] !== item);
+    const items = [1];
+    if (listPage > 2) items.push("left-dots");
+    if (listPage !== 1 && listPage !== listTotalPages) items.push(listPage);
+    if (listPage < listTotalPages - 1) items.push("right-dots");
+    if (listTotalPages > 1) items.push(listTotalPages);
+    return items;
   };
 
   const paginatedMeetings = useMemo(
@@ -371,7 +555,10 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
       {showStats && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            {kpiTiles.map((tile) => (
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
+            ) : (
+              kpiTiles.map((tile) => (
               <div
                 key={tile.label}
                 className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
@@ -395,7 +582,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                   )}
                 </div>
               </div>
-            ))}
+            )))}
           </div>
 
           <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
@@ -403,6 +590,14 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
       )}
 
       {/* Search + Controls */}
+      {isLoading ? (
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+          <Skeleton height={44} shape="rect" className="flex-1 rounded-full" />
+          <Skeleton height={44} width={96} shape="rect" className="rounded-full flex-shrink-0" />
+          <Skeleton height={44} width={86} shape="rect" className="rounded-full flex-shrink-0" />
+          <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
+        </div>
+      ) : (
       <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
         <div className="relative flex-1 h-full">
           <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
@@ -468,9 +663,10 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           <Plus size={20} />
         </button>
       </div>
+      )}
 
       {/* Meeting list or empty state */}
-      {filteredMeetings.length === 0 ? (
+      {!isLoading && filteredMeetings.length === 0 ? (
         <button
           onClick={() => setShowMeetingForm(true)}
           className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
@@ -480,64 +676,135 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
         </button>
       ) : viewMode === "list" ? (
         <div
-          className="box-border flex flex-col items-start w-full bg-white overflow-x-auto"
-          style={{ border: "1px solid #E1E4EA", borderRadius: 8 }}
+          ref={fillContainerRef}
+          className="relative bg-white border border-[#E1E4EA] rounded-lg overflow-x-auto overflow-y-auto"
+          style={fillStyle}
         >
-          <table className="text-sm text-left border-collapse" style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth }}>
-            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+          <table className="w-full border-separate border-spacing-0 text-left" style={{ tableLayout: "fixed", minWidth: totalTableWidth }}>
+            <thead className="sticky top-0 z-30 bg-[#F5F7FA] border-b border-[#E1E4EA]">
               <tr>
-                {[
-                  { id: "title", label: "Meeting Title", pinnable: true, firstCol: true },
-                  { id: "type", label: "Type", pinnable: true, firstCol: true },
-                  { id: "dateTime", label: "Date & Time", pinnable: true },
-                  { id: "duration", label: "Duration", pinnable: true },
-                  { id: "attendees", label: "Attendees", pinnable: true },
-                  { id: "organiser", label: "Organiser", pinnable: true },
-                  { id: "relatedTo", label: "₹ Related to", pinnable: true },
-                  { id: "status", label: "Status", pinnable: true },
-                ].map((col) => {
-                  const isPinned = pinnedColumn === col.id;
+                {orderedColumns.map((col, colIdx) => {
+                  const isLastCol = colIdx === orderedColumns.length - 1;
+                  const isDragging = draggedColKey === col.id;
+                  const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
                   return (
                     <th
                       key={col.id}
-                      style={{ width: colWidths[col.id], height: 56, position: "relative" }}
-                      className={`py-2.5 font-medium text-[#525252] text-xs border-r border-[#E1E4EA] ${
+                      data-col-id={col.id}
+                      onMouseDown={(e) => startColumnDrag(e, col.id)}
+                      style={{ 
+                        width: colWidths[col.id], 
+                        height: 56, 
+                        position: "relative",
+                        opacity: isDragging ? 0.35 : 1
+                      }}
+                      className={`py-2.5 font-medium text-[#525252] text-xs border-r border-[#E1E4EA] cursor-grab active:cursor-grabbing ${
                         col.firstCol ? "pl-6 pr-3" : "px-3"
-                      }`}
+                      } ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
-                      <div className="flex items-center justify-between w-full">
+                      <div className={`flex items-center justify-between w-full ${isLoading ? "[&_button]:invisible" : ""}`}>
                         <div
                           className="relative flex items-center justify-start flex-1 group cursor-pointer select-none min-w-0"
                           onDoubleClick={() => togglePinColumn(col.id)}
                         >
                           <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                            <span className="truncate">{col.label}</span>
+                            {isLoading ? <Skeleton width="65%" height={12} /> : <span className="truncate">{col.label}</span>}
                           </div>
-                          <button
-                            onClick={() => togglePinColumn(col.id)}
-                            className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${
-                              isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
-                            }`}
-                            title={isPinned ? "Unpin Column" : "Pin Column"}
-                          >
-                            {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
-                          </button>
                         </div>
+
+                        {/* Column menu trigger */}
                         <button
-                          onClick={() => handleSort(col.id)}
-                          className="ml-1 p-0.5 rounded hover:bg-gray-200 flex-shrink-0"
-                          title="Sort"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (openColumnMenuKey === col.id) {
+                              setOpenColumnMenuKey(null);
+                              setColumnMenuPos(null);
+                              return;
+                            }
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            let calculatedLeft = rect.right - 190;
+                            if (isLastCol) {
+                              calculatedLeft -= 80;
+                            }
+                            setColumnMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
+                            setOpenColumnMenuKey(col.id);
+                          }}
+                          className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                          title="Column options"
                         >
-                          {sortConfig.key === col.id ? (
-                            sortConfig.direction === "asc" ? (
-                              <ChevronUp className="w-3.5 h-3.5 text-blue-600" />
-                            ) : (
-                              <ChevronDown className="w-3.5 h-3.5 text-blue-600" />
-                            )
-                          ) : (
-                            <ChevronDown className="w-3.5 h-3.5 text-gray-300" />
-                          )}
+                          <ChevronDown className="w-3.5 h-3.5" />
                         </button>
+
+                        {/* Column menu portal */}
+                        {openColumnMenuKey === col.id && columnMenuPos && createPortal(
+                          <>
+                            <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColumnMenuKey(null); setColumnMenuPos(null); }} />
+                            <div
+                              ref={columnMenuRef}
+                              style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
+                              className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                            >
+                              <button
+                                onClick={() => {
+                                  setOpenColumnMenuKey(null);
+                                  setColumnMenuPos(null);
+                                  getColumnPinSide(col.id) === "left" ? unpinColumn(col.id) : pinColumnToSide(col.id, "left");
+                                }}
+                                className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${getColumnPinSide(col.id) === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                              >
+                                {getColumnPinSide(col.id) === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                                Pin to Left
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setOpenColumnMenuKey(null);
+                                  setColumnMenuPos(null);
+                                  getColumnPinSide(col.id) === "right" ? unpinColumn(col.id) : pinColumnToSide(col.id, "right");
+                                }}
+                                className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${getColumnPinSide(col.id) === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                              >
+                                {getColumnPinSide(col.id) === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                                Pin to Right
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setOpenColumnMenuKey(null);
+                                  setColumnMenuPos(null);
+                                  handleSort(col.id, "asc");
+                                  setListPage(1);
+                                }}
+                                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                              >
+                                <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                                Sort Ascending
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setOpenColumnMenuKey(null);
+                                  setColumnMenuPos(null);
+                                  handleSort(col.id, "desc");
+                                  setListPage(1);
+                                }}
+                                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                              >
+                                <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                                Sort Descending
+                              </button>
+                              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                              <button
+                                onClick={() => {
+                                  setOpenColumnMenuKey(null);
+                                  setColumnMenuPos(null);
+                                  toggleHideColumn(col.id);
+                                }}
+                                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap text-[#161618] hover:bg-gray-50"
+                              >
+                                Hide Column
+                              </button>
+                            </div>
+                          </>,
+                          document.body
+                        )}
                       </div>
                       <div
                         onMouseDown={(e) => startResize(e, col.id)}
@@ -550,138 +817,175 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                 })}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E1E4EA] bg-white">
-              {paginatedMeetings.map((meeting) => {
+            <tbody className="bg-white">
+              {isLoading ? (
+                <TableSkeletonRows
+                  columns={orderedColumns.map((c) => colWidths[c.id])}
+                  hasCheckbox={false}
+                  numRows={listLimit}
+                  rowHeight={60}
+                />
+              ) : paginatedMeetings.map((meeting) => {
                 const participants = meeting.participants || [];
                 const organizer = typeof meeting.createdBy === "object" ? meeting.createdBy : null;
-                return (
+                  const cells = {
+                    title: (
+                        <td key="title" style={{ height: 60 }} className="pl-6 pr-3 truncate border-r border-b border-[#E1E4EA]">
+                          <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#222530" }} className="truncate">
+                            <HighlightText text={meeting.title || "Untitled Meeting"} query={searchTerm} />
+                          </span>
+                        </td>
+                    ),
+                    type: (
+                        <td key="type" style={{ height: 60 }} className="pl-6 pr-3 border-r border-b border-[#E1E4EA]">
+                          <span
+                            className="inline-flex items-center justify-center capitalize"
+                            style={{
+                              padding: "5px 12px",
+                              borderRadius: 53,
+                              backgroundColor: "rgba(0, 133, 255, 0.1)",
+                              fontFamily: "Inter",
+                              fontWeight: 500,
+                              fontSize: 12,
+                              lineHeight: "120%",
+                              color: "#0085FF",
+                            }}
+                          >
+                            <HighlightText text={meeting.meetingType || "General"} query={searchTerm} />
+                          </span>
+                        </td>
+                    ),
+                    dateTime: (
+                        <td key="dateTime" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          <div className="flex flex-col">
+                            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866" }} className="truncate">
+                              {meeting.scheduledAt
+                                ? new Date(meeting.scheduledAt).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" })
+                                : "—"}
+                            </span>
+                            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "rgba(28, 28, 29, 0.5)" }} className="truncate">
+                              {meeting.scheduledAt
+                                ? new Date(meeting.scheduledAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+                                : "—"}
+                            </span>
+                          </div>
+                        </td>
+                    ),
+                    duration: (
+                        <td key="duration" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866" }}>
+                            {meeting.duration ? <HighlightText text={`${meeting.duration} min`} query={searchTerm} /> : "—"}
+                          </span>
+                        </td>
+                    ),
+                    attendees: (
+                        <td key="attendees" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          {participants.length ? (
+                            <div className="flex items-center">
+                              {participants.slice(0, 3).map((p, i) => (
+                                <div
+                                  key={p._id || i}
+                                  className="rounded-full bg-gray-200 border border-white flex items-center justify-center text-[9px] font-semibold text-gray-600 flex-shrink-0"
+                                  style={{ width: 24, height: 24, marginLeft: i === 0 ? 0 : -8 }}
+                                >
+                                  {p.name?.charAt(0)?.toUpperCase() || "?"}
+                                </div>
+                              ))}
+                              {participants.length > 3 && (
+                                <div
+                                  className="rounded-full bg-[#D9D9D9] border border-white flex items-center justify-center flex-shrink-0"
+                                  style={{ width: 24, height: 24, marginLeft: -8 }}
+                                >
+                                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
+                                    +{participants.length - 3}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                    ),
+                    organiser: (
+                        <td key="organiser" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          <div className="flex items-center" style={{ gap: 6 }}>
+                            <div
+                              className="rounded-full bg-blue-100 border border-white flex items-center justify-center text-[10px] font-semibold text-blue-700 flex-shrink-0"
+                              style={{ width: 24, height: 24 }}
+                            >
+                              {organizer?.name?.charAt(0)?.toUpperCase() || "?"}
+                            </div>
+                            <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, lineHeight: "120%", color: "#1C1C1D" }} className="truncate">
+                              <HighlightText text={organizer?.name || "Unknown"} query={searchTerm} />
+                            </span>
+                          </div>
+                        </td>
+                    ),
+                    relatedTo: (
+                        <td key="relatedTo" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          <div className="flex flex-col">
+                            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#0085FF" }} className="truncate">
+                              <HighlightText text={meeting.dealCode || meeting.company?.name || "—"} query={searchTerm} />
+                            </span>
+                            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866" }} className="truncate">
+                              {meeting.amount ? `₹${Number(meeting.amount).toLocaleString("en-IN")}` : "—"}
+                            </span>
+                          </div>
+                        </td>
+                    ),
+                    status: (
+                        <td key="status" style={{ height: 60 }} className="px-3 border-b border-[#E1E4EA]">
+                          <div className="flex items-center justify-start" style={{ gap: 8 }}>
+                            <span
+                              className="inline-flex items-center justify-center capitalize"
+                              style={{
+                                padding: "5px 12px",
+                                borderRadius: 53,
+                                backgroundColor: meeting.status === "completed" ? "rgba(0, 201, 80, 0.1)" : "rgba(0, 133, 255, 0.1)",
+                                fontFamily: "Inter",
+                                fontWeight: 500,
+                                fontSize: 12,
+                                lineHeight: "120%",
+                                color: meeting.status === "completed" ? "#00C950" : "#0085FF",
+                              }}
+                            >
+                              <HighlightText text={meeting.status || "scheduled"} query={searchTerm} />
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMeetingClick(meeting);
+                              }}
+                              className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
+                              title="More options"
+                            >
+                              <MoreVertIcon className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                    ),
+                  };
+                  return (
                   <tr
                     key={meeting._id}
                     onClick={() => handleMeetingClick(meeting)}
                     className="hover:bg-gray-50 transition-colors cursor-pointer"
                   >
-                    <td style={{ height: 60 }} className="pl-6 pr-3 truncate">
-                      <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#222530" }} className="truncate">
-                        {meeting.title || "Untitled Meeting"}
-                      </span>
-                    </td>
-                    <td style={{ height: 60 }} className="pl-6 pr-3">
-                      <span
-                        className="inline-flex items-center justify-center capitalize"
-                        style={{
-                          padding: "5px 12px",
-                          borderRadius: 53,
-                          backgroundColor: "rgba(0, 133, 255, 0.1)",
-                          fontFamily: "Inter",
-                          fontWeight: 500,
-                          fontSize: 12,
-                          lineHeight: "120%",
-                          color: "#0085FF",
-                        }}
-                      >
-                        {meeting.meetingType || "General"}
-                      </span>
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      <div className="flex flex-col">
-                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866" }} className="truncate">
-                          {meeting.scheduledAt
-                            ? new Date(meeting.scheduledAt).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" })
-                            : "—"}
-                        </span>
-                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "rgba(28, 28, 29, 0.5)" }} className="truncate">
-                          {meeting.scheduledAt
-                            ? new Date(meeting.scheduledAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
-                            : "—"}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866" }}>
-                        {meeting.duration ? `${meeting.duration} min` : "—"}
-                      </span>
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      {participants.length ? (
-                        <div className="flex items-center">
-                          {participants.slice(0, 3).map((p, i) => (
-                            <div
-                              key={p._id || i}
-                              className="rounded-full bg-gray-200 border border-white flex items-center justify-center text-[9px] font-semibold text-gray-600 flex-shrink-0"
-                              style={{ width: 24, height: 24, marginLeft: i === 0 ? 0 : -8 }}
-                            >
-                              {p.name?.charAt(0)?.toUpperCase() || "?"}
-                            </div>
-                          ))}
-                          {participants.length > 3 && (
-                            <div
-                              className="rounded-full bg-[#D9D9D9] border border-white flex items-center justify-center flex-shrink-0"
-                              style={{ width: 24, height: 24, marginLeft: -8 }}
-                            >
-                              <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
-                                +{participants.length - 3}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      <div className="flex items-center" style={{ gap: 6 }}>
-                        <div
-                          className="rounded-full bg-blue-100 border border-white flex items-center justify-center text-[10px] font-semibold text-blue-700 flex-shrink-0"
-                          style={{ width: 24, height: 24 }}
-                        >
-                          {organizer?.name?.charAt(0)?.toUpperCase() || "?"}
-                        </div>
-                        <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, lineHeight: "120%", color: "#1C1C1D" }} className="truncate">
-                          {organizer?.name || "Unknown"}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      <div className="flex flex-col">
-                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#0085FF" }} className="truncate">
-                          {meeting.dealCode || meeting.company?.name || "—"}
-                        </span>
-                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866" }} className="truncate">
-                          {meeting.amount ? `₹${Number(meeting.amount).toLocaleString("en-IN")}` : "—"}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      <div className="flex items-center justify-start" style={{ gap: 8 }}>
-                        <span
-                          className="inline-flex items-center justify-center capitalize"
-                          style={{
-                            padding: "5px 12px",
-                            borderRadius: 53,
-                            backgroundColor: meeting.status === "completed" ? "rgba(0, 201, 80, 0.1)" : "rgba(0, 133, 255, 0.1)",
-                            fontFamily: "Inter",
-                            fontWeight: 500,
-                            fontSize: 12,
-                            lineHeight: "120%",
-                            color: meeting.status === "completed" ? "#00C950" : "#0085FF",
-                          }}
-                        >
-                          {meeting.status || "scheduled"}
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMeetingClick(meeting);
-                          }}
-                          className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
-                          title="More options"
-                        >
-                          <MoreVertIcon className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
+                      {/* Cells are indexed by column id and rendered through
+                          orderedColumns, so hiding or pinning a column in the header
+                          moves/removes its data cell too. Each <td> is unchanged. */}
+                      {orderedColumns.map((col) => {
+                        const isDragging = draggedColKey === col.id;
+                        const cell = cells[col.id];
+                        if (!cell) return null;
+                        if (isDragging) {
+                          return React.cloneElement(cell, { style: { ...cell.props.style, opacity: 0.35 } });
+                        }
+                        return cell;
+                      })}
+                    </tr>
+                  );
               })}
             </tbody>
           </table>
@@ -1085,7 +1389,24 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                   className="absolute"
                   style={{ width: 1, top: 60, bottom: -34, left: 4, background: "#E7E7E9" }}
                 />
-                {completedMeetings.map((meeting, idx) => {
+                {isLoading ? (
+                  [1, 2, 3].map((_, idx) => (
+                    <div key={idx} className="flex flex-row items-center" style={{ gap: 12, width: "100%" }}>
+                      <span className="flex-shrink-0" style={{ width: 10, height: 10, borderRadius: 9999, background: "#E1E4EA" }} />
+                      <div
+                        className="flex flex-col justify-center items-start flex-1"
+                        style={{
+                          boxSizing: "border-box", padding: 24, gap: 10, minHeight: 120, border: "1px solid #E1E4EA",
+                          borderTop: idx === 0 ? "1px solid #E1E4EA" : "none",
+                          borderRadius: `${idx === 0 ? "8px 8px" : "0 0"} ${idx === 2 ? "8px 8px" : "0 0"}`,
+                        }}
+                      >
+                        <Skeleton height={20} width={200} className="mb-2" />
+                        <Skeleton height={14} width={150} />
+                      </div>
+                    </div>
+                  ))
+                ) : completedMeetings.map((meeting, idx) => {
                   const start = new Date(meeting.scheduledAt);
                   const duration = meeting.duration || 30;
                   const end = new Date(start.getTime() + duration * 60000);
@@ -1272,7 +1593,10 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
       )}
 
       {viewMode === "list" && listTotalCount > 0 && (
-        <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+        <div
+          ref={fillFooterRef}
+          className="w-full bg-transparent px-4 py-3 mt-3 flex items-center justify-between sm:px-6"
+        >
           <div className="flex-1 flex justify-between sm:hidden">
             <button
               onClick={() => handleListPageChange(listPage - 1)}
@@ -1319,28 +1643,30 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
               </button>
 
               {listTotalPages > 0 &&
-                getListPageNumbers().map((pageNum, index) =>
-                  pageNum === "..." ? (
-                    <span
-                      key={`dots-${index}`}
-                      className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
-                    >
-                      ...
-                    </span>
-                  ) : (
+                getListPageNumbers().map((item, index) => {
+                  if (item === "left-dots" || item === "right-dots") {
+                    return (
+                      <span
+                        key={`${item}-${index}`}
+                        className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
+                      >
+                        ...
+                      </span>
+                    );
+                  }
+                  return (
                     <button
-                      key={`page-${pageNum}`}
-                      onClick={() => handleListPageChange(pageNum)}
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
-                        pageNum === listPage
-                          ? "bg-blue-600 text-white"
-                          : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                      }`}
+                      key={`page-${item}`}
+                      onClick={() => handleListPageChange(item)}
+                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${item === listPage
+                        ? "bg-blue-600 text-white"
+                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                        }`}
                     >
-                      {pageNum}
+                      {item}
                     </button>
-                  ),
-                )}
+                  );
+                })}
 
               <button
                 onClick={() => handleListPageChange(listPage + 1)}
@@ -1385,6 +1711,31 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
         onDelete={handleMeetingDelete}
         onClose={() => setIsDetailsOpen(false)}
       />
+
+      {dragGhost && createPortal(
+        <div
+          ref={ghostElRef}
+          style={{
+            position: "fixed",
+            top: -9999,
+            left: -9999,
+            width: dragGhost.width,
+            zIndex: 10000,
+            pointerEvents: "none",
+          }}
+          className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+        >
+          <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+            <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+          </div>
+          {dragGhost.previewRows.map((rowVal, i) => (
+            <div key={i} className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0">
+              <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

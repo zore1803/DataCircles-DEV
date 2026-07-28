@@ -31,6 +31,9 @@ import AppToaster from "../AppToaster";
 import FilterIcon from "../common/FilterIcon";
 import CompanyFilterPanel from "./CompanyFilterPanel";
 import { applyColumnFilters } from "../../utils/advancedFilters";
+import TableSkeletonRows from "../common/TableSkeletonRows";
+import Skeleton from "../common/Skeleton";
+import useFillToBottom from "../../hooks/useFillToBottom";
 
 const FOLDER_ITEM_COUNT_RANGES = [
   { label: "Empty", test: (n) => n === 0 },
@@ -999,8 +1002,17 @@ const AddLinkModal = ({ isOpen, onClose, onSubmit }) => {
   );
 };
 
-const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
+// `showStats` is intentionally not accepted any more: it used to feed the
+// old calc()-based height offset. useFillToBottom measures the container's real
+// position instead, so a KPI-row toggle is handled automatically. CompanyFolderTab
+// still passes it harmlessly.
+const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }) => {
   const { id: paramCompanyId } = useParams();
+  const {
+    containerRef: fillContainerRef,
+    footerRef: fillFooterRef,
+    style: fillStyle,
+  } = useFillToBottom();
   const companyId = propCompanyId || paramCompanyId;
   const [folders, setFolders] = useState([]);
   const [selectedFolderId, setSelectedFolderId] = useState("");
@@ -1535,6 +1547,13 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
         ) : (
         <>
         {/* Search + Controls */}
+        {isLoading ? (
+          <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+            <Skeleton height={44} shape="rect" className="flex-1 rounded-full" />
+            <Skeleton height={44} width={96} shape="rect" className="rounded-full flex-shrink-0" />
+            <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
+          </div>
+        ) : (
         <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
             <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-900 opacity-50 w-5 h-5" />
@@ -1616,9 +1635,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
             <CreateNewFolderIcon size={20} style={{ color: "#404040" }} />
           </button>
         </div>
+        )}
 
         {/* Folders List / Grid */}
-        {folderViewMode === "grid" && filteredFolders.length === 0 ? (
+        {!isLoading && folderViewMode === "grid" && filteredFolders.length === 0 ? (
           <button
             onClick={() =>
               setModalState({
@@ -1640,11 +1660,11 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
           </button>
         ) : folderViewMode === "grid" ? (
           <div
-            className="w-full"
+            ref={fillContainerRef}
+            className="w-full relative"
             style={{
               boxSizing: "border-box",
               width: "100%",
-              height: 482,
               borderRadius: 8,
               padding: 0,
               display: "grid",
@@ -1652,9 +1672,17 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
               gap: "1.2px",
               alignContent: "flex-start",
               overflowY: "auto",
+              ...fillStyle,
             }}
           >
-            {paginatedFolders.map((folder) => (
+            {isLoading ? (
+              [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((_, idx) => (
+                <div key={idx} className="flex flex-col justify-center items-center" style={{ boxSizing: "border-box", width: "100%", height: 150, borderRadius: 8, gap: 12 }}>
+                  <Skeleton width={100} height={100} className="rounded-xl" />
+                  <Skeleton width={100} height={18} />
+                </div>
+              ))
+            ) : paginatedFolders.map((folder) => (
               <div
                 key={folder._id}
                 onClick={() => setOpenFolderId(folder._id)}
@@ -1711,7 +1739,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
               </div>
             ))}
           </div>
-        ) : filteredFolders.length === 0 ? (
+        ) : !isLoading && filteredFolders.length === 0 ? (
           <button
             onClick={() =>
               setModalState({
@@ -1732,8 +1760,39 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
             <span className="text-sm font-medium">Create New Folder</span>
           </button>
         ) : (
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            {paginatedFolders.map((folder, idx) => (
+          <div
+            ref={fillContainerRef}
+            className="border border-gray-200 rounded-lg overflow-x-hidden overflow-y-auto"
+            style={fillStyle}
+          >
+            {isLoading ? (
+              [1, 2, 3, 4, 5, 6].map((_, idx) => (
+                <div key={idx} className="transition-all">
+                  <div
+                    className="flex items-center justify-between gap-2"
+                    style={{
+                      boxSizing: "border-box",
+                      padding: "11px 12px 11px 24px",
+                      background: "#FFFFFF",
+                      borderTop: idx === 0 ? "none" : "1px solid #E1E4EA",
+                    }}
+                  >
+                    <div className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                      <Skeleton width={20} height={20} className="flex-shrink-0" />
+                      <div className="flex-1 min-w-0 flex flex-col gap-1">
+                        <Skeleton width={150} height={16} />
+                        <Skeleton width={80} height={12} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Skeleton width={20} height={20} />
+                      <Skeleton width={20} height={20} />
+                      <Skeleton width={20} height={20} />
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : paginatedFolders.map((folder, idx) => (
               <FolderCard
                 key={folder._id}
                 folder={folder}
@@ -1757,7 +1816,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
         )}
 
         {folderViewMode === "list" && listTotalCount > 0 && (
-          <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+          <div
+            ref={fillFooterRef}
+            className="w-full bg-transparent px-4 py-3 mt-3 flex items-center justify-between sm:px-6"
+          >
             <div className="flex-1 flex justify-between sm:hidden">
               <button
                 onClick={() => handleListPageChange(listPage - 1)}

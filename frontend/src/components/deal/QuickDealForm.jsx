@@ -438,7 +438,7 @@ const QuickDealForm = ({
         onClick={handleClose}
       />
       <div
- className={`fixed inset-y-0 right-0 z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-full"
+ className={`fixed dc-panel-card z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
           }`}
       >
         <form onSubmit={handleSubmit} className="p-8">
