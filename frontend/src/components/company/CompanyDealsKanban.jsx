@@ -352,43 +352,28 @@ export default function CompanyDealsKanban({
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    e.preventDefault();
-    window.getSelection?.()?.removeAllRanges();
-
     const th = e.currentTarget;
-    const rect = th.getBoundingClientRect();
-    const previewRows = paginatedDeals.map((d) => String(getDealColumnPreviewValue(d, colId)));
-    const zGhost = getRootZoom();
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
 
-    dragOverRef.current = null;
-    setDraggedColKey(colId);
-    setDragOverColKey(null);
-    document.body.style.userSelect = "none";
-    setDragGhost({
-      label,
-      previewRows,
-      offsetX,
-      offsetY,
-      width: rect.width / zGhost,
-      height: rect.height / zGhost,
-    });
+    // Tracks whether the pointer has moved past the threshold yet. A plain click
+    // (mousedown -> tiny/no movement -> mouseup) never crosses it, so it never shows
+    // the drag ghost or touches drag state — only a deliberate drag does.
+    const dragState = { started: false, offsetX: 0, offsetY: 0, zGhost: 1 };
 
     const positionGhost = (clientX, clientY) => {
       const el = ghostElRef.current;
       if (!el) return;
-      const visualTop = clientY - offsetY;
-      const visualLeft = clientX - offsetX;
-      el.style.top = `${visualTop / zGhost}px`;
-      el.style.left = `${visualLeft / zGhost}px`;
-      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      const visualTop = clientY - dragState.offsetY;
+      const visualLeft = clientX - dragState.offsetX;
+      el.style.top = `${visualTop / dragState.zGhost}px`;
+      el.style.left = `${visualLeft / dragState.zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / dragState.zGhost}px`;
     };
-    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
 
-    const handleMouseMove = (moveEvent) => {
-      positionGhost(moveEvent.clientX, moveEvent.clientY);
-      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+    const updateDragOver = (clientX, clientY) => {
+      const elAtPoint = document.elementFromPoint(clientX, clientY);
       const thAtPoint = elAtPoint?.closest("th[data-col-id]");
       const overKey = thAtPoint?.getAttribute("data-col-id") || null;
       if (dragOverRef.current !== overKey) {
@@ -397,9 +382,48 @@ export default function CompanyDealsKanban({
       }
     };
 
+    const beginDrag = () => {
+      dragState.started = true;
+      window.getSelection?.()?.removeAllRanges();
+
+      const rect = th.getBoundingClientRect();
+      const previewRows = paginatedDeals.map((d) => String(getDealColumnPreviewValue(d, colId)));
+      dragState.zGhost = getRootZoom();
+      dragState.offsetX = startX - rect.left;
+      dragState.offsetY = startY - rect.top;
+
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX: dragState.offsetX,
+        offsetY: dragState.offsetY,
+        width: rect.width / dragState.zGhost,
+        height: rect.height / dragState.zGhost,
+      });
+
+      requestAnimationFrame(() => positionGhost(startX, startY));
+    };
+
+    const handleMouseMove = (moveEvent) => {
+      if (!dragState.started) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        e.preventDefault();
+        beginDrag();
+      }
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      updateDragOver(moveEvent.clientX, moveEvent.clientY);
+    };
+
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragState.started) return;
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) {
@@ -446,16 +470,19 @@ export default function CompanyDealsKanban({
     const handleKeyDown = (e) => {
       if (SCROLL_KEYS.includes(e.key)) closeMenus();
     };
+    const handleScroll = () => closeMenus();
 
     window.addEventListener("wheel", handleWheel, { passive: false, capture: true });
     window.addEventListener("touchmove", handleTouchMove, { passive: true, capture: true });
     window.addEventListener("keydown", handleKeyDown, { capture: true });
+    document.addEventListener("scroll", handleScroll, { capture: true });
 
     return () => {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("wheel", handleWheel, { capture: true });
       window.removeEventListener("touchmove", handleTouchMove, { capture: true });
       window.removeEventListener("keydown", handleKeyDown, { capture: true });
+      document.removeEventListener("scroll", handleScroll, { capture: true });
     };
   }, [openRowActionsId, openColMenuKey]);
 
@@ -815,7 +842,7 @@ export default function CompanyDealsKanban({
         </div>
       ) : viewMode === "list" && selectedDeals.length > 0 ? (
         <div
-          className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4"
+          className="flex flex-wrap items-center justify-end gap-6 bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4"
           style={{ minHeight: 44 }}
         >
           <div className="flex items-center gap-3 py-2">

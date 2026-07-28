@@ -1825,11 +1825,11 @@ function Tasks() {
               ))}
             </select>
           </div>
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => handlePageChange(pagination.currentPage - 1)}
               disabled={!pagination.hasPrevPage}
-              className="relative inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -1837,15 +1837,15 @@ function Tasks() {
               p === "..." ? (
                 <span
                   key={`dots-${i}`}
-                  className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700"
+                  className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none"
                 >
-                  ...
+                  ....
                 </span>
               ) : (
                 <button
                   key={p}
                   onClick={() => handlePageChange(p)}
-                  className={`relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${p === pagination.currentPage ? "bg-blue-600 text-white" : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"}`}
+                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${p === pagination.currentPage ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
                 >
                   {p}
                 </button>
@@ -1854,7 +1854,7 @@ function Tasks() {
             <button
               onClick={() => handlePageChange(pagination.currentPage + 1)}
               disabled={!pagination.hasNextPage}
-              className="relative inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight className="h-4 w-4" />
             </button>

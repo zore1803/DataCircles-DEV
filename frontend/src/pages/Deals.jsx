@@ -57,6 +57,7 @@ import {
   TimerReset,
   Handshake,
   ClipboardList,
+  Eye,
 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -592,8 +593,11 @@ function Deals() {
   const [statuses, setStatuses] = useState([]);
   const showKanbanSkeleton = useMinDelay(loading && deals.length === 0, 300);
   const [showFilters, setShowFilters] = useState(false);
+  const [showStats, setShowStats] = useState(true);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
   const [dealsCurrentPage, setDealsCurrentPage] = useState(1);
-  const [dealsPerPage, setDealsPerPage] = useState(10);
+  const [dealsPerPage, setDealsPerPage] = useState(50);
   const [dealsEditingPage, setDealsEditingPage] = useState(false);
   const [dealsPageInput, setDealsPageInput] = useState("");
   const [filters, setFilters] = useState({
@@ -607,7 +611,7 @@ function Deals() {
     searchTerm: "",
   });
   const [name, setName] = useState("");
-  const [showKanban, setShowKanban] = useState(true);
+  const [showKanban, setShowKanban] = useState(false);
   const [permission, setPermission] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [dealFields, setDealFields] = useState([]);
@@ -871,7 +875,10 @@ function Deals() {
 
       let aValue, bValue;
 
-      if (sortConfig.key === "company") {
+      if (sortConfig.key === "dealId") {
+        aValue = a._id.slice(-5).toUpperCase();
+        bValue = b._id.slice(-5).toUpperCase();
+      } else if (sortConfig.key === "company") {
         aValue = a.company?.name || "";
         bValue = b.company?.name || "";
       } else if (sortConfig.key === "amount") {
@@ -1699,10 +1706,12 @@ function Deals() {
 
   // NEW: Handle select all
   const handleSelectAll = () => {
-    if (selectedRows.length === sortedTableDeals.length) {
-      setSelectedRows([]);
+    const pageIds = paginatedTableDeals.map((deal) => deal._id);
+    const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedRows.includes(id));
+    if (allPageSelected) {
+      setSelectedRows((prev) => prev.filter((id) => !pageIds.includes(id)));
     } else {
-      setSelectedRows(sortedTableDeals.map((deal) => deal._id));
+      setSelectedRows((prev) => [...new Set([...prev, ...pageIds])]);
     }
   };
 
@@ -1827,7 +1836,7 @@ function Deals() {
 
   if (loading) {
     return (
-      <PageSkeleton variant="kanban" />
+      <PageSkeleton variant="kanban" boardVariant={showKanban ? "kanban" : "table"} tableRows={dealsPerPage} />
     );
   }
 
@@ -1995,10 +2004,63 @@ function Deals() {
 
       {/* New Strip */}
       <div
-        className="sticky -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 px-6"
-        style={{ top: "64px", zIndex: 40, height: "64px", minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
+        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 px-6"
+        style={{
+          top: "64px",
+          left: "var(--sidebar-width, 0px)",
+          zIndex: 40,
+          height: "64px",
+          minHeight: "64px",
+          maxHeight: "64px",
+          boxSizing: "border-box",
+        }}
       >
-        <div className="flex flex-col gap-1.5">
+        {selectedRows.length > 0 ? (
+          <div className="animate-slideInLeft flex flex-wrap items-center justify-between gap-6 w-full h-full">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </button>
+              <button
+                onClick={() => setShowBulkActions(true)}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <Edit2 className="w-4 h-4" />
+                Bulk Update
+              </button>
+              <button
+                onClick={() => setShowBulkDeleteModal(true)}
+                disabled={loading}
+                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+              <button
+                onClick={() => {
+                  setSelectionMode(false);
+                  setSelectedRows([]);
+                }}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <CheckSquare className="w-5 h-5 text-blue-600" />
+              <span className="text-blue-800 font-semibold font-inter">
+                {selectedRows.length} deal{selectedRows.length !== 1 ? "s" : ""} selected
+              </span>
+            </div>
+          </div>
+        ) : (
+        <>
+        <div className="flex flex-col gap-1.5 flex-shrink-0">
           <h2
             className="m-0 font-medium"
             style={{ fontSize: "16px", lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
@@ -2010,9 +2072,71 @@ function Deals() {
           </p>
         </div>
 
-        <div className="relative flex-1 flex items-center justify-end">
-          {/* Action Buttons */}
-          <div className="flex items-center gap-3">
+        {/* Spacer pushes the search/filter/switcher/actions group to the right */}
+        <div className="flex-1 min-w-0" />
+
+        {/* Search, Filter, Switcher, Actions — one continuous group with a uniform gap */}
+        <div className="relative flex items-center gap-3 flex-shrink-0">
+          <div
+            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[320px]" : "w-10"} max-w-full flex-shrink-0`}
+          >
+            <Search
+              strokeWidth={2.5}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+              onClick={() => {
+                setIsSearchExpanded(true);
+                searchInputRef.current?.focus();
+              }}
+            />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={filters.searchTerm}
+              onChange={(e) =>
+                setFilters({ ...filters, searchTerm: e.target.value })
+              }
+              onFocus={() => setIsSearchExpanded(true)}
+              onBlur={() => {
+                if (!filters.searchTerm) setIsSearchExpanded(false);
+              }}
+              className={`w-full h-full pl-9 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+              placeholder="Search deals by title, company, or status..."
+            />
+          </div>
+
+          {/* Filters */}
+          <button
+            onClick={() => setShowFilters((prev) => !prev)}
+            className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
+            title="Filters"
+          >
+            <FilterIcon size={15} />
+          </button>
+
+          {/* List / Kanban Toggle */}
+          <div className="relative flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
+            <span
+              className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+              style={{ left: showKanban ? 36 : 4 }}
+            />
+            <button
+              onClick={() => setShowKanban(false)}
+              className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+              title="List View"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setShowKanban(true)}
+              className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+              title="Kanban View"
+            >
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="currentColor" />
+              </svg>
+            </button>
+          </div>
+
           {/* More options */}
           <div className="relative" ref={moreMenuRef}>
             <button
@@ -2025,6 +2149,16 @@ function Deals() {
 
             {isMoreMenuOpen && (
               <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
+                <button
+                  onClick={() => {
+                    setShowStats((prev) => !prev);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Eye className="w-4 h-4 text-gray-400" />
+                  {showStats ? "Hide KPIs" : "Unhide KPIs"}
+                </button>
                 <button
                   onClick={() => {
                     setShowVideoTutorial(true);
@@ -2100,13 +2234,22 @@ function Deals() {
             <Plus className="w-4 h-4" />
             {showForm ? "Cancel" : "New Deal"}
           </button>
-          </div>
         </div>
+        </>
+        )}
       </div>
 
+      {showStats && (
       <div
-        className="box-border -mx-4 sm:-mx-6 lg:-mx-8 flex flex-col justify-start items-start border-b border-[#E1E4EA]"
-        style={{ paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24, height: "120px" }}
+        className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA]"
+        style={{
+          top: "128px",
+          left: "var(--sidebar-width, 0px)",
+          zIndex: 39,
+          paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
+          height: "120px",
+          boxSizing: "border-box",
+        }}
       >
         {/* KPI Strip */}
         <div className="flex flex-row items-center self-stretch" style={{ gap: "24px", height: "72px" }}>
@@ -2165,59 +2308,12 @@ function Deals() {
           ))}
         </div>
       </div>
+      )}
 
-      {/* Third Strip: Search, Filter, Switcher */}
-      <div className="-mx-4 sm:-mx-6 lg:-mx-8 bg-white flex items-center justify-between gap-3 px-6 py-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            type="text"
-            value={filters.searchTerm}
-            onChange={(e) =>
-              setFilters({ ...filters, searchTerm: e.target.value })
-            }
-            className="w-full h-10 pl-9 pr-4 border border-[#E1E4EA] rounded-full text-sm focus:outline-none focus:border-[#0085FF] transition-colors font-inter bg-white"
-            placeholder="Search deals by title, company, or status..."
-          />
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Filters */}
-          <button
-            onClick={() => setShowFilters((prev) => !prev)}
-            className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
-            title="Filters"
-          >
-            <FilterIcon size={15} />
-          </button>
-
-          {/* List / Kanban Toggle */}
-          <div className="relative flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
-            <span
-              className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
-              style={{ left: showKanban ? 36 : 4 }}
-            />
-            <button
-              onClick={() => setShowKanban(false)}
-              className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-              title="List View"
-            >
-              <List className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setShowKanban(true)}
-              className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-              title="Kanban View"
-            >
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="currentColor" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pt-2 pb-6 space-y-8">
+      <div
+        className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6 space-y-8"
+        style={{ marginTop: showStats ? (showKanban ? 184 : 168) : (showKanban ? 64 : 48) }}
+      >
         {/* Filter Panel */}
         {showFilters && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 animate-slide-down">
@@ -2392,7 +2488,7 @@ function Deals() {
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <div className="overflow-x-auto overflow-y-hidden scrollbar-hide -mx-6" style={{ padding: "24px", paddingTop: 0, "--kanban-top-offset": "20rem" }}>
+            <div className="overflow-x-auto overflow-y-hidden scrollbar-hide -mx-6" style={{ padding: "24px", paddingTop: 0, "--kanban-top-offset": "16rem" }}>
               <div className="flex min-w-max" style={{ gap: "16px" }}>
                 {statuses?.map((status) => {
                   const columnDeals = sortedTableDeals.filter((d) => d.status === status);
@@ -2423,60 +2519,9 @@ function Deals() {
           <div>
             {/* Table View Implementation (Kept original logic) */}
             {/* Table View Implementation */}
-            {selectedRows.length > 0 && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm gap-4">
-                <div className="flex items-center gap-3">
-                  <CheckSquare className="w-5 h-5 text-blue-600" />
-                  <span className="text-blue-800 font-semibold font-inter">
-                    {selectedRows.length} deal
-                    {selectedRows.length !== 1 ? "s" : ""} selected
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                  {/* ✅ Export Button */}
-                  <button
-                    onClick={() => setShowExportModal(true)}
-                    className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Export
-                  </button>
+            {/* Bulk-actions banner now lives in the fixed title strip (replaces it when rows are selected) */}
 
-                  {/* ✅ Bulk Update Button */}
-                  <button
-                    onClick={() => setShowBulkActions(true)}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Bulk Update
-                  </button>
-
-                  {/* ✅ Bulk Delete Button */}
-                  <button
-                    onClick={() => setShowBulkDeleteModal(true)}
-                    disabled={loading}
-                    className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </button>
-
-                  {/* Cancel Button */}
-                  <button
-                    onClick={() => {
-                      setSelectionMode(false);
-                      setSelectedRows([]);
-                    }}
-                    className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
-                  >
-                    <X className="w-4 h-4" />
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="relative bg-white border border-[#E1E4EA] -mx-6">
               <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "866px" }}>
                 <DealsTable
                   sortedTableDeals={paginatedTableDeals}
@@ -2506,7 +2551,10 @@ function Deals() {
             </div>
 
             {sortedTableDeals.length > 0 && (
-              <div className="bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+              <div
+                className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center justify-between px-4 sm:px-6"
+                style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+              >
                 <div className="flex items-center space-x-2">
                   <p className="text-sm text-gray-700 font-inter">
                     Showing{" "}

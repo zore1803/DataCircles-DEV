@@ -288,49 +288,28 @@ function Contacts() {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    e.preventDefault();
-    window.getSelection?.()?.removeAllRanges();
-
     const th = e.currentTarget;
-    const rect = th.getBoundingClientRect();
-    const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
-    const previewRows = (sortedContacts || [])
-      .map((c) => String(getFieldValue(c, colId) ?? "").trim() || "—");
-    // Grab offset is measured in visual space (rect + clientX both visual) — no
-    // correction. `zGhost` scales the values we SET on the body-portal ghost so
-    // they map back to visual space (the ghost is painted inside the <html> zoom).
-    const zGhost = getAncestorZoom(document.body);
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
 
-    dragOverRef.current = null;
-    setDraggedColKey(colId);
-    setDragOverColKey(null);
-    document.body.style.userSelect = "none";
-    setDragGhost({
-      label,
-      previewRows,
-      offsetX,
-      offsetY,
-      width: rect.width / zGhost,
-      height: rect.height / zGhost,
-    });
+    // Tracks whether the pointer has moved past the threshold yet. A plain click
+    // (mousedown -> tiny/no movement -> mouseup) never crosses it, so it never shows
+    // the drag ghost or touches drag state — only a deliberate drag does.
+    const dragState = { started: false, offsetX: 0, offsetY: 0, zGhost: 1 };
 
     const positionGhost = (clientX, clientY) => {
       const el = ghostElRef.current;
       if (!el) return;
-      const visualTop = clientY - offsetY;
-      const visualLeft = clientX - offsetX;
-      el.style.top = `${visualTop / zGhost}px`;
-      el.style.left = `${visualLeft / zGhost}px`;
-      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      const visualTop = clientY - dragState.offsetY;
+      const visualLeft = clientX - dragState.offsetX;
+      el.style.top = `${visualTop / dragState.zGhost}px`;
+      el.style.left = `${visualLeft / dragState.zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / dragState.zGhost}px`;
     };
-    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
 
-    const handleMouseMove = (moveEvent) => {
-      positionGhost(moveEvent.clientX, moveEvent.clientY);
-
-      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+    const updateDragOver = (clientX, clientY) => {
+      const elAtPoint = document.elementFromPoint(clientX, clientY);
       const thAtPoint = elAtPoint?.closest("th[data-col-id]");
       const overKey = thAtPoint?.getAttribute("data-col-id") || null;
       if (dragOverRef.current !== overKey) {
@@ -339,9 +318,53 @@ function Contacts() {
       }
     };
 
+    const beginDrag = () => {
+      dragState.started = true;
+      window.getSelection?.()?.removeAllRanges();
+
+      const rect = th.getBoundingClientRect();
+      const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
+      const previewRows = (sortedContacts || [])
+        .map((c) => String(getFieldValue(c, colId) ?? "").trim() || "—");
+      // Grab offset is measured in visual space (rect + clientX both visual) — no
+      // correction. `zGhost` scales the values we SET on the body-portal ghost so
+      // they map back to visual space (the ghost is painted inside the <html> zoom).
+      dragState.zGhost = getAncestorZoom(document.body);
+      dragState.offsetX = startX - rect.left;
+      dragState.offsetY = startY - rect.top;
+
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX: dragState.offsetX,
+        offsetY: dragState.offsetY,
+        width: rect.width / dragState.zGhost,
+        height: rect.height / dragState.zGhost,
+      });
+
+      requestAnimationFrame(() => positionGhost(startX, startY));
+    };
+
+    const handleMouseMove = (moveEvent) => {
+      if (!dragState.started) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        e.preventDefault();
+        beginDrag();
+      }
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      updateDragOver(moveEvent.clientX, moveEvent.clientY);
+    };
+
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragState.started) return;
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) {
@@ -2325,12 +2348,6 @@ function Contacts() {
       >
         {selectionMode && selectedContacts.length > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-3 w-full h-full">
-            <div className="flex items-center gap-3">
-              <CheckSquare className="w-5 h-5 text-blue-600" />
-              <span className="text-blue-800 font-semibold font-inter">
-                {selectedContacts.length} contact{selectedContacts.length !== 1 ? "s" : ""} selected
-              </span>
-            </div>
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowExportModal(true)}
@@ -2375,6 +2392,12 @@ function Contacts() {
                 <X className="w-4 h-4" />
                 Cancel
               </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <CheckSquare className="w-5 h-5 text-blue-600" />
+              <span className="text-blue-800 font-semibold font-inter">
+                {selectedContacts.length} contact{selectedContacts.length !== 1 ? "s" : ""} selected
+              </span>
             </div>
           </div>
         ) : (

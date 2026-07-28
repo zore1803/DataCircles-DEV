@@ -30,17 +30,25 @@ const TableSkeleton = ({ rows = 10, cols = 6 }) => (
   </div>
 );
 
-// Matches the real Deals page top-to-bottom: title strip, KPI strip, search
-// strip, then the kanban board itself (column header + total bar + cards).
-const KanbanSkeleton = ({ columns = 3, cards = 3 }) => (
+// Matches the real Deals page top-to-bottom: title strip (with the search /
+// filter / view-toggle controls inline), KPI strip, then either the kanban
+// board (column header + total bar + cards) or the deals table, whichever
+// view is currently active — so the skeleton never flashes the wrong shape.
+const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", tableRows = 10 }) => (
   <div className="space-y-0 -m-6">
-    {/* Title strip: "Deals" + subtitle, more-menu + New Deal button */}
-    <div className="flex items-center justify-between gap-3 bg-white border-b border-gray-200 px-6" style={{ height: 64 }}>
-      <div className="flex flex-col gap-1.5">
+    {/* Title strip: "Deals" + subtitle, then one right-aligned group —
+        search icon, filter, list/kanban switcher, more-menu, New Deal —
+        all sharing the same gap, matching the real collapsed-search strip. */}
+    <div className="flex items-center gap-3 bg-white border-b border-gray-200 px-6" style={{ height: 64 }}>
+      <div className="flex flex-col gap-1.5 flex-shrink-0">
         <Skeleton width={50} height={16} />
         <Skeleton width={160} height={12} />
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex-1 min-w-0" />
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <Skeleton shape="circle" width={40} height={40} />
+        <Skeleton shape="circle" width={40} height={40} />
+        <Skeleton width={76} height={40} shape="rect" className="rounded-full" />
         <Skeleton shape="circle" width={40} height={40} />
         <Skeleton width={110} height={40} shape="rect" className="rounded-full" />
       </div>
@@ -64,40 +72,62 @@ const KanbanSkeleton = ({ columns = 3, cards = 3 }) => (
       ))}
     </div>
 
-    {/* Search + filter/view-toggle strip */}
-    <div className="flex items-center justify-between gap-3 bg-white px-6 py-3">
-      <Skeleton width="100%" height={40} shape="rect" className="rounded-full" />
-      <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-        <Skeleton shape="circle" width={40} height={40} />
-        <Skeleton width={72} height={32} shape="rect" className="rounded-full" />
-      </div>
-    </div>
-
-    {/* Kanban board */}
-    <div className="flex gap-4 px-6 pt-6 pb-6 overflow-x-auto">
-      {Array.from({ length: columns }).map((_, c) => (
-        <div key={c} className="w-[340px] flex-shrink-0 rounded-xl border border-gray-200 bg-white overflow-hidden">
-          {/* Column header: title + count badge + plus icon */}
-          <div className="flex items-center justify-between px-4" style={{ height: 46, background: "#F5F7FA" }}>
-            <div className="flex items-center gap-1.5">
-              <Skeleton width={60} height={12} />
-              <Skeleton shape="circle" width={22} height={22} />
+    {boardVariant === "table" ? (
+      /* Deals table: checkbox + 7 columns, matching DealsTable's header/row shape.
+         No top/left padding — the real table view sits edge-to-edge. */
+      <div>
+        <div className="relative bg-white border border-[#E1E4EA]">
+          <div className="flex items-stretch bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: 56 }}>
+            <div className="flex items-center justify-center flex-shrink-0 border-r border-[#E1E4EA]" style={{ width: 60 }}>
+              <Skeleton shape="rect" width={16} height={16} className="rounded" />
             </div>
-            <Skeleton shape="circle" width={16} height={16} />
-          </div>
-          {/* Total bar (plain gray, no gradient) */}
-          <div className="px-5 pt-5">
-            <Skeleton width="100%" height={67} shape="rect" className="rounded-[10px]" />
-          </div>
-          {/* Deal cards */}
-          <div className="flex flex-col items-start gap-3.5 px-5 py-5">
-            {Array.from({ length: cards }).map((_, i) => (
-              <DealCardSkeleton key={i} />
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="flex items-center flex-1 px-3 border-r border-[#E1E4EA] last:border-r-0">
+                <Skeleton width={80 + (i % 3) * 20} height={10} />
+              </div>
             ))}
           </div>
+          {Array.from({ length: tableRows }).map((_, r) => (
+            <div key={r} className="flex items-stretch border-b border-[#E1E4EA] last:border-b-0" style={{ height: 54 }}>
+              <div className="flex items-center justify-center flex-shrink-0 border-r border-[#E1E4EA]" style={{ width: 60 }}>
+                <Skeleton shape="rect" width={16} height={16} className="rounded" />
+              </div>
+              {Array.from({ length: 7 }).map((_, c) => (
+                <div key={c} className="flex items-center flex-1 px-3 border-r border-[#E1E4EA] last:border-r-0">
+                  <Skeleton width={`${50 + ((r + c) % 4) * 10}%`} height={12} />
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      </div>
+    ) : (
+      /* Kanban board */
+      <div className="flex gap-4 px-6 pt-6 pb-6 overflow-x-auto">
+        {Array.from({ length: columns }).map((_, c) => (
+          <div key={c} className="w-[340px] flex-shrink-0 rounded-xl border border-gray-200 bg-white overflow-hidden">
+            {/* Column header: title + count badge + plus icon */}
+            <div className="flex items-center justify-between px-4" style={{ height: 46, background: "#F5F7FA" }}>
+              <div className="flex items-center gap-1.5">
+                <Skeleton width={60} height={12} />
+                <Skeleton shape="circle" width={22} height={22} />
+              </div>
+              <Skeleton shape="circle" width={16} height={16} />
+            </div>
+            {/* Total bar (plain gray, no gradient) */}
+            <div className="px-5 pt-5">
+              <Skeleton width="100%" height={67} shape="rect" className="rounded-[10px]" />
+            </div>
+            {/* Deal cards */}
+            <div className="flex flex-col items-start gap-3.5 px-5 py-5">
+              {Array.from({ length: cards }).map((_, i) => (
+                <DealCardSkeleton key={i} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
   </div>
 );
 

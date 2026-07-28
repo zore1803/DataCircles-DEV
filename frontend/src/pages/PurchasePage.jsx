@@ -407,7 +407,7 @@ const PurchasePage = () => {
             <select
               value={limit}
               onChange={(e) => handleLimitChange(parseInt(e.target.value))}
-              className="ml-2 border rounded-lg px-3 py-1.5 text-sm"
+              className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
             >
               {[10, 20, 50, 100].map((v) => (
                 <option key={v} value={v}>
@@ -417,25 +417,25 @@ const PurchasePage = () => {
             </select>
           </div>
 
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={!hasPrevPage}
-              className="pagination-btn"
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             {getPageNumbers().map((num, i) =>
               num === "..." ? (
-                <span key={i} className="px-4 py-2 text-sm text-gray-700">
-                  ...
+                <span key={i} className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none">
+                  ....
                 </span>
               ) : (
                 <button
                   key={num}
                   onClick={() => handlePageChange(num)}
-                  className={`pagination-btn ${
-                    num === currentPage ? "bg-blue-600 text-white" : ""
+                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
+                    num === currentPage ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
                   }`}
                 >
                   {num}
@@ -445,7 +445,7 @@ const PurchasePage = () => {
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={!hasNextPage}
-              className="pagination-btn"
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
