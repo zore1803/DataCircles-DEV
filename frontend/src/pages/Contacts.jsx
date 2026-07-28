@@ -2414,7 +2414,7 @@ function Contacts() {
   );
 
   return (
-    <div className="bg-white min-h-screen">
+    <div className={`bg-white ${showKanban ? "" : "min-h-screen"}`}>
       <AppToaster />
 
       {/* Video Tutorial Modal */}
@@ -2852,7 +2852,7 @@ function Contacts() {
       {/* Main Content Card */}
       <div className="bg-white overflow-visible">
         <div
-          className="overflow-x-auto overflow-y-auto"
+          className={showKanban ? "overflow-x-auto overflow-y-hidden" : "overflow-x-auto overflow-y-auto"}
           style={{
             position: "fixed",
             top: 128,
@@ -2863,7 +2863,7 @@ function Contacts() {
         >
         {/* Content Area */}
         {showKanban ? (
-          <div className="flex gap-4 px-6 pt-6 pb-2 overflow-x-auto">
+          <div className="flex gap-4 px-6 pt-6 pb-2 h-full">
             {["New", "Contacted", "Interested", "Unqualified"].map((col) => {
               const count = sortedContacts.filter(
                 (c) => (c.stageStatus || "New") === col
@@ -2880,8 +2880,8 @@ function Contacts() {
                       handleKanbanItemMove(contactId, col);
                     }
                   }}
-                  className="border border-[#E1E4EA] rounded-lg flex-shrink-0 overflow-hidden flex flex-col"
-                  style={{ width: "340px", minHeight: "624px" }}
+                  className="border border-[#E1E4EA] rounded-lg flex-shrink-0 overflow-hidden flex flex-col h-full"
+                  style={{ width: "340px" }}
                 >
                   <div
                     className="flex items-center gap-1.5"
@@ -2900,7 +2900,7 @@ function Contacts() {
                     </span>
                   </div>
 
-                  <div className="flex flex-col gap-3 p-3">
+                  <div className="flex-1 overflow-y-auto flex flex-col gap-3 p-3 custom-scrollbar">
                     {sortedContacts
                       .filter((c) => (c.stageStatus || "New") === col)
                       .map((contact) => (

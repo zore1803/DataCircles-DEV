@@ -2381,7 +2381,9 @@ function Tasks() {
   };
 
   return (
-    <div className="bg-white min-h-screen -mx-4 sm:-mx-6 lg:-mx-8 pb-16">
+    <div
+      className={`bg-white -mx-4 sm:-mx-6 lg:-mx-8 ${showKanban ? "" : "min-h-screen pb-16"}`}
+    >
       <AppToaster />
 
       {/* Video Tutorial Modal */}
@@ -2986,7 +2988,16 @@ function Tasks() {
       )}
 
       {activeTab === "tasks" && showKanban && (
-        <div className="mx-6" style={{ height: 587 }}>
+        <div
+          style={{
+            position: "fixed",
+            top: 128,
+            left: "var(--sidebar-width, 0px)",
+            right: 0,
+            bottom: 24,
+            padding: "16px 24px 0",
+          }}
+        >
           <TaskKanbanBoard
             columns={["Pending", "In Progress", "Completed"]}
             items={tasks}
