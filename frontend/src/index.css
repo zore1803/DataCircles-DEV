@@ -53,6 +53,14 @@
   }
 }
 
+/* NOTE: a `.dc-fill-to-bottom` calc() utility used to live here, for sizing a
+   panel to end at the bottom of the viewport. It was removed — the height of
+   the content above such a panel is not expressible as a constant on a page
+   whose header can reflow (KPI toggle, wrapped text, notice banner, and a
+   grid that changes column count at the 1024px breakpoint), so it needed a
+   different magic number per breakpoint per state and still drifted.
+   Use `hooks/useFillToBottom.js` instead, which measures the real position. */
+
 .dc-panel-w {
   width: 100%;
 }

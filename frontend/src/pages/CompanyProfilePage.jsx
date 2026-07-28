@@ -1574,6 +1574,7 @@ const CompanyProfilePage = () => {
                 companyId={id}
                 company={company}
                 setContacts={setContacts}
+                isLoading={showOverviewSkeleton}
               />
             )}
             {activeTab === "Invoices" && (
