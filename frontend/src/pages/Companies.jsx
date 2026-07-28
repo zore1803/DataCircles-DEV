@@ -6,6 +6,7 @@ import API from "../services/api";
 import { Link } from "react-router-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
+import HighlightText from "../components/common/HighlightText";
 import {
   Plus,
   X,
@@ -125,30 +126,6 @@ const getAncestorZoom = (el) => {
     node = node.parentElement;
   }
   return z || 1;
-};
-
-const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-// Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>.
-const HighlightText = ({ text, query }) => {
-  const str = text === null || text === undefined ? "" : String(text);
-  const q = (query || "").trim();
-  if (!q) return <>{str}</>;
-
-  const parts = str.split(new RegExp(`(${escapeRegExp(q)})`, "gi"));
-  return (
-    <>
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
-          <mark key={i} className="bg-yellow-200 text-inherit rounded-sm px-0.5">
-            {part}
-          </mark>
-        ) : (
-          part
-        ),
-      )}
-    </>
-  );
 };
 
 function Companies() {

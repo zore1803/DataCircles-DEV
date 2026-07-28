@@ -1,4 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { createPortal } from "react-dom";
+import { getAncestorZoom } from "../../utils/domUtils";
 import { useParams } from "react-router-dom";
 import {
   Search,
@@ -25,7 +27,14 @@ import toast from "react-hot-toast";
 import API from "../../services/api";
 import { NoteEditor, NoteViewer, NoteCard } from "./NoteSection";
 import FilterIcon from "../common/FilterIcon";
+import HighlightText from "../common/HighlightText";
 import CompanyFilterPanel from "./CompanyFilterPanel";
+import TableSkeletonRows from "../common/TableSkeletonRows";
+import NoteCardSkeleton from "../common/NoteCardSkeleton";
+import StatTileSkeleton from "../common/StatTileSkeleton";
+import Skeleton from "../common/Skeleton";
+import useFillToBottom from "../../hooks/useFillToBottom";
+import useMinDelay from "../../hooks/useMinDelay";
 import { applyColumnFilters } from "../../utils/advancedFilters";
 
 const NOTE_TYPE_OPTIONS = ["General Note", "Meeting Note", "Call Note", "Follow-up Note"];
@@ -74,6 +83,23 @@ const LastUpdatedIcon = ({ size = 20, ...props }) => (
 
 export default function CompanyNotesTab({ showStats = true }) {
   const { id } = useParams();
+
+  // Notes fetch their own data on mount, so the loading flag is local — the
+  // parent's showRecordsSkeleton tracks a different request and would only
+  // hold this skeleton up for longer than its own data actually takes.
+  // NOTE: the existing `loading` state below belongs to the save/submit path;
+  // this is deliberately separate.
+  const [isNotesLoading, setIsNotesLoading] = useState(true);
+  const showNotesSkeleton = useMinDelay(isNotesLoading, 300);
+
+  // Keeps the list-view table box a fixed height ending at the bottom of the
+  // screen, so changing rows-per-page scrolls internally.
+  const {
+    containerRef: fillContainerRef,
+    footerRef: fillFooterRef,
+    style: fillStyle,
+  } = useFillToBottom();
+
   const [notes, setNotes] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -89,7 +115,166 @@ export default function CompanyNotesTab({ showStats = true }) {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [viewMode, setViewMode] = useState("grid");
-  const [pinnedColumn, setPinnedColumn] = useState(null);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [leftPinned, setLeftPinned] = useState(new Set());
+  const [rightPinned, setRightPinned] = useState(new Set());
+  const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
+  const [columnMenuPos, setColumnMenuPos] = useState(null);
+  const columnMenuRef = useRef(null);
+
+  const BASE_COLUMNS = useMemo(() => [
+    { id: "title", label: "Task Title", width: 212, pinnable: true },
+    { id: "type", label: "Type", width: 160, pinnable: true },
+    { id: "description", label: "Linked To", width: 227, pinnable: true },
+    { id: "contacts", label: "Author", width: 144, pinnable: true },
+    { id: "company", label: "Tags", width: 205, pinnable: true },
+    { id: "date", label: "Last Updated", width: 117, pinnable: true },
+    { id: "year", label: "Visibility To", width: 93, pinnable: true },
+    { id: "createdBy", label: "Attachments", width: 179, pinnable: true },
+  ], []);
+
+  const [columnOrder, setColumnOrder] = useState(() => BASE_COLUMNS.map(c => c.id));
+  const [draggedColKey, setDraggedColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
+  const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
+
+  const orderedColumns = useMemo(() => {
+    const sortedBase = [...BASE_COLUMNS].sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
+    const visible = sortedBase.filter((c) => !hiddenColumns.has(c.id));
+    const left = visible.filter((c) => leftPinned.has(c.id));
+    const right = visible.filter((c) => rightPinned.has(c.id));
+    const unpinned = visible.filter((c) => !leftPinned.has(c.id) && !rightPinned.has(c.id));
+    return [...left, ...unpinned, ...right];
+  }, [BASE_COLUMNS, hiddenColumns, leftPinned, rightPinned, columnOrder]);
+
+  const pinColumnToSide = (colId, side) => {
+    if (side === "left") {
+      setLeftPinned((prev) => new Set(prev).add(colId));
+      setRightPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+    } else {
+      setRightPinned((prev) => new Set(prev).add(colId));
+      setLeftPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+    }
+  };
+
+  const unpinColumn = (colId) => {
+    setLeftPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+    setRightPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+  };
+
+  const toggleHideColumn = (colId) => {
+    setHiddenColumns((prev) => { const next = new Set(prev); next.add(colId); return next; });
+  };
+
+  const getColumnPinSide = (colId) => {
+    if (leftPinned.has(colId)) return "left";
+    if (rightPinned.has(colId)) return "right";
+    return null;
+  };
+
+  const startColumnDrag = (e, colId) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    e.preventDefault();
+    window.getSelection?.()?.removeAllRanges();
+
+    const th = e.currentTarget;
+    const rect = th.getBoundingClientRect();
+    const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
+    
+    const previewRows = (notes || []).slice(0, 10).map((n) => {
+      let val = n[colId];
+      if (colId === 'contacts') val = n.author?.name || "—";
+      if (colId === 'company') val = (n.tags || []).join(", ") || "—";
+      if (typeof val === 'object' && val !== null) val = val?.name || val?.title || "";
+      return String(val ?? "").trim() || "—";
+    });
+
+    const zGhost = getAncestorZoom(document.body);
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    dragOverRef.current = null;
+    setDraggedColKey(colId);
+    setDragOverColKey(null);
+    document.body.style.userSelect = "none";
+
+    setDragGhost({
+      label,
+      previewRows,
+      offsetX,
+      offsetY,
+      width: rect.width / zGhost,
+      height: rect.height / zGhost,
+    });
+
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const visualTop = clientY - offsetY;
+      const visualLeft = clientX - offsetX;
+      el.style.top = `${visualTop / zGhost}px`;
+      el.style.left = `${visualLeft / zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+    };
+    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
+
+    const handleMouseMove = (moveEvent) => {
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) {
+        handleColumnReorder(colId, overKey);
+      }
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    if (!draggedKey || draggedKey === targetKey) return;
+    setColumnOrder((prev) => {
+      const newOrder = [...prev];
+      const draggedIdx = newOrder.indexOf(draggedKey);
+      const targetIdx = newOrder.indexOf(targetKey);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedKey);
+      return newOrder;
+    });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(e.target)) {
+        setOpenColumnMenuKey(null);
+        setColumnMenuPos(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const [colWidths, setColWidths] = useState({
     title: 212,
     type: 160,
@@ -101,14 +286,15 @@ export default function CompanyNotesTab({ showStats = true }) {
     createdBy: 179,
   });
   const [resizingCol, setResizingCol] = useState(null);
-  const resizingRef = React.useRef(null);
+  const resizingRef = useRef(null);
   const totalTableWidth = useMemo(
     () => Object.values(colWidths).reduce((sum, w) => sum + w, 0),
     [colWidths],
   );
 
   const togglePinColumn = (colId) => {
-    setPinnedColumn((prev) => (prev === colId ? null : colId));
+    if (getColumnPinSide(colId)) unpinColumn(colId);
+    else pinColumnToSide(colId, "left");
   };
 
   const startResize = (e, colId) => {
@@ -144,6 +330,10 @@ export default function CompanyNotesTab({ showStats = true }) {
       setNotes(sorted);
     } catch (err) {
       toast.error("Failed to load notes");
+    } finally {
+      // In `finally` so a failed request drops the skeleton too, rather than
+      // leaving it pulsing forever behind the error toast.
+      setIsNotesLoading(false);
     }
   }, [id]);
 
@@ -287,12 +477,17 @@ export default function CompanyNotesTab({ showStats = true }) {
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
       result = result.filter((note) => {
-        const content = note.note.replace(/<[^>]*>/g, "").toLowerCase();
-        const taggedNames = note.taggedContacts.map((c) => c.name.toLowerCase()).join(" ");
+        const content = note.note ? note.note.replace(/<[^>]*>/g, "").toLowerCase() : "";
+        const taggedNames = note.taggedContacts ? note.taggedContacts.map((c) => (c.name || "").toLowerCase()).join(" ") : "";
+        const descriptionStr = (note.company?.name || "").toLowerCase();
+        const contactStr = typeof note.user === "object" ? (note.user?.name || "").toLowerCase() : "";
+
         return (
           (note.title || "").toLowerCase().includes(q) ||
           content.includes(q) ||
-          taggedNames.includes(q)
+          taggedNames.includes(q) ||
+          descriptionStr.includes(q) ||
+          contactStr.includes(q)
         );
       });
     }
@@ -333,18 +528,12 @@ export default function CompanyNotesTab({ showStats = true }) {
   };
 
   const getListPageNumbers = () => {
-    const delta = 2;
-    const range = [];
-    const rangeWithDots = [];
-    for (let i = Math.max(2, listPage - delta); i <= Math.min(listTotalPages - 1, listPage + delta); i++) {
-      range.push(i);
-    }
-    if (listPage - delta > 2) rangeWithDots.push(1, "...");
-    else rangeWithDots.push(1);
-    rangeWithDots.push(...range);
-    if (listPage + delta < listTotalPages - 1) rangeWithDots.push("...", listTotalPages);
-    else if (listTotalPages > 1) rangeWithDots.push(listTotalPages);
-    return rangeWithDots.filter((item, index, arr) => index === 0 || arr[index - 1] !== item);
+    const items = [1];
+    if (listPage > 2) items.push("left-dots");
+    if (listPage !== 1 && listPage !== listTotalPages) items.push(listPage);
+    if (listPage < listTotalPages - 1) items.push("right-dots");
+    if (listTotalPages > 1) items.push(listTotalPages);
+    return items;
   };
 
   const paginatedNotes = useMemo(
@@ -433,7 +622,10 @@ export default function CompanyNotesTab({ showStats = true }) {
       {showStats && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            {kpiTiles.map((tile) => (
+            {showNotesSkeleton ? (
+              Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
+            ) : (
+              kpiTiles.map((tile) => (
               <div
                 key={tile.label}
                 className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
@@ -451,14 +643,23 @@ export default function CompanyNotesTab({ showStats = true }) {
                   )}
                 </div>
               </div>
-            ))}
+            )))}
           </div>
 
           <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
         </>
       )}
 
-      {/* Search + Controls */}
+      {/* Search + Controls — skeletoned as one row so the whole area above the
+          table resolves at the same moment, matching Contacts/Invoices. */}
+      {showNotesSkeleton ? (
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+          <Skeleton height={44} shape="rect" className="flex-1 rounded-full" />
+          <Skeleton height={44} width={96} shape="rect" className="rounded-full flex-shrink-0" />
+          <Skeleton height={44} width={86} shape="rect" className="rounded-full flex-shrink-0" />
+          <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
+        </div>
+      ) : (
       <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
         <div className="relative flex-1 h-full">
           <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
@@ -524,9 +725,48 @@ export default function CompanyNotesTab({ showStats = true }) {
           <Plus size={20} />
         </button>
       </div>
+      )}
 
-      {/* Notes list or empty state */}
-      {filteredNotes.length === 0 ? (
+      {/* Notes list, skeleton, or empty state.
+          The skeleton branch has to come FIRST: during the initial fetch
+          `filteredNotes` is still [], so otherwise the empty-state button renders
+          and neither skeleton ever mounts. The skeleton matches the ACTIVE view —
+          cards for Grid (the default), rows for List — so the real content
+          replaces it in place instead of snapping to a different layout. */}
+      {showNotesSkeleton ? (
+        viewMode === "grid" ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(311px, 1fr))",
+              gap: 24,
+            }}
+          >
+            {Array.from({ length: 8 }).map((_, i) => (
+              <NoteCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : (
+          <div
+            className="box-border flex flex-col items-start w-full bg-white overflow-x-auto"
+            style={{ border: "1px solid #E1E4EA", borderRadius: 8 }}
+          >
+            <table
+              className="text-sm text-left border-collapse"
+              style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%" }}
+            >
+              <tbody>
+                <TableSkeletonRows
+                  numRows={listLimit}
+                  rowHeight={60}
+                  hasCheckbox={false}
+                  columns={orderedColumns.map((c) => colWidths[c.id])}
+                />
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : filteredNotes.length === 0 ? (
         <button
           onClick={() => setIsEditorOpen(true)}
           className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
@@ -554,85 +794,160 @@ export default function CompanyNotesTab({ showStats = true }) {
         </div>
       ) : (
         <div
-          className="box-border flex flex-col items-start w-full bg-white overflow-x-auto"
+          ref={fillContainerRef}
+          className="box-border flex flex-col items-start w-full bg-white overflow-x-auto overflow-y-auto"
           style={{
+            ...fillStyle,
             border: "1px solid #E1E4EA",
             borderRadius: 8,
-          }}
+            }}
         >
           <table
             className="text-sm text-left border-collapse"
             style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%" }}
           >
-            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+            {/* Sticky header. The table stays `border-collapse`, where borders on
+                a sticky <thead> are dropped by the browser — so the divider lines
+                are painted with inset boxShadow on each <th> instead. */}
+            <thead className="bg-[#F5F7FA] sticky top-0 z-30">
               <tr>
-                {[
-                  { id: "title", label: "Task Title", width: 212, icon: FileText, pinnable: true },
-                  { id: "type", label: "Type", width: 160, icon: Tag, pinnable: true },
-                  { id: "description", label: "Linked To", width: 227, icon: Link2, pinnable: true },
-                  { id: "contacts", label: "Author", width: 144, icon: Users, pinnable: true },
-                  { id: "company", label: "Tags", width: 205, icon: Tag, pinnable: true },
-                  { id: "date", label: "Last Updated", width: 117, icon: Clock, pinnable: true },
-                  { id: "year", label: "Visibility To", width: 93, icon: Eye, pinnable: true },
-                  { id: "createdBy", label: "Attachments", width: 179, icon: Paperclip, pinnable: true },
-                ].map((col) => {
-                  const isPinned = pinnedColumn === col.id;
+                {orderedColumns.map((col, idx) => {
+                  const isLast = idx === orderedColumns.length - 1;
+                  const isDragging = draggedColKey === col.id;
+                  const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
                   return (
                     <th
                       key={col.id}
-                      style={{ width: colWidths[col.id], height: 56, position: "relative" }}
-                      className={`px-3 py-2.5 font-medium text-[#525252] text-xs ${col.id === "actions" ? "" : "border-r border-[#E1E4EA]"
-                        }`}
+                      data-col-id={col.id}
+                      onMouseDown={(e) => startColumnDrag(e, col.id)}
+                      style={{ 
+                        width: colWidths[col.id], 
+                        height: 56, 
+                        position: "relative",
+                        opacity: isDragging ? 0.35 : 1,
+                        boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                      }}
+                      className={`px-3 py-2.5 font-medium text-[#525252] text-xs cursor-grab active:cursor-grabbing ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
-                      <div className="flex items-center justify-between w-full">
+                      <div className={`flex items-center justify-between w-full ${showNotesSkeleton ? "[&_button]:invisible" : ""}`}>
                         {col.pinnable ? (
                           <div
                             className="relative flex items-center justify-start flex-1 group cursor-pointer select-none min-w-0"
                             onDoubleClick={() => togglePinColumn(col.id)}
                           >
                             <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                              <col.icon className="w-3.5 h-3.5 flex-shrink-0" />
-                              <span className="truncate">{col.label}</span>
+                              {showNotesSkeleton ? <Skeleton width="65%" height={12} /> : (
+                                <>
+                                  <span className="truncate">{col.label}</span>
+                                </>
+                              )}
                             </div>
-                            <button
-                              onClick={() => togglePinColumn(col.id)}
-                              className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
-                                }`}
-                              title={isPinned ? "Unpin Column" : "Pin Column"}
-                            >
-                              {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
-                            </button>
                           </div>
                         ) : (
                           <div className="flex items-center justify-center gap-1.5 whitespace-nowrap flex-1">
-                            {col.icon && <col.icon className="w-3.5 h-3.5 flex-shrink-0" />}
                             <span>{col.label}</span>
                           </div>
                         )}
+
+                        {/* Column menu trigger */}
                         <button
-                          onClick={() => handleSort(col.id)}
-                          className="ml-1 p-0.5 rounded hover:bg-gray-200 flex-shrink-0"
-                          title="Sort"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (openColumnMenuKey === col.id) {
+                              setOpenColumnMenuKey(null);
+                              setColumnMenuPos(null);
+                              return;
+                            }
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            let calculatedLeft = rect.right - 190;
+                            if (isLast) {
+                              calculatedLeft -= 80;
+                            }
+                            setColumnMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
+                            setOpenColumnMenuKey(col.id);
+                          }}
+                          className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                          title="Column options"
                         >
-                          {sortConfig.key === col.id ? (
-                            sortConfig.direction === "asc" ? (
-                              <ChevronUp className="w-3.5 h-3.5 text-blue-600" />
-                            ) : (
-                              <ChevronDown className="w-3.5 h-3.5 text-blue-600" />
-                            )
-                          ) : (
-                            <ChevronDown className="w-3.5 h-3.5 text-gray-300" />
-                          )}
+                          <ChevronDown className="w-3.5 h-3.5" />
                         </button>
+
+                        {/* Column menu portal */}
+                        {openColumnMenuKey === col.id && columnMenuPos && createPortal(
+                          <>
+                            <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColumnMenuKey(null); setColumnMenuPos(null); }} />
+                            <div
+                              ref={columnMenuRef}
+                              style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
+                              className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                            >
+                              <button
+                                onClick={() => {
+                                  setOpenColumnMenuKey(null);
+                                  setColumnMenuPos(null);
+                                  getColumnPinSide(col.id) === "left" ? unpinColumn(col.id) : pinColumnToSide(col.id, "left");
+                                }}
+                                className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${getColumnPinSide(col.id) === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                              >
+                                {getColumnPinSide(col.id) === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                                Pin to Left
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setOpenColumnMenuKey(null);
+                                  setColumnMenuPos(null);
+                                  getColumnPinSide(col.id) === "right" ? unpinColumn(col.id) : pinColumnToSide(col.id, "right");
+                                }}
+                                className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${getColumnPinSide(col.id) === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                              >
+                                {getColumnPinSide(col.id) === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                                Pin to Right
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setOpenColumnMenuKey(null);
+                                  setColumnMenuPos(null);
+                                  handleSort(col.id, "asc");
+                                  setListPage(1);
+                                }}
+                                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                              >
+                                <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                                Sort Ascending
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setOpenColumnMenuKey(null);
+                                  setColumnMenuPos(null);
+                                  handleSort(col.id, "desc");
+                                  setListPage(1);
+                                }}
+                                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                              >
+                                <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                                Sort Descending
+                              </button>
+                              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                              <button
+                                onClick={() => {
+                                  setOpenColumnMenuKey(null);
+                                  setColumnMenuPos(null);
+                                  toggleHideColumn(col.id);
+                                }}
+                                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap text-[#161618] hover:bg-gray-50"
+                              >
+                                Hide Column
+                              </button>
+                            </div>
+                          </>,
+                          document.body
+                        )}
                       </div>
 
-                      {col.id !== "actions" && (
-                        <div
-                          onMouseDown={(e) => startResize(e, col.id)}
-                          className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"
-                            }`}
-                        />
-                      )}
+                      <div
+                        onMouseDown={(e) => startResize(e, col.id)}
+                        className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"}`}
+                      />
                     </th>
                   );
                 })}
@@ -641,87 +956,118 @@ export default function CompanyNotesTab({ showStats = true }) {
             <tbody className="divide-y divide-[#E1E4EA] bg-white">
               {paginatedNotes.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500 font-medium">
+                  <td colSpan={orderedColumns.length} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
                     No notes found.
                   </td>
                 </tr>
               ) : (
-                paginatedNotes.map((note) => (
-                  <tr key={note._id} className="hover:bg-gray-50 transition-colors group">
-                    <td style={{ height: 64 }} className="px-3 text-left truncate">
-                      <span className="text-sm font-medium text-gray-900 truncate">
-                        {note.title || "Untitled Note"}
-                      </span>
-                    </td>
-                    <td style={{ height: 64 }} className="px-3 text-left truncate">
-                      <span
-                        className="inline-flex items-center justify-center text-xs font-medium"
-                        style={{ padding: "4px 10px", borderRadius: 53, backgroundColor: "rgba(0, 133, 255, 0.1)", color: "#0085FF" }}
-                      >
-                        Meeting Note
-                      </span>
-                    </td>
-                    <td style={{ height: 64 }} className="px-3 text-left truncate">
-                      <span className="text-xs text-gray-500 truncate">{note.company?.name || "{Deal Name/Activity/Invoice}"}</span>
-                    </td>
-                    <td style={{ height: 64 }} className="px-3">
-                      <div className="flex items-center justify-start gap-1.5">
-                        <div
-                          className="rounded-full bg-gray-200 flex items-center justify-center text-[9px] font-semibold text-gray-600 flex-shrink-0"
-                          style={{ width: 18, height: 18 }}
-                        >
-                          {(typeof note.user === "object" ? note.user?.name : null)?.charAt(0)?.toUpperCase() || "?"}
-                        </div>
-                        <span className="text-xs font-medium text-gray-700 truncate">
-                          {typeof note.user === "object" ? note.user?.name || "Unknown" : "Unknown"}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={{ height: 64 }} className="px-3 text-left truncate">
-                      <div className="flex items-center justify-start gap-1 flex-wrap">
-                        {note.taggedContacts?.length ? (
-                          note.taggedContacts.slice(0, 3).map((c) => (
-                            <span
-                              key={c._id}
-                              className="inline-flex items-center justify-center text-[10px] font-medium"
-                              style={{ padding: "3px 8px", borderRadius: 53, backgroundColor: "rgba(0, 133, 255, 0.1)", color: "#0085FF" }}
+                paginatedNotes.map((note) => {
+                  const cells = {
+                    title: (
+                        <td key="title" style={{ height: 64 }} className="px-3 text-left truncate border-r border-b border-[#E1E4EA]">
+                          <span className="text-sm font-medium text-gray-900 truncate">
+                            <HighlightText text={note.title || "Untitled Note"} query={searchTerm} />
+                          </span>
+                        </td>
+                    ),
+                    type: (
+                        <td key="type" style={{ height: 64 }} className="px-3 text-left truncate border-r border-b border-[#E1E4EA]">
+                          <span
+                            className="inline-flex items-center justify-center text-xs font-medium"
+                            style={{ padding: "4px 10px", borderRadius: 53, backgroundColor: "rgba(0, 133, 255, 0.1)", color: "#0085FF" }}
+                          >
+                            Meeting Note
+                          </span>
+                        </td>
+                    ),
+                    description: (
+                        <td key="description" style={{ height: 64 }} className="px-3 text-left truncate border-r border-b border-[#E1E4EA]">
+                          <span className="text-xs text-gray-500 truncate">{note.company?.name || "{Deal Name/Activity/Invoice}"}</span>
+                        </td>
+                    ),
+                    contacts: (
+                        <td key="contacts" style={{ height: 64 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          <div className="flex items-center justify-start gap-1.5">
+                            <div
+                              className="rounded-full bg-gray-200 flex items-center justify-center text-[9px] font-semibold text-gray-600 flex-shrink-0"
+                              style={{ width: 18, height: 18 }}
                             >
-                              {c.name}
+                              {(typeof note.user === "object" ? note.user?.name : null)?.charAt(0)?.toUpperCase() || "?"}
+                            </div>
+                            <span className="text-xs font-medium text-gray-700 truncate">
+                              {typeof note.user === "object" ? note.user?.name || "Unknown" : "Unknown"}
                             </span>
-                          ))
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td style={{ height: 64 }} className="px-3 text-left truncate">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-medium text-gray-700 leading-tight">
-                          {formatNoteDate(note.createdAt)}
-                        </span>
-                        <span className="text-[11px] text-gray-400 leading-tight">
-                          {formatNoteTime(note.createdAt)}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={{ height: 64 }} className="px-3 text-left truncate">
-                      <span className="text-xs text-gray-500">Team</span>
-                    </td>
-                    <td style={{ height: 64 }} className="px-3">
-                      <div className="relative flex items-center justify-start gap-1">
-                        <Paperclip className="w-3.5 h-3.5 text-gray-400" />
-                        <span className="text-xs text-gray-500">{note.attachments?.length || 0}</span>
-                        <button
-                          onClick={() => handleView(note)}
-                          className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="More options"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          </div>
+                        </td>
+                    ),
+                    company: (
+                        <td key="company" style={{ height: 64 }} className="px-3 text-left truncate border-r border-b border-[#E1E4EA]">
+                          <div className="flex items-center justify-start gap-1 flex-wrap">
+                            {note.taggedContacts?.length ? (
+                              note.taggedContacts.slice(0, 3).map((c) => (
+                                <span
+                                  key={c._id}
+                                  className="inline-flex items-center justify-center text-[10px] font-medium"
+                                  style={{ padding: "3px 8px", borderRadius: 53, backgroundColor: "rgba(0, 133, 255, 0.1)", color: "#0085FF" }}
+                                >
+                                  {c.name}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
+                          </div>
+                        </td>
+                    ),
+                    date: (
+                        <td key="date" style={{ height: 64 }} className="px-3 text-left truncate border-r border-b border-[#E1E4EA]">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-medium text-gray-700 leading-tight">
+                              {formatNoteDate(note.createdAt)}
+                            </span>
+                            <span className="text-[11px] text-gray-400 leading-tight">
+                              {formatNoteTime(note.createdAt)}
+                            </span>
+                          </div>
+                        </td>
+                    ),
+                    year: (
+                        <td key="year" style={{ height: 64 }} className="px-3 text-left truncate border-r border-b border-[#E1E4EA]">
+                          <span className="text-xs text-gray-500">Team</span>
+                        </td>
+                    ),
+                    createdBy: (
+                        <td key="createdBy" style={{ height: 64 }} className="px-3 border-b border-[#E1E4EA]">
+                          <div className="relative flex items-center justify-start gap-1">
+                            <Paperclip className="w-3.5 h-3.5 text-gray-400" />
+                            <span className="text-xs text-gray-500">{note.attachments?.length || 0}</span>
+                            <button
+                              onClick={() => handleView(note)}
+                              className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="More options"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                    ),
+                  };
+                  return (
+                    <tr key={note._id} className="hover:bg-gray-50 transition-colors group">
+                      {/* Cells indexed by column id and rendered through orderedColumns,
+                          so hide/pin in the header moves its data cell too. */}
+                      {orderedColumns.map((col) => {
+                        const isDragging = draggedColKey === col.id;
+                        const cell = cells[col.id];
+                        if (!cell) return null;
+                        if (isDragging) {
+                          return React.cloneElement(cell, { style: { ...cell.props.style, opacity: 0.35 } });
+                        }
+                        return cell;
+                      })}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -729,7 +1075,10 @@ export default function CompanyNotesTab({ showStats = true }) {
       )}
 
       {viewMode === "list" && listTotalCount > 0 && (
-        <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+        <div
+          ref={fillFooterRef}
+          className="w-full bg-transparent px-4 py-3 mt-3 flex items-center justify-between sm:px-6"
+        >
           <div className="flex-1 flex justify-between sm:hidden">
             <button
               onClick={() => handleListPageChange(listPage - 1)}
@@ -776,27 +1125,30 @@ export default function CompanyNotesTab({ showStats = true }) {
               </button>
 
               {listTotalPages > 0 &&
-                getListPageNumbers().map((pageNum, index) =>
-                  pageNum === "..." ? (
-                    <span
-                      key={`dots-${index}`}
-                      className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
-                    >
-                      ...
-                    </span>
-                  ) : (
+                getListPageNumbers().map((item, index) => {
+                  if (item === "left-dots" || item === "right-dots") {
+                    return (
+                      <span
+                        key={`${item}-${index}`}
+                        className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
+                      >
+                        ...
+                      </span>
+                    );
+                  }
+                  return (
                     <button
-                      key={`page-${pageNum}`}
-                      onClick={() => handleListPageChange(pageNum)}
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${pageNum === listPage
+                      key={`page-${item}`}
+                      onClick={() => handleListPageChange(item)}
+                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${item === listPage
                         ? "bg-blue-600 text-white"
                         : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
                         }`}
                     >
-                      {pageNum}
+                      {item}
                     </button>
-                  ),
-                )}
+                  );
+                })}
 
               <button
                 onClick={() => handleListPageChange(listPage + 1)}
@@ -849,6 +1201,31 @@ export default function CompanyNotesTab({ showStats = true }) {
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
+
+      {dragGhost && createPortal(
+        <div
+          ref={ghostElRef}
+          style={{
+            position: "fixed",
+            top: -9999,
+            left: -9999,
+            width: dragGhost.width,
+            zIndex: 10000,
+            pointerEvents: "none",
+          }}
+          className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+        >
+          <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+            <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+          </div>
+          {dragGhost.previewRows.map((rowVal, i) => (
+            <div key={i} className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0">
+              <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

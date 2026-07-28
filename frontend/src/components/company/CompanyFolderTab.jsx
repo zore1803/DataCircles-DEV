@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import { Files, Cloud, Upload, History } from "lucide-react";
 import Folder from "./Folder";
+import StatTileSkeleton from "../common/StatTileSkeleton";
 
 const STORAGE_ALLOCATION_GB = 5;
 
-export default function CompanyFolderTab({ showStats = true }) {
+export default function CompanyFolderTab({ showStats = true, isLoading = false }) {
   const [folders, setFolders] = useState([]);
 
   const allFiles = folders.flatMap((f) => f.files || []);
@@ -83,7 +84,10 @@ export default function CompanyFolderTab({ showStats = true }) {
       {showStats && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            {kpiTiles.map((tile) => (
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
+            ) : (
+              kpiTiles.map((tile) => (
               <div
                 key={tile.label}
                 className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
@@ -105,7 +109,7 @@ export default function CompanyFolderTab({ showStats = true }) {
                   )}
                 </div>
               </div>
-            ))}
+            )))}
           </div>
 
           <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
@@ -113,7 +117,7 @@ export default function CompanyFolderTab({ showStats = true }) {
       )}
 
       {/* Existing folder UI (its own search/grid/upload) */}
-      <Folder onFoldersChange={setFolders} />
+      <Folder onFoldersChange={setFolders} isLoading={isLoading} showStats={showStats} />
     </div>
   );
 }

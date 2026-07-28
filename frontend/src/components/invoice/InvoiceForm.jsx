@@ -1071,8 +1071,8 @@ const InvoiceForm = ({
       />
       <div
         ref={formRef}
-        className={`fixed inset-y-0 right-0 z-[10000] w-full md:w-[600px] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${
-          isSliding ? "translate-x-0" : "translate-x-full"
+        className={`fixed dc-panel-card z-[10000] w-full md:w-[600px] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${
+          isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
       >
         <form onSubmit={handleSubmit} className="p-4 space-y-6">

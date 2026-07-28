@@ -5,8 +5,15 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 const MIN_HEIGHT = 180;
 
 /**
- * Sizes a container so its bottom edge lands at the bottom of the viewport,
- * with an optional element (e.g. a pagination bar) reserved below it.
+ * Caps a container so it can never extend past the bottom of the viewport, with
+ * an optional element (e.g. a pagination bar) reserved below it.
+ *
+ * This is a MAX height, not a fixed one — deliberately. With a fixed height a
+ * short list (3–4 rows) would leave a large empty gap inside the box and strand
+ * the pagination bar at the bottom of the screen. As a max, the container
+ * shrinks to its content when the list is short — so the pagination sits
+ * directly beneath the last row — and only starts scrolling internally once the
+ * content would otherwise run off-screen.
  *
  * Why this measures instead of using a `calc(100vh - <constant>)`:
  * the height of everything above the container is not knowable as a constant
@@ -32,7 +39,7 @@ const MIN_HEIGHT = 180;
 export default function useFillToBottom() {
   const containerRef = useRef(null);
   const footerRef = useRef(null);
-  const [height, setHeight] = useState(null);
+  const [maxHeight, setMaxHeight] = useState(null);
 
   const measure = useCallback(() => {
     const el = containerRef.current;
@@ -60,15 +67,22 @@ export default function useFillToBottom() {
         ? 1
         : scale;
 
-    const footerHeight = footerRef.current
-      ? footerRef.current.getBoundingClientRect().height * rectToVisual
-      : 0;
+    // The footer sits OUTSIDE the container, so both its height and the gap
+    // between the two (its top margin) have to be reserved. The gap is a fixed
+    // margin — it doesn't move when the container's height changes — so reading
+    // it here is stable rather than circular.
+    let footerReserve = 0;
+    if (footerRef.current) {
+      const footerRect = footerRef.current.getBoundingClientRect();
+      const gap = Math.max(0, footerRect.top - rect.bottom);
+      footerReserve = (footerRect.height + gap) * rectToVisual;
+    }
 
     // Space left on screen below the container's top edge, in visual px...
     const availableVisual =
-      window.innerHeight - rect.top * rectToVisual - footerHeight;
-    // ...converted back into the CSS px that `height` is expressed in.
-    setHeight(Math.max(MIN_HEIGHT, availableVisual / scale));
+      window.innerHeight - rect.top * rectToVisual - footerReserve;
+    // ...converted back into the CSS px that `max-height` is expressed in.
+    setMaxHeight(Math.max(MIN_HEIGHT, availableVisual / scale));
   }, []);
 
   useLayoutEffect(() => {
@@ -101,6 +115,6 @@ export default function useFillToBottom() {
   return {
     containerRef,
     footerRef,
-    style: height == null ? undefined : { height: `${height}px` },
+    style: maxHeight == null ? undefined : { maxHeight: `${maxHeight}px` },
   };
 }

@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import { createPortal } from "react-dom";
+import { getAncestorZoom } from "../../utils/domUtils";
 import {
   Search,
   Filter,
@@ -14,9 +16,14 @@ import {
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import CompanyTaskForm from "./CompanyTaskForm";
+import HighlightText from "../common/HighlightText";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
 import FilterIcon from "../common/FilterIcon";
 import CompanyFilterPanel from "./CompanyFilterPanel";
+import TableSkeletonRows from "../common/TableSkeletonRows";
+import StatTileSkeleton from "../common/StatTileSkeleton";
+import Skeleton from "../common/Skeleton";
+import useFillToBottom from "../../hooks/useFillToBottom";
 import { applyColumnFilters } from "../../utils/advancedFilters";
 
 const TASK_STATUS_OPTIONS = ["Completed", "In-Progress"];
@@ -111,14 +118,177 @@ const BriefcaseIcon = ({ size = 14, ...props }) => (
   </svg>
 );
 
-export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showStats = true }) {
+export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showStats = true, isLoading = false }) {
+  // Keeps the table box a fixed height ending at the bottom of the screen, so
+  // changing rows-per-page scrolls internally instead of growing the page.
+  const {
+    containerRef: fillContainerRef,
+    footerRef: fillFooterRef,
+    style: fillStyle,
+  } = useFillToBottom();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [users, setUsers] = useState([]);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [pinnedColumn, setPinnedColumn] = useState(null);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [leftPinned, setLeftPinned] = useState(new Set());
+  const [rightPinned, setRightPinned] = useState(new Set());
+  const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
+  const [columnMenuPos, setColumnMenuPos] = useState(null);
+  const columnMenuRef = useRef(null);
+
+  const BASE_COLUMNS = useMemo(() => [
+    { id: "title", label: "Task", width: 264, pinnable: true },
+    { id: "assignedTo", label: "Assigned to", width: 190, pinnable: true },
+    { id: "status", label: "Status", width: 160, pinnable: true },
+    { id: "priority", label: "Priority", width: 148, pinnable: true },
+    { id: "dueDate", label: "Due Date", width: 166, pinnable: true },
+    { id: "progress", label: "Progress", width: 362, pinnable: true },
+  ], []);
+
+  const [columnOrder, setColumnOrder] = useState(() => BASE_COLUMNS.map(c => c.id));
+  const [draggedColKey, setDraggedColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
+  const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
+
+  const orderedColumns = useMemo(() => {
+    const sortedBase = [...BASE_COLUMNS].sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
+    const visible = sortedBase.filter((c) => !hiddenColumns.has(c.id));
+    const left = visible.filter((c) => leftPinned.has(c.id));
+    const right = visible.filter((c) => rightPinned.has(c.id));
+    const unpinned = visible.filter((c) => !leftPinned.has(c.id) && !rightPinned.has(c.id));
+    return [...left, ...unpinned, ...right];
+  }, [BASE_COLUMNS, hiddenColumns, leftPinned, rightPinned, columnOrder]);
+
+  const pinColumnToSide = (colId, side) => {
+    if (side === "left") {
+      setLeftPinned((prev) => new Set(prev).add(colId));
+      setRightPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+    } else {
+      setRightPinned((prev) => new Set(prev).add(colId));
+      setLeftPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+    }
+  };
+
+  const unpinColumn = (colId) => {
+    setLeftPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+    setRightPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+  };
+
+  const toggleHideColumn = (colId) => {
+    setHiddenColumns((prev) => { const next = new Set(prev); next.add(colId); return next; });
+  };
+
+  const getColumnPinSide = (colId) => {
+    if (leftPinned.has(colId)) return "left";
+    if (rightPinned.has(colId)) return "right";
+    return null;
+  };
+
+  const startColumnDrag = (e, colId) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    e.preventDefault();
+    window.getSelection?.()?.removeAllRanges();
+
+    const th = e.currentTarget;
+    const rect = th.getBoundingClientRect();
+    const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
+    
+    const previewRows = (tasks || []).slice(0, 10).map((t) => {
+      let val = t[colId];
+      if (colId === 'assignedTo') val = val?.name || "Unassigned";
+      if (typeof val === 'object' && val !== null) val = val?.name || val?.title || "";
+      return String(val ?? "").trim() || "—";
+    });
+
+    const zGhost = getAncestorZoom(document.body);
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    dragOverRef.current = null;
+    setDraggedColKey(colId);
+    setDragOverColKey(null);
+    document.body.style.userSelect = "none";
+
+    setDragGhost({
+      label,
+      previewRows,
+      offsetX,
+      offsetY,
+      width: rect.width / zGhost,
+      height: rect.height / zGhost,
+    });
+
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const visualTop = clientY - offsetY;
+      const visualLeft = clientX - offsetX;
+      el.style.top = `${visualTop / zGhost}px`;
+      el.style.left = `${visualLeft / zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+    };
+    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
+
+    const handleMouseMove = (moveEvent) => {
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) {
+        handleColumnReorder(colId, overKey);
+      }
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    if (!draggedKey || draggedKey === targetKey) return;
+    setColumnOrder((prev) => {
+      const newOrder = [...prev];
+      const draggedIdx = newOrder.indexOf(draggedKey);
+      const targetIdx = newOrder.indexOf(targetKey);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedKey);
+      return newOrder;
+    });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(e.target)) {
+        setOpenColumnMenuKey(null);
+        setColumnMenuPos(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const [colWidths, setColWidths] = useState({
     title: 264,
     assignedTo: 190,
@@ -134,8 +304,12 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     [colWidths],
   );
 
+  // Kept so the existing header Pin button and double-click-to-pin keep working;
+  // they now write to the same left/right pin state the column menu uses, rather
+  // than a second independent `pinnedColumn` value.
   const togglePinColumn = (colId) => {
-    setPinnedColumn((prev) => (prev === colId ? null : colId));
+    if (getColumnPinSide(colId)) unpinColumn(colId);
+    else pinColumnToSide(colId, "left");
   };
 
   const startResize = (e, colId) => {
@@ -228,7 +402,8 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
   };
 
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
-  const handleSort = (key) => {
+  const handleSort = (key, direction) => {
+    if (direction) { setSortConfig({ key, direction }); return; }
     setSortConfig((prev) =>
       prev.key === key
         ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
@@ -286,11 +461,26 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     }
   };
 
+  // Every column the table renders, flattened to one searchable string. Built from
+  // BASE_COLUMNS + getTaskFieldValue (the same accessor the columns and sorting use)
+  // so adding a column can't silently leave it out of search, plus the extra bits a
+  // cell shows that the accessor doesn't cover: the linked entity, EVERY assignee
+  // rather than just the first, and the human due-date label.
+  const getTaskSearchText = (task) => {
+    const parts = BASE_COLUMNS.map((c) => getTaskFieldValue(task, c.id));
+    const linked = task.relatedEntities?.[0]?.entityId;
+    parts.push(linked?.name || linked?.title || "");
+    parts.push(getTaskAssignees(task).map((a) => a?.name || "").join(" "));
+    const due = formatTaskDueLabel(task.dueDate);
+    parts.push(due ? `${due.day || ""} ${due.time || ""}` : "");
+    return parts.filter(Boolean).join(" ").toLowerCase();
+  };
+
   const filteredTasks = useMemo(() => {
     let result = tasks;
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      result = result.filter((t) => (t.title || "").toLowerCase().includes(q));
+      result = result.filter((t) => getTaskSearchText(t).includes(q));
     }
     return applyColumnFilters(result, selectedFilters, getTaskFieldValue);
   }, [tasks, searchTerm, selectedFilters]);
@@ -335,18 +525,12 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
   };
 
   const getListPageNumbers = () => {
-    const delta = 2;
-    const range = [];
-    const rangeWithDots = [];
-    for (let i = Math.max(2, listPage - delta); i <= Math.min(listTotalPages - 1, listPage + delta); i++) {
-      range.push(i);
-    }
-    if (listPage - delta > 2) rangeWithDots.push(1, "...");
-    else rangeWithDots.push(1);
-    rangeWithDots.push(...range);
-    if (listPage + delta < listTotalPages - 1) rangeWithDots.push("...", listTotalPages);
-    else if (listTotalPages > 1) rangeWithDots.push(listTotalPages);
-    return rangeWithDots.filter((item, index, arr) => index === 0 || arr[index - 1] !== item);
+    const items = [1];
+    if (listPage > 2) items.push("left-dots");
+    if (listPage !== 1 && listPage !== listTotalPages) items.push(listPage);
+    if (listPage < listTotalPages - 1) items.push("right-dots");
+    if (listTotalPages > 1) items.push(listTotalPages);
+    return items;
   };
 
   const total = tasks.length;
@@ -399,7 +583,10 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
       {showStats && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            {kpiTiles.map((tile) => (
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
+            ) : (
+              kpiTiles.map((tile) => (
               <div
                 key={tile.label}
                 className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
@@ -430,14 +617,22 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                   )}
                 </div>
               </div>
-            ))}
+            )))}
           </div>
 
           <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
         </>
       )}
 
-      {/* Search + Controls */}
+      {/* Search + Controls — skeletoned as one row so the whole area above the
+          table resolves at the same moment, matching Contacts/Invoices. */}
+      {isLoading ? (
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+          <Skeleton height={44} shape="rect" className="flex-1 rounded-full" />
+          <Skeleton height={44} width={86} shape="rect" className="rounded-full flex-shrink-0" />
+          <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
+        </div>
+      ) : (
       <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
         <div className="relative flex-1 h-full">
           <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
@@ -475,9 +670,13 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
           <Plus size={20} />
         </button>
       </div>
+      )}
 
-      {/* Task list or empty state */}
-      {tasks.length === 0 ? (
+      {/* Task list or empty state.
+          The `isLoading` check has to come FIRST: while the parent's fetch is in
+          flight `tasks` is still [], so without it the empty-state button renders
+          and the table (and therefore the skeleton inside it) never mounts. */}
+      {!isLoading && tasks.length === 0 ? (
         <button
           onClick={() => setShowTaskForm(true)}
           className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
@@ -487,68 +686,155 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
         </button>
       ) : (
       <div
-        className="box-border flex flex-col items-start w-full bg-white overflow-x-auto"
-        style={{ border: "1px solid #E1E4EA", borderRadius: 8 }}
+        ref={fillContainerRef}
+        className="box-border flex flex-col items-start w-full bg-white overflow-x-auto overflow-y-auto"
+        style={{
+          ...fillStyle,
+          border: "1px solid #E1E4EA",
+          borderRadius: 8,
+        }}
       >
         <table
           className="text-sm text-left border-collapse"
           style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%" }}
         >
-          <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+          {/* Sticky header. The table stays `border-collapse`, where borders on a
+              sticky <thead> are dropped by the browser — so the divider lines are
+              painted with inset boxShadow on each <th> instead (see below). */}
+          <thead className="bg-[#F5F7FA] sticky top-0 z-30">
             <tr>
-              <th style={{ width: 51, height: 56 }} className="px-3" />
-              {[
-                { id: "title", label: "Task", width: 264, pinnable: true },
-                { id: "assignedTo", label: "Assigned to", width: 190, pinnable: true },
-                { id: "status", label: "Status", width: 160, pinnable: true },
-                { id: "priority", label: "Priority", width: 148, pinnable: true },
-                { id: "dueDate", label: "Due Date", width: 166, pinnable: true },
-                { id: "progress", label: "Progress", width: 362, pinnable: true },
-              ].map((col) => {
-                const isPinned = pinnedColumn === col.id;
+              <th
+                style={{ width: 51, height: 56, boxShadow: "inset 0 -1px 0 #E1E4EA" }}
+                className="px-3"
+              />
+              {orderedColumns.map((col, colIdx) => {
+                const isLastCol = colIdx === orderedColumns.length - 1;
+                const isDragging = draggedColKey === col.id;
+                const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
                 return (
                   <th
                     key={col.id}
-                    style={{ width: colWidths[col.id], height: 56, position: "relative" }}
-                    className={`py-2.5 font-medium text-[#525252] text-xs border-r border-[#E1E4EA] ${
+                    data-col-id={col.id}
+                    onMouseDown={(e) => startColumnDrag(e, col.id)}
+                    style={{
+                      width: colWidths[col.id],
+                      height: 56,
+                      position: "relative",
+                      opacity: isDragging ? 0.35 : 1,
+                      // Right divider + header underline, as inset shadows rather
+                      // than borders so they survive `position: sticky` on the
+                      // <thead> under the border-collapse model.
+                      boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                    }}
+                    className={`py-2.5 font-medium text-[#525252] text-xs cursor-grab active:cursor-grabbing ${
                       col.id === "title" ? "pl-6 pr-3" : "px-3"
-                    }`}
+                    } ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                   >
-                    <div className="flex items-center justify-between w-full">
+                    <div className={`flex items-center justify-between w-full ${isLoading ? "[&_button]:invisible" : ""}`}>
                       {col.pinnable ? (
                         <div
                           className="relative flex items-center justify-start flex-1 group cursor-pointer select-none min-w-0"
                           onDoubleClick={() => togglePinColumn(col.id)}
                         >
                           <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                            <span className="truncate">{col.label}</span>
+                            {/* Label swaps to a skeleton bar on the same flag as the body rows. */}
+                            {isLoading ? <Skeleton width="65%" height={12} /> : <span className="truncate">{col.label}</span>}
                           </div>
-                          <button
-                            onClick={() => togglePinColumn(col.id)}
-                            className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${
-                              isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
-                            }`}
-                            title={isPinned ? "Unpin Column" : "Pin Column"}
-                          >
-                            {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
-                          </button>
                         </div>
                       ) : null}
+                      {/* Column menu — UI and behaviour copied from
+                          CompanyContactsTab.jsx (Pin L/R, Sort, Hide). */}
                       <button
-                        onClick={() => handleSort(col.id)}
-                        className="ml-1 p-0.5 rounded hover:bg-gray-200 flex-shrink-0"
-                        title="Sort"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (openColumnMenuKey === col.id) {
+                            setOpenColumnMenuKey(null);
+                            setColumnMenuPos(null);
+                            return;
+                          }
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          let calculatedLeft = rect.right - 190;
+                          if (isLastCol) {
+                            calculatedLeft -= 80; // Push inward for last column to prevent shadow bleeding outside table
+                          }
+                          setColumnMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
+                          setOpenColumnMenuKey(col.id);
+                        }}
+                        className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                        title="Column options"
                       >
-                        {sortConfig.key === col.id ? (
-                          sortConfig.direction === "asc" ? (
-                            <ChevronUp className="w-3.5 h-3.5 text-blue-600" />
-                          ) : (
-                            <ChevronDown className="w-3.5 h-3.5 text-blue-600" />
-                          )
-                        ) : (
-                          <ChevronDown className="w-3.5 h-3.5 text-gray-300" />
-                        )}
+                        <ChevronDown className="w-3.5 h-3.5" />
                       </button>
+
+                      {openColumnMenuKey === col.id && columnMenuPos && createPortal(
+                        <>
+                          <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColumnMenuKey(null); setColumnMenuPos(null); }} />
+                          <div
+                            ref={columnMenuRef}
+                            style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
+                            className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                          >
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                getColumnPinSide(col.id) === "left" ? unpinColumn(col.id) : pinColumnToSide(col.id, "left");
+                              }}
+                              className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${getColumnPinSide(col.id) === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                            >
+                              {getColumnPinSide(col.id) === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                              Pin to Left
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                getColumnPinSide(col.id) === "right" ? unpinColumn(col.id) : pinColumnToSide(col.id, "right");
+                              }}
+                              className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${getColumnPinSide(col.id) === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                            >
+                              {getColumnPinSide(col.id) === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                              Pin to Right
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                handleSort(col.id, "asc");
+                                setListPage(1);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            >
+                              <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                              Sort Ascending
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                handleSort(col.id, "desc");
+                                setListPage(1);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            >
+                              <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                              Sort Descending
+                            </button>
+                            <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                toggleHideColumn(col.id);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap text-[#161618] hover:bg-gray-50"
+                            >
+                              Hide Column
+                            </button>
+                          </div>
+                        </>,
+                        document.body
+                      )}
                     </div>
                     <div
                       onMouseDown={(e) => startResize(e, col.id)}
@@ -561,10 +847,21 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
               })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#E1E4EA] bg-white">
-            {paginatedTasks.length === 0 ? (
+          <tbody className="bg-white">
+            {isLoading ? (
+              <TableSkeletonRows
+                numRows={listLimit}
+                rowHeight={60}
+                hasCheckbox={false}
+                // Leading 51px spacer column, then the six real columns — same
+                // widths the header uses, so the skeleton lines up with it.
+                // Derived from orderedColumns so the skeleton matches the header
+                // after a column is hidden or pinned.
+                columns={[51, ...orderedColumns.map((c) => colWidths[c.id])]}
+              />
+            ) : paginatedTasks.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center text-gray-500 font-medium">
+                <td colSpan={orderedColumns.length + 1} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
                   No tasks found.
                 </td>
               </tr>
@@ -585,151 +882,180 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                 const textDecoration = isCompleted ? "line-through" : "none";
                 const primaryAssignee = assignees[0];
                 const avatarUrl = primaryAssignee?.profileUrl || primaryAssignee?.userData?.mainData?.profilePic;
-                return (
-                  <tr key={task._id} className="hover:bg-gray-50 transition-colors group cursor-pointer" onClick={() => handleTaskClick(task)}>
-                    <td style={{ height: 60 }} className="px-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-start">
-                        <CircleCheckIcon checked={isCompleted} className="flex-shrink-0" />
-                      </div>
-                    </td>
-                    <td style={{ height: 60 }} className="pl-6 pr-3 py-3">
-                      <div className="flex flex-col gap-0.5">
-                        <span
-                          style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "20px", color: "#0E121B", textDecoration }}
-                          className="truncate"
-                        >
-                          {task.title || "Untitled Task"}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <BriefcaseIcon className="flex-shrink-0" />
-                          <span
-                            style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#8D8D8E", textDecoration }}
-                            className="truncate"
-                          >
-                            Related to: {linkedEntity?.entityId?.name || linkedEntity?.entityId?.title || "(Deal Name)"}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      {primaryAssignee ? (
-                        <div className="flex items-center justify-start gap-2">
-                          {avatarUrl ? (
-                            <img
-                              src={avatarUrl}
-                              alt={primaryAssignee.name}
-                              className="rounded-full object-cover flex-shrink-0 border border-white"
-                              style={{ width: 32, height: 32 }}
-                            />
-                          ) : (
-                            <div
-                              className="rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0 border border-white"
-                              style={{ width: 32, height: 32 }}
-                            >
-                              {primaryAssignee.name?.charAt(0)?.toUpperCase() || "?"}
-                            </div>
-                          )}
-                          <div className="flex flex-col min-w-0">
+                  const cells = {
+                    __lead: (
+                        <td key="__lead" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-start">
+                            <CircleCheckIcon checked={isCompleted} className="flex-shrink-0" />
+                          </div>
+                        </td>
+                    ),
+                    title: (
+                        <td key="title" style={{ height: 60 }} className="pl-6 pr-3 py-3 border-r border-b border-[#E1E4EA]">
+                          <div className="flex flex-col gap-0.5">
                             <span
                               style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "20px", color: "#0E121B", textDecoration }}
                               className="truncate"
                             >
-                              {primaryAssignee.name}
-                              {assignees.length > 1 ? ` +${assignees.length - 1}` : ""}
+                              <HighlightText text={task.title || "Untitled Task"} query={searchTerm} />
                             </span>
-                            <span
-                              style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#8D8D8E", textDecoration }}
-                              className="truncate"
-                            >
-                              {primaryAssignee.role || "Team Member"}
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <BriefcaseIcon className="flex-shrink-0" />
+                              <span
+                                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#8D8D8E", textDecoration }}
+                                className="truncate"
+                              >
+                                Related to: <HighlightText text={linkedEntity?.entityId?.name || linkedEntity?.entityId?.title || "(Deal Name)"} query={searchTerm} />
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      <span
-                        className="inline-flex items-center justify-center"
-                        style={{
-                          padding: "5px 12px",
-                          borderRadius: 53,
-                          backgroundColor: isCompleted ? "rgba(0, 201, 80, 0.1)" : "rgba(0, 133, 255, 0.1)",
-                          fontFamily: "Inter",
-                          fontWeight: 500,
-                          fontSize: 12,
-                          lineHeight: "120%",
-                          color: isCompleted ? "#00C950" : "#0085FF",
-                        }}
-                      >
-                        {isCompleted ? "Completed" : "In-Progress"}
-                      </span>
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      {priority ? (
-                        <span
-                          className="inline-flex items-center justify-center"
-                          style={{
-                            padding: "5px 12px",
-                            borderRadius: 53,
-                            backgroundColor: (priorityStyles[priority] || priorityStyles.medium).bg,
-                            fontFamily: "Inter",
-                            fontWeight: 500,
-                            fontSize: 12,
-                            lineHeight: "120%",
-                            color: (priorityStyles[priority] || priorityStyles.medium).color,
-                          }}
-                        >
-                          {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      <div className="flex flex-col gap-0.5">
-                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866", textDecoration }}>
-                          {dueLabel.day} {dueLabel.time}
-                        </span>
-                        {isCompleted ? (
-                          <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#00C950" }}>
-                            Completed
+                        </td>
+                    ),
+                    assignedTo: (
+                        <td key="assignedTo" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          {primaryAssignee ? (
+                            <div className="flex items-center justify-start gap-2">
+                              {avatarUrl ? (
+                                <img
+                                  src={avatarUrl}
+                                  alt={primaryAssignee.name}
+                                  className="rounded-full object-cover flex-shrink-0 border border-white"
+                                  style={{ width: 32, height: 32 }}
+                                />
+                              ) : (
+                                <div
+                                  className="rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0 border border-white"
+                                  style={{ width: 32, height: 32 }}
+                                >
+                                  {primaryAssignee.name?.charAt(0)?.toUpperCase() || "?"}
+                                </div>
+                              )}
+                              <div className="flex flex-col min-w-0">
+                                <span
+                                  style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "20px", color: "#0E121B", textDecoration }}
+                                  className="truncate"
+                                >
+                                  <HighlightText text={primaryAssignee.name} query={searchTerm} />
+                                  {assignees.length > 1 ? ` +${assignees.length - 1}` : ""}
+                                </span>
+                                <span
+                                  style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#8D8D8E", textDecoration }}
+                                  className="truncate"
+                                >
+                                  {primaryAssignee.role || "Team Member"}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                    ),
+                    status: (
+                        <td key="status" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          <span
+                            className="inline-flex items-center justify-center"
+                            style={{
+                              padding: "5px 12px",
+                              borderRadius: 53,
+                              backgroundColor: isCompleted ? "rgba(0, 201, 80, 0.1)" : "rgba(0, 133, 255, 0.1)",
+                              fontFamily: "Inter",
+                              fontWeight: 500,
+                              fontSize: 12,
+                              lineHeight: "120%",
+                              color: isCompleted ? "#00C950" : "#0085FF",
+                            }}
+                          >
+                            <HighlightText text={isCompleted ? "Completed" : "In-Progress"} query={searchTerm} />
                           </span>
-                        ) : (
-                          isOverdue && (
-                            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#CD3636" }}>
-                              Overdue
+                        </td>
+                    ),
+                    priority: (
+                        <td key="priority" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          {priority ? (
+                            <span
+                              className="inline-flex items-center justify-center"
+                              style={{
+                                padding: "5px 12px",
+                                borderRadius: 53,
+                                backgroundColor: (priorityStyles[priority] || priorityStyles.medium).bg,
+                                fontFamily: "Inter",
+                                fontWeight: 500,
+                                fontSize: 12,
+                                lineHeight: "120%",
+                                color: (priorityStyles[priority] || priorityStyles.medium).color,
+                              }}
+                            >
+                              <HighlightText text={priority.charAt(0).toUpperCase() + priority.slice(1)} query={searchTerm} />
                             </span>
-                          )
-                        )}
-                      </div>
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 rounded-full overflow-hidden" style={{ height: 5, backgroundColor: "#D9D9D9" }}>
-                          <div
-                            className="h-full rounded-full"
-                            style={{ width: `${progress}%`, backgroundColor: progress === 100 ? "#00C950" : "#0085FF" }}
-                          />
-                        </div>
-                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866" }} className="flex-shrink-0">
-                          {progress}%
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTaskClick(task);
-                          }}
-                          className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
-                          title="More options"
-                        >
-                          <MoreVertIcon className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                    ),
+                    dueDate: (
+                        <td key="dueDate" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          <div className="flex flex-col gap-0.5">
+                            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866", textDecoration }}>
+                              <HighlightText text={`${dueLabel.day} ${dueLabel.time}`} query={searchTerm} />
+                            </span>
+                            {isCompleted ? (
+                              <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#00C950" }}>
+                                Completed
+                              </span>
+                            ) : (
+                              isOverdue && (
+                                <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#CD3636" }}>
+                                  Overdue
+                                </span>
+                              )
+                            )}
+                          </div>
+                        </td>
+                    ),
+                    progress: (
+                        <td key="progress" style={{ height: 60 }} className="px-3 border-b border-[#E1E4EA]">
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 rounded-full overflow-hidden" style={{ height: 5, backgroundColor: "#D9D9D9" }}>
+                              <div
+                                className="h-full rounded-full"
+                                style={{ width: `${progress}%`, backgroundColor: progress === 100 ? "#00C950" : "#0085FF" }}
+                              />
+                            </div>
+                            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866" }} className="flex-shrink-0">
+                              {progress}%
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTaskClick(task);
+                              }}
+                              className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
+                              title="More options"
+                            >
+                              <MoreVertIcon className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                    ),
+                  };
+                  return (
+                    <tr key={task._id} className="hover:bg-gray-50 transition-colors group cursor-pointer" onClick={() => handleTaskClick(task)}>
+                      {cells.__lead}
+                      {/* Body cells are indexed by column id and rendered through
+                          orderedColumns, so hiding or pinning a column in the header
+                          moves/removes the matching cell too. Each <td> is unchanged. */}
+                      {orderedColumns.map((col) => {
+                        const isDragging = draggedColKey === col.id;
+                        const cell = cells[col.id];
+                        if (!cell) return null;
+                        if (isDragging) {
+                          return React.cloneElement(cell, { style: { ...cell.props.style, opacity: 0.35 } });
+                        }
+                        return cell;
+                      })}
+                    </tr>
+                  );
               })
             )}
           </tbody>
@@ -738,7 +1064,10 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
       )}
 
       {listTotalCount > 0 && (
-        <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+        <div
+          ref={fillFooterRef}
+          className="w-full bg-transparent px-4 py-3 mt-3 flex items-center justify-between sm:px-6"
+        >
           <div className="flex-1 flex justify-between sm:hidden">
             <button
               onClick={() => handleListPageChange(listPage - 1)}
@@ -785,28 +1114,30 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
               </button>
 
               {listTotalPages > 0 &&
-                getListPageNumbers().map((pageNum, index) =>
-                  pageNum === "..." ? (
-                    <span
-                      key={`dots-${index}`}
-                      className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
-                    >
-                      ...
-                    </span>
-                  ) : (
+                getListPageNumbers().map((item, index) => {
+                  if (item === "left-dots" || item === "right-dots") {
+                    return (
+                      <span
+                        key={`${item}-${index}`}
+                        className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
+                      >
+                        ...
+                      </span>
+                    );
+                  }
+                  return (
                     <button
-                      key={`page-${pageNum}`}
-                      onClick={() => handleListPageChange(pageNum)}
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
-                        pageNum === listPage
-                          ? "bg-blue-600 text-white"
-                          : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                      }`}
+                      key={`page-${item}`}
+                      onClick={() => handleListPageChange(item)}
+                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${item === listPage
+                        ? "bg-blue-600 text-white"
+                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                        }`}
                     >
-                      {pageNum}
+                      {item}
                     </button>
-                  ),
-                )}
+                  );
+                })}
 
               <button
                 onClick={() => handleListPageChange(listPage + 1)}
@@ -859,6 +1190,31 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
         onEdit={handleEditTask}
         onClose={() => setIsDetailsOpen(false)}
       />
+
+      {dragGhost && createPortal(
+        <div
+          ref={ghostElRef}
+          style={{
+            position: "fixed",
+            top: -9999,
+            left: -9999,
+            width: dragGhost.width,
+            zIndex: 10000,
+            pointerEvents: "none",
+          }}
+          className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+        >
+          <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+            <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+          </div>
+          {dragGhost.previewRows.map((rowVal, i) => (
+            <div key={i} className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0">
+              <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

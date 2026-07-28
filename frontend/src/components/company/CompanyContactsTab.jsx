@@ -1,10 +1,12 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { getAncestorZoom } from "../../utils/domUtils";
 import { Link } from "react-router-dom";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import QuickContactForm from "../contact/QuickContactForm";
 import useFillToBottom from "../../hooks/useFillToBottom";
+import HighlightText from "../common/HighlightText";
 import FilterIcon from "../common/FilterIcon";
 import CompanyFilterPanel from "./CompanyFilterPanel";
 import { applyColumnFilters } from "../../utils/advancedFilters";
@@ -138,13 +140,21 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
     { id: "status", label: "Interaction", width: 331 },
   ], []);
 
+  const [columnOrder, setColumnOrder] = useState(() => BASE_COLUMNS.map(c => c.id));
+  const [draggedColKey, setDraggedColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
+  const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
+
   const orderedColumns = useMemo(() => {
-    const visible = BASE_COLUMNS.filter(c => !hiddenColumns.has(c.id));
+    const sortedBase = [...BASE_COLUMNS].sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
+    const visible = sortedBase.filter(c => !hiddenColumns.has(c.id));
     const left = visible.filter(c => leftPinned.has(c.id));
     const right = visible.filter(c => rightPinned.has(c.id));
     const unpinned = visible.filter(c => !leftPinned.has(c.id) && !rightPinned.has(c.id));
     return [...left, ...unpinned, ...right];
-  }, [BASE_COLUMNS, hiddenColumns, leftPinned, rightPinned]);
+  }, [BASE_COLUMNS, hiddenColumns, leftPinned, rightPinned, columnOrder]);
 
   const pinColumnToSide = (colId, side) => {
     if (side === "left") {
@@ -173,6 +183,94 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
     if (leftPinned.has(colId)) return "left";
     if (rightPinned.has(colId)) return "right";
     return null;
+  };
+
+  const startColumnDrag = (e, colId) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    e.preventDefault();
+    window.getSelection?.()?.removeAllRanges();
+
+    const th = e.currentTarget;
+    const rect = th.getBoundingClientRect();
+    const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
+    
+    const previewRows = (contacts || []).slice(0, 10).map((c) => {
+      let val = getContactFieldValue(c, colId);
+      if (typeof val === 'object' && val !== null) val = val?.name || "";
+      return String(val ?? "").trim() || "—";
+    });
+
+    const zGhost = getAncestorZoom(document.body);
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    dragOverRef.current = null;
+    setDraggedColKey(colId);
+    setDragOverColKey(null);
+    document.body.style.userSelect = "none";
+
+    setDragGhost({
+      label,
+      previewRows,
+      offsetX,
+      offsetY,
+      width: rect.width / zGhost,
+      height: rect.height / zGhost,
+    });
+
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const visualTop = clientY - offsetY;
+      const visualLeft = clientX - offsetX;
+      el.style.top = `${visualTop / zGhost}px`;
+      el.style.left = `${visualLeft / zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+    };
+    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
+
+    const handleMouseMove = (moveEvent) => {
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) {
+        handleColumnReorder(colId, overKey);
+      }
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    if (!draggedKey || draggedKey === targetKey) return;
+    setColumnOrder((prev) => {
+      const newOrder = [...prev];
+      const draggedIdx = newOrder.indexOf(draggedKey);
+      const targetIdx = newOrder.indexOf(targetKey);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedKey);
+      return newOrder;
+    });
   };
 
   useEffect(() => {
@@ -232,7 +330,8 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
         (c) =>
           (c.name || "").toLowerCase().includes(q) ||
           (c.email || "").toLowerCase().includes(q) ||
-          (c.phone || "").toLowerCase().includes(q),
+          (c.phone || "").toLowerCase().includes(q) ||
+          (c.role || "").toLowerCase().includes(q),
       );
     }
     return applyColumnFilters(result, selectedFilters, getContactFieldValue);
@@ -276,18 +375,12 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
   };
 
   const getPageNumbers = () => {
-    const delta = 2;
-    const range = [];
-    const rangeWithDots = [];
-    for (let i = Math.max(2, currentPage - delta); i <= Math.min(totalPages - 1, currentPage + delta); i++) {
-      range.push(i);
-    }
-    if (currentPage - delta > 2) rangeWithDots.push(1, "...");
-    else rangeWithDots.push(1);
-    rangeWithDots.push(...range);
-    if (currentPage + delta < totalPages - 1) rangeWithDots.push("...", totalPages);
-    else if (totalPages > 1) rangeWithDots.push(totalPages);
-    return rangeWithDots.filter((item, index, arr) => index === 0 || arr[index - 1] !== item);
+    const items = [1];
+    if (currentPage > 2) items.push("left-dots");
+    if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
+    if (currentPage < totalPages - 1) items.push("right-dots");
+    if (totalPages > 1) items.push(totalPages);
+    return items;
   };
 
   const paginatedContacts = useMemo(
@@ -418,7 +511,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
       <div
         ref={fillContainerRef}
         style={fillStyle}
-        className={`relative bg-white border border-[#E1E4EA] ${totalCount > 0 ? "border-b-0" : ""} overflow-x-auto overflow-y-auto`}
+        className="relative bg-white border border-[#E1E4EA] rounded-lg overflow-x-auto overflow-y-auto"
       >
         <table
           className="w-full border-separate border-spacing-0 text-left"
@@ -428,14 +521,26 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
             <tr>
               {orderedColumns.map((col, idx) => {
                 const isLast = idx === orderedColumns.length - 1;
+                const isDragging = draggedColKey === col.id;
+                const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
                 return (
                   <th
                     key={col.id}
-                    style={{ width: colWidths[col.id], height: 56, position: "relative" }}
-                    className={`px-3 py-2.5 font-medium text-[#525866] text-xs border-b border-[#E1E4EA] ${isLast ? "" : "border-r"}`}
+                    data-col-id={col.id}
+                    onMouseDown={(e) => startColumnDrag(e, col.id)}
+                    style={{ 
+                      width: colWidths[col.id], 
+                      height: 56, 
+                      position: "relative",
+                      opacity: isDragging ? 0.35 : 1
+                    }}
+                    className={`px-3 py-2.5 font-medium text-[#525866] text-xs border-b border-[#E1E4EA] cursor-grab active:cursor-grabbing ${isLast ? "" : "border-r"} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                   >
-                    <div className="flex items-center justify-between w-full group">
-                      <span className="truncate flex-1 min-w-0" title={col.label}>{col.label}</span>
+                    <div className={`flex items-center justify-between w-full group ${isLoading ? "[&_button]:invisible" : ""}`}>
+                      {/* Header label swaps to a skeleton bar on the same flag as the
+                          body rows, so the whole table resolves in one step. Controls
+                          are hidden rather than unmounted to keep the layout stable. */}
+                      {isLoading ? <Skeleton width="65%" height={12} /> : <span className="truncate flex-1 min-w-0" title={col.label}>{col.label}</span>}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -556,16 +661,18 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                 <tr key={contact._id} className="hover:bg-gray-50 transition-colors group">
                   {orderedColumns.map((col, idx) => {
                     const isLast = idx === orderedColumns.length - 1;
+                    const isDragging = draggedColKey === col.id;
                     const borderClass = isLast ? "border-b border-[#E1E4EA]" : "border-r border-b border-[#E1E4EA]";
+                    const styleBase = { height: 54, opacity: isDragging ? 0.35 : 1 };
                     
                     if (col.id === "name") {
                       return (
-                        <td key={col.id} style={{ height: 54 }} className={`px-3 text-left ${borderClass}`}>
+                        <td key={col.id} style={styleBase} className={`px-3 text-left ${borderClass}`}>
                           <Link
                             to={`/contacts/${contact._id}`}
                             className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
                           >
-                            {contact.name || "-"}
+                            <HighlightText text={contact.name} query={searchTerm} />
                           </Link>
                         </td>
                       );
@@ -574,10 +681,10 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                       return (
                         <td
                           key={col.id}
-                          style={{ height: 54 }}
+                          style={styleBase}
                           className={`px-3 text-[14px] leading-5 font-medium text-[#525866] truncate text-left ${borderClass}`}
                         >
-                          {contact.email || "-"}
+                          <HighlightText text={contact.email} query={searchTerm} />
                         </td>
                       );
                     }
@@ -585,10 +692,10 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                       return (
                         <td
                           key={col.id}
-                          style={{ height: 54 }}
+                          style={styleBase}
                           className={`px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left ${borderClass}`}
                         >
-                          {contact.phone || "-"}
+                          <HighlightText text={contact.phone} query={searchTerm} />
                         </td>
                       );
                     }
@@ -596,16 +703,16 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                       return (
                         <td
                           key={col.id}
-                          style={{ height: 54 }}
+                          style={styleBase}
                           className={`px-3 text-[14px] leading-5 font-medium text-[#525866] truncate text-left ${borderClass}`}
                         >
-                          {contact.role || "-"}
+                          <HighlightText text={contact.role} query={searchTerm} />
                         </td>
                       );
                     }
                     if (col.id === "status") {
                       return (
-                        <td key={col.id} style={{ height: 54 }} className={`px-3 ${borderClass}`}>
+                        <td key={col.id} style={styleBase} className={`px-3 ${borderClass}`}>
                           <div className="relative flex items-center justify-start">
                             <span className="text-[14px] leading-5 font-medium text-[#525866]">
                               {contact.lifecycleStage || contact.status || "-"}
@@ -632,7 +739,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
       {totalCount > 0 && (
         <div
           ref={fillFooterRef}
-          className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6 border border-[#E1E4EA] border-t-0"
+          className="w-full bg-transparent px-4 py-3 mt-3 flex items-center justify-between sm:px-6"
         >
           <div className="flex-1 flex justify-between sm:hidden">
             <button
@@ -680,27 +787,30 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
               </button>
 
               {totalPages > 0 &&
-                getPageNumbers().map((pageNum, index) =>
-                  pageNum === "..." ? (
-                    <span
-                      key={`dots-${index}`}
-                      className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
-                    >
-                      ...
-                    </span>
-                  ) : (
+                getPageNumbers().map((item, index) => {
+                  if (item === "left-dots" || item === "right-dots") {
+                    return (
+                      <span
+                        key={`${item}-${index}`}
+                        className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
+                      >
+                        ...
+                      </span>
+                    );
+                  }
+                  return (
                     <button
-                      key={`page-${pageNum}`}
-                      onClick={() => handlePageChange(pageNum)}
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${pageNum === currentPage
+                      key={`page-${item}`}
+                      onClick={() => handlePageChange(item)}
+                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${item === currentPage
                         ? "bg-blue-600 text-white"
                         : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
                         }`}
                     >
-                      {pageNum}
+                      {item}
                     </button>
-                  ),
-                )}
+                  );
+                })}
 
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
@@ -712,6 +822,31 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
             </div>
           </div>
         </div>
+      )}
+
+      {dragGhost && createPortal(
+        <div
+          ref={ghostElRef}
+          style={{
+            position: "fixed",
+            top: -9999,
+            left: -9999,
+            width: dragGhost.width,
+            zIndex: 10000,
+            pointerEvents: "none",
+          }}
+          className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+        >
+          <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+            <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+          </div>
+          {dragGhost.previewRows.map((rowVal, i) => (
+            <div key={i} className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0">
+              <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+            </div>
+          ))}
+        </div>,
+        document.body,
       )}
     </div>
   );
