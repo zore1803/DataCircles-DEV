@@ -1,11 +1,16 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import QuickContactForm from "../contact/QuickContactForm";
+import useFillToBottom from "../../hooks/useFillToBottom";
 import FilterIcon from "../common/FilterIcon";
 import CompanyFilterPanel from "./CompanyFilterPanel";
 import { applyColumnFilters } from "../../utils/advancedFilters";
+import TableSkeletonRows from "../common/TableSkeletonRows";
+import StatTileSkeleton from "../common/StatTileSkeleton";
+import Skeleton from "../common/Skeleton";
 import {
   Search,
   Filter,
@@ -92,23 +97,95 @@ const getContactFieldValue = (contact, key) => {
   return contact[key];
 };
 
-export default function CompanyContactsTab({ contacts, meetings = [], tasks = [], showStats = true, companyId, company, setContacts }) {
+export default function CompanyContactsTab({ contacts, meetings = [], tasks = [], showStats = true, companyId, company, setContacts, isLoading }) {
   const [showContactForm, setShowContactForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({});
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
 
-  const handleSort = (key) => {
-    setSortConfig((prev) =>
-      prev.key === key
+  const handleSort = (key, forceDirection = null) => {
+    setSortConfig((prev) => {
+      if (forceDirection) return { key, direction: forceDirection };
+      return prev.key === key
         ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
-        : { key, direction: "asc" },
-    );
+        : { key, direction: "asc" };
+    });
   };
+  // Keeps the table box a fixed height that ends at the bottom of the screen,
+  // so changing rows-per-page scrolls internally instead of growing the page.
+  const {
+    containerRef: fillContainerRef,
+    footerRef: fillFooterRef,
+    style: fillStyle,
+  } = useFillToBottom();
+
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [pinnedColumn, setPinnedColumn] = useState(null);
+  
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [leftPinned, setLeftPinned] = useState(new Set());
+  const [rightPinned, setRightPinned] = useState(new Set());
+  const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
+  const [columnMenuPos, setColumnMenuPos] = useState(null);
+  const columnMenuRef = useRef(null);
+
+  const BASE_COLUMNS = useMemo(() => [
+    { id: "name", label: "Contact Name", width: 275 },
+    { id: "email", label: "Email", width: 244 },
+    { id: "phone", label: "Phone Number", width: 232 },
+    { id: "role", label: "Role", width: 244 },
+    { id: "status", label: "Interaction", width: 331 },
+  ], []);
+
+  const orderedColumns = useMemo(() => {
+    const visible = BASE_COLUMNS.filter(c => !hiddenColumns.has(c.id));
+    const left = visible.filter(c => leftPinned.has(c.id));
+    const right = visible.filter(c => rightPinned.has(c.id));
+    const unpinned = visible.filter(c => !leftPinned.has(c.id) && !rightPinned.has(c.id));
+    return [...left, ...unpinned, ...right];
+  }, [BASE_COLUMNS, hiddenColumns, leftPinned, rightPinned]);
+
+  const pinColumnToSide = (colId, side) => {
+    if (side === "left") {
+      setLeftPinned(prev => new Set(prev).add(colId));
+      setRightPinned(prev => { const next = new Set(prev); next.delete(colId); return next; });
+    } else {
+      setRightPinned(prev => new Set(prev).add(colId));
+      setLeftPinned(prev => { const next = new Set(prev); next.delete(colId); return next; });
+    }
+  };
+
+  const unpinColumn = (colId) => {
+    setLeftPinned(prev => { const next = new Set(prev); next.delete(colId); return next; });
+    setRightPinned(prev => { const next = new Set(prev); next.delete(colId); return next; });
+  };
+
+  const toggleHideColumn = (colId) => {
+    setHiddenColumns(prev => {
+      const next = new Set(prev);
+      next.add(colId);
+      return next;
+    });
+  };
+
+  const getColumnPinSide = (colId) => {
+    if (leftPinned.has(colId)) return "left";
+    if (rightPinned.has(colId)) return "right";
+    return null;
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(e.target)) {
+        setOpenColumnMenuKey(null);
+        setColumnMenuPos(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const [colWidths, setColWidths] = useState({
     name: 275,
     email: 244,
@@ -122,10 +199,6 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
     () => Object.values(colWidths).reduce((sum, w) => sum + w, 0),
     [colWidths],
   );
-
-  const togglePinColumn = (colId) => {
-    setPinnedColumn((prev) => (prev === colId ? null : colId));
-  };
 
   const startResize = (e, colId) => {
     e.preventDefault();
@@ -235,22 +308,26 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
       {showStats && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            {kpiTiles.map((tile) => (
-              <div
-                key={tile.label}
-                className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
-              >
-                <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <tile.icon size={20} />
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
+            ) : (
+              kpiTiles.map((tile) => (
+                <div
+                  key={tile.label}
+                  className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
+                >
+                  <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <tile.icon size={20} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {tile.value}
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-                  <p className="text-sm font-semibold text-gray-900 truncate">
-                    {tile.value}
-                  </p>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
           <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
@@ -258,47 +335,55 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
       )}
 
       {/* Search + Controls */}
-      <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
-        <div className="relative flex-1 h-full">
-          <Search
-            size={20}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50"
-          />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by contact by name, email, or phone..."
-            className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-            style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
-          />
+      {isLoading ? (
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+          <Skeleton height={44} shape="rect" className="flex-1 rounded-full" />
+          <Skeleton height={44} width={86} shape="rect" className="rounded-full flex-shrink-0" />
+          <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
         </div>
-        <button
-          onClick={() => setShowFilterPanel(true)}
-          className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
-          style={{
-            height: "44px",
-            borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
-          }}
-        >
-          <FilterIcon size={16} />
-          Filter
-          {Object.values(selectedFilters).flat().length > 0 && (
-            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
-              {Object.values(selectedFilters).flat().length}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowContactForm(true)}
-          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
-          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
-          title="Add Contact"
-        >
-          <Plus size={20} />
-        </button>
-      </div>
+      ) : (
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+          <div className="relative flex-1 h-full">
+            <Search
+              size={20}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50"
+            />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by contact by name, email, or phone..."
+              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+            />
+          </div>
+          <button
+            onClick={() => setShowFilterPanel(true)}
+            className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+            style={{
+              height: "44px",
+              borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
+            }}
+          >
+            <FilterIcon size={16} />
+            Filter
+            {Object.values(selectedFilters).flat().length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+                {Object.values(selectedFilters).flat().length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowContactForm(true)}
+            className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
+            style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
+            title="Add Contact"
+          >
+            <Plus size={20} />
+          </button>
+        </div>
+      )}
 
       {showContactForm && (
         <QuickContactForm
@@ -331,136 +416,212 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
       />
 
       <div
-        className="box-border flex flex-col items-start bg-white self-stretch overflow-x-auto"
-        style={{ border: "1px solid #E1E4EA", borderRadius: "8px" }}
+        ref={fillContainerRef}
+        style={fillStyle}
+        className={`relative bg-white border border-[#E1E4EA] ${totalCount > 0 ? "border-b-0" : ""} overflow-x-auto overflow-y-auto`}
       >
         <table
-          className="text-sm text-left border-collapse"
+          className="w-full border-separate border-spacing-0 text-left"
           style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%" }}
         >
-          <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+          <thead className="sticky top-0 z-30 bg-[#F5F7FA] border-b border-[#E1E4EA]">
             <tr>
-              {[
-                { id: "name", label: "Contact Name", width: 275, icon: ContactNameIcon, pinnable: true },
-                { id: "email", label: "Email", width: 244, icon: EmailIcon, pinnable: true },
-                { id: "phone", label: "Phone Number", width: 232, icon: Phone, pinnable: true },
-                { id: "role", label: "Role", width: 244, icon: Building2, pinnable: true },
-                { id: "status", label: "Interaction", width: 331, icon: Target },
-              ].map((col) => {
-                const isPinned = pinnedColumn === col.id;
+              {orderedColumns.map((col, idx) => {
+                const isLast = idx === orderedColumns.length - 1;
                 return (
                   <th
                     key={col.id}
                     style={{ width: colWidths[col.id], height: 56, position: "relative" }}
-                    className={`px-3 py-2.5 font-medium text-[#525866] text-xs ${col.id === "status" ? "" : "border-r border-[#E1E4EA]"
-                      }`}
+                    className={`px-3 py-2.5 font-medium text-[#525866] text-xs border-b border-[#E1E4EA] ${isLast ? "" : "border-r"}`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      {col.pinnable ? (
-                        <div
-                          className="relative flex items-center justify-start flex-1 min-w-0 group cursor-pointer select-none"
-                          onDoubleClick={() => togglePinColumn(col.id)}
-                        >
-                          <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                            <col.icon className="w-4 h-4 flex-shrink-0" />
-                            <span className="truncate">{col.label}</span>
-                          </div>
-                          <button
-                            onClick={() => togglePinColumn(col.id)}
-                            className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
-                              }`}
-                            title={isPinned ? "Unpin Column" : "Pin Column"}
+                    <div className="flex items-center justify-between w-full group">
+                      <span className="truncate flex-1 min-w-0" title={col.label}>{col.label}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (openColumnMenuKey === col.id) {
+                            setOpenColumnMenuKey(null);
+                            setColumnMenuPos(null);
+                            return;
+                          }
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          let calculatedLeft = rect.right - 190;
+                          if (isLast) {
+                            calculatedLeft -= 80; // Push inward for last column to prevent shadow bleeding outside table
+                          }
+                          setColumnMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
+                          setOpenColumnMenuKey(col.id);
+                        }}
+                        className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+
+                      {openColumnMenuKey === col.id && columnMenuPos && createPortal(
+                        <>
+                          <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColumnMenuKey(null); setColumnMenuPos(null); }} />
+                          <div
+                            ref={columnMenuRef}
+                            style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
+                            className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
                           >
-                            {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-start gap-1.5 whitespace-nowrap flex-1 min-w-0">
-                          {col.icon && <col.icon className="w-4 h-4 flex-shrink-0" />}
-                          <span>{col.label}</span>
-                        </div>
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                getColumnPinSide(col.id) === "left" ? unpinColumn(col.id) : pinColumnToSide(col.id, "left");
+                              }}
+                              className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${getColumnPinSide(col.id) === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                            >
+                              {getColumnPinSide(col.id) === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                              Pin to Left
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                getColumnPinSide(col.id) === "right" ? unpinColumn(col.id) : pinColumnToSide(col.id, "right");
+                              }}
+                              className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${getColumnPinSide(col.id) === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                            >
+                              {getColumnPinSide(col.id) === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                              Pin to Right
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                handleSort(col.id, "asc");
+                                setCurrentPage(1);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            >
+                              <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                              Sort Ascending
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                handleSort(col.id, "desc");
+                                setCurrentPage(1);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            >
+                              <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                              Sort Descending
+                            </button>
+                            <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                toggleHideColumn(col.id);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap text-[#161618] hover:bg-gray-50"
+                            >
+                              Hide Column
+                            </button>
+                          </div>
+                        </>,
+                        document.body
                       )}
 
                       <div
-                        className="flex flex-col ml-1 flex-shrink-0 cursor-pointer"
-                        onClick={() => handleSort(col.id)}
-                      >
-                        <ChevronUp
-                          className={`w-3 h-3 ${sortConfig.key === col.id && sortConfig.direction === "asc"
-                            ? "text-blue-600"
-                            : "text-gray-400"
-                            }`}
-                        />
-                        <ChevronDown
-                          className={`w-3 h-3 -mt-1 ${sortConfig.key === col.id && sortConfig.direction === "desc"
-                            ? "text-blue-600"
-                            : "text-gray-400"
-                            }`}
-                        />
-                      </div>
+                        onMouseDown={(e) => startResize(e, col.id)}
+                        className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"}`}
+                      />
                     </div>
-
-                    <div
-                      onMouseDown={(e) => startResize(e, col.id)}
-                      className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"
-                        }`}
-                    />
                   </th>
                 );
               })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#E1E4EA] bg-white">
-            {paginatedContacts.length === 0 ? (
+          <tbody className="bg-white">
+            {isLoading ? (
+              <TableSkeletonRows
+                columns={orderedColumns.map(c => colWidths[c.id])}
+                hasCheckbox={false}
+                numRows={limit}
+                rowHeight={54}
+              />
+            ) : paginatedContacts.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-500 font-medium">
+                <td colSpan={orderedColumns.length} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
                   No contacts found.
                 </td>
               </tr>
             ) : (
               paginatedContacts.map((contact) => (
                 <tr key={contact._id} className="hover:bg-gray-50 transition-colors group">
-                  <td style={{ height: 54 }} className="px-3 text-left">
-                    <Link
-                      to={`/contacts/${contact._id}`}
-                      className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
-                    >
-                      {contact.name || "-"}
-                    </Link>
-                  </td>
-                  <td
-                    style={{ height: 54 }}
-                    className="px-3 text-[14px] leading-5 font-medium text-[#525866] truncate text-left"
-                  >
-                    {contact.email || "-"}
-                  </td>
-                  <td
-                    style={{ height: 54 }}
-                    className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
-                  >
-                    {contact.phone || "-"}
-                  </td>
-                  <td
-                    style={{ height: 54 }}
-                    className="px-3 text-[14px] leading-5 font-medium text-[#222530] truncate text-left"
-                  >
-                    {contact.additionalFields?.find(
-                      (f) => /^(role|designation|job title)$/i.test(f.key || "")
-                    )?.value || "-"}
-                  </td>
-                  <td style={{ height: 54 }} className="px-3">
-                    <div className="relative flex items-center justify-start">
-                      <span className="text-[14px] leading-5 font-medium text-[#525866]">
-                        {contact.lifecycleStage || contact.status || "-"}
-                      </span>
-                      <button
-                        className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                        title="More options"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
+                  {orderedColumns.map((col, idx) => {
+                    const isLast = idx === orderedColumns.length - 1;
+                    const borderClass = isLast ? "border-b border-[#E1E4EA]" : "border-r border-b border-[#E1E4EA]";
+                    
+                    if (col.id === "name") {
+                      return (
+                        <td key={col.id} style={{ height: 54 }} className={`px-3 text-left ${borderClass}`}>
+                          <Link
+                            to={`/contacts/${contact._id}`}
+                            className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
+                          >
+                            {contact.name || "-"}
+                          </Link>
+                        </td>
+                      );
+                    }
+                    if (col.id === "email") {
+                      return (
+                        <td
+                          key={col.id}
+                          style={{ height: 54 }}
+                          className={`px-3 text-[14px] leading-5 font-medium text-[#525866] truncate text-left ${borderClass}`}
+                        >
+                          {contact.email || "-"}
+                        </td>
+                      );
+                    }
+                    if (col.id === "phone") {
+                      return (
+                        <td
+                          key={col.id}
+                          style={{ height: 54 }}
+                          className={`px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left ${borderClass}`}
+                        >
+                          {contact.phone || "-"}
+                        </td>
+                      );
+                    }
+                    if (col.id === "role") {
+                      return (
+                        <td
+                          key={col.id}
+                          style={{ height: 54 }}
+                          className={`px-3 text-[14px] leading-5 font-medium text-[#525866] truncate text-left ${borderClass}`}
+                        >
+                          {contact.role || "-"}
+                        </td>
+                      );
+                    }
+                    if (col.id === "status") {
+                      return (
+                        <td key={col.id} style={{ height: 54 }} className={`px-3 ${borderClass}`}>
+                          <div className="relative flex items-center justify-start">
+                            <span className="text-[14px] leading-5 font-medium text-[#525866]">
+                              {contact.lifecycleStage || contact.status || "-"}
+                            </span>
+                            <button
+                              className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                              title="More options"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      );
+                    }
+                    return null;
+                  })}
                 </tr>
               ))
             )}
@@ -469,7 +630,10 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
       </div>
 
       {totalCount > 0 && (
-        <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+        <div
+          ref={fillFooterRef}
+          className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6 border border-[#E1E4EA] border-t-0"
+        >
           <div className="flex-1 flex justify-between sm:hidden">
             <button
               onClick={() => handlePageChange(currentPage - 1)}

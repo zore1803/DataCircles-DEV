@@ -1725,165 +1725,165 @@ function Companies() {
               </div>
             </div>
           ) : (
-          <div className="flex items-center gap-4 w-full h-full">
-            <div className="flex-shrink-0 flex flex-col justify-center gap-1.5">
-              <h1 className="m-0 leading-tight font-bold text-lg text-gray-900">Companies</h1>
-              <p className="m-0 leading-tight text-xs text-gray-500 font-inter">
-                Manage your organisation contracts
-              </p>
-            </div>
-
-            <div className="relative flex-1 flex items-center justify-end">
-              <div
-                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full`}
-              >
-                <Search
-                  strokeWidth={2.5}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
-                  onClick={() => {
-                    setIsSearchExpanded(true);
-                    searchInputRef.current?.focus();
-                  }}
-                />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onFocus={() => setIsSearchExpanded(true)}
-                  onBlur={() => {
-                    if (!searchTerm) setIsSearchExpanded(false);
-                  }}
-                  className={`w-full h-full pl-9 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
-                  placeholder="Search companies by name, industry, or location..."
-                />
+            <div className="flex items-center gap-4 w-full h-full">
+              <div className="flex-shrink-0 flex flex-col justify-center gap-1.5">
+                <h1 className="m-0 leading-tight font-bold text-lg text-gray-900">Companies</h1>
+                <p className="m-0 leading-tight text-xs text-gray-500 font-inter">
+                  Manage your organisation contracts
+                </p>
               </div>
-            </div>
 
-            {/* Overflow menu: Industry filter, Columns, Import, Video Tutorial */}
-            <div className="relative" ref={moreMenuRef}>
-              <button
-                onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-                className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
-                title="More options"
-              >
-                <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
-                {filterIndustry && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
-                )}
-              </button>
+              <div className="relative flex-1 flex items-center justify-end">
+                <div
+                  className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full`}
+                >
+                  <Search
+                    strokeWidth={2.5}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+                    onClick={() => {
+                      setIsSearchExpanded(true);
+                      searchInputRef.current?.focus();
+                    }}
+                  />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onFocus={() => setIsSearchExpanded(true)}
+                    onBlur={() => {
+                      if (!searchTerm) setIsSearchExpanded(false);
+                    }}
+                    className={`w-full h-full pl-9 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                    placeholder="Search companies by name, industry, or location..."
+                  />
+                </div>
+              </div>
 
-              {isMoreMenuOpen && (
-                <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
-                  <div className="px-3 pb-2 mb-2 border-b border-gray-50">
-                    <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 px-1">
-                      Filter by Industry
-                    </p>
-                  </div>
-                  <div className="max-h-[200px] overflow-y-auto px-1 custom-scrollbar mb-2">
-                    <button
-                      onClick={() => {
-                        setFilterIndustry("");
-                        setPagination((p) => ({ ...p, currentPage: 1 }));
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${!filterIndustry ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
-                    >
-                      All Industries
-                      {!filterIndustry && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                      )}
-                    </button>
-                    {getUniqueIndustries().map((i) => (
+              {/* Overflow menu: Industry filter, Columns, Import, Video Tutorial */}
+              <div className="relative" ref={moreMenuRef}>
+                <button
+                  onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                  className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
+                  title="More options"
+                >
+                  <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
+                  {filterIndustry && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
+                  )}
+                </button>
+
+                {isMoreMenuOpen && (
+                  <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
+                    <div className="px-3 pb-2 mb-2 border-b border-gray-50">
+                      <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 px-1">
+                        Filter by Industry
+                      </p>
+                    </div>
+                    <div className="max-h-[200px] overflow-y-auto px-1 custom-scrollbar mb-2">
                       <button
-                        key={i}
                         onClick={() => {
-                          setFilterIndustry(i);
+                          setFilterIndustry("");
                           setPagination((p) => ({ ...p, currentPage: 1 }));
                         }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between mt-0.5 ${filterIndustry === i ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${!filterIndustry ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
                       >
-                        {i}
-                        {filterIndustry === i && (
+                        All Industries
+                        {!filterIndustry && (
                           <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
                         )}
                       </button>
-                    ))}
+                      {getUniqueIndustries().map((i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            setFilterIndustry(i);
+                            setPagination((p) => ({ ...p, currentPage: 1 }));
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between mt-0.5 ${filterIndustry === i ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
+                        >
+                          {i}
+                          {filterIndustry === i && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="border-t border-gray-50 pt-1">
+                      <button
+                        onClick={() => {
+                          setShowColumnSettings(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <Settings className="w-4 h-4 text-gray-400" />
+                        Columns
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowImport(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <Upload className="w-4 h-4 text-gray-400" />
+                        Import
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowVideoTutorial(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <FileText className="w-4 h-4 text-gray-400" />
+                        Video Tutorial
+                      </button>
+                    </div>
                   </div>
-                  <div className="border-t border-gray-50 pt-1">
-                    <button
-                      onClick={() => {
-                        setShowColumnSettings(true);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      <Settings className="w-4 h-4 text-gray-400" />
-                      Columns
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowImport(true);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      <Upload className="w-4 h-4 text-gray-400" />
-                      Import
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowVideoTutorial(true);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      <FileText className="w-4 h-4 text-gray-400" />
-                      Video Tutorial
-                    </button>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
+
+              {/* Filters */}
+              <button
+                onClick={() => setShowAdvancedFilters(true)}
+                className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+                title="Filters"
+              >
+                <FilterIcon size={16} />
+                {activeFilters.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                    {activeFilters.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Hotlist */}
+              <button
+                onClick={() => setShowHotlist(!showHotlist)}
+                className={`inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors ${showHotlist
+                  ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
+                  : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
+                  }`}
+              >
+                <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#1F2937" />
+                </svg>
+                <span className="font-medium">Hotlist</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  resetForm();
+                  setShowForm(true);
+                }}
+                className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                {showForm ? "Cancel" : "New Company"}
+              </button>
             </div>
-
-            {/* Filters */}
-            <button
-              onClick={() => setShowAdvancedFilters(true)}
-              className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
-              title="Filters"
-            >
-              <FilterIcon size={16} />
-              {activeFilters.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                  {activeFilters.length}
-                </span>
-              )}
-            </button>
-
-            {/* Hotlist */}
-            <button
-              onClick={() => setShowHotlist(!showHotlist)}
-              className={`inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors ${showHotlist
-                ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
-                : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
-                }`}
-            >
-              <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#1F2937" />
-              </svg>
-              <span className="font-medium">Hotlist</span>
-            </button>
-
-            <button
-              onClick={() => {
-                resetForm();
-                setShowForm(true);
-              }}
-              className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              {showForm ? "Cancel" : "New Company"}
-            </button>
-          </div>
           )}
         </div>
 
@@ -1897,12 +1897,12 @@ function Companies() {
             bottom: !loading && !showHotlist ? 64 : 0,
           }}
         >
-        {showHotlist ? (
-          <Hotlist />
-        ) : (
-          <div
-            className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
-          >
+          {showHotlist ? (
+            <Hotlist />
+          ) : (
+            <div
+              className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
+            >
               <table
                 className="w-full border-separate border-spacing-0 text-left"
                 style={{
@@ -1938,126 +1938,126 @@ function Companies() {
                   const firstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
 
                   return (
-                <>
-                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <tr key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => {
-                        const colId = header.column.id;
-                        const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
-                        const isRightSticky = rightPinnedKeys.includes(colId);
-                        const isSticky = isLeftSticky || isRightSticky;
-                        const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
-                        const isRightBoundary = colId === firstRightPinnedKey;
-                        const isDraggable = colId !== "selection";
-                        const isDragging = draggedColKey === colId;
-                        const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+                    <>
+                      <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
+                        {table.getHeaderGroups().map((headerGroup) => (
+                          <tr key={headerGroup.id}>
+                            {headerGroup.headers.map((header) => {
+                              const colId = header.column.id;
+                              const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                              const isRightSticky = rightPinnedKeys.includes(colId);
+                              const isSticky = isLeftSticky || isRightSticky;
+                              const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                              const isRightBoundary = colId === firstRightPinnedKey;
+                              const isDraggable = colId !== "selection";
+                              const isDragging = draggedColKey === colId;
+                              const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
 
-                        return (
-                          <th
-                            key={header.id}
-                            data-col-id={colId}
-                            onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
-                            style={{
-                              width: header.getSize(),
-                              position: isSticky ? "sticky" : "relative",
-                              left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
-                              right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
-                              zIndex: isSticky ? 20 : 1,
-                              opacity: isDragging ? 0.35 : 1,
-                            }}
-                            className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
-                              ? "border-r-2 border-r-gray-300"
-                              : "last:border-r-0"
-                              } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
-                          >
-                            <div className="w-full min-w-0">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext(),
-                              )}
-                            </div>
+                              return (
+                                <th
+                                  key={header.id}
+                                  data-col-id={colId}
+                                  onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
+                                  style={{
+                                    width: header.getSize(),
+                                    position: isSticky ? "sticky" : "relative",
+                                    left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                    right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                    zIndex: isSticky ? 20 : 1,
+                                    opacity: isDragging ? 0.35 : 1,
+                                  }}
+                                  className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
+                                    ? "border-r-2 border-r-gray-300"
+                                    : "last:border-r-0"
+                                    } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                                >
+                                  <div className="w-full min-w-0">
+                                    {flexRender(
+                                      header.column.columnDef.header,
+                                      header.getContext(),
+                                    )}
+                                  </div>
 
-                            {colId !== "selection" && header.column.getCanResize() && (
-                              <div
-                                data-resize-handle="true"
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  header.getResizeHandler()(e);
-                                }}
-                                onTouchStart={header.getResizeHandler()}
-                                className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
-                              />
-                            )}
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </thead>
+                                  {colId !== "selection" && header.column.getCanResize() && (
+                                    <div
+                                      data-resize-handle="true"
+                                      onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        header.getResizeHandler()(e);
+                                      }}
+                                      onTouchStart={header.getResizeHandler()}
+                                      className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
+                                    />
+                                  )}
+                                </th>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </thead>
 
-                <tbody className="bg-white">
-                  {showLoadingSkeleton ? (
-                    <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox />
-                  ) : companies.length === 0 ? (
-                    <tr>
-                      <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
-                        <p className="font-medium">No companies found</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    table.getRowModel().rows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className={`bg-white hover:bg-blue-50 transition-colors ${selectedCompaniesSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
-                        onMouseDown={() => handleMouseDown(row.original._id)}
-                        onMouseUp={handleMouseUp}
-                        onMouseLeave={handleMouseUp}
-                        onTouchStart={() => handleTouchStart(row.original._id)}
-                        onTouchEnd={handleTouchEnd}
-                      >
-                        {row.getVisibleCells().map((cell) => {
-                          const colId = cell.column.id;
-                          const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
-                          const isRightSticky = rightPinnedKeys.includes(colId);
-                          const isSticky = isLeftSticky || isRightSticky;
-                          const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
-                          const isRightBoundary = colId === firstRightPinnedKey;
-                          const isColDragging = draggedColKey === colId;
-
-                          return (
-                            <td
-                              key={cell.id}
-                              style={{
-                                width: cell.column.getSize(),
-                                position: isSticky ? "sticky" : "static",
-                                left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
-                                right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
-                                zIndex: isSticky ? 10 : 1,
-                                opacity: isColDragging ? 0.35 : 1,
-                              }}
-                              className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
-                                ? "border-r-2 border-r-gray-200"
-                                : "last:border-r-0"
-                                } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
-                            >
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext(),
-                              )}
+                      <tbody className="bg-white">
+                        {showLoadingSkeleton ? (
+                          <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox />
+                        ) : companies.length === 0 ? (
+                          <tr>
+                            <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
+                              <p className="font-medium">No companies found</p>
                             </td>
-                          );
-                        })}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-                </>
+                          </tr>
+                        ) : (
+                          table.getRowModel().rows.map((row) => (
+                            <tr
+                              key={row.id}
+                              className={`bg-white hover:bg-blue-50 transition-colors ${selectedCompaniesSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                              onMouseDown={() => handleMouseDown(row.original._id)}
+                              onMouseUp={handleMouseUp}
+                              onMouseLeave={handleMouseUp}
+                              onTouchStart={() => handleTouchStart(row.original._id)}
+                              onTouchEnd={handleTouchEnd}
+                            >
+                              {row.getVisibleCells().map((cell) => {
+                                const colId = cell.column.id;
+                                const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                                const isRightSticky = rightPinnedKeys.includes(colId);
+                                const isSticky = isLeftSticky || isRightSticky;
+                                const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                                const isRightBoundary = colId === firstRightPinnedKey;
+                                const isColDragging = draggedColKey === colId;
+
+                                return (
+                                  <td
+                                    key={cell.id}
+                                    style={{
+                                      width: cell.column.getSize(),
+                                      position: isSticky ? "sticky" : "static",
+                                      left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                      right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                      zIndex: isSticky ? 10 : 1,
+                                      opacity: isColDragging ? 0.35 : 1,
+                                    }}
+                                    className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
+                                      ? "border-r-2 border-r-gray-200"
+                                      : "last:border-r-0"
+                                      } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
+                                  >
+                                    {flexRender(
+                                      cell.column.columnDef.cell,
+                                      cell.getContext(),
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </>
                   );
                 })()}
               </table>
-          </div>
-        )}
+            </div>
+          )}
         </div>
 
         {dragGhost && createPortal(
