@@ -683,8 +683,7 @@ function Companies() {
                       setColumnMenuPos(null);
                       return;
                     }
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setColumnMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
+                    setColumnMenuPos({ top: e.clientY + 4, left: e.clientX - 160 });
                     setOpenColumnMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -1155,6 +1154,29 @@ function Companies() {
     }
   };
 
+  // "Select All" grabs every company ID matching the current search/filters
+  // straight from the database (not just the loaded page). "Deselect All" is
+  // its counterpart: it doesn't clear the selection outright (that's what
+  // "Cancel" does) — it steps back down to only the rows on the current page.
+  const handleSelectAllAcrossPages = async () => {
+    try {
+      const params = new URLSearchParams({ allIds: "true" });
+      if (searchTerm.trim()) params.append("search", searchTerm.trim());
+      if (filterIndustry) params.append("industry", filterIndustry);
+      if (activeFilters && activeFilters.length > 0) {
+        params.append("advancedFilters", JSON.stringify(activeFilters));
+      }
+      const res = await API.get(`/companies/pagination?${params.toString()}`);
+      setSelectedCompanies(res.data.ids || []);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to select all rows");
+    }
+  };
+
+  const handleDeselectAllExtra = () => {
+    setSelectedCompanies(companies.map((c) => c._id));
+  };
+
   // Pagination handlers
   const handlePageChange = (newPage) => {
     if (
@@ -1444,17 +1466,20 @@ function Companies() {
               <span className="font-semibold">{endItem}</span> of{" "}
               <span className="font-semibold">{totalCount}</span> results
             </p>
-            <select
-              value={limit}
-              onChange={(e) => handleLimitChange(parseInt(e.target.value))}
-              className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
-            >
-              <option value={10}>10 per page</option>
-              <option value={20}>20 per page</option>
-              <option value={50}>50 per page</option>
-              <option value={100}>100 per page</option>
-              <option value={150}>150 per page</option>
-            </select>
+            <div className="relative ml-2">
+              <select
+                value={limit}
+                onChange={(e) => handleLimitChange(parseInt(e.target.value))}
+                className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
+              >
+                <option value={10}>10 per page</option>
+                <option value={20}>20 per page</option>
+                <option value={50}>50 per page</option>
+                <option value={100}>100 per page</option>
+                <option value={150}>150 per page</option>
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -1767,6 +1792,20 @@ function Companies() {
                 <span className="text-blue-800 font-semibold font-inter">
                   {selectedCompanies.length} compan{selectedCompanies.length !== 1 ? "ies" : "y"} selected
                 </span>
+                <button
+                  onClick={handleSelectAllAcrossPages}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  Select All
+                </button>
+                <button
+                  onClick={handleDeselectAllExtra}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Deselect All
+                </button>
               </div>
             </div>
           ) : (

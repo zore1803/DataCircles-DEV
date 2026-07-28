@@ -715,6 +715,18 @@ export default function CompanyDealsKanban({
     setCurrentPage(1);
   };
 
+  // "Select All" grabs every deal matching the current search/filters (all
+  // deals for this company are already loaded client-side, so this selects
+  // the full filtered set, not only the current page). "Deselect All" is its
+  // counterpart: it doesn't clear the selection outright — it steps back
+  // down to only the rows on the current page.
+  const handleSelectAllAcrossPages = () => {
+    setSelectedDeals(sortedDeals.map((d) => d._id));
+  };
+
+  const handleDeselectAllExtra = () => {
+    setSelectedDeals(paginatedDeals.map((d) => d._id));
+  };
 
   const paginatedDeals = useMemo(
     () => sortedDeals.slice((currentPage - 1) * limit, currentPage * limit),
@@ -867,6 +879,18 @@ export default function CompanyDealsKanban({
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2 py-2">
+            <button
+              onClick={handleSelectAllAcrossPages}
+              className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Select All
+            </button>
+            <button
+              onClick={handleDeselectAllExtra}
+              className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Deselect All
+            </button>
             <button
               onClick={handleExportSelectedDeals}
               className="px-3.5 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 transition-colors"
@@ -1089,8 +1113,7 @@ export default function CompanyDealsKanban({
                                 setColMenuPos(null);
                                 return;
                               }
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              setColMenuPos({ top: rect.bottom + 4, left: rect.right - 190 });
+                              setColMenuPos({ top: e.clientY + 4, left: e.clientX - 190 });
                               setOpenColMenuKey(col.id);
                             }}
                             className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -1290,12 +1313,11 @@ export default function CompanyDealsKanban({
                                       setRowActionsPos(null);
                                       return;
                                     }
-                                    const rect = e.currentTarget.getBoundingClientRect();
                                     const menuHeight = 128;
-                                    const wouldOverflow = rect.bottom + 4 + menuHeight > window.innerHeight;
+                                    const wouldOverflow = e.clientY + 4 + menuHeight > window.innerHeight;
                                     setRowActionsPos({
-                                      top: wouldOverflow ? rect.top - menuHeight - 4 : rect.bottom + 4,
-                                      left: rect.right - 160,
+                                      top: wouldOverflow ? e.clientY - menuHeight - 4 : e.clientY + 4,
+                                      left: e.clientX - 160,
                                     });
                                     setOpenRowActionsId(deal._id);
                                   }}

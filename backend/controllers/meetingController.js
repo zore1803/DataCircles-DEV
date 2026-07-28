@@ -13,6 +13,33 @@ const Task = require("../models/Task"); // for follow-up task
 const { google } = require("googleapis");
 const axios = require("axios");
 
+// Parses a search term as a calendar date so free-text search can match the
+// "Date & Time" column, which the UI renders as D/M/YYYY (toLocaleDateString).
+// Accepts "D/M/YYYY", "YYYY-MM-DD", and anything else the Date constructor
+// understands; returns the UTC start/end-of-day range, or null if it isn't
+// date-like.
+const parseSearchAsDayRange = (search) => {
+  const trimmed = (search || "").trim();
+  if (!trimmed) return null;
+
+  let date = null;
+  const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashMatch) {
+    const [, d, m, y] = slashMatch;
+    const candidate = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+    if (!Number.isNaN(candidate.getTime())) date = candidate;
+  } else {
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) date = parsed;
+  }
+
+  if (!date) return null;
+
+  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
+  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999));
+  return { $gte: start, $lte: end };
+};
+
 // Helper function to get meeting participants' emails
 const getMeetingParticipants = async (meeting) => {
   const emails = [];
@@ -1389,13 +1416,40 @@ exports.getMeetingsPaginated = async (req, res) => {
     // Base query with organization filter
     const query = { organization: req.user.organization };
 
-    // Search filter (title, description, location, notes)
+    // Search across every column shown in the Meetings list view: title/
+    // description/location/notes live on the Meeting doc itself, but the
+    // "Contact" column is a populated ref, so also resolve which
+    // Contacts/Companies/Vendors/Users match the term and match meetings
+    // that point at any of them.
     if (search) {
+      const searchRegex = { $regex: search, $options: "i" };
+      const orgFilter = { organization: req.user.organization };
+
+      const [matchingContacts, matchingCompanies, matchingVendors, matchingUsers] =
+        await Promise.all([
+          Contact.find({ ...orgFilter, name: searchRegex }).select("_id"),
+          Company.find({ ...orgFilter, name: searchRegex }).select("_id"),
+          Vendor.find({ ...orgFilter, name: searchRegex }).select("_id"),
+          User.find({ ...orgFilter, name: searchRegex }).select("_id"),
+        ]);
+
+      const contactIds = matchingContacts.map((doc) => doc._id);
+      const companyIds = matchingCompanies.map((doc) => doc._id);
+      const vendorIds = matchingVendors.map((doc) => doc._id);
+      const userIds = matchingUsers.map((doc) => doc._id);
+      const scheduledAtRange = parseSearchAsDayRange(search);
+
       query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { location: { $regex: search, $options: "i" } },
-        { notes: { $regex: search, $options: "i" } },
+        { title: searchRegex },
+        { description: searchRegex },
+        { location: searchRegex },
+        { notes: searchRegex },
+        { status: searchRegex },
+        ...(contactIds.length ? [{ contact: { $in: contactIds } }, { participants: { $in: contactIds } }] : []),
+        ...(companyIds.length ? [{ company: { $in: companyIds } }] : []),
+        ...(vendorIds.length ? [{ vendor: { $in: vendorIds } }] : []),
+        ...(userIds.length ? [{ createdBy: { $in: userIds } }] : []),
+        ...(scheduledAtRange ? [{ scheduledAt: scheduledAtRange }] : []),
       ];
     }
 
@@ -1436,6 +1490,14 @@ exports.getMeetingsPaginated = async (req, res) => {
     // Sort configuration
     const sortObj = {};
     sortObj[sortBy] = sortOrder === "asc" ? 1 : -1;
+
+    // "Select All" support: return every matching meeting's _id (ignoring
+    // pagination) so the frontend can select all rows across every page,
+    // not just the current page's 50.
+    if (req.query.allIds === "true") {
+      const allMeetings = await Meeting.find(query).select("_id").lean();
+      return res.json({ ids: allMeetings.map((m) => m._id) });
+    }
 
     // Execute query with pagination
     const [meetings, totalCount] = await Promise.all([
