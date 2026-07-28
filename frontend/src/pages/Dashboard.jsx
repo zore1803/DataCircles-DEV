@@ -212,6 +212,19 @@ function Dashboard() {
     setSelectedInvoices((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
+  // "Select All" grabs every invoice matching the current search (all
+  // invoices are already loaded client-side, so this selects the full
+  // filtered set, not only the current page). "Deselect All" is its
+  // counterpart: it doesn't clear the selection outright — it steps back
+  // down to only the rows on the current page.
+  const handleSelectAllInvoicesAcrossPages = () => {
+    setSelectedInvoices(sortedInvoices.map((inv) => inv._id));
+  };
+
+  const handleDeselectAllInvoicesExtra = () => {
+    setSelectedInvoices(paginatedInvoices.map((inv) => inv._id));
+  };
+
   const [showBulkInvoiceDeleteModal, setShowBulkInvoiceDeleteModal] = useState(false);
   const [showBulkInvoiceStatusModal, setShowBulkInvoiceStatusModal] = useState(false);
   const [bulkInvoiceStatus, setBulkInvoiceStatus] = useState("Paid");
@@ -440,8 +453,7 @@ function Dashboard() {
                       setInvoiceColMenuPos(null);
                       return;
                     }
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setInvoiceColMenuPos({ top: rect.bottom + 4, left: rect.right - 190 });
+                    setInvoiceColMenuPos({ top: e.clientY + 4, left: e.clientX - 190 });
                     setOpenInvoiceColMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -586,8 +598,7 @@ function Dashboard() {
                           setInvoiceActionsPos(null);
                           return;
                         }
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setInvoiceActionsPos({ top: rect.bottom + 4, left: rect.right - 190 });
+                        setInvoiceActionsPos({ top: e.clientY + 4, left: e.clientX - 190 });
                         setOpenInvoiceActionsId(inv._id);
                       }}
                       className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -1530,6 +1541,20 @@ function Dashboard() {
               <span className="text-blue-800 font-semibold font-inter text-sm">
                 {selectedInvoices.length} invoice{selectedInvoices.length !== 1 ? "s" : ""} selected
               </span>
+              <button
+                onClick={handleSelectAllInvoicesAcrossPages}
+                className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Select All
+              </button>
+              <button
+                onClick={handleDeselectAllInvoicesExtra}
+                className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+              >
+                <X className="w-4 h-4" />
+                Deselect All
+              </button>
             </div>
           </div>
         ) : (
@@ -1617,17 +1642,20 @@ function Dashboard() {
                   <span className="font-semibold">{Math.min(invoicePage * invoicesPerPage, sortedInvoices.length)}</span> of{" "}
                   <span className="font-semibold">{sortedInvoices.length}</span> results
                 </p>
-                <select
-                  value={invoicesPerPage}
-                  onChange={(e) => setInvoicesPerPage(parseInt(e.target.value))}
-                  className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
-                >
-                  <option value={10}>10 per page</option>
-                  <option value={20}>20 per page</option>
-                  <option value={50}>50 per page</option>
-                  <option value={100}>100 per page</option>
-                  <option value={150}>150 per page</option>
-                </select>
+                <div className="relative ml-2">
+                  <select
+                    value={invoicesPerPage}
+                    onChange={(e) => setInvoicesPerPage(parseInt(e.target.value))}
+                    className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
+                  >
+                    <option value={10}>10 per page</option>
+                    <option value={20}>20 per page</option>
+                    <option value={50}>50 per page</option>
+                    <option value={100}>100 per page</option>
+                    <option value={150}>150 per page</option>
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                </div>
               </div>
 
               <div className="flex items-center gap-2">

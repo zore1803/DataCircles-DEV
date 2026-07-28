@@ -7,6 +7,33 @@ const Vendor = require("../models/Vendor");
 const sendGridMail = require("../utils/sendGridMail");
 const NotificationSettings = require("../models/NotificationSettings");
 
+// Parses a search term as a calendar date so free-text search can match the
+// "Due Date" column, which the UI renders as D/M/YYYY (toLocaleDateString).
+// Accepts "D/M/YYYY", "YYYY-MM-DD", and anything else the Date constructor
+// understands; returns the UTC start/end-of-day range, or null if it isn't
+// date-like.
+const parseSearchAsDayRange = (search) => {
+  const trimmed = (search || "").trim();
+  if (!trimmed) return null;
+
+  let date = null;
+  const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashMatch) {
+    const [, d, m, y] = slashMatch;
+    const candidate = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+    if (!Number.isNaN(candidate.getTime())) date = candidate;
+  } else {
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) date = parsed;
+  }
+
+  if (!date) return null;
+
+  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
+  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999));
+  return { $gte: start, $lte: end };
+};
+
 const createTask = async (req, res) => {
   try {
     let assignedUsers = [];
@@ -236,11 +263,40 @@ const getAllTasksPaginated = async (req, res) => {
     // Base query - always filter by organization
     let query = { organization: req.user.organization };
 
-    // Search
+    // Search across every column shown in the Tasks list view: title/
+    // description live on the Task doc itself, but "Related To", "Company"
+    // and "Assigned Users" are populated refs, so also resolve which
+    // Companies/Contacts/Deals/Vendors/Users match the term and match tasks
+    // that point at any of them.
     if (search) {
+      const searchRegex = { $regex: search, $options: "i" };
+      const orgFilter = { organization: req.user.organization };
+
+      const [matchingCompanies, matchingContacts, matchingDeals, matchingVendors, matchingUsers] =
+        await Promise.all([
+          Company.find({ ...orgFilter, name: searchRegex }).select("_id"),
+          Contact.find({ ...orgFilter, name: searchRegex }).select("_id"),
+          Deal.find({ ...orgFilter, title: searchRegex }).select("_id"),
+          Vendor.find({ ...orgFilter, name: searchRegex }).select("_id"),
+          User.find({ ...orgFilter, name: searchRegex }).select("_id"),
+        ]);
+
+      const entityIds = [
+        ...matchingCompanies,
+        ...matchingContacts,
+        ...matchingDeals,
+        ...matchingVendors,
+      ].map((doc) => doc._id);
+      const userIds = matchingUsers.map((doc) => doc._id);
+      const dueDateRange = parseSearchAsDayRange(search);
+
       query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
+        { title: searchRegex },
+        { description: searchRegex },
+        { status: searchRegex },
+        ...(entityIds.length ? [{ relatedTo: { $in: entityIds } }, { "relatedEntities.entityId": { $in: entityIds } }] : []),
+        ...(userIds.length ? [{ users: { $in: userIds } }] : []),
+        ...(dueDateRange ? [{ dueDate: dueDateRange }] : []),
       ];
     }
 
@@ -267,6 +323,14 @@ const getAllTasksPaginated = async (req, res) => {
     // Sorting
     const sortObj = {};
     sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
+
+    // "Select All" support: return every matching task's _id (ignoring
+    // pagination) so the frontend can select all rows across every page,
+    // not just the current page's 50.
+    if (req.query.allIds === "true") {
+      const allTasks = await Task.find(query).select("_id").lean();
+      return res.json({ ids: allTasks.map((t) => t._id) });
+    }
 
     // Execute
     const [tasks, totalCount] = await Promise.all([
@@ -619,7 +683,7 @@ const updateTask = async (req, res) => {
 const updateTaskStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    const validStatuses = ["Pending", "Completed"];
+    const validStatuses = ["Pending", "In Progress", "Completed"];
 
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });

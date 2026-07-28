@@ -341,8 +341,7 @@ export default function DealsTable({
               setColMenuPos(null);
               return;
             }
-            const rect = e.currentTarget.getBoundingClientRect();
-            setColMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
+            setColMenuPos({ top: e.clientY + 4, left: e.clientX - 160 });
             setOpenColMenuKey(colKey);
           }}
           className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -664,12 +663,11 @@ export default function DealsTable({
                       setRowActionsPos(null);
                       return;
                     }
-                    const rect = e.currentTarget.getBoundingClientRect();
                     const menuHeight = 128;
-                    const wouldOverflow = rect.bottom + 4 + menuHeight > window.innerHeight;
+                    const wouldOverflow = e.clientY + 4 + menuHeight > window.innerHeight;
                     setRowActionsPos({
-                      top: wouldOverflow ? rect.top - menuHeight - 4 : rect.bottom + 4,
-                      left: rect.right - 130,
+                      top: wouldOverflow ? e.clientY - menuHeight - 4 : e.clientY + 4,
+                      left: e.clientX - 130,
                     });
                     setOpenRowActionsId(deal._id);
                   }}

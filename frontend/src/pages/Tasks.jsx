@@ -53,6 +53,33 @@ import {
   createColumnHelper,
 } from "@tanstack/react-table";
 import AppToaster from "../components/AppToaster";
+import TableSkeletonRows from "../components/common/TableSkeletonRows";
+import useMinDelay from "../hooks/useMinDelay";
+
+const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>,
+// matching Companies/Contacts' search-highlighting exactly.
+const HighlightText = ({ text, query }) => {
+  const str = text === null || text === undefined ? "" : String(text);
+  const q = (query || "").trim();
+  if (!q) return <>{str}</>;
+
+  const parts = str.split(new RegExp(`(${escapeRegExp(q)})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="bg-yellow-200 text-inherit rounded-sm px-0.5">
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+};
 
 const TuneFilterIcon = (props) => (
   <svg viewBox="433 15 24 24" width={16} height={16} fill="none" {...props}>
@@ -118,7 +145,7 @@ const CustomKanbanIcon = (props) => (
 );
 
 // Task Status Dropdown Component
-const StatusSelect = ({ task, onUpdate }) => {
+const StatusSelect = ({ task, onUpdate, query }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = React.useRef(null);
   const statuses = ["Pending", "In Progress", "Completed"];
@@ -156,7 +183,7 @@ const StatusSelect = ({ task, onUpdate }) => {
       >
         {task.status === "Completed" && <CheckCircle className="w-3 h-3" />}
         <span className="truncate max-w-[100px]">
-          {task.status || "Pending"}
+          <HighlightText text={task.status || "Pending"} query={query} />
         </span>
         <ChevronDown className="w-3 h-3 opacity-50 flex-shrink-0" />
       </button>
@@ -192,7 +219,7 @@ const StatusSelect = ({ task, onUpdate }) => {
 };
 
 // Meeting Priority Dropdown Component
-const MeetingStatusSelect = ({ meeting, onUpdate }) => {
+const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = React.useRef(null);
   const statuses = ["scheduled", "completed", "cancelled", "no-show"];
@@ -234,7 +261,7 @@ const MeetingStatusSelect = ({ meeting, onUpdate }) => {
       >
         {meeting.status === "completed" && <CheckCircle className="w-3 h-3" />}
         <span className="truncate max-w-[100px]">
-          {capitalize(meeting.status || "scheduled")}
+          <HighlightText text={capitalize(meeting.status || "scheduled")} query={query} />
         </span>
         <ChevronDown className="w-3 h-3 opacity-50 flex-shrink-0" />
       </button>
@@ -428,6 +455,25 @@ function Tasks() {
 
   // Bulk Selection for Meetings
   const [selectedMeetings, setSelectedMeetings] = useState([]);
+  // Delays the bulk-strip's unmount so it can play a slide-out-right exit
+  // animation on deselect (mirroring the slide-in entrance), same as Companies.
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    const selectedCount = activeTab === "tasks" ? selectedTasks.length : selectedMeetings.length;
+    const active = selectionMode && selectedCount > 0;
+    if (active) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [activeTab, selectionMode, selectedTasks.length, selectedMeetings.length]);
   const [showMeetingBulkActions, setShowMeetingBulkActions] = useState(false);
 
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
@@ -476,6 +522,9 @@ function Tasks() {
       setActiveTab(state.tab);
     }
   }, [state]);
+
+  const showTaskLoadingSkeleton = useMinDelay(loading && tasks.length === 0, 300);
+  const showMeetingLoadingSkeleton = useMinDelay(loading && meetings.length === 0, 300);
 
   // Pagination & Sorting for Tasks
   const [taskPagination, setTaskPagination] = useState({
@@ -542,7 +591,7 @@ function Tasks() {
     setColumnOrder(order);
   };
 
-  const startColumnDrag = (e, colId, label, previewRows) => {
+  const startColumnDrag = (e, colId, label, previewRows, fallbackOrder = []) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
@@ -616,7 +665,7 @@ function Tasks() {
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) {
-        reorderColumns(colId, overKey, columnOrder.length ? columnOrder : []);
+        reorderColumns(colId, overKey, columnOrder.length ? columnOrder : fallbackOrder);
       }
       dragOverRef.current = null;
       setDraggedColKey(null);
@@ -820,7 +869,44 @@ function Tasks() {
     }
   };
 
-  
+  // "Select All" grabs every task/meeting ID matching the current
+  // search/filters straight from the database (not just the loaded page of
+  // up to `limit` rows). "Deselect All" is its counterpart: it doesn't clear
+  // the selection outright (that's what "Clear" does) — it steps back down
+  // to only the rows on the current page.
+  const handleSelectAllAcrossPages = async () => {
+    try {
+      if (activeTab === "tasks") {
+        const params = new URLSearchParams({ allIds: "true" });
+        if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
+        if (debouncedFilterStatus) params.append("status", debouncedFilterStatus);
+        if (debouncedUserFilter) params.append("user", debouncedUserFilter);
+        if (debouncedDateFilter) params.append("dueDate", debouncedDateFilter);
+        const res = await API.get(`/tasks/pagination?${params.toString()}`);
+        setSelectedTasks(res.data.ids || []);
+      } else {
+        const params = new URLSearchParams({ allIds: "true" });
+        if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
+        if (debouncedFilterStatus) params.append("priority", debouncedFilterStatus);
+        if (debouncedUserFilter) params.append("user", debouncedUserFilter);
+        if (debouncedDateFilter) params.append("scheduledAt", debouncedDateFilter);
+        const res = await API.get(`/meetings/pagination?${params.toString()}`);
+        setSelectedMeetings(res.data.ids || []);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to select all rows");
+    }
+  };
+
+  const handleDeselectAllExtra = () => {
+    if (activeTab === "tasks") {
+      setSelectedTasks(tasks.map((t) => t._id));
+    } else {
+      setSelectedMeetings(meetings.map((m) => m._id));
+    }
+  };
+
+
   // Task handlers
   const toggleTaskForm = () => {
     if (showTaskForm) resetTaskForm();
@@ -1309,19 +1395,21 @@ function Tasks() {
     if (meeting.vendor) return "Vendor";
     return "Unknown";
   };
+  // Returns a plain string (not JSX) so callers can run it through
+  // HighlightText for search-match highlighting, same as getCompanyName.
   const getRelatedToName = (task) => {
     if (
       task.relatedEntities &&
       Array.isArray(task.relatedEntities) &&
       task.relatedEntities.length > 0
     ) {
-      return task.relatedEntities.map((entity, index) => {
-        const entityData = entity.entityId;
+      return task.relatedEntities
+        .map((entity) => {
+          const entityData = entity.entityId;
 
-        let name = "N/A";
-        if (entityData && typeof entityData === "object") {
-          name = entityData.name || entityData.title || "N/A";
-        } else {
+          if (entityData && typeof entityData === "object") {
+            return entityData.name || entityData.title || "N/A";
+          }
           const entityId = entityData;
           const map = {
             Company: companies,
@@ -1331,18 +1419,9 @@ function Tasks() {
           };
           const options = map[entity.entityModel] || [];
           const related = options.find((item) => item._id === entityId);
-          name = related ? related.name || related.title || "N/A" : "N/A";
-        }
-
-        return (
-          <span key={index} className="font-semibold text-sm text-gray-900">
-            {name}
-            {index < task.relatedEntities.length - 1 && (
-              <span className="text-gray-400 mx-1">,</span>
-            )}
-          </span>
-        );
-      });
+          return related ? related.name || related.title || "N/A" : "N/A";
+        })
+        .join(", ");
     }
 
     if (task.relatedTo && task.relationModel) {
@@ -1355,12 +1434,10 @@ function Tasks() {
       const options = map[task.relationModel] || [];
       const relatedToId = task.relatedTo?._id || task.relatedTo;
       const related = options.find((item) => item._id === relatedToId);
-      const name = related ? related.name || related.title || "N/A" : "N/A";
-
-      return <span className="font-semibold text-sm text-gray-900">{name}</span>;
+      return related ? related.name || related.title || "N/A" : "N/A";
     }
 
-    return <span className="text-sm text-gray-500">N/A</span>;
+    return "N/A";
   };
 
   const getCompanyName = (task) => {
@@ -1513,6 +1590,7 @@ function Tasks() {
     participants: "Contact",
     scheduledAt: "Date & Time",
     status: "Status",
+    url: "URL",
   };
   const getMeetingColumnPreviewValue = (meeting, colId) => {
     switch (colId) {
@@ -1524,6 +1602,8 @@ function Tasks() {
         return meeting.scheduledAt ? new Date(meeting.scheduledAt).toLocaleString() : "No Date";
       case "status":
         return meeting.status || "-";
+      case "url":
+        return meeting.location || "-";
       default:
         return "-";
     }
@@ -1551,8 +1631,7 @@ function Tasks() {
               setColMenuPos(null);
               return;
             }
-            const rect = e.currentTarget.getBoundingClientRect();
-            setColMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
+            setColMenuPos({ top: e.clientY + 4, left: e.clientX - 160 });
             setOpenColMenuKey(colKey);
           }}
           className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -1799,14 +1878,14 @@ function Tasks() {
                   className={`font-medium text-gray-900 truncate ${task.status === "Completed" ? "line-through text-gray-400" : ""}`}
                   title={task.title}
                 >
-                  {task.title}
+                  <HighlightText text={task.title} query={searchTerm} />
                 </span>
                 {task.description && (
                   <p
                     className={`text-xs text-gray-500 truncate mt-0.5 ${task.status === "Completed" ? "line-through text-gray-300" : ""}`}
                     title={task.description}
                   >
-                    {task.description}
+                    <HighlightText text={task.description} query={searchTerm} />
                   </p>
                 )}
               </div>
@@ -1819,8 +1898,8 @@ function Tasks() {
         size: 200,
         header: () => renderHeaderMenu("relatedTo", "Related To"),
         cell: ({ row }) => (
-          <div className="truncate text-gray-700 w-full">
-            {getRelatedToName(row.original)}
+          <div className="truncate text-gray-700 w-full" title={getRelatedToName(row.original)}>
+            <HighlightText text={getRelatedToName(row.original)} query={searchTerm} />
           </div>
         ),
       }),
@@ -1830,7 +1909,7 @@ function Tasks() {
         header: () => renderHeaderMenu("company", "Company"),
         cell: ({ row }) => (
           <div className="truncate text-gray-700 w-full" title={getCompanyName(row.original)}>
-            {getCompanyName(row.original)}
+            <HighlightText text={getCompanyName(row.original)} query={searchTerm} />
           </div>
         ),
       }),
@@ -1848,6 +1927,7 @@ function Tasks() {
             <StatusSelect
               task={row.original}
               onUpdate={handleTaskStatusChange}
+              query={searchTerm}
             />
           </div>
         ),
@@ -1861,7 +1941,7 @@ function Tasks() {
             className="truncate text-gray-700 w-full"
             title={getAssignedUsers(row.original)}
           >
-            {getAssignedUsers(row.original)}
+            <HighlightText text={getAssignedUsers(row.original)} query={searchTerm} />
           </div>
         ),
       }),
@@ -1871,12 +1951,13 @@ function Tasks() {
         header: () => renderHeaderMenu("dueDate", "Due Date"),
         cell: ({ getValue }) => {
           const val = getValue();
+          const text = val ? new Date(val).toLocaleDateString() : "No Date";
           return (
             <div
               className="truncate text-gray-700"
-              title={val ? new Date(val).toLocaleDateString() : "No Date"}
+              title={text}
             >
-              {val ? new Date(val).toLocaleDateString() : "No Date"}
+              <HighlightText text={text} query={searchTerm} />
             </div>
           );
         },
@@ -1896,6 +1977,7 @@ function Tasks() {
       colMenuPos,
       openRowActionsId,
       rowActionsPos,
+      searchTerm,
     ],
   );
 
@@ -2001,18 +2083,7 @@ function Tasks() {
       meetingColumnHelper.accessor("title", {
         id: "title",
         size: 293,
-        header: () => (
-          <div
-            className="flex items-center gap-2 cursor-pointer select-none"
-            onClick={() => handleSort("title")}
-          >
-            <CustomMeetingIcon width={20} height={20} style={{ color: "#525252" }} />
-            <span className="truncate" title="Meeting">
-              Meeting
-            </span>
-            <SortIcons field="title" config={meetingSortConfig} />
-          </div>
-        ),
+        header: () => renderHeaderMenu("title", "Meeting"),
         cell: ({ row }) => {
           const meeting = row.original;
           return (
@@ -2022,7 +2093,7 @@ function Tasks() {
                 style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#222530" }}
                 title={meeting.title}
               >
-                {meeting.title}
+                <HighlightText text={meeting.title} query={searchTerm} />
               </div>
               <div
                 className="flex items-center gap-1.5 mt-0.5 truncate"
@@ -2033,7 +2104,7 @@ function Tasks() {
                   className="truncate"
                   style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#525252" }}
                 >
-                  With {getMeetingEntityName(meeting)}
+                  With <HighlightText text={getMeetingEntityName(meeting)} query={searchTerm} />
                 </span>
               </div>
             </div>
@@ -2043,34 +2114,22 @@ function Tasks() {
       meetingColumnHelper.accessor("scheduledAt", {
         id: "scheduledAt",
         size: 239,
-        header: () => (
-          <div
-            className="flex items-center gap-2 cursor-pointer select-none"
-            onClick={() => handleSort("scheduledAt")}
-          >
-            <CustomEventIcon width={20} height={20} style={{ color: "#525252" }} />
-            <span className="truncate" title="Date & Time">
-              Date & Time
-            </span>
-            <SortIcons field="scheduledAt" config={meetingSortConfig} />
-          </div>
-        ),
+        header: () => renderHeaderMenu("scheduledAt", "Date & Time"),
         cell: ({ getValue }) => {
           const val = getValue();
           if (!val)
             return <div className="text-gray-700 truncate w-full">No Date</div>;
           const d = new Date(val);
+          const dateText = d.toLocaleDateString();
+          const timeText = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
           return (
             <div
               className="w-full truncate text-gray-700"
               title={d.toLocaleString()}
             >
-              <div>{d.toLocaleDateString()}</div>
+              <div><HighlightText text={dateText} query={searchTerm} /></div>
               <div className="text-xs text-gray-500">
-                {d.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                <HighlightText text={timeText} query={searchTerm} />
               </div>
             </div>
           );
@@ -2079,18 +2138,7 @@ function Tasks() {
       meetingColumnHelper.accessor("status", {
         id: "status",
         size: 213,
-        header: () => (
-          <div
-            className="flex items-center gap-2 cursor-pointer select-none"
-            onClick={() => handleSort("status")}
-          >
-            <CustomTargetIcon width={20} height={20} style={{ color: "#525252" }} />
-            <span className="truncate" title="Status">
-              Status
-            </span>
-            <SortIcons field="status" config={meetingSortConfig} />
-          </div>
-        ),
+        header: () => renderHeaderMenu("status", "Status"),
         cell: ({ row }) => (
           <div
             className="w-full flex items-center"
@@ -2101,6 +2149,7 @@ function Tasks() {
             <MeetingStatusSelect
               meeting={row.original}
               onUpdate={handleMeetingStatusChange}
+              query={searchTerm}
             />
           </div>
         ),
@@ -2108,18 +2157,7 @@ function Tasks() {
       meetingColumnHelper.accessor("participants", {
         id: "participants",
         size: 379,
-        header: () => (
-          <div
-            className="flex items-center gap-2 cursor-pointer select-none"
-            onClick={() => handleSort("participants")}
-          >
-            <CustomContactIcon width={20} height={20} style={{ color: "#525252" }} />
-            <span className="truncate" title="Contact">
-              Contact
-            </span>
-            <SortIcons field="participants" config={meetingSortConfig} />
-          </div>
-        ),
+        header: () => renderHeaderMenu("participants", "Contact"),
         cell: ({ row }) => {
           const meeting = row.original;
           return (
@@ -2129,58 +2167,45 @@ function Tasks() {
                 style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#222530" }}
                 title={getMeetingEntityName(meeting)}
               >
-                {getMeetingEntityName(meeting)}
+                <HighlightText text={getMeetingEntityName(meeting)} query={searchTerm} />
               </div>
               <div
                 className="truncate mt-0.5"
                 style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#525252" }}
                 title={getMeetingParticipants(meeting)}
               >
-                {getMeetingParticipants(meeting)}
+                <HighlightText text={getMeetingParticipants(meeting)} query={searchTerm} />
               </div>
             </div>
           );
         },
       }),
-      meetingColumnHelper.display({
-        id: "actions",
-        size: 152,
-        enableResizing: false,
-        header: () => <span>Actions</span>,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2 w-full">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleMeetingEdit(row.original);
-              }}
-              title="View"
-              className="p-1 text-[#525866] hover:text-blue-600 rounded hover:bg-gray-100"
+      meetingColumnHelper.accessor("location", {
+        id: "url",
+        size: 220,
+        enableResizing: true,
+        header: () => renderHeaderMenu("url", "URL"),
+        cell: ({ getValue }) => {
+          const url = getValue();
+          if (!url) return <div className="text-gray-400 truncate w-full">—</div>;
+          const isLink = /^https?:\/\//i.test(url);
+          return isLink ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="truncate w-full block text-blue-600 hover:underline"
+              title={url}
             >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleMeetingEdit(row.original);
-              }}
-              title="Edit"
-              className="p-1 text-[#525866] hover:text-blue-600 rounded hover:bg-gray-100"
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(row.original._id, "meeting");
-              }}
-              title="Delete"
-              className="p-1 text-[#E82222] hover:bg-red-50 rounded"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        ),
+              <HighlightText text={url} query={searchTerm} />
+            </a>
+          ) : (
+            <div className="truncate w-full text-gray-700" title={url}>
+              <HighlightText text={url} query={searchTerm} />
+            </div>
+          );
+        },
       }),
     ],
     [
@@ -2191,12 +2216,18 @@ function Tasks() {
       companies,
       contacts,
       vendors,
+      searchTerm,
     ],
+  );
+
+  const orderedMeetingColumns = useMemo(
+    () => orderColumns(meetingColumnsConfig, "meeting"),
+    [meetingColumnsConfig, hiddenColumns, columnOrder, pinnedColumns],
   );
 
   const meetingTable = useReactTable({
     data: meetings,
-    columns: meetingColumnsConfig,
+    columns: orderedMeetingColumns,
     state: { columnSizing: meetingColumnSizing },
     onColumnSizingChange: setMeetingColumnSizing,
     getCoreRowModel: getCoreRowModel(),
@@ -2265,17 +2296,20 @@ function Tasks() {
               <span className="font-semibold">{pagination.totalCount}</span>{" "}
               results
             </p>
-            <select
-              value={pagination.limit}
-              onChange={(e) => handleLimitChange(parseInt(e.target.value))}
-              className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer text-gray-700"
-            >
-              {[10, 20, 50, 100].map((v) => (
-                <option key={v} value={v}>
-                  {v} per page
-                </option>
-              ))}
-            </select>
+            <div className="relative ml-2">
+              <select
+                value={pagination.limit}
+                onChange={(e) => handleLimitChange(parseInt(e.target.value))}
+                className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer text-gray-700"
+              >
+                {[10, 20, 50, 100].map((v) => (
+                  <option key={v} value={v}>
+                    {v} per page
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -2377,6 +2411,63 @@ function Tasks() {
           zIndex: 40,
         }}
       >
+        {showBulkStrip ? (
+          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-6 w-full h-full`}>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleExport}
+                className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </button>
+              <button
+                onClick={() => (activeTab === "tasks" ? setShowBulkActions(true) : setShowMeetingBulkActions(true))}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <Edit2 className="w-4 h-4" />
+                Bulk Update
+              </button>
+              <button
+                onClick={() => setShowBulkDeleteModal(true)}
+                disabled={bulkLoading}
+                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+              <button
+                onClick={() => (activeTab === "tasks" ? setSelectedTasks([]) : setSelectedMeetings([]))}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-blue-600" />
+              <span className="text-blue-800 font-semibold font-inter">
+                {activeTab === "tasks" ? selectedTasks.length : selectedMeetings.length}{" "}
+                {activeTab === "tasks" ? "task" : "meeting"}
+                {(activeTab === "tasks" ? selectedTasks.length : selectedMeetings.length) !== 1 ? "s" : ""} selected
+              </span>
+              <button
+                onClick={handleSelectAllAcrossPages}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Select All
+              </button>
+              <button
+                onClick={handleDeselectAllExtra}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <X className="w-4 h-4" />
+                Deselect All
+              </button>
+            </div>
+          </div>
+        ) : (
+        <>
         <div className="flex flex-row items-center flex-shrink-0" style={{ height: 44 }}>
           <button
             onClick={() => setActiveTab("tasks")}
@@ -2424,12 +2515,12 @@ function Tasks() {
 
         <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
           <div
-            className={`relative h-11 flex items-center border rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-80" : "w-11"} max-w-full flex-shrink-0`}
+            className={`relative h-10 flex items-center border rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full flex-shrink-0`}
             style={{ borderColor: isSearchExpanded ? "#0085FF" : "rgba(31, 41, 55, 0.1)" }}
           >
             <Search
               strokeWidth={2.5}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
               onClick={() => {
                 setIsSearchExpanded(true);
                 searchInputRef.current?.focus();
@@ -2646,91 +2737,11 @@ function Tasks() {
             </span>
           </button>
         </div>
+        </>
+        )}
       </div>
       {/* Spacer to offset the fixed strip above */}
       <div style={{ height: 64 }} />
-
-      {activeTab === "tasks" && selectionMode && selectedTasks.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mx-6 mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm gap-4">
-          <div className="flex items-center gap-3">
-            <CheckCircle className="w-5 h-5 text-blue-600" />
-            <span className="text-blue-800 font-semibold font-inter">
-              {selectedTasks.length} task{selectedTasks.length !== 1 ? "s" : ""} selected
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-            <button
-              onClick={handleExport}
-              className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </button>
-            <button
-              onClick={() => setShowBulkActions(true)}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <Edit2 className="w-4 h-4" />
-              Bulk Update
-            </button>
-            <button
-              onClick={() => setShowBulkDeleteModal(true)}
-              disabled={bulkLoading}
-              className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete
-            </button>
-            <button
-              onClick={() => setSelectedTasks([])}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-      )}
-
-      {activeTab === "meetings" && selectionMode && selectedMeetings.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mx-6 mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm gap-4">
-          <div className="flex items-center gap-3">
-            <CheckCircle className="w-5 h-5 text-blue-600" />
-            <span className="text-blue-800 font-semibold font-inter">
-              {selectedMeetings.length} meeting{selectedMeetings.length !== 1 ? "s" : ""} selected
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-            <button
-              onClick={handleExport}
-              className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </button>
-            <button
-              onClick={() => setShowMeetingBulkActions(true)}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <Edit2 className="w-4 h-4" />
-              Bulk Update
-            </button>
-            <button
-              onClick={() => setShowBulkDeleteModal(true)}
-              disabled={bulkLoading}
-              className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete
-            </button>
-            <button
-              onClick={() => setSelectedMeetings([])}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-      )}
 
       {activeTab === "tasks" && !showKanban && (
       <>
@@ -2769,6 +2780,7 @@ function Tasks() {
                           colId,
                           TASK_COLUMN_LABELS[colId] || colId,
                           tasks.map((t) => String(getTaskColumnPreviewValue(t, colId))),
+                          headerGroup.headers.map((h) => h.column.id).filter((id) => id !== "selection"),
                         ) : undefined}
                         style={{
                           width: header.getSize(),
@@ -2777,7 +2789,7 @@ function Tasks() {
                           zIndex: isLeftSticky ? 20 : 1,
                           opacity: isDragging ? 0.35 : 1,
                         }}
-                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
                         <div className="truncate w-full">
                           {flexRender(header.column.columnDef.header, header.getContext())}
@@ -2800,12 +2812,13 @@ function Tasks() {
               ))}
             </thead>
             <tbody className="divide-y divide-[#E1E4EA] bg-white">
-              {loading && tasks.length === 0 ? (
-                <tr>
-                  <td colSpan={taskTable.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-medium">
-                    Loading Tasks...
-                  </td>
-                </tr>
+              {showTaskLoadingSkeleton ? (
+                <TableSkeletonRows
+                  numRows={taskPagination.limit}
+                  columns={taskTable.getVisibleLeafColumns().filter((c) => c.id !== "selection")}
+                  hasCheckbox
+                  rowHeight={54}
+                />
               ) : tasks.length === 0 ? (
                 <tr>
                   <td colSpan={taskTable.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-medium">
@@ -2878,34 +2891,60 @@ function Tasks() {
             <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
               {meetingTable.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <th
-                      key={header.id}
-                      style={{ width: header.getSize(), position: "relative" }}
-                      className="px-3 py-3 text-sm font-medium text-[#525866] hover:bg-gray-100 transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0"
-                    >
-                      <div className="truncate w-full">
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                      </div>
-                      {header.column.getCanResize() && (
-                        <div
-                          onMouseDown={header.getResizeHandler()}
-                          onTouchStart={header.getResizeHandler()}
-                          className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 ${header.column.getIsResizing() ? "bg-blue-500" : "bg-transparent"}`}
-                        />
-                      )}
-                    </th>
-                  ))}
+                  {headerGroup.headers.map((header) => {
+                    const colId = header.column.id;
+                    const isLeftSticky = colId === "selection";
+                    const isDraggable = colId !== "selection" && colId !== "actions";
+                    const isDragging = draggedColKey === colId;
+                    const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+                    return (
+                      <th
+                        key={header.id}
+                        data-col-id={colId}
+                        onMouseDown={isDraggable ? (e) => startColumnDrag(
+                          e,
+                          colId,
+                          MEETING_COLUMN_LABELS[colId] || colId,
+                          meetings.map((m) => String(getMeetingColumnPreviewValue(m, colId))),
+                          headerGroup.headers.map((h) => h.column.id).filter((id) => id !== "selection"),
+                        ) : undefined}
+                        style={{
+                          width: header.getSize(),
+                          position: isLeftSticky ? "sticky" : "relative",
+                          left: isLeftSticky ? 0 : "auto",
+                          zIndex: isLeftSticky ? 20 : 1,
+                          opacity: isDragging ? 0.35 : 1,
+                        }}
+                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                      >
+                        <div className="truncate w-full">
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                        </div>
+                        {header.column.getCanResize() && (
+                          <div
+                            data-resize-handle="true"
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              header.getResizeHandler()(e);
+                            }}
+                            onTouchStart={header.getResizeHandler()}
+                            className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 ${header.column.getIsResizing() ? "bg-blue-500" : "bg-transparent"}`}
+                          />
+                        )}
+                      </th>
+                    );
+                  })}
                 </tr>
               ))}
             </thead>
             <tbody className="divide-y divide-[#E1E4EA] bg-white">
-              {loading && meetings.length === 0 ? (
-                <tr>
-                  <td colSpan={meetingTable.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-medium">
-                    Loading Meetings...
-                  </td>
-                </tr>
+              {showMeetingLoadingSkeleton ? (
+                <TableSkeletonRows
+                  numRows={meetingPagination.limit}
+                  columns={meetingTable.getVisibleLeafColumns().filter((c) => c.id !== "selection")}
+                  hasCheckbox
+                  rowHeight={54}
+                />
               ) : meetings.length === 0 ? (
                 <tr>
                   <td colSpan={meetingTable.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-medium">

@@ -1782,6 +1782,19 @@ function Deals() {
     }
   };
 
+  // "Select All" grabs every deal matching the current search/filters (all
+  // deals are already loaded client-side, so this just selects the full
+  // filtered set, not only the current page). "Deselect All" is its
+  // counterpart: it doesn't clear the selection outright (that's "Cancel")
+  // — it steps back down to only the rows on the current page.
+  const handleSelectAllAcrossPages = () => {
+    setSelectedRows(sortedTableDeals.map((deal) => deal._id));
+  };
+
+  const handleDeselectAllExtra = () => {
+    setSelectedRows(paginatedTableDeals.map((deal) => deal._id));
+  };
+
   const handleExport = (format) => {
     if (permission === "readonly") {
       toast.error("You do not have permission to export deals.", {
@@ -2123,6 +2136,20 @@ function Deals() {
               <span className="text-blue-800 font-semibold font-inter">
                 {selectedRows.length} deal{selectedRows.length !== 1 ? "s" : ""} selected
               </span>
+              <button
+                onClick={handleSelectAllAcrossPages}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Select All
+              </button>
+              <button
+                onClick={handleDeselectAllExtra}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+              >
+                <X className="w-4 h-4" />
+                Deselect All
+              </button>
             </div>
           </div>
         ) : (
@@ -2575,19 +2602,22 @@ function Deals() {
                     </span>{" "}
                     of <span className="font-semibold">{sortedTableDeals.length}</span> results
                   </p>
-                  <select
-                    value={dealsPerPage}
-                    onChange={(e) => {
-                      setDealsPerPage(parseInt(e.target.value));
-                      setDealsCurrentPage(1);
-                    }}
-                    className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
-                  >
-                    <option value={10}>10 per page</option>
-                    <option value={20}>20 per page</option>
-                    <option value={50}>50 per page</option>
-                    <option value={100}>100 per page</option>
-                  </select>
+                  <div className="relative ml-2">
+                    <select
+                      value={dealsPerPage}
+                      onChange={(e) => {
+                        setDealsPerPage(parseInt(e.target.value));
+                        setDealsCurrentPage(1);
+                      }}
+                      className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
+                    >
+                      <option value={10}>10 per page</option>
+                      <option value={20}>20 per page</option>
+                      <option value={50}>50 per page</option>
+                      <option value={100}>100 per page</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">

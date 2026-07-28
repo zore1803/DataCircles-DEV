@@ -58,7 +58,7 @@ const TaskKanbanCard = ({ task, isDragging, onEdit, onDelete }) => {
 
   return (
     <div
-      className={`relative bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all group text-left ${
+      className={`relative bg-white p-4 rounded-[10px] border border-[#E5E5EC] hover:shadow-sm transition-shadow group text-left ${
         isDragging ? "opacity-50" : "opacity-100"
       }`}
     >
@@ -185,29 +185,7 @@ const TaskKanbanCard = ({ task, isDragging, onEdit, onDelete }) => {
 };
 
 // ============================================================================
-// 2. HELPER: HEADER PILL STYLES
-// ============================================================================
-const getHeaderStyle = (columnName) => {
-  const normalized = columnName?.toLowerCase() || "";
-
-  if (normalized.includes("pending") || normalized.includes("todo")) {
-    return "bg-[#FEF3C7] text-[#D97706]"; // Amber/Yellow
-  }
-  if (normalized.includes("progress")) {
-    return "bg-[#EFF6FF] text-[#2563EB]"; // Blue
-  }
-  if (normalized.includes("completed") || normalized.includes("done")) {
-    return "bg-[#ECFDF5] text-[#059669]"; // Green
-  }
-  if (normalized.includes("cancel") || normalized.includes("fail")) {
-    return "bg-[#FEF2F2] text-[#DC2626]"; // Red
-  }
-
-  return "bg-gray-100 text-gray-700";
-};
-
-// ============================================================================
-// 3. INTERNAL COMPONENTS
+// 2. INTERNAL COMPONENTS
 // ============================================================================
 
 const SortableItem = ({ item, itemIdKey, renderItemWrapper, isDragging }) => {
@@ -240,9 +218,7 @@ const DroppableColumn = ({
   items,
   itemIdKey,
   renderItemWrapper,
-  onAddTask, // Renamed from onAddContact
   isDragging,
-  isLast,
 }) => {
   const { setNodeRef, isOver } = useDroppable({ id: column });
   const columnItems = items.filter((item) => item.column === column);
@@ -251,92 +227,29 @@ const DroppableColumn = ({
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col flex-shrink-0 ${isOver ? "bg-gray-50" : "bg-white"}`}
-      style={{
-        boxSizing: "border-box",
-        width: 340,
-        border: "1px solid #E7E7E9",
-        borderRadius: 12,
-        overflow: "hidden",
-      }}
+      className={`h-full border border-[#E1E4EA] rounded-lg flex-shrink-0 overflow-hidden flex flex-col ${isOver ? "bg-gray-50" : ""}`}
+      style={{ width: "340px" }}
     >
-      {/* --- Column Header --- */}
+      {/* --- Column Header (plain bar + count badge, matching Contacts) --- */}
       <div
-        className="flex flex-row items-center justify-between flex-shrink-0"
-        style={{
-          boxSizing: "border-box",
-          padding: "0px 18px",
-          gap: 6,
-          width: 340,
-          height: 46,
-          background: "#F5F7FA",
-        }}
+        className="flex items-center gap-1.5"
+        style={{ height: "46px", background: "#F5F7FA", padding: "0 18px" }}
       >
-        <div className="flex flex-row items-center gap-2 flex-1 min-w-0">
-          <span
-            className="truncate"
-            style={{
-              fontFamily: "Inter",
-              fontWeight: 600,
-              fontSize: 12,
-              lineHeight: "15px",
-              letterSpacing: "-0.02em",
-              color: "#44444A",
-            }}
-          >
-            {column}
-          </span>
-          <div
-            className="flex flex-row justify-center items-center flex-shrink-0"
-            style={{
-              boxSizing: "border-box",
-              padding: "5px 8px",
-              minWidth: 22,
-              height: 22,
-              background: "#FFFFFF",
-              border: "1px solid #E5E5EC",
-              boxShadow: "0px 1px 2px rgba(82, 88, 102, 0.06)",
-              borderRadius: 20,
-            }}
-          >
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 600,
-                fontSize: 12,
-                lineHeight: "15px",
-                textAlign: "center",
-                letterSpacing: "-0.02em",
-                color: "#161618",
-              }}
-            >
-              {columnItems.length}
-            </span>
-          </div>
-        </div>
-        <button
-          onClick={() => onAddTask && onAddTask(column)}
-          className="flex-shrink-0"
-          style={{ width: 16, height: 16 }}
+        <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}>
+          {column}
+        </span>
+        <span
+          className="flex items-center justify-center rounded-full bg-white border border-[#E5E5EC]"
+          style={{ width: "22px", height: "22px", boxShadow: "0px 1px 2px rgba(82, 88, 102, 0.06)" }}
         >
-          <MoreVertical className="w-4 h-4" style={{ color: "#BEBEC8" }} />
-        </button>
+          <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#161618" }}>
+            {columnItems.length}
+          </span>
+        </span>
       </div>
 
-      <div style={{ width: "100%", height: 1, background: "#E7E7E9", flexShrink: 0 }} />
-
       {/* --- Cards List --- */}
-      <div
-        className="flex-1 overflow-y-auto custom-scrollbar"
-        style={{
-          boxSizing: "border-box",
-          padding: 20,
-          display: "flex",
-          flexDirection: "column",
-          gap: 14,
-          minHeight: 200,
-        }}
-      >
+      <div className="flex-1 overflow-y-auto flex flex-col gap-3 p-3 custom-scrollbar">
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
           {columnItems.map((item) => (
             <SortableItem
@@ -370,7 +283,6 @@ const TaskKanbanBoard = ({
   onItemMove,
   onCardEdit,
   onCardDelete,
-  onAddTask,
   renderItem,
   itemIdKey = "_id",
 }) => {
@@ -437,18 +349,16 @@ const TaskKanbanBoard = ({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="h-full w-full overflow-x-auto overflow-y-hidden bg-white">
-        <div className="flex h-full min-w-max gap-4 p-4 items-start">
-          {columns.map((col, index) => (
+      <div className="h-full w-full overflow-x-auto overflow-y-visible bg-white">
+        <div className="flex gap-4 h-full min-w-max">
+          {columns.map((col) => (
             <DroppableColumn
               key={col}
               column={col}
               items={itemsWithColumn}
               itemIdKey={itemIdKey}
               renderItemWrapper={renderWrapper}
-              onAddTask={onAddTask}
               isDragging={!!activeItem}
-              isLast={index === columns.length - 1} // Logic to hide last border
             />
           ))}
         </div>
@@ -456,7 +366,7 @@ const TaskKanbanBoard = ({
 
       <DragOverlay>
         {activeItem ? (
-          <div style={{ width: "350px" }}>
+          <div style={{ width: "340px" }}>
             {renderWrapper(activeItem, true)}
           </div>
         ) : null}
