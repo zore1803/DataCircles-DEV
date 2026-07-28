@@ -9,9 +9,7 @@ import Skeleton from "../components/common/Skeleton";
 
 const getRootZoom = () => {
   if (typeof window === "undefined") return 1;
-  const el = document.getElementById("root");
-  if (!el) return 1;
-  const z = parseFloat(getComputedStyle(el).zoom);
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom);
   return z && !Number.isNaN(z) ? z : 1;
 };
 
@@ -128,6 +126,23 @@ function Dashboard() {
   const [invoices, setInvoices] = useState([]);
 
   const [selectedInvoices, setSelectedInvoices] = useState([]);
+  // Delays the bulk-strip's unmount so it can play a slide-out-right exit
+  // animation on deselect (mirroring the slide-in entrance).
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    if (selectedInvoices.length > 0) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [selectedInvoices.length]);
   const [invoiceSearchTerm, setInvoiceSearchTerm] = useState("");
   const [invoicePage, setInvoicePage] = useState(1);
   const [invoicesPerPage, setInvoicesPerPage] = useState(10);
@@ -296,12 +311,15 @@ function Dashboard() {
   const sortedInvoices = useMemo(() => {
     const term = invoiceSearchTerm.trim().toLowerCase();
     const filtered = term
-      ? invoices.filter((inv) =>
-          ["invoiceId", "client", "contact", "deal", "invoiceDate", "amount", "dueDate", "status"]
+      ? invoices.filter((inv) => {
+          const values = ["invoiceId", "client", "contact", "deal", "invoiceDate", "amount", "dueDate", "status"]
             .map((key) => String(getInvoiceFieldValue(inv, key) ?? "").trim())
-            .filter(Boolean)
-            .some((v) => v.toLowerCase().includes(term)),
-        )
+            .filter(Boolean);
+          // Also match the raw, unformatted amount (no ₹ / commas) so typing
+          // plain digits like "45000" still finds "₹45,000".
+          if (inv.amount != null) values.push(String(Math.round(inv.amount)));
+          return values.some((v) => v.toLowerCase().includes(term));
+        })
       : invoices;
 
     if (!invoiceSortConfig.key) return filtered;
@@ -423,8 +441,7 @@ function Dashboard() {
                       return;
                     }
                     const rect = e.currentTarget.getBoundingClientRect();
-                    const z = getRootZoom();
-                    setInvoiceColMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+                    setInvoiceColMenuPos({ top: rect.bottom + 4, left: rect.right - 190 });
                     setOpenInvoiceColMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -570,8 +587,7 @@ function Dashboard() {
                           return;
                         }
                         const rect = e.currentTarget.getBoundingClientRect();
-                        const z = getRootZoom();
-                        setInvoiceActionsPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+                        setInvoiceActionsPos({ top: rect.bottom + 4, left: rect.right - 190 });
                         setOpenInvoiceActionsId(inv._id);
                       }}
                       className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -1108,7 +1124,9 @@ function Dashboard() {
             zIndex: 40,
             padding: "0px 24px",
             gap: 16,
-            height: 56,
+            height: 64,
+            minHeight: 64,
+            maxHeight: 64,
             background: "#FFFFFF",
             borderBottom: "1px solid #E1E4EA",
             boxSizing: "border-box",
@@ -1144,7 +1162,7 @@ function Dashboard() {
           </div>
         </div>
         {/* Spacer to offset the fixed header bar */}
-        <div style={{ height: 56 }} />
+        <div style={{ height: 64 }} />
 
         {/* KPI Cards */}
         <div
@@ -1472,10 +1490,10 @@ function Dashboard() {
           </div>
         </div>
 
-        {selectedInvoices.length > 0 ? (
+        {showBulkStrip ? (
           <div
-            className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4"
-            style={{ width: "100%", minHeight: 64, marginTop: 24 }}
+            className={`${bulkStripClosing ? "animate-slideOutLeft" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4`}
+            style={{ width: "100%", minHeight: 44, marginTop: 24 }}
           >
             <div className="flex flex-wrap items-center gap-2 py-2">
               <button
@@ -1833,7 +1851,9 @@ function Dashboard() {
           zIndex: 40,
           padding: "0px 24px",
           gap: 16,
-          height: 56,
+          height: 64,
+          minHeight: 64,
+          maxHeight: 64,
           background: "#FFFFFF",
           borderBottom: "1px solid #E1E4EA",
           boxSizing: "border-box",
@@ -1873,7 +1893,7 @@ function Dashboard() {
         </div>
       </div>
       {/* Spacer to offset the fixed header bar */}
-      <div style={{ height: 56 }} />
+      <div style={{ height: 64 }} />
 
       {/* KPI Cards */}
       <div

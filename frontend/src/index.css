@@ -4,52 +4,41 @@
 /* Keep your existing CSS exactly as-is */
 @import "tailwindcss";
 
-/* Force a 75% zoom on desktop so the app always renders at the same
-   density regardless of the user's browser zoom. Scoped to >=1024px so
-   phones/tablets keep their native scale. Applied to #root (not body) so
-   that portal overlays mounted on document.body — drag ghost, column and
-   row-action menus — are NOT double-scaled and stay aligned to the cursor. */
-@media (min-width: 1024px) {
-  #root {
-    zoom: 0.75;
-    /* CSS `zoom` makes #root the containing block for fixed descendants, so
-       drawers/backdrops/loaders are sized to #root, not the viewport. Force
-       #root to always be >= one visual viewport tall (100vh / 0.75) so those
-       full-screen overlays reach the bottom of the screen on short pages. */
-    min-height: 133.334vh;
-  }
-}
+/* The forced 75% #root zoom was removed — it stacked with the dynamic
+   <html> zoom below and was the root cause of dropdown/menu portals
+   misaligning from their trigger buttons (getRootZoom() only ever read
+   #root's own zoom, never the outer <html> one). The dynamic zoom on
+   <html> alone now does the desktop scaling job. */
 
 /* Standard width for right-anchored slide-in panels/cards across the app.
    Full width on small screens; one third of the screen on desktop (>=1024px,
    matching Tailwind's lg breakpoint). Applied via the `dc-panel-w` class so
    the standard lives in one place. */
-/* Full-viewport loader height. Under the desktop #root zoom (0.75), a plain
-   100vh box only fills 75% of the real screen, leaving a bottom gutter — so
-   compensate by dividing by the zoom factor at >=1024px. */
+/* Full-viewport loader height. `vh` does NOT scale with CSS `zoom` (it stays
+   relative to the physical viewport), so a plain 100vh box under the dynamic
+   <html> zoom (App.jsx, exposed live as --dynamic-zoom) would fall short of
+   the real screen — compensate by dividing by that zoom factor at >=1024px. */
 .dc-loader-fill {
   min-height: 100vh;
 }
 @media (min-width: 1024px) {
   .dc-loader-fill {
-    min-height: 133.34vh;
+    min-height: calc(100vh / var(--dynamic-zoom, 1));
   }
 }
 
 /* Kanban column height: fill from its top down to the bottom of the page.
-   `vh` does NOT scale with CSS `zoom` (it stays relative to the physical
-   viewport), so we compensate for both zoom layers purely in CSS: the fixed
-   #root zoom (0.75) and the dynamic <html> zoom applied in App.jsx, exposed
-   live as --dynamic-zoom. Pure calc() reacts instantly to that variable —
-   no JS measurement, no timing race with when the zoom gets applied.
-   --kanban-top-offset (set by each caller) accounts for the header content
-   sitting above the kanban row on that particular page. */
+   Same --dynamic-zoom compensation as .dc-loader-fill above. Pure calc()
+   reacts instantly to that variable — no JS measurement, no timing race
+   with when the zoom gets applied. --kanban-top-offset (set by each caller)
+   accounts for the header content sitting above the kanban row on that
+   particular page. */
 .dc-kanban-col {
   height: 520px;
 }
 @media (min-width: 1024px) {
   .dc-kanban-col {
-    height: calc((100vh - var(--kanban-top-offset, 20rem)) / (var(--dynamic-zoom, 1) * 0.75));
+    height: calc((100vh - var(--kanban-top-offset, 20rem)) / var(--dynamic-zoom, 1));
   }
 }
 
@@ -369,6 +358,36 @@ h6{
 
 .animate-slideInLeft {
   animation: slideInLeft 0.3s ease-out;
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.animate-slideOutRight {
+  animation: slideOutRight 0.3s ease-in;
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+.animate-slideOutLeft {
+  animation: slideOutLeft 0.3s ease-in;
 }
 
 .shake {

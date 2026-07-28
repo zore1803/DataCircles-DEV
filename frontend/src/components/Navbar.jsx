@@ -479,7 +479,7 @@ const Navbar = () => {
 
       {/* Sidebar */}
       <div
-        className={`fixed top-0 left-0 bottom-0 overflow-y-auto overflow-x-hidden border-r border-gray-200 z-[9995] flex flex-col transition-all duration-300 ease-in-out lg:w-auto ${isMobileOpen
+        className={`animate-slideInLeft fixed top-0 left-0 bottom-0 overflow-y-auto overflow-x-hidden border-r border-gray-200 z-[9995] flex flex-col transition-all duration-300 ease-in-out lg:w-auto ${isMobileOpen
           ? "w-72 translate-x-0"
           : "w-72 -translate-x-full lg:translate-x-0"
           }`}

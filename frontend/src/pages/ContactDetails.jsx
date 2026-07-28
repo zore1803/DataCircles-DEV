@@ -285,11 +285,11 @@ const ContactDetailsPage = () => {
       </div>
 
       <div
-        className="box-border flex flex-row items-start bg-white"
+        className="box-border flex flex-row items-start bg-white w-full"
         style={{
           padding: "18px 24px",
           gap: "18px",
-          height: "216px",
+          minHeight: "216px",
           borderRight: "1px solid #F1F1F5",
           boxShadow: "0px 38px 23px rgba(0, 0, 0, 0.01), 0px 17px 17px rgba(0, 0, 0, 0.02), 0px 4px 9px rgba(0, 0, 0, 0.02)",
         }}
@@ -365,12 +365,9 @@ const ContactDetailsPage = () => {
 
         <div
           className="box-border flex-shrink-0 flex flex-col items-start"
-          style={{ width: "642px", height: "198px", borderRadius: "10px" }}
+          style={{ borderRadius: "10px" }}
         >
-          <div
-            className="flex flex-col items-start"
-            style={{ width: "641.5px", height: "175px", gap: "8px" }}
-          >
+          <div className="flex flex-col items-start" style={{ gap: "8px" }}>
             <div
               className="flex flex-row justify-center items-center self-stretch"
               style={{ padding: "8px 0", gap: "16px", height: "33px", borderRadius: "8px" }}
@@ -382,28 +379,28 @@ const ContactDetailsPage = () => {
               </div>
             </div>
 
-            <div style={{ width: "641.5px", height: "1px", background: "rgba(31, 41, 55, 0.2)" }} />
+            <div className="self-stretch" style={{ height: "1px", background: "rgba(31, 41, 55, 0.2)" }} />
 
-            <div className="relative" style={{ width: "641.5px", height: "148px" }}>
+            <div className="grid grid-cols-3" style={{ rowGap: "8px", columnGap: "16px", gridTemplateColumns: "repeat(3, 208.5px)" }}>
               {[
-                { icon: Mail, label: "Email", value: contact.email, left: 0, top: 0 },
-                { icon: Phone, label: "Phone", value: contact.phone, left: 216.5, top: 0 },
-                { icon: CorporateFareIcon, label: "Company", value: company?.name, left: 433, top: 0 },
-                { icon: MapPin, label: "Location", value: contact.address, left: 0, top: 52 },
-                { icon: Target, label: "Status", value: contact.stageStatus, left: 216.5, top: 52 },
-              ].map(({ icon: Icon, label, value, left, top }) => (
+                { icon: Mail, label: "Email", value: contact.email },
+                { icon: Phone, label: "Phone", value: contact.phone },
+                { icon: CorporateFareIcon, label: "Company", value: company?.name },
+                { icon: MapPin, label: "Location", value: contact.address },
+                { icon: Target, label: "Status", value: contact.stageStatus },
+              ].map(({ icon: Icon, label, value }) => (
                 <div
                   key={label}
-                  className="absolute flex flex-row justify-center items-center"
-                  style={{ width: "208.5px", height: "44px", left: `${left}px`, top: `${top}px`, padding: "8px", gap: "16px", borderRadius: "8px" }}
+                  className="flex flex-row items-center min-w-0"
+                  style={{ height: "44px", padding: "8px", gap: "16px", borderRadius: "8px" }}
                 >
-                  <div className="flex items-center flex-1" style={{ gap: "8px", height: "28px" }}>
+                  <div className="flex items-center flex-1 min-w-0" style={{ gap: "8px", height: "28px" }}>
                     <Icon className="w-5 h-5 text-[#525252] flex-shrink-0" />
-                    <div className="flex flex-col justify-center items-start" style={{ gap: "2px" }}>
+                    <div className="flex flex-col justify-center items-start min-w-0" style={{ gap: "2px" }}>
                       <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "10px", lineHeight: "120%", color: "rgba(107, 114, 128, 0.5)" }}>
                         {label}
                       </span>
-                      <span className="truncate" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}>
+                      <span className="truncate w-full" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}>
                         {value || "—"}
                       </span>
                     </div>
@@ -415,10 +412,10 @@ const ContactDetailsPage = () => {
         </div>
 
         <div
-          className="flex flex-col items-start flex-shrink-0"
-          style={{ width: "254px", height: "126px", gap: "18px" }}
+          className="flex flex-col items-start flex-1 min-w-0"
+          style={{ gap: "18px" }}
         >
-          <div className="flex flex-col items-start" style={{ width: "254px", height: "94px", gap: "8px" }}>
+          <div className="flex flex-col items-start self-stretch" style={{ height: "94px", gap: "8px" }}>
             <div
               className="flex flex-row justify-center items-center self-stretch"
               style={{ padding: "8px 0", gap: "16px", height: "33px", borderRadius: "8px" }}
@@ -430,7 +427,7 @@ const ContactDetailsPage = () => {
               </div>
             </div>
 
-            <div style={{ width: "254px", height: "1px", background: "rgba(31, 41, 55, 0.2)" }} />
+            <div className="self-stretch" style={{ height: "1px", background: "rgba(31, 41, 55, 0.2)" }} />
 
             <div className="flex flex-col items-start self-stretch" style={{ height: "44px" }}>
               <div

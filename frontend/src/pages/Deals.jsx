@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import API from "../services/api";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import FilterIcon from "../components/common/FilterIcon";
+import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
+import { applyAdvancedFilters } from "../utils/advancedFilters";
 import {
   DndContext,
   DragOverlay,
@@ -593,6 +595,42 @@ function Deals() {
   const [statuses, setStatuses] = useState([]);
   const showKanbanSkeleton = useMinDelay(loading && deals.length === 0, 300);
   const [showFilters, setShowFilters] = useState(false);
+  const [activeAdvancedFilters, setActiveAdvancedFilters] = useState([]);
+
+  const dealFilterColumns = [
+    { key: "dealId", label: "Deal ID" },
+    { key: "title", label: "Deal Name" },
+    { key: "company", label: "Company" },
+    { key: "contact", label: "Contact" },
+    { key: "status", label: "Stage" },
+    { key: "amount", label: "Amount" },
+    { key: "dueDate", label: "Due Date" },
+  ];
+
+  const getDealFieldValue = (deal, key) => {
+    switch (key) {
+      case "dealId":
+        return `DL-${deal._id.slice(-5).toUpperCase()}`;
+      case "title":
+        return deal.title || "";
+      case "company":
+        return deal.company?.name || "";
+      case "contact":
+        return deal.contact?.name || "";
+      case "status":
+        return deal.status || "";
+      case "amount":
+        return deal.amount || 0;
+      case "dueDate": {
+        const dueDateField = deal.additionalFields?.find((f) => f.key === "Expected Close Date");
+        return dueDateField?.value
+          ? new Date(dueDateField.value).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })
+          : "";
+      }
+      default:
+        return "";
+    }
+  };
   const [showStats, setShowStats] = useState(true);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const searchInputRef = useRef(null);
@@ -625,6 +663,23 @@ function Deals() {
   const [staleDays, setStaleDays] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
+  // Delays the bulk-strip's unmount so it can play a slide-out-right exit
+  // animation on deselect (mirroring the slide-in-left entrance).
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    if (selectedRows.length > 0) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [selectedRows.length]);
   const [activeDeal, setActiveDeal] = useState(null);
   const [sortConfig, setSortConfig] = useState({
     key: null,
@@ -1562,6 +1617,7 @@ function Deals() {
   const filteredDeals = useMemo(() => {
     let filtered = [...deals];
 
+    filtered = applyAdvancedFilters(filtered, activeAdvancedFilters, getDealFieldValue);
     filtered = StatusFilter.filter(filtered, filters.status);
     filtered = CompanyFilter.filter(filtered, filters.company);
     filtered = UserFilter.filter(filtered, filters.user); // Add this line
@@ -1579,16 +1635,27 @@ function Deals() {
       );
     }
     if (filters.searchTerm) {
-      filtered = filtered.filter(
-        (deal) =>
-          deal.title.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-          deal.company?.name
-            ?.toLowerCase()
-            .includes(filters.searchTerm.toLowerCase()) ||
-          deal.contact?.name
-            ?.toLowerCase()
-            .includes(filters.searchTerm.toLowerCase()),
-      );
+      const q = filters.searchTerm.toLowerCase();
+      filtered = filtered.filter((deal) => {
+        const dealIdShort = `DL-${deal._id.slice(-5).toUpperCase()}`;
+        const amountStr = `${deal.amount || 0}`;
+        const formattedAmount = `₹${(deal.amount || 0).toLocaleString("en-IN")}`;
+        const dueDateField = deal.additionalFields?.find((f) => f.key === "Expected Close Date");
+        const dueDateStr = dueDateField?.value
+          ? new Date(dueDateField.value).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })
+          : "";
+
+        return (
+          deal.title?.toLowerCase().includes(q) ||
+          deal.company?.name?.toLowerCase().includes(q) ||
+          deal.contact?.name?.toLowerCase().includes(q) ||
+          deal.status?.toLowerCase().includes(q) ||
+          dealIdShort.toLowerCase().includes(q) ||
+          amountStr.includes(q) ||
+          formattedAmount.toLowerCase().includes(q) ||
+          dueDateStr.toLowerCase().includes(q)
+        );
+      });
     }
 
     return filtered.sort((a, b) => {
@@ -1596,7 +1663,7 @@ function Deals() {
       const bIsStale = isStale(b.createdAt);
       return aIsStale === bIsStale ? 0 : aIsStale ? 1 : -1;
     });
-  }, [deals, filters, staleDays]);
+  }, [deals, filters, staleDays, activeAdvancedFilters]);
 
   const sortedTableDeals = getSortedDeals(filteredDeals);
   const dealsTotalPages = Math.max(1, Math.ceil(sortedTableDeals.length / dealsPerPage));
@@ -2015,8 +2082,8 @@ function Deals() {
           boxSizing: "border-box",
         }}
       >
-        {selectedRows.length > 0 ? (
-          <div className="animate-slideInLeft flex flex-wrap items-center justify-between gap-6 w-full h-full">
+        {showBulkStrip ? (
+          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-6 w-full h-full`}>
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowExportModal(true)}
@@ -2078,7 +2145,7 @@ function Deals() {
         {/* Search, Filter, Switcher, Actions — one continuous group with a uniform gap */}
         <div className="relative flex items-center gap-3 flex-shrink-0">
           <div
-            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[320px]" : "w-10"} max-w-full flex-shrink-0`}
+            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full flex-shrink-0`}
           >
             <Search
               strokeWidth={2.5}
@@ -2106,11 +2173,16 @@ function Deals() {
 
           {/* Filters */}
           <button
-            onClick={() => setShowFilters((prev) => !prev)}
+            onClick={() => setShowFilters(true)}
             className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
             title="Filters"
           >
             <FilterIcon size={15} />
+            {activeAdvancedFilters.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                {activeAdvancedFilters.length}
+              </span>
+            )}
           </button>
 
           {/* List / Kanban Toggle */}
@@ -2314,82 +2386,18 @@ function Deals() {
         className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6 space-y-8"
         style={{ marginTop: showStats ? (showKanban ? 184 : 168) : (showKanban ? 64 : 48) }}
       >
-        {/* Filter Panel */}
-        {showFilters && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 animate-slide-down">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-              {/* Search Input */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search deals..."
-                  value={filters.searchTerm}
-                  onChange={(e) =>
-                    setFilters({ ...filters, searchTerm: e.target.value })
-                  }
-                  className="w-full pl-10 pr-4 py-2 bg-gradient-to-r from-white to-blue-100 border border-[#E0E0E1] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              {/* Status Select */}
-              <select
-                value={filters.status}
-                onChange={(e) =>
-                  setFilters({ ...filters, status: e.target.value })
-                }
-                className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              >
-                <option value="All">All Status</option>
-                {statuses?.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-
-              {/* Company Select */}
-              <select
-                value={filters.company}
-                onChange={(e) =>
-                  setFilters({ ...filters, company: e.target.value })
-                }
-                className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              >
-                <option value="All">All Companies</option>
-                {companies?.map((company) => (
-                  <option key={company._id} value={company._id}>
-                    {company?.name}
-                  </option>
-                ))}
-              </select>
-
-              {/* Clear Button */}
-              <button
-                onClick={clearFilters}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
-              >
-                Clear Filters
-              </button>
-            </div>
-            {/* Results Count */}
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <span>
-                Showing{" "}
-                <span className="font-semibold text-gray-900">
-                  {filteredDeals?.length}
-                </span>{" "}
-                of{" "}
-                <span className="font-semibold text-gray-900">
-                  {deals?.length}
-                </span>{" "}
-                deals
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Modals & Overlays */}
+        <AdvancedFilterPanel
+          isOpen={showFilters}
+          onClose={() => setShowFilters(false)}
+          columns={dealFilterColumns}
+          filters={activeAdvancedFilters}
+          setFilters={setActiveAdvancedFilters}
+          onApply={(newFilters) => setActiveAdvancedFilters(newFilters)}
+          title="Filter Deals"
+          subtitle="Find specific deals quickly"
+          emptyStateText="Add a rule to narrow down your deal list."
+        />
         <ImportDeals
           isOpen={showImport}
           onClose={() => setShowImport(false)}

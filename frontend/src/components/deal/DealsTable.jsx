@@ -31,15 +31,13 @@ import {
   createColumnHelper,
 } from "@tanstack/react-table";
 
-// The app renders inside #root which carries a CSS `zoom` (0.75 on desktop).
+// The app scales its desktop layout via a dynamic CSS `zoom` on <html> (App.jsx).
 // getBoundingClientRect() returns UNSCALED layout coordinates while portal overlays on
 // document.body render in visual space, so rect-derived positions must be multiplied by
 // this zoom factor to line up on screen.
 const getRootZoom = () => {
   if (typeof window === "undefined") return 1;
-  const el = document.getElementById("root");
-  if (!el) return 1;
-  const z = parseFloat(getComputedStyle(el).zoom);
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom);
   return z && !Number.isNaN(z) ? z : 1;
 };
 
@@ -344,8 +342,7 @@ export default function DealsTable({
               return;
             }
             const rect = e.currentTarget.getBoundingClientRect();
-            const z = getRootZoom();
-            setColMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 160 });
+            setColMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
             setOpenColMenuKey(colKey);
           }}
           className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -498,7 +495,7 @@ export default function DealsTable({
               <Link
                 to={`/deals/${deal._id}`}
                 onClick={(e) => e.stopPropagation()}
-                className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-all duration-150 ease-out truncate flex-1 pr-4"
+                className="text-sm font-medium text-blue-600 hover:underline transition-all duration-150 ease-out truncate flex-1 pr-4"
                 title={getValue()}
               >
                 <HighlightText text={getValue()} query={searchTerm} />
@@ -668,12 +665,11 @@ export default function DealsTable({
                       return;
                     }
                     const rect = e.currentTarget.getBoundingClientRect();
-                    const z = getRootZoom();
                     const menuHeight = 128;
-                    const wouldOverflow = rect.bottom * z + 4 + menuHeight > window.innerHeight;
+                    const wouldOverflow = rect.bottom + 4 + menuHeight > window.innerHeight;
                     setRowActionsPos({
-                      top: wouldOverflow ? rect.top * z - menuHeight - 4 : rect.bottom * z + 4,
-                      left: rect.right * z - 160,
+                      top: wouldOverflow ? rect.top - menuHeight - 4 : rect.bottom + 4,
+                      left: rect.right - 130,
                     });
                     setOpenRowActionsId(deal._id);
                   }}
@@ -688,7 +684,7 @@ export default function DealsTable({
                     <div
                       ref={rowActionsRef}
                       style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-                      className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                      className="w-[130px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
                     >
                       <button
                         onClick={(e) => {
@@ -834,7 +830,7 @@ export default function DealsTable({
                         zIndex: isSticky ? 20 : 1,
                         opacity: isDragging ? 0.35 : 1,
                       }}
-                      className={`px-3 font-medium text-[#525866] text-xs border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                      className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
                       <div className="truncate w-full">
                         {flexRender(
