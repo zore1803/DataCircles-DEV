@@ -1333,6 +1333,10 @@ const Header = () => {
                 );
               })}
             </div>
+          ) : location.pathname.startsWith("/tasks") ? (
+            <span className="text-base font-semibold text-gray-900">
+              Tasks & Meetings
+            </span>
           ) : (
             <div className="flex items-center gap-2">
               {getBreadcrumb().map((crumb, idx, arr) => {

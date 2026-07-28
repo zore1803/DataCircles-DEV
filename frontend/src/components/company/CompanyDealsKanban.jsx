@@ -111,15 +111,13 @@ const getDealFieldValue = (deal, key) => {
 
 const TERMINAL_STATUSES = ["won", "lost"];
 
-// The app renders inside #root which carries a CSS `zoom` (0.75 on desktop).
+// The app scales its desktop layout via a dynamic CSS `zoom` on <html> (App.jsx).
 // getBoundingClientRect() returns UNSCALED layout coordinates while portal overlays on
 // document.body render in visual space, so rect-derived positions must be multiplied by
 // this zoom factor to line up on screen.
 const getRootZoom = () => {
   if (typeof window === "undefined") return 1;
-  const el = document.getElementById("root");
-  if (!el) return 1;
-  const z = parseFloat(getComputedStyle(el).zoom);
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom);
   return z && !Number.isNaN(z) ? z : 1;
 };
 
@@ -503,43 +501,28 @@ export default function CompanyDealsKanban({
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    e.preventDefault();
-    window.getSelection?.()?.removeAllRanges();
-
     const th = e.currentTarget;
-    const rect = th.getBoundingClientRect();
-    const previewRows = paginatedDeals.map((d) => String(getDealColumnPreviewValue(d, colId)));
-    const zGhost = getRootZoom();
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
 
-    dragOverRef.current = null;
-    setDraggedColKey(colId);
-    setDragOverColKey(null);
-    document.body.style.userSelect = "none";
-    setDragGhost({
-      label,
-      previewRows,
-      offsetX,
-      offsetY,
-      width: rect.width / zGhost,
-      height: rect.height / zGhost,
-    });
+    // Tracks whether the pointer has moved past the threshold yet. A plain click
+    // (mousedown -> tiny/no movement -> mouseup) never crosses it, so it never shows
+    // the drag ghost or touches drag state — only a deliberate drag does.
+    const dragState = { started: false, offsetX: 0, offsetY: 0, zGhost: 1 };
 
     const positionGhost = (clientX, clientY) => {
       const el = ghostElRef.current;
       if (!el) return;
-      const visualTop = clientY - offsetY;
-      const visualLeft = clientX - offsetX;
-      el.style.top = `${visualTop / zGhost}px`;
-      el.style.left = `${visualLeft / zGhost}px`;
-      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      const visualTop = clientY - dragState.offsetY;
+      const visualLeft = clientX - dragState.offsetX;
+      el.style.top = `${visualTop / dragState.zGhost}px`;
+      el.style.left = `${visualLeft / dragState.zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / dragState.zGhost}px`;
     };
-    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
 
-    const handleMouseMove = (moveEvent) => {
-      positionGhost(moveEvent.clientX, moveEvent.clientY);
-      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+    const updateDragOver = (clientX, clientY) => {
+      const elAtPoint = document.elementFromPoint(clientX, clientY);
       const thAtPoint = elAtPoint?.closest("th[data-col-id]");
       const overKey = thAtPoint?.getAttribute("data-col-id") || null;
       if (dragOverRef.current !== overKey) {
@@ -548,9 +531,48 @@ export default function CompanyDealsKanban({
       }
     };
 
+    const beginDrag = () => {
+      dragState.started = true;
+      window.getSelection?.()?.removeAllRanges();
+
+      const rect = th.getBoundingClientRect();
+      const previewRows = paginatedDeals.map((d) => String(getDealColumnPreviewValue(d, colId)));
+      dragState.zGhost = getRootZoom();
+      dragState.offsetX = startX - rect.left;
+      dragState.offsetY = startY - rect.top;
+
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX: dragState.offsetX,
+        offsetY: dragState.offsetY,
+        width: rect.width / dragState.zGhost,
+        height: rect.height / dragState.zGhost,
+      });
+
+      requestAnimationFrame(() => positionGhost(startX, startY));
+    };
+
+    const handleMouseMove = (moveEvent) => {
+      if (!dragState.started) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        e.preventDefault();
+        beginDrag();
+      }
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      updateDragOver(moveEvent.clientX, moveEvent.clientY);
+    };
+
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragState.started) return;
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) {
@@ -597,16 +619,19 @@ export default function CompanyDealsKanban({
     const handleKeyDown = (e) => {
       if (SCROLL_KEYS.includes(e.key)) closeMenus();
     };
+    const handleScroll = () => closeMenus();
 
     window.addEventListener("wheel", handleWheel, { passive: false, capture: true });
     window.addEventListener("touchmove", handleTouchMove, { passive: true, capture: true });
     window.addEventListener("keydown", handleKeyDown, { capture: true });
+    document.addEventListener("scroll", handleScroll, { capture: true });
 
     return () => {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("wheel", handleWheel, { capture: true });
       window.removeEventListener("touchmove", handleTouchMove, { capture: true });
       window.removeEventListener("keydown", handleKeyDown, { capture: true });
+      document.removeEventListener("scroll", handleScroll, { capture: true });
     };
   }, [openRowActionsId, openColMenuKey]);
 
@@ -631,6 +656,24 @@ export default function CompanyDealsKanban({
 
   // Row selection + bulk actions
   const [selectedDeals, setSelectedDeals] = useState([]);
+  // Delays the bulk-strip's unmount so it can play a slide-out-right exit
+  // animation on deselect (mirroring the slide-in entrance).
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    const active = viewMode === "list" && selectedDeals.length > 0;
+    if (active) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [viewMode, selectedDeals.length]);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
   const [bulkStatus, setBulkStatus] = useState("Open");
@@ -823,6 +866,18 @@ export default function CompanyDealsKanban({
     setCurrentPage(1);
   };
 
+  // "Select All" grabs every deal matching the current search/filters (all
+  // deals for this company are already loaded client-side, so this selects
+  // the full filtered set, not only the current page). "Deselect All" is its
+  // counterpart: it doesn't clear the selection outright — it steps back
+  // down to only the rows on the current page.
+  const handleSelectAllAcrossPages = () => {
+    setSelectedDeals(sortedDeals.map((d) => d._id));
+  };
+
+  const handleDeselectAllExtra = () => {
+    setSelectedDeals(paginatedDeals.map((d) => d._id));
+  };
 
   const paginatedDeals = useMemo(
     () => sortedDeals.slice((currentPage - 1) * limit, currentPage * limit),
@@ -1009,9 +1064,9 @@ export default function CompanyDealsKanban({
           <Skeleton width={88} height={44} shape="rounded" className="!rounded-full flex-shrink-0" />
           <Skeleton width={44} height={44} shape="circle" className="flex-shrink-0" />
         </div>
-      ) : viewMode === "list" && selectedDeals.length > 0 ? (
+      ) : showBulkStrip ? (
         <div
-          className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4"
+          className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInRight"} flex flex-wrap items-center justify-end gap-6 bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4`}
           style={{ minHeight: 44 }}
         >
           <div className="flex items-center gap-3 py-2">
@@ -1020,6 +1075,18 @@ export default function CompanyDealsKanban({
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2 py-2">
+            <button
+              onClick={handleSelectAllAcrossPages}
+              className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Select All
+            </button>
+            <button
+              onClick={handleDeselectAllExtra}
+              className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Deselect All
+            </button>
             <button
               onClick={handleExportSelectedDeals}
               className="px-3.5 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 transition-colors"
@@ -1276,9 +1343,7 @@ export default function CompanyDealsKanban({
                                 setColMenuPos(null);
                                 return;
                               }
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              const z = getRootZoom();
-                              setColMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+                              setColMenuPos({ top: e.clientY + 4, left: e.clientX - 190 });
                               setOpenColMenuKey(col.id);
                             }}
                             className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -1478,13 +1543,11 @@ export default function CompanyDealsKanban({
                                       setRowActionsPos(null);
                                       return;
                                     }
-                                    const rect = e.currentTarget.getBoundingClientRect();
-                                    const z = getRootZoom();
                                     const menuHeight = 128;
-                                    const wouldOverflow = rect.bottom * z + 4 + menuHeight > window.innerHeight;
+                                    const wouldOverflow = e.clientY + 4 + menuHeight > window.innerHeight;
                                     setRowActionsPos({
-                                      top: wouldOverflow ? rect.top * z - menuHeight - 4 : rect.bottom * z + 4,
-                                      left: rect.right * z - 160,
+                                      top: wouldOverflow ? e.clientY - menuHeight - 4 : e.clientY + 4,
+                                      left: e.clientX - 160,
                                     });
                                     setOpenRowActionsId(deal._id);
                                   }}

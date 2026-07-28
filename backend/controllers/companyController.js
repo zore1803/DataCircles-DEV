@@ -160,6 +160,14 @@ const getAllCompaniesPaginated = async (req, res) => {
     const sortObj = {};
     sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
 
+    // "Select All" support: return every matching company's _id (ignoring
+    // pagination) so the frontend can select all rows across every page,
+    // not just the current page.
+    if (req.query.allIds === "true") {
+      const allCompanies = await Company.find(query).select("_id").lean();
+      return res.json({ ids: allCompanies.map((c) => c._id) });
+    }
+
     const [companies, totalCount] = await Promise.all([
       Company.find(query)
         .skip(skip)

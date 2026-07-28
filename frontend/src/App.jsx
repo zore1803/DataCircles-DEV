@@ -337,17 +337,33 @@ function App() {
     const DESIGN_WIDTH = 1440;
     const MIN_ZOOM = 0.6;
     const MAX_ZOOM = 1.3;
+    // Baseline shrink so the default (100% browser zoom) view matches the
+    // more compact density users previously got by manually zooming the
+    // browser out to ~85%.
+    const BASE_SCALE = 0.85;
+
+    // Both innerWidth and outerWidth are measured in CSS pixels, which
+    // shrink/grow as the user zooms with +/- — so neither is safe to feed
+    // back into this calc without fighting manual zoom. devicePixelRatio
+    // scales proportionally with zoom too (e.g. 1 -> 1.1 -> 1.2 as zoom goes
+    // 100% -> 110% -> 120%), so dividing by how much it moved since mount
+    // cancels the zoom's contribution to innerWidth, leaving a value that
+    // only changes on a real window resize.
+    const baselineDPR = window.devicePixelRatio || 1;
 
     const applyZoom = () => {
-      if (window.innerWidth < 1024) {
+      const currentDPR = window.devicePixelRatio || 1;
+      const zoomFactor = currentDPR / baselineDPR;
+      const referenceWidth = window.innerWidth * zoomFactor;
+      if (referenceWidth < 1024) {
         document.documentElement.style.zoom = "";
         document.documentElement.style.setProperty("--dynamic-zoom", "1");
         return;
       }
       const zoom = Math.min(
         MAX_ZOOM,
-        Math.max(MIN_ZOOM, window.innerWidth / DESIGN_WIDTH),
-      );
+        Math.max(MIN_ZOOM, referenceWidth / DESIGN_WIDTH),
+      ) * BASE_SCALE;
       document.documentElement.style.zoom = zoom;
       // Exposed as a CSS custom property so layout that needs to compensate
       // for this zoom (e.g. calc()-based full-height panels) can react to it

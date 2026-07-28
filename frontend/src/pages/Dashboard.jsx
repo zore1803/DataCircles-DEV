@@ -9,9 +9,7 @@ import Skeleton from "../components/common/Skeleton";
 
 const getRootZoom = () => {
   if (typeof window === "undefined") return 1;
-  const el = document.getElementById("root");
-  if (!el) return 1;
-  const z = parseFloat(getComputedStyle(el).zoom);
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom);
   return z && !Number.isNaN(z) ? z : 1;
 };
 
@@ -128,6 +126,23 @@ function Dashboard() {
   const [invoices, setInvoices] = useState([]);
 
   const [selectedInvoices, setSelectedInvoices] = useState([]);
+  // Delays the bulk-strip's unmount so it can play a slide-out-right exit
+  // animation on deselect (mirroring the slide-in entrance).
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    if (selectedInvoices.length > 0) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [selectedInvoices.length]);
   const [invoiceSearchTerm, setInvoiceSearchTerm] = useState("");
   const [invoicePage, setInvoicePage] = useState(1);
   const [invoicesPerPage, setInvoicesPerPage] = useState(10);
@@ -195,6 +210,19 @@ function Dashboard() {
 
   const handleSelectInvoice = (id) => {
     setSelectedInvoices((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  // "Select All" grabs every invoice matching the current search (all
+  // invoices are already loaded client-side, so this selects the full
+  // filtered set, not only the current page). "Deselect All" is its
+  // counterpart: it doesn't clear the selection outright — it steps back
+  // down to only the rows on the current page.
+  const handleSelectAllInvoicesAcrossPages = () => {
+    setSelectedInvoices(sortedInvoices.map((inv) => inv._id));
+  };
+
+  const handleDeselectAllInvoicesExtra = () => {
+    setSelectedInvoices(paginatedInvoices.map((inv) => inv._id));
   };
 
   const [showBulkInvoiceDeleteModal, setShowBulkInvoiceDeleteModal] = useState(false);
@@ -296,12 +324,15 @@ function Dashboard() {
   const sortedInvoices = useMemo(() => {
     const term = invoiceSearchTerm.trim().toLowerCase();
     const filtered = term
-      ? invoices.filter((inv) =>
-          ["invoiceId", "client", "contact", "deal", "invoiceDate", "amount", "dueDate", "status"]
+      ? invoices.filter((inv) => {
+          const values = ["invoiceId", "client", "contact", "deal", "invoiceDate", "amount", "dueDate", "status"]
             .map((key) => String(getInvoiceFieldValue(inv, key) ?? "").trim())
-            .filter(Boolean)
-            .some((v) => v.toLowerCase().includes(term)),
-        )
+            .filter(Boolean);
+          // Also match the raw, unformatted amount (no ₹ / commas) so typing
+          // plain digits like "45000" still finds "₹45,000".
+          if (inv.amount != null) values.push(String(Math.round(inv.amount)));
+          return values.some((v) => v.toLowerCase().includes(term));
+        })
       : invoices;
 
     if (!invoiceSortConfig.key) return filtered;
@@ -422,9 +453,7 @@ function Dashboard() {
                       setInvoiceColMenuPos(null);
                       return;
                     }
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const z = getRootZoom();
-                    setInvoiceColMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+                    setInvoiceColMenuPos({ top: e.clientY + 4, left: e.clientX - 190 });
                     setOpenInvoiceColMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -569,9 +598,7 @@ function Dashboard() {
                           setInvoiceActionsPos(null);
                           return;
                         }
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const z = getRootZoom();
-                        setInvoiceActionsPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+                        setInvoiceActionsPos({ top: e.clientY + 4, left: e.clientX - 190 });
                         setOpenInvoiceActionsId(inv._id);
                       }}
                       className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -1108,7 +1135,9 @@ function Dashboard() {
             zIndex: 40,
             padding: "0px 24px",
             gap: 16,
-            height: 56,
+            height: 64,
+            minHeight: 64,
+            maxHeight: 64,
             background: "#FFFFFF",
             borderBottom: "1px solid #E1E4EA",
             boxSizing: "border-box",
@@ -1144,7 +1173,7 @@ function Dashboard() {
           </div>
         </div>
         {/* Spacer to offset the fixed header bar */}
-        <div style={{ height: 56 }} />
+        <div style={{ height: 64 }} />
 
         {/* KPI Cards */}
         <div
@@ -1472,17 +1501,11 @@ function Dashboard() {
           </div>
         </div>
 
-        {selectedInvoices.length > 0 ? (
+        {showBulkStrip ? (
           <div
-            className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4"
-            style={{ width: "100%", minHeight: 64, marginTop: 24 }}
+            className={`${bulkStripClosing ? "animate-slideOutLeft" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4`}
+            style={{ width: "100%", minHeight: 44, marginTop: 24 }}
           >
-            <div className="flex items-center gap-3">
-              <CheckSquare className="w-5 h-5 text-blue-600" />
-              <span className="text-blue-800 font-semibold font-inter text-sm">
-                {selectedInvoices.length} invoice{selectedInvoices.length !== 1 ? "s" : ""} selected
-              </span>
-            </div>
             <div className="flex flex-wrap items-center gap-2 py-2">
               <button
                 onClick={handleExportSelectedInvoices}
@@ -1511,6 +1534,26 @@ function Dashboard() {
               >
                 <X className="w-4 h-4" />
                 Cancel
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <CheckSquare className="w-5 h-5 text-blue-600" />
+              <span className="text-blue-800 font-semibold font-inter text-sm">
+                {selectedInvoices.length} invoice{selectedInvoices.length !== 1 ? "s" : ""} selected
+              </span>
+              <button
+                onClick={handleSelectAllInvoicesAcrossPages}
+                className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Select All
+              </button>
+              <button
+                onClick={handleDeselectAllInvoicesExtra}
+                className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+              >
+                <X className="w-4 h-4" />
+                Deselect All
               </button>
             </div>
           </div>
@@ -1599,17 +1642,20 @@ function Dashboard() {
                   <span className="font-semibold">{Math.min(invoicePage * invoicesPerPage, sortedInvoices.length)}</span> of{" "}
                   <span className="font-semibold">{sortedInvoices.length}</span> results
                 </p>
-                <select
-                  value={invoicesPerPage}
-                  onChange={(e) => setInvoicesPerPage(parseInt(e.target.value))}
-                  className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
-                >
-                  <option value={10}>10 per page</option>
-                  <option value={20}>20 per page</option>
-                  <option value={50}>50 per page</option>
-                  <option value={100}>100 per page</option>
-                  <option value={150}>150 per page</option>
-                </select>
+                <div className="relative ml-2">
+                  <select
+                    value={invoicesPerPage}
+                    onChange={(e) => setInvoicesPerPage(parseInt(e.target.value))}
+                    className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
+                  >
+                    <option value={10}>10 per page</option>
+                    <option value={20}>20 per page</option>
+                    <option value={50}>50 per page</option>
+                    <option value={100}>100 per page</option>
+                    <option value={150}>150 per page</option>
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -1833,7 +1879,9 @@ function Dashboard() {
           zIndex: 40,
           padding: "0px 24px",
           gap: 16,
-          height: 56,
+          height: 64,
+          minHeight: 64,
+          maxHeight: 64,
           background: "#FFFFFF",
           borderBottom: "1px solid #E1E4EA",
           boxSizing: "border-box",
@@ -1873,7 +1921,7 @@ function Dashboard() {
         </div>
       </div>
       {/* Spacer to offset the fixed header bar */}
-      <div style={{ height: 56 }} />
+      <div style={{ height: 64 }} />
 
       {/* KPI Cards */}
       <div
