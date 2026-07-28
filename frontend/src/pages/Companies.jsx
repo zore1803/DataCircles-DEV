@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
+import Skeleton from "../components/common/Skeleton";
 import useMinDelay from "../hooks/useMinDelay";
 import { createPortal } from "react-dom";
 import API from "../services/api";
@@ -108,9 +109,7 @@ import AppToaster from "../components/AppToaster";
 // by this zoom factor to line up on screen.
 const getRootZoom = () => {
   if (typeof window === "undefined") return 1;
-  const el = document.getElementById("root");
-  if (!el) return 1;
-  const z = parseFloat(getComputedStyle(el).zoom);
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom);
   return z && !Number.isNaN(z) ? z : 1;
 };
 
@@ -143,7 +142,7 @@ function Companies() {
   });
   const [additionalFields, setAdditionalFields] = useState({});
   const [companyFieldNames, setCompanyFieldNames] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const showLoadingSkeleton = useMinDelay(loading && companies.length === 0, 300);
   const [industries, setIndustries] = useState([]);
   const [industriesLoading, setIndustriesLoading] = useState(false);
@@ -217,6 +216,25 @@ function Companies() {
   // Selection mode state
   const [selectionMode, setSelectionMode] = useState(true);
   const [longPressTimer, setLongPressTimer] = useState(null);
+
+  // Delays the bulk-strip's unmount so it can play a slide-out-right exit
+  // animation on deselect (mirroring the slide-in-right entrance).
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    const active = selectionMode && selectedCompanies.length > 0;
+    if (active) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [selectionMode, selectedCompanies.length]);
 
   const [columnSizing, setColumnSizing] = useState({});
 
@@ -344,53 +362,28 @@ function Companies() {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    e.preventDefault();
-    window.getSelection?.()?.removeAllRanges();
-
     const th = e.currentTarget;
-    const rect = th.getBoundingClientRect();
-    const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
-    const previewRows = (sortedCompanies || [])
-      .map((c) => String(getFieldValue(c, colId) ?? "").trim() || "—");
-    // Grab offset is measured in visual space (rect + clientX both visual) — no
-    // correction. `zGhost` scales the values we SET on the body-portal ghost so
-    // they map back to visual space (the ghost is painted inside the <html> zoom).
-    const zGhost = getAncestorZoom(document.body);
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
 
-    dragOverRef.current = null;
-    setDraggedColKey(colId);
-    setDragOverColKey(null);
-    document.body.style.userSelect = "none";
-    // Only the label/previewRows/dimensions go through React state (set once).
-    // x/y position is mutated directly on the DOM node below so mousemove never
-    // triggers a re-render of the whole (up to 500-row) table.
-    setDragGhost({
-      label,
-      previewRows,
-      offsetX,
-      offsetY,
-      width: rect.width / zGhost,
-      height: rect.height / zGhost,
-    });
+    // Tracks whether the pointer has moved past the threshold yet. A plain click
+    // (mousedown -> tiny/no movement -> mouseup) never crosses it, so it never shows
+    // the drag ghost or touches drag state — only a deliberate drag does.
+    const dragState = { started: false, offsetX: 0, offsetY: 0, zGhost: 1 };
 
     const positionGhost = (clientX, clientY) => {
       const el = ghostElRef.current;
       if (!el) return;
-      const visualTop = clientY - offsetY;
-      const visualLeft = clientX - offsetX;
-      el.style.top = `${visualTop / zGhost}px`;
-      el.style.left = `${visualLeft / zGhost}px`;
-      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      const visualTop = clientY - dragState.offsetY;
+      const visualLeft = clientX - dragState.offsetX;
+      el.style.top = `${visualTop / dragState.zGhost}px`;
+      el.style.left = `${visualLeft / dragState.zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / dragState.zGhost}px`;
     };
-    // Position immediately so the ghost doesn't flash at (0,0) before the first mousemove.
-    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
 
-    const handleMouseMove = (moveEvent) => {
-      positionGhost(moveEvent.clientX, moveEvent.clientY);
-
-      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+    const updateDragOver = (clientX, clientY) => {
+      const elAtPoint = document.elementFromPoint(clientX, clientY);
       const thAtPoint = elAtPoint?.closest("th[data-col-id]");
       const overKey = thAtPoint?.getAttribute("data-col-id") || null;
       if (dragOverRef.current !== overKey) {
@@ -399,9 +392,57 @@ function Companies() {
       }
     };
 
+    const beginDrag = () => {
+      dragState.started = true;
+      window.getSelection?.()?.removeAllRanges();
+
+      const rect = th.getBoundingClientRect();
+      const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
+      const previewRows = (sortedCompanies || [])
+        .map((c) => String(getFieldValue(c, colId) ?? "").trim() || "—");
+      // Grab offset is measured in visual space (rect + clientX both visual) — no
+      // correction. `zGhost` scales the values we SET on the body-portal ghost so
+      // they map back to visual space (the ghost is painted inside the <html> zoom).
+      dragState.zGhost = getAncestorZoom(document.body);
+      dragState.offsetX = startX - rect.left;
+      dragState.offsetY = startY - rect.top;
+
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
+      // Only the label/previewRows/dimensions go through React state (set once).
+      // x/y position is mutated directly on the DOM node below so mousemove never
+      // triggers a re-render of the whole (up to 500-row) table.
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX: dragState.offsetX,
+        offsetY: dragState.offsetY,
+        width: rect.width / dragState.zGhost,
+        height: rect.height / dragState.zGhost,
+      });
+
+      // Position immediately so the ghost doesn't flash at (0,0) before the first mousemove.
+      requestAnimationFrame(() => positionGhost(startX, startY));
+    };
+
+    const handleMouseMove = (moveEvent) => {
+      if (!dragState.started) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        e.preventDefault();
+        beginDrag();
+      }
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      updateDragOver(moveEvent.clientX, moveEvent.clientY);
+    };
+
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragState.started) return;
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) {
@@ -458,14 +499,6 @@ function Companies() {
               setRowActionsPos(null);
               return;
             }
-            const rect = e.currentTarget.getBoundingClientRect();
-            const z = getRootZoom();
-            const menuHeight = 260;
-            const wouldOverflow = rect.bottom * z + 4 + menuHeight > window.innerHeight;
-            setRowActionsPos({
-              top: wouldOverflow ? rect.top * z - menuHeight - 4 : rect.bottom * z + 4,
-              left: rect.right * z - 160,
-            });
             setOpenRowActionsId(company._id);
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -473,10 +506,9 @@ function Companies() {
         >
           <MoreVertical className="w-4 h-4" />
         </button>
-        {isOpen && rowActionsPos && createPortal(
+        {isOpen && (
           <div
-            style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-            className="z-[9999] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right pointer-events-auto"
+            className="absolute right-0 top-full mt-1 z-[9999] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
           >
             <Link
               to={`/companies/${company._id}`}
@@ -545,8 +577,7 @@ function Companies() {
               <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
               Delete
             </button>
-          </div>,
-          document.body,
+          </div>
         )}
       </div>
     );
@@ -629,9 +660,7 @@ function Companies() {
                       setColumnMenuPos(null);
                       return;
                     }
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const z = getRootZoom();
-                    setColumnMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+                    setColumnMenuPos({ top: e.clientY + 4, left: e.clientX - 160 });
                     setOpenColumnMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -646,7 +675,7 @@ function Companies() {
                     <div
                       ref={columnMenuRef}
                       style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
-                      className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                      className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
                     >
                       <button
                         onClick={() => {
@@ -654,9 +683,9 @@ function Companies() {
                           setColumnMenuPos(null);
                           pinSide === "left" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "left");
                         }}
-                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                       >
-                        {pinSide === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                        {pinSide === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
                         Pin to Left
                       </button>
                       <button
@@ -665,9 +694,9 @@ function Companies() {
                           setColumnMenuPos(null);
                           pinSide === "right" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "right");
                         }}
-                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                       >
-                        {pinSide === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                        {pinSide === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
                         Pin to Right
                       </button>
 
@@ -680,9 +709,9 @@ function Companies() {
                               setSortConfig({ key: vc.key, direction: "asc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
-                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                           >
-                            <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                            <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             Sort Ascending
                           </button>
                           <button
@@ -692,9 +721,9 @@ function Companies() {
                               setSortConfig({ key: vc.key, direction: "desc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
-                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                           >
-                            <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                            <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             Sort Descending
                           </button>
                         </>
@@ -712,12 +741,12 @@ function Companies() {
                             columns.map((c) => (c.key === vc.key ? { ...c, visible: false } : c)),
                           );
                         }}
-                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${vc.required
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${vc.required
                           ? "text-gray-300 cursor-not-allowed"
                           : "text-[#161618] hover:bg-gray-50"
                           }`}
                       >
-                        <EyeOff className={`w-4 h-4 ${vc.required ? "text-gray-300" : "text-[#1C1B1F]"}`} />
+                        <EyeOff className={`w-3.5 h-3.5 ${vc.required ? "text-gray-300" : "text-[#1C1B1F]"}`} />
                         Hide Column
                       </button>
                     </div>
@@ -956,8 +985,16 @@ function Companies() {
     }
   };
 
-  // Separate effect for search/filter to trigger reset + fetch
+  // Separate effect for search/filter to trigger reset + fetch.
+  // Skips the initial mount — the [pagination.currentPage, ...] effect above
+  // already fires the first fetch, and running both here would race a second,
+  // duplicate request that can resolve first and clear `loading` early.
+  const skipInitialSearchFetch = useRef(true);
   useEffect(() => {
+    if (skipInitialSearchFetch.current) {
+      skipInitialSearchFetch.current = false;
+      return;
+    }
     if (pagination.currentPage === 1) {
       fetchCompanies();
     }
@@ -1092,6 +1129,29 @@ function Companies() {
       setLoading(false);
       setShowImport(false);
     }
+  };
+
+  // "Select All" grabs every company ID matching the current search/filters
+  // straight from the database (not just the loaded page). "Deselect All" is
+  // its counterpart: it doesn't clear the selection outright (that's what
+  // "Cancel" does) — it steps back down to only the rows on the current page.
+  const handleSelectAllAcrossPages = async () => {
+    try {
+      const params = new URLSearchParams({ allIds: "true" });
+      if (searchTerm.trim()) params.append("search", searchTerm.trim());
+      if (filterIndustry) params.append("industry", filterIndustry);
+      if (activeFilters && activeFilters.length > 0) {
+        params.append("advancedFilters", JSON.stringify(activeFilters));
+      }
+      const res = await API.get(`/companies/pagination?${params.toString()}`);
+      setSelectedCompanies(res.data.ids || []);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to select all rows");
+    }
+  };
+
+  const handleDeselectAllExtra = () => {
+    setSelectedCompanies(companies.map((c) => c._id));
   };
 
   // Pagination handlers
@@ -1249,10 +1309,12 @@ function Companies() {
     return industries; // Return the fetched industries
   };
 
-  // Lock page scroll while the row-actions menu is open so the background can't shift/scroll.
-  // Any scroll/wheel/touch/keyboard-scroll attempt closes the menu instead of moving the page.
+  // Lock page scroll while a row-actions or column-options menu is open so the
+  // background (and the horizontally-scrollable table) can't shift/scroll out from
+  // under the portal-positioned menu. Any scroll/wheel/touch/keyboard-scroll attempt
+  // closes the menu instead of moving the page.
   useEffect(() => {
-    if (!openRowActionsId) return;
+    if (!openRowActionsId && !openColumnMenuKey) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -1260,6 +1322,8 @@ function Companies() {
     const closeMenu = () => {
       setOpenRowActionsId(null);
       setRowActionsPos(null);
+      setOpenColumnMenuKey(null);
+      setColumnMenuPos(null);
     };
     const handleWheel = (e) => {
       e.preventDefault();
@@ -1269,18 +1333,21 @@ function Companies() {
     const handleKeyDown = (e) => {
       if (SCROLL_KEYS.includes(e.key)) closeMenu();
     };
+    const handleScroll = () => closeMenu();
 
     window.addEventListener("wheel", handleWheel, { passive: false, capture: true });
     window.addEventListener("touchmove", handleTouchMove, { passive: true, capture: true });
     window.addEventListener("keydown", handleKeyDown, { capture: true });
+    document.addEventListener("scroll", handleScroll, { capture: true });
 
     return () => {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("wheel", handleWheel, { capture: true });
       window.removeEventListener("touchmove", handleTouchMove, { capture: true });
       window.removeEventListener("keydown", handleKeyDown, { capture: true });
+      document.removeEventListener("scroll", handleScroll, { capture: true });
     };
-  }, [openRowActionsId]);
+  }, [openRowActionsId, openColumnMenuKey]);
 
   // Click outside listener for the overflow menu
   useEffect(() => {
@@ -1376,17 +1443,20 @@ function Companies() {
               <span className="font-semibold">{endItem}</span> of{" "}
               <span className="font-semibold">{totalCount}</span> results
             </p>
-            <select
-              value={limit}
-              onChange={(e) => handleLimitChange(parseInt(e.target.value))}
-              className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
-            >
-              <option value={10}>10 per page</option>
-              <option value={20}>20 per page</option>
-              <option value={50}>50 per page</option>
-              <option value={100}>100 per page</option>
-              <option value={150}>150 per page</option>
-            </select>
+            <div className="relative ml-2">
+              <select
+                value={limit}
+                onChange={(e) => handleLimitChange(parseInt(e.target.value))}
+                className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
+              >
+                <option value={10}>10 per page</option>
+                <option value={20}>20 per page</option>
+                <option value={50}>50 per page</option>
+                <option value={100}>100 per page</option>
+                <option value={150}>150 per page</option>
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -1637,7 +1707,7 @@ function Companies() {
       <div className="bg-white overflow-visible">
         {/* Toolbar (Title + Search + Buttons) */}
         <div
-          className={`fixed right-0 h-16 px-6 border-b flex items-center ${selectionMode && selectedCompanies.length > 0 ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          className={`fixed right-0 h-16 px-6 border-b flex items-center ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
           style={{
             top: "64px",
             left: "var(--sidebar-width, 0px)",
@@ -1647,14 +1717,8 @@ function Companies() {
             boxSizing: "border-box",
           }}
         >
-          {selectionMode && selectedCompanies.length > 0 ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 w-full h-full">
-              <div className="flex items-center gap-3">
-                <CheckSquare className="w-5 h-5 text-blue-600" />
-                <span className="text-blue-800 font-semibold font-inter">
-                  {selectedCompanies.length} compan{selectedCompanies.length !== 1 ? "ies" : "y"} selected
-                </span>
-              </div>
+          {showBulkStrip ? (
+            <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-6 w-full h-full`}>
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   onClick={() => setShowExportModal(true)}
@@ -1700,16 +1764,55 @@ function Companies() {
                   Cancel
                 </button>
               </div>
+              <div className="flex items-center gap-3">
+                <CheckSquare className="w-5 h-5 text-blue-600" />
+                <span className="text-blue-800 font-semibold font-inter">
+                  {selectedCompanies.length} compan{selectedCompanies.length !== 1 ? "ies" : "y"} selected
+                </span>
+                <button
+                  onClick={handleSelectAllAcrossPages}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  Select All
+                </button>
+                <button
+                  onClick={handleDeselectAllExtra}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Deselect All
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="flex items-center gap-4 w-full h-full">
-              <div className="flex-shrink-0 flex flex-col justify-center gap-1.5">
-                <h1 className="m-0 leading-tight font-bold text-lg text-gray-900">Companies</h1>
-                <p className="m-0 leading-tight text-xs text-gray-500 font-inter">
-                  Manage your organisation contracts
-                </p>
-              </div>
+          <div className="flex items-center gap-4 w-full h-full">
+            <div className="flex-shrink-0 flex flex-col justify-center gap-1.5">
+              {showLoadingSkeleton ? (
+                <>
+                  <Skeleton width={110} height={18} />
+                  <Skeleton width={170} height={12} />
+                </>
+              ) : (
+                <>
+                  <h1 className="m-0 leading-tight font-bold text-lg text-gray-900">Companies</h1>
+                  <p className="m-0 leading-tight text-xs text-gray-500 font-inter">
+                    Manage your organisation contracts
+                  </p>
+                </>
+              )}
+            </div>
 
+            {showLoadingSkeleton ? (
+              <div className="relative flex-1 flex items-center justify-end gap-3">
+                <Skeleton width={40} height={40} shape="circle" />
+                <Skeleton width={40} height={40} shape="circle" />
+                <Skeleton width={40} height={40} shape="circle" />
+                <Skeleton width={90} height={40} shape="circle" />
+                <Skeleton width={140} height={40} shape="circle" />
+              </div>
+            ) : (
+            <>
               <div className="relative flex-1 flex items-center justify-end">
                 <div
                   className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full`}
@@ -1850,17 +1953,47 @@ function Companies() {
                 <span className="font-medium">Hotlist</span>
               </button>
 
-              <button
-                onClick={() => {
-                  resetForm();
-                  setShowForm(true);
-                }}
-                className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                {showForm ? "Cancel" : "New Company"}
-              </button>
-            </div>
+            {/* Filters */}
+            <button
+              onClick={() => setShowAdvancedFilters(true)}
+              className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+              title="Filters"
+            >
+              <FilterIcon size={16} />
+              {activeFilters.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                  {activeFilters.length}
+                </span>
+              )}
+            </button>
+
+            {/* Hotlist */}
+            <button
+              onClick={() => setShowHotlist(!showHotlist)}
+              className={`inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors ${showHotlist
+                ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
+                : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
+                }`}
+            >
+              <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#1F2937" />
+              </svg>
+              <span className="font-medium">Hotlist</span>
+            </button>
+
+            <button
+              onClick={() => {
+                resetForm();
+                setShowForm(true);
+              }}
+              className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              {showForm ? "Cancel" : "New Company"}
+            </button>
+            </>
+            )}
+          </div>
           )}
         </div>
 

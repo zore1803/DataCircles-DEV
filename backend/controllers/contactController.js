@@ -232,6 +232,14 @@ const getAllContactsPaginated = async (req, res) => {
     const sortObj = {};
     sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
 
+    // "Select All" support: return every matching contact's _id (ignoring
+    // pagination) so the frontend can select all rows across every page,
+    // not just the current page.
+    if (req.query.allIds === "true") {
+      const allContacts = await Contact.find(query).select("_id").lean();
+      return res.json({ ids: allContacts.map((c) => c._id) });
+    }
+
     // Execute queries in parallel for better performance
     const [contacts, totalCount] = await Promise.all([
       Contact.find(query)
