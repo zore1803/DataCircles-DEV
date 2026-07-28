@@ -102,15 +102,13 @@ const getDealFieldValue = (deal, key) => {
 
 const TERMINAL_STATUSES = ["won", "lost"];
 
-// The app renders inside #root which carries a CSS `zoom` (0.75 on desktop).
+// The app scales its desktop layout via a dynamic CSS `zoom` on <html> (App.jsx).
 // getBoundingClientRect() returns UNSCALED layout coordinates while portal overlays on
 // document.body render in visual space, so rect-derived positions must be multiplied by
 // this zoom factor to line up on screen.
 const getRootZoom = () => {
   if (typeof window === "undefined") return 1;
-  const el = document.getElementById("root");
-  if (!el) return 1;
-  const z = parseFloat(getComputedStyle(el).zoom);
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom);
   return z && !Number.isNaN(z) ? z : 1;
 };
 
@@ -507,6 +505,24 @@ export default function CompanyDealsKanban({
 
   // Row selection + bulk actions
   const [selectedDeals, setSelectedDeals] = useState([]);
+  // Delays the bulk-strip's unmount so it can play a slide-out-right exit
+  // animation on deselect (mirroring the slide-in entrance).
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    const active = viewMode === "list" && selectedDeals.length > 0;
+    if (active) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [viewMode, selectedDeals.length]);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
   const [bulkStatus, setBulkStatus] = useState("Open");
@@ -840,9 +856,9 @@ export default function CompanyDealsKanban({
           <Skeleton width={88} height={44} shape="rounded" className="!rounded-full flex-shrink-0" />
           <Skeleton width={44} height={44} shape="circle" className="flex-shrink-0" />
         </div>
-      ) : viewMode === "list" && selectedDeals.length > 0 ? (
+      ) : showBulkStrip ? (
         <div
-          className="flex flex-wrap items-center justify-end gap-6 bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4"
+          className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInRight"} flex flex-wrap items-center justify-end gap-6 bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4`}
           style={{ minHeight: 44 }}
         >
           <div className="flex items-center gap-3 py-2">
@@ -1074,8 +1090,7 @@ export default function CompanyDealsKanban({
                                 return;
                               }
                               const rect = e.currentTarget.getBoundingClientRect();
-                              const z = getRootZoom();
-                              setColMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+                              setColMenuPos({ top: rect.bottom + 4, left: rect.right - 190 });
                               setOpenColMenuKey(col.id);
                             }}
                             className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -1276,12 +1291,11 @@ export default function CompanyDealsKanban({
                                       return;
                                     }
                                     const rect = e.currentTarget.getBoundingClientRect();
-                                    const z = getRootZoom();
                                     const menuHeight = 128;
-                                    const wouldOverflow = rect.bottom * z + 4 + menuHeight > window.innerHeight;
+                                    const wouldOverflow = rect.bottom + 4 + menuHeight > window.innerHeight;
                                     setRowActionsPos({
-                                      top: wouldOverflow ? rect.top * z - menuHeight - 4 : rect.bottom * z + 4,
-                                      left: rect.right * z - 160,
+                                      top: wouldOverflow ? rect.top - menuHeight - 4 : rect.bottom + 4,
+                                      left: rect.right - 160,
                                     });
                                     setOpenRowActionsId(deal._id);
                                   }}

@@ -24,11 +24,11 @@ const resolveWidth = (col) => {
   return 150;
 };
 
-export function SkeletonRow({ columns, hasCheckbox = true, rowHeight = 44 }) {
+export function SkeletonRow({ columns, hasCheckbox = true, rowHeight = 44, checkboxWidth = 60 }) {
   return (
     <tr style={{ height: rowHeight }}>
       {hasCheckbox && (
-        <td className="px-4 py-2 align-middle border-r border-b border-[#E1E4EA]" style={{ width: 60 }}>
+        <td className="px-4 py-2 align-middle border-r border-b border-[#E1E4EA]" style={{ width: checkboxWidth }}>
           <div className="flex justify-center items-center w-full">
             <div className="w-4 h-4 rounded border border-gray-300 animate-pulse bg-gray-100" />
           </div>
@@ -47,11 +47,11 @@ export function SkeletonRow({ columns, hasCheckbox = true, rowHeight = 44 }) {
   );
 }
 
-export default function TableSkeletonRows({ numRows = 12, columns, hasCheckbox = true, rowHeight = 44 }) {
+export default function TableSkeletonRows({ numRows = 12, columns, hasCheckbox = true, rowHeight = 44, checkboxWidth = 60 }) {
   return (
     <>
       {Array.from({ length: numRows }).map((_, i) => (
-        <SkeletonRow key={i} columns={columns} hasCheckbox={hasCheckbox} rowHeight={rowHeight} />
+        <SkeletonRow key={i} columns={columns} hasCheckbox={hasCheckbox} rowHeight={rowHeight} checkboxWidth={checkboxWidth} />
       ))}
     </>
   );

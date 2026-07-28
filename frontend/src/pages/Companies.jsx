@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
+import Skeleton from "../components/common/Skeleton";
 import useMinDelay from "../hooks/useMinDelay";
 import { createPortal } from "react-dom";
 import API from "../services/api";
@@ -107,9 +108,7 @@ import AppToaster from "../components/AppToaster";
 // by this zoom factor to line up on screen.
 const getRootZoom = () => {
   if (typeof window === "undefined") return 1;
-  const el = document.getElementById("root");
-  if (!el) return 1;
-  const z = parseFloat(getComputedStyle(el).zoom);
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom);
   return z && !Number.isNaN(z) ? z : 1;
 };
 
@@ -166,7 +165,7 @@ function Companies() {
   });
   const [additionalFields, setAdditionalFields] = useState({});
   const [companyFieldNames, setCompanyFieldNames] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const showLoadingSkeleton = useMinDelay(loading && companies.length === 0, 300);
   const [industries, setIndustries] = useState([]);
   const [industriesLoading, setIndustriesLoading] = useState(false);
@@ -240,6 +239,25 @@ function Companies() {
   // Selection mode state
   const [selectionMode, setSelectionMode] = useState(true);
   const [longPressTimer, setLongPressTimer] = useState(null);
+
+  // Delays the bulk-strip's unmount so it can play a slide-out-right exit
+  // animation on deselect (mirroring the slide-in-right entrance).
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    const active = selectionMode && selectedCompanies.length > 0;
+    if (active) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [selectionMode, selectedCompanies.length]);
 
   const [columnSizing, setColumnSizing] = useState({});
 
@@ -504,14 +522,6 @@ function Companies() {
               setRowActionsPos(null);
               return;
             }
-            const rect = e.currentTarget.getBoundingClientRect();
-            const z = getRootZoom();
-            const menuHeight = 260;
-            const wouldOverflow = rect.bottom * z + 4 + menuHeight > window.innerHeight;
-            setRowActionsPos({
-              top: wouldOverflow ? rect.top * z - menuHeight - 4 : rect.bottom * z + 4,
-              left: rect.right * z - 160,
-            });
             setOpenRowActionsId(company._id);
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -519,10 +529,9 @@ function Companies() {
         >
           <MoreVertical className="w-4 h-4" />
         </button>
-        {isOpen && rowActionsPos && createPortal(
+        {isOpen && (
           <div
-            style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-            className="z-[9999] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right pointer-events-auto"
+            className="absolute right-0 top-full mt-1 z-[9999] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
           >
             <Link
               to={`/companies/${company._id}`}
@@ -591,8 +600,7 @@ function Companies() {
               <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
               Delete
             </button>
-          </div>,
-          document.body,
+          </div>
         )}
       </div>
     );
@@ -676,8 +684,7 @@ function Companies() {
                       return;
                     }
                     const rect = e.currentTarget.getBoundingClientRect();
-                    const z = getRootZoom();
-                    setColumnMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 160 });
+                    setColumnMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
                     setOpenColumnMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -1002,8 +1009,16 @@ function Companies() {
     }
   };
 
-  // Separate effect for search/filter to trigger reset + fetch
+  // Separate effect for search/filter to trigger reset + fetch.
+  // Skips the initial mount — the [pagination.currentPage, ...] effect above
+  // already fires the first fetch, and running both here would race a second,
+  // duplicate request that can resolve first and clear `loading` early.
+  const skipInitialSearchFetch = useRef(true);
   useEffect(() => {
+    if (skipInitialSearchFetch.current) {
+      skipInitialSearchFetch.current = false;
+      return;
+    }
     if (pagination.currentPage === 1) {
       fetchCompanies();
     }
@@ -1690,7 +1705,7 @@ function Companies() {
       <div className="bg-white overflow-visible">
         {/* Toolbar (Title + Search + Buttons) */}
         <div
-          className={`fixed right-0 h-16 px-6 border-b flex items-center ${selectionMode && selectedCompanies.length > 0 ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          className={`fixed right-0 h-16 px-6 border-b flex items-center ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
           style={{
             top: "64px",
             left: "var(--sidebar-width, 0px)",
@@ -1700,8 +1715,8 @@ function Companies() {
             boxSizing: "border-box",
           }}
         >
-          {selectionMode && selectedCompanies.length > 0 ? (
-            <div className="animate-slideInRight flex flex-wrap items-center justify-between gap-6 w-full h-full">
+          {showBulkStrip ? (
+            <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-6 w-full h-full`}>
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   onClick={() => setShowExportModal(true)}
@@ -1757,12 +1772,31 @@ function Companies() {
           ) : (
           <div className="flex items-center gap-4 w-full h-full">
             <div className="flex-shrink-0 flex flex-col justify-center gap-1.5">
-              <h1 className="m-0 leading-tight font-bold text-lg text-gray-900">Companies</h1>
-              <p className="m-0 leading-tight text-xs text-gray-500 font-inter">
-                Manage your organisation contracts
-              </p>
+              {showLoadingSkeleton ? (
+                <>
+                  <Skeleton width={110} height={18} />
+                  <Skeleton width={170} height={12} />
+                </>
+              ) : (
+                <>
+                  <h1 className="m-0 leading-tight font-bold text-lg text-gray-900">Companies</h1>
+                  <p className="m-0 leading-tight text-xs text-gray-500 font-inter">
+                    Manage your organisation contracts
+                  </p>
+                </>
+              )}
             </div>
 
+            {showLoadingSkeleton ? (
+              <div className="relative flex-1 flex items-center justify-end gap-3">
+                <Skeleton width={40} height={40} shape="circle" />
+                <Skeleton width={40} height={40} shape="circle" />
+                <Skeleton width={40} height={40} shape="circle" />
+                <Skeleton width={90} height={40} shape="circle" />
+                <Skeleton width={140} height={40} shape="circle" />
+              </div>
+            ) : (
+            <>
             <div className="relative flex-1 flex items-center justify-end">
               <div
                 className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full`}
@@ -1913,6 +1947,8 @@ function Companies() {
               <Plus className="w-4 h-4" />
               {showForm ? "Cancel" : "New Company"}
             </button>
+            </>
+            )}
           </div>
           )}
         </div>

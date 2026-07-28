@@ -1,10 +1,12 @@
 ﻿import React, { useEffect, useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import API from "../services/api";
 import TaskForm from "../components/Task/TaskForm";
 import AdminMeetingForm from "../components/admin/AdminMeetingForm";
 import { useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import FilterIcon from "../components/common/FilterIcon";
+import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import {
   Search,
   ChevronUp,
@@ -30,6 +32,10 @@ import {
   CheckCircle,
   Layout,
   Eye,
+  FileText,
+  Pin,
+  PinOff,
+  EyeOff,
 } from "lucide-react";
 import BulkActions from "../components/BulkActions";
 import TaskDetailsModal from "../components/Task/TaskDetailsModal";
@@ -342,11 +348,41 @@ const MeetingPriorityDropdown = ({ meeting, onUpdate }) => {
   );
 };
 
+// The app scales its desktop layout via a dynamic CSS `zoom` on <html> (App.jsx).
+// getBoundingClientRect() returns UNSCALED layout coordinates while portal overlays on
+// document.body render in visual space, so rect-derived positions must be multiplied by
+// this zoom factor to line up on screen.
+const getRootZoom = () => {
+  if (typeof window === "undefined") return 1;
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom);
+  return z && !Number.isNaN(z) ? z : 1;
+};
+
+const getAncestorZoom = (el) => {
+  let z = 1;
+  let node = el;
+  while (node && node.nodeType === 1) {
+    const cz = parseFloat(getComputedStyle(node).zoom);
+    if (cz && !Number.isNaN(cz)) z *= cz;
+    node = node.parentElement;
+  }
+  return z || 1;
+};
+
 function Tasks() {
   // Tab state
   const [activeTab, setActiveTab] = useState("tasks"); // "tasks" or "meetings"
   const [showKanban, setShowKanban] = useState(false);
   const [showMeetingCalendar, setShowMeetingCalendar] = useState(false);
+  const meetingToggleRefs = useRef({});
+  const [meetingToggleIndicator, setMeetingToggleIndicator] = useState({ left: 4, width: 32 });
+  useEffect(() => {
+    const key = showMeetingCalendar ? "calendar" : "list";
+    const el = meetingToggleRefs.current[key];
+    if (el) {
+      setMeetingToggleIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+    }
+  }, [showMeetingCalendar, activeTab]);
 
   // Tasks state
   const [tasks, setTasks] = useState([]);
@@ -402,9 +438,32 @@ function Tasks() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [showVideoTutorial, setShowVideoTutorial] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef(null);
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
+        setIsMoreMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const [userFilter, setUserFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [editingPage, setEditingPage] = useState(false);
+  const [pageInput, setPageInput] = useState("");
+  const [activeAdvancedFilters, setActiveAdvancedFilters] = useState([]);
+  // Backend only supports exact-day matching on dueDate for tasks/meetings
+  // pagination (no generic per-field querying yet), so this panel is scoped
+  // to that one field rather than offering columns it can't actually filter.
+  const advancedFilterColumns = [{ key: "dueDate", label: "Due Date (YYYY-MM-DD)" }];
+  const applyAdvancedTaskFilters = (newFilters) => {
+    setActiveAdvancedFilters(newFilters);
+    const dueDateFilter = newFilters.find((f) => f.column === "dueDate");
+    setDateFilter(dueDateFilter?.value || "");
+  };
 
   // Debounced states
   const [debouncedUserFilter, setDebouncedUserFilter] = useState("");
@@ -423,7 +482,7 @@ function Tasks() {
     currentPage: 1,
     totalPages: 0,
     totalCount: 0,
-    limit: 10,
+    limit: 50,
     hasNextPage: false,
     hasPrevPage: false,
   });
@@ -438,7 +497,7 @@ function Tasks() {
     currentPage: 1,
     totalPages: 0,
     totalCount: 0,
-    limit: 10,
+    limit: 50,
     hasNextPage: false,
     hasPrevPage: false,
   });
@@ -449,6 +508,184 @@ function Tasks() {
     key: "scheduledAt",
     direction: "desc",
   });
+
+  // Column pin/hide/reorder + row-actions menu — shared across the Tasks and
+  // Meetings tables (only one is ever visible at a time), same pattern as
+  // Companies/Contacts/Deals.
+  const [pinnedColumns, setPinnedColumns] = useState([]); // [{ key, side }]
+  const [hiddenColumns, setHiddenColumns] = useState([]);
+  const [columnOrder, setColumnOrder] = useState([]);
+  const [draggedColKey, setDraggedColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
+  const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
+
+  const pinColumnToSide = (colKey, side) => {
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colKey), { key: colKey, side }]);
+  };
+  const unpinColumn = (colKey) => {
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colKey));
+  };
+  const getColumnPinSide = (colKey) => pinnedColumns.find((p) => p.key === colKey)?.side || null;
+  const hideColumn = (colKey) => setHiddenColumns((prev) => [...prev, colKey]);
+
+  const reorderColumns = (draggedKey, targetKey, fallbackOrder) => {
+    if (!draggedKey || !targetKey || draggedKey === targetKey) return;
+    const base = columnOrder.length ? columnOrder : fallbackOrder;
+    const order = base.includes(draggedKey) ? [...base] : [...base, draggedKey];
+    const from = order.indexOf(draggedKey);
+    const to = order.indexOf(targetKey);
+    if (from === -1 || to === -1) return;
+    order.splice(from, 1);
+    order.splice(to, 0, draggedKey);
+    setColumnOrder(order);
+  };
+
+  const startColumnDrag = (e, colId, label, previewRows) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    const th = e.currentTarget;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
+    const dragState = { started: false, offsetX: 0, offsetY: 0, zGhost: 1 };
+
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const visualTop = clientY - dragState.offsetY;
+      const visualLeft = clientX - dragState.offsetX;
+      el.style.top = `${visualTop / dragState.zGhost}px`;
+      el.style.left = `${visualLeft / dragState.zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / dragState.zGhost}px`;
+    };
+
+    const updateDragOver = (clientX, clientY) => {
+      const elAtPoint = document.elementFromPoint(clientX, clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+
+    const beginDrag = () => {
+      dragState.started = true;
+      window.getSelection?.()?.removeAllRanges();
+
+      const rect = th.getBoundingClientRect();
+      dragState.zGhost = getAncestorZoom(document.body);
+      dragState.offsetX = startX - rect.left;
+      dragState.offsetY = startY - rect.top;
+
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX: dragState.offsetX,
+        offsetY: dragState.offsetY,
+        width: rect.width / dragState.zGhost,
+        height: rect.height / dragState.zGhost,
+      });
+
+      requestAnimationFrame(() => positionGhost(startX, startY));
+    };
+
+    const handleMouseMove = (moveEvent) => {
+      if (!dragState.started) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        e.preventDefault();
+        beginDrag();
+      }
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      updateDragOver(moveEvent.clientX, moveEvent.clientY);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragState.started) return;
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) {
+        reorderColumns(colId, overKey, columnOrder.length ? columnOrder : []);
+      }
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const [openColMenuKey, setOpenColMenuKey] = useState(null);
+  const [colMenuPos, setColMenuPos] = useState(null);
+  const colMenuRef = useRef(null);
+
+  const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const [rowActionsPos, setRowActionsPos] = useState(null);
+  const rowActionsRef = useRef(null);
+
+  // Click outside listener for the row-actions ("⋮") menu, matching Companies.
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (rowActionsRef.current && !rowActionsRef.current.contains(event.target)) {
+        setOpenRowActionsId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Lock page scroll while a row-actions or column-options menu is open so the
+  // background can't shift/scroll out from under the portal-positioned menu.
+  // Any scroll/wheel/touch/keyboard-scroll attempt closes the menu instead of
+  // moving the page.
+  useEffect(() => {
+    if (!openRowActionsId && !openColMenuKey) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const SCROLL_KEYS = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "];
+    const closeMenus = () => {
+      setOpenRowActionsId(null);
+      setRowActionsPos(null);
+      setOpenColMenuKey(null);
+      setColMenuPos(null);
+    };
+    const handleWheel = (e) => {
+      e.preventDefault();
+      closeMenus();
+    };
+    const handleTouchMove = () => closeMenus();
+    const handleKeyDown = (e) => {
+      if (SCROLL_KEYS.includes(e.key)) closeMenus();
+    };
+    const handleScroll = () => closeMenus();
+
+    window.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: true, capture: true });
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    document.addEventListener("scroll", handleScroll, { capture: true });
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("wheel", handleWheel, { capture: true });
+      window.removeEventListener("touchmove", handleTouchMove, { capture: true });
+      window.removeEventListener("keydown", handleKeyDown, { capture: true });
+      document.removeEventListener("scroll", handleScroll, { capture: true });
+    };
+  }, [openRowActionsId, openColMenuKey]);
 
   // Debounce effects
   useEffect(() => {
@@ -1098,19 +1335,12 @@ function Tasks() {
         }
 
         return (
-          <React.Fragment key={index}>
-            <div className="inline-flex flex-col mr-1">
-              <span className="font-semibold text-sm text-gray-900">
-                {name}
-              </span>
-              <span className="text-xs text-gray-500 font-normal">
-                {entity.entityModel}
-              </span>
-            </div>
+          <span key={index} className="font-semibold text-sm text-gray-900">
+            {name}
             {index < task.relatedEntities.length - 1 && (
-              <span className="text-gray-400 mx-1 self-start">,</span>
+              <span className="text-gray-400 mx-1">,</span>
             )}
-          </React.Fragment>
+          </span>
         );
       });
     }
@@ -1127,17 +1357,37 @@ function Tasks() {
       const related = options.find((item) => item._id === relatedToId);
       const name = related ? related.name || related.title || "N/A" : "N/A";
 
-      return (
-        <div className="flex flex-col">
-          <span className="font-semibold text-sm text-gray-900">{name}</span>
-          <span className="text-xs text-gray-500 font-normal">
-            {task.relationModel}
-          </span>
-        </div>
-      );
+      return <span className="font-semibold text-sm text-gray-900">{name}</span>;
     }
 
     return <span className="text-sm text-gray-500">N/A</span>;
+  };
+
+  const getCompanyName = (task) => {
+    if (task.relatedEntities && Array.isArray(task.relatedEntities) && task.relatedEntities.length > 0) {
+      const companyEntities = task.relatedEntities.filter((entity) => entity.entityModel === "Company");
+      if (companyEntities.length === 0) return "-";
+      return companyEntities
+        .map((entity) => {
+          const entityData = entity.entityId;
+          if (entityData && typeof entityData === "object") {
+            return entityData.name || entityData.title || "N/A";
+          }
+          const related = companies.find((item) => item._id === entityData);
+          return related?.name || "N/A";
+        })
+        .join(", ");
+    }
+
+    if (task.relatedTo && task.relationModel === "Company") {
+      const relatedToId = task.relatedTo?._id || task.relatedTo;
+      const related = companies.find((item) => item._id === relatedToId);
+      if (related) return related.name || "N/A";
+      if (task.relatedTo && typeof task.relatedTo === "object") return task.relatedTo.name || "N/A";
+      return "N/A";
+    }
+
+    return "-";
   };
 
   const getAssignedUsers = (task) => {
@@ -1224,6 +1474,238 @@ function Tasks() {
     </div>
   );
 
+  // Reusable header: label (sortable via click) + dropdown-menu trigger
+  // (Pin Left / Pin Right / Sort Asc / Sort Desc / Hide Column), matching
+  // Companies/Contacts/Deals exactly.
+  // Display labels + drag-ghost preview values for the column-drag-reorder
+  // feature — must resolve the SAME human-readable text shown in the real
+  // header/cells, never raw object/array field values (which stringify to
+  // "[object Object]").
+  const TASK_COLUMN_LABELS = {
+    title: "Task",
+    relatedTo: "Related To",
+    company: "Company",
+    status: "Status",
+    users: "Assigned Users",
+    dueDate: "Due Date",
+  };
+  const getTaskColumnPreviewValue = (task, colId) => {
+    switch (colId) {
+      case "title":
+        return task.title || "-";
+      case "relatedTo":
+        return getRelatedToName(task);
+      case "company":
+        return getCompanyName(task);
+      case "status":
+        return task.status || "-";
+      case "users":
+        return getAssignedUsers(task);
+      case "dueDate":
+        return task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No Date";
+      default:
+        return "-";
+    }
+  };
+
+  const MEETING_COLUMN_LABELS = {
+    title: "Meeting",
+    participants: "Contact",
+    scheduledAt: "Date & Time",
+    status: "Status",
+  };
+  const getMeetingColumnPreviewValue = (meeting, colId) => {
+    switch (colId) {
+      case "title":
+        return meeting.title || "-";
+      case "participants":
+        return getMeetingEntityName(meeting);
+      case "scheduledAt":
+        return meeting.scheduledAt ? new Date(meeting.scheduledAt).toLocaleString() : "No Date";
+      case "status":
+        return meeting.status || "-";
+      default:
+        return "-";
+    }
+  };
+
+  const renderHeaderMenu = (colKey, label, { sortable = true } = {}) => {
+    const isMenuOpen = openColMenuKey === colKey;
+    const pinSide = getColumnPinSide(colKey);
+    return (
+      <div className="flex items-center justify-between w-full group">
+        <div
+          className="flex items-center gap-1.5 flex-1 overflow-hidden cursor-pointer select-none"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (sortable) handleSort(colKey);
+          }}
+        >
+          <span className="truncate" title={label}>{label}</span>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isMenuOpen) {
+              setOpenColMenuKey(null);
+              setColMenuPos(null);
+              return;
+            }
+            const rect = e.currentTarget.getBoundingClientRect();
+            setColMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
+            setOpenColMenuKey(colKey);
+          }}
+          className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+          title="Column options"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
+
+        {isMenuOpen && colMenuPos && createPortal(
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColMenuKey(null); setColMenuPos(null); }} />
+            <div
+              ref={colMenuRef}
+              style={{ position: "fixed", top: colMenuPos.top, left: colMenuPos.left }}
+              className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+            >
+              <button
+                onClick={() => {
+                  setOpenColMenuKey(null);
+                  setColMenuPos(null);
+                  pinSide === "left" ? unpinColumn(colKey) : pinColumnToSide(colKey, "left");
+                }}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+              >
+                {pinSide === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                Pin to Left
+              </button>
+              <button
+                onClick={() => {
+                  setOpenColMenuKey(null);
+                  setColMenuPos(null);
+                  pinSide === "right" ? unpinColumn(colKey) : pinColumnToSide(colKey, "right");
+                }}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+              >
+                {pinSide === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                Pin to Right
+              </button>
+
+              {sortable && (
+                <>
+                  <button
+                    onClick={() => {
+                      setOpenColMenuKey(null);
+                      setColMenuPos(null);
+                      handleSort(colKey);
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Sort Ascending
+                  </button>
+                  <button
+                    onClick={() => {
+                      setOpenColMenuKey(null);
+                      setColMenuPos(null);
+                      handleSort(colKey);
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Sort Descending
+                  </button>
+                </>
+              )}
+
+              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+
+              <button
+                onClick={() => {
+                  setOpenColMenuKey(null);
+                  setColMenuPos(null);
+                  hideColumn(colKey);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <EyeOff className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                Hide Column
+              </button>
+            </div>
+          </>,
+          document.body,
+        )}
+      </div>
+    );
+  };
+
+  // Reusable "⋮" row-actions menu: View / Edit / Delete, matching
+  // Companies/Contacts/Deals exactly.
+  const renderRowActionsMenu = (item, type) => {
+    const isOpen = openRowActionsId === item._id;
+    return (
+      <div
+        className="relative flex-shrink-0"
+        ref={isOpen ? rowActionsRef : null}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isOpen) {
+              setOpenRowActionsId(null);
+              return;
+            }
+            setOpenRowActionsId(item._id);
+          }}
+          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+          title="More actions"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+        {isOpen && (
+          <div className="absolute right-0 top-full mt-1 z-[9999] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenRowActionsId(null);
+                type === "task" ? handleTaskEdit(item) : handleMeetingEdit(item);
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+            >
+              <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+              View
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenRowActionsId(null);
+                type === "task" ? handleTaskEdit(item) : handleMeetingEdit(item);
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+            >
+              <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+              Edit
+            </button>
+            <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenRowActionsId(null);
+                handleDelete(item._id, type);
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const SortableHeader = ({ field, children }) => {
     const sortConfig =
       activeTab === "tasks" ? taskSortConfig : meetingSortConfig;
@@ -1295,17 +1777,7 @@ function Tasks() {
       taskColumnHelper.accessor("title", {
         id: "title",
         size: 250,
-        header: () => (
-          <div
-            className="flex items-center gap-2 cursor-pointer select-none"
-            onClick={() => handleSort("title")}
-          >
-            <span className="truncate" title="Task">
-              Task
-            </span>
-            <SortIcons field="title" config={taskSortConfig} />
-          </div>
-        ),
+        header: () => renderHeaderMenu("title", "Task"),
         cell: ({ row }) => {
           const task = row.original;
           return (
@@ -1345,37 +1817,27 @@ function Tasks() {
       taskColumnHelper.accessor("relatedTo", {
         id: "relatedTo",
         size: 200,
-        header: () => (
-          <div
-            className="flex items-center gap-2 cursor-pointer select-none"
-            onClick={() => handleSort("relatedTo")}
-          >
-            <span className="truncate" title="Related To">
-              Related To
-            </span>
-            <SortIcons field="relatedTo" config={taskSortConfig} />
-          </div>
-        ),
+        header: () => renderHeaderMenu("relatedTo", "Related To"),
         cell: ({ row }) => (
           <div className="truncate text-gray-700 w-full">
             {getRelatedToName(row.original)}
           </div>
         ),
       }),
+      taskColumnHelper.accessor("company", {
+        id: "company",
+        size: 180,
+        header: () => renderHeaderMenu("company", "Company"),
+        cell: ({ row }) => (
+          <div className="truncate text-gray-700 w-full" title={getCompanyName(row.original)}>
+            {getCompanyName(row.original)}
+          </div>
+        ),
+      }),
       taskColumnHelper.accessor("status", {
         id: "status",
         size: 160,
-        header: () => (
-          <div
-            className="flex items-center gap-2 cursor-pointer select-none"
-            onClick={() => handleSort("status")}
-          >
-            <span className="truncate" title="Status">
-              Status
-            </span>
-            <SortIcons field="status" config={taskSortConfig} />
-          </div>
-        ),
+        header: () => renderHeaderMenu("status", "Status"),
         cell: ({ row }) => (
           <div
             className="w-full flex items-center"
@@ -1393,17 +1855,7 @@ function Tasks() {
       taskColumnHelper.accessor("users", {
         id: "users",
         size: 200,
-        header: () => (
-          <div
-            className="flex items-center gap-2 cursor-pointer select-none"
-            onClick={() => handleSort("users")}
-          >
-            <span className="truncate" title="Assigned Users">
-              Assigned Users
-            </span>
-            <SortIcons field="users" config={taskSortConfig} />
-          </div>
-        ),
+        header: () => renderHeaderMenu("users", "Assigned Users", { sortable: false }),
         cell: ({ row }) => (
           <div
             className="truncate text-gray-700 w-full"
@@ -1416,17 +1868,7 @@ function Tasks() {
       taskColumnHelper.accessor("dueDate", {
         id: "dueDate",
         size: 150,
-        header: () => (
-          <div
-            className="flex items-center gap-2 cursor-pointer select-none"
-            onClick={() => handleSort("dueDate")}
-          >
-            <span className="truncate" title="Due Date">
-              Due Date
-            </span>
-            <SortIcons field="dueDate" config={taskSortConfig} />
-          </div>
-        ),
+        header: () => renderHeaderMenu("dueDate", "Due Date"),
         cell: ({ getValue }) => {
           const val = getValue();
           return (
@@ -1439,46 +1881,6 @@ function Tasks() {
           );
         },
       }),
-      taskColumnHelper.display({
-        id: "actions",
-        size: 152,
-        enableResizing: false,
-        header: () => <span>Actions</span>,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2 w-full">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleTaskEdit(row.original);
-              }}
-              title="View"
-              className="p-1 text-[#525866] hover:text-blue-600 rounded hover:bg-gray-100"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleTaskEdit(row.original);
-              }}
-              title="Edit"
-              className="p-1 text-[#525866] hover:text-blue-600 rounded hover:bg-gray-100"
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(row.original._id, "task");
-              }}
-              title="Delete"
-              className="p-1 text-[#E82222] hover:bg-red-50 rounded"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        ),
-      }),
     ],
     [
       tasks,
@@ -1489,12 +1891,65 @@ function Tasks() {
       contacts,
       deals,
       vendors,
+      pinnedColumns,
+      openColMenuKey,
+      colMenuPos,
+      openRowActionsId,
+      rowActionsPos,
     ],
+  );
+
+  // Apply hide/pin/reorder on top of the base column defs — selection & actions
+  // columns always stay in place; the rest respect hiddenColumns/columnOrder,
+  // with left-pinned columns first and right-pinned columns last.
+  // Orders/filters columns by pin+hide+drag state, then merges the row-actions
+  // "⋮" trigger into whichever column ends up last (instead of a dedicated
+  // Actions column), matching the DealsTable pattern.
+  const orderColumns = (baseCols, itemType) => {
+    const visibleCols = baseCols.filter(
+      (col) => !hiddenColumns.includes(col.id) || col.id === "selection",
+    );
+    const selectionCol = visibleCols.find((c) => c.id === "selection");
+    let middle = visibleCols.filter((c) => c.id !== "selection");
+    if (columnOrder.length) {
+      const rank = (id) => {
+        const idx = columnOrder.indexOf(id);
+        return idx === -1 ? columnOrder.length + middle.findIndex((c) => c.id === id) : idx;
+      };
+      middle = [...middle].sort((a, b) => rank(a.id) - rank(b.id));
+    }
+    const leftPinned = middle.filter((c) => getColumnPinSide(c.id) === "left");
+    const rightPinned = middle.filter((c) => getColumnPinSide(c.id) === "right");
+    const unpinned = middle.filter((c) => !getColumnPinSide(c.id));
+    const ordered = [selectionCol, ...leftPinned, ...unpinned, ...rightPinned].filter(Boolean);
+
+    const lastIdx = ordered.length - 1;
+    if (lastIdx >= 0 && ordered[lastIdx].id !== "selection") {
+      const lastCol = ordered[lastIdx];
+      const originalCell = lastCol.cell;
+      ordered[lastIdx] = {
+        ...lastCol,
+        cell: (ctx) => (
+          <div className="flex items-center justify-between gap-2 w-full">
+            <div className="min-w-0 flex-1">
+              {typeof originalCell === "function" ? originalCell(ctx) : originalCell}
+            </div>
+            {renderRowActionsMenu(ctx.row.original, itemType)}
+          </div>
+        ),
+      };
+    }
+    return ordered;
+  };
+
+  const orderedTaskColumns = useMemo(
+    () => orderColumns(taskColumnsConfig, "task"),
+    [taskColumnsConfig, hiddenColumns, columnOrder, pinnedColumns],
   );
 
   const taskTable = useReactTable({
     data: tasks,
-    columns: taskColumnsConfig,
+    columns: orderedTaskColumns,
     state: { columnSizing: taskColumnSizing },
     onColumnSizingChange: setTaskColumnSizing,
     getCoreRowModel: getCoreRowModel(),
@@ -1788,23 +2243,20 @@ function Tasks() {
       pagination.totalCount,
     );
 
-    const pages = [];
-    const delta = 2;
-    for (
-      let i = Math.max(2, pagination.currentPage - delta);
-      i <= Math.min(pagination.totalPages - 1, pagination.currentPage + delta);
-      i++
-    )
-      pages.push(i);
-    const pageNumbers = [1];
-    if (pagination.currentPage - delta > 2) pageNumbers.push("...");
-    pageNumbers.push(...pages);
-    if (pagination.currentPage + delta < pagination.totalPages - 1)
-      pageNumbers.push("...");
-    if (pagination.totalPages > 1) pageNumbers.push(pagination.totalPages);
+    const { currentPage, totalPages } = pagination;
+    const commitPage = () => {
+      const n = parseInt(pageInput, 10);
+      if (!Number.isNaN(n)) handlePageChange(Math.min(Math.max(n, 1), totalPages));
+      setEditingPage(false);
+    };
+    const pageItems = [1];
+    if (currentPage > 2) pageItems.push("left-dots");
+    if (currentPage !== 1 && currentPage !== totalPages) pageItems.push(currentPage);
+    if (currentPage < totalPages - 1) pageItems.push("right-dots");
+    if (totalPages > 1) pageItems.push(totalPages);
 
     return (
-      <div className="bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+      <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
           <div className="flex items-center space-x-2">
             <p className="text-sm text-gray-700 font-inter">
@@ -1833,24 +2285,54 @@ function Tasks() {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            {pageNumbers.map((p, i) =>
-              p === "..." ? (
-                <span
-                  key={`dots-${i}`}
-                  className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none"
-                >
-                  ....
-                </span>
-              ) : (
+            {pageItems.map((item, index) => {
+              if (item === "left-dots" || item === "right-dots") {
+                return (
+                  <span
+                    key={`${item}-${index}`}
+                    className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none"
+                  >
+                    ....
+                  </span>
+                );
+              }
+              const isCurrent = item === currentPage;
+              if (isCurrent && editingPage) {
+                return (
+                  <input
+                    key="page-edit"
+                    autoFocus
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={pageInput}
+                    onChange={(e) => setPageInput(e.target.value)}
+                    onBlur={commitPage}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitPage();
+                      if (e.key === "Escape") setEditingPage(false);
+                    }}
+                    className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                );
+              }
+              return (
                 <button
-                  key={p}
-                  onClick={() => handlePageChange(p)}
-                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${p === pagination.currentPage ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+                  key={`page-${item}`}
+                  onClick={() => handlePageChange(item)}
+                  onDoubleClick={() => {
+                    if (isCurrent) {
+                      setPageInput(String(currentPage));
+                      setEditingPage(true);
+                    }
+                  }}
+                  title={isCurrent ? "Double-click to type a page number" : undefined}
+                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${isCurrent ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
                 >
-                  {p}
+                  {item}
                 </button>
-              ),
-            )}
+              );
+            })}
             <button
               onClick={() => handlePageChange(pagination.currentPage + 1)}
               disabled={!pagination.hasNextPage}
@@ -1865,7 +2347,7 @@ function Tasks() {
   };
 
   return (
-    <div className="bg-white min-h-screen -mx-4 sm:-mx-6 lg:-mx-8">
+    <div className="bg-white min-h-screen -mx-4 sm:-mx-6 lg:-mx-8 pb-16">
       <AppToaster />
 
       {/* Video Tutorial Modal */}
@@ -1877,107 +2359,25 @@ function Tasks() {
       />
 
       <div
-        className="sticky flex flex-row justify-between items-center"
-        style={{
-          boxSizing: "border-box",
-          padding: "0px 24px 12px",
-          gap: 16,
-          width: "100%",
-          background: "#FFFFFF",
-          borderBottom: "1px solid #E1E4EA",
-          borderRadius: 0,
-          top: "64px",
-          zIndex: 40,
-        }}
-      >
-        <div
-          className="flex flex-col items-start flex-shrink-0"
-          style={{ gap: 6, width: 614, height: 39 }}
-        >
-          <span
-            style={{
-              fontFamily: "Inter",
-              fontWeight: 500,
-              fontSize: 16,
-              lineHeight: "120%",
-              letterSpacing: "-0.5px",
-              color: "#0E121B",
-            }}
-          >
-            Tasks & Meetings
-          </span>
-          <span
-            style={{
-              fontFamily: "Inter",
-              fontWeight: 400,
-              fontSize: 12,
-              lineHeight: "120%",
-              color: "#525866",
-            }}
-          >
-            Manage your Tasks & reminders
-          </span>
-        </div>
-
-        <div
-          className="flex flex-row items-center flex-shrink-0"
-          style={{ gap: 8, width: 198, height: 44 }}
-        >
-          <button
-            className="flex items-center justify-center flex-shrink-0"
-            style={{
-              boxSizing: "border-box",
-              padding: 12,
-              gap: 8,
-              width: 44,
-              height: 44,
-              background: "#FFFFFF",
-              border: "1px solid #E1E4EA",
-              borderRadius: 96,
-            }}
-          >
-            <MoreVertical size={20} style={{ color: "#1F2937" }} />
-          </button>
-          <button
-            className="flex flex-row justify-center items-center flex-shrink-0"
-            style={{
-              padding: 12,
-              gap: 6,
-              width: 146,
-              height: 44,
-              background: "#0085FF",
-              borderRadius: 96,
-            }}
-          >
-            <Plus size={20} style={{ color: "#FFFFFF" }} />
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 500,
-                fontSize: 14,
-                lineHeight: "20px",
-                color: "#FFFFFF",
-              }}
-            >
-              New Activity
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {/* Tabbing */}
-      <div
         className="flex flex-row justify-between items-center"
         style={{
           boxSizing: "border-box",
           padding: "0px 24px",
-          width: "100%",
+          gap: 16,
           height: 64,
+          minHeight: 64,
+          maxHeight: 64,
           background: "#FFFFFF",
-          borderBottom: "1px solid #F1F1F5",
+          borderBottom: "1px solid #E1E4EA",
+          borderRadius: 0,
+          position: "fixed",
+          top: "64px",
+          left: "var(--sidebar-width, 0px)",
+          right: 0,
+          zIndex: 40,
         }}
       >
-        <div className="flex flex-row items-center flex-shrink-0" style={{ height: 64 }}>
+        <div className="flex flex-row items-center flex-shrink-0" style={{ height: 44 }}>
           <button
             onClick={() => setActiveTab("tasks")}
             className="flex flex-row justify-center items-center flex-shrink-0"
@@ -1985,7 +2385,7 @@ function Tasks() {
               boxSizing: "border-box",
               padding: "0px 16px",
               gap: 10,
-              height: 64,
+              height: 44,
               borderBottom: activeTab === "tasks" ? "3px solid #0085FF" : "3px solid transparent",
               fontFamily: "Inter",
               fontWeight: 600,
@@ -2005,7 +2405,7 @@ function Tasks() {
               boxSizing: "border-box",
               padding: "0px 16px",
               gap: 10,
-              height: 64,
+              height: 44,
               borderBottom: activeTab === "meetings" ? "3px solid #0085FF" : "3px solid transparent",
               fontFamily: "Inter",
               fontWeight: 600,
@@ -2020,24 +2420,16 @@ function Tasks() {
           </button>
         </div>
 
+        <div className="flex-1 min-w-0" />
+
         <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
           <div
-            className="relative flex flex-row items-center flex-shrink-0 transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:hover:bg-white"
-            style={{
-              boxSizing: "border-box",
-              padding: "12px 14px",
-              gap: 10,
-              width: isSearchExpanded ? 416 : 44,
-              height: 44,
-              border: `1px solid ${isSearchExpanded ? "#0085FF" : "rgba(31, 41, 55, 0.1)"}`,
-              borderRadius: 95,
-              background: "#fff",
-            }}
+            className={`relative h-11 flex items-center border rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-80" : "w-11"} max-w-full flex-shrink-0`}
+            style={{ borderColor: isSearchExpanded ? "#0085FF" : "rgba(31, 41, 55, 0.1)" }}
           >
             <Search
               strokeWidth={2.5}
-              className="w-5 h-5 flex-shrink-0 cursor-pointer"
-              style={{ color: "#1F2937" }}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
               onClick={() => {
                 setIsSearchExpanded(true);
                 searchInputRef.current?.focus();
@@ -2052,8 +2444,8 @@ function Tasks() {
               onBlur={() => {
                 if (!searchTerm) setIsSearchExpanded(false);
               }}
-              className={`flex-1 bg-transparent focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
-              style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 14, lineHeight: "20px", color: "#1F2937" }}
+              className={`w-full h-full pl-9 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+              style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "20px", color: "#1F2937" }}
               placeholder={
                 activeTab === "tasks"
                   ? "Search Task by Title or Description..."
@@ -2063,40 +2455,42 @@ function Tasks() {
           </div>
 
           {activeTab === "tasks" && (
-            <div
-              className="flex flex-row items-center flex-shrink-0"
-              style={{ gap: 8 }}
-            >
+            <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
               <button
-                onClick={() => {
-                  setShowMobileFilters(!showMobileFilters);
-                }}
-                className="flex flex-row justify-center items-center flex-shrink-0"
+                onClick={() => setShowMobileFilters(true)}
+                className="relative flex flex-row justify-center items-center flex-shrink-0"
                 style={{
-                  width: 44,
-                  height: 44,
+                  width: 40,
+                  height: 40,
                   background: "#FFFFFF",
                   border: "1px solid #E1E4EA",
                   borderRadius: 95,
                 }}
               >
                 <FilterIcon size={15} style={{ color: "#1F2937" }} />
+                {activeAdvancedFilters.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                    {activeAdvancedFilters.length}
+                  </span>
+                )}
               </button>
 
               <div
-                className="flex flex-row items-center flex-shrink-0"
-                style={{ padding: 4, gap: 6, width: 86, height: 44, background: "#F1F1F5", borderRadius: 95 }}
+                className="relative flex flex-row items-center flex-shrink-0"
+                style={{ padding: 4, gap: 6, width: 80, height: 40, background: "#F1F1F5", borderRadius: 95 }}
               >
+                <span
+                  className="absolute top-1 rounded-full bg-white shadow-[0_0_6px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
+                  style={{ width: 32, height: 32, left: showKanban ? 42 : 4 }}
+                />
                 <button
                   onClick={() => setShowKanban(false)}
-                  className="flex flex-row justify-center items-center flex-shrink-0"
+                  className="relative z-10 flex flex-row justify-center items-center flex-shrink-0"
                   style={{
                     padding: 8,
                     gap: 10,
-                    width: 36,
-                    height: 36,
-                    background: !showKanban ? "#FFFFFF" : "transparent",
-                    boxShadow: !showKanban ? "0px 0px 6px rgba(0, 0, 0, 0.1)" : "none",
+                    width: 32,
+                    height: 32,
                     borderRadius: 95,
                   }}
                 >
@@ -2104,14 +2498,12 @@ function Tasks() {
                 </button>
                 <button
                   onClick={() => setShowKanban(true)}
-                  className="flex flex-row justify-center items-center flex-shrink-0"
+                  className="relative z-10 flex flex-row justify-center items-center flex-shrink-0"
                   style={{
                     padding: 8,
                     gap: 10,
-                    width: 36,
-                    height: 36,
-                    background: showKanban ? "#FFFFFF" : "transparent",
-                    boxShadow: showKanban ? "0px 0px 6px rgba(0, 0, 0, 0.1)" : "none",
+                    width: 32,
+                    height: 32,
                     borderRadius: 96,
                   }}
                 >
@@ -2124,48 +2516,53 @@ function Tasks() {
           {activeTab === "meetings" && (
             <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
               <button
-                onClick={() => {
-                  setShowMobileFilters(!showMobileFilters);
-                }}
-                className="flex flex-row justify-center items-center flex-shrink-0"
+                onClick={() => setShowMobileFilters(true)}
+                className="relative flex flex-row justify-center items-center flex-shrink-0"
                 style={{
-                  width: 44,
-                  height: 44,
+                  width: 40,
+                  height: 40,
                   background: "#FFFFFF",
                   border: "1px solid #E1E4EA",
                   borderRadius: 95,
                 }}
               >
                 <FilterIcon size={15} style={{ color: "#1F2937" }} />
+                {activeAdvancedFilters.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                    {activeAdvancedFilters.length}
+                  </span>
+                )}
               </button>
 
               <div
-                className="flex flex-row items-center flex-shrink-0"
-                style={{ padding: 4, gap: 6, height: 44, background: "#F1F1F5", borderRadius: 95 }}
+                className="relative flex flex-row items-center flex-shrink-0"
+                style={{ padding: 4, gap: 6, height: 40, background: "#F1F1F5", borderRadius: 95 }}
               >
+                <span
+                  className="absolute top-1 rounded-full bg-white shadow-[0_0_6px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
+                  style={{ height: 32, left: meetingToggleIndicator.left, width: meetingToggleIndicator.width }}
+                />
                 <button
+                  ref={(el) => (meetingToggleRefs.current.list = el)}
                   onClick={() => setShowMeetingCalendar(false)}
-                  className="flex flex-row justify-center items-center flex-shrink-0"
+                  className="relative z-10 flex flex-row justify-center items-center flex-shrink-0"
                   style={{
                     padding: 8,
                     gap: 10,
-                    width: 36,
-                    height: 36,
-                    background: !showMeetingCalendar ? "#FFFFFF" : "transparent",
-                    boxShadow: !showMeetingCalendar ? "0px 0px 6px rgba(0, 0, 0, 0.1)" : "none",
+                    width: 32,
+                    height: 32,
                     borderRadius: 95,
                   }}
                 >
                   <CustomListIcon width={15} height={15} style={{ color: !showMeetingCalendar ? "#0085FF" : "#525252" }} />
                 </button>
                 <button
+                  ref={(el) => (meetingToggleRefs.current.calendar = el)}
                   onClick={() => setShowMeetingCalendar(true)}
-                  className="flex flex-row justify-center items-center gap-2 flex-shrink-0"
+                  className="relative z-10 flex flex-row justify-center items-center gap-2 flex-shrink-0"
                   style={{
                     padding: "8px 14px",
-                    height: 36,
-                    background: showMeetingCalendar ? "#FFFFFF" : "transparent",
-                    boxShadow: showMeetingCalendar ? "0px 0px 6px rgba(0, 0, 0, 0.1)" : "none",
+                    height: 32,
                     borderRadius: 96,
                   }}
                 >
@@ -2185,9 +2582,73 @@ function Tasks() {
               </div>
             </div>
           )}
+        </div>
 
+        <div
+          className="flex flex-row items-center flex-shrink-0"
+          style={{ gap: 8, width: 186, height: 40 }}
+        >
+          <div className="relative" ref={moreMenuRef}>
+            <button
+              onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+              className="flex items-center justify-center flex-shrink-0"
+              style={{
+                boxSizing: "border-box",
+                padding: 12,
+                gap: 8,
+                width: 40,
+                height: 40,
+                background: "#FFFFFF",
+                border: "1px solid #E1E4EA",
+                borderRadius: 96,
+              }}
+            >
+              <MoreVertical size={20} style={{ color: "#1F2937" }} />
+            </button>
+            {isMoreMenuOpen && (
+              <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
+                <button
+                  onClick={() => {
+                    setShowVideoTutorial(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <FileText className="w-4 h-4 text-gray-400" />
+                  Video Tutorial
+                </button>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => (activeTab === "tasks" ? toggleTaskForm() : toggleMeetingForm())}
+            className="flex flex-row justify-center items-center flex-shrink-0"
+            style={{
+              padding: 12,
+              gap: 6,
+              width: 138,
+              height: 40,
+              background: "#0085FF",
+              borderRadius: 96,
+            }}
+          >
+            <Plus size={18} style={{ color: "#FFFFFF" }} />
+            <span
+              style={{
+                fontFamily: "Inter",
+                fontWeight: 500,
+                fontSize: 14,
+                lineHeight: "20px",
+                color: "#FFFFFF",
+              }}
+            >
+              New Activity
+            </span>
+          </button>
         </div>
       </div>
+      {/* Spacer to offset the fixed strip above */}
+      <div style={{ height: 64 }} />
 
       {activeTab === "tasks" && selectionMode && selectedTasks.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mx-6 mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm gap-4">
@@ -2274,35 +2735,67 @@ function Tasks() {
       {activeTab === "tasks" && !showKanban && (
       <>
       <div
-        className={`relative bg-white overflow-hidden border border-[#E1E4EA] rounded-lg mx-6 ${loading ? "pointer-events-none opacity-60" : ""}`}
-        style={{ marginTop: 24 }}
+        className="overflow-x-auto overflow-y-auto"
+        style={{
+          position: "fixed",
+          top: 128,
+          left: "var(--sidebar-width, 0px)",
+          right: 0,
+          bottom: !loading ? 64 : 0,
+        }}
       >
-        <div className="overflow-x-auto">
+      <div
+        className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
+      >
           <table
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${taskTable.getTotalSize()}px`, tableLayout: "fixed" }}
           >
-            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
               {taskTable.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <th
-                      key={header.id}
-                      style={{ width: header.getSize(), position: "relative" }}
-                      className="px-3 py-3 text-sm font-medium text-[#525866] hover:bg-gray-100 transition-colors bg-[#F5F7FA]"
-                    >
-                      <div className="truncate w-full">
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                      </div>
-                      {header.column.getCanResize() && (
-                        <div
-                          onMouseDown={header.getResizeHandler()}
-                          onTouchStart={header.getResizeHandler()}
-                          className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 ${header.column.getIsResizing() ? "bg-blue-500" : "bg-transparent"}`}
-                        />
-                      )}
-                    </th>
-                  ))}
+                  {headerGroup.headers.map((header) => {
+                    const colId = header.column.id;
+                    const isLeftSticky = colId === "selection";
+                    const isDraggable = colId !== "selection" && colId !== "actions";
+                    const isDragging = draggedColKey === colId;
+                    const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+                    return (
+                      <th
+                        key={header.id}
+                        data-col-id={colId}
+                        onMouseDown={isDraggable ? (e) => startColumnDrag(
+                          e,
+                          colId,
+                          TASK_COLUMN_LABELS[colId] || colId,
+                          tasks.map((t) => String(getTaskColumnPreviewValue(t, colId))),
+                        ) : undefined}
+                        style={{
+                          width: header.getSize(),
+                          position: isLeftSticky ? "sticky" : "relative",
+                          left: isLeftSticky ? 0 : "auto",
+                          zIndex: isLeftSticky ? 20 : 1,
+                          opacity: isDragging ? 0.35 : 1,
+                        }}
+                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                      >
+                        <div className="truncate w-full">
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                        </div>
+                        {header.column.getCanResize() && (
+                          <div
+                            data-resize-handle="true"
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              header.getResizeHandler()(e);
+                            }}
+                            onTouchStart={header.getResizeHandler()}
+                            className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 ${header.column.getIsResizing() ? "bg-blue-500" : "bg-transparent"}`}
+                          />
+                        )}
+                      </th>
+                    );
+                  })}
                 </tr>
               ))}
             </thead>
@@ -2326,15 +2819,25 @@ function Tasks() {
                     onClick={() => handleTaskEdit(row.original)}
                     className={`group cursor-pointer hover:bg-blue-50 transition-colors ${selectedTasks.includes(row.original._id) ? "bg-blue-50" : "bg-white"}`}
                   >
-                    {row.getVisibleCells().map((cell) => (
-                      <td
-                        key={cell.id}
-                        style={{ width: cell.column.getSize(), height: 54 }}
-                        className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit"
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
+                    {row.getVisibleCells().map((cell) => {
+                      const colId = cell.column.id;
+                      const isLeftSticky = colId === "selection";
+                      return (
+                        <td
+                          key={cell.id}
+                          style={{
+                            width: cell.column.getSize(),
+                            height: 54,
+                            position: isLeftSticky ? "sticky" : "static",
+                            left: isLeftSticky ? 0 : "auto",
+                            zIndex: isLeftSticky ? 10 : 1,
+                          }}
+                          className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))
               )}
@@ -2342,29 +2845,44 @@ function Tasks() {
           </table>
         </div>
       </div>
-      {!loading && <PaginationControls />}
+      {!loading && (
+        <div
+          className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
+          style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+        >
+          <PaginationControls />
+        </div>
+      )}
       </>
       )}
 
       {activeTab === "meetings" && !showMeetingCalendar && (
       <>
       <div
-        className={`relative bg-white overflow-hidden border border-[#E1E4EA] rounded-lg mx-6 ${loading ? "pointer-events-none opacity-60" : ""}`}
-        style={{ marginTop: 24 }}
+        className="overflow-x-auto overflow-y-auto"
+        style={{
+          position: "fixed",
+          top: 128,
+          left: "var(--sidebar-width, 0px)",
+          right: 0,
+          bottom: !loading ? 64 : 0,
+        }}
       >
-        <div className="overflow-x-auto">
+      <div
+        className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
+      >
           <table
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${meetingTable.getTotalSize()}px`, tableLayout: "fixed" }}
           >
-            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
               {meetingTable.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
                     <th
                       key={header.id}
                       style={{ width: header.getSize(), position: "relative" }}
-                      className="px-3 py-3 text-sm font-medium text-[#525866] hover:bg-gray-100 transition-colors bg-[#F5F7FA]"
+                      className="px-3 py-3 text-sm font-medium text-[#525866] hover:bg-gray-100 transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0"
                     >
                       <div className="truncate w-full">
                         {flexRender(header.column.columnDef.header, header.getContext())}
@@ -2405,7 +2923,7 @@ function Tasks() {
                       <td
                         key={cell.id}
                         style={{ width: cell.column.getSize(), height: 54 }}
-                        className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit"
+                        className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
@@ -2417,12 +2935,19 @@ function Tasks() {
           </table>
         </div>
       </div>
-      {!loading && <PaginationControls />}
+      {!loading && (
+        <div
+          className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
+          style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+        >
+          <PaginationControls />
+        </div>
+      )}
       </>
       )}
 
       {activeTab === "tasks" && showKanban && (
-        <div className="mx-6 mt-6" style={{ height: 587 }}>
+        <div className="mx-6" style={{ height: 587 }}>
           <TaskKanbanBoard
             columns={["Pending", "In Progress", "Completed"]}
             items={tasks}
@@ -2596,6 +3121,43 @@ function Tasks() {
           </div>
         </div>
       )}
+
+      {dragGhost && createPortal(
+        <div
+          ref={ghostElRef}
+          style={{
+            position: "fixed",
+            top: -9999,
+            left: -9999,
+            width: dragGhost.width,
+            zIndex: 10000,
+            pointerEvents: "none",
+          }}
+          className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+        >
+          <div className="px-3 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+            <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+          </div>
+          {(dragGhost.previewRows || []).slice(0, 10).map((rowVal, i) => (
+            <div key={i} className="px-3 py-2 border-b border-[#F1F1F5] last:border-b-0">
+              <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
+
+      <AdvancedFilterPanel
+        isOpen={showMobileFilters}
+        onClose={() => setShowMobileFilters(false)}
+        columns={advancedFilterColumns}
+        filters={activeAdvancedFilters}
+        setFilters={setActiveAdvancedFilters}
+        onApply={applyAdvancedTaskFilters}
+        title={activeTab === "tasks" ? "Filter Tasks" : "Filter Meetings"}
+        subtitle="Find items due on a specific date"
+        emptyStateText="Add a rule to narrow down the list."
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef, useLayoutEffect } from "react";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import useMinDelay from "../hooks/useMinDelay";
 import { createPortal } from "react-dom";
@@ -106,9 +106,7 @@ const useIsMobile = () => {
 // this zoom factor to line up on screen.
 const getRootZoom = () => {
   if (typeof window === "undefined") return 1;
-  const el = document.getElementById("root");
-  if (!el) return 1;
-  const z = parseFloat(getComputedStyle(el).zoom);
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom);
   return z && !Number.isNaN(z) ? z : 1;
 };
 
@@ -167,7 +165,7 @@ function Contacts() {
     },
   });
   const [companies, setCompanies] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const showLoadingSkeleton = useMinDelay(loading && contacts.length === 0, 300);
   const [contactFieldList, setContactFieldList] = useState([]);
   const [additionalValues, setAdditionalValues] = useState({});
@@ -277,6 +275,25 @@ function Contacts() {
   const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
   const [columnMenuPos, setColumnMenuPos] = useState(null);
   const columnMenuRef = useRef(null);
+
+  // Close any open portal menu on scroll instead of locking the page in place —
+  // the background stays freely scrollable, and the menu just disappears since
+  // its position was only computed once, on open, and won't track the scroll.
+  useEffect(() => {
+    if (!openRowActionsId && !openColumnMenuKey) return;
+    const closeMenus = () => {
+      setOpenRowActionsId(null);
+      setRowActionsPos(null);
+      setOpenColumnMenuKey(null);
+      setColumnMenuPos(null);
+    };
+    window.addEventListener("scroll", closeMenus, { passive: true, capture: true });
+    window.addEventListener("wheel", closeMenus, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", closeMenus, { capture: true });
+      window.removeEventListener("wheel", closeMenus);
+    };
+  }, [openRowActionsId, openColumnMenuKey]);
 
   const [draggedColKey, setDraggedColKey] = useState(null);
   const [dragOverColKey, setDragOverColKey] = useState(null);
@@ -434,6 +451,20 @@ function Contacts() {
     setCurrentContactIds,
   } = useContactStore();
 
+  // Sliding underline indicator for the tab bar
+  const tabRefs = useRef({});
+  const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
+  useLayoutEffect(() => {
+    const el = tabRefs.current[activeTab];
+    if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+    const onResize = () => {
+      const cur = tabRefs.current[activeTab];
+      if (cur) setTabIndicator({ left: cur.offsetLeft, width: cur.offsetWidth });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [activeTab]);
+
   const fetchFolders = async () => {
     try {
       const res = await API.get("/contact-folders/");
@@ -480,6 +511,25 @@ function Contacts() {
   // Selection mode state
   const [selectionMode, setSelectionMode] = useState(true);
   const [longPressTimer, setLongPressTimer] = useState(null);
+
+  // Delays the bulk-strip's unmount so it can play a slide-out-right exit
+  // animation on deselect (mirroring the slide-in entrance).
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    const active = selectionMode && selectedContacts.length > 0;
+    if (active) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [selectionMode, selectedContacts.length]);
 
   //Pinning rows
   const [pinnedIds, setPinnedIds] = useState(() => {
@@ -711,8 +761,7 @@ function Contacts() {
               return;
             }
             const rect = e.currentTarget.getBoundingClientRect();
-            const z = getRootZoom();
-            setRowActionsPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+            setRowActionsPos({ top: rect.bottom + 4, left: rect.right - 130 });
             setOpenRowActionsId(contact._id);
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -727,7 +776,7 @@ function Contacts() {
               ref={rowActionsRef}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
               onMouseDown={(e) => e.stopPropagation()}
-              className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-2 animate-in fade-in zoom-in duration-150 origin-top-right"
+              className="w-[130px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
             >
               <button
                 onClick={(e) => {
@@ -735,9 +784,9 @@ function Contacts() {
                   closeMenu();
                   setQuickViewContactId(contact._id);
                 }}
-                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Eye className="w-4 h-4 text-[#1C1B1F]" />
+                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 Quick View
               </button>
               <button
@@ -746,9 +795,9 @@ function Contacts() {
                   closeMenu();
                   handleEditContact(contact);
                 }}
-                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Edit2 className="w-4 h-4 text-[#1C1B1F]" />
+                <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 Edit
               </button>
               <button
@@ -757,9 +806,9 @@ function Contacts() {
                   closeMenu();
                   openAddToFolderModal(contact);
                 }}
-                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <FolderPlus className="w-4 h-4 text-[#1C1B1F]" />
+                <FolderPlus className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 Add to Folder
               </button>
               <button
@@ -767,21 +816,21 @@ function Contacts() {
                   e.stopPropagation();
                   toggleStar(e, contact._id);
                 }}
-                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Star className={`w-4 h-4 ${starredContactsSet.has(contact._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
+                <Star className={`w-3.5 h-3.5 ${starredContactsSet.has(contact._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
                 {starredContactsSet.has(contact._id) ? "Unstar Contact" : "Star Contact"}
               </button>
-              <div className="w-full border-t border-[#F1F1F5]" />
+              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   closeMenu();
                   handleDelete(contact._id);
                 }}
-                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
               >
-                <Trash2 className="w-4 h-4 text-[#CD3636]" />
+                <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
                 Delete
               </button>
             </div>
@@ -880,8 +929,7 @@ function Contacts() {
                       return;
                     }
                     const rect = e.currentTarget.getBoundingClientRect();
-                    const z = getRootZoom();
-                    setColumnMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+                    setColumnMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
                     setOpenColumnMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -896,7 +944,7 @@ function Contacts() {
                     <div
                       ref={columnMenuRef}
                       style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
-                      className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                      className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
                     >
                       <button
                         onClick={() => {
@@ -904,9 +952,9 @@ function Contacts() {
                           setColumnMenuPos(null);
                           pinSide === "left" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "left");
                         }}
-                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                       >
-                        {pinSide === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                        {pinSide === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
                         Pin to Left
                       </button>
                       <button
@@ -915,9 +963,9 @@ function Contacts() {
                           setColumnMenuPos(null);
                           pinSide === "right" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "right");
                         }}
-                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                       >
-                        {pinSide === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                        {pinSide === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
                         Pin to Right
                       </button>
 
@@ -930,9 +978,9 @@ function Contacts() {
                               setSortConfig({ key: vc.key, direction: "asc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
-                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                           >
-                            <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                            <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             Sort Ascending
                           </button>
                           <button
@@ -942,9 +990,9 @@ function Contacts() {
                               setSortConfig({ key: vc.key, direction: "desc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
-                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                           >
-                            <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                            <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             Sort Descending
                           </button>
                         </>
@@ -961,12 +1009,12 @@ function Contacts() {
                             columns.map((c) => (c.key === vc.key ? { ...c, visible: false } : c)),
                           );
                         }}
-                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${vc.required
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${vc.required
                           ? "text-gray-300 cursor-not-allowed"
                           : "text-[#161618] hover:bg-gray-50"
                           }`}
                       >
-                        <EyeOff className={`w-4 h-4 ${vc.required ? "text-gray-300" : "text-[#1C1B1F]"}`} />
+                        <EyeOff className={`w-3.5 h-3.5 ${vc.required ? "text-gray-300" : "text-[#1C1B1F]"}`} />
                         Hide Column
                       </button>
                     </div>
@@ -1025,7 +1073,7 @@ function Contacts() {
                 <div className="truncate w-full" title={contact.email}>
                   <a
                     href={`mailto:${contact.email}`}
-                    className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
+                    className="text-sm text-blue-600 hover:underline transition-colors"
                   >
                     <HighlightText text={contact.email} query={searchTerm} />
                   </a>
@@ -1037,7 +1085,7 @@ function Contacts() {
                   {contact.phone ? (
                     <a
                       href={`tel:${contact.phone}`}
-                      className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
+                      className="text-sm text-blue-600 hover:underline transition-colors"
                     >
                       <HighlightText text={contact.phone} query={searchTerm} />
                     </a>
@@ -1608,8 +1656,16 @@ function Contacts() {
     fetchData();
   }, [pagination.currentPage, pagination.limit, sortConfig]);
 
-  // Separate effect for search/filter to trigger reset + fetch
+  // Separate effect for search/filter to trigger reset + fetch.
+  // Skips the initial mount — the [pagination.currentPage, ...] effect above
+  // already fires the first fetch, and running both here would race a second,
+  // duplicate request that can resolve first and clear `loading` early.
+  const skipInitialSearchFetch = useRef(true);
   useEffect(() => {
+    if (skipInitialSearchFetch.current) {
+      skipInitialSearchFetch.current = false;
+      return;
+    }
     if (pagination.currentPage === 1) {
       fetchData();
     }
@@ -2343,11 +2399,11 @@ function Contacts() {
 
       {/* Title Strip */}
       <div
-        className={`fixed right-0 h-16 flex items-center justify-between gap-3 px-6 border-b ${selectionMode && selectedContacts.length > 0 ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
+        className={`fixed right-0 h-16 flex items-center justify-between gap-3 px-6 border-b ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
         style={{ top: "64px", left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
       >
-        {selectionMode && selectedContacts.length > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 w-full h-full">
+        {showBulkStrip ? (
+          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-3 w-full h-full`}>
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowExportModal(true)}
@@ -2402,7 +2458,7 @@ function Contacts() {
           </div>
         ) : (
         <>
-        <nav className="flex items-stretch h-11 overflow-x-auto flex-shrink-0">
+        <nav className="relative flex items-stretch h-11 overflow-x-auto flex-shrink-0">
           {[
             { id: "All", label: "All" },
             { id: "Leads", label: "Leads" },
@@ -2411,6 +2467,7 @@ function Contacts() {
           ].map(({ id, label }) => (
             <button
               key={id}
+              ref={(el) => (tabRefs.current[id] = el)}
               onClick={() => handleTabChange(id)}
               className="flex items-center justify-center px-4 h-full whitespace-nowrap"
               style={{
@@ -2419,19 +2476,22 @@ function Contacts() {
                 fontSize: "14px",
                 letterSpacing: "-0.04em",
                 color: activeTab === id ? "#0085FF" : "#44444A",
-                borderBottom: activeTab === id ? "3px solid #0085FF" : "3px solid transparent",
               }}
             >
               {label}
             </button>
           ))}
+          <span
+            className="absolute bottom-0 pointer-events-none transition-all duration-300 ease-out"
+            style={{ left: tabIndicator.left, width: tabIndicator.width, height: 3, background: "#0085FF" }}
+          />
         </nav>
 
         <div className="flex items-center gap-2 flex-shrink-0">
           {activeTab !== "Hotlist" && (
             <>
               <div
-                className={`relative h-11 flex items-center border border-[rgba(31,41,55,0.1)] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-11"} max-w-full`}
+                className={`relative h-10 flex items-center border border-[rgba(31,41,55,0.1)] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full`}
               >
                 <Search
                   strokeWidth={2.5}
@@ -2457,7 +2517,7 @@ function Contacts() {
 
               <button
                 onClick={() => setShowAdvancedFilters(true)}
-                className="relative flex items-center justify-center w-11 h-11 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
+                className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
                 title="Filters"
               >
                 <FilterIcon size={15} />
@@ -2470,12 +2530,12 @@ function Contacts() {
 
               <div className="relative flex items-center gap-1.5 bg-[#F1F1F5] rounded-full p-1 flex-shrink-0 overflow-hidden">
                 <span
-                  className="absolute top-1 w-9 h-9 rounded-full bg-white shadow-[0_0_6px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
-                  style={{ left: showKanban ? 46 : 4 }}
+                  className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-[0_0_6px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
+                  style={{ left: showKanban ? 42 : 4 }}
                 />
                 <button
                   onClick={() => setShowKanban(false)}
-                  className={`relative z-10 flex items-center justify-center w-9 h-9 rounded-full transition-colors ${!showKanban ? "text-[#0085FF]" : "text-[#525252]"
+                  className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "text-[#0085FF]" : "text-[#525252]"
                     }`}
                   title="List View"
                 >
@@ -2483,7 +2543,7 @@ function Contacts() {
                 </button>
                 <button
                   onClick={() => setShowKanban(true)}
-                  className={`relative z-10 flex items-center justify-center w-9 h-9 rounded-full transition-colors ${showKanban ? "text-[#0085FF]" : "text-[#525252]"
+                  className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "text-[#0085FF]" : "text-[#525252]"
                     }`}
                   title="Kanban View"
                 >
@@ -2498,7 +2558,7 @@ function Contacts() {
           <div className="relative" ref={moreMenuRef}>
             <button
               onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-              className="flex items-center justify-center w-11 h-11 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+              className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
               title="More options"
             >
               <MoreVertical className="w-4 h-4" />
@@ -2966,7 +3026,7 @@ function Contacts() {
 
                 <tbody className="bg-white">
                   {showLoadingSkeleton ? (
-                    <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox />
+                    <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox checkboxWidth={50} />
                   ) : sortedContacts.length === 0 ? (
                     <tr>
                       <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
@@ -2978,7 +3038,10 @@ function Contacts() {
                       <tr
                         key={row.id}
                         className={`bg-white hover:bg-blue-50 transition-colors cursor-pointer ${selectedContactsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
-                        onClick={() => navigate(`/contacts/${row.original._id}`)}
+                        onClick={(e) => {
+                          if (e.target.closest("button") || e.target.closest("a") || e.target.closest("input")) return;
+                          navigate(`/contacts/${row.original._id}`);
+                        }}
                       >
                         {row.getVisibleCells().map((cell) => {
                           const colId = cell.column.id;
