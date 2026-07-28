@@ -859,11 +859,11 @@ function Vendors() {
             </select>
           </div>
 
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={!hasPrevPage}
-              className="relative inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -873,17 +873,17 @@ function Vendors() {
                 pageNum === "..." ? (
                   <span
                     key={`dots-${index}`}
-                    className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700"
+                    className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none"
                   >
-                    ...
+                    ....
                   </span>
                 ) : (
                   <button
                     key={`page-${pageNum}`}
                     onClick={() => handlePageChange(pageNum)}
-                    className={`relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${pageNum === currentPage
+                    className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${pageNum === currentPage
                         ? "bg-blue-600 text-white"
-                        : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
                       }`}
                   >
                     {pageNum}
@@ -894,7 +894,7 @@ function Vendors() {
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={!hasNextPage}
-              className="relative inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight className="h-4 w-4" />
             </button>

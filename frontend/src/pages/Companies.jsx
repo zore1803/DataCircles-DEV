@@ -367,53 +367,28 @@ function Companies() {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    e.preventDefault();
-    window.getSelection?.()?.removeAllRanges();
-
     const th = e.currentTarget;
-    const rect = th.getBoundingClientRect();
-    const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
-    const previewRows = (sortedCompanies || [])
-      .map((c) => String(getFieldValue(c, colId) ?? "").trim() || "—");
-    // Grab offset is measured in visual space (rect + clientX both visual) — no
-    // correction. `zGhost` scales the values we SET on the body-portal ghost so
-    // they map back to visual space (the ghost is painted inside the <html> zoom).
-    const zGhost = getAncestorZoom(document.body);
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
 
-    dragOverRef.current = null;
-    setDraggedColKey(colId);
-    setDragOverColKey(null);
-    document.body.style.userSelect = "none";
-    // Only the label/previewRows/dimensions go through React state (set once).
-    // x/y position is mutated directly on the DOM node below so mousemove never
-    // triggers a re-render of the whole (up to 500-row) table.
-    setDragGhost({
-      label,
-      previewRows,
-      offsetX,
-      offsetY,
-      width: rect.width / zGhost,
-      height: rect.height / zGhost,
-    });
+    // Tracks whether the pointer has moved past the threshold yet. A plain click
+    // (mousedown -> tiny/no movement -> mouseup) never crosses it, so it never shows
+    // the drag ghost or touches drag state — only a deliberate drag does.
+    const dragState = { started: false, offsetX: 0, offsetY: 0, zGhost: 1 };
 
     const positionGhost = (clientX, clientY) => {
       const el = ghostElRef.current;
       if (!el) return;
-      const visualTop = clientY - offsetY;
-      const visualLeft = clientX - offsetX;
-      el.style.top = `${visualTop / zGhost}px`;
-      el.style.left = `${visualLeft / zGhost}px`;
-      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      const visualTop = clientY - dragState.offsetY;
+      const visualLeft = clientX - dragState.offsetX;
+      el.style.top = `${visualTop / dragState.zGhost}px`;
+      el.style.left = `${visualLeft / dragState.zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / dragState.zGhost}px`;
     };
-    // Position immediately so the ghost doesn't flash at (0,0) before the first mousemove.
-    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
 
-    const handleMouseMove = (moveEvent) => {
-      positionGhost(moveEvent.clientX, moveEvent.clientY);
-
-      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+    const updateDragOver = (clientX, clientY) => {
+      const elAtPoint = document.elementFromPoint(clientX, clientY);
       const thAtPoint = elAtPoint?.closest("th[data-col-id]");
       const overKey = thAtPoint?.getAttribute("data-col-id") || null;
       if (dragOverRef.current !== overKey) {
@@ -422,9 +397,57 @@ function Companies() {
       }
     };
 
+    const beginDrag = () => {
+      dragState.started = true;
+      window.getSelection?.()?.removeAllRanges();
+
+      const rect = th.getBoundingClientRect();
+      const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
+      const previewRows = (sortedCompanies || [])
+        .map((c) => String(getFieldValue(c, colId) ?? "").trim() || "—");
+      // Grab offset is measured in visual space (rect + clientX both visual) — no
+      // correction. `zGhost` scales the values we SET on the body-portal ghost so
+      // they map back to visual space (the ghost is painted inside the <html> zoom).
+      dragState.zGhost = getAncestorZoom(document.body);
+      dragState.offsetX = startX - rect.left;
+      dragState.offsetY = startY - rect.top;
+
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
+      // Only the label/previewRows/dimensions go through React state (set once).
+      // x/y position is mutated directly on the DOM node below so mousemove never
+      // triggers a re-render of the whole (up to 500-row) table.
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX: dragState.offsetX,
+        offsetY: dragState.offsetY,
+        width: rect.width / dragState.zGhost,
+        height: rect.height / dragState.zGhost,
+      });
+
+      // Position immediately so the ghost doesn't flash at (0,0) before the first mousemove.
+      requestAnimationFrame(() => positionGhost(startX, startY));
+    };
+
+    const handleMouseMove = (moveEvent) => {
+      if (!dragState.started) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        e.preventDefault();
+        beginDrag();
+      }
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      updateDragOver(moveEvent.clientX, moveEvent.clientY);
+    };
+
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragState.started) return;
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) {
@@ -654,7 +677,7 @@ function Companies() {
                     }
                     const rect = e.currentTarget.getBoundingClientRect();
                     const z = getRootZoom();
-                    setColumnMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 190 });
+                    setColumnMenuPos({ top: rect.bottom * z + 4, left: rect.right * z - 160 });
                     setOpenColumnMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -669,7 +692,7 @@ function Companies() {
                     <div
                       ref={columnMenuRef}
                       style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
-                      className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                      className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
                     >
                       <button
                         onClick={() => {
@@ -677,9 +700,9 @@ function Companies() {
                           setColumnMenuPos(null);
                           pinSide === "left" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "left");
                         }}
-                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                       >
-                        {pinSide === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                        {pinSide === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
                         Pin to Left
                       </button>
                       <button
@@ -688,9 +711,9 @@ function Companies() {
                           setColumnMenuPos(null);
                           pinSide === "right" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "right");
                         }}
-                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                       >
-                        {pinSide === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                        {pinSide === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
                         Pin to Right
                       </button>
 
@@ -703,9 +726,9 @@ function Companies() {
                               setSortConfig({ key: vc.key, direction: "asc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
-                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                           >
-                            <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                            <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             Sort Ascending
                           </button>
                           <button
@@ -715,9 +738,9 @@ function Companies() {
                               setSortConfig({ key: vc.key, direction: "desc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
-                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                           >
-                            <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                            <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             Sort Descending
                           </button>
                         </>
@@ -735,12 +758,12 @@ function Companies() {
                             columns.map((c) => (c.key === vc.key ? { ...c, visible: false } : c)),
                           );
                         }}
-                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${vc.required
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${vc.required
                           ? "text-gray-300 cursor-not-allowed"
                           : "text-[#161618] hover:bg-gray-50"
                           }`}
                       >
-                        <EyeOff className={`w-4 h-4 ${vc.required ? "text-gray-300" : "text-[#1C1B1F]"}`} />
+                        <EyeOff className={`w-3.5 h-3.5 ${vc.required ? "text-gray-300" : "text-[#1C1B1F]"}`} />
                         Hide Column
                       </button>
                     </div>
@@ -1272,10 +1295,12 @@ function Companies() {
     return industries; // Return the fetched industries
   };
 
-  // Lock page scroll while the row-actions menu is open so the background can't shift/scroll.
-  // Any scroll/wheel/touch/keyboard-scroll attempt closes the menu instead of moving the page.
+  // Lock page scroll while a row-actions or column-options menu is open so the
+  // background (and the horizontally-scrollable table) can't shift/scroll out from
+  // under the portal-positioned menu. Any scroll/wheel/touch/keyboard-scroll attempt
+  // closes the menu instead of moving the page.
   useEffect(() => {
-    if (!openRowActionsId) return;
+    if (!openRowActionsId && !openColumnMenuKey) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -1283,6 +1308,8 @@ function Companies() {
     const closeMenu = () => {
       setOpenRowActionsId(null);
       setRowActionsPos(null);
+      setOpenColumnMenuKey(null);
+      setColumnMenuPos(null);
     };
     const handleWheel = (e) => {
       e.preventDefault();
@@ -1292,18 +1319,21 @@ function Companies() {
     const handleKeyDown = (e) => {
       if (SCROLL_KEYS.includes(e.key)) closeMenu();
     };
+    const handleScroll = () => closeMenu();
 
     window.addEventListener("wheel", handleWheel, { passive: false, capture: true });
     window.addEventListener("touchmove", handleTouchMove, { passive: true, capture: true });
     window.addEventListener("keydown", handleKeyDown, { capture: true });
+    document.addEventListener("scroll", handleScroll, { capture: true });
 
     return () => {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("wheel", handleWheel, { capture: true });
       window.removeEventListener("touchmove", handleTouchMove, { capture: true });
       window.removeEventListener("keydown", handleKeyDown, { capture: true });
+      document.removeEventListener("scroll", handleScroll, { capture: true });
     };
-  }, [openRowActionsId]);
+  }, [openRowActionsId, openColumnMenuKey]);
 
   // Click outside listener for the overflow menu
   useEffect(() => {
@@ -1671,13 +1701,7 @@ function Companies() {
           }}
         >
           {selectionMode && selectedCompanies.length > 0 ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 w-full h-full">
-              <div className="flex items-center gap-3">
-                <CheckSquare className="w-5 h-5 text-blue-600" />
-                <span className="text-blue-800 font-semibold font-inter">
-                  {selectedCompanies.length} compan{selectedCompanies.length !== 1 ? "ies" : "y"} selected
-                </span>
-              </div>
+            <div className="animate-slideInRight flex flex-wrap items-center justify-between gap-6 w-full h-full">
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   onClick={() => setShowExportModal(true)}
@@ -1722,6 +1746,12 @@ function Companies() {
                   <X className="w-4 h-4" />
                   Cancel
                 </button>
+              </div>
+              <div className="flex items-center gap-3">
+                <CheckSquare className="w-5 h-5 text-blue-600" />
+                <span className="text-blue-800 font-semibold font-inter">
+                  {selectedCompanies.length} compan{selectedCompanies.length !== 1 ? "ies" : "y"} selected
+                </span>
               </div>
             </div>
           ) : (

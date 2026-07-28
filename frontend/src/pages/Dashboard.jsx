@@ -1477,12 +1477,6 @@ function Dashboard() {
             className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4"
             style={{ width: "100%", minHeight: 64, marginTop: 24 }}
           >
-            <div className="flex items-center gap-3">
-              <CheckSquare className="w-5 h-5 text-blue-600" />
-              <span className="text-blue-800 font-semibold font-inter text-sm">
-                {selectedInvoices.length} invoice{selectedInvoices.length !== 1 ? "s" : ""} selected
-              </span>
-            </div>
             <div className="flex flex-wrap items-center gap-2 py-2">
               <button
                 onClick={handleExportSelectedInvoices}
@@ -1512,6 +1506,12 @@ function Dashboard() {
                 <X className="w-4 h-4" />
                 Cancel
               </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <CheckSquare className="w-5 h-5 text-blue-600" />
+              <span className="text-blue-800 font-semibold font-inter text-sm">
+                {selectedInvoices.length} invoice{selectedInvoices.length !== 1 ? "s" : ""} selected
+              </span>
             </div>
           </div>
         ) : (
