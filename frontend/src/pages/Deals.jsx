@@ -436,7 +436,7 @@ const ModernKanbanColumn = ({
 
   return (
     <div
-      className="flex flex-col items-start flex-shrink-0 bg-white"
+      className="dc-kanban-col flex flex-col items-start flex-shrink-0 bg-white"
       style={{ width: "340px", border: "1px solid #E7E7E9", borderRadius: "12px", overflow: "hidden" }}
     >
       {/* Header */}
@@ -523,9 +523,9 @@ const ModernKanbanColumn = ({
         </div>
       </div>
 
-      {/* Scrollable Deals Area — capped to ~7 cards tall (7*132 + 6*14 gaps),
-          any additional cards scroll internally instead of growing the page. */}
-      <div className="w-full overflow-y-auto" style={{ padding: "14px 20px 20px", maxHeight: "1042px" }}>
+      {/* Scrollable Deals Area — fills remaining column height, any
+          additional cards scroll internally instead of growing the page. */}
+      <div className="w-full flex-1 overflow-y-auto custom-scrollbar" style={{ padding: "14px 20px 20px" }}>
         <div
           ref={setNodeRef}
           className="flex flex-col items-start w-full"
@@ -2523,7 +2523,13 @@ function Deals() {
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <div className="overflow-x-auto overflow-y-hidden scrollbar-hide -mx-6" style={{ padding: "24px", paddingTop: 0, "--kanban-top-offset": "16rem" }}>
+            <div
+              className="overflow-x-auto overflow-y-hidden scrollbar-hide -mx-6"
+              style={{
+                padding: "16px 24px 24px",
+                "--kanban-top-offset": showStats ? "17.5rem" : "10rem",
+              }}
+            >
               <div className="flex min-w-max" style={{ gap: "16px" }}>
                 {statuses?.map((status) => {
                   const columnDeals = sortedTableDeals.filter((d) => d.status === status);
