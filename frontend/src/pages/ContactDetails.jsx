@@ -8,6 +8,8 @@ import Calendar from "../components/contact/Calender";
 import MeetingsTable from "../components/contact/MeetingsTable";
 import ContactTasksTable from "../components/contact/ContactTasksTable";
 import ProfilePicture from "../components/contact/ProfilePicture";
+import QuickDealForm from "../components/deal/QuickDealForm";
+import ContactMeetingForm from "../components/contact/ContactMeetingForm";
 import logo from "/DataCircles.png";
 import {
   Mail,
@@ -80,6 +82,8 @@ const ContactDetailsPage = () => {
   const [allCompanies, setAllCompanies] = useState([]); // Needed for the dropdown in the edit form
   const [additionalValues, setAdditionalValues] = useState({});
   const [showMergeModal, setShowMergeModal] = useState(false);
+  const [showDealForm, setShowDealForm] = useState(false);
+  const [showMeetingForm, setShowMeetingForm] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -192,6 +196,18 @@ const ContactDetailsPage = () => {
   const handleDealCreated = (newDeal) => {
     setDeals(prev => [newDeal, ...prev]);
     toast.success("Deal created successfully!");
+    setShowDealForm(false);
+  };
+
+  const handleMeetingSave = async (form) => {
+    const loadingToast = toast.loading("Saving meeting...");
+    try {
+      await API.post("/meetings", { ...form, contactId: id, linkedTo: "contact" });
+      toast.success("Meeting saved", { id: loadingToast });
+      setShowMeetingForm(false);
+    } catch (err) {
+      toast.error("Failed to save meeting", { id: loadingToast });
+    }
   };
 
   // Helper function to check if social media link exists
@@ -261,7 +277,7 @@ const ContactDetailsPage = () => {
 
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
-            onClick={() => setShowForm(true)}
+            onClick={handleEdit}
             title="Edit"
             className="flex items-center justify-center gap-2 bg-white rounded-full flex-shrink-0 w-8 sm:w-[75px]"
             style={{ minHeight: "32px", padding: 0, boxSizing: "border-box", border: "1px solid rgba(31, 41, 55, 0.3)" }}
@@ -290,7 +306,7 @@ const ContactDetailsPage = () => {
       <div style={{ height: 56 }} />
 
       <div
-        className="box-border flex flex-row items-start bg-white w-full"
+        className="box-border flex flex-col lg:flex-row items-start bg-white w-full"
         style={{
           padding: "18px 24px",
           gap: "18px",
@@ -300,8 +316,8 @@ const ContactDetailsPage = () => {
         }}
       >
         <div
-          className="flex flex-col items-start"
-          style={{ width: "345px", height: "175px", gap: "17px" }}
+          className="flex flex-col items-start w-full lg:w-[345px]"
+          style={{ gap: "17px" }}
         >
           <div className="flex items-center gap-3">
             <ProfilePicture contact={contact} />
@@ -313,9 +329,8 @@ const ContactDetailsPage = () => {
           </div>
 
           <div
-            className="box-border flex flex-row items-center justify-between rounded-[10px]"
+            className="box-border flex flex-row items-center justify-between rounded-[10px] w-full lg:w-[345px]"
             style={{
-              width: "345px",
               height: "67px",
               padding: "16px",
               gap: "10px",
@@ -341,8 +356,9 @@ const ContactDetailsPage = () => {
             )}
           </div>
 
-          <div className="flex items-center" style={{ gap: "8px", width: "254px", height: "32px" }}>
+          <div className="flex items-center w-full lg:w-[254px]" style={{ gap: "8px", height: "32px" }}>
             <button
+              onClick={() => setShowDealForm(true)}
               className="flex items-center justify-center gap-1.5 rounded-full flex-shrink-0"
               style={{ width: "174px", height: "32px", padding: 0, boxSizing: "border-box", background: "#0085FF" }}
             >
@@ -352,6 +368,7 @@ const ContactDetailsPage = () => {
               </span>
             </button>
             <button
+              onClick={() => setShowMeetingForm(true)}
               className="flex items-center justify-center rounded-full bg-white flex-shrink-0"
               style={{ width: "32px", height: "32px", padding: 0, boxSizing: "border-box", border: "1px solid rgba(31, 41, 55, 0.3)" }}
               title="Schedule Video Call"
@@ -359,6 +376,7 @@ const ContactDetailsPage = () => {
               <Video className="w-4 h-4 text-[#525252]" />
             </button>
             <button
+              onClick={() => setShowMeetingForm(true)}
               className="flex items-center justify-center rounded-full bg-white flex-shrink-0"
               style={{ width: "32px", height: "32px", padding: 0, boxSizing: "border-box", border: "1px solid rgba(31, 41, 55, 0.3)" }}
               title="Schedule Meeting"
@@ -369,7 +387,7 @@ const ContactDetailsPage = () => {
         </div>
 
         <div
-          className="box-border flex-shrink-0 flex flex-col items-start"
+          className="box-border flex-shrink-0 flex flex-col items-start w-full lg:w-auto"
           style={{ borderRadius: "10px" }}
         >
           <div className="flex flex-col items-start" style={{ gap: "8px" }}>
@@ -386,7 +404,7 @@ const ContactDetailsPage = () => {
 
             <div className="self-stretch" style={{ height: "1px", background: "rgba(31, 41, 55, 0.2)" }} />
 
-            <div className="grid grid-cols-3" style={{ rowGap: "8px", columnGap: "16px", gridTemplateColumns: "repeat(3, 208.5px)" }}>
+            <div className="grid grid-cols-2 lg:grid-cols-3" style={{ rowGap: "8px", columnGap: "16px", gridTemplateColumns: undefined }}>
               {[
                 { icon: Mail, label: "Email", value: contact.email },
                 { icon: Phone, label: "Phone", value: contact.phone },
@@ -447,6 +465,43 @@ const ContactDetailsPage = () => {
           </div>
         </div>
       </div>
+
+      {showForm && (
+        <ContactForm
+          form={form}
+          setForm={setForm}
+          additionalValues={additionalValues}
+          setAdditionalValues={setAdditionalValues}
+          contactFieldList={contactFieldList}
+          companies={allCompanies}
+          loading={formLoading}
+          setLoading={setFormLoading}
+          setError={(message) => toast.error(message || "Failed to save contact")}
+          setSuccess={(message) => toast.success(message || "Contact saved successfully")}
+          fetchContacts={fetchContactDetails}
+          onRequestClose={() => setShowForm(false)}
+        />
+      )}
+
+      {showDealForm && (
+        <QuickDealForm
+          companies={company ? [company] : []}
+          contacts={contact ? [contact] : []}
+          initialCompanyId={company?._id || ""}
+          onDealCreated={handleDealCreated}
+          onRequestClose={() => setShowDealForm(false)}
+        />
+      )}
+
+      {showMeetingForm && (
+        <ContactMeetingForm
+          open={showMeetingForm}
+          mode="create"
+          contactId={id}
+          onSave={handleMeetingSave}
+          onClose={() => setShowMeetingForm(false)}
+        />
+      )}
     </div>
   );
 };
