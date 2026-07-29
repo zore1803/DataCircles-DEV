@@ -693,14 +693,13 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           </table>
         </div>
       ) : (
-        <div className="flex flex-row items-start" style={{ gap: 18, marginTop: 24 }}>
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-start" style={{ gap: 18, marginTop: 24 }}>
         <div
-          className="flex flex-col items-start flex-shrink-0"
+          className="flex flex-col items-start w-full lg:w-[319px] lg:flex-shrink-0"
           style={{
             boxSizing: "border-box",
             padding: 20,
             gap: 24,
-            width: 319,
             background: "#FFFFFF",
             border: "1px solid #E1E4EA",
             borderRadius: 14,
@@ -842,10 +841,10 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
             ))}
           </div>
         </div>
-        <div className="flex flex-col items-start flex-shrink-0" style={{ gap: 24 }}>
+        <div className="flex flex-col items-start w-full min-w-0 lg:w-auto lg:flex-shrink-0" style={{ gap: 24 }}>
           <div
-            className="flex flex-row items-center self-stretch flex-shrink-0"
-            style={{ padding: 0, gap: 24, width: 989, height: 17 }}
+            className="flex flex-row items-center self-stretch flex-shrink-0 w-full lg:w-[989px]"
+            style={{ padding: 0, gap: 24, height: 17 }}
           >
             <span
               style={{
@@ -871,7 +870,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                 ? [...realUpcomingMeetings, realUpcomingMeetings[0]]
                 : realUpcomingMeetings;
             return (
-              <div className="relative flex-shrink-0" style={{ isolation: "isolate", width: 994 }}>
+              <div className="relative flex-shrink-0 w-full lg:w-[994px]" style={{ isolation: "isolate" }}>
                 <div
                   className="absolute"
                   style={{ width: 1, top: 60, bottom: -34, left: 4, background: "#E7E7E9" }}
@@ -905,7 +904,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                           borderRadius: `${isFirst ? "8px 8px" : "0 0"} ${isLast ? "8px 8px" : "0 0"}`,
                         }}
                       >
-                        <div className="flex flex-row items-start" style={{ gap: 95, width: "100%" }}>
+                        <div className="flex flex-row items-start gap-3 lg:gap-[95px]" style={{ width: "100%" }}>
                           <div className="flex flex-col justify-center items-center flex-shrink-0" style={{ width: 44, gap: 4 }}>
                             <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, lineHeight: "120%", color: "#1C1C1D", textAlign: "center" }}>
                               {start.toLocaleDateString("en-US", { month: "short" }).toUpperCase()}
@@ -917,7 +916,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               {start.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
                             </span>
                           </div>
-                          <div className="flex flex-col items-start flex-shrink-0" style={{ width: 240, gap: 8 }}>
+                          <div className="flex flex-col items-start min-w-0 flex-1 lg:flex-none lg:w-[240px]" style={{ gap: 8 }}>
                             <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 16, lineHeight: "120%", color: "#1C1C1D" }} className="truncate">
                               {meeting.title || "Untitled Meeting"}
                             </span>
@@ -1059,8 +1058,8 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
             </span>
           </div>
           <div
-            className="flex flex-row items-center self-stretch flex-shrink-0"
-            style={{ padding: 0, gap: 24, width: 989, height: 17 }}
+            className="flex flex-row items-center self-stretch flex-shrink-0 w-full lg:w-[989px]"
+            style={{ padding: 0, gap: 24, height: 17 }}
           >
             <span
               style={{
@@ -1086,7 +1085,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                 ? [...realCompletedMeetings, realCompletedMeetings[0]]
                 : realCompletedMeetings;
             return (
-              <div className="relative flex-shrink-0" style={{ isolation: "isolate", width: 994 }}>
+              <div className="relative flex-shrink-0 w-full lg:w-[994px]" style={{ isolation: "isolate" }}>
                 <div
                   className="absolute"
                   style={{ width: 1, top: 60, bottom: -34, left: 4, background: "#E7E7E9" }}
@@ -1120,7 +1119,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                           borderRadius: `${isFirst ? "8px 8px" : "0 0"} ${isLast ? "8px 8px" : "0 0"}`,
                         }}
                       >
-                        <div className="flex flex-row items-start" style={{ gap: 95, width: "100%" }}>
+                        <div className="flex flex-row items-start gap-3 lg:gap-[95px]" style={{ width: "100%" }}>
                           <div className="flex flex-col justify-center items-center flex-shrink-0" style={{ width: 44, gap: 4 }}>
                             <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, lineHeight: "120%", color: "#1C1C1D", textAlign: "center" }}>
                               {start.toLocaleDateString("en-US", { month: "short" }).toUpperCase()}
@@ -1132,7 +1131,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               {start.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
                             </span>
                           </div>
-                          <div className="flex flex-col items-start flex-shrink-0" style={{ width: 240, gap: 8 }}>
+                          <div className="flex flex-col items-start min-w-0 flex-1 lg:flex-none lg:w-[240px]" style={{ gap: 8 }}>
                             <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 16, lineHeight: "120%", color: "#1C1C1D" }} className="truncate">
                               {meeting.title || "Untitled Meeting"}
                             </span>
