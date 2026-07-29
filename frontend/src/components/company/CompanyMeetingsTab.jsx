@@ -920,8 +920,8 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               {meeting.title || "Untitled Meeting"}
                             </span>
                             <div className="flex flex-row items-center flex-shrink-0 min-w-0" style={{ gap: 8 }}>
-                              <AlarmClock className="w-2.5 h-2.5 lg:w-3.5 lg:h-3.5 flex-shrink-0" style={{ color: "#78788D" }} />
-                              <span className="text-[8px] lg:text-[10px] truncate" style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: "#78788D" }}>
+                              <AlarmClock className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#78788D" }} />
+                              <span className="text-[11px] lg:text-[10px] truncate" style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: "#78788D" }}>
                                 {start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} - {end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} ({duration} mins)
                               </span>
                             </div>
@@ -1135,8 +1135,8 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               {meeting.title || "Untitled Meeting"}
                             </span>
                             <div className="flex flex-row items-center flex-shrink-0 min-w-0" style={{ gap: 8 }}>
-                              <AlarmClock className="w-2.5 h-2.5 lg:w-3.5 lg:h-3.5 flex-shrink-0" style={{ color: "#78788D" }} />
-                              <span className="text-[8px] lg:text-[10px] truncate" style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: "#78788D" }}>
+                              <AlarmClock className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#78788D" }} />
+                              <span className="text-[11px] lg:text-[10px] truncate" style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: "#78788D" }}>
                                 {start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} - {end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} ({duration} mins)
                               </span>
                             </div>
