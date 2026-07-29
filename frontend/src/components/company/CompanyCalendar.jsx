@@ -521,16 +521,22 @@ const CompanyCalendar = ({ companyId }) => {
           ))}
         </div>
 
-        <div className={`relative min-w-0 lg:flex-1 ${isSearchExpanded ? "flex-1" : "flex-shrink-0"}`}>
-          <Search
-            className={`absolute left-2.5 lg:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5 lg:w-4 lg:h-4 ${!isSearchExpanded ? "lg:hidden cursor-pointer" : ""}`}
+        {/* Mobile: icon-only button when collapsed */}
+        {!isSearchExpanded && (
+          <button
             onClick={() => {
-              if (!isSearchExpanded) {
-                setIsSearchExpanded(true);
-                searchInputRef.current?.focus();
-              }
+              setIsSearchExpanded(true);
+              setTimeout(() => searchInputRef.current?.focus(), 0);
             }}
-          />
+            className="lg:hidden flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 text-gray-400 hover:bg-gray-50 flex-shrink-0"
+          >
+            <Search className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {/* Mobile: expanded input, replaces the icon button. Desktop: always shown, always full width. */}
+        <div className={`relative min-w-0 lg:flex lg:flex-1 ${isSearchExpanded ? "flex-1" : "hidden"}`}>
+          <Search className="absolute left-2.5 lg:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5 lg:w-4 lg:h-4" />
           <input
             ref={searchInputRef}
             type="text"
@@ -541,7 +547,7 @@ const CompanyCalendar = ({ companyId }) => {
             onBlur={() => {
               if (!searchTerm) setIsSearchExpanded(false);
             }}
-            className={`h-8 lg:h-9 pl-8 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300 transition-all duration-200 lg:w-full ${isSearchExpanded ? "w-full" : "w-8 cursor-pointer"}`}
+            className="w-full h-8 lg:h-9 pl-8 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
           />
         </div>
 
