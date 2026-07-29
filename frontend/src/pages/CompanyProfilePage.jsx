@@ -798,7 +798,7 @@ const CompanyProfilePage = () => {
                 <MoreVertical size={16} strokeWidth={2.5} />
               </button>
               {showActionsMenu && (
-                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
                   <button
                     onClick={() => {
                       setShowStats((prev) => !prev);
@@ -848,7 +848,7 @@ const CompanyProfilePage = () => {
                 <ChevronDown size={14} className="hidden lg:inline" />
               </button>
               {showNewEntryMenu && (
-                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
                   {newEntryOptions.map((option) =>
                     option.tab ? (
                       <button
