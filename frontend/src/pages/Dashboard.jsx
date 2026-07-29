@@ -1960,18 +1960,13 @@ function Dashboard() {
   return (
     <div style={{ marginTop: -16 }}>
       <div
-        className="box-border flex flex-row justify-between items-center"
+        className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-6 py-3 top-[56px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:px-6 lg:py-0 lg:top-16"
         style={{
           position: "fixed",
-          top: 64,
           left: "var(--sidebar-width, 0px)",
           right: 0,
           zIndex: 40,
-          padding: "0px 24px",
           gap: 16,
-          height: 64,
-          minHeight: 64,
-          maxHeight: 64,
           background: "#FFFFFF",
           borderBottom: "1px solid #E1E4EA",
           boxSizing: "border-box",
@@ -2011,12 +2006,12 @@ function Dashboard() {
         </div>
       </div>
       {/* Spacer to offset the fixed header bar */}
-      <div style={{ height: 64 }} />
+      <div className="h-[74px] lg:h-16" />
 
       {/* KPI Cards */}
       <div
-        className="flex flex-row items-stretch -mx-4 sm:-mx-6 lg:-mx-8 px-6"
-        style={{ display: "flex", flexDirection: "row", alignItems: "stretch", flexWrap: "nowrap", gap: 16, marginTop: 24, width: "auto" }}
+        className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-6"
+        style={{ marginTop: 24 }}
       >
         {[
           { icon: TotalIncomeIcon, label: "Total Income", value: `₹${Math.round(overviewKpis.totalIncome).toLocaleString("en-IN")}`, trend: `${overviewKpis.totalIncomeTrend.pct}% this month`, trendUp: overviewKpis.totalIncomeTrend.up },
@@ -2026,46 +2021,45 @@ function Dashboard() {
         ].map(({ icon: Icon, label, value, trend, trendUp }, i) => (
           <div
             key={i}
-            className="box-border flex flex-row justify-between items-start relative"
+            className="box-border flex flex-row justify-start items-center relative w-full h-[89px] rounded-2xl shadow-sm lg:shadow-none lg:rounded-xl lg:justify-between lg:items-start lg:min-w-[200px] lg:w-[313.5px] lg:h-[72px] lg:flex-1 lg:shrink lg:basis-0"
             style={{
-              display: "flex",
               padding: 16,
-              minWidth: 200,
-              width: 313.5,
-              height: 72,
               background: "#FFFFFF",
               border: "1px solid #E1E4EA",
-              borderRadius: 12,
-              flexGrow: 1,
-              flexShrink: 1,
-              flexBasis: 0,
             }}
           >
-            <div className="flex flex-row items-center" style={{ gap: 14 }}>
+            <div className="flex flex-row items-center w-full min-w-0" style={{ gap: 14 }}>
               {loading ? (
                 <Skeleton width={40} height={40} />
               ) : (
-                <div
-                  className="box-border flex items-center justify-center flex-shrink-0"
-                  style={{
-                    width: 40,
-                    height: 40,
-                    padding: 8,
-                    background: "rgba(255, 255, 255, 0.1)",
-                    border: "1px solid #E1E4EA",
-                    borderRadius: 6,
-                  }}
-                >
-                  <Icon size={24} style={{ color: "#0085FF" }} />
-                </div>
+                <>
+                  {/* Mobile: plain icon, no badge/border */}
+                  <div className="flex lg:hidden flex-shrink-0">
+                    <Icon size={20} style={{ color: "#0085FF" }} />
+                  </div>
+                  {/* Desktop: original icon style */}
+                  <div
+                    className="hidden lg:flex box-border items-center justify-center flex-shrink-0"
+                    style={{
+                      width: 40,
+                      height: 40,
+                      padding: 8,
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "1px solid #E1E4EA",
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Icon size={24} style={{ color: "#0085FF" }} />
+                  </div>
+                </>
               )}
-              <div className="flex flex-col items-start" style={{ gap: 4 }}>
+              <div className="flex flex-col items-start min-w-0 flex-1" style={{ gap: 4 }}>
                 {loading ? (
                   <Skeleton width={90} height={10} />
                 ) : (
                   <span
-                    className="whitespace-nowrap"
-                    style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}
+                    className="truncate w-full text-[10px] sm:text-xs uppercase tracking-wide font-semibold lg:normal-case lg:tracking-normal lg:font-normal lg:text-xs"
+                    style={{ fontFamily: "'Inter Tight', Inter, sans-serif", lineHeight: "120%", color: "#525866" }}
                   >
                     {label}
                   </span>
@@ -2074,16 +2068,33 @@ function Dashboard() {
                   <Skeleton width={70} height={16} />
                 ) : (
                   <span
-                    className="whitespace-nowrap"
-                    style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 18, lineHeight: "120%", color: "#0E121B" }}
+                    className="truncate w-full text-base sm:text-lg"
+                    style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#0E121B" }}
                   >
                     {value}
                   </span>
                 )}
+                {/* Trend, inline under the value on mobile (matches Figma mobile card) */}
+                {!loading && (
+                  <div className="flex lg:hidden flex-row items-center w-full min-w-0" style={{ gap: 4 }}>
+                    {trendUp ? (
+                      <TrendingUp size={12} className="flex-shrink-0" style={{ color: "#00C950" }} />
+                    ) : (
+                      <TrendingDown size={12} className="flex-shrink-0" style={{ color: "#E82222" }} />
+                    )}
+                    <span
+                      className="truncate min-w-0 text-[9px]"
+                      style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
+                    >
+                      {trend}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
+            {/* Trend, absolute bottom-right on desktop */}
             <div
-              className="flex flex-row items-center flex-shrink-0 absolute"
+              className="hidden lg:flex flex-row items-center flex-shrink-0 absolute"
               style={{ gap: 4, right: 16, bottom: 16 }}
             >
               {loading ? (
