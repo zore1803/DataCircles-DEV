@@ -1535,28 +1535,28 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
         ) : (
         <>
         {/* Search + Controls */}
-        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+        <div className="flex items-center gap-2 lg:gap-4 mb-4 h-8 lg:h-11">
           <div className="relative flex-1 h-full">
-            <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-900 opacity-50 w-5 h-5" />
+            <Search className="absolute left-3 lg:left-3.5 top-1/2 transform -translate-y-1/2 text-gray-900 opacity-50 w-3.5 h-3.5 lg:w-5 lg:h-5" />
             <input
               type="text"
               placeholder="Search folder by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              className="w-full h-full pl-8 lg:pl-10 pr-3 lg:pr-3.5 border rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
               style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
             />
           </div>
           <button
             onClick={() => setShowFilterPanel(true)}
-            className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+            className="relative flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 h-full text-xs lg:text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
             style={{
-              height: "44px",
               borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
             }}
           >
-            <FilterIcon size={16} />
-            Filter
+            <FilterIcon size={12} className="lg:hidden" />
+            <FilterIcon size={16} className="hidden lg:block" />
+            <span className="hidden lg:inline">Filter</span>
             {Object.values(selectedFilters).flat().length > 0 && (
               <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
                 {Object.values(selectedFilters).flat().length}
@@ -1565,34 +1565,30 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
           </button>
 
           <div
-            className="relative flex flex-row items-center flex-shrink-0"
-            style={{ padding: 4, gap: 6, width: 86, height: 44, background: "#E9EAEB", borderRadius: 95 }}
+            className="relative flex flex-row items-center flex-shrink-0 p-0.5 lg:p-1 gap-1 lg:gap-1.5 w-16 h-8 lg:w-[86px] lg:h-11 rounded-full"
+            style={{ background: "#E9EAEB" }}
           >
             <span
-              className="absolute transition-all duration-300 ease-out pointer-events-none"
+              className="absolute top-0.5 lg:top-1 w-7 h-7 lg:w-9 lg:h-9 rounded-full transition-all duration-300 ease-out pointer-events-none"
               style={{
-                top: 4,
-                left: folderViewMode === "grid" ? 46 : 4,
-                width: 36,
-                height: 36,
+                left: folderViewMode === "grid" ? "calc(100% - 30px)" : 2,
                 background: "#FFFFFF",
                 boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.05)",
-                borderRadius: 107,
               }}
             />
             <button
               onClick={() => setFolderViewMode("list")}
-              className="relative z-10 flex items-center justify-center flex-shrink-0"
-              style={{ padding: 8, gap: 10, width: 36, height: 36, borderRadius: 107 }}
+              className="relative z-10 flex items-center justify-center flex-shrink-0 w-7 h-7 lg:w-9 lg:h-9 rounded-full"
             >
-              <List size={20} style={{ color: folderViewMode === "list" ? "#0085FF" : "#404040" }} />
+              <List size={13} style={{ color: folderViewMode === "list" ? "#0085FF" : "#404040" }} className="lg:hidden" />
+              <List size={20} style={{ color: folderViewMode === "list" ? "#0085FF" : "#404040" }} className="hidden lg:block" />
             </button>
             <button
               onClick={() => setFolderViewMode("grid")}
-              className="relative z-10 flex items-center justify-center flex-shrink-0"
-              style={{ padding: 8, gap: 10, width: 36, height: 36, borderRadius: 107 }}
+              className="relative z-10 flex items-center justify-center flex-shrink-0 w-7 h-7 lg:w-9 lg:h-9 rounded-full"
             >
-              <LayoutGrid size={20} style={{ color: folderViewMode === "grid" ? "#0085FF" : "#404040" }} />
+              <LayoutGrid size={13} style={{ color: folderViewMode === "grid" ? "#0085FF" : "#404040" }} className="lg:hidden" />
+              <LayoutGrid size={20} style={{ color: folderViewMode === "grid" ? "#0085FF" : "#404040" }} className="hidden lg:block" />
             </button>
           </div>
 
@@ -1600,20 +1596,16 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
             onClick={() =>
               setModalState({ isOpen: true, editingId: null, initialName: "" })
             }
-            className="flex items-center justify-center flex-shrink-0"
+            className="flex items-center justify-center flex-shrink-0 w-8 h-8 lg:w-11 lg:h-11 rounded-full"
             style={{
               boxSizing: "border-box",
-              padding: 12,
-              gap: 8,
-              width: 44,
-              height: 44,
               background: "#FFFFFF",
               border: "1px solid rgba(31, 41, 55, 0.3)",
-              borderRadius: 95,
             }}
             title="New Folder"
           >
-            <CreateNewFolderIcon size={20} style={{ color: "#404040" }} />
+            <CreateNewFolderIcon size={14} style={{ color: "#404040" }} className="lg:hidden" />
+            <CreateNewFolderIcon size={20} style={{ color: "#404040" }} className="hidden lg:block" />
           </button>
         </div>
 

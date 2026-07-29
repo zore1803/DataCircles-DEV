@@ -462,56 +462,58 @@ export default function CompanyNotesTab({ showStats = true }) {
       )}
 
       {/* Search + Controls */}
-      <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+      <div className="flex items-center gap-2 lg:gap-4 mb-4 h-8 lg:h-11">
         <div className="relative flex-1 h-full">
-          <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
+          <Search size={14} className="absolute left-3 lg:left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50 lg:w-5 lg:h-5" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by note by name, deal..."
-            className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+            className="w-full h-full pl-8 lg:pl-10 pr-3 lg:pr-3.5 border rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
             style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
           />
         </div>
-        <div className="relative flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0 overflow-hidden" style={{ height: "44px" }}>
+        <div className="relative flex items-center gap-1 lg:gap-1.5 p-0.5 lg:p-1 bg-[#E9EAEB] rounded-full flex-shrink-0 overflow-hidden h-full">
           <span
-            className="absolute top-1 w-9 h-9 rounded-full bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
-            style={{ left: viewMode === "list" ? 46 : 4 }}
+            className="absolute top-0.5 lg:top-1 w-7 h-7 lg:w-9 lg:h-9 rounded-full bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
+            style={{ left: viewMode === "list" ? "calc(100% - 30px)" : 2 }}
           />
           <button
             onClick={() => setViewMode("grid")}
             title="Grid view"
-            className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
+            className={`relative z-10 w-7 h-7 lg:w-9 lg:h-9 flex items-center justify-center rounded-full transition-colors ${
               viewMode === "grid"
                 ? "text-[#0085FF]"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <GridViewIcon size={20} />
+            <GridViewIcon size={15} className="lg:hidden" />
+            <GridViewIcon size={20} className="hidden lg:block" />
           </button>
           <button
             onClick={() => setViewMode("list")}
             title="List view"
-            className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
+            className={`relative z-10 w-7 h-7 lg:w-9 lg:h-9 flex items-center justify-center rounded-full transition-colors ${
               viewMode === "list"
                 ? "text-[#0085FF]"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <ListViewIcon size={15} />
+            <ListViewIcon size={11} className="lg:hidden" />
+            <ListViewIcon size={15} className="hidden lg:block" />
           </button>
         </div>
         <button
           onClick={() => setShowFilterPanel(true)}
-          className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+          className="relative flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 h-full text-xs lg:text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
           style={{
-            height: "44px",
             borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
           }}
         >
-          <FilterIcon size={16} />
-          Filter
+          <FilterIcon size={12} className="lg:hidden" />
+          <FilterIcon size={16} className="hidden lg:block" />
+          <span className="hidden lg:inline">Filter</span>
           {Object.values(selectedFilters).flat().length > 0 && (
             <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
               {Object.values(selectedFilters).flat().length}
@@ -520,11 +522,12 @@ export default function CompanyNotesTab({ showStats = true }) {
         </button>
         <button
           onClick={() => setIsEditorOpen(true)}
-          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
-          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
+          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0 w-8 h-8 lg:w-11 lg:h-11"
+          style={{ borderColor: "#E1E4EA" }}
           title="Add Note"
         >
-          <Plus size={20} />
+          <Plus size={14} className="lg:hidden" />
+          <Plus size={20} className="hidden lg:block" />
         </button>
       </div>
 
