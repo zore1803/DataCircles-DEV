@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
@@ -1007,6 +1007,8 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [selectedFileNames, setSelectedFileNames] = useState([]);
   const [fileSearchTerm, setFileSearchTerm] = useState("");
+  const [isFileSearchExpanded, setIsFileSearchExpanded] = useState(false);
+  const fileSearchInputRef = useRef(null);
   const [openFolderId, setOpenFolderId] = useState("");
   const [newFiles, setNewFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -1338,10 +1340,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
         {openFolderId && openFolder ? (
           <div className="min-h-[400px]">
             <div
-              className="flex items-center justify-between w-full flex-shrink-0"
+              className="relative flex items-center justify-between w-full flex-shrink-0"
               style={{ height: 32, margin: "0 auto 18px 0" }}
             >
-              <div className="flex items-center flex-shrink-0" style={{ gap: 10, width: 160, height: 20 }}>
+              <div className="flex items-center min-w-0 flex-1 lg:flex-initial lg:flex-shrink-0" style={{ gap: 10, height: 20 }}>
                 <button
                   onClick={() => setOpenFolderId("")}
                   style={{
@@ -1372,9 +1374,25 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
                 </span>
               </div>
 
-              <div className="flex items-center flex-shrink-0" style={{ gap: 12, width: 329, height: 32 }}>
+              <div className="flex items-center flex-shrink-0" style={{ gap: 12 }}>
+                {/* Mobile: icon-only button when collapsed */}
+                {!isFileSearchExpanded && (
+                  <button
+                    onClick={() => {
+                      setIsFileSearchExpanded(true);
+                      setTimeout(() => fileSearchInputRef.current?.focus(), 0);
+                    }}
+                    className="lg:hidden flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 text-gray-400 flex-shrink-0"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                )}
+
+                {/* Mobile: expanded input slides in from the right, overlaying the breadcrumb.
+                    Desktop: always shown inline, always full width. */}
                 <div
-                  className="relative flex items-center flex-shrink-0"
+                  className={`absolute inset-y-0 right-[96px] z-20 flex items-center overflow-hidden bg-white transition-[left] duration-300 ease-out lg:static lg:!left-auto lg:!right-auto lg:overflow-visible ${isFileSearchExpanded ? "left-0 opacity-100" : "left-[calc(100%-32px)] opacity-0 pointer-events-none lg:opacity-100"
+                    }`}
                   style={{
                     boxSizing: "border-box",
                     padding: "0 14px",
@@ -1387,10 +1405,15 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
                 >
                   <Search className="text-gray-900 opacity-50 w-4 h-4 flex-shrink-0" />
                   <input
+                    ref={fileSearchInputRef}
                     type="text"
                     placeholder="Search file by name..."
                     value={fileSearchTerm}
                     onChange={(e) => setFileSearchTerm(e.target.value)}
+                    onFocus={() => setIsFileSearchExpanded(true)}
+                    onBlur={() => {
+                      if (!fileSearchTerm) setIsFileSearchExpanded(false);
+                    }}
                     className="w-full h-full bg-transparent border-none outline-none text-xs leading-normal"
                     style={{ color: "#1F2937", opacity: 0.9 }}
                   />
