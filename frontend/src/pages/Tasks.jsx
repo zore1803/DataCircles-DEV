@@ -3089,15 +3089,25 @@ function Tasks() {
                     onClick={() => handleMeetingEdit(row.original)}
                     className={`group cursor-pointer hover:bg-blue-50 transition-colors ${selectedMeetings.includes(row.original._id) ? "bg-blue-50" : "bg-white"}`}
                   >
-                    {row.getVisibleCells().map((cell) => (
+                    {row.getVisibleCells().map((cell) => {
+                      const colId = cell.column.id;
+                      const isLeftSticky = colId === "selection";
+                      return (
                       <td
                         key={cell.id}
-                        style={{ width: cell.column.getSize(), height: 54 }}
+                        style={{
+                          width: cell.column.getSize(),
+                          height: 54,
+                          position: isLeftSticky ? "sticky" : "static",
+                          left: isLeftSticky ? 0 : "auto",
+                          zIndex: isLeftSticky ? 10 : 1,
+                        }}
                         className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
-                    ))}
+                      );
+                    })}
                   </tr>
                 ))
               )}
