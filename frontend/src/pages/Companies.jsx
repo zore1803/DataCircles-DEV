@@ -959,20 +959,11 @@ function Companies() {
     }
   };
 
-  const handleTouchStart = (companyId) => {
-    const timer = setTimeout(() => {
-      setSelectionMode(true);
-      handleSelectCompany(companyId);
-    }, 500);
-    setLongPressTimer(timer);
-  };
+  // Long-press-to-select is disabled on touch devices — mobile rows should
+  // only enter selection via the checkbox itself, never by holding the row.
+  const handleTouchStart = () => {};
 
-  const handleTouchEnd = () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
-  };
+  const handleTouchEnd = () => {};
 
   // Truncate text
   const truncateText = (text, maxLength = 30) => {

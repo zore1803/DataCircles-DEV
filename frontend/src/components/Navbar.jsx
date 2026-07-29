@@ -26,6 +26,7 @@ import {
   Tag,
 } from "lucide-react";
 import API from "../services/api";
+import dataCirclesLogo from "../assets/Datacircles logo.png";
 
 const ContactsIcon = (props) => (
   <svg viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -258,35 +259,13 @@ const Navbar = () => {
     setProfile(res.data);
   };
 
-  const renderCompanyLogo = () => {
-    if (branding?.logoUrl) {
-      const src =
-        typeof branding.logoUrl === "string" &&
-          (branding.logoUrl.startsWith("data:") ||
-            branding.logoUrl.startsWith("blob:") ||
-            branding.logoUrl.startsWith("http"))
-          ? branding.logoUrl
-          : `${import.meta.env.VITE_APP_API_URL}${branding.logoUrl}`;
-
-      return (
-        <img
-          src={src}
-          alt="Company Logo"
-          className="h-8 w-8 rounded-full object-cover flex-shrink-0"
-        />
-      );
-    } else {
-      const src = `/DataCircles.png`;
-      return (
-        <img
-          src={src}
-          alt="Company Logo"
-          className="h-8 w-8 rounded-md object-cover flex-shrink-0"
-          style={{ filter: "invert(100%)" }}
-        />
-      );
-    }
-  };
+  const renderCompanyLogo = () => (
+    <img
+      src={dataCirclesLogo}
+      alt="DataCircles Logo"
+      className="h-8 w-8 rounded-md object-cover flex-shrink-0"
+    />
+  );
 
   const renderProfileImage = () => {
     if (profile && !isSuperAdmin) {

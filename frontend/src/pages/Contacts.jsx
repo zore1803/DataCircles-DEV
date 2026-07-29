@@ -1219,20 +1219,11 @@ function Contacts() {
     }
   };
 
-  const handleTouchStart = (contactId) => {
-    const timer = setTimeout(() => {
-      setSelectionMode(true);
-      handleSelectContact(contactId);
-    }, 500);
-    setLongPressTimer(timer);
-  };
+  // Long-press-to-select is disabled on touch devices — mobile rows should
+  // only enter selection via the checkbox itself, never by holding the row.
+  const handleTouchStart = () => {};
 
-  const handleTouchEnd = () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
-  };
+  const handleTouchEnd = () => {};
 
   // Exit selection mode
   const exitSelectionMode = () => {
