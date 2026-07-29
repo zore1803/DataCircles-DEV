@@ -1014,6 +1014,15 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
   const [expandedFolders, setExpandedFolders] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [folderViewMode, setFolderViewMode] = useState("grid");
+  const [isLgUp, setIsLgUp] = useState(
+    () => typeof window !== "undefined" && window.innerWidth >= 1024
+  );
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 1024px)");
+    const handler = (e) => setIsLgUp(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({});
   const [uploadMode, setUploadMode] = useState("file"); // "file" or "link"
@@ -1632,7 +1641,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
           </button>
         ) : folderViewMode === "grid" ? (
           <div
-            className="w-full grid grid-cols-2 lg:grid-cols-5"
+            className="w-full grid lg:grid-cols-5"
             style={{
               boxSizing: "border-box",
               width: "100%",
@@ -1642,6 +1651,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
               gap: "1.2px",
               alignContent: "flex-start",
               overflowY: "auto",
+              gridTemplateColumns: isLgUp ? undefined : "repeat(auto-fill, minmax(130px, 1fr))",
             }}
           >
             {paginatedFolders.map((folder) => (
