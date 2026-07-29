@@ -436,15 +436,18 @@ export default function CompanyNotesTab({ showStats = true }) {
             {kpiTiles.map((tile) => (
               <div
                 key={tile.label}
-                className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
+                className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
               >
-                <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                  <tile.icon size={20} />
+                </div>
+                <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
                   <tile.icon size={20} />
                 </div>
                 <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-                    <p className="text-base font-semibold text-gray-900">{tile.value}</p>
+                    <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">{tile.label}</p>
+                    <p className="truncate w-full text-sm sm:text-base font-semibold text-gray-900">{tile.value}</p>
                   </div>
                   {tile.subtitle && (
                     <span className={`text-[11px] flex-shrink-0 whitespace-nowrap ${tile.subtitleClass}`}>{tile.subtitle}</span>
