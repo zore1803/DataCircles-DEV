@@ -432,11 +432,11 @@ export default function CompanyNotesTab({ showStats = true }) {
       {/* KPI Tiles */}
       {showStats && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
             {kpiTiles.map((tile) => (
               <div
                 key={tile.label}
-                className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
+                className="min-h-[72px] lg:h-[72px] flex items-center lg:items-end gap-3 px-3 py-3 lg:py-0 bg-white border border-gray-200 rounded-xl box-border min-w-0"
               >
                 <div className="flex lg:hidden flex-shrink-0 text-blue-600">
                   <tile.icon size={20} />
@@ -444,13 +444,13 @@ export default function CompanyNotesTab({ showStats = true }) {
                 <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
                   <tile.icon size={20} />
                 </div>
-                <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
+                <div className="min-w-0 flex-1 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-0.5 lg:gap-2">
                   <div className="min-w-0">
                     <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">{tile.label}</p>
                     <p className="truncate w-full text-sm sm:text-base font-semibold text-gray-900">{tile.value}</p>
                   </div>
                   {tile.subtitle && (
-                    <span className={`text-[11px] flex-shrink-0 whitespace-nowrap ${tile.subtitleClass}`}>{tile.subtitle}</span>
+                    <span className={`text-[10px] lg:text-[11px] flex-shrink-0 whitespace-nowrap ${tile.subtitleClass}`}>{tile.subtitle}</span>
                   )}
                 </div>
               </div>
