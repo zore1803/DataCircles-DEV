@@ -693,9 +693,9 @@ const CompanyProfilePage = () => {
 
       <div className="mx-auto">
         {/* Header Section */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2 lg:mb-3">
           {/* LEFT: Logo + Name + Address */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {/* Logo using ProfilePicture component */}
             {company ? (
               <ProfilePicture
@@ -711,9 +711,9 @@ const CompanyProfilePage = () => {
             )}
 
             {/* Title + Address */}
-            <div>
+            <div className="min-w-0">
               {company ? (
-                <h1 className="text-base font-semibold text-gray-900">
+                <h1 className="text-base font-semibold text-gray-900 truncate">
                   {company.name}
                 </h1>
               ) : (
@@ -721,7 +721,7 @@ const CompanyProfilePage = () => {
               )}
               {company ? (
                 company.address && (
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">
                     {company.address}
                   </p>
                 )
@@ -731,12 +731,12 @@ const CompanyProfilePage = () => {
             </div>
           </div>
 
-          {/* RIGHT: Social Icons */}
-          <div className="flex items-center gap-2">
+          {/* RIGHT: Social Icons (desktop only here — shown below the name on mobile) + Actions */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             {/* Twitter/X */}
             <button
               disabled={!hasSocialLink("twitter")}
-              className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("twitter")
+              className={`hidden lg:flex w-8 h-8 items-center justify-center rounded-full border transition-colors ${hasSocialLink("twitter")
                 ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
                 : "border-gray-200 text-gray-300 cursor-not-allowed"
                 }`}
@@ -753,7 +753,7 @@ const CompanyProfilePage = () => {
             {/* LinkedIn */}
             <button
               disabled={!hasSocialLink("linkedin")}
-              className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("linkedin")
+              className={`hidden lg:flex w-8 h-8 items-center justify-center rounded-full border transition-colors ${hasSocialLink("linkedin")
                 ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
                 : "border-gray-200 text-gray-300 cursor-not-allowed"
                 }`}
@@ -771,7 +771,7 @@ const CompanyProfilePage = () => {
                 instagram field exists in the schema yet) */}
             <button
               disabled={!hasSocialLink("facebook")}
-              className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("facebook")
+              className={`hidden lg:flex w-8 h-8 items-center justify-center rounded-full border transition-colors ${hasSocialLink("facebook")
                 ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
                 : "border-gray-200 text-gray-300 cursor-not-allowed"
                 }`}
@@ -875,6 +875,55 @@ const CompanyProfilePage = () => {
               Edit
             </button>
           </div>
+        </div>
+
+        {/* Social Icons — mobile only, shown below the name/address instead of beside it */}
+        <div className="flex lg:hidden items-center gap-2 mb-3">
+          <button
+            disabled={!hasSocialLink("twitter")}
+            className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("twitter")
+              ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
+              : "border-gray-200 text-gray-300 cursor-not-allowed"
+              }`}
+            onClick={() => openSocialLink("twitter")}
+            title={
+              hasSocialLink("twitter")
+                ? "View Twitter/X profile"
+                : "No Twitter/X link available"
+            }
+          >
+            <Twitter size={16} strokeWidth={2} />
+          </button>
+          <button
+            disabled={!hasSocialLink("linkedin")}
+            className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("linkedin")
+              ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
+              : "border-gray-200 text-gray-300 cursor-not-allowed"
+              }`}
+            onClick={() => openSocialLink("linkedin")}
+            title={
+              hasSocialLink("linkedin")
+                ? "View LinkedIn profile"
+                : "No LinkedIn link available"
+            }
+          >
+            <Linkedin size={16} strokeWidth={2} />
+          </button>
+          <button
+            disabled={!hasSocialLink("facebook")}
+            className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("facebook")
+              ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
+              : "border-gray-200 text-gray-300 cursor-not-allowed"
+              }`}
+            onClick={() => openSocialLink("facebook")}
+            title={
+              hasSocialLink("facebook")
+                ? "View Instagram profile"
+                : "No Instagram link available"
+            }
+          >
+            <Instagram size={16} strokeWidth={2} />
+          </button>
         </div>
 
         {/* Location */}
