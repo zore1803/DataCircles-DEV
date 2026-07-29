@@ -534,10 +534,10 @@ const CompanyCalendar = ({ companyId }) => {
           </button>
         )}
 
-        {/* Mobile: expanded input overlays leftward, covering the date nav + switcher (matches the
-            Companies-strip search behavior). Desktop: always shown inline, always full width. */}
+        {/* Mobile: expanded input slides in from the right, overlaying the date nav + switcher
+            (matches the Companies-strip search behavior). Desktop: always shown inline, always full width. */}
         <div
-          className={`min-w-0 lg:static lg:flex lg:flex-1 ${isSearchExpanded ? "absolute inset-y-0 left-0 right-11 z-20 flex bg-white" : "relative hidden"
+          className={`absolute inset-y-0 right-11 z-20 flex items-center overflow-hidden rounded-full bg-white transition-[left] duration-300 ease-out lg:static lg:!left-auto lg:!right-auto lg:flex lg:flex-1 lg:overflow-visible lg:bg-transparent ${isSearchExpanded ? "left-0 opacity-100" : "left-[calc(100%-76px)] opacity-0 pointer-events-none lg:opacity-100"
             }`}
         >
           <Search className="absolute left-2.5 lg:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5 lg:w-4 lg:h-4" />
