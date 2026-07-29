@@ -1732,32 +1732,32 @@ function Companies() {
           }}
         >
           {showBulkStrip ? (
-            <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-6 w-full h-full`}>
-              <div className="flex flex-wrap items-center gap-3">
+            <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
+              <div className="flex flex-nowrap lg:flex-wrap items-center gap-3 flex-shrink-0">
                 <button
                   onClick={() => setShowExportModal(true)}
-                  className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
+                  className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <Download className="w-4 h-4" />
                   Export
                 </button>
                 <button
                   onClick={() => setShowBulkNoteModal(true)}
-                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <StickyNote className="w-4 h-4 text-emerald-600" />
                   Add Note
                 </button>
                 <button
                   onClick={() => setShowAddToHotlistModal(true)}
-                  className="px-4 py-2 bg-white border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 focus:outline-none transition-colors flex items-center gap-2"
+                  className="h-10 px-4 bg-white border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <FolderPlus className="w-4 h-4" />
                   Add to Hotlist
                 </button>
                 <button
                   onClick={() => setShowBulkActions(true)}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
+                  className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <Edit2 className="w-4 h-4" />
                   Bulk Update
@@ -1765,34 +1765,34 @@ function Companies() {
                 <button
                   onClick={() => setShowBulkDeleteModal(true)}
                   disabled={bulkLoading}
-                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
+                  className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
                 >
                   <Trash2 className="w-4 h-4" />
                   Delete
                 </button>
                 <button
                   onClick={exitSelectionMode}
-                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <X className="w-4 h-4" />
                   Cancel
                 </button>
               </div>
-              <div className="flex items-center gap-3">
-                <CheckSquare className="w-5 h-5 text-blue-600" />
-                <span className="text-blue-800 font-semibold font-inter">
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
                   {selectedCompanies.length} compan{selectedCompanies.length !== 1 ? "ies" : "y"} selected
                 </span>
                 <button
                   onClick={handleSelectAllAcrossPages}
-                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <CheckSquare className="w-4 h-4" />
                   Select All
                 </button>
                 <button
                   onClick={handleDeselectAllExtra}
-                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <X className="w-4 h-4" />
                   Deselect All
