@@ -13,6 +13,10 @@ import { applyColumnFilters } from "../../utils/advancedFilters";
 import TableSkeletonRows from "../common/TableSkeletonRows";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import Skeleton from "../common/Skeleton";
+import BulkActionBar from "../common/BulkActionBar";
+import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
+import { exportToCSV } from "../../utils/exportToCSV";
+import { bulkDelete } from "../../utils/bulkOperations";
 import {
   Search,
   Filter,
@@ -106,6 +110,44 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
   const [selectedFilters, setSelectedFilters] = useState({});
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
 
+  const filteredContacts = useMemo(() => {
+    let result = contacts;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter(
+        (c) =>
+          (c.name || "").toLowerCase().includes(q) ||
+          (c.email || "").toLowerCase().includes(q) ||
+          (c.phone || "").toLowerCase().includes(q) ||
+          (c.role || "").toLowerCase().includes(q),
+      );
+    }
+    return applyColumnFilters(result, selectedFilters, getContactFieldValue);
+  }, [contacts, searchTerm, selectedFilters]);
+
+  const sortedContacts = useMemo(() => {
+    if (!sortConfig.key) return filteredContacts;
+    return [...filteredContacts].sort((a, b) => {
+      const aVal = (getContactFieldValue(a, sortConfig.key) || "").toString().toLowerCase();
+      const bVal = (getContactFieldValue(b, sortConfig.key) || "").toString().toLowerCase();
+      if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredContacts, sortConfig]);
+
+  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+    items: filteredContacts,
+    onDelete: () => setShowBulkDeleteModal(true)
+  });
+
+  // Keeps the bulk strip mounted for one beat after deselect so its
+  // slide-out animation can play instead of vanishing on the same frame.
+  const { visible: bulkStripVisible, closing: bulkStripClosing } =
+    useBulkStrip(selectedItems.length);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+
   const handleSort = (key, forceDirection = null) => {
     setSortConfig((prev) => {
       if (forceDirection) return { key, direction: forceDirection };
@@ -188,6 +230,13 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    // A single press does nothing: the column menu opens from its own chevron
+    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
+    // meant the FIRST press of every double-click popped the menu, whose
+    // full-screen backdrop then swallowed the second press — making the header
+    // effectively un-double-clickable. Drag still starts on the second press.
+    if (e.detail < 2) return;
 
     e.preventDefault();
     window.getSelection?.()?.removeAllRanges();
@@ -322,32 +371,6 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
     document.addEventListener("mouseup", onMouseUp);
   };
 
-  const filteredContacts = useMemo(() => {
-    let result = contacts;
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      result = result.filter(
-        (c) =>
-          (c.name || "").toLowerCase().includes(q) ||
-          (c.email || "").toLowerCase().includes(q) ||
-          (c.phone || "").toLowerCase().includes(q) ||
-          (c.role || "").toLowerCase().includes(q),
-      );
-    }
-    return applyColumnFilters(result, selectedFilters, getContactFieldValue);
-  }, [contacts, searchTerm, selectedFilters]);
-
-  const sortedContacts = useMemo(() => {
-    if (!sortConfig.key) return filteredContacts;
-    return [...filteredContacts].sort((a, b) => {
-      const aVal = (getContactFieldValue(a, sortConfig.key) || "").toString().toLowerCase();
-      const bVal = (getContactFieldValue(b, sortConfig.key) || "").toString().toLowerCase();
-      if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
-      return 0;
-    });
-  }, [filteredContacts, sortConfig]);
-
   const decisionMakers = contacts.filter(
     (c) => c.lifecycleStage === "Customer",
   ).length;
@@ -368,6 +391,37 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
     if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
   };
+
+  const handleExportSelected = () => {
+    const dataToExport = contacts.filter(c => selectedItems.includes(c._id)).map(c => ({
+      "Contact Name": c.name || "",
+      "Email": c.email || "",
+      "Phone": c.phone || "",
+      "Role": getContactFieldValue(c, "role"),
+      "Interaction": getContactFieldValue(c, "status"),
+    }));
+    const headers = Object.keys(dataToExport[0] || {}).join(",");
+    const rows = dataToExport.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    exportToCSV([headers, ...rows], `contacts_export_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkActionLoading(true);
+    try {
+      await bulkDelete("contacts", selectedItems);
+      setContacts?.(prev => prev.filter(c => !selectedItems.includes(c._id)));
+      toast.success(`${selectedItems.length} contact(s) deleted`);
+      clearSelection();
+      setShowBulkDeleteModal(false);
+    } catch (error) {
+      console.error("Bulk delete failed:", error);
+      toast.error(error.response?.data?.message || "Failed to delete contacts");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleSelectAllAcrossPages = () => selectAll(filteredContacts);
 
   const handleLimitChange = (newLimit) => {
     setLimit(newLimit);
@@ -434,6 +488,17 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
           <Skeleton height={44} width={86} shape="rect" className="rounded-full flex-shrink-0" />
           <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
         </div>
+      ) : bulkStripVisible ? (
+        <BulkActionBar
+          isClosing={bulkStripClosing}
+          selectedCount={selectedItems.length}
+          entityName="contact"
+          onSelectAll={handleSelectAllAcrossPages}
+          onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onDelete={() => setShowBulkDeleteModal(true)}
+          onCancel={clearSelection}
+        />
       ) : (
         <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
@@ -519,6 +584,8 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
         >
           <thead className="sticky top-0 z-30 bg-[#F5F7FA] border-b border-[#E1E4EA]">
             <tr>
+              <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
+              </th>
               {orderedColumns.map((col, idx) => {
                 const isLast = idx === orderedColumns.length - 1;
                 const isDragging = draggedColKey === col.id;
@@ -657,10 +724,22 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                 </td>
               </tr>
             ) : (
-              paginatedContacts.map((contact) => (
-                <tr key={contact._id} className="hover:bg-gray-50 transition-colors group">
-                  {orderedColumns.map((col, idx) => {
-                    const isLast = idx === orderedColumns.length - 1;
+              paginatedContacts.map((contact) => {
+                const isSelected = selectedItems.includes(contact._id);
+                return (
+                  <tr key={contact._id} className={`hover:bg-gray-50 transition-colors group ${isSelected ? "!bg-blue-50" : ""}`}>
+                    <td style={{ height: 54, width: 44 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                      <div className="flex justify-center items-center w-full">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleItem(contact._id)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
+                    </td>
+                    {orderedColumns.map((col, idx) => {
+                      const isLast = idx === orderedColumns.length - 1;
                     const isDragging = draggedColKey === col.id;
                     const borderClass = isLast ? "border-b border-[#E1E4EA]" : "border-r border-b border-[#E1E4EA]";
                     const styleBase = { height: 54, opacity: isDragging ? 0.35 : 1 };
@@ -730,7 +809,8 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                     return null;
                   })}
                 </tr>
-              ))
+              )
+            })
             )}
           </tbody>
         </table>
@@ -847,6 +927,34 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
           ))}
         </div>,
         document.body,
+      )}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Delete</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Delete {selectedItems.length} selected contact{selectedItems.length !== 1 ? 's' : ''}? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkActionLoading ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

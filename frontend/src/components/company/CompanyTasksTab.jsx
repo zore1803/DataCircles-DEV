@@ -23,6 +23,10 @@ import CompanyFilterPanel from "./CompanyFilterPanel";
 import TableSkeletonRows from "../common/TableSkeletonRows";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import Skeleton from "../common/Skeleton";
+import BulkActionBar from "../common/BulkActionBar";
+import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
+import { exportToCSV } from "../../utils/exportToCSV";
+import { bulkDelete } from "../../utils/bulkOperations";
 import useFillToBottom from "../../hooks/useFillToBottom";
 import { applyColumnFilters } from "../../utils/advancedFilters";
 
@@ -128,6 +132,10 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
   } = useFillToBottom();
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
+  const [bulkStatusValue, setBulkStatusValue] = useState("");
   const [users, setUsers] = useState([]);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -193,6 +201,13 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    // A single press does nothing: the column menu opens from its own chevron
+    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
+    // meant the FIRST press of every double-click popped the menu, whose
+    // full-screen backdrop then swallowed the second press — making the header
+    // effectively un-double-clickable. Drag still starts on the second press.
+    if (e.detail < 2) return;
 
     e.preventDefault();
     window.getSelection?.()?.removeAllRanges();
@@ -502,6 +517,16 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     });
   }, [filteredTasks, sortConfig]);
 
+  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+    items: filteredTasks,
+    onDelete: () => setShowBulkDeleteModal(true)
+  });
+
+  // Keeps the bulk strip mounted for one beat after deselect so its
+  // slide-out animation can play instead of vanishing on the same frame.
+  const { visible: bulkStripVisible, closing: bulkStripClosing } =
+    useBulkStrip(selectedItems.length);
+
   const paginatedTasks = useMemo(
     () => sortedTasks.slice((listPage - 1) * listLimit, listPage * listLimit),
     [sortedTasks, listPage, listLimit],
@@ -518,6 +543,54 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     if (page < 1 || page > listTotalPages) return;
     setListPage(page);
   };
+
+  const handleExportSelected = () => {
+    const dataToExport = tasks.filter(t => selectedItems.includes(t._id)).map(t => ({
+      "Task": t.title || "",
+      "Assigned to": getTaskAssignees(t).map(u => u.name).join(", "),
+      "Status": t.status === "Completed" ? "Completed" : "In-Progress",
+      "Priority": t.priority || "",
+      "Due Date": t.dueDate ? new Date(t.dueDate).toLocaleDateString() : "",
+    }));
+    const headers = Object.keys(dataToExport[0] || {}).join(",");
+    const rows = dataToExport.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    exportToCSV([headers, ...rows], `tasks_export_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkActionLoading(true);
+    try {
+      await bulkDelete("tasks", selectedItems);
+      setTasks?.(prev => prev.filter(t => !selectedItems.includes(t._id)));
+      toast.success(`${selectedItems.length} task(s) deleted`);
+      clearSelection();
+      setShowBulkDeleteModal(false);
+    } catch (error) {
+      console.error("Bulk delete failed:", error);
+      toast.error("Failed to delete tasks");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkUpdateStatus = async () => {
+    if (!bulkStatusValue) return;
+    setBulkActionLoading(true);
+    try {
+      await Promise.all(selectedItems.map(id => API.patch(`/tasks/${id}`, { status: bulkStatusValue })));
+      setTasks?.(prev => prev.map(t => selectedItems.includes(t._id) ? { ...t, status: bulkStatusValue } : t));
+      toast.success(`Status updated for ${selectedItems.length} task(s)`);
+      clearSelection();
+      setShowBulkStatusModal(false);
+    } catch (error) {
+      console.error("Bulk update failed:", error);
+      toast.error("Failed to update tasks");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleSelectAllAcrossPages = () => selectAll(filteredTasks);
 
   const handleListLimitChange = (newLimit) => {
     setListLimit(newLimit);
@@ -624,58 +697,67 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
         </>
       )}
 
-      {/* Search + Controls — skeletoned as one row so the whole area above the
-          table resolves at the same moment, matching Contacts/Invoices. */}
+      {/* Search + Controls */}
       {isLoading ? (
         <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
           <Skeleton height={44} shape="rect" className="flex-1 rounded-full" />
           <Skeleton height={44} width={86} shape="rect" className="rounded-full flex-shrink-0" />
           <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
         </div>
+      ) : bulkStripVisible ? (
+        <BulkActionBar
+          isClosing={bulkStripClosing}
+          selectedCount={selectedItems.length}
+          entityName="task"
+          onSelectAll={handleSelectAllAcrossPages}
+          onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onUpdateStatus={() => setShowBulkStatusModal(true)}
+          onDelete={() => setShowBulkDeleteModal(true)}
+          onCancel={clearSelection}
+        />
       ) : (
-      <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
-        <div className="relative flex-1 h-full">
-          <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by tasks by name, team, or deal..."
-            className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-            style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
-          />
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+          <div className="relative flex-1 h-full">
+            <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by tasks..."
+              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+            />
+          </div>
+          <button
+            onClick={() => setShowFilterPanel(true)}
+            className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+            style={{
+              height: "44px",
+              borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
+            }}
+          >
+            <FilterIcon size={16} />
+            Filter
+            {Object.values(selectedFilters).flat().length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+                {Object.values(selectedFilters).flat().length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowTaskForm(true)}
+            className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
+            style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
+            title="Add Task"
+          >
+            <Plus size={20} />
+          </button>
         </div>
-        <button
-          onClick={() => setShowFilterPanel(true)}
-          className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
-          style={{
-            height: "44px",
-            borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
-          }}
-        >
-          <FilterIcon size={16} />
-          Filter
-          {Object.values(selectedFilters).flat().length > 0 && (
-            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
-              {Object.values(selectedFilters).flat().length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setShowTaskForm(true)}
-          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
-          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
-          title="Add Task"
-        >
-          <Plus size={20} />
-        </button>
-      </div>
       )}
 
-      {/* Task list or empty state.
-          The `isLoading` check has to come FIRST: while the parent's fetch is in
-          flight `tasks` is still [], so without it the empty-state button renders
-          and the table (and therefore the skeleton inside it) never mounts. */}
+      {/* Task list or empty state. */}
       {!isLoading && tasks.length === 0 ? (
         <button
           onClick={() => setShowTaskForm(true)}
@@ -698,17 +780,18 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
           className="text-sm text-left border-collapse"
           style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%" }}
         >
-          {/* Sticky header. The table stays `border-collapse`, where borders on a
-              sticky <thead> are dropped by the browser — so the divider lines are
-              painted with inset boxShadow on each <th> instead (see below). */}
-          <thead className="bg-[#F5F7FA] sticky top-0 z-30">
+          <thead className="sticky top-0 z-30 bg-[#F5F7FA] border-b border-[#E1E4EA]">
             <tr>
-              <th
-                style={{ width: 51, height: 56, boxShadow: "inset 0 -1px 0 #E1E4EA" }}
-                className="px-3"
-              />
-              {orderedColumns.map((col, colIdx) => {
-                const isLastCol = colIdx === orderedColumns.length - 1;
+              <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
+                <input
+                  type="checkbox"
+                  checked={selectedItems.length > 0 && selectedItems.length === paginatedTasks.length}
+                  onChange={(e) => e.target.checked ? selectAll(paginatedTasks) : clearSelection()}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                />
+              </th>
+              {orderedColumns.map((col, idx) => {
+                const isLast = idx === orderedColumns.length - 1;
                 const isDragging = draggedColKey === col.id;
                 const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
                 return (
@@ -721,9 +804,6 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                       height: 56,
                       position: "relative",
                       opacity: isDragging ? 0.35 : 1,
-                      // Right divider + header underline, as inset shadows rather
-                      // than borders so they survive `position: sticky` on the
-                      // <thead> under the border-collapse model.
                       boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
                     }}
                     className={`py-2.5 font-medium text-[#525252] text-xs cursor-grab active:cursor-grabbing ${
@@ -737,13 +817,10 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                           onDoubleClick={() => togglePinColumn(col.id)}
                         >
                           <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                            {/* Label swaps to a skeleton bar on the same flag as the body rows. */}
-                            {isLoading ? <Skeleton width="65%" height={12} /> : <span className="truncate">{col.label}</span>}
+                            {isLoading ? <Skeleton width="65%" height={12} /> : <span className="truncate flex-1 min-w-0" title={col.label}>{col.label}</span>}
                           </div>
                         </div>
                       ) : null}
-                      {/* Column menu — UI and behaviour copied from
-                          CompanyContactsTab.jsx (Pin L/R, Sort, Hide). */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -754,13 +831,13 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                           }
                           const rect = e.currentTarget.getBoundingClientRect();
                           let calculatedLeft = rect.right - 190;
-                          if (isLastCol) {
-                            calculatedLeft -= 80; // Push inward for last column to prevent shadow bleeding outside table
+                          if (isLast) {
+                            calculatedLeft -= 80;
                           }
                           setColumnMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
                           setOpenColumnMenuKey(col.id);
                         }}
-                        className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                        className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
                         title="Column options"
                       >
                         <ChevronDown className="w-3.5 h-3.5" />
@@ -850,14 +927,10 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
           <tbody className="bg-white">
             {isLoading ? (
               <TableSkeletonRows
+                columns={orderedColumns.map(c => colWidths[c.id])}
+                hasCheckbox={true}
                 numRows={listLimit}
-                rowHeight={60}
-                hasCheckbox={false}
-                // Leading 51px spacer column, then the six real columns — same
-                // widths the header uses, so the skeleton lines up with it.
-                // Derived from orderedColumns so the skeleton matches the header
-                // after a column is hidden or pinned.
-                columns={[51, ...orderedColumns.map((c) => colWidths[c.id])]}
+                rowHeight={54}
               />
             ) : paginatedTasks.length === 0 ? (
               <tr>
@@ -867,6 +940,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
               </tr>
             ) : (
               paginatedTasks.map((task) => {
+                const isSelected = selectedItems.includes(task._id);
                 const isCompleted = task.status === "Completed";
                 const assignees = getTaskAssignees(task);
                 const progress = getTaskProgress(task);
@@ -1214,6 +1288,73 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
           ))}
         </div>,
         document.body,
+      )}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Delete</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Delete {selectedItems.length} selected task{selectedItems.length !== 1 ? 's' : ''}? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkActionLoading ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBulkStatusModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-left">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Update Status for {selectedItems.length} Tasks</h3>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select New Status</label>
+                <select
+                  value={bulkStatusValue}
+                  onChange={(e) => setBulkStatusValue(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="" disabled>Select a status...</option>
+                  {TASK_STATUS_OPTIONS.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowBulkStatusModal(false)}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkUpdateStatus}
+                  disabled={bulkActionLoading || !bulkStatusValue}
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkActionLoading ? "Updating..." : "Update"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

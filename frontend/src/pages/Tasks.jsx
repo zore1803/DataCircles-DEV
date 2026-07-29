@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
 import TaskForm from "../components/Task/TaskForm";
@@ -594,6 +594,24 @@ function Tasks() {
   const startColumnDrag = (e, colId, label, previewRows, fallbackOrder = []) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    if (e.detail === 1) {
+      e.stopPropagation();
+      if (openColMenuKey === colId) {
+        setOpenColMenuKey(null);
+        setColMenuPos(null);
+        return;
+      }
+      const th = e.currentTarget;
+      const rect = th.getBoundingClientRect();
+      let calculatedLeft = rect.right - 190;
+      if (th.cellIndex === th.parentNode.cells.length - 1) {
+        calculatedLeft -= 80;
+      }
+      setColMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
+      setOpenColMenuKey(colId);
+      return;
+    }
 
     const th = e.currentTarget;
     const startX = e.clientX;
@@ -1631,7 +1649,16 @@ function Tasks() {
               setColMenuPos(null);
               return;
             }
-            setColMenuPos({ top: e.clientY + 4, left: e.clientX - 160 });
+            // rect is VISUAL px; the menu is portaled into document.body, which
+            // paints inside the dynamic <html> zoom, so rect-derived values must be
+            // divided by that zoom (same correction as the drag-ghost above).
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 160;
+            const rect = e.currentTarget.getBoundingClientRect();
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, window.innerWidth / zMenu - MENU_W - 8);
+            calcLeft = Math.max(calcLeft, 8);
+            setColMenuPos({ top: rect.bottom / zMenu + 4, left: calcLeft });
             setOpenColMenuKey(colKey);
           }}
           className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -2779,7 +2806,7 @@ function Tasks() {
                           e,
                           colId,
                           TASK_COLUMN_LABELS[colId] || colId,
-                          tasks.map((t) => String(getTaskColumnPreviewValue(t, colId))),
+                          completedTasks.map((t) => String(getTaskColumnPreviewValue(t, colId))),
                           headerGroup.headers.map((h) => h.column.id).filter((id) => id !== "selection"),
                         ) : undefined}
                         style={{

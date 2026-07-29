@@ -27,6 +27,10 @@ import { applyColumnFilters } from "../../utils/advancedFilters";
 import TableSkeletonRows from "../common/TableSkeletonRows";
 import Skeleton from "../common/Skeleton";
 import StatTileSkeleton from "../common/StatTileSkeleton";
+import BulkActionBar from "../common/BulkActionBar";
+import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
+import { exportToCSV } from "../../utils/exportToCSV";
+import { bulkDelete } from "../../utils/bulkOperations";
 import useFillToBottom from "../../hooks/useFillToBottom";
 
 const MEETING_TYPE_LABELS = { "in-person": "In-person", "video-call": "Video Call", "phone-call": "Phone Call" };
@@ -97,6 +101,10 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     footerRef: fillFooterRef,
     style: fillStyle,
   } = useFillToBottom();
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
+  const [bulkStatusValue, setBulkStatusValue] = useState("");
   const [users, setUsers] = useState([]);
   const [showMeetingForm, setShowMeetingForm] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
@@ -165,6 +173,13 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    // A single press does nothing: the column menu opens from its own chevron
+    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
+    // meant the FIRST press of every double-click popped the menu, whose
+    // full-screen backdrop then swallowed the second press — making the header
+    // effectively un-double-clickable. Drag still starts on the second press.
+    if (e.detail < 2) return;
 
     e.preventDefault();
     window.getSelection?.()?.removeAllRanges();
@@ -446,6 +461,16 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     });
   }, [filteredMeetings, sortConfig]);
 
+  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+    items: filteredMeetings,
+    onDelete: () => setShowBulkDeleteModal(true)
+  });
+
+  // Keeps the bulk strip mounted for one beat after deselect so its
+  // slide-out animation can play instead of vanishing on the same frame.
+  const { visible: bulkStripVisible, closing: bulkStripClosing } =
+    useBulkStrip(selectedItems.length);
+
   const [listPage, setListPage] = useState(1);
   const [listLimit, setListLimit] = useState(10);
 
@@ -460,6 +485,54 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     if (page < 1 || page > listTotalPages) return;
     setListPage(page);
   };
+
+  const handleExportSelected = () => {
+    const dataToExport = meetings.filter(m => selectedItems.includes(m._id)).map(m => ({
+      "Meeting Title": m.title || "",
+      "Type": MEETING_TYPE_LABELS[m.meetingType] || m.meetingType || "General",
+      "Date & Time": m.scheduledAt ? new Date(m.scheduledAt).toLocaleString() : "",
+      "Duration": m.duration || "",
+      "Status": MEETING_STATUS_LABELS[m.status] || m.status || "Scheduled",
+    }));
+    const headers = Object.keys(dataToExport[0] || {}).join(",");
+    const rows = dataToExport.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    exportToCSV([headers, ...rows], `meetings_export_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkActionLoading(true);
+    try {
+      await bulkDelete("meetings", selectedItems);
+      await refetchMeetings();
+      toast.success(`${selectedItems.length} meeting(s) deleted`);
+      clearSelection();
+      setShowBulkDeleteModal(false);
+    } catch (error) {
+      console.error("Bulk delete failed:", error);
+      toast.error("Failed to delete meetings");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkUpdateStatus = async () => {
+    if (!bulkStatusValue) return;
+    setBulkActionLoading(true);
+    try {
+      await Promise.all(selectedItems.map(id => API.patch(`/meetings/${id}`, { status: bulkStatusValue })));
+      await refetchMeetings();
+      toast.success(`Status updated for ${selectedItems.length} meeting(s)`);
+      clearSelection();
+      setShowBulkStatusModal(false);
+    } catch (error) {
+      console.error("Bulk update failed:", error);
+      toast.error("Failed to update meetings");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleSelectAllAcrossPages = () => selectAll(filteredMeetings);
 
   const handleListLimitChange = (newLimit) => {
     setListLimit(newLimit);
@@ -597,6 +670,18 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           <Skeleton height={44} width={86} shape="rect" className="rounded-full flex-shrink-0" />
           <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
         </div>
+      ) : viewMode === "list" && bulkStripVisible ? (
+        <BulkActionBar
+          isClosing={bulkStripClosing}
+          selectedCount={selectedItems.length}
+          entityName="meeting"
+          onSelectAll={handleSelectAllAcrossPages}
+          onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onUpdateStatus={() => setShowBulkStatusModal(true)}
+          onDelete={() => setShowBulkDeleteModal(true)}
+          onCancel={clearSelection}
+        />
       ) : (
       <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
         <div className="relative flex-1 h-full">
@@ -605,7 +690,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by meetings by type, time, or contact..."
+            placeholder="Search meetings by title, deal, or participants..."
             className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
             style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
           />
@@ -683,6 +768,14 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           <table className="w-full border-separate border-spacing-0 text-left" style={{ tableLayout: "fixed", minWidth: totalTableWidth }}>
             <thead className="sticky top-0 z-30 bg-[#F5F7FA] border-b border-[#E1E4EA]">
               <tr>
+                <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
+                  <input
+                    type="checkbox"
+                    checked={selectedItems.length > 0 && selectedItems.length === paginatedMeetings.length}
+                    onChange={(e) => e.target.checked ? selectAll(paginatedMeetings) : clearSelection()}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                  />
+                </th>
                 {orderedColumns.map((col, colIdx) => {
                   const isLastCol = colIdx === orderedColumns.length - 1;
                   const isDragging = draggedColKey === col.id;
@@ -820,14 +913,16 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
             <tbody className="bg-white">
               {isLoading ? (
                 <TableSkeletonRows
-                  columns={orderedColumns.map((c) => colWidths[c.id])}
-                  hasCheckbox={false}
+                  columns={orderedColumns.map(c => colWidths[c.id])}
+                  hasCheckbox={true}
                   numRows={listLimit}
-                  rowHeight={60}
+                  rowHeight={54}
                 />
-              ) : paginatedMeetings.map((meeting) => {
-                const participants = meeting.participants || [];
-                const organizer = typeof meeting.createdBy === "object" ? meeting.createdBy : null;
+              ) : (
+                paginatedMeetings.map((meeting) => {
+                  const isSelected = selectedItems.includes(meeting._id);
+                  const participants = meeting.participants || [];
+                  const organizer = typeof meeting.createdBy === "object" ? meeting.createdBy : null;
                   const cells = {
                     title: (
                         <td key="title" style={{ height: 60 }} className="pl-6 pr-3 truncate border-r border-b border-[#E1E4EA]">
@@ -967,14 +1062,21 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                     ),
                   };
                   return (
-                  <tr
-                    key={meeting._id}
-                    onClick={() => handleMeetingClick(meeting)}
-                    className="hover:bg-gray-50 transition-colors cursor-pointer"
-                  >
-                      {/* Cells are indexed by column id and rendered through
-                          orderedColumns, so hiding or pinning a column in the header
-                          moves/removes its data cell too. Each <td> is unchanged. */}
+                    <tr
+                      key={meeting._id}
+                      onClick={() => handleMeetingClick(meeting)}
+                      className={`hover:bg-gray-50 transition-colors group cursor-pointer ${isSelected ? "!bg-blue-50" : ""}`}
+                    >
+                      <td style={{ height: 54, width: 44 }} onClick={e => e.stopPropagation()} className="px-3 border-r border-b border-[#E1E4EA]">
+                        <div className="flex justify-center items-center w-full">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleItem(meeting._id)}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                          />
+                        </div>
+                      </td>
                       {orderedColumns.map((col) => {
                         const isDragging = draggedColKey === col.id;
                         const cell = cells[col.id];
@@ -986,7 +1088,8 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                       })}
                     </tr>
                   );
-              })}
+              })
+              )}
             </tbody>
           </table>
         </div>
@@ -1735,6 +1838,73 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           ))}
         </div>,
         document.body,
+      )}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Delete</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Delete {selectedItems.length} selected meeting{selectedItems.length !== 1 ? 's' : ''}? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkActionLoading ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBulkStatusModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-left">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Update Status for {selectedItems.length} Meetings</h3>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select New Status</label>
+                <select
+                  value={bulkStatusValue}
+                  onChange={(e) => setBulkStatusValue(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="" disabled>Select a status...</option>
+                  {Object.entries(MEETING_STATUS_LABELS).map(([val, label]) => (
+                    <option key={val} value={val}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowBulkStatusModal(false)}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkUpdateStatus}
+                  disabled={bulkActionLoading || !bulkStatusValue}
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkActionLoading ? "Updating..." : "Update"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

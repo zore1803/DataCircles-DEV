@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import API from "../../services/api";
 import QuickDealForm from "../deal/QuickDealForm";
 import toast from "react-hot-toast";
@@ -11,6 +11,10 @@ const CompanyDeals = ({ deals, companyId, setDeals }) => {
   const [dealFilter, setDealFilter] = useState("");
   const [dealSort, setDealSort] = useState("date-desc");
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limit, setLimit] = useState(10);
 
   // Handlers
   const handleDealCreated = async (newDeal) => {
@@ -58,6 +62,41 @@ const CompanyDeals = ({ deals, companyId, setDeals }) => {
   };
 
   const filteredDeals = getFilteredAndSortedDeals();
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dealFilter, dealSort]);
+
+  // Pagination Logic
+  const totalCount = filteredDeals.length;
+  const totalPages = Math.ceil(totalCount / limit);
+  const startItem = totalCount === 0 ? 0 : (currentPage - 1) * limit + 1;
+  const endItem = Math.min(currentPage * limit, totalCount);
+  const hasPrevPage = currentPage > 1;
+  const hasNextPage = currentPage < totalPages;
+
+  const currentDeals = filteredDeals.slice((currentPage - 1) * limit, currentPage * limit);
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  const handleLimitChange = (newLimit) => {
+    setLimit(newLimit);
+    setCurrentPage(1);
+  };
+
+  const getPageNumbers = () => {
+    const items = [1];
+    if (currentPage > 2) items.push("left-dots");
+    if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
+    if (currentPage < totalPages - 1) items.push("right-dots");
+    if (totalPages > 1) items.push(totalPages);
+    return items;
+  };
 
   return (
     <div>
@@ -135,9 +174,9 @@ const CompanyDeals = ({ deals, companyId, setDeals }) => {
               </th>
             </tr>
           </thead>
-          {filteredDeals && filteredDeals.length > 0 ? (
+          {currentDeals && currentDeals.length > 0 ? (
             <tbody className="divide-y divide-gray-100">
-              {filteredDeals.map((deal) => (
+              {currentDeals.map((deal) => (
                 <tr key={deal._id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <Link
@@ -170,6 +209,91 @@ const CompanyDeals = ({ deals, companyId, setDeals }) => {
           )}
         </table>
       </div>
+
+      {totalCount > 0 && (
+        <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6 mt-4 rounded-lg border">
+          <div className="flex flex-1 justify-between sm:hidden">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={!hasPrevPage}
+              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={!hasNextPage}
+              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+
+          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div className="flex items-center space-x-2">
+              <p className="text-sm text-gray-700 font-inter">
+                Showing <span className="font-semibold">{startItem}</span> to{" "}
+                <span className="font-semibold">{endItem}</span> of{" "}
+                <span className="font-semibold">{totalCount}</span> results
+              </p>
+              <select
+                value={limit}
+                onChange={(e) => handleLimitChange(parseInt(e.target.value))}
+                className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
+              >
+                <option value={10}>10 per page</option>
+                <option value={20}>20 per page</option>
+                <option value={50}>50 per page</option>
+                <option value={100}>100 per page</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={!hasPrevPage}
+                className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              {totalPages > 0 &&
+                getPageNumbers().map((item, index) => {
+                  if (item === "left-dots" || item === "right-dots") {
+                    return (
+                      <span
+                        key={`${item}-${index}`}
+                        className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
+                      >
+                        ...
+                      </span>
+                    );
+                  }
+                  return (
+                    <button
+                      key={`page-${item}`}
+                      onClick={() => handlePageChange(item)}
+                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${item === currentPage
+                        ? "bg-blue-600 text-white"
+                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                        }`}
+                    >
+                      {item}
+                    </button>
+                  );
+                })}
+
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={!hasNextPage}
+                className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDealForm && (
         <QuickDealForm

@@ -275,6 +275,7 @@ function Contacts() {
   const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
   const [columnMenuPos, setColumnMenuPos] = useState(null);
   const columnMenuRef = useRef(null);
+  const tableScrollRef = useRef(null);
 
   // Close any open portal menu on scroll instead of locking the page in place —
   // the background stays freely scrollable, and the menu just disappears since
@@ -304,6 +305,24 @@ function Contacts() {
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    if (e.detail === 1) {
+      e.stopPropagation();
+      if (openColMenuKey === colId) {
+        setOpenColMenuKey(null);
+        setColMenuPos(null);
+        return;
+      }
+      const th = e.currentTarget;
+      const rect = th.getBoundingClientRect();
+      let calculatedLeft = rect.right - 190;
+      if (th.cellIndex === th.parentNode.cells.length - 1) {
+        calculatedLeft -= 80;
+      }
+      setColMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
+      setOpenColMenuKey(colId);
+      return;
+    }
 
     const th = e.currentTarget;
     const startX = e.clientX;
@@ -927,7 +946,19 @@ function Contacts() {
                       setColumnMenuPos(null);
                       return;
                     }
-                    setColumnMenuPos({ top: e.clientY + 4, left: e.clientX - 160 });
+                    // rect + boundsRight are VISUAL px; the menu is portaled into
+                    // document.body, which paints inside the dynamic <html> zoom, so
+                    // every rect-derived value we set must be divided by that zoom
+                    // (same correction as the drag-ghost above). Without it the menu
+                    // drifts right by rect.right * (zoom - 1) — worst on the last columns.
+                    const zMenu = getAncestorZoom(document.body);
+                    const MENU_W = 160;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const boundsRight = tableScrollRef.current?.getBoundingClientRect().right ?? window.innerWidth;
+                    let calcLeft = rect.right / zMenu - MENU_W;
+                    calcLeft = Math.min(calcLeft, boundsRight / zMenu - MENU_W - 8);
+                    calcLeft = Math.max(calcLeft, 8);
+                    setColumnMenuPos({ top: rect.bottom / zMenu + 4, left: calcLeft });
                     setOpenColumnMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -2852,6 +2883,7 @@ function Contacts() {
       {/* Main Content Card */}
       <div className="bg-white overflow-visible">
         <div
+          ref={tableScrollRef}
           className="overflow-x-auto overflow-y-auto"
           style={{
             position: "fixed",
