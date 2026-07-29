@@ -1056,7 +1056,7 @@ const CompanyProfilePage = () => {
                       {pipelineData.map((stage, idx) => (
                         <div
                           key={stage.key}
-                          className={`flex-1 min-w-0 flex flex-col justify-center ${stage.color} ${idx > 0 ? "-ml-2 sm:-ml-3 pl-4 pr-2 sm:pl-8 sm:pr-5" : "pl-4 pr-2 sm:pl-8 sm:pr-5"}`}
+                          className={`flex-1 min-w-0 flex flex-col justify-center ${stage.color} ${idx > 0 ? "-ml-2 sm:-ml-3 pl-6 pr-2 sm:pl-8 sm:pr-5" : "pl-6 pr-2 sm:pl-8 sm:pr-5"}`}
                           style={{
                             clipPath:
                               idx === pipelineData.length - 1
