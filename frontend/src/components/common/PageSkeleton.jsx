@@ -38,26 +38,29 @@ const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", table
   <div className="space-y-0 -m-6">
     {/* Title strip: "Deals" + subtitle, then one right-aligned group —
         search icon, filter, list/kanban switcher, more-menu, New Deal —
-        all sharing the same gap, matching the real collapsed-search strip. */}
-    <div className="flex items-center gap-3 bg-white border-b border-gray-200 px-6" style={{ height: 64 }}>
+        all sharing the same gap, matching the real collapsed-search strip.
+        Mobile: filter/switcher fold away (same as the real mobile header),
+        leaving just search + more-menu + add. */}
+    <div className="flex items-center gap-2 lg:gap-3 bg-white border-b border-gray-200 px-4 lg:px-6" style={{ height: 64 }}>
       <div className="flex flex-col gap-1.5 flex-shrink-0">
         <Skeleton width={50} height={16} />
-        <Skeleton width={160} height={12} />
+        <Skeleton width={110} height={12} className="hidden sm:block" />
       </div>
       <div className="flex-1 min-w-0" />
-      <div className="flex items-center gap-3 flex-shrink-0">
+      <div className="flex items-center gap-2 lg:gap-3 flex-shrink-0">
         <Skeleton shape="circle" width={40} height={40} />
+        <Skeleton shape="circle" width={40} height={40} className="hidden lg:block" />
+        <Skeleton width={76} height={40} shape="rect" className="rounded-full hidden lg:block" />
         <Skeleton shape="circle" width={40} height={40} />
-        <Skeleton width={76} height={40} shape="rect" className="rounded-full" />
-        <Skeleton shape="circle" width={40} height={40} />
-        <Skeleton width={110} height={40} shape="rect" className="rounded-full" />
+        <Skeleton width={110} height={40} shape="rect" className="rounded-full hidden lg:block" />
+        <Skeleton shape="circle" width={40} height={40} className="lg:hidden" />
       </div>
     </div>
 
-    {/* KPI strip: 4 stat cards */}
-    <div className="flex items-center gap-6 bg-white border-b border-gray-200 px-6" style={{ height: 120 }}>
+    {/* KPI strip: 4 stat cards — 2x2 grid on mobile, single row on desktop */}
+    <div className="grid grid-cols-2 gap-3 lg:flex lg:items-center lg:gap-6 bg-white border-b border-gray-200 px-4 lg:px-6 py-4 lg:py-0" style={{ minHeight: 120 }}>
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="relative flex-1 rounded-xl border border-gray-200 bg-white" style={{ padding: 16, height: 72 }}>
+        <div key={i} className="relative lg:flex-1 rounded-xl border border-gray-200 bg-white" style={{ padding: 16, height: 72 }}>
           <div className="flex items-end gap-3.5" style={{ height: 40 }}>
             <Skeleton shape="circle" width={40} height={40} className="flex-shrink-0" />
             <div className="flex flex-col gap-1 flex-1 min-w-0">
@@ -74,9 +77,26 @@ const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", table
 
     {boardVariant === "table" ? (
       /* Deals table: checkbox + 7 columns, matching DealsTable's header/row shape.
-         No top/left padding — the real table view sits edge-to-edge. */
+         No top/left padding — the real table view sits edge-to-edge.
+         Mobile: simplified card-style rows instead of the 7-thin-column layout. */
       <div>
         <div className="relative bg-white border border-[#E1E4EA]">
+          {/* Mobile rows */}
+          <div className="lg:hidden">
+            {Array.from({ length: tableRows }).map((_, r) => (
+              <div key={r} className="flex items-center gap-3 border-b border-[#E1E4EA] last:border-b-0 px-4" style={{ height: 64 }}>
+                <Skeleton shape="rect" width={16} height={16} className="rounded flex-shrink-0" />
+                <Skeleton shape="circle" width={36} height={36} className="flex-shrink-0" />
+                <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                  <Skeleton width="55%" height={13} />
+                  <Skeleton width="35%" height={11} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden lg:block">
           <div className="flex items-stretch bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: 56 }}>
             <div className="flex items-center justify-center flex-shrink-0 border-r border-[#E1E4EA]" style={{ width: 60 }}>
               <Skeleton shape="rect" width={16} height={16} className="rounded" />
@@ -99,6 +119,7 @@ const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", table
               ))}
             </div>
           ))}
+          </div>
         </div>
       </div>
     ) : (
@@ -183,8 +204,8 @@ export default function PageSkeleton({ variant = "generic", ...rest }) {
   const Body = VARIANTS[variant] || GenericSkeleton;
   return (
     <div
-      className="fixed overflow-y-auto bg-gray-50 p-6 z-20"
-      style={{ top: 64, left: "var(--sidebar-width, 0px)", right: 0, bottom: 0 }}
+      className="fixed overflow-y-auto bg-gray-50 p-6 z-20 top-[54px] lg:top-16"
+      style={{ left: "var(--sidebar-width, 0px)", right: 0, bottom: 0 }}
     >
       <Body {...rest} />
     </div>
