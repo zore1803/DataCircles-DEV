@@ -81,22 +81,6 @@ const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", table
          Mobile: simplified card-style rows instead of the 7-thin-column layout. */
       <div>
         <div className="relative bg-white border border-[#E1E4EA]">
-          {/* Mobile rows */}
-          <div className="lg:hidden">
-            {Array.from({ length: tableRows }).map((_, r) => (
-              <div key={r} className="flex items-center gap-3 border-b border-[#E1E4EA] last:border-b-0 px-4" style={{ height: 64 }}>
-                <Skeleton shape="rect" width={16} height={16} className="rounded flex-shrink-0" />
-                <Skeleton shape="circle" width={36} height={36} className="flex-shrink-0" />
-                <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                  <Skeleton width="55%" height={13} />
-                  <Skeleton width="35%" height={11} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Desktop table */}
-          <div className="hidden lg:block">
           <div className="flex items-stretch bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: 56 }}>
             <div className="flex items-center justify-center flex-shrink-0 border-r border-[#E1E4EA]" style={{ width: 60 }}>
               <Skeleton shape="rect" width={16} height={16} className="rounded" />
@@ -119,7 +103,6 @@ const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", table
               ))}
             </div>
           ))}
-          </div>
         </div>
       </div>
     ) : (
