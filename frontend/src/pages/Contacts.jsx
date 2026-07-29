@@ -2428,8 +2428,8 @@ function Contacts() {
 
       {/* Title Strip */}
       <div
-        className={`fixed right-0 h-16 flex items-center justify-between gap-3 px-6 border-b ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
-        style={{ top: "64px", left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
+        className={`fixed right-0 h-16 flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 border-b top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
+        style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
       >
         {showBulkStrip ? (
           <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-3 w-full h-full overflow-x-auto lg:overflow-visible`}>
@@ -2530,7 +2530,7 @@ function Contacts() {
           />
         </nav>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 lg:gap-4 flex-shrink-0">
           {activeTab !== "Hotlist" && (
             <>
               <div
@@ -2844,10 +2844,9 @@ function Contacts() {
       {/* Main Content Card */}
       <div className="bg-white overflow-visible">
         <div
-          className={showKanban ? "overflow-x-auto overflow-y-hidden" : "overflow-x-auto overflow-y-auto"}
+          className={`${showKanban ? "overflow-x-auto overflow-y-hidden" : "overflow-x-auto overflow-y-auto"} top-[118px] lg:top-[128px]`}
           style={{
             position: "fixed",
-            top: 128,
             left: "var(--sidebar-width, 0px)",
             right: 0,
             bottom: !showKanban && activeTab !== "Hotlist" && !loading ? 64 : 0,
