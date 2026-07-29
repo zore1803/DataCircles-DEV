@@ -1632,15 +1632,13 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
           </button>
         ) : folderViewMode === "grid" ? (
           <div
-            className="w-full"
+            className="w-full grid grid-cols-2 lg:grid-cols-5"
             style={{
               boxSizing: "border-box",
               width: "100%",
               height: 482,
               borderRadius: 8,
               padding: 0,
-              display: "grid",
-              gridTemplateColumns: "repeat(5, 1fr)",
               gap: "1.2px",
               alignContent: "flex-start",
               overflowY: "auto",
