@@ -890,11 +890,12 @@ const CompanyProfilePage = () => {
           </div>
         </div>
 
-        {/* Social Icons — mobile only, shown below the name/address instead of beside it */}
-        <div className="flex lg:hidden items-center gap-2 mb-3">
+        {/* Social Icons — mobile only, shown below the name/address instead of beside it,
+            left-aligned under the name text (past the avatar), not the avatar itself */}
+        <div className="flex lg:hidden items-center gap-1.5 mb-3 ml-12">
           <button
             disabled={!hasSocialLink("twitter")}
-            className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("twitter")
+            className={`w-6 h-6 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("twitter")
               ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
               : "border-gray-200 text-gray-300 cursor-not-allowed"
               }`}
@@ -905,11 +906,11 @@ const CompanyProfilePage = () => {
                 : "No Twitter/X link available"
             }
           >
-            <Twitter size={16} strokeWidth={2} />
+            <Twitter size={12} strokeWidth={2} />
           </button>
           <button
             disabled={!hasSocialLink("linkedin")}
-            className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("linkedin")
+            className={`w-6 h-6 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("linkedin")
               ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
               : "border-gray-200 text-gray-300 cursor-not-allowed"
               }`}
@@ -920,11 +921,11 @@ const CompanyProfilePage = () => {
                 : "No LinkedIn link available"
             }
           >
-            <Linkedin size={16} strokeWidth={2} />
+            <Linkedin size={12} strokeWidth={2} />
           </button>
           <button
             disabled={!hasSocialLink("facebook")}
-            className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("facebook")
+            className={`w-6 h-6 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("facebook")
               ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
               : "border-gray-200 text-gray-300 cursor-not-allowed"
               }`}
@@ -935,7 +936,7 @@ const CompanyProfilePage = () => {
                 : "No Instagram link available"
             }
           >
-            <Instagram size={16} strokeWidth={2} />
+            <Instagram size={12} strokeWidth={2} />
           </button>
         </div>
 
