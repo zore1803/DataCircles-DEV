@@ -1012,7 +1012,7 @@ const CompanyProfilePage = () => {
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_319px] gap-4">
               <div className="space-y-4 min-w-0">
                 {/* Deal Pipeline */}
-                <div className="h-[162px] bg-white border border-gray-200 rounded-lg p-5">
+                <div className="h-[162px] bg-white border border-gray-200 rounded-lg p-5 overflow-hidden">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-900">
                       {showOverviewSkeleton ? <Skeleton width={110} height={14} /> : <>Deal Pipeline ({deals.length})</>}
@@ -1052,7 +1052,7 @@ const CompanyProfilePage = () => {
                       {pipelineData.map((stage, idx) => (
                         <div
                           key={stage.key}
-                          className={`flex-1 flex flex-col justify-center ${stage.color} ${idx > 0 ? "-ml-3 pl-8 pr-5" : "pl-8 pr-5"}`}
+                          className={`flex-1 min-w-0 flex flex-col justify-center ${stage.color} ${idx > 0 ? "-ml-2 sm:-ml-3 pl-4 pr-2 sm:pl-8 sm:pr-5" : "pl-4 pr-2 sm:pl-8 sm:pr-5"}`}
                           style={{
                             clipPath:
                               idx === pipelineData.length - 1
@@ -1060,11 +1060,11 @@ const CompanyProfilePage = () => {
                                 : "polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%, 20px 50%)",
                           }}
                         >
-                          <p className="text-xs font-medium">{stage.label}</p>
-                          <p className="text-[11px] opacity-70">
+                          <p className="truncate w-full text-[10px] sm:text-xs font-medium">{stage.label}</p>
+                          <p className="truncate w-full text-[9px] sm:text-[11px] opacity-70">
                             {stage.count} Deal{stage.count !== 1 ? "s" : ""}
                           </p>
-                          <p className="text-sm font-semibold">
+                          <p className="truncate w-full text-[11px] sm:text-sm font-semibold">
                             ₹{stage.amount.toLocaleString("en-IN")}
                           </p>
                         </div>
