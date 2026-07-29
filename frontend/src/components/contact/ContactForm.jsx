@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import API from "../../services/api";
 import SearchableDropdown from "./SearchableDropdown";
 import { Upload, Plus, Twitter, Linkedin, Facebook, FolderOpen, ChevronDown } from "lucide-react";
@@ -477,7 +478,7 @@ const ContactForm = ({
   });
 
 
-  return (
+  return createPortal(
     <>
       {showQuickCompanyForm && (
         <QuickCompanyForm
@@ -526,13 +527,13 @@ const ContactForm = ({
       />
 
       <div
- className={`fixed inset-y-0 right-0 z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 font-inter ${isOpen ? "translate-x-0" : "translate-x-full"
+        className={`fixed dc-panel-card z-[10001] dc-panel-w bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
           }`}
       >
-        <form onSubmit={handleSubmit} className="p-8">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
 
           {/* Header */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0 bg-white">
             <h2 className="text-[24px] font-bold text-[#111216]">
               {form._id ? "Edit Contact" : "Create New Contact"}
             </h2>
@@ -547,7 +548,8 @@ const ContactForm = ({
             </button>
           </div>
 
-          <div className="space-y-6">
+          <div className="flex-1 overflow-y-auto p-8">
+            <div className="space-y-6">
 
             {/* Profile Picture */}
             <div>
@@ -725,9 +727,10 @@ const ContactForm = ({
               {success}
             </div>
           )}
+          </div>
 
           {/* Action buttons */}
-          <div className="mt-12 pt-6 border-t border-[#F2F2F7] flex gap-4">
+          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
@@ -745,7 +748,8 @@ const ContactForm = ({
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 

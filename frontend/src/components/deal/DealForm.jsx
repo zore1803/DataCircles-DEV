@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import API from "../../services/api";
 import SearchableDropdown from "../contact/SearchableDropdown"; // Adjust path if needed
 import { FolderOpen, ChevronDown } from "lucide-react";
@@ -305,7 +306,7 @@ const DealForm = ({
     return a.localeCompare(b);
   });
 
-  return (
+  return createPortal(
     <>
       {/* Unsaved Changes Dialog */}
       {showConfirmDialog && (
@@ -326,8 +327,8 @@ const DealForm = ({
       <div className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300" style={{ opacity: isOpen ? 1 : 0 }} onClick={handleClose} />
 
       {/* Sliding Side Panel */}
- <div className={`fixed inset-y-0 right-0 z-[10001] dc-panel-w bg-white shadow-2xl transform transition-transform duration-300 flex flex-col font-inter ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
-        <form onSubmit={handleSubmit} className="flex flex-col h-full">
+ <div className={`fixed dc-panel-card z-[10001] dc-panel-w bg-white shadow-2xl transform transition-transform duration-300 flex flex-col overflow-hidden font-inter ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}>
+        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
           
           {/* Header */}
           <div className="flex justify-between items-center p-6 sm:p-8 border-b border-gray-100">
@@ -454,7 +455,8 @@ const DealForm = ({
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 

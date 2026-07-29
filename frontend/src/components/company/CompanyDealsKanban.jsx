@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import BulkActionBar from "../common/BulkActionBar";
 import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -75,20 +76,6 @@ const getAmountRangeLabel = (amount) => {
   return AMOUNT_RANGES.find((r) => r.test(num))?.label || "";
 };
 
-const daysAgo = (date) =>
-  Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
-
-const DATE_RANGES = [
-  { label: "Today", test: (d) => daysAgo(d) < 1 },
-  { label: "This Week", test: (d) => daysAgo(d) < 7 },
-  { label: "This Month", test: (d) => daysAgo(d) < 30 },
-  { label: "Older", test: (d) => daysAgo(d) >= 30 },
-];
-
-const getDateRangeLabel = (date) => {
-  if (!date) return "";
-  return DATE_RANGES.find((r) => r.test(date))?.label || "";
-};
 
 const DEAL_FILTER_COLUMNS = (statuses) => [
   { key: "stage", label: "Stage", options: statuses },

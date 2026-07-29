@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import API from "../../services/api";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import QuickCompanyForm from "../company/QuickCompanyForm";
@@ -335,7 +336,7 @@ const TaskForm = ({
 
   if (!shouldRender) return null;
 
-  return (
+  return createPortal(
     <>
       {showQuickCompanyForm && (
         <QuickCompanyForm
@@ -414,13 +415,13 @@ const TaskForm = ({
       />
 
       <div
- className={`fixed inset-y-0 right-0 z-[10000] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${
-          isOpen ? "translate-x-0" : "translate-x-full"
+        className={`fixed dc-panel-card z-[10001] dc-panel-w bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out font-inter ${
+          isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
       >
-        <form onSubmit={handleSubmitWithValidation} className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">
+        <form onSubmit={handleSubmitWithValidation} className="flex flex-col h-full overflow-hidden">
+          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0 bg-white">
+            <h2 className="text-[24px] font-bold text-[#111216]">
               {form._id ? "Edit Task" : "Create New Task"}
             </h2>
             <button
@@ -428,11 +429,11 @@ const TaskForm = ({
               onClick={handleClose}
               className="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
             >
-              ✕
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
 
-          <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto p-8 space-y-6">
             {/* Task Title */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -649,25 +650,26 @@ const TaskForm = ({
             </div>
           </div>
 
-          <div className="mt-6 flex justify-end gap-3">
+          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
-              className="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors shadow-sm cursor-pointer"
+              className="flex-1 border border-[#E0E0E1] text-[#111216] h-12 rounded-xl text-[14px] font-bold hover:bg-gray-50 transition-colors font-inter cursor-pointer"
             >
               Cancel
             </button>
             <button
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm cursor-pointer"
+              className="flex-1 bg-[#0C4FCD] text-white h-12 rounded-xl text-[14px] font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter cursor-pointer"
               type="submit"
               disabled={loading}
             >
-              {loading ? "Saving..." : form._id ? "Update Task" : "Create Task"}
+              {loading ? "Saving..." : form._id ? "Update Task" : "Create New Task"}
             </button>
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 

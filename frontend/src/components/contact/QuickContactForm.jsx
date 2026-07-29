@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import API from "../../services/api";
 import SearchableDropdown from "./SearchableDropdown";
 import CustomDropdown from "../common/CustomDropdown";
@@ -372,7 +373,7 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
 
   if (!shouldRender) return null;
 
-  return (
+  return createPortal(
     <>
       {showConfirmDialog && (
         <div className="fixed inset-0 bg-black/50 z-[10004] flex items-center justify-center">
@@ -430,7 +431,7 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
         className={`
           fixed dc-panel-card z-[10002] 
           w-full sm:w-[500px] md:w-[600px]
-          max-w-full bg-white shadow-2xl flex flex-col
+          max-w-full bg-white shadow-2xl flex flex-col overflow-hidden
           transform transition-transform duration-300 ease-in-out font-inter
           ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
@@ -614,7 +615,8 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 

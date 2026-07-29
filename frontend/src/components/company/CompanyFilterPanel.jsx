@@ -34,18 +34,32 @@ export default function CompanyFilterPanel({
   const valuesByColumn = useMemo(() => {
     const map = {};
     columns.forEach((col) => {
-      // Columns with an explicit `options` list (e.g. Stage, Amount ranges)
-      // always show the full fixed set, regardless of what's in the current data.
-      if (col.options) {
-        map[col.key] = col.options;
-        return;
-      }
-      const set = new Set();
+      // Distinct values actually present in the data for this column.
+      const fromData = new Set();
       data.forEach((item) => {
         const v = getFieldValue(item, col.key);
-        if (v !== undefined && v !== null && v !== "") set.add(String(v));
+        if (v !== undefined && v !== null && v !== "") fromData.add(String(v));
       });
-      map[col.key] = Array.from(set).sort();
+
+      if (!col.options) {
+        map[col.key] = Array.from(fromData).sort();
+        return;
+      }
+
+      // A column's `options` list (Stage, Amount ranges, Status, ...) used to
+      // REPLACE the data-derived values. Anything stored that wasn't in the
+      // hardcoded list was then both invisible and unselectable — e.g. invoices
+      // with status "Pending"/"Overdue" could never be filtered. So merge
+      // instead: keep the declared options in their given order (they carry
+      // intentional ordering, like amount/date ranges, and should stay visible
+      // even when the current page contains none of them), then append any real
+      // value the data has that the list didn't anticipate.
+      const declared = col.options.map(String);
+      const declaredSet = new Set(declared);
+      const extras = Array.from(fromData)
+        .filter((v) => !declaredSet.has(v))
+        .sort();
+      map[col.key] = [...declared, ...extras];
     });
     return map;
   }, [columns, data, getFieldValue]);
@@ -86,7 +100,7 @@ export default function CompanyFilterPanel({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-[26px] dc-panel-w max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 flex flex-col animate-in slide-in-from-right duration-300"
+        className="bg-white rounded-[26px] w-[min(90vw,560px)] min-w-[420px] max-w-[560px] h-[90vh] overflow-hidden shadow-2xl border border-gray-100 flex flex-col animate-in slide-in-from-right duration-300"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 pt-5 pb-6 bg-gray-50/50 flex-shrink-0">

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
 import {
@@ -35,17 +36,6 @@ import useFillToBottom from "../../hooks/useFillToBottom";
 
 const MEETING_TYPE_LABELS = { "in-person": "In-person", "video-call": "Video Call", "phone-call": "Phone Call" };
 const MEETING_STATUS_LABELS = { scheduled: "Scheduled", completed: "Completed", cancelled: "Cancelled", "no-show": "No-show" };
-const daysAgo = (date) => Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
-const DATE_RANGES = [
-  { label: "Today", test: (d) => daysAgo(d) < 1 },
-  { label: "This Week", test: (d) => daysAgo(d) < 7 },
-  { label: "This Month", test: (d) => daysAgo(d) < 30 },
-  { label: "Older", test: (d) => daysAgo(d) >= 30 },
-];
-const getDateRangeLabel = (date) => {
-  if (!date) return "";
-  return DATE_RANGES.find((r) => r.test(date))?.label || "";
-};
 const MEETING_FILTER_COLUMNS = [
   { key: "type", label: "Type", options: Object.values(MEETING_TYPE_LABELS) },
   { key: "status", label: "Status", options: Object.values(MEETING_STATUS_LABELS) },
@@ -768,16 +758,10 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           <table className="w-full border-separate border-spacing-0 text-left" style={{ tableLayout: "fixed", minWidth: totalTableWidth }}>
             <thead className="sticky top-0 z-30 bg-[#F5F7FA] border-b border-[#E1E4EA]">
               <tr>
-                <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
-                  <input
-                    type="checkbox"
-                    checked={selectedItems.length > 0 && selectedItems.length === paginatedMeetings.length}
-                    onChange={(e) => e.target.checked ? selectAll(paginatedMeetings) : clearSelection()}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                  />
-                </th>
+                {/* Spacer for the row-select checkbox column. No select-all here —
+                    the bulk-action strip owns Select All / Deselect All. */}
+                <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]" />
                 {orderedColumns.map((col, colIdx) => {
-                  const isLastCol = colIdx === orderedColumns.length - 1;
                   const isDragging = draggedColKey === col.id;
                   const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
                   return (
@@ -814,12 +798,20 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               setColumnMenuPos(null);
                               return;
                             }
+                            // rect is VISUAL px; the menu is portaled into document.body, which paints
+                            // inside the dynamic <html> zoom, so rect-derived values must be divided by
+                            // that zoom or the browser applies it twice. The resulting drift is
+                            // PROPORTIONAL to the button's x position (pos x (zoom-1)), which is why it
+                            // was invisible on the first column and obvious on the last — and why the
+                            // old fixed `-80` nudge for the last column could never be right everywhere.
+                            // MENU_W and the +4/8 gaps are already in portal space, so they are NOT divided.
+                            const zMenu = getAncestorZoom(document.body);
+                            const MENU_W = 190;
                             const rect = e.currentTarget.getBoundingClientRect();
-                            let calculatedLeft = rect.right - 190;
-                            if (isLastCol) {
-                              calculatedLeft -= 80;
-                            }
-                            setColumnMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
+                            let calculatedLeft = rect.right / zMenu - MENU_W;
+                            calculatedLeft = Math.min(calculatedLeft, window.innerWidth / zMenu - MENU_W - 8);
+                            calculatedLeft = Math.max(calculatedLeft, 8);
+                            setColumnMenuPos({ top: rect.bottom / zMenu + 4, left: calculatedLeft });
                             setOpenColumnMenuKey(col.id);
                           }}
                           className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"

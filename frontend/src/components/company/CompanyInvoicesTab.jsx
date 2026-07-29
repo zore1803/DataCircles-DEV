@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
+import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
 import { Link } from "react-router-dom";
@@ -93,7 +94,13 @@ const OverdueInvoicesIcon = ({ size = 20, ...props }) => (
   </svg>
 );
 
-const INVOICE_STATUS_OPTIONS = ["Draft", "Sent", "Paid", "Accepted", "Rejected", "Delivered", "Void"];
+// "Pending" and "Overdue" were missing here even though both are rendered by
+// the table — "Overdue" has its own pill style and "Pending" is what a blank
+// status displays as — so neither could ever be selected in the filter panel.
+// The panel now merges these with the values actually present in the data
+// (see CompanyFilterPanel), so this list is a display ORDER hint plus a
+// guarantee that the common statuses are offered even when none are loaded.
+const INVOICE_STATUS_OPTIONS = ["Draft", "Pending", "Sent", "Paid", "Overdue", "Accepted", "Rejected", "Delivered", "Void"];
 
 const AMOUNT_RANGES = [
   { label: "Under ₹10,000", test: (v) => v < 10000 },
@@ -106,17 +113,6 @@ const getAmountRangeLabel = (amount) => {
   return AMOUNT_RANGES.find((r) => r.test(num))?.label || "";
 };
 
-const daysAgo = (date) => Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
-const DATE_RANGES = [
-  { label: "Today", test: (d) => daysAgo(d) < 1 },
-  { label: "This Week", test: (d) => daysAgo(d) < 7 },
-  { label: "This Month", test: (d) => daysAgo(d) < 30 },
-  { label: "Older", test: (d) => daysAgo(d) >= 30 },
-];
-const getDateRangeLabel = (date) => {
-  if (!date) return "";
-  return DATE_RANGES.find((r) => r.test(date))?.label || "";
-};
 
 const INVOICE_FILTER_COLUMNS = [
   { key: "status", label: "Status", options: INVOICE_STATUS_OPTIONS },
@@ -142,7 +138,11 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
       case "amount":
         return getAmountRangeLabel(invoice.amount);
       case "status":
-        return invoice.status || "Draft";
+        // Must match what the status cell renders (`invoice.status || "Pending"`).
+        // This previously fell back to "Draft", so an invoice with no status
+        // DISPLAYED as "Pending" but FILTERED as "Draft" — selecting "Pending"
+        // returned nothing, and selecting "Draft" returned rows labelled Pending.
+        return invoice.status || "Pending";
       default:
         return invoice[key];
     }
@@ -672,14 +672,9 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
         >
           <thead className="sticky top-0 z-30 bg-[#F5F7FA] border-b border-[#E1E4EA]">
             <tr>
-              <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
-                <input
-                  type="checkbox"
-                  checked={selectedItems.length > 0 && selectedItems.length === paginatedInvoices.length}
-                  onChange={(e) => e.target.checked ? selectAll(paginatedInvoices) : clearSelection()}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                />
-              </th>
+              {/* Spacer for the row-select checkbox column. No select-all here —
+                  the bulk-action strip owns Select All / Deselect All. */}
+              <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]" />
               {orderedColumns.map((col, idx) => {
                 const isLast = idx === orderedColumns.length - 1;
                 const isDragging = draggedColKey === col.id;
@@ -707,12 +702,20 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                             setColumnMenuPos(null);
                             return;
                           }
+                          // rect is VISUAL px; the menu is portaled into document.body, which paints
+                          // inside the dynamic <html> zoom, so rect-derived values must be divided by
+                          // that zoom or the browser applies it twice. The resulting drift is
+                          // PROPORTIONAL to the button's x position (pos x (zoom-1)), which is why it
+                          // was invisible on the first column and obvious on the last — and why the
+                          // old fixed `-80` nudge for the last column could never be right everywhere.
+                          // MENU_W and the +4/8 gaps are already in portal space, so they are NOT divided.
+                          const zMenu = getAncestorZoom(document.body);
+                          const MENU_W = 190;
                           const rect = e.currentTarget.getBoundingClientRect();
-                          let calculatedLeft = rect.right - 190;
-                          if (isLast) {
-                            calculatedLeft -= 80;
-                          }
-                          setColumnMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
+                          let calculatedLeft = rect.right / zMenu - MENU_W;
+                          calculatedLeft = Math.min(calculatedLeft, window.innerWidth / zMenu - MENU_W - 8);
+                          calculatedLeft = Math.max(calculatedLeft, 8);
+                          setColumnMenuPos({ top: rect.bottom / zMenu + 4, left: calculatedLeft });
                           setOpenColumnMenuKey(col.id);
                         }}
                         className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -916,7 +919,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                                 ₹{(invoice.amount || 0).toLocaleString("en-IN")}
                               </span>
                               <button
-                                className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
                                 title="More options"
                               >
                                 <MoreVertical className="w-4 h-4" />
