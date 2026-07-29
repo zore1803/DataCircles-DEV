@@ -616,12 +616,20 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                             setColumnMenuPos(null);
                             return;
                           }
+                          // rect is VISUAL px; the menu is portaled into document.body, which paints
+                          // inside the dynamic <html> zoom, so rect-derived values must be divided by
+                          // that zoom or the browser applies it twice. The resulting drift is
+                          // PROPORTIONAL to the button's x position (pos x (zoom-1)), which is why it
+                          // was invisible on the first column and obvious on the last — and why the
+                          // old fixed `-80` nudge for the last column could never be right everywhere.
+                          // MENU_W and the +4/8 gaps are already in portal space, so they are NOT divided.
+                          const zMenu = getAncestorZoom(document.body);
+                          const MENU_W = 190;
                           const rect = e.currentTarget.getBoundingClientRect();
-                          let calculatedLeft = rect.right - 190;
-                          if (isLast) {
-                            calculatedLeft -= 80; // Push inward for last column to prevent shadow bleeding outside table
-                          }
-                          setColumnMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
+                          let calculatedLeft = rect.right / zMenu - MENU_W;
+                          calculatedLeft = Math.min(calculatedLeft, window.innerWidth / zMenu - MENU_W - 8);
+                          calculatedLeft = Math.max(calculatedLeft, 8);
+                          setColumnMenuPos({ top: rect.bottom / zMenu + 4, left: calculatedLeft });
                           setOpenColumnMenuKey(col.id);
                         }}
                         className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -797,7 +805,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                               {contact.lifecycleStage || contact.status || "-"}
                             </span>
                             <button
-                              className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                              className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
                               title="More options"
                             >
                               <MoreVertical className="w-4 h-4" />

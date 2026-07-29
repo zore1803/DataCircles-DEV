@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
 import {
   Plus,
@@ -1007,7 +1008,7 @@ const InvoiceForm = ({
     label: `${deal.title} — ${deal.company?.name || "No Company"}`,
   }));
 
-  return (
+  return createPortal(
     <>
       {toastMessage && (
         <div className="fixed top-4 right-4 z-[10002] bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg animate-fade-in-out">
@@ -1071,7 +1072,7 @@ const InvoiceForm = ({
       />
       <div
         ref={formRef}
-        className={`fixed dc-panel-card z-[10000] w-full md:w-[600px] bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${
+        className={`fixed dc-panel-card z-[10000] w-full md:w-[600px] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out ${
           isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
       >
@@ -1721,7 +1722,8 @@ const InvoiceForm = ({
           />
         )}
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 

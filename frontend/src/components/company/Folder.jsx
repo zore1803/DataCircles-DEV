@@ -1668,8 +1668,8 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
               borderRadius: 8,
               padding: 0,
               display: "grid",
-              gridTemplateColumns: "repeat(5, 1fr)",
-              gap: "1.2px",
+              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+              gap: "16px",
               alignContent: "flex-start",
               overflowY: "auto",
               ...fillStyle,
@@ -1683,12 +1683,12 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                 </div>
               ))
             ) : paginatedFolders.map((folder) => (
-              <div
-                key={folder._id}
-                onClick={() => setOpenFolderId(folder._id)}
-                className="flex flex-col justify-center items-center cursor-pointer hover:bg-gray-50 transition-colors"
-                style={{ boxSizing: "border-box", width: "100%", height: 150, borderRadius: 8, gap: 2 }}
-              >
+              <div key={folder._id} className="flex justify-center items-center w-full">
+                <div
+                  onClick={() => setOpenFolderId(folder._id)}
+                  className="flex flex-col justify-center items-center cursor-pointer hover:bg-gray-50 transition-colors"
+                  style={{ boxSizing: "border-box", width: "100%", maxWidth: 220, height: 170, borderRadius: 12, padding: "12px 0", gap: 2 }}
+                >
                 <GridFolderIcon size={100} />
                 <div
                   className="flex flex-col justify-center items-center"
@@ -1735,6 +1735,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                       {folder.files?.length || 0} {folder.files?.length === 1 ? "File" : "Files"}
                     </span>
                   </div>
+                </div>
                 </div>
               </div>
             ))}

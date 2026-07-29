@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import API from "../../services/api";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import QuickCompanyForm from "../company/QuickCompanyForm";
@@ -464,7 +465,7 @@ const DealsForm = ({
     }
   };
 
-  return (
+  return createPortal(
     <>
       {/* QuickCompanyForm Modal */}
       {showQuickCompanyForm && (
@@ -532,11 +533,11 @@ const DealsForm = ({
 
       {/* Modal Container */}
       <div
- className={`fixed top-0 right-0 h-screen z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-full"
+        className={`fixed dc-panel-card z-[10001] dc-panel-w bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
           }`}
       >
-        <form onSubmit={handleSubmit} className="p-8">
-          <div className="flex justify-between items-center mb-8">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
+          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0 bg-white">
             <h2 className="text-[24px] font-bold text-[#111216]">
               {form._id ? "Edit Deal" : "Create New Deal"}
             </h2>
@@ -550,8 +551,9 @@ const DealsForm = ({
               </svg>
             </button>
           </div>
-
-          <div className="space-y-6">
+          
+          <div className="flex-1 overflow-y-auto p-8 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
             {/* Title */}
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
@@ -764,9 +766,10 @@ const DealsForm = ({
               {success}
             </div>
           )}
+          </div>
 
           {/* Action Buttons */}
-          <div className="mt-12 pt-6 border-t border-[#F2F2F7] flex gap-4">
+          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
@@ -784,7 +787,8 @@ const DealsForm = ({
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 

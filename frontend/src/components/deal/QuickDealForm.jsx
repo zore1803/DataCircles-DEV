@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import API, { configureAxios } from "../../services/api";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import QuickCompanyForm from "../company/QuickCompanyForm";
@@ -378,7 +379,7 @@ const QuickDealForm = ({
 
   if (!shouldRender) return null;
 
-  return (
+  return createPortal(
     <>
       {showConfirmDialog && (
         <div className="fixed inset-0 bg-black/50 z-[10004] flex items-center justify-center">
@@ -438,11 +439,11 @@ const QuickDealForm = ({
         onClick={handleClose}
       />
       <div
- className={`fixed dc-panel-card z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
+        className={`fixed dc-panel-card z-[10001] dc-panel-w bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
           }`}
       >
-        <form onSubmit={handleSubmit} className="p-8">
-          <div className="flex justify-between items-center mb-8">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
+          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0 bg-white">
             <h2 className="text-[24px] font-bold text-[#111216]">
               Create New Deal
             </h2>
@@ -455,7 +456,8 @@ const QuickDealForm = ({
               <X className="w-6 h-6" />
             </button>
           </div>
-          <div className="space-y-6">
+          <div className="flex-1 overflow-y-auto p-8">
+            <div className="space-y-6">
             {/* Title - Now with validation */}
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
@@ -604,8 +606,9 @@ const QuickDealForm = ({
                 </div>
               </div>
             )}
+            </div>
           </div>
-          <div className="mt-12 pt-6 border-t border-[#F2F2F7] flex gap-4">
+          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
@@ -623,7 +626,8 @@ const QuickDealForm = ({
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 
