@@ -1537,8 +1537,8 @@ const Header = () => {
       </header>
 
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-[9992] bg-[#FAFAFA] h-[54px] flex items-center">
-        <div className="w-full max-w-[440px] mx-auto flex items-center justify-between px-4 py-2 gap-3 h-full border-b border-[#ECECEC]">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-[9992] bg-[#FAFAFA] h-[54px] flex items-center border-b border-[#ECECEC]">
+        <div className="w-full max-w-[440px] mx-auto flex items-center justify-between px-4 py-2 gap-3 h-full">
           {/* Logo — opens the sidebar on mobile */}
           <img
             src={dataCirclesLogo}
