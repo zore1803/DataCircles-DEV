@@ -539,7 +539,7 @@ const CompanyCalendar = ({ companyId }) => {
             onBlur={() => {
               if (!searchTerm) setIsSearchExpanded(false);
             }}
-            className={`h-8 lg:h-9 pl-8 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300 transition-all duration-200 lg:w-full ${isSearchExpanded ? "w-full opacity-100" : "w-8 opacity-0 lg:opacity-100 cursor-pointer"}`}
+            className={`h-8 lg:h-9 pl-8 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300 transition-all duration-200 lg:w-full ${isSearchExpanded ? "w-full" : "w-8 cursor-pointer"}`}
           />
         </div>
 
