@@ -32,7 +32,9 @@ export function useTopLoadingSignal(isLoading) {
  * starts and completes the moment the last one finishes.
  */
 export function TopLoadingBarProvider({ children }) {
-  const location = useLocation();
+  // Kept mounted so components below can read the route (not used to drive
+  // the bar directly — see note above the removed reset-effect below).
+  useLocation();
   const [width, setWidth] = useState(0);
   const [visible, setVisible] = useState(false);
 
@@ -65,16 +67,16 @@ export function TopLoadingBarProvider({ children }) {
     timersRef.current.push(setTimeout(() => setWidth(0), 500));
   }, []);
 
-  // A route change means whatever the previous page was tracking is now
-  // stale — reset so a new page starts from a clean bar.
-  useEffect(() => {
-    clearTimers();
-    activeIdsRef.current.clear();
-    setVisible(false);
-    setWidth(0);
-    return clearTimers;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, location.search]);
+  // NOTE: there used to be a location-keyed effect here that cleared
+  // activeIdsRef/hid the bar on every navigation, meant to wipe stale state
+  // from the page being left. It was removed: effects fire child-before-parent
+  // on the same commit, so the *new* page's useTopLoadingSignal(start) call
+  // (a child effect) always ran before this parent effect — which then
+  // immediately deleted that id from activeIdsRef, silently breaking the
+  // matching done() call later (it no-ops on an id it can't find). Page
+  // transitions are already handled correctly by ordinary mount/unmount:
+  // the old page's consumer unmounts and its cleanup calls done(oldId); the
+  // new page's consumer mounts and calls start(newId).
 
   // Stable across re-renders (start/done are themselves useCallback-stable) —
   // without this, a fresh object identity on every provider render would give

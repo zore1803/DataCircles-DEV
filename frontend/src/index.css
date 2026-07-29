@@ -53,6 +53,24 @@
   }
 }
 
+/* Mobile-only: clamp everything to the screen width so cards/charts/tables
+   that assume desktop space (fixed widths, wide flex rows, etc.) don't push
+   the page wider than the viewport. Scoped to <1024px so desktop (lg:) is
+   untouched. */
+@media (max-width: 1023px) {
+  html,
+  body,
+  #root {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  main {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+}
+
 ::-webkit-scrollbar {
     display: none;
 }

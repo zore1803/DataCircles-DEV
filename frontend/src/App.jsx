@@ -418,7 +418,9 @@ function App() {
           !shouldHideNavigation && <Navbar />}
         <main
           className={`transition-all duration-300 ease-in-out py-6 px-4 sm:px-6 lg:px-8 ${
-            userIsAuthenticated && !shouldHideNavigation ? "pt-20 lg:ml-16" : ""
+            userIsAuthenticated && !shouldHideNavigation
+              ? "pt-[70px] lg:pt-20 lg:ml-16"
+              : ""
           }`}
         >
           <Routes>
