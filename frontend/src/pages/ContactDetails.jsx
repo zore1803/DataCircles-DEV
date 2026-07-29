@@ -237,8 +237,8 @@ const ContactDetailsPage = () => {
   return (
     <div className="min-h-screen bg-[#f8fafc] -mt-6 -mx-4 sm:-mx-6 lg:-mx-8">
       <div
-        className="box-border flex items-center justify-between bg-white border-b border-[#E1E4EA] gap-2"
-        style={{ padding: "12px 16px" }}
+        className="box-border flex items-center justify-between bg-white border-b border-[#E1E4EA] gap-2 fixed top-[54px] lg:top-16"
+        style={{ padding: "12px 16px", left: "var(--sidebar-width, 0px)", right: 0, zIndex: 40 }}
       >
         <div className="flex items-center min-w-0" style={{ gap: "12px" }}>
           <button
@@ -286,6 +286,8 @@ const ContactDetailsPage = () => {
           </button>
         </div>
       </div>
+      {/* Spacer to offset the fixed header strip above */}
+      <div style={{ height: 56 }} />
 
       <div
         className="box-border flex flex-row items-start bg-white w-full"
