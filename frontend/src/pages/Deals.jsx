@@ -806,22 +806,11 @@ function Deals() {
   };
 
 
-  const handleRowTouchStart = (dealId) => {
-    const timer = setTimeout(() => {
-      setSelectionMode(true);
-      if (!selectedRows.includes(dealId)) {
-        setSelectedRows([...selectedRows, dealId]);
-      }
-    }, 500);
-    setLongPressTimer(timer);
-  };
+  // Long-press-to-select is disabled on touch devices — mobile rows should
+  // only enter selection via the checkbox itself, never by holding the row.
+  const handleRowTouchStart = () => {};
 
-  const handleRowTouchEnd = () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
-  };
+  const handleRowTouchEnd = () => {};
 
   // Bulk delete handler
   // Bulk handlers
@@ -2384,17 +2373,15 @@ function Deals() {
 
       {showStats && (
       <div
-        className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px]"
+        className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px] h-[238px] lg:h-[120px] px-4 lg:px-6 py-4 lg:py-6"
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 39,
-          paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
-          height: "120px",
           boxSizing: "border-box",
         }}
       >
         {/* KPI Strip */}
-        <div className="flex flex-row items-center self-stretch" style={{ gap: "24px", height: "72px" }}>
+        <div className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-center lg:gap-6 self-stretch">
           {[
             { label: "Pipeline Summary", value: `₹${formatNumberToIndian(dealStatistics.totalPipeline)}`, icon: PipelineSummaryIcon, trend: `${Math.abs(dealStatistics.trends.pipeline)}% this week`, trendUp: dealStatistics.trends.pipeline >= 0 },
             { label: "Deals Won", value: dealStatistics.wonCount, icon: WonDealsIcon, trend: `${Math.abs(dealStatistics.trends.won)}% this week`, trendUp: dealStatistics.trends.won >= 0 },
@@ -2403,34 +2390,54 @@ function Deals() {
           ].map(({ label, value, icon: Icon, iconClassName, trend, trendUp }) => (
             <div
               key={label}
-              className="box-border flex flex-col justify-center items-start bg-white relative"
-              style={{ padding: "16px", width: 313.5, height: "72px", border: "1px solid #E1E4EA", borderRadius: "12px", flexGrow: 1 }}
+              className="box-border flex flex-row justify-start items-center relative w-full h-[89px] lg:justify-between lg:items-start lg:min-w-[200px] lg:w-[313.5px] lg:h-[72px] lg:flex-1 lg:shrink lg:basis-0 bg-white"
+              style={{ padding: "16px", border: "1px solid #E1E4EA", borderRadius: "12px" }}
             >
-              <div className="flex flex-row items-end w-full" style={{ gap: "14px", height: "40px" }}>
+              <div className="flex flex-row items-center w-full min-w-0" style={{ gap: "14px" }}>
+                {/* Mobile: plain icon, no badge/border */}
+                <Icon className={`flex lg:hidden flex-shrink-0 ${iconClassName || "w-5 h-5"}`} style={{ color: "#0085FF" }} />
+                {/* Desktop: original bordered icon box */}
                 <div
-                  className="box-border flex items-center justify-center flex-shrink-0"
+                  className="hidden lg:flex box-border items-center justify-center flex-shrink-0"
                   style={{ width: "40px", height: "40px", padding: "8px", gap: "10px", background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: "6px" }}
                 >
                   <Icon className={iconClassName || "w-6 h-6"} style={{ color: "#0085FF" }} />
                 </div>
-                <div className="flex flex-col items-start flex-1 min-w-0" style={{ gap: "4px", height: "40px" }}>
+                <div className="flex flex-col items-start min-w-0 flex-1" style={{ gap: "4px" }}>
                   <span
-                    className="whitespace-nowrap"
-                    style={{ fontFamily: "'Inter Tight', 'Inter', sans-serif", fontWeight: 400, fontSize: "12px", lineHeight: "120%", color: "#525866" }}
+                    className="truncate w-full text-[10px] sm:text-xs"
+                    style={{ fontFamily: "'Inter Tight', 'Inter', sans-serif", fontWeight: 400, lineHeight: "120%", color: "#525866" }}
                   >
                     {label}
                   </span>
                   <span
-                    className="whitespace-nowrap"
-                    style={{ fontFamily: "Inter, sans-serif", fontWeight: 600, fontSize: "18px", lineHeight: "120%", color: "#0E121B" }}
+                    className="truncate w-full text-base sm:text-lg"
+                    style={{ fontFamily: "Inter, sans-serif", fontWeight: 600, lineHeight: "120%", color: "#0E121B" }}
                   >
                     {value}
                   </span>
+                  {/* Trend, inline under the value on mobile */}
+                  {trend && (
+                    <div className="flex lg:hidden flex-row items-center" style={{ gap: 4 }}>
+                      {trendUp ? (
+                        <TrendingUp size={12} className="flex-shrink-0" style={{ color: "#00C950" }} />
+                      ) : (
+                        <TrendingDown size={12} className="flex-shrink-0" style={{ color: "#E82222" }} />
+                      )}
+                      <span
+                        className="truncate min-w-0 text-[9px]"
+                        style={{ fontFamily: "Inter, sans-serif", fontWeight: 400, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
+                      >
+                        {trend}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
+              {/* Trend, absolute bottom-right on desktop */}
               {trend && (
                 <div
-                  className="flex flex-row items-center flex-shrink-0 absolute"
+                  className="hidden lg:flex flex-row items-center flex-shrink-0 absolute"
                   style={{ gap: 4, right: 16, bottom: 16 }}
                 >
                   {trendUp ? (
@@ -2453,8 +2460,11 @@ function Deals() {
       )}
 
       <div
-        className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6 space-y-8"
-        style={{ marginTop: showStats ? (showKanban ? 184 : 168) : (showKanban ? 64 : 48) }}
+        className={`-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6 space-y-8 ${
+          showStats
+            ? showKanban ? "mt-[302px] lg:mt-[184px]" : "mt-[286px] lg:mt-[168px]"
+            : showKanban ? "mt-16" : "mt-12"
+        }`}
       >
         {/* Modals & Overlays */}
         <AdvancedFilterPanel

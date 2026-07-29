@@ -1413,21 +1413,11 @@ function Tasks() {
     if (longPressTimer) clearTimeout(longPressTimer);
   };
 
-  const handleTouchStart = (id) => {
-    const timer = setTimeout(() => {
-      setSelectionMode(true);
-      if (activeTab === "tasks") {
-        handleSelectTask(id);
-      } else {
-        handleSelectMeeting(id);
-      }
-    }, 500);
-    setLongPressTimer(timer);
-  };
+  // Long-press-to-select is disabled on touch devices — mobile rows should
+  // only enter selection via the checkbox itself, never by holding the row.
+  const handleTouchStart = () => {};
 
-  const handleTouchEnd = () => {
-    if (longPressTimer) clearTimeout(longPressTimer);
-  };
+  const handleTouchEnd = () => {};
 
   const getMeetingEntityName = (meeting) => {
     if (meeting.contact) {
