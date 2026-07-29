@@ -2086,18 +2086,18 @@ function Deals() {
         }}
       >
         {showBulkStrip ? (
-          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-6 w-full h-full`}>
-            <div className="flex flex-wrap items-center gap-3">
+          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
+            <div className="flex flex-nowrap lg:flex-wrap items-center gap-3 flex-shrink-0">
               <button
                 onClick={() => setShowExportModal(true)}
-                className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <Download className="w-4 h-4" />
                 Export
               </button>
               <button
                 onClick={() => setShowBulkActions(true)}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <Edit2 className="w-4 h-4" />
                 Bulk Update
@@ -2105,7 +2105,7 @@ function Deals() {
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={loading}
-                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
               >
                 <Trash2 className="w-4 h-4" />
                 Delete
@@ -2115,27 +2115,27 @@ function Deals() {
                   setSelectionMode(false);
                   setSelectedRows([]);
                 }}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Cancel
               </button>
             </div>
-            <div className="flex items-center gap-3">
-              <CheckSquare className="w-5 h-5 text-blue-600" />
-              <span className="text-blue-800 font-semibold font-inter">
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
                 {selectedRows.length} deal{selectedRows.length !== 1 ? "s" : ""} selected
               </span>
               <button
                 onClick={handleSelectAllAcrossPages}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <CheckSquare className="w-4 h-4" />
                 Select All
               </button>
               <button
                 onClick={handleDeselectAllExtra}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Deselect All
@@ -2649,6 +2649,24 @@ function Deals() {
                 className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center justify-between px-4 sm:px-6"
                 style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
               >
+                <div className="flex-1 flex justify-between sm:hidden">
+                  <button
+                    onClick={() => setDealsCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={dealsCurrentPageClamped === 1}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setDealsCurrentPage((p) => Math.min(dealsTotalPages, p + 1))}
+                    disabled={dealsCurrentPageClamped === dealsTotalPages}
+                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+
+                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                 <div className="flex items-center space-x-2">
                   <p className="text-sm text-gray-700 font-inter">
                     Showing{" "}
@@ -2754,6 +2772,7 @@ function Deals() {
                   >
                     <ChevronRight className="h-4 w-4" />
                   </button>
+                </div>
                 </div>
               </div>
             )}
