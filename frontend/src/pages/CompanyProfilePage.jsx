@@ -984,16 +984,19 @@ const CompanyProfilePage = () => {
               : statTiles.map((tile) => (
                 <div
                   key={tile.label}
-                  className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
+                  className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
                 >
-                  <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                    <tile.icon width={20} height={20} />
+                  </div>
+                  <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
                     <tile.icon width={22} height={21} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[11px] text-gray-500 truncate">
+                    <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">
                       {tile.label}
                     </p>
-                    <p className="text-sm font-semibold text-gray-900 truncate">
+                    <p className="truncate w-full text-xs sm:text-sm font-semibold text-gray-900">
                       {tile.value}
                     </p>
                   </div>
@@ -1084,17 +1087,20 @@ const CompanyProfilePage = () => {
                       : financialTiles.map((tile) => (
                         <div
                           key={tile.label}
-                          className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl"
+                          className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl min-w-0"
                         >
-                          <div className="w-10 h-10 bg-white text-gray-500 rounded-lg flex items-center justify-center flex-shrink-0 border border-gray-200">
+                          <div className="flex lg:hidden flex-shrink-0 text-gray-500">
+                            <tile.icon width={20} height={20} />
+                          </div>
+                          <div className="hidden lg:flex w-10 h-10 bg-white text-gray-500 rounded-lg items-center justify-center flex-shrink-0 border border-gray-200">
                             <tile.icon width={20} height={20} />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[11px] text-gray-500 truncate">
+                            <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">
                               {tile.label}
                             </p>
                             <p
-                              className={`text-sm font-semibold truncate ${tile.valueClassName || "text-gray-900"}`}
+                              className={`truncate w-full text-xs sm:text-sm font-semibold ${tile.valueClassName || "text-gray-900"}`}
                             >
                               {tile.value}
                             </p>
