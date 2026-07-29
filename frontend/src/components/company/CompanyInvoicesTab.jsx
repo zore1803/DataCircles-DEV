@@ -27,6 +27,7 @@ import {
   Pin,
   PinOff,
   MoreVertical,
+  Download,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -919,10 +920,14 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                                 ₹{(invoice.amount || 0).toLocaleString("en-IN")}
                               </span>
                               <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  console.log("Download invoice", invoice._id);
+                                }}
                                 className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                                title="More options"
+                                title="Download"
                               >
-                                <MoreVertical className="w-4 h-4" />
+                                <Download className="w-4 h-4" />
                               </button>
                             </div>
                           </td>
