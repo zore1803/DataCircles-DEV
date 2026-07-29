@@ -480,7 +480,7 @@ const CompanyCalendar = ({ companyId }) => {
       <AppToaster />
 
       {/* Header */}
-      <div className="flex items-center gap-1.5 lg:gap-3 mb-4">
+      <div className="relative flex items-center gap-1.5 lg:gap-3 mb-4">
         <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
           <button
             onClick={() => goToPeriod(-1)}
@@ -534,8 +534,12 @@ const CompanyCalendar = ({ companyId }) => {
           </button>
         )}
 
-        {/* Mobile: expanded input, replaces the icon button. Desktop: always shown, always full width. */}
-        <div className={`relative min-w-0 lg:flex lg:flex-1 ${isSearchExpanded ? "flex-1" : "hidden"}`}>
+        {/* Mobile: expanded input overlays leftward, covering the date nav + switcher (matches the
+            Companies-strip search behavior). Desktop: always shown inline, always full width. */}
+        <div
+          className={`relative min-w-0 lg:static lg:flex lg:flex-1 ${isSearchExpanded ? "absolute inset-y-0 left-0 right-11 z-20 flex bg-white" : "hidden"
+            }`}
+        >
           <Search className="absolute left-2.5 lg:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5 lg:w-4 lg:h-4" />
           <input
             ref={searchInputRef}
