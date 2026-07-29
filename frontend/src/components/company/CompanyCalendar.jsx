@@ -497,17 +497,6 @@ const CompanyCalendar = ({ companyId }) => {
           </button>
         </div>
 
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-2.5 lg:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5 lg:w-4 lg:h-4" />
-          <input
-            type="text"
-            placeholder="Search Events"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-8 lg:h-9 pl-8 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
-          />
-        </div>
-
         <div className="relative flex items-center bg-gray-100 rounded-full p-0.5 lg:p-1 flex-shrink-0 overflow-hidden">
           <span
             className="absolute top-0.5 lg:top-1 bottom-0.5 lg:bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
@@ -526,6 +515,17 @@ const CompanyCalendar = ({ companyId }) => {
               {mode}
             </button>
           ))}
+        </div>
+
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-2.5 lg:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5 lg:w-4 lg:h-4" />
+          <input
+            type="text"
+            placeholder="Search Events"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full h-8 lg:h-9 pl-8 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
+          />
         </div>
 
         <button
