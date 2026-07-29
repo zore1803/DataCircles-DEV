@@ -821,18 +821,31 @@ const CompanyProfilePage = () => {
                       {dealsViewMode === "board" ? "List View" : "Kanban View"}
                     </button>
                   )}
+                  {/* Edit: mobile-only entry, folded in here instead of its own button */}
+                  <button
+                    onClick={() => {
+                      handleEdit();
+                      setShowActionsMenu(false);
+                    }}
+                    className="lg:hidden flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                  >
+                    <Edit2 size={14} className="text-gray-400" />
+                    Edit
+                  </button>
                 </div>
               )}
             </div>
 
-            {/* New Entry Dropdown */}
+            {/* New Entry Dropdown — icon-only (+) on mobile */}
             <div className="relative" ref={newEntryRef}>
               <button
                 onClick={() => setShowNewEntryMenu((prev) => !prev)}
-                className="flex items-center gap-1.5 h-8 px-4 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-full transition-colors"
+                title="New Entry"
+                className="flex items-center justify-center gap-1.5 h-8 w-8 lg:w-auto px-0 lg:px-4 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-full transition-colors"
               >
-                New Entry
-                <ChevronDown size={14} />
+                <Plus size={14} className="lg:hidden" />
+                <span className="hidden lg:inline">New Entry</span>
+                <ChevronDown size={14} className="hidden lg:inline" />
               </button>
               {showNewEntryMenu && (
                 <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
@@ -869,7 +882,7 @@ const CompanyProfilePage = () => {
             <button
               title="Edit"
               onClick={handleEdit}
-              className="flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+              className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
             >
               <Edit2 size={13} />
               Edit
