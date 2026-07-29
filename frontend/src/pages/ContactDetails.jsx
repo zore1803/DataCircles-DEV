@@ -237,10 +237,10 @@ const ContactDetailsPage = () => {
   return (
     <div className="min-h-screen bg-[#f8fafc] -mt-6 -mx-4 sm:-mx-6 lg:-mx-8">
       <div
-        className="box-border flex items-center justify-between bg-white border-b border-[#E1E4EA]"
-        style={{ padding: "12px 24px", height: "72px" }}
+        className="box-border flex items-center justify-between bg-white border-b border-[#E1E4EA] gap-2"
+        style={{ padding: "12px 16px" }}
       >
-        <div className="flex items-center" style={{ gap: "12px" }}>
+        <div className="flex items-center min-w-0" style={{ gap: "12px" }}>
           <button
             onClick={() => navigate("/contacts")}
             className="flex items-center justify-center bg-white border border-[#E5E5E5] rounded flex-shrink-0"
@@ -252,32 +252,35 @@ const ContactDetailsPage = () => {
             </svg>
           </button>
           <span
+            className="truncate"
             style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "16px", lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
           >
             {contact.name}
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center justify-center gap-2 bg-white rounded-full flex-shrink-0"
-            style={{ width: "75px", minHeight: "32px", padding: 0, boxSizing: "border-box", border: "1px solid rgba(31, 41, 55, 0.3)" }}
+            title="Edit"
+            className="flex items-center justify-center gap-2 bg-white rounded-full flex-shrink-0 w-8 sm:w-[75px]"
+            style={{ minHeight: "32px", padding: 0, boxSizing: "border-box", border: "1px solid rgba(31, 41, 55, 0.3)" }}
           >
             <svg width="14" height="15" viewBox="0 0 17 18" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
               <path d="M0 17.58V15.08H16.6667V17.58H0ZM3.33333 11.2579H4.36375L11.2804 4.35396L10.7565 3.82208L10.2373 3.31083L3.33333 10.2275V11.2579ZM2.08333 12.5079V9.69542L11.4248 0.366876C11.5455 0.246182 11.6825 0.154862 11.8358 0.0929171C11.989 0.0309727 12.1485 0 12.3142 0C12.48 0 12.6406 0.0309727 12.7958 0.0929171C12.9511 0.154862 13.0934 0.250487 13.2227 0.379793L14.2244 1.39417C14.3537 1.51486 14.4472 1.65313 14.5048 1.80896C14.5624 1.96465 14.5913 2.12563 14.5913 2.29188C14.5913 2.44771 14.562 2.60264 14.5035 2.75667C14.4451 2.91083 14.352 3.05174 14.2244 3.17938L4.89583 12.5079H2.08333ZM11.2804 4.35396L10.7565 3.82208L10.2373 3.31083L11.2804 4.35396Z" fill="#1C1B1F" />
             </svg>
-            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "20px", color: "#1F2937", whiteSpace: "nowrap" }}>
+            <span className="hidden sm:inline" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "20px", color: "#1F2937", whiteSpace: "nowrap" }}>
               Edit
             </span>
           </button>
           <button
             onClick={handleDeleteContact}
-            className="flex items-center justify-center gap-2 rounded-full flex-shrink-0"
-            style={{ width: "139px", minHeight: "32px", padding: 0, boxSizing: "border-box", background: "rgba(232, 34, 34, 0.1)", border: "1px solid rgba(232, 34, 34, 0.3)" }}
+            title="Delete Contact"
+            className="flex items-center justify-center gap-2 rounded-full flex-shrink-0 w-8 sm:w-[139px]"
+            style={{ minHeight: "32px", padding: 0, boxSizing: "border-box", background: "rgba(232, 34, 34, 0.1)", border: "1px solid rgba(232, 34, 34, 0.3)" }}
           >
             <Trash2 className="w-3.5 h-3.5 text-[#E82222] flex-shrink-0" />
-            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "20px", color: "#E82222", whiteSpace: "nowrap" }}>
+            <span className="hidden sm:inline" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "20px", color: "#E82222", whiteSpace: "nowrap" }}>
               Delete Contact
             </span>
           </button>
