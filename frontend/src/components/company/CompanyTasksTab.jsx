@@ -417,18 +417,18 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                   </div>
                   {tile.subtitle && (
                     <span
-                      className="flex items-center flex-shrink-0"
+                      className="flex items-center flex-shrink-0 min-w-0 max-w-full text-[10px] lg:text-xs"
                       style={{
                         gap: 4,
                         color: tile.subtitleColor,
                         fontFamily: "Inter",
                         fontWeight: 400,
-                        fontSize: 12,
                         lineHeight: "120%",
                       }}
                     >
-                      <tile.subtitleIcon size={14} />
-                      {tile.subtitle}
+                      <tile.subtitleIcon size={12} className="flex-shrink-0 lg:hidden" />
+                      <tile.subtitleIcon size={14} className="flex-shrink-0 hidden lg:block" />
+                      <span className="truncate">{tile.subtitle}</span>
                     </span>
                   )}
                 </div>
