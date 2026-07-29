@@ -2271,11 +2271,10 @@ function Dashboard() {
 
       <div className="flex flex-col lg:flex-row" style={{ gap: 16, marginTop: 16, width: "100%" }}>
         <div
-          className="box-border flex flex-col items-start"
+          className="box-border flex flex-col items-start flex-none w-full lg:flex-1 lg:basis-0 lg:w-auto"
           style={{
             padding: 18,
             gap: 16,
-            flex: "1 1 0",
             minWidth: 0,
             height: 390,
             background: "#FFFFFF",
@@ -2285,13 +2284,13 @@ function Dashboard() {
           }}
         >
           <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ gap: 16, width: "100%", height: 88 }}>
-            <div className="flex flex-col items-start flex-1" style={{ gap: 8, height: 76 }}>
+            <div className="flex flex-col items-start flex-1 min-w-0" style={{ gap: 8, height: 76 }}>
               {loading ? (
                 <Skeleton width={110} height={12} />
               ) : (
               <span
-                className="self-stretch"
-                style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
+                className="self-stretch truncate text-[11px] sm:text-sm"
+                style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
               >
                 Total Invoices Issued
               </span>
@@ -2300,8 +2299,8 @@ function Dashboard() {
                 <Skeleton width={140} height={24} />
               ) : (
                 <span
-                  className="self-stretch"
-                  style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 600, fontSize: 24, lineHeight: "120%", color: "#000000" }}
+                  className="self-stretch truncate text-base sm:text-2xl"
+                  style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 600, lineHeight: "120%", color: "#000000" }}
                 >
                   ₹{Math.round(invoiceStats.total).toLocaleString("en-IN")}
                 </span>
@@ -2310,8 +2309,8 @@ function Dashboard() {
                 <Skeleton width={80} height={12} />
               ) : (
                 <span
-                  className="self-stretch"
-                  style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}
+                  className="self-stretch truncate text-[10px] sm:text-xs"
+                  style={{ fontFamily: "Inter", fontWeight: 500, lineHeight: "120%", color: "#6B7280" }}
                 >
                   {totalInvoicesCard.clearedPct}% Cleared
                 </span>
@@ -2320,13 +2319,13 @@ function Dashboard() {
 
             <div className="flex-shrink-0 self-stretch" style={{ width: 1, background: "#1F2937", opacity: 0.1 }} />
 
-            <div className="flex flex-col items-start flex-1" style={{ gap: 8, height: 88 }}>
+            <div className="flex flex-col items-start flex-1 min-w-0" style={{ gap: 8, height: 88 }}>
               {loading ? (
                 <Skeleton width={80} height={12} />
               ) : (
                 <span
-                  className="self-stretch truncate"
-                  style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
+                  className="self-stretch truncate text-[10px] sm:text-xs"
+                  style={{ fontFamily: "Inter", fontWeight: 500, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
                 >
                   {totalInvoicesCard.topClient?.companyName || "No invoices yet"}
                 </span>
@@ -2339,11 +2338,11 @@ function Dashboard() {
                   className="box-border flex flex-col items-start self-stretch flex-shrink-0"
                   style={{ padding: 6, gap: 6, height: 66, background: "#F8FAFC", borderRadius: 6 }}
                 >
-                  <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0" style={{ gap: 8, height: 12 }}>
-                    <span className="truncate" style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
+                  <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0 min-w-0" style={{ gap: 8, height: 12 }}>
+                    <span className="truncate min-w-0" style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
                       {totalInvoicesCard.topClient?.dealTitle || "—"}
                     </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#1F2937" }}>
+                    <span className="flex-shrink-0" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#1F2937" }}>
                       {totalInvoicesCard.topClientPct}%
                     </span>
                   </div>
@@ -2409,11 +2408,11 @@ function Dashboard() {
                   </div>
                 ))}
 
-                <div className="absolute" style={{ width: 374, height: 124, right: 8, top: 29 }}>
-                  <svg width="374" height="124" viewBox="0 0 374 124" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d={totalInvoicesCard.linePath} stroke="#0085FF" strokeWidth="2" fill="none" />
+                <div className="absolute" style={{ left: 0, right: 0, height: 124, top: 29 }}>
+                  <svg width="100%" height="124" viewBox="0 0 374 124" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d={totalInvoicesCard.linePath} stroke="#0085FF" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" />
                     {totalInvoicesCard.points.map((p, idx) => (
-                      <circle key={idx} cx={p.x} cy={p.y} r={2.5} fill="#FFFFFF" stroke="#0085FF" strokeWidth="1" />
+                      <circle key={idx} cx={p.x} cy={p.y} r={2.5} fill="#FFFFFF" stroke="#0085FF" strokeWidth="1" vectorEffect="non-scaling-stroke" />
                     ))}
                   </svg>
                 </div>
@@ -2422,7 +2421,7 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="flex flex-col self-stretch" style={{ gap: 12, flex: "1 1 0", minWidth: 0 }}>
+        <div className="flex flex-col self-stretch flex-none w-full lg:flex-1 lg:basis-0 lg:w-auto" style={{ gap: 12, minWidth: 0 }}>
           <div
             className="box-border flex flex-col items-start self-stretch flex-shrink-0"
             style={{
@@ -2437,27 +2436,27 @@ function Dashboard() {
             }}
           >
             <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ gap: 16, width: "100%", height: 76 }}>
-              <div className="flex flex-col items-start flex-1" style={{ gap: 8, height: 76 }}>
+              <div className="flex flex-col items-start flex-1 min-w-0" style={{ gap: 8, height: 76 }}>
                 {loading ? <Skeleton width={80} height={12} /> : (
                 <span
-                  className="self-stretch"
-                  style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
+                  className="self-stretch truncate text-[11px] sm:text-sm"
+                  style={{ fontFamily: "Inter", fontWeight: 500, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
                 >
                   {selectedQuarter} Earnings
                 </span>
                 )}
                 {loading ? <Skeleton width={130} height={24} /> : (
                 <span
-                  className="self-stretch"
-                  style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 24, lineHeight: "120%", color: "#1F2937" }}
+                  className="self-stretch truncate text-base sm:text-2xl"
+                  style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#1F2937" }}
                 >
                   {Math.round(quarterlyEarnings.total).toLocaleString("en-IN")} INR
                 </span>
                 )}
                 {loading ? <Skeleton width={110} height={12} /> : (
                 <span
-                  className="self-stretch"
-                  style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}
+                  className="self-stretch truncate text-[10px] sm:text-xs"
+                  style={{ fontFamily: "Inter", fontWeight: 500, lineHeight: "120%", color: "#6B7280" }}
                 >
                   {quarterlyEarnings.pctChange >= 0 ? "+" : ""}{quarterlyEarnings.pctChange}% from last quarter
                 </span>
@@ -2479,14 +2478,14 @@ function Dashboard() {
                   ].map((item) => (
                     <div
                       key={item.label}
-                      className="box-border flex flex-col items-start self-stretch flex-shrink-0"
-                      style={{ padding: 8, gap: 6, width: 178.5, height: 30, background: "#F8FAFC", borderRadius: 6 }}
+                      className="box-border flex flex-col items-start self-stretch flex-shrink-0 min-w-0 w-full sm:w-[178.5px]"
+                      style={{ padding: 8, gap: 6, height: 30, background: "#F8FAFC", borderRadius: 6 }}
                     >
-                      <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0" style={{ gap: 8, height: 14 }}>
-                        <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+                      <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0 min-w-0" style={{ gap: 8, height: 14 }}>
+                        <span className="truncate text-[10px] sm:text-xs" style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: "#6B7280" }}>
                           {item.label}
                         </span>
-                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}>
+                        <span className="truncate text-[10px] sm:text-xs" style={{ fontFamily: "Inter", fontWeight: 500, lineHeight: "120%", color: "#1F2937" }}>
                           {item.value}
                         </span>
                       </div>
@@ -2500,13 +2499,13 @@ function Dashboard() {
               <Skeleton width="100%" height={30} shape="rect" className="rounded-md" />
             ) : (
               <div
-                className="box-border flex flex-col items-start self-stretch flex-shrink-0"
+                className="box-border flex flex-col items-start self-stretch flex-shrink-0 h-auto min-h-[30px] sm:h-[30px]"
                 style={{
-                  padding: 8, gap: 6, width: "100%", height: 30, borderRadius: 6,
+                  padding: 8, gap: 6, width: "100%", borderRadius: 6,
                   background: quarterlyEarnings.pctChange >= 0 ? "rgba(0, 133, 255, 0.1)" : "rgba(232, 34, 34, 0.1)",
                 }}
               >
-                <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: quarterlyEarnings.pctChange >= 0 ? "#0085FF" : "#E82222" }}>
+                <span className="text-[10px] sm:text-xs" style={{ fontFamily: "Inter", fontWeight: 500, lineHeight: "120%", color: quarterlyEarnings.pctChange >= 0 ? "#0085FF" : "#E82222" }}>
                   {quarterlyEarnings.pctChange >= 0 ? "Outperforming" : "Underperforming"} last quarter by {Math.abs(quarterlyEarnings.pctChange)}%
                 </span>
               </div>
@@ -2639,11 +2638,10 @@ function Dashboard() {
         </div>
 
         <div
-          className="box-border flex flex-col items-start"
+          className="box-border flex flex-col items-start flex-none w-full lg:flex-1 lg:basis-0 lg:w-auto"
           style={{
             padding: 18,
             gap: 16,
-            flex: "1 1 0",
             minWidth: 0,
             height: 390,
             background: "#FFFFFF",
@@ -2652,10 +2650,11 @@ function Dashboard() {
             borderRadius: 12,
           }}
         >
-          <div className="flex flex-col items-start self-stretch flex-shrink-0" style={{ gap: 8, width: "100%", height: 81 }}>
-            <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0" style={{ gap: 8, height: 22 }}>
+          <div className="flex flex-col items-start self-stretch flex-shrink-0 min-w-0" style={{ gap: 8, width: "100%", height: 81 }}>
+            <div className="flex flex-row justify-between items-center self-stretch flex-shrink-0 min-w-0" style={{ gap: 8, height: 22 }}>
               <span
-                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
+                className="truncate min-w-0 text-[11px] sm:text-sm"
+                style={{ fontFamily: "Inter", fontWeight: 500, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
               >
                 Recent Deals
               </span>
@@ -2664,7 +2663,7 @@ function Dashboard() {
                 className="flex flex-row justify-center items-center flex-shrink-0"
                 style={{ padding: "4px 6px", gap: 10, width: 63, height: 22, background: "rgba(0, 133, 255, 0.1)", borderRadius: 41, marginRight: 12 }}
               >
-                <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#0085FF" }}>
+                <span className="text-[10px] sm:text-xs" style={{ fontFamily: "Inter", fontWeight: 500, lineHeight: "120%", color: "#0085FF" }}>
                   Top Deal
                 </span>
               </div>
@@ -2672,8 +2671,8 @@ function Dashboard() {
 
             {loading ? <Skeleton width={150} height={24} /> : (
             <span
-              className="self-stretch"
-              style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 600, fontSize: 24, lineHeight: "120%", color: "#000000" }}
+              className="self-stretch truncate text-base sm:text-2xl"
+              style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 600, lineHeight: "120%", color: "#000000" }}
             >
               {recentDealsWidget.topDeal
                 ? (recentDealsWidget.topDeal.company?.name || recentDealsWidget.topDeal.title || "—")
@@ -2683,8 +2682,8 @@ function Dashboard() {
 
             {loading ? <Skeleton width={130} height={12} /> : (
             <span
-              className="self-stretch"
-              style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}
+              className="self-stretch truncate text-[10px] sm:text-xs"
+              style={{ fontFamily: "Inter", fontWeight: 500, lineHeight: "120%", color: "#6B7280" }}
             >
               {recentDealsWidget.topDeal
                 ? `INR ${Math.round(recentDealsWidget.topDeal.amount || 0).toLocaleString("en-IN")} deal value`

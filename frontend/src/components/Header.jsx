@@ -1597,28 +1597,28 @@ const Header = () => {
                     className="fixed inset-0 z-[9999] cursor-default"
                     onClick={handleAddMenuClose}
                   />
-                  <div className="absolute right-0 top-10 w-[214px] max-h-[70vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-100 z-[10000] py-4 flex flex-col transition-all duration-300 ease-in-out">
-                    <div className="flex-1 px-4">
-                      <div className="mb-2">
-                        <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">
+                  <div className="absolute right-0 top-10 w-[min(168px,calc(100vw-32px))] max-h-[70vh] overflow-y-auto bg-white rounded-xl shadow-2xl border border-gray-100 z-[10000] py-2.5 flex flex-col transition-all duration-300 ease-in-out">
+                    <div className="flex-1 px-2.5">
+                      <div className="mb-1.5">
+                        <h3 className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1 px-1.5">
                           Add Records
                         </h3>
-                        <div className="space-y-0.5">
+                        <div className="space-y-0">
                           {addRecords.map((item) => {
                             const active = isSelected(item.id);
                             return (
                               <button
                                 key={item.id}
                                 onClick={() => handleAddItem(item.id)}
-                                className={`w-full flex items-center p-2 rounded-xl transition-all group ${active
+                                className={`w-full flex items-center p-1.5 rounded-lg transition-all group ${active
                                   ? "bg-gradient-to-r from-[#D0E0FF] to-white"
                                   : "hover:bg-[#F2F2F7]"
                                   }`}
                               >
-                                <div className="w-8 h-8 flex items-center justify-center mr-2">
-                                  <item.icon className="w-5 h-5 text-black" strokeWidth={1.5} />
+                                <div className="w-6 h-6 flex items-center justify-center mr-1.5">
+                                  <item.icon className="w-4 h-4 text-black" strokeWidth={1.5} />
                                 </div>
-                                <span className="text-base font-bold text-gray-900 transition-all">
+                                <span className="text-xs font-medium text-gray-900 transition-all truncate">
                                   {item.label}
                                 </span>
                               </button>
@@ -1627,28 +1627,28 @@ const Header = () => {
                         </div>
                       </div>
 
-                      <div className="border-t border-gray-50 my-3" />
+                      <div className="border-t border-gray-50 my-1.5" />
 
-                      <div className="mb-2">
-                        <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">
+                      <div className="mb-1.5">
+                        <h3 className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1 px-1.5">
                           Add Activities
                         </h3>
-                        <div className="space-y-0.5">
+                        <div className="space-y-0">
                           {addActivities.map((item) => {
                             const active = isSelected(item.id);
                             return (
                               <button
                                 key={item.id}
                                 onClick={() => handleAddItem(item.id)}
-                                className={`w-full flex items-center p-2 rounded-xl transition-all group ${active
+                                className={`w-full flex items-center p-1.5 rounded-lg transition-all group ${active
                                   ? "bg-gradient-to-r from-[#D0E0FF] to-white"
                                   : "hover:bg-[#F2F2F7]"
                                   }`}
                               >
-                                <div className="w-8 h-8 flex items-center justify-center mr-2">
-                                  <item.icon className="w-5 h-5 text-black" strokeWidth={1.5} />
+                                <div className="w-6 h-6 flex items-center justify-center mr-1.5">
+                                  <item.icon className="w-4 h-4 text-black" strokeWidth={1.5} />
                                 </div>
-                                <span className="text-base font-bold text-gray-900 transition-all">
+                                <span className="text-xs font-medium text-gray-900 transition-all truncate">
                                   {item.label}
                                 </span>
                               </button>
