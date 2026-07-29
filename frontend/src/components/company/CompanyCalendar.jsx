@@ -478,39 +478,39 @@ const CompanyCalendar = ({ companyId }) => {
       <AppToaster />
 
       {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-1.5 lg:gap-3 mb-4">
+        <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
           <button
             onClick={() => goToPeriod(-1)}
-            className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            className="p-1 lg:p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            <ChevronLeft className="w-4 h-4 text-gray-600" />
+            <ChevronLeft className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" />
           </button>
-          <span className="text-sm font-semibold text-gray-900 min-w-[90px] text-center whitespace-nowrap">
+          <span className="text-xs lg:text-sm font-semibold text-gray-900 min-w-[64px] lg:min-w-[90px] text-center whitespace-nowrap">
             {periodLabel}
           </span>
           <button
             onClick={() => goToPeriod(1)}
-            className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            className="p-1 lg:p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            <ChevronRight className="w-4 h-4 text-gray-600" />
+            <ChevronRight className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" />
           </button>
         </div>
 
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-2.5 lg:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5 lg:w-4 lg:h-4" />
           <input
             type="text"
             placeholder="Search Events"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-9 pl-9 pr-3 border border-gray-200 rounded-full text-sm focus:outline-none focus:border-blue-300"
+            className="w-full h-8 lg:h-9 pl-8 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
           />
         </div>
 
-        <div className="relative flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
+        <div className="relative flex items-center bg-gray-100 rounded-full p-0.5 lg:p-1 flex-shrink-0 overflow-hidden">
           <span
-            className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+            className="absolute top-0.5 lg:top-1 bottom-0.5 lg:bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
             style={{ left: viewIndicator.left, width: viewIndicator.width }}
           />
           {["month", "week", "day"].map((mode) => (
@@ -518,7 +518,7 @@ const CompanyCalendar = ({ companyId }) => {
               key={mode}
               ref={(el) => (viewRefs.current[mode] = el)}
               onClick={() => setViewMode(mode)}
-              className={`relative z-10 px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${viewMode === mode
+              className={`relative z-10 px-2 lg:px-3 py-1 lg:py-1.5 rounded-full text-[11px] lg:text-sm font-medium capitalize transition-colors ${viewMode === mode
                 ? "text-blue-600"
                 : "text-gray-500 hover:text-gray-700"
                 }`}
@@ -530,10 +530,10 @@ const CompanyCalendar = ({ companyId }) => {
 
         <button
           onClick={() => handleDayClick(today)}
-          className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 flex-shrink-0"
+          className="w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 flex-shrink-0"
           title="Add Event"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
         </button>
       </div>
 
