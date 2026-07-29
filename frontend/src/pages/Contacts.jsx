@@ -2428,7 +2428,7 @@ function Contacts() {
 
       {/* Title Strip */}
       <div
-        className={`fixed right-0 h-16 flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 border-b top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
+        className={`fixed right-0 h-16 flex items-center gap-2 lg:gap-4 px-4 lg:px-6 border-b top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
       >
         {showBulkStrip ? (
@@ -2501,7 +2501,7 @@ function Contacts() {
           </div>
         ) : (
         <>
-        <nav className="relative flex items-stretch h-11 overflow-x-auto flex-shrink-0">
+        <nav className="hidden lg:flex relative items-stretch h-11 overflow-x-auto flex-shrink-0">
           {[
             { id: "All", label: "All" },
             { id: "Leads", label: "Leads" },
@@ -2530,34 +2530,38 @@ function Contacts() {
           />
         </nav>
 
+        {activeTab !== "Hotlist" && (
+          <div className="relative flex-1 min-w-0 flex items-center justify-end">
+            <div
+              className={`relative h-10 flex items-center border border-[rgba(31,41,55,0.1)] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
+            >
+              <Search
+                strokeWidth={2.5}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+                onClick={() => {
+                  setIsSearchExpanded(true);
+                  searchInputRef.current?.focus();
+                }}
+              />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onFocus={() => setIsSearchExpanded(true)}
+                onBlur={() => {
+                  if (!searchTerm) setIsSearchExpanded(false);
+                }}
+                className={`w-full h-full pl-10 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                placeholder="Search by contact by name, company, or status..."
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 lg:gap-4 flex-shrink-0">
           {activeTab !== "Hotlist" && (
             <>
-              <div
-                className={`relative h-10 flex items-center border border-[rgba(31,41,55,0.1)] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full`}
-              >
-                <Search
-                  strokeWidth={2.5}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
-                  onClick={() => {
-                    setIsSearchExpanded(true);
-                    searchInputRef.current?.focus();
-                  }}
-                />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onFocus={() => setIsSearchExpanded(true)}
-                  onBlur={() => {
-                    if (!searchTerm) setIsSearchExpanded(false);
-                  }}
-                  className={`w-full h-full pl-10 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
-                  placeholder="Search by contact by name, company, or status..."
-                />
-              </div>
-
               <button
                 onClick={() => setShowAdvancedFilters(true)}
                 className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
@@ -2722,10 +2726,11 @@ function Contacts() {
 
           <button
             onClick={toggleForm}
-            className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
+            title={showForm ? "Cancel" : "New Contact"}
+            className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
           >
-            <Plus className="w-4 h-4" />
-            {showForm ? "Cancel" : "New Contact"}
+            <Plus className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden lg:inline">{showForm ? "Cancel" : "New Contact"}</span>
           </button>
 
         </div>
