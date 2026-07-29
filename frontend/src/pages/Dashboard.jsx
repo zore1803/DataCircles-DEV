@@ -130,6 +130,17 @@ function Dashboard() {
 
   const salesRevenueScrollRef = useRef(null);
 
+  // Sales Revenue chart visible window: 5 months at a time on mobile (<lg), 12 on desktop.
+  const [isMobileViewport, setIsMobileViewport] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 1024
+  );
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 1023px)");
+    const handler = (e) => setIsMobileViewport(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+
   const [selectedInvoices, setSelectedInvoices] = useState([]);
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in entrance).
@@ -1094,7 +1105,7 @@ function Dashboard() {
     if (!loading && salesRevenueScrollRef.current) {
       salesRevenueScrollRef.current.scrollLeft = salesRevenueScrollRef.current.scrollWidth;
     }
-  }, [loading, monthlySalesRevenueData]);
+  }, [loading, monthlySalesRevenueData, isMobileViewport]);
 
   // ------------------- Auth Check ---------------------
   useEffect(() => {
@@ -1960,7 +1971,7 @@ function Dashboard() {
   return (
     <div style={{ marginTop: -16 }}>
       <div
-        className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-6 py-3 top-[56px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:px-6 lg:py-0 lg:top-16"
+        className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-6 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:px-6 lg:py-0 lg:top-16"
         style={{
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
@@ -2006,7 +2017,7 @@ function Dashboard() {
         </div>
       </div>
       {/* Spacer to offset the fixed header bar */}
-      <div className="h-[74px] lg:h-16" />
+      <div className="h-[72px] lg:h-16" />
 
       {/* KPI Cards */}
       <div
@@ -2202,7 +2213,12 @@ function Dashboard() {
               className="sales-revenue-chart-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none", cursor: "grab", height: "100%" }}
             >
-              <div style={{ minWidth: "100%", height: "100%" }}>
+              <div
+                style={{
+                  minWidth: `${Math.max(100, (salesRevenueMonthTicks.length / (isMobileViewport ? 5 : 12)) * 100)}%`,
+                  height: "100%",
+                }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={monthlySalesRevenueData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                     <defs>
@@ -2253,7 +2269,7 @@ function Dashboard() {
         )}
       </div>
 
-      <div className="flex flex-row" style={{ gap: 16, marginTop: 16, width: "100%" }}>
+      <div className="flex flex-col lg:flex-row" style={{ gap: 16, marginTop: 16, width: "100%" }}>
         <div
           className="box-border flex flex-col items-start"
           style={{
