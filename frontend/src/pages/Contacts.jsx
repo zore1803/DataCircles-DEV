@@ -2560,7 +2560,7 @@ function Contacts() {
 
               <button
                 onClick={() => setShowAdvancedFilters(true)}
-                className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
+                className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
                 title="Filters"
               >
                 <FilterIcon size={15} />
@@ -2571,7 +2571,7 @@ function Contacts() {
                 )}
               </button>
 
-              <div className="relative flex items-center gap-1.5 bg-[#F1F1F5] rounded-full p-1 flex-shrink-0 overflow-hidden">
+              <div className="hidden lg:flex relative items-center gap-1.5 bg-[#F1F1F5] rounded-full p-1 flex-shrink-0 overflow-hidden">
                 <span
                   className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-[0_0_6px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
                   style={{ left: showKanban ? 42 : 4 }}
@@ -2609,6 +2609,47 @@ function Contacts() {
 
             {isMoreMenuOpen && (
               <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
+                {/* Switcher + Hotlist: mobile-only entries, folded in here instead of their own controls */}
+                {activeTab !== "Hotlist" && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setShowKanban(false);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <List className="w-4 h-4 text-gray-400" />
+                      List View
+                      {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowKanban(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
+                      </svg>
+                      Kanban View
+                      {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => {
+                    handleTabChange(activeTab === "Hotlist" ? "All" : "Hotlist");
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                    <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
+                  </svg>
+                  {activeTab === "Hotlist" ? "Hide Hotlist" : "Hotlist"}
+                </button>
                 <button
                   onClick={() => {
                     setShowVideoTutorial(true);
@@ -2668,7 +2709,7 @@ function Contacts() {
 
           <button
             onClick={() => handleTabChange(activeTab === "Hotlist" ? "All" : "Hotlist")}
-            className={`inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors flex-shrink-0 ${activeTab === "Hotlist"
+            className={`hidden lg:inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors flex-shrink-0 ${activeTab === "Hotlist"
               ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
               : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
               }`}
