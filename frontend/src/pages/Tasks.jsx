@@ -2851,6 +2851,7 @@ function Tasks() {
                         style={{
                           width: header.getSize(),
                           position: isLeftSticky ? "sticky" : "relative",
+                          top: isLeftSticky ? 0 : "auto",
                           left: isLeftSticky ? 0 : "auto",
                           zIndex: isLeftSticky ? 20 : 1,
                           opacity: isDragging ? 0.35 : 1,
@@ -2977,6 +2978,7 @@ function Tasks() {
                         style={{
                           width: header.getSize(),
                           position: isLeftSticky ? "sticky" : "relative",
+                          top: isLeftSticky ? 0 : "auto",
                           left: isLeftSticky ? 0 : "auto",
                           zIndex: isLeftSticky ? 20 : 1,
                           opacity: isDragging ? 0.35 : 1,
