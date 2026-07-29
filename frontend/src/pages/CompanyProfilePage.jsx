@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from "react";
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import API from "../services/api";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
+import useMinDelay from "../hooks/useMinDelay";
 import CompanyDealsKanban from "../components/company/CompanyDealsKanban";
 import CompanyContactsTab from "../components/company/CompanyContactsTab";
 import CompanyInvoicesTab from "../components/company/CompanyInvoicesTab";
@@ -51,7 +53,6 @@ import CompanyForm from "../components/company/CompanyForm";
 import SubsidiaryModal from "../components/company/SubsidiaryModal";
 import MergeCompanyModal from "../components/company/MergeCompanyModal";
 import StatTileSkeleton from "../components/common/StatTileSkeleton";
-import useMinDelay from "../hooks/useMinDelay";
 
 const tabs = [
   "Overview",
@@ -592,6 +593,8 @@ const CompanyProfilePage = () => {
   // their skeletons up long after their own data had arrived.
   const showRecordsSkeleton = useMinDelay(!dataLoaded, 300);
 
+  useTopLoadingSignal(showOverviewSkeleton || showRecordsSkeleton);
+
   const fetchInvoices = useCallback(async () => {
     setInvoicesLoading(true);
     try {
@@ -698,9 +701,9 @@ const CompanyProfilePage = () => {
 
       <div className="mx-auto">
         {/* Header Section */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2 lg:mb-3">
           {/* LEFT: Logo + Name + Address */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {/* Logo using ProfilePicture component */}
             {company ? (
               <ProfilePicture
@@ -716,9 +719,9 @@ const CompanyProfilePage = () => {
             )}
 
             {/* Title + Address */}
-            <div>
+            <div className="min-w-0">
               {company ? (
-                <h1 className="text-base font-semibold text-gray-900">
+                <h1 className="text-base font-semibold text-gray-900 truncate">
                   {company.name}
                 </h1>
               ) : (
@@ -726,7 +729,7 @@ const CompanyProfilePage = () => {
               )}
               {company ? (
                 company.address && (
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">
                     {company.address}
                   </p>
                 )
@@ -736,12 +739,12 @@ const CompanyProfilePage = () => {
             </div>
           </div>
 
-          {/* RIGHT: Social Icons */}
-          <div className="flex items-center gap-2">
+          {/* RIGHT: Social Icons (desktop only here — shown below the name on mobile) + Actions */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             {/* Twitter/X */}
             <button
               disabled={!hasSocialLink("twitter")}
-              className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("twitter")
+              className={`hidden lg:flex w-8 h-8 items-center justify-center rounded-full border transition-colors ${hasSocialLink("twitter")
                 ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
                 : "border-gray-200 text-gray-300 cursor-not-allowed"
                 }`}
@@ -758,7 +761,7 @@ const CompanyProfilePage = () => {
             {/* LinkedIn */}
             <button
               disabled={!hasSocialLink("linkedin")}
-              className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("linkedin")
+              className={`hidden lg:flex w-8 h-8 items-center justify-center rounded-full border transition-colors ${hasSocialLink("linkedin")
                 ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
                 : "border-gray-200 text-gray-300 cursor-not-allowed"
                 }`}
@@ -776,7 +779,7 @@ const CompanyProfilePage = () => {
                 instagram field exists in the schema yet) */}
             <button
               disabled={!hasSocialLink("facebook")}
-              className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("facebook")
+              className={`hidden lg:flex w-8 h-8 items-center justify-center rounded-full border transition-colors ${hasSocialLink("facebook")
                 ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
                 : "border-gray-200 text-gray-300 cursor-not-allowed"
                 }`}
@@ -826,18 +829,31 @@ const CompanyProfilePage = () => {
                       {dealsViewMode === "board" ? "List View" : "Kanban View"}
                     </button>
                   )}
+                  {/* Edit: mobile-only entry, folded in here instead of its own button */}
+                  <button
+                    onClick={() => {
+                      handleEdit();
+                      setShowActionsMenu(false);
+                    }}
+                    className="lg:hidden flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                  >
+                    <Edit2 size={14} className="text-gray-400" />
+                    Edit
+                  </button>
                 </div>
               )}
             </div>
 
-            {/* New Entry Dropdown */}
+            {/* New Entry Dropdown — icon-only (+) on mobile */}
             <div className="relative" ref={newEntryRef}>
               <button
                 onClick={() => setShowNewEntryMenu((prev) => !prev)}
-                className="flex items-center gap-1.5 h-8 px-4 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-full transition-colors"
+                title="New Entry"
+                className="flex items-center justify-center gap-1.5 h-8 w-8 lg:w-auto px-0 lg:px-4 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-full transition-colors"
               >
-                New Entry
-                <ChevronDown size={14} />
+                <Plus size={14} className="lg:hidden" />
+                <span className="hidden lg:inline">New Entry</span>
+                <ChevronDown size={14} className="hidden lg:inline" />
               </button>
               {showNewEntryMenu && (
                 <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
@@ -874,12 +890,62 @@ const CompanyProfilePage = () => {
             <button
               title="Edit"
               onClick={handleEdit}
-              className="flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+              className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
             >
               <Edit2 size={13} />
               Edit
             </button>
           </div>
+        </div>
+
+        {/* Social Icons — mobile only, shown below the name/address instead of beside it,
+            left-aligned under the name text (past the avatar), not the avatar itself */}
+        <div className="flex lg:hidden items-center gap-1.5 mb-3 ml-12">
+          <button
+            disabled={!hasSocialLink("twitter")}
+            className={`w-6 h-6 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("twitter")
+              ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
+              : "border-gray-200 text-gray-300 cursor-not-allowed"
+              }`}
+            onClick={() => openSocialLink("twitter")}
+            title={
+              hasSocialLink("twitter")
+                ? "View Twitter/X profile"
+                : "No Twitter/X link available"
+            }
+          >
+            <Twitter size={12} strokeWidth={2} />
+          </button>
+          <button
+            disabled={!hasSocialLink("linkedin")}
+            className={`w-6 h-6 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("linkedin")
+              ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
+              : "border-gray-200 text-gray-300 cursor-not-allowed"
+              }`}
+            onClick={() => openSocialLink("linkedin")}
+            title={
+              hasSocialLink("linkedin")
+                ? "View LinkedIn profile"
+                : "No LinkedIn link available"
+            }
+          >
+            <Linkedin size={12} strokeWidth={2} />
+          </button>
+          <button
+            disabled={!hasSocialLink("facebook")}
+            className={`w-6 h-6 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("facebook")
+              ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
+              : "border-gray-200 text-gray-300 cursor-not-allowed"
+              }`}
+            onClick={() => openSocialLink("facebook")}
+            title={
+              hasSocialLink("facebook")
+                ? "View Instagram profile"
+                : "No Instagram link available"
+            }
+          >
+            <Instagram size={12} strokeWidth={2} />
+          </button>
         </div>
 
         {/* Location */}
@@ -1056,7 +1122,7 @@ const CompanyProfilePage = () => {
                   ) : (
                   <div className="flex min-w-0" style={{ flex: "1 1 0%", minHeight: 0 }}>
                     {/* Fixed Y-axis, stays put while the plot below scrolls horizontally */}
-                    <div style={{ width: 64, height: "100%", flexShrink: 0 }}>
+                    <div style={{ width: 88, height: "100%", flexShrink: 0 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <ComposedChart data={monthlyIncomeData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
                           <XAxis
@@ -1073,7 +1139,7 @@ const CompanyProfilePage = () => {
                             allowDecimals={false}
                             tickFormatter={(value) => value.toLocaleString("en-IN")}
                             tick={{ fontSize: 12, fontFamily: "'DM Sans', sans-serif", fill: "rgba(33, 32, 31, 0.56)" }}
-                            width={64}
+                            width={88}
                           />
                           <Area type="linear" dataKey="income" stroke="none" fill="none" isAnimationActive={false} />
                         </ComposedChart>

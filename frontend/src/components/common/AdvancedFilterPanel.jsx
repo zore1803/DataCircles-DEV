@@ -181,11 +181,14 @@ export default function AdvancedFilterPanel({
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[9993]"
         onClick={onClose}
       />
 
-      <div className="fixed right-0 top-0 h-full w-[min(90vw,560px)] min-w-[420px] max-w-[560px] bg-white shadow-2xl z-50 flex flex-col animate-slide-in-right">
+      <div
+        className="fixed right-0 dc-panel-w bg-white shadow-2xl z-[9995] flex flex-col animate-slide-in-right"
+        style={{ top: 0, bottom: 0 }}
+      >
         <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50/50">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg">
