@@ -14,8 +14,6 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Menu,
-  X,
   Wallet,
   Calendar,
   ChevronDown,
@@ -28,6 +26,7 @@ import {
   Tag,
 } from "lucide-react";
 import API from "../services/api";
+import dataCirclesLogo from "../assets/Datacircles logo.png";
 
 const ContactsIcon = (props) => (
   <svg viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -81,6 +80,12 @@ const Navbar = () => {
     } else {
       document.documentElement.style.setProperty("--sidebar-width", "0px");
     }
+  }, []);
+
+  useEffect(() => {
+    const toggle = () => setIsMobileOpen((prev) => !prev);
+    window.addEventListener("toggle-mobile-sidebar", toggle);
+    return () => window.removeEventListener("toggle-mobile-sidebar", toggle);
   }, []);
 
   const fetchBranding = async () => {
@@ -254,35 +259,13 @@ const Navbar = () => {
     setProfile(res.data);
   };
 
-  const renderCompanyLogo = () => {
-    if (branding?.logoUrl) {
-      const src =
-        typeof branding.logoUrl === "string" &&
-          (branding.logoUrl.startsWith("data:") ||
-            branding.logoUrl.startsWith("blob:") ||
-            branding.logoUrl.startsWith("http"))
-          ? branding.logoUrl
-          : `${import.meta.env.VITE_APP_API_URL}${branding.logoUrl}`;
-
-      return (
-        <img
-          src={src}
-          alt="Company Logo"
-          className="h-8 w-8 rounded-full object-cover flex-shrink-0"
-        />
-      );
-    } else {
-      const src = `/DataCircles.png`;
-      return (
-        <img
-          src={src}
-          alt="Company Logo"
-          className="h-8 w-8 rounded-md object-cover flex-shrink-0"
-          style={{ filter: "invert(100%)" }}
-        />
-      );
-    }
-  };
+  const renderCompanyLogo = () => (
+    <img
+      src={dataCirclesLogo}
+      alt="DataCircles Logo"
+      className="h-8 w-8 rounded-md object-cover flex-shrink-0"
+    />
+  );
 
   const renderProfileImage = () => {
     if (profile && !isSuperAdmin) {
@@ -465,17 +448,13 @@ const Navbar = () => {
 
   return (
     <>
-      {/* Mobile Toggle */}
-      <button
-        className="fixed top-20 left-2 z-[10000] lg:hidden p-2 rounded-md bg-white transition-transform duration-300"
-        onClick={() => setIsMobileOpen(!isMobileOpen)}
-      >
-        {isMobileOpen ? (
-          <X className="w-6 h-6" />
-        ) : (
-          <Menu className="w-6 h-6" />
-        )}
-      </button>
+      {/* Mobile overlay: tap outside the sidebar to close it */}
+      {isMobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/40 z-[9994]"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
 
       {/* Sidebar */}
       <div

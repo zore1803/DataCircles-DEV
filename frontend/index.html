@@ -3,6 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Chrome's "Request Desktop Site" on phones keeps the physical CSS
+      // viewport narrow (~980px) while spoofing a desktop-like UA, which
+      // falls below our lg: (1024px) breakpoint used app-wide — so the
+      // mobile layout kept showing even in that mode. When it's detected,
+      // widen the viewport meta so the layout genuinely renders at desktop
+      // width (browser handles zoom/scroll), letting our normal lg:
+      // breakpoint kick in with no component changes needed.
+      (function () {
+        var isDesktopSiteRequest;
+        if (navigator.userAgentData && "mobile" in navigator.userAgentData) {
+          // Modern Chrome/Edge: explicitly reflects the "Desktop site" toggle.
+          isDesktopSiteRequest = navigator.userAgentData.mobile === false && /Android|iPhone/i.test(navigator.userAgent);
+        } else {
+          // Fallback for browsers without userAgentData: a touch device whose
+          // UA string no longer says "Mobile" is very likely in desktop-site mode.
+          var ua = navigator.userAgent;
+          var looksMobileDevice = /Android|iPhone|iPad|iPod/i.test(ua);
+          var uaSaysMobile = /Mobile/i.test(ua);
+          isDesktopSiteRequest = looksMobileDevice && !uaSaysMobile;
+        }
+        if (isDesktopSiteRequest) {
+          document
+            .querySelector('meta[name="viewport"]')
+            .setAttribute("content", "width=1280");
+        }
+      })();
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <title>DataCircles</title>
     <link href="https://fonts.googleapis.com/css2?family=Meie+Script&display=swap" rel="stylesheet">

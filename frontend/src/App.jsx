@@ -23,6 +23,7 @@ import PrivateRoute from "./components/PrivateRoute";
 import SuperAdminPrivateRoute from "./components/SuperAdminPrivateRoute";
 import Navbar from "./components/Navbar";
 import Header from "./components/Header";
+import { TopLoadingBarProvider } from "./components/common/TopLoadingBar";
 import CompanyProfilePage from "./pages/CompanyProfilePage";
 import DealDetail from "./pages/DealDetail";
 import FormDetailPage from "./pages/FormDetailPage";
@@ -392,6 +393,7 @@ function App() {
 
   return (
     <Router>
+      <TopLoadingBarProvider>
       <div className="min-h-screen bg-white relative">
         {userIsAuthenticated && adminNotice && !shouldHideNavigation && (
           <div className="bg-indigo-600 text-white px-4 py-3 flex items-center justify-between gap-3 relative z-[100010]">
@@ -416,7 +418,9 @@ function App() {
           !shouldHideNavigation && <Navbar />}
         <main
           className={`transition-all duration-300 ease-in-out py-6 px-4 sm:px-6 lg:px-8 ${
-            userIsAuthenticated && !shouldHideNavigation ? "pt-20 lg:ml-16" : ""
+            userIsAuthenticated && !shouldHideNavigation
+              ? "pt-[70px] lg:pt-20 lg:ml-16"
+              : ""
           }`}
         >
           <Routes>
@@ -797,6 +801,7 @@ function App() {
           setShowChecklist={setShowChecklist}
         />
       </div>
+      </TopLoadingBarProvider>
     </Router>
   );
 }

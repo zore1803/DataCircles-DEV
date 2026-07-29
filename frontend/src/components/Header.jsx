@@ -744,6 +744,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import dataCirclesLogo from "../assets/Datacircles logo.png";
 import {
   Search,
   Plus,
@@ -1291,7 +1292,7 @@ const Header = () => {
   return (
     <>
       <header
-        className="fixed top-0 right-0 bg-white border-b border-gray-200 shadow-sm z-[9992] h-16 flex items-center justify-between px-4 lg:px-6 transition-all duration-300 ease-in-out"
+        className="hidden lg:flex fixed top-0 right-0 bg-white border-b border-gray-200 shadow-sm z-[9992] h-16 items-center justify-between px-4 lg:px-6 transition-all duration-300 ease-in-out"
         style={{ left: "var(--sidebar-width, 0px)" }}
       >
         {/* Left Section: Breadcrumb / Dashboard tabs */}
@@ -1531,6 +1532,145 @@ const Header = () => {
             title={user?.name || ""}
           >
             {getInitials(user?.name)}
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile Header */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-[9992] bg-[#FAFAFA] h-[54px] flex items-center">
+        <div className="w-full max-w-[440px] mx-auto flex items-center justify-between px-4 py-2 gap-3 h-full border-b border-[#ECECEC]">
+          {/* Logo — opens the sidebar on mobile */}
+          <img
+            src={dataCirclesLogo}
+            alt="Logo"
+            className="w-9 h-9 rounded-md object-cover flex-shrink-0 cursor-pointer"
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent("toggle-mobile-sidebar"))
+            }
+          />
+
+          {/* Right cluster */}
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Search pill */}
+            <div className="flex items-center gap-2 px-2.5 h-8 border border-[#E1E4EA] rounded-full flex-1 min-w-0 max-w-[172px]">
+              <Search className="w-4 h-4 text-[#525866] flex-shrink-0" strokeWidth={1.75} />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onFocus={handleSearchFocus}
+                className="bg-transparent outline-none text-sm text-[#525866] placeholder:text-[#525866] w-full min-w-0"
+              />
+            </div>
+
+            {/* Notification bell */}
+            <button className="relative flex items-center justify-center w-8 h-8 border border-[#E1E4EA] rounded-full flex-shrink-0">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 6.66658C12 4.45745 10.2092 2.66659 8.00004 2.66659C5.7909 2.66659 4.00004 4.45745 4.00004 6.66658V11.9999H12V6.66658ZM13.3334 12.4444L13.6 12.7999C13.7105 12.9472 13.6806 13.1561 13.5334 13.2666C13.4757 13.3099 13.4055 13.3333 13.3334 13.3333H2.66671C2.48261 13.3333 2.33337 13.184 2.33337 12.9999C2.33337 12.9278 2.35677 12.8576 2.40004 12.7999L2.66671 12.4444V6.66658C2.66671 3.72107 5.05452 1.33325 8.00004 1.33325C10.9456 1.33325 13.3334 3.72107 13.3334 6.66658V12.4444ZM6.33337 13.9999H9.66671C9.66671 14.9204 8.92051 15.6666 8.00004 15.6666C7.07957 15.6666 6.33337 14.9204 6.33337 13.9999Z" fill="#000000" />
+              </svg>
+              <span className="absolute top-0.5 right-1.5 w-[5px] h-[5px] rounded-full bg-[#DF120B]" />
+            </button>
+
+            {/* Add button */}
+            <div className="relative flex-shrink-0">
+              <button
+                onClick={handleGlobalAdd}
+                title="New"
+                className="flex items-center justify-center w-8 h-8 rounded-full bg-[#0085FF] border border-[#0085FF]"
+                style={{
+                  background:
+                    "linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 100%), #0085FF",
+                  boxShadow: "inset 0px 0px 0px 1.8px rgba(255,255,255,0.25)",
+                }}
+              >
+                {isAddMenuOpen ? (
+                  <X className="w-4 h-4 text-white" />
+                ) : (
+                  <Plus className="w-4 h-4 text-white" />
+                )}
+              </button>
+
+              {isAddMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-[9999] cursor-default"
+                    onClick={handleAddMenuClose}
+                  />
+                  <div className="absolute right-0 top-10 w-[min(168px,calc(100vw-32px))] max-h-[70vh] overflow-y-auto bg-white rounded-xl shadow-2xl border border-gray-100 z-[10000] py-2.5 flex flex-col transition-all duration-300 ease-in-out">
+                    <div className="flex-1 px-2.5">
+                      <div className="mb-1.5">
+                        <h3 className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1 px-1.5">
+                          Add Records
+                        </h3>
+                        <div className="space-y-0">
+                          {addRecords.map((item) => {
+                            const active = isSelected(item.id);
+                            return (
+                              <button
+                                key={item.id}
+                                onClick={() => handleAddItem(item.id)}
+                                className={`w-full flex items-center p-1.5 rounded-lg transition-all group ${active
+                                  ? "bg-gradient-to-r from-[#D0E0FF] to-white"
+                                  : "hover:bg-[#F2F2F7]"
+                                  }`}
+                              >
+                                <div className="w-6 h-6 flex items-center justify-center mr-1.5">
+                                  <item.icon className="w-4 h-4 text-black" strokeWidth={1.5} />
+                                </div>
+                                <span className="text-xs font-medium text-gray-900 transition-all truncate">
+                                  {item.label}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="border-t border-gray-50 my-1.5" />
+
+                      <div className="mb-1.5">
+                        <h3 className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1 px-1.5">
+                          Add Activities
+                        </h3>
+                        <div className="space-y-0">
+                          {addActivities.map((item) => {
+                            const active = isSelected(item.id);
+                            return (
+                              <button
+                                key={item.id}
+                                onClick={() => handleAddItem(item.id)}
+                                className={`w-full flex items-center p-1.5 rounded-lg transition-all group ${active
+                                  ? "bg-gradient-to-r from-[#D0E0FF] to-white"
+                                  : "hover:bg-[#F2F2F7]"
+                                  }`}
+                              >
+                                <div className="w-6 h-6 flex items-center justify-center mr-1.5">
+                                  <item.icon className="w-4 h-4 text-black" strokeWidth={1.5} />
+                                </div>
+                                <span className="text-xs font-medium text-gray-900 transition-all truncate">
+                                  {item.label}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* User Avatar */}
+            <div className="flex items-center justify-center w-10 h-10 p-1 bg-white border border-[#E5E5E5] rounded-full flex-shrink-0">
+              <div
+                className={`flex items-center justify-center w-8 h-8 rounded-full text-white font-medium text-sm ${getRandomColor(user?.name)}`}
+                title={user?.name || ""}
+              >
+                {getInitials(user?.name)}
+              </div>
+            </div>
           </div>
         </div>
       </header>

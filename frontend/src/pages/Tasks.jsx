@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import TaskForm from "../components/Task/TaskForm";
 import AdminMeetingForm from "../components/admin/AdminMeetingForm";
 import { useLocation } from "react-router-dom";
@@ -54,9 +55,44 @@ import {
 } from "@tanstack/react-table";
 import AppToaster from "../components/AppToaster";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
-import useMinDelay from "../hooks/useMinDelay";
 
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Month/Week/Day switcher icons — mirrors the ones on the Calendar page.
+const CustomMonthIcon = (props) => (
+  <svg viewBox="20 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M25.1665 15.667V19.0003" />
+    <path d="M31.8335 15.667V19.0003" />
+    <path d="M36 28.1663V18.9997C36 18.5576 35.8244 18.1337 35.5118 17.8212C35.1993 17.5086 34.7754 17.333 34.3333 17.333H22.6667C22.2246 17.333 21.8007 17.5086 21.4882 17.8212C21.1756 18.1337 21 18.5576 21 18.9997V30.6663C21 31.1084 21.1756 31.5323 21.4882 31.8449C21.8007 32.1574 22.2246 32.333 22.6667 32.333H31.8333L36 28.1663Z" />
+    <path d="M21 22.333H36" />
+    <path d="M31 32.333V28.9997C31 28.5576 31.1756 28.1337 31.4882 27.8212C31.8007 27.5086 32.2246 27.333 32.6667 27.333H36" />
+  </svg>
+);
+
+const CustomWeekIcon = (props) => (
+  <svg viewBox="112 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M117.167 15.667V19.0003" />
+    <path d="M123.833 15.667V19.0003" />
+    <path d="M126.333 17.333H114.667C113.746 17.333 113 18.0792 113 18.9997V30.6663C113 31.5868 113.746 32.333 114.667 32.333H126.333C127.254 32.333 128 31.5868 128 30.6663V18.9997C128 18.0792 127.254 17.333 126.333 17.333Z" />
+    <path d="M113 22.333H128" />
+    <path d="M117.167 25.667H117.175" />
+    <path d="M120.5 25.667H120.508" />
+    <path d="M123.833 25.667H123.842" />
+    <path d="M117.167 29H117.175" />
+    <path d="M120.5 29H120.508" />
+    <path d="M123.833 29H123.842" />
+  </svg>
+);
+
+const CustomDayIcon = (props) => (
+  <svg viewBox="210.5 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M218.167 25.667H219V29.0003" />
+    <path d="M222.333 15.667V19.0003" />
+    <path d="M211.5 22.333H226.5" />
+    <path d="M215.667 15.667V19.0003" />
+    <path d="M224.833 17.333H213.167C212.246 17.333 211.5 18.0792 211.5 18.9997V30.6663C211.5 31.5868 212.246 32.333 213.167 32.333H224.833C225.754 32.333 226.5 31.5868 226.5 30.6663V18.9997C226.5 18.0792 225.754 17.333 224.833 17.333Z" />
+  </svg>
+);
 
 // Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>,
 // matching Companies/Contacts' search-highlighting exactly.
@@ -401,6 +437,8 @@ function Tasks() {
   const [activeTab, setActiveTab] = useState("tasks"); // "tasks" or "meetings"
   const [showKanban, setShowKanban] = useState(false);
   const [showMeetingCalendar, setShowMeetingCalendar] = useState(false);
+  const [meetingCalendarDate, setMeetingCalendarDate] = useState(new Date());
+  const [meetingCalendarView, setMeetingCalendarView] = useState("month"); // "month" | "week" | "day"
   const meetingToggleRefs = useRef({});
   const [meetingToggleIndicator, setMeetingToggleIndicator] = useState({ left: 4, width: 32 });
   useEffect(() => {
@@ -410,6 +448,21 @@ function Tasks() {
       setMeetingToggleIndicator({ left: el.offsetLeft, width: el.offsetWidth });
     }
   }, [showMeetingCalendar, activeTab]);
+
+  useEffect(() => {
+    if (!showMeetingCalendar) return;
+    let cancelled = false;
+    API.get("/meetings/all-meetings")
+      .then((res) => {
+        if (!cancelled) setAllMeetingsForCalendar(res.data || []);
+      })
+      .catch(() => {
+        if (!cancelled) toast.error("Failed to load calendar meetings");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showMeetingCalendar]);
 
   // Tasks state
   const [tasks, setTasks] = useState([]);
@@ -428,6 +481,9 @@ function Tasks() {
 
   // Meetings state
   const [meetings, setMeetings] = useState([]);
+  // Separate from the paginated `meetings` list (50/page) — the calendar view
+  // needs every meeting, not just whatever page the list happens to be on.
+  const [allMeetingsForCalendar, setAllMeetingsForCalendar] = useState([]);
   const [showMeetingForm, setShowMeetingForm] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [meetingModalMode, setMeetingModalMode] = useState("create");
@@ -523,8 +579,9 @@ function Tasks() {
     }
   }, [state]);
 
-  const showTaskLoadingSkeleton = useMinDelay(loading && tasks.length === 0, 300);
-  const showMeetingLoadingSkeleton = useMinDelay(loading && meetings.length === 0, 300);
+  const showTaskLoadingSkeleton = loading && tasks.length === 0;
+  const showMeetingLoadingSkeleton = loading && meetings.length === 0;
+  useTopLoadingSignal(showTaskLoadingSkeleton || showMeetingLoadingSkeleton);
 
   // Pagination & Sorting for Tasks
   const [taskPagination, setTaskPagination] = useState({
@@ -1374,21 +1431,11 @@ function Tasks() {
     if (longPressTimer) clearTimeout(longPressTimer);
   };
 
-  const handleTouchStart = (id) => {
-    const timer = setTimeout(() => {
-      setSelectionMode(true);
-      if (activeTab === "tasks") {
-        handleSelectTask(id);
-      } else {
-        handleSelectMeeting(id);
-      }
-    }, 500);
-    setLongPressTimer(timer);
-  };
+  // Long-press-to-select is disabled on touch devices — mobile rows should
+  // only enter selection via the checkbox itself, never by holding the row.
+  const handleTouchStart = () => {};
 
-  const handleTouchEnd = () => {
-    if (longPressTimer) clearTimeout(longPressTimer);
-  };
+  const handleTouchEnd = () => {};
 
   const getMeetingEntityName = (meeting) => {
     if (meeting.contact) {
@@ -2315,6 +2362,23 @@ function Tasks() {
 
     return (
       <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+        <div className="flex-1 flex justify-between sm:hidden">
+          <button
+            onClick={() => handlePageChange(pagination.currentPage - 1)}
+            disabled={!pagination.hasPrevPage}
+            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <button
+            onClick={() => handlePageChange(pagination.currentPage + 1)}
+            disabled={!pagination.hasNextPage}
+            className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+
         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
           <div className="flex items-center space-x-2">
             <p className="text-sm text-gray-700 font-inter">
@@ -2408,7 +2472,9 @@ function Tasks() {
   };
 
   return (
-    <div className="bg-white min-h-screen -mx-4 sm:-mx-6 lg:-mx-8 pb-16">
+    <div
+      className={`bg-white -mx-4 sm:-mx-6 lg:-mx-8 ${showKanban ? "" : "min-h-screen pb-16"}`}
+    >
       <AppToaster />
 
       {/* Video Tutorial Modal */}
@@ -2420,11 +2486,9 @@ function Tasks() {
       />
 
       <div
-        className="flex flex-row justify-between items-center"
+        className="flex flex-row justify-between items-center px-4 lg:px-6 top-[54px] lg:top-16 gap-2 lg:gap-4"
         style={{
           boxSizing: "border-box",
-          padding: "0px 24px",
-          gap: 16,
           height: 64,
           minHeight: 64,
           maxHeight: 64,
@@ -2432,25 +2496,24 @@ function Tasks() {
           borderBottom: "1px solid #E1E4EA",
           borderRadius: 0,
           position: "fixed",
-          top: "64px",
           left: "var(--sidebar-width, 0px)",
           right: 0,
           zIndex: 40,
         }}
       >
         {showBulkStrip ? (
-          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-6 w-full h-full`}>
-            <div className="flex flex-wrap items-center gap-3">
+          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
+            <div className="flex flex-nowrap lg:flex-wrap items-center gap-3 flex-shrink-0">
               <button
                 onClick={handleExport}
-                className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <Download className="w-4 h-4" />
                 Export
               </button>
               <button
                 onClick={() => (activeTab === "tasks" ? setShowBulkActions(true) : setShowMeetingBulkActions(true))}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <Edit2 className="w-4 h-4" />
                 Bulk Update
@@ -2458,35 +2521,35 @@ function Tasks() {
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={bulkLoading}
-                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
               >
                 <Trash2 className="w-4 h-4" />
                 Delete
               </button>
               <button
                 onClick={() => (activeTab === "tasks" ? setSelectedTasks([]) : setSelectedMeetings([]))}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex-shrink-0 whitespace-nowrap"
               >
                 Clear
               </button>
             </div>
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-5 h-5 text-blue-600" />
-              <span className="text-blue-800 font-semibold font-inter">
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
                 {activeTab === "tasks" ? selectedTasks.length : selectedMeetings.length}{" "}
                 {activeTab === "tasks" ? "task" : "meeting"}
                 {(activeTab === "tasks" ? selectedTasks.length : selectedMeetings.length) !== 1 ? "s" : ""} selected
               </span>
               <button
                 onClick={handleSelectAllAcrossPages}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <CheckSquare className="w-4 h-4" />
                 Select All
               </button>
               <button
                 onClick={handleDeselectAllExtra}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Deselect All
@@ -2538,11 +2601,9 @@ function Tasks() {
           </button>
         </div>
 
-        <div className="flex-1 min-w-0" />
-
-        <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
+        <div className="relative flex-1 min-w-0 flex items-center justify-end">
           <div
-            className={`relative h-10 flex items-center border rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full flex-shrink-0`}
+            className={`relative h-10 flex items-center border rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
             style={{ borderColor: isSearchExpanded ? "#0085FF" : "rgba(31, 41, 55, 0.1)" }}
           >
             <Search
@@ -2571,9 +2632,11 @@ function Tasks() {
               }
             />
           </div>
+        </div>
 
+        <div className="hidden lg:flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
           {activeTab === "tasks" && (
-            <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
+            <div className="hidden lg:flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
               <button
                 onClick={() => setShowMobileFilters(true)}
                 className="relative flex flex-row justify-center items-center flex-shrink-0"
@@ -2632,7 +2695,7 @@ function Tasks() {
           )}
 
           {activeTab === "meetings" && (
-            <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
+            <div className="hidden lg:flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
               <button
                 onClick={() => setShowMobileFilters(true)}
                 className="relative flex flex-row justify-center items-center flex-shrink-0"
@@ -2703,8 +2766,8 @@ function Tasks() {
         </div>
 
         <div
-          className="flex flex-row items-center flex-shrink-0"
-          style={{ gap: 8, width: 186, height: 40 }}
+          className="flex flex-row items-center flex-shrink-0 w-auto lg:w-[186px] gap-2 lg:gap-4"
+          style={{ height: 40 }}
         >
           <div className="relative" ref={moreMenuRef}>
             <button
@@ -2725,6 +2788,73 @@ function Tasks() {
             </button>
             {isMoreMenuOpen && (
               <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
+                {/* Filters + Switcher: mobile-only entries, folded in here instead of their own controls */}
+                <button
+                  onClick={() => {
+                    setShowMobileFilters(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <FilterIcon size={15} className="text-gray-400" />
+                  Filters
+                  {activeAdvancedFilters.length > 0 && (
+                    <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                      {activeAdvancedFilters.length}
+                    </span>
+                  )}
+                </button>
+                {activeTab === "tasks" ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        setShowKanban(false);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <CustomListIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
+                      List View
+                      {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowKanban(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <CustomKanbanIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
+                      Kanban View
+                      {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        setShowMeetingCalendar(false);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <CustomListIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
+                      List View
+                      {!showMeetingCalendar && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowMeetingCalendar(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                      View in Calendar
+                      {showMeetingCalendar && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => {
                     setShowVideoTutorial(true);
@@ -2740,18 +2870,19 @@ function Tasks() {
           </div>
           <button
             onClick={() => (activeTab === "tasks" ? toggleTaskForm() : toggleMeetingForm())}
-            className="flex flex-row justify-center items-center flex-shrink-0"
+            title="New Activity"
+            className="flex flex-row justify-center items-center flex-shrink-0 w-10 lg:w-[138px]"
             style={{
               padding: 12,
               gap: 6,
-              width: 138,
               height: 40,
               background: "#0085FF",
               borderRadius: 96,
             }}
           >
-            <Plus size={18} style={{ color: "#FFFFFF" }} />
+            <Plus size={18} style={{ color: "#FFFFFF" }} className="flex-shrink-0" />
             <span
+              className="hidden lg:inline"
               style={{
                 fontFamily: "Inter",
                 fontWeight: 500,
@@ -2773,10 +2904,9 @@ function Tasks() {
       {activeTab === "tasks" && !showKanban && (
       <>
       <div
-        className="overflow-x-auto overflow-y-auto"
+        className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
         style={{
           position: "fixed",
-          top: 128,
           left: "var(--sidebar-width, 0px)",
           right: 0,
           bottom: !loading ? 64 : 0,
@@ -2789,7 +2919,7 @@ function Tasks() {
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${taskTable.getTotalSize()}px`, tableLayout: "fixed" }}
           >
-            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
+            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
               {taskTable.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
@@ -2811,9 +2941,10 @@ function Tasks() {
                         ) : undefined}
                         style={{
                           width: header.getSize(),
-                          position: isLeftSticky ? "sticky" : "relative",
+                          position: "sticky",
+                          top: 0,
                           left: isLeftSticky ? 0 : "auto",
-                          zIndex: isLeftSticky ? 20 : 1,
+                          zIndex: isLeftSticky ? 20 : 15,
                           opacity: isDragging ? 0.35 : 1,
                         }}
                         className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
@@ -2899,10 +3030,9 @@ function Tasks() {
       {activeTab === "meetings" && !showMeetingCalendar && (
       <>
       <div
-        className="overflow-x-auto overflow-y-auto"
+        className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
         style={{
           position: "fixed",
-          top: 128,
           left: "var(--sidebar-width, 0px)",
           right: 0,
           bottom: !loading ? 64 : 0,
@@ -2915,7 +3045,7 @@ function Tasks() {
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${meetingTable.getTotalSize()}px`, tableLayout: "fixed" }}
           >
-            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
+            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
               {meetingTable.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
@@ -2937,9 +3067,10 @@ function Tasks() {
                         ) : undefined}
                         style={{
                           width: header.getSize(),
-                          position: isLeftSticky ? "sticky" : "relative",
+                          position: "sticky",
+                          top: 0,
                           left: isLeftSticky ? 0 : "auto",
-                          zIndex: isLeftSticky ? 20 : 1,
+                          zIndex: isLeftSticky ? 20 : 15,
                           opacity: isDragging ? 0.35 : 1,
                         }}
                         className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
@@ -2985,15 +3116,25 @@ function Tasks() {
                     onClick={() => handleMeetingEdit(row.original)}
                     className={`group cursor-pointer hover:bg-blue-50 transition-colors ${selectedMeetings.includes(row.original._id) ? "bg-blue-50" : "bg-white"}`}
                   >
-                    {row.getVisibleCells().map((cell) => (
+                    {row.getVisibleCells().map((cell) => {
+                      const colId = cell.column.id;
+                      const isLeftSticky = colId === "selection";
+                      return (
                       <td
                         key={cell.id}
-                        style={{ width: cell.column.getSize(), height: 54 }}
+                        style={{
+                          width: cell.column.getSize(),
+                          height: 54,
+                          position: isLeftSticky ? "sticky" : "static",
+                          left: isLeftSticky ? 0 : "auto",
+                          zIndex: isLeftSticky ? 10 : 1,
+                        }}
                         className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
-                    ))}
+                      );
+                    })}
                   </tr>
                 ))
               )}
@@ -3012,8 +3153,266 @@ function Tasks() {
       </>
       )}
 
+      {activeTab === "meetings" && showMeetingCalendar && (() => {
+        const year = meetingCalendarDate.getFullYear();
+        const month = meetingCalendarDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const firstDay = new Date(year, month, 1).getDay();
+        const startDay = firstDay === 0 ? 6 : firstDay - 1;
+        const prevMonthDays = new Date(year, month, 0).getDate();
+
+        const calDays = [];
+        for (let i = startDay - 1; i >= 0; i--) {
+          calDays.push({ date: new Date(year, month - 1, prevMonthDays - i), isCurrent: false });
+        }
+        for (let i = 1; i <= daysInMonth; i++) {
+          calDays.push({ date: new Date(year, month, i), isCurrent: true });
+        }
+        const remaining = 42 - calDays.length;
+        for (let i = 1; i <= remaining; i++) {
+          calDays.push({ date: new Date(year, month + 1, i), isCurrent: false });
+        }
+
+        const meetingsByDate = {};
+        allMeetingsForCalendar.forEach((m) => {
+          if (!m.scheduledAt) return;
+          const key = new Date(m.scheduledAt).toDateString();
+          if (!meetingsByDate[key]) meetingsByDate[key] = [];
+          meetingsByDate[key].push(m);
+        });
+
+        return (
+        <div
+          className="top-[118px] lg:top-[128px]"
+          style={{
+            position: "fixed",
+            left: "var(--sidebar-width, 0px)",
+            right: 0,
+            bottom: 24,
+            padding: "16px 24px 0",
+            overflowY: "auto",
+          }}
+        >
+          <div className="box-border flex flex-col items-start flex-shrink-0 self-stretch bg-white border border-[#E1E4EA] rounded-lg" style={{ padding: 0, gap: 0 }}>
+            {/* Month nav */}
+            <div
+              className="relative box-border flex flex-row justify-between items-center flex-shrink-0 self-stretch"
+              style={{ padding: "6px 16px", width: "100%", height: 60, borderBottom: "1px solid #E0E0E1" }}
+            >
+              <div
+                className="absolute flex flex-row items-center"
+                style={{ left: "50%", top: "50%", transform: "translate(-50%, -50%)", gap: 8 }}
+              >
+                <div className="flex flex-row justify-center items-center flex-shrink-0" style={{ padding: "8px 24px", gap: 10, height: 30, borderRadius: 96 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0085FF", flexShrink: 0 }} />
+                  <span className="whitespace-nowrap" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#0085FF" }}>
+                    {allMeetingsForCalendar.length} Meeting{allMeetingsForCalendar.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-row items-center flex-shrink-0" style={{ height: 32 }}>
+                <button
+                  onClick={() => {
+                    const d = new Date(meetingCalendarDate);
+                    if (meetingCalendarView === "month") d.setMonth(d.getMonth() - 1);
+                    else if (meetingCalendarView === "week") d.setDate(d.getDate() - 7);
+                    else d.setDate(d.getDate() - 1);
+                    setMeetingCalendarDate(d);
+                  }}
+                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                  style={{ width: 48, height: 32, border: "1px solid #E0E0E1", borderRadius: "95px 0px 0px 95px" }}
+                >
+                  <ChevronLeft size={20} style={{ color: "#111216" }} />
+                </button>
+                <div
+                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                  style={{ padding: "0px 16px", minWidth: 94, height: 32, borderWidth: "1px 0px", borderStyle: "solid", borderColor: "#E0E0E1" }}
+                >
+                  <span className="whitespace-nowrap" style={{ fontFamily: "'SF Pro Display', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "17px", color: "#111216" }}>
+                    {meetingCalendarView === "day"
+                      ? meetingCalendarDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                      : meetingCalendarDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    const d = new Date(meetingCalendarDate);
+                    if (meetingCalendarView === "month") d.setMonth(d.getMonth() + 1);
+                    else if (meetingCalendarView === "week") d.setDate(d.getDate() + 7);
+                    else d.setDate(d.getDate() + 1);
+                    setMeetingCalendarDate(d);
+                  }}
+                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                  style={{ width: 48, height: 32, border: "1px solid #E0E0E1", borderRadius: "0px 95px 95px 0px" }}
+                >
+                  <ChevronRight size={20} style={{ color: "#111216" }} />
+                </button>
+              </div>
+
+              <div
+                className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                style={{
+                  padding: 4,
+                  gap: 6,
+                  width: 285,
+                  height: 40,
+                  background: "#FFFFFF",
+                  border: "1px solid #E0E0E1",
+                  boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.1)",
+                  borderRadius: 96,
+                }}
+              >
+                {[
+                  { v: "month", Icon: CustomMonthIcon },
+                  { v: "week", Icon: CustomWeekIcon },
+                  { v: "day", Icon: CustomDayIcon },
+                ].map(({ v, Icon }) => (
+                  <button
+                    key={v}
+                    onClick={() => setMeetingCalendarView(v)}
+                    className="box-border flex flex-row justify-center items-center flex-1"
+                    style={{
+                      padding: "6px 12px",
+                      gap: 6,
+                      height: 32,
+                      background: meetingCalendarView === v ? "#FFFFFF" : "transparent",
+                      border: meetingCalendarView === v ? "1px solid rgba(0, 133, 255, 0.2)" : "none",
+                      boxShadow: meetingCalendarView === v ? "0px 0px 6px rgba(0, 0, 0, 0.1)" : "none",
+                      borderRadius: meetingCalendarView === v ? 96 : 4,
+                    }}
+                  >
+                    <Icon width={16} height={16} style={{ color: meetingCalendarView === v ? "#0085FF" : "#48494C", flexShrink: 0 }} />
+                    <span
+                      className="capitalize whitespace-nowrap"
+                      style={{
+                        fontFamily: "'SF Pro Display', Inter, sans-serif",
+                        fontWeight: 500,
+                        fontSize: 13,
+                        lineHeight: "17px",
+                        color: meetingCalendarView === v ? "#0085FF" : "#48494C",
+                      }}
+                    >
+                      {v}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Day-of-week header */}
+            <div className="flex flex-row items-start flex-shrink-0 self-stretch">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => (
+                <div
+                  key={day}
+                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                  style={{
+                    padding: 16,
+                    gap: 10,
+                    width: "14.2857%",
+                    height: 40,
+                    borderWidth: i === 6 ? "0px 0px 1px 0px" : "0px 1px 1px 0px",
+                    borderStyle: "solid",
+                    borderColor: "#E0E0E1",
+                  }}
+                >
+                  <span className="whitespace-nowrap" style={{ fontFamily: "'SF Pro Display', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "17px", color: "#111216" }}>
+                    {day}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Month grid — meetings only */}
+            {Array.from({ length: 6 }).map((_, weekIdx) => {
+              const weekDays = calDays.slice(weekIdx * 7, weekIdx * 7 + 7);
+              const isCurrentWeek = weekDays.some(
+                (d) => d.date.toDateString() === meetingCalendarDate.toDateString(),
+              );
+              return (
+                <div
+                  key={weekIdx}
+                  className="flex flex-row items-start flex-shrink-0 self-stretch"
+                  style={{ background: meetingCalendarView === "week" && isCurrentWeek ? "#F5F8FF" : "transparent" }}
+                >
+                  {weekDays.map((dayObj, i) => {
+                    const dateKey = dayObj.date.toDateString();
+                    const dayMeetings = meetingsByDate[dateKey] || [];
+                    const visibleMeetings = dayMeetings.slice(0, 3);
+                    const overflowCount = dayMeetings.length - visibleMeetings.length;
+                    const isLastCol = i === 6;
+                    const isLastRow = weekIdx === 5;
+
+                    return (
+                      <div
+                        key={i}
+                        className="box-border flex flex-col items-start flex-shrink-0"
+                        style={{
+                          padding: 16,
+                          gap: 8,
+                          width: "14.2857%",
+                          height: 158,
+                          borderWidth: isLastCol
+                            ? isLastRow ? "0px" : "0px 0px 1px 0px"
+                            : isLastRow ? "0px 1px 0px 0px" : "0px 1px 1px 0px",
+                          borderStyle: "solid",
+                          borderColor: "#E0E0E1",
+                          opacity: dayObj.isCurrent ? 1 : 0.4,
+                          background:
+                            meetingCalendarView === "day" && dateKey === meetingCalendarDate.toDateString()
+                              ? "#F5F8FF"
+                              : "transparent",
+                        }}
+                      >
+                        <span style={{ fontFamily: "'SF Pro Display', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "17px", color: "#111216" }}>
+                          {dayObj.date.getDate()}
+                        </span>
+
+                        <div className="flex flex-col items-start w-full" style={{ gap: 4 }}>
+                          {visibleMeetings.map((m) => (
+                            <div
+                              key={m._id}
+                              className="box-border flex flex-row items-center justify-between w-full"
+                              style={{ padding: "10px 8px", height: 24, background: "#E7EFFF", border: "1px solid #E0E0E1", borderRadius: 4 }}
+                            >
+                              <span className="truncate" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, letterSpacing: "-0.06em", color: "#0952E7" }}>
+                                {m.title || "Meeting"}
+                              </span>
+                              <span className="whitespace-nowrap flex-shrink-0" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, letterSpacing: "-0.06em", color: "#0952E7" }}>
+                                {new Date(m.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                          ))}
+                          {overflowCount > 0 && (
+                            <div className="flex flex-row justify-center items-center" style={{ padding: "2px 8px", gap: 4, background: "#F5F6F6", borderRadius: 100 }}>
+                              <span style={{ fontFamily: "'SF Pro Display', Inter, sans-serif", fontWeight: 500, fontSize: 12, lineHeight: "18px", color: "#111216" }}>
+                                +{overflowCount} more
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        );
+      })()}
+
       {activeTab === "tasks" && showKanban && (
-        <div className="mx-6" style={{ height: 587 }}>
+        <div
+          className="top-[118px] lg:top-[128px]"
+          style={{
+            position: "fixed",
+            left: "var(--sidebar-width, 0px)",
+            right: 0,
+            bottom: 24,
+            padding: "16px 24px 0",
+          }}
+        >
           <TaskKanbanBoard
             columns={["Pending", "In Progress", "Completed"]}
             items={tasks}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import API from "../services/api";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
@@ -436,7 +437,7 @@ const ModernKanbanColumn = ({
 
   return (
     <div
-      className="flex flex-col items-start flex-shrink-0 bg-white"
+      className="dc-kanban-col flex flex-col items-start flex-shrink-0 bg-white"
       style={{ width: "340px", border: "1px solid #E7E7E9", borderRadius: "12px", overflow: "hidden" }}
     >
       {/* Header */}
@@ -523,9 +524,9 @@ const ModernKanbanColumn = ({
         </div>
       </div>
 
-      {/* Scrollable Deals Area — capped to ~7 cards tall (7*132 + 6*14 gaps),
-          any additional cards scroll internally instead of growing the page. */}
-      <div className="w-full overflow-y-auto" style={{ padding: "14px 20px 20px", maxHeight: "1042px" }}>
+      {/* Scrollable Deals Area — fills remaining column height, any
+          additional cards scroll internally instead of growing the page. */}
+      <div className="w-full flex-1 overflow-y-auto custom-scrollbar" style={{ padding: "14px 20px 20px" }}>
         <div
           ref={setNodeRef}
           className="flex flex-col items-start w-full"
@@ -593,7 +594,8 @@ function Deals() {
   });
   const [loading, setLoading] = useState(false);
   const [statuses, setStatuses] = useState([]);
-  const showKanbanSkeleton = useMinDelay(loading && deals.length === 0, 300);
+  const showKanbanSkeleton = loading && deals.length === 0;
+  useTopLoadingSignal(showKanbanSkeleton);
   const [showFilters, setShowFilters] = useState(false);
   const [activeAdvancedFilters, setActiveAdvancedFilters] = useState([]);
 
@@ -805,22 +807,11 @@ function Deals() {
   };
 
 
-  const handleRowTouchStart = (dealId) => {
-    const timer = setTimeout(() => {
-      setSelectionMode(true);
-      if (!selectedRows.includes(dealId)) {
-        setSelectedRows([...selectedRows, dealId]);
-      }
-    }, 500);
-    setLongPressTimer(timer);
-  };
+  // Long-press-to-select is disabled on touch devices — mobile rows should
+  // only enter selection via the checkbox itself, never by holding the row.
+  const handleRowTouchStart = () => {};
 
-  const handleRowTouchEnd = () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
-  };
+  const handleRowTouchEnd = () => {};
 
   // Bulk delete handler
   // Bulk handlers
@@ -2085,9 +2076,8 @@ function Deals() {
 
       {/* New Strip */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 px-6"
+        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
         style={{
-          top: "64px",
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,
           height: "64px",
@@ -2097,18 +2087,18 @@ function Deals() {
         }}
       >
         {showBulkStrip ? (
-          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-6 w-full h-full`}>
-            <div className="flex flex-wrap items-center gap-3">
+          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
+            <div className="flex flex-nowrap lg:flex-wrap items-center gap-3 flex-shrink-0">
               <button
                 onClick={() => setShowExportModal(true)}
-                className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <Download className="w-4 h-4" />
                 Export
               </button>
               <button
                 onClick={() => setShowBulkActions(true)}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <Edit2 className="w-4 h-4" />
                 Bulk Update
@@ -2116,7 +2106,7 @@ function Deals() {
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={loading}
-                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
               >
                 <Trash2 className="w-4 h-4" />
                 Delete
@@ -2126,27 +2116,27 @@ function Deals() {
                   setSelectionMode(false);
                   setSelectedRows([]);
                 }}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Cancel
               </button>
             </div>
-            <div className="flex items-center gap-3">
-              <CheckSquare className="w-5 h-5 text-blue-600" />
-              <span className="text-blue-800 font-semibold font-inter">
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
                 {selectedRows.length} deal{selectedRows.length !== 1 ? "s" : ""} selected
               </span>
               <button
                 onClick={handleSelectAllAcrossPages}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <CheckSquare className="w-4 h-4" />
                 Select All
               </button>
               <button
                 onClick={handleDeselectAllExtra}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Deselect All
@@ -2155,25 +2145,24 @@ function Deals() {
           </div>
         ) : (
         <>
-        <div className="flex flex-col gap-1.5 flex-shrink-0">
+        <div
+          className={`flex flex-col gap-1.5 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
+        >
           <h2
-            className="m-0 font-medium"
-            style={{ fontSize: "16px", lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
+            className="m-0 font-medium truncate text-sm sm:text-base"
+            style={{ lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
           >
             Deals
           </h2>
-          <p className="text-[#5B5A64] text-sm m-0 leading-tight">
+          <p className="text-[#5B5A64] text-[10px] sm:text-sm m-0 leading-tight truncate">
             Manage Your Sales Pipeline
           </p>
         </div>
 
-        {/* Spacer pushes the search/filter/switcher/actions group to the right */}
-        <div className="flex-1 min-w-0" />
-
-        {/* Search, Filter, Switcher, Actions — one continuous group with a uniform gap */}
-        <div className="relative flex items-center gap-3 flex-shrink-0">
+        {/* Search — flex-1 so it fills exactly the space freed by the title collapsing, same as Companies */}
+        <div className="relative flex-1 min-w-0 flex items-center justify-end">
           <div
-            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full flex-shrink-0`}
+            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
           >
             <Search
               strokeWidth={2.5}
@@ -2198,11 +2187,14 @@ function Deals() {
               placeholder="Search deals by title, company, or status..."
             />
           </div>
+        </div>
 
-          {/* Filters */}
+        {/* Filters, Switcher, Actions — fixed-size group */}
+        <div className="relative flex items-center gap-2 lg:gap-4 flex-shrink-0">
+          {/* Filters — folded into the three-dot menu on mobile */}
           <button
             onClick={() => setShowFilters(true)}
-            className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
+            className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
             title="Filters"
           >
             <FilterIcon size={15} />
@@ -2213,8 +2205,8 @@ function Deals() {
             )}
           </button>
 
-          {/* List / Kanban Toggle */}
-          <div className="relative flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
+          {/* List / Kanban Toggle — folded into the three-dot menu on mobile */}
+          <div className="hidden lg:flex relative items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
             <span
               className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
               style={{ left: showKanban ? 36 : 4 }}
@@ -2249,6 +2241,46 @@ function Deals() {
 
             {isMoreMenuOpen && (
               <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
+                {/* Filters + List/Kanban: mobile-only entries, folded in here instead of their own controls */}
+                <button
+                  onClick={() => {
+                    setShowFilters(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <FilterIcon size={15} className="text-gray-400" />
+                  Filters
+                  {activeAdvancedFilters.length > 0 && (
+                    <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                      {activeAdvancedFilters.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowKanban(false);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <List className="w-4 h-4 text-gray-400" />
+                  List View
+                  {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowKanban(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                    <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
+                  </svg>
+                  Kanban View
+                  {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                </button>
                 <button
                   onClick={() => {
                     setShowStats((prev) => !prev);
@@ -2326,13 +2358,14 @@ function Deals() {
             )}
           </div>
 
-          {/* Add Deal Button */}
+          {/* Add Deal Button — icon-only on mobile */}
           <button
             onClick={toggleForm}
-            className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
+            title={showForm ? "Cancel" : "New Deal"}
+            className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
           >
-            <Plus className="w-4 h-4" />
-            {showForm ? "Cancel" : "New Deal"}
+            <Plus className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden lg:inline">{showForm ? "Cancel" : "New Deal"}</span>
           </button>
         </div>
         </>
@@ -2341,18 +2374,15 @@ function Deals() {
 
       {showStats && (
       <div
-        className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA]"
+        className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px] h-[238px] lg:h-[120px] px-4 lg:px-6 py-4 lg:py-6"
         style={{
-          top: "128px",
           left: "var(--sidebar-width, 0px)",
           zIndex: 39,
-          paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
-          height: "120px",
           boxSizing: "border-box",
         }}
       >
         {/* KPI Strip */}
-        <div className="flex flex-row items-center self-stretch" style={{ gap: "24px", height: "72px" }}>
+        <div className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-center lg:gap-6 self-stretch">
           {[
             { label: "Pipeline Summary", value: `₹${formatNumberToIndian(dealStatistics.totalPipeline)}`, icon: PipelineSummaryIcon, trend: `${Math.abs(dealStatistics.trends.pipeline)}% this week`, trendUp: dealStatistics.trends.pipeline >= 0 },
             { label: "Deals Won", value: dealStatistics.wonCount, icon: WonDealsIcon, trend: `${Math.abs(dealStatistics.trends.won)}% this week`, trendUp: dealStatistics.trends.won >= 0 },
@@ -2361,34 +2391,54 @@ function Deals() {
           ].map(({ label, value, icon: Icon, iconClassName, trend, trendUp }) => (
             <div
               key={label}
-              className="box-border flex flex-col justify-center items-start bg-white relative"
-              style={{ padding: "16px", width: 313.5, height: "72px", border: "1px solid #E1E4EA", borderRadius: "12px", flexGrow: 1 }}
+              className="box-border flex flex-row justify-start items-center relative w-full h-[89px] lg:justify-between lg:items-start lg:min-w-[200px] lg:w-[313.5px] lg:h-[72px] lg:flex-1 lg:shrink lg:basis-0 bg-white"
+              style={{ padding: "16px", border: "1px solid #E1E4EA", borderRadius: "12px" }}
             >
-              <div className="flex flex-row items-end w-full" style={{ gap: "14px", height: "40px" }}>
+              <div className="flex flex-row items-center w-full min-w-0" style={{ gap: "14px" }}>
+                {/* Mobile: plain icon, no badge/border */}
+                <Icon className={`flex lg:hidden flex-shrink-0 ${iconClassName || "w-5 h-5"}`} style={{ color: "#0085FF" }} />
+                {/* Desktop: original bordered icon box */}
                 <div
-                  className="box-border flex items-center justify-center flex-shrink-0"
+                  className="hidden lg:flex box-border items-center justify-center flex-shrink-0"
                   style={{ width: "40px", height: "40px", padding: "8px", gap: "10px", background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: "6px" }}
                 >
                   <Icon className={iconClassName || "w-6 h-6"} style={{ color: "#0085FF" }} />
                 </div>
-                <div className="flex flex-col items-start flex-1 min-w-0" style={{ gap: "4px", height: "40px" }}>
+                <div className="flex flex-col items-start min-w-0 flex-1" style={{ gap: "4px" }}>
                   <span
-                    className="whitespace-nowrap"
-                    style={{ fontFamily: "'Inter Tight', 'Inter', sans-serif", fontWeight: 400, fontSize: "12px", lineHeight: "120%", color: "#525866" }}
+                    className="truncate w-full text-[10px] sm:text-xs"
+                    style={{ fontFamily: "'Inter Tight', 'Inter', sans-serif", fontWeight: 400, lineHeight: "120%", color: "#525866" }}
                   >
                     {label}
                   </span>
                   <span
-                    className="whitespace-nowrap"
-                    style={{ fontFamily: "Inter, sans-serif", fontWeight: 600, fontSize: "18px", lineHeight: "120%", color: "#0E121B" }}
+                    className="truncate w-full text-base sm:text-lg"
+                    style={{ fontFamily: "Inter, sans-serif", fontWeight: 600, lineHeight: "120%", color: "#0E121B" }}
                   >
                     {value}
                   </span>
+                  {/* Trend, inline under the value on mobile */}
+                  {trend && (
+                    <div className="flex lg:hidden flex-row items-center" style={{ gap: 4 }}>
+                      {trendUp ? (
+                        <TrendingUp size={12} className="flex-shrink-0" style={{ color: "#00C950" }} />
+                      ) : (
+                        <TrendingDown size={12} className="flex-shrink-0" style={{ color: "#E82222" }} />
+                      )}
+                      <span
+                        className="truncate min-w-0 text-[9px]"
+                        style={{ fontFamily: "Inter, sans-serif", fontWeight: 400, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
+                      >
+                        {trend}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
+              {/* Trend, absolute bottom-right on desktop */}
               {trend && (
                 <div
-                  className="flex flex-row items-center flex-shrink-0 absolute"
+                  className="hidden lg:flex flex-row items-center flex-shrink-0 absolute"
                   style={{ gap: 4, right: 16, bottom: 16 }}
                 >
                   {trendUp ? (
@@ -2411,8 +2461,11 @@ function Deals() {
       )}
 
       <div
-        className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6 space-y-8"
-        style={{ marginTop: showStats ? (showKanban ? 184 : 168) : (showKanban ? 64 : 48) }}
+        className={`-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6 space-y-8 ${
+          showStats
+            ? showKanban ? "mt-[302px] lg:mt-[184px]" : "mt-[286px] lg:mt-[168px]"
+            : showKanban ? "mt-16" : "mt-12"
+        }`}
       >
         {/* Modals & Overlays */}
         <AdvancedFilterPanel
@@ -2524,7 +2577,13 @@ function Deals() {
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <div className="overflow-x-auto overflow-y-hidden scrollbar-hide -mx-6" style={{ padding: "24px", paddingTop: 0, "--kanban-top-offset": "16rem" }}>
+            <div
+              className="overflow-x-auto overflow-y-hidden scrollbar-hide -mx-6"
+              style={{
+                padding: "16px 24px 24px",
+                "--kanban-top-offset": showStats ? "17.5rem" : "10rem",
+              }}
+            >
               <div className="flex min-w-max" style={{ gap: "16px" }}>
                 {statuses?.map((status) => {
                   const columnDeals = sortedTableDeals.filter((d) => d.status === status);
@@ -2592,6 +2651,24 @@ function Deals() {
                 className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center justify-between px-4 sm:px-6"
                 style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
               >
+                <div className="flex-1 flex justify-between sm:hidden">
+                  <button
+                    onClick={() => setDealsCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={dealsCurrentPageClamped === 1}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setDealsCurrentPage((p) => Math.min(dealsTotalPages, p + 1))}
+                    disabled={dealsCurrentPageClamped === dealsTotalPages}
+                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+
+                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                 <div className="flex items-center space-x-2">
                   <p className="text-sm text-gray-700 font-inter">
                     Showing{" "}
@@ -2698,6 +2775,7 @@ function Deals() {
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
+                </div>
               </div>
             )}
 
@@ -2779,4 +2857,3 @@ export default Deals;
 import PageSkeleton from "../components/common/PageSkeleton";
 import Skeleton from "../components/common/Skeleton";
 import DealCardSkeleton from "../components/common/DealCardSkeleton";
-import useMinDelay from "../hooks/useMinDelay";

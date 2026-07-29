@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useLayoutEffect } from "react";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
-import useMinDelay from "../hooks/useMinDelay";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { createPortal } from "react-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
@@ -166,7 +166,8 @@ function Contacts() {
   });
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const showLoadingSkeleton = useMinDelay(loading && contacts.length === 0, 300);
+  const showLoadingSkeleton = loading && contacts.length === 0;
+  useTopLoadingSignal(showLoadingSkeleton);
   const [contactFieldList, setContactFieldList] = useState([]);
   const [additionalValues, setAdditionalValues] = useState({});
   const [permission, setPermission] = useState("");
@@ -1249,20 +1250,11 @@ function Contacts() {
     }
   };
 
-  const handleTouchStart = (contactId) => {
-    const timer = setTimeout(() => {
-      setSelectionMode(true);
-      handleSelectContact(contactId);
-    }, 500);
-    setLongPressTimer(timer);
-  };
+  // Long-press-to-select is disabled on touch devices — mobile rows should
+  // only enter selection via the checkbox itself, never by holding the row.
+  const handleTouchStart = () => { };
 
-  const handleTouchEnd = () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
-  };
+  const handleTouchEnd = () => { };
 
   // Exit selection mode
   const exitSelectionMode = () => {
@@ -2445,7 +2437,7 @@ function Contacts() {
   );
 
   return (
-    <div className="bg-white min-h-screen">
+    <div className={`bg-white ${showKanban ? "" : "min-h-screen"}`}>
       <AppToaster />
 
       {/* Video Tutorial Modal */}
@@ -2467,36 +2459,36 @@ function Contacts() {
 
       {/* Title Strip */}
       <div
-        className={`fixed right-0 h-16 flex items-center justify-between gap-3 px-6 border-b ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
-        style={{ top: "64px", left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
+        className={`fixed right-0 h-16 flex items-center gap-2 lg:gap-4 px-4 lg:px-6 border-b top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
+        style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
       >
         {showBulkStrip ? (
-          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-3 w-full h-full`}>
-            <div className="flex flex-wrap items-center gap-3">
+          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-3 w-full h-full overflow-x-auto lg:overflow-visible`}>
+            <div className="flex flex-nowrap lg:flex-wrap items-center gap-3 flex-shrink-0">
               <button
                 onClick={() => setShowExportModal(true)}
-                className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <Download className="w-4 h-4" />
                 Export
               </button>
               <button
                 onClick={() => setShowBulkNoteModal(true)}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <StickyNote className="w-4 h-4 text-emerald-600" />
                 Add Note
               </button>
               <button
                 onClick={() => setShowAddToHotlistModal(true)}
-                className="px-4 py-2 bg-white border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <FolderPlus className="w-4 h-4" />
                 Add to Folder
               </button>
               <button
                 onClick={() => setShowBulkActions(true)}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <Edit2 className="w-4 h-4" />
                 Bulk Update
@@ -2504,34 +2496,34 @@ function Contacts() {
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={loading}
-                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
               >
                 <Trash2 className="w-4 h-4" />
                 Delete
               </button>
               <button
                 onClick={exitSelectionMode}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Cancel
               </button>
             </div>
-            <div className="flex items-center gap-3">
-              <CheckSquare className="w-5 h-5 text-blue-600" />
-              <span className="text-blue-800 font-semibold font-inter">
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
                 {selectedContacts.length} contact{selectedContacts.length !== 1 ? "s" : ""} selected
               </span>
               <button
                 onClick={handleSelectAllAcrossPages}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <CheckSquare className="w-4 h-4" />
                 Select All
               </button>
               <button
                 onClick={handleDeselectAllExtra}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Deselect All
@@ -2539,204 +2531,250 @@ function Contacts() {
             </div>
           </div>
         ) : (
-        <>
-        <nav className="relative flex items-stretch h-11 overflow-x-auto flex-shrink-0">
-          {[
-            { id: "All", label: "All" },
-            { id: "Leads", label: "Leads" },
-            { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
-            { id: "Customers", label: "Customers" },
-          ].map(({ id, label }) => (
-            <button
-              key={id}
-              ref={(el) => (tabRefs.current[id] = el)}
-              onClick={() => handleTabChange(id)}
-              className="flex items-center justify-center px-4 h-full whitespace-nowrap"
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 600,
-                fontSize: "14px",
-                letterSpacing: "-0.04em",
-                color: activeTab === id ? "#0085FF" : "#44444A",
-              }}
+          <>
+            <div
+              className={`lg:hidden flex flex-col justify-center gap-1.5 overflow-hidden flex-shrink-0 transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
             >
-              {label}
-            </button>
-          ))}
-          <span
-            className="absolute bottom-0 pointer-events-none transition-all duration-300 ease-out"
-            style={{ left: tabIndicator.left, width: tabIndicator.width, height: 3, background: "#0085FF" }}
-          />
-        </nav>
+              <h1 className="m-0 leading-tight font-bold text-base text-gray-900 truncate">Contacts</h1>
+              <p className="m-0 leading-tight text-[10px] text-gray-500 font-inter truncate">
+                Manage your contacts and leads
+              </p>
+            </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {activeTab !== "Hotlist" && (
-            <>
-              <div
-                className={`relative h-10 flex items-center border border-[rgba(31,41,55,0.1)] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full`}
-              >
-                <Search
-                  strokeWidth={2.5}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
-                  onClick={() => {
-                    setIsSearchExpanded(true);
-                    searchInputRef.current?.focus();
+            <nav className="hidden lg:flex relative items-stretch h-11 overflow-x-auto flex-shrink-0">
+              {[
+                { id: "All", label: "All" },
+                { id: "Leads", label: "Leads" },
+                { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
+                { id: "Customers", label: "Customers" },
+              ].map(({ id, label }) => (
+                <button
+                  key={id}
+                  ref={(el) => (tabRefs.current[id] = el)}
+                  onClick={() => handleTabChange(id)}
+                  className="flex items-center justify-center px-4 h-full whitespace-nowrap"
+                  style={{
+                    fontFamily: "Inter",
+                    fontWeight: 600,
+                    fontSize: "14px",
+                    letterSpacing: "-0.04em",
+                    color: activeTab === id ? "#0085FF" : "#44444A",
                   }}
-                />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onFocus={() => setIsSearchExpanded(true)}
-                  onBlur={() => {
-                    if (!searchTerm) setIsSearchExpanded(false);
-                  }}
-                  className={`w-full h-full pl-10 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
-                  placeholder="Search by contact by name, company, or status..."
-                />
+                >
+                  {label}
+                </button>
+              ))}
+              <span
+                className="absolute bottom-0 pointer-events-none transition-all duration-300 ease-out"
+                style={{ left: tabIndicator.left, width: tabIndicator.width, height: 3, background: "#0085FF" }}
+              />
+            </nav>
+
+            {activeTab !== "Hotlist" && (
+              <div className="relative flex-1 min-w-0 flex items-center justify-end">
+                <div
+                  className={`relative h-10 flex items-center border border-[rgba(31,41,55,0.1)] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
+                >
+                  <Search
+                    strokeWidth={2.5}
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+                    onClick={() => {
+                      setIsSearchExpanded(true);
+                      searchInputRef.current?.focus();
+                    }}
+                  />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onFocus={() => setIsSearchExpanded(true)}
+                    onBlur={() => {
+                      if (!searchTerm) setIsSearchExpanded(false);
+                    }}
+                    className={`w-full h-full pl-10 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                    placeholder="Search by contact by name, company, or status..."
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 lg:gap-4 flex-shrink-0">
+              {activeTab !== "Hotlist" && (
+                <>
+                  <button
+                    onClick={() => setShowAdvancedFilters(true)}
+                    className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
+                    title="Filters"
+                  >
+                    <FilterIcon size={15} />
+                    {activeFilters.length > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                        {activeFilters.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <div className="hidden lg:flex relative items-center gap-1.5 bg-[#F1F1F5] rounded-full p-1 flex-shrink-0 overflow-hidden">
+                    <span
+                      className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-[0_0_6px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
+                      style={{ left: showKanban ? 42 : 4 }}
+                    />
+                    <button
+                      onClick={() => setShowKanban(false)}
+                      className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "text-[#0085FF]" : "text-[#525252]"
+                        }`}
+                      title="List View"
+                    >
+                      <List className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setShowKanban(true)}
+                      className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "text-[#0085FF]" : "text-[#525252]"
+                        }`}
+                      title="Kanban View"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={showKanban ? "#0085FF" : "#525252"} />
+                      </svg>
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <div className="relative" ref={moreMenuRef}>
+                <button
+                  onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                  className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+                  title="More options"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+
+                {isMoreMenuOpen && (
+                  <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
+                    {/* Switcher + Hotlist: mobile-only entries, folded in here instead of their own controls */}
+                    {activeTab !== "Hotlist" && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setShowKanban(false);
+                            setIsMoreMenuOpen(false);
+                          }}
+                          className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <List className="w-4 h-4 text-gray-400" />
+                          List View
+                          {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowKanban(true);
+                            setIsMoreMenuOpen(false);
+                          }}
+                          className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                            <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
+                          </svg>
+                          Kanban View
+                          {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => {
+                        handleTabChange(activeTab === "Hotlist" ? "All" : "Hotlist");
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
+                      </svg>
+                      {activeTab === "Hotlist" ? "Hide Hotlist" : "Hotlist"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowVideoTutorial(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      Video Tutorial
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowImport(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Upload className="w-4 h-4 text-gray-400" />
+                      Import
+                    </button>
+                    <Link
+                      to="/settings/forms?module=Contact"
+                      onClick={() => setIsMoreMenuOpen(false)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      Forms
+                    </Link>
+                    <button
+                      onClick={() => {
+                        setShowColumnSettings(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Settings className="w-4 h-4 text-gray-400" />
+                      Columns
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowAdvancedFilters(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Filter className="w-4 h-4 text-gray-400" />
+                      Filters
+                      {activeFilters.length > 0 && (
+                        <span className="ml-auto bg-blue-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">
+                          {activeFilters.length}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <button
-                onClick={() => setShowAdvancedFilters(true)}
-                className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
-                title="Filters"
+                onClick={() => handleTabChange(activeTab === "Hotlist" ? "All" : "Hotlist")}
+                className={`hidden lg:inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors flex-shrink-0 ${activeTab === "Hotlist"
+                  ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
+                  : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
+                  }`}
               >
-                <FilterIcon size={15} />
-                {activeFilters.length > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                    {activeFilters.length}
-                  </span>
-                )}
+                <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={activeTab === "Hotlist" ? "#1D4ED8" : "#1F2937"} />
+                </svg>
+                <span className="font-medium">Hotlist</span>
               </button>
 
-              <div className="relative flex items-center gap-1.5 bg-[#F1F1F5] rounded-full p-1 flex-shrink-0 overflow-hidden">
-                <span
-                  className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-[0_0_6px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
-                  style={{ left: showKanban ? 42 : 4 }}
-                />
-                <button
-                  onClick={() => setShowKanban(false)}
-                  className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "text-[#0085FF]" : "text-[#525252]"
-                    }`}
-                  title="List View"
-                >
-                  <List className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setShowKanban(true)}
-                  className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "text-[#0085FF]" : "text-[#525252]"
-                    }`}
-                  title="Kanban View"
-                >
-                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={showKanban ? "#0085FF" : "#525252"} />
-                  </svg>
-                </button>
-              </div>
-            </>
-          )}
+              <button
+                onClick={toggleForm}
+                title={showForm ? "Cancel" : "New Contact"}
+                className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
+              >
+                <Plus className="w-4 h-4 flex-shrink-0" />
+                <span className="hidden lg:inline">{showForm ? "Cancel" : "New Contact"}</span>
+              </button>
 
-          <div className="relative" ref={moreMenuRef}>
-            <button
-              onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-              className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
-              title="More options"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-
-            {isMoreMenuOpen && (
-              <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
-                <button
-                  onClick={() => {
-                    setShowVideoTutorial(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  Video Tutorial
-                </button>
-                <button
-                  onClick={() => {
-                    setShowImport(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Upload className="w-4 h-4 text-gray-400" />
-                  Import
-                </button>
-                <Link
-                  to="/settings/forms?module=Contact"
-                  onClick={() => setIsMoreMenuOpen(false)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  Forms
-                </Link>
-                <button
-                  onClick={() => {
-                    setShowColumnSettings(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Settings className="w-4 h-4 text-gray-400" />
-                  Columns
-                </button>
-                <button
-                  onClick={() => {
-                    setShowAdvancedFilters(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Filter className="w-4 h-4 text-gray-400" />
-                  Filters
-                  {activeFilters.length > 0 && (
-                    <span className="ml-auto bg-blue-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">
-                      {activeFilters.length}
-                    </span>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={() => handleTabChange(activeTab === "Hotlist" ? "All" : "Hotlist")}
-            className={`inline-flex items-center gap-2 h-11 px-4 rounded-full text-sm font-semibold transition-colors flex-shrink-0 ${activeTab === "Hotlist"
-              ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
-              : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
-              }`}
-          >
-            <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={activeTab === "Hotlist" ? "#1D4ED8" : "#1F2937"} />
-            </svg>
-            <span className="font-medium">Hotlist</span>
-          </button>
-
-          <button
-            onClick={toggleForm}
-            className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            {showForm ? "Cancel" : "New Contact"}
-          </button>
-
-          <button
-            onClick={() => setShowMobileFilters(true)}
-            className="md:hidden p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors relative"
-          >
-            <Filter className="w-5 h-5 text-gray-600" />
-            {statusFilter && (
-              <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full"></div>
-            )}
-          </button>
-        </div>
-        </>
+            </div>
+          </>
         )}
       </div>
 
@@ -2884,136 +2922,135 @@ function Contacts() {
       <div className="bg-white overflow-visible">
         <div
           ref={tableScrollRef}
-          className="overflow-x-auto overflow-y-auto"
+          className={`${showKanban ? "overflow-x-auto overflow-y-hidden" : "overflow-x-auto overflow-y-auto"} top-[118px] lg:top-[128px]`}
           style={{
             position: "fixed",
-            top: 128,
             left: "var(--sidebar-width, 0px)",
             right: 0,
             bottom: !showKanban && activeTab !== "Hotlist" && !loading ? 64 : 0,
           }}
         >
-        {/* Content Area */}
-        {showKanban ? (
-          <div className="flex gap-4 px-6 pt-6 pb-2 overflow-x-auto">
-            {["New", "Contacted", "Interested", "Unqualified"].map((col) => {
-              const count = sortedContacts.filter(
-                (c) => (c.stageStatus || "New") === col
-              ).length;
-              return (
-                <div
-                  key={col}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const contactId = e.dataTransfer.getData("contactId");
-                    const fromStatus = e.dataTransfer.getData("fromStatus");
-                    if (contactId && fromStatus !== col) {
-                      handleKanbanItemMove(contactId, col);
-                    }
-                  }}
-                  className="border border-[#E1E4EA] rounded-lg flex-shrink-0 overflow-hidden flex flex-col"
-                  style={{ width: "340px", minHeight: "624px" }}
-                >
+          {/* Content Area */}
+          {showKanban ? (
+            <div className="flex gap-4 px-6 pt-6 pb-2 h-full">
+              {["New", "Contacted", "Interested", "Unqualified"].map((col) => {
+                const count = sortedContacts.filter(
+                  (c) => (c.stageStatus || "New") === col
+                ).length;
+                return (
                   <div
-                    className="flex items-center gap-1.5"
-                    style={{ height: "46px", background: "#F5F7FA", padding: "0 18px" }}
+                    key={col}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const contactId = e.dataTransfer.getData("contactId");
+                      const fromStatus = e.dataTransfer.getData("fromStatus");
+                      if (contactId && fromStatus !== col) {
+                        handleKanbanItemMove(contactId, col);
+                      }
+                    }}
+                    className="border border-[#E1E4EA] rounded-lg flex-shrink-0 overflow-hidden flex flex-col h-full"
+                    style={{ width: "340px" }}
                   >
-                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}>
-                      {col}
-                    </span>
-                    <span
-                      className="flex items-center justify-center rounded-full bg-white border border-[#E5E5EC]"
-                      style={{ width: "22px", height: "22px", boxShadow: "0px 1px 2px rgba(82, 88, 102, 0.06)" }}
+                    <div
+                      className="flex items-center gap-1.5"
+                      style={{ height: "46px", background: "#F5F7FA", padding: "0 18px" }}
                     >
-                      <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#161618" }}>
-                        {count}
+                      <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}>
+                        {col}
                       </span>
-                    </span>
-                  </div>
+                      <span
+                        className="flex items-center justify-center rounded-full bg-white border border-[#E5E5EC]"
+                        style={{ width: "22px", height: "22px", boxShadow: "0px 1px 2px rgba(82, 88, 102, 0.06)" }}
+                      >
+                        <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#161618" }}>
+                          {count}
+                        </span>
+                      </span>
+                    </div>
 
-                  <div className="flex flex-col gap-3 p-3">
-                    {sortedContacts
-                      .filter((c) => (c.stageStatus || "New") === col)
-                      .map((contact) => (
-                        <div
-                          key={contact._id}
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData("contactId", contact._id);
-                            e.dataTransfer.setData("fromStatus", col);
-                            const node = e.currentTarget;
-                            const clone = node.cloneNode(true);
-                            clone.style.width = `${node.offsetWidth}px`;
-                            clone.style.position = "absolute";
-                            clone.style.top = "-9999px";
-                            clone.style.left = "-9999px";
-                            clone.style.opacity = "1";
-                            document.body.appendChild(clone);
-                            e.dataTransfer.setDragImage(clone, node.offsetWidth / 2, 20);
-                            requestAnimationFrame(() => document.body.removeChild(clone));
-                          }}
-                          onClick={() => navigate(`/contacts/${contact._id}`)}
-                          className="flex flex-col bg-white border border-[#E5E5EC] rounded-[10px] cursor-pointer hover:shadow-sm transition-shadow active:cursor-grabbing"
-                          style={{ padding: "16px", gap: "16px" }}
-                        >
-                          <div className="flex items-center gap-2 w-full">
-                            <ProfilePicture contact={contact} />
-                            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-2.5 w-full">
+                    <div className="flex-1 overflow-y-auto flex flex-col gap-3 p-3 custom-scrollbar">
+                      {sortedContacts
+                        .filter((c) => (c.stageStatus || "New") === col)
+                        .map((contact) => (
+                          <div
+                            key={contact._id}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("contactId", contact._id);
+                              e.dataTransfer.setData("fromStatus", col);
+                              const node = e.currentTarget;
+                              const clone = node.cloneNode(true);
+                              clone.style.width = `${node.offsetWidth}px`;
+                              clone.style.position = "absolute";
+                              clone.style.top = "-9999px";
+                              clone.style.left = "-9999px";
+                              clone.style.opacity = "1";
+                              document.body.appendChild(clone);
+                              e.dataTransfer.setDragImage(clone, node.offsetWidth / 2, 20);
+                              requestAnimationFrame(() => document.body.removeChild(clone));
+                            }}
+                            onClick={() => navigate(`/contacts/${contact._id}`)}
+                            className="flex flex-col bg-white border border-[#E5E5EC] rounded-[10px] cursor-pointer hover:shadow-sm transition-shadow active:cursor-grabbing"
+                            style={{ padding: "16px", gap: "16px" }}
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <ProfilePicture contact={contact} />
+                              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2.5 w-full">
+                                  <span
+                                    className="truncate"
+                                    style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: "16px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
+                                  >
+                                    {contact.name}
+                                  </span>
+                                  <MoreVertical className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
+                                </div>
                                 <span
                                   className="truncate"
-                                  style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: "16px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
+                                  style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "150%", letterSpacing: "-0.06em", color: "#525252" }}
                                 >
-                                  {contact.name}
+                                  {contact.company?.name || "—"}
                                 </span>
-                                <MoreVertical className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
                               </div>
+                            </div>
+
+                            <div className="w-full border-t border-[#F1F1F5]" />
+
+                            <div className="flex items-center gap-2 w-full">
+                              <Phone className="w-4 h-4 text-[#525252] flex-shrink-0" />
                               <span
                                 className="truncate"
-                                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "150%", letterSpacing: "-0.06em", color: "#525252" }}
+                                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}
                               >
-                                {contact.company?.name || "—"}
+                                {contact.phone || "—"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 w-full">
+                              <Mail className="w-4 h-4 text-[#525252] flex-shrink-0" />
+                              <span
+                                className="truncate"
+                                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}
+                              >
+                                {contact.email || "—"}
                               </span>
                             </div>
                           </div>
-
-                          <div className="w-full border-t border-[#F1F1F5]" />
-
-                          <div className="flex items-center gap-2 w-full">
-                            <Phone className="w-4 h-4 text-[#525252] flex-shrink-0" />
-                            <span
-                              className="truncate"
-                              style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}
-                            >
-                              {contact.phone || "—"}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2 w-full">
-                            <Mail className="w-4 h-4 text-[#525252] flex-shrink-0" />
-                            <span
-                              className="truncate"
-                              style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}
-                            >
-                              {contact.email || "—"}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : activeTab === "Hotlist" ? (
-          <div className="px-6 pt-6">
-            <ContactFolder />
-          </div>
-        ) : (
-          <div
-            className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
-          >
+                );
+              })}
+            </div>
+          ) : activeTab === "Hotlist" ? (
+            <div className="px-6 pt-6">
+              <ContactFolder />
+            </div>
+          ) : (
+            <div
+              className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
+            >
               <table
                 className="w-full border-separate border-spacing-0 text-left"
                 style={{
@@ -3049,126 +3086,126 @@ function Contacts() {
                   const firstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
 
                   return (
-                <>
-                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <tr key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => {
-                        const colId = header.column.id;
-                        const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
-                        const isRightSticky = rightPinnedKeys.includes(colId);
-                        const isSticky = isLeftSticky || isRightSticky;
-                        const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
-                        const isRightBoundary = colId === firstRightPinnedKey;
-                        const isDraggable = colId !== "selection";
-                        const isDragging = draggedColKey === colId;
-                        const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+                    <>
+                      <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
+                        {table.getHeaderGroups().map((headerGroup) => (
+                          <tr key={headerGroup.id}>
+                            {headerGroup.headers.map((header) => {
+                              const colId = header.column.id;
+                              const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                              const isRightSticky = rightPinnedKeys.includes(colId);
+                              const isSticky = isLeftSticky || isRightSticky;
+                              const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                              const isRightBoundary = colId === firstRightPinnedKey;
+                              const isDraggable = colId !== "selection";
+                              const isDragging = draggedColKey === colId;
+                              const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
 
-                        return (
-                          <th
-                            key={header.id}
-                            data-col-id={colId}
-                            onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
-                            style={{
-                              width: header.getSize(),
-                              position: isSticky ? "sticky" : "relative",
-                              left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
-                              right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
-                              zIndex: isSticky ? 20 : 1,
-                              opacity: isDragging ? 0.35 : 1,
-                            }}
-                            className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
-                              ? "border-r-2 border-r-gray-300"
-                              : "last:border-r-0"
-                              } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
-                          >
-                            <div className="w-full min-w-0">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext(),
-                              )}
-                            </div>
+                              return (
+                                <th
+                                  key={header.id}
+                                  data-col-id={colId}
+                                  onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
+                                  style={{
+                                    width: header.getSize(),
+                                    position: isSticky ? "sticky" : "relative",
+                                    left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                    right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                    zIndex: isSticky ? 20 : 1,
+                                    opacity: isDragging ? 0.35 : 1,
+                                  }}
+                                  className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
+                                    ? "border-r-2 border-r-gray-300"
+                                    : "last:border-r-0"
+                                    } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                                >
+                                  <div className="w-full min-w-0">
+                                    {flexRender(
+                                      header.column.columnDef.header,
+                                      header.getContext(),
+                                    )}
+                                  </div>
 
-                            {colId !== "selection" && header.column.getCanResize() && (
-                              <div
-                                data-resize-handle="true"
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  header.getResizeHandler()(e);
-                                }}
-                                onTouchStart={header.getResizeHandler()}
-                                className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
-                              />
-                            )}
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </thead>
+                                  {colId !== "selection" && header.column.getCanResize() && (
+                                    <div
+                                      data-resize-handle="true"
+                                      onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        header.getResizeHandler()(e);
+                                      }}
+                                      onTouchStart={header.getResizeHandler()}
+                                      className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
+                                    />
+                                  )}
+                                </th>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </thead>
 
-                <tbody className="bg-white">
-                  {showLoadingSkeleton ? (
-                    <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox checkboxWidth={50} />
-                  ) : sortedContacts.length === 0 ? (
-                    <tr>
-                      <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
-                        <p className="font-medium">No contacts found</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    table.getRowModel().rows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className={`bg-white hover:bg-blue-50 transition-colors cursor-pointer ${selectedContactsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
-                        onClick={(e) => {
-                          if (e.target.closest("button") || e.target.closest("a") || e.target.closest("input")) return;
-                          navigate(`/contacts/${row.original._id}`);
-                        }}
-                      >
-                        {row.getVisibleCells().map((cell) => {
-                          const colId = cell.column.id;
-                          const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
-                          const isRightSticky = rightPinnedKeys.includes(colId);
-                          const isSticky = isLeftSticky || isRightSticky;
-                          const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
-                          const isRightBoundary = colId === firstRightPinnedKey;
-                          const isColDragging = draggedColKey === colId;
-
-                          return (
-                            <td
-                              key={cell.id}
-                              onClick={(e) => { if (colId === "selection") e.stopPropagation(); }}
-                              style={{
-                                width: cell.column.getSize(),
-                                position: isSticky ? "sticky" : "static",
-                                left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
-                                right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
-                                zIndex: isSticky ? 10 : 1,
-                                opacity: isColDragging ? 0.35 : 1,
-                              }}
-                              className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
-                                ? "border-r-2 border-r-gray-200"
-                                : "last:border-r-0"
-                                } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
-                            >
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext(),
-                              )}
+                      <tbody className="bg-white">
+                        {showLoadingSkeleton ? (
+                          <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox checkboxWidth={50} />
+                        ) : sortedContacts.length === 0 ? (
+                          <tr>
+                            <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
+                              <p className="font-medium">No contacts found</p>
                             </td>
-                          );
-                        })}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-                </>
+                          </tr>
+                        ) : (
+                          table.getRowModel().rows.map((row) => (
+                            <tr
+                              key={row.id}
+                              className={`bg-white hover:bg-blue-50 transition-colors cursor-pointer ${selectedContactsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                              onClick={(e) => {
+                                if (e.target.closest("button") || e.target.closest("a") || e.target.closest("input")) return;
+                                navigate(`/contacts/${row.original._id}`);
+                              }}
+                            >
+                              {row.getVisibleCells().map((cell) => {
+                                const colId = cell.column.id;
+                                const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                                const isRightSticky = rightPinnedKeys.includes(colId);
+                                const isSticky = isLeftSticky || isRightSticky;
+                                const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                                const isRightBoundary = colId === firstRightPinnedKey;
+                                const isColDragging = draggedColKey === colId;
+
+                                return (
+                                  <td
+                                    key={cell.id}
+                                    onClick={(e) => { if (colId === "selection") e.stopPropagation(); }}
+                                    style={{
+                                      width: cell.column.getSize(),
+                                      position: isSticky ? "sticky" : "static",
+                                      left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                      right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                      zIndex: isSticky ? 10 : 1,
+                                      opacity: isColDragging ? 0.35 : 1,
+                                    }}
+                                    className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
+                                      ? "border-r-2 border-r-gray-200"
+                                      : "last:border-r-0"
+                                      } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
+                                  >
+                                    {flexRender(
+                                      cell.column.columnDef.cell,
+                                      cell.getContext(),
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </>
                   );
                 })()}
               </table>
-          </div>
-        )}
+            </div>
+          )}
         </div>
 
         {dragGhost && createPortal(
