@@ -441,28 +441,28 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
       )}
 
       {/* Search + Controls */}
-      <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+      <div className="flex items-center gap-2 lg:gap-4 mb-4 h-8 lg:h-11">
         <div className="relative flex-1 h-full">
-          <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
+          <Search size={14} className="absolute left-3 lg:left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50 lg:w-5 lg:h-5" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by tasks by name, team, or deal..."
-            className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+            className="w-full h-full pl-8 lg:pl-10 pr-3 lg:pr-3.5 border rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
             style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
           />
         </div>
         <button
           onClick={() => setShowFilterPanel(true)}
-          className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+          className="relative flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 h-full text-xs lg:text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
           style={{
-            height: "44px",
             borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
           }}
         >
-          <FilterIcon size={16} />
-          Filter
+          <FilterIcon size={12} className="lg:hidden" />
+          <FilterIcon size={16} className="hidden lg:block" />
+          <span className="hidden lg:inline">Filter</span>
           {Object.values(selectedFilters).flat().length > 0 && (
             <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
               {Object.values(selectedFilters).flat().length}
@@ -471,11 +471,12 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
         </button>
         <button
           onClick={() => setShowTaskForm(true)}
-          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
-          style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
+          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0 w-8 h-8 lg:w-11 lg:h-11"
+          style={{ borderColor: "#E1E4EA" }}
           title="Add Task"
         >
-          <Plus size={20} />
+          <Plus size={14} className="lg:hidden" />
+          <Plus size={20} className="hidden lg:block" />
         </button>
       </div>
 
