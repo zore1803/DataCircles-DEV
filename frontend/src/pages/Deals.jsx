@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import API from "../services/api";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
@@ -593,7 +594,8 @@ function Deals() {
   });
   const [loading, setLoading] = useState(false);
   const [statuses, setStatuses] = useState([]);
-  const showKanbanSkeleton = useMinDelay(loading && deals.length === 0, 300);
+  const showKanbanSkeleton = loading && deals.length === 0;
+  useTopLoadingSignal(showKanbanSkeleton);
   const [showFilters, setShowFilters] = useState(false);
   const [activeAdvancedFilters, setActiveAdvancedFilters] = useState([]);
 
@@ -2783,4 +2785,3 @@ export default Deals;
 import PageSkeleton from "../components/common/PageSkeleton";
 import Skeleton from "../components/common/Skeleton";
 import DealCardSkeleton from "../components/common/DealCardSkeleton";
-import useMinDelay from "../hooks/useMinDelay";

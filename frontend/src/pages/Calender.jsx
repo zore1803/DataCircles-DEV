@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import logo from "/DataCircles.png";
 import AppToaster from "../components/AppToaster";
+import Skeleton from "../components/common/Skeleton";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 
 // --- Components ---
 
@@ -281,7 +283,8 @@ const AdminCalendar = () => {
   const [view, setView] = useState("month");
   const [meetings, setMeetings] = useState({});
   const [tasks, setTasks] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  useTopLoadingSignal(loading);
 
   // Modals & Popups
   const [modalOpen, setModalOpen] = useState(false);
@@ -503,22 +506,26 @@ const AdminCalendar = () => {
       <AppToaster />
 
       <div
-        className="sticky flex flex-col flex-shrink-0 self-stretch"
+        className="fixed flex flex-col flex-shrink-0"
         style={{
-          width: "100%",
+          top: "64px",
+          left: "var(--sidebar-width, 0px)",
+          right: 0,
           background: "#FFFFFF",
           borderBottom: "1px solid #E1E4EA",
           borderRadius: 0,
-          top: "64px",
           zIndex: 40,
         }}
       >
       <div
         className="box-border flex flex-row justify-between items-center flex-shrink-0 self-stretch"
         style={{
-          padding: "0px 24px 12px",
+          padding: "0px 24px",
           gap: 16,
           width: "100%",
+          height: 64,
+          minHeight: 64,
+          maxHeight: 64,
         }}
       >
         <div
@@ -538,6 +545,9 @@ const AdminCalendar = () => {
           >
             Calendar
           </span>
+          {loading ? (
+            <Skeleton width={260} height={12} />
+          ) : (
           <span
             className="truncate w-full"
             style={{
@@ -550,28 +560,29 @@ const AdminCalendar = () => {
           >
             View all meetings and tasks across contacts, companies and vendors
           </span>
+          )}
         </div>
 
         <div
           className="flex flex-row items-center flex-shrink-0"
-          style={{ gap: 12, height: 44 }}
+          style={{ gap: 12, height: 40 }}
         >
           <div
             className="relative box-border flex flex-row items-center flex-shrink transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:hover:bg-white"
             style={{
-              padding: "12px 14px",
+              padding: "10px 14px",
               gap: 10,
-              width: isSearchExpanded ? 416 : 44,
+              width: isSearchExpanded ? 416 : 40,
               maxWidth: "40vw",
-              minWidth: isSearchExpanded ? 120 : 44,
-              height: 44,
+              minWidth: isSearchExpanded ? 120 : 40,
+              height: 40,
               border: `1px solid ${isSearchExpanded ? "#0085FF" : "rgba(31, 41, 55, 0.1)"}`,
               borderRadius: 95,
               background: "#fff",
             }}
           >
             <Search
-              size={20}
+              size={16}
               strokeWidth={2.5}
               className="flex-shrink-0 cursor-pointer"
               style={{ color: "#1F2937" }}
@@ -602,58 +613,67 @@ const AdminCalendar = () => {
           </div>
 
           <button
+            disabled={loading}
             className="box-border flex flex-row justify-center items-center flex-shrink-0"
             style={{
-              padding: 12,
+              padding: 10,
               gap: 8,
-              width: 44,
-              height: 44,
+              width: 40,
+              height: 40,
               background: "#FFFFFF",
               border: "1px solid #E1E4EA",
               borderRadius: 95,
             }}
           >
-            <Filter size={20} style={{ color: "#1F2937" }} />
+            {loading ? <Skeleton width={16} height={16} shape="circle" /> : <Filter size={16} strokeWidth={2.5} style={{ color: "#1F2937" }} />}
           </button>
 
           <button
+            disabled={loading}
             className="box-border flex flex-row justify-center items-center flex-shrink-0"
             style={{
-              padding: 12,
+              padding: 10,
               gap: 8,
-              width: 44,
-              height: 44,
+              width: 40,
+              height: 40,
               background: "#FFFFFF",
               border: "1px solid #E1E4EA",
               borderRadius: 96,
             }}
           >
-            <MoreVertical size={20} style={{ color: "#1F2937" }} />
+            {loading ? <Skeleton width={16} height={16} shape="circle" /> : <MoreVertical size={16} strokeWidth={2.5} style={{ color: "#1F2937" }} />}
           </button>
 
           <button
+            disabled={loading}
             className="flex flex-row justify-center items-center flex-shrink-0"
             style={{
-              padding: 12,
+              padding: 10,
               gap: 6,
               width: 146,
-              height: 44,
-              background: "#0085FF",
+              height: 40,
+              background: loading ? "#F5F6F6" : "#0085FF",
               borderRadius: 96,
             }}
           >
-            <Plus size={20} style={{ color: "#FFFFFF" }} />
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 500,
-                fontSize: 14,
-                lineHeight: "20px",
-                color: "#FFFFFF",
-              }}
-            >
-              Add Activity
-            </span>
+            {loading ? (
+              <Skeleton width={90} height={14} />
+            ) : (
+              <>
+                <Plus size={16} style={{ color: "#FFFFFF" }} />
+                <span
+                  style={{
+                    fontFamily: "Inter",
+                    fontWeight: 500,
+                    fontSize: 14,
+                    lineHeight: "20px",
+                    color: "#FFFFFF",
+                  }}
+                >
+                  Add Activity
+                </span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -661,7 +681,7 @@ const AdminCalendar = () => {
 
       <div
         className="box-border flex flex-col items-start flex-shrink-0 self-stretch mx-6 bg-white border border-[#E1E4EA] rounded-lg"
-        style={{ padding: 0, gap: 0, marginTop: 18 }}
+        style={{ padding: 0, gap: 0, marginTop: 18 + 64 }}
       >
         {/* Filter bar */}
         <div
@@ -688,24 +708,32 @@ const AdminCalendar = () => {
               style={{ padding: "8px 24px", gap: 10, height: 30, borderRadius: 96 }}
             >
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0085FF", flexShrink: 0 }} />
+              {loading ? (
+                <Skeleton width={70} height={12} />
+              ) : (
               <span
                 className="whitespace-nowrap"
                 style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#0085FF" }}
               >
                 {periodMeetingsCount} Meeting{periodMeetingsCount !== 1 ? "s" : ""}
               </span>
+              )}
             </div>
             <div
               className="flex flex-row justify-center items-center flex-shrink-0"
               style={{ padding: "8px 24px", gap: 10, height: 30, borderRadius: 96 }}
             >
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#00C950", flexShrink: 0 }} />
+              {loading ? (
+                <Skeleton width={60} height={12} />
+              ) : (
               <span
                 className="whitespace-nowrap"
                 style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#00C950" }}
               >
                 {periodTasksCount} Task{periodTasksCount !== 1 ? "s" : ""}
               </span>
+              )}
             </div>
           </div>
 
@@ -743,6 +771,9 @@ const AdminCalendar = () => {
                 borderColor: "#E0E0E1",
               }}
             >
+              {loading ? (
+                <Skeleton width={72} height={14} />
+              ) : (
               <span
                 className="whitespace-nowrap"
                 style={{
@@ -757,6 +788,7 @@ const AdminCalendar = () => {
                   ? currentDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
                   : currentDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
               </span>
+              )}
             </div>
             <button
               onClick={() => {
@@ -785,7 +817,7 @@ const AdminCalendar = () => {
               padding: 4,
               gap: 6,
               width: 285,
-              height: 44,
+              height: 40,
               background: "#FFFFFF",
               border: "1px solid #E0E0E1",
               boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.1)",
@@ -799,19 +831,26 @@ const AdminCalendar = () => {
             ].map(({ v, Icon }) => (
               <button
                 key={v}
-                onClick={() => setView(v)}
+                onClick={() => !loading && setView(v)}
                 className="box-border flex flex-row justify-center items-center flex-1"
                 style={{
-                  padding: "8px 12px",
+                  padding: "6px 12px",
                   gap: 6,
-                  height: 36,
+                  height: 32,
                   background: view === v ? "#FFFFFF" : "transparent",
                   border: view === v ? "1px solid rgba(0, 133, 255, 0.2)" : "none",
                   boxShadow: view === v ? "0px 0px 6px rgba(0, 0, 0, 0.1)" : "none",
                   borderRadius: view === v ? 96 : 4,
                 }}
               >
-                <Icon width={16} height={16} style={{ color: view === v ? "#0085FF" : "#48494C", flexShrink: 0 }} />
+                {loading ? (
+                  <Skeleton width={16} height={16} shape="circle" />
+                ) : (
+                  <Icon width={16} height={16} style={{ color: view === v ? "#0085FF" : "#48494C", flexShrink: 0 }} />
+                )}
+                {loading ? (
+                  <Skeleton width={30} height={12} />
+                ) : (
                 <span
                   className="capitalize whitespace-nowrap"
                   style={{
@@ -824,6 +863,7 @@ const AdminCalendar = () => {
                 >
                   {v}
                 </span>
+                )}
               </button>
             ))}
           </div>
@@ -847,6 +887,9 @@ const AdminCalendar = () => {
                 borderColor: "#E0E0E1",
               }}
             >
+              {loading ? (
+                <Skeleton width={28} height={12} />
+              ) : (
               <span
                 className="whitespace-nowrap"
                 style={{
@@ -859,12 +902,49 @@ const AdminCalendar = () => {
               >
                 {day}
               </span>
+              )}
             </div>
           ))}
         </div>
 
+        {/* Month/Week grid skeleton */}
+        {loading &&
+          Array.from({ length: 6 }).map((_, weekIdx) => (
+            <div key={weekIdx} className="flex flex-row items-start flex-shrink-0 self-stretch">
+              {Array.from({ length: 7 }).map((__, i) => {
+                const isLastCol = i === 6;
+                const isLastRow = weekIdx === 5;
+                return (
+                  <div
+                    key={i}
+                    className="box-border flex flex-col items-start flex-shrink-0"
+                    style={{
+                      padding: 16,
+                      gap: 8,
+                      width: "14.2857%",
+                      height: 158,
+                      borderWidth: isLastCol
+                        ? isLastRow ? "0px" : "0px 0px 1px 0px"
+                        : isLastRow ? "0px 1px 0px 0px" : "0px 1px 1px 0px",
+                      borderStyle: "solid",
+                      borderColor: "#E0E0E1",
+                    }}
+                  >
+                    <Skeleton width={18} height={14} />
+                    {(weekIdx + i) % 3 !== 0 && (
+                      <div className="flex flex-col items-start w-full" style={{ gap: 4, marginTop: 8 }}>
+                        <Skeleton width="100%" height={24} className="rounded" />
+                        {(weekIdx + i) % 2 === 0 && <Skeleton width="100%" height={24} className="rounded" />}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+
         {/* Month/Week grid */}
-        {(view === "month" || view === "week" || view === "day") &&
+        {!loading && (view === "month" || view === "week" || view === "day") &&
           Array.from({ length: 6 }).map((_, weekIdx) => {
             const weekDays = calendarDays.slice(weekIdx * 7, weekIdx * 7 + 7);
             const isCurrentWeek = weekDays.some(

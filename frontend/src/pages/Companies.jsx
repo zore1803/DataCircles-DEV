@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
-import useMinDelay from "../hooks/useMinDelay";
 import { createPortal } from "react-dom";
 import API from "../services/api";
 import { Link } from "react-router-dom";
@@ -166,7 +166,8 @@ function Companies() {
   const [additionalFields, setAdditionalFields] = useState({});
   const [companyFieldNames, setCompanyFieldNames] = useState([]);
   const [loading, setLoading] = useState(true);
-  const showLoadingSkeleton = useMinDelay(loading && companies.length === 0, 300);
+  const showLoadingSkeleton = loading && companies.length === 0;
+  useTopLoadingSignal(showLoadingSkeleton);
   const [industries, setIndustries] = useState([]);
   const [industriesLoading, setIndustriesLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);

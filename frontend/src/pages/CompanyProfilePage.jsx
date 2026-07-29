@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from "react";
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import API from "../services/api";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import CompanyDealsKanban from "../components/company/CompanyDealsKanban";
 import CompanyContactsTab from "../components/company/CompanyContactsTab";
 import CompanyInvoicesTab from "../components/company/CompanyInvoicesTab";
@@ -51,7 +52,6 @@ import CompanyForm from "../components/company/CompanyForm";
 import SubsidiaryModal from "../components/company/SubsidiaryModal";
 import MergeCompanyModal from "../components/company/MergeCompanyModal";
 import StatTileSkeleton from "../components/common/StatTileSkeleton";
-import useMinDelay from "../hooks/useMinDelay";
 
 const tabs = [
   "Overview",
@@ -583,8 +583,9 @@ const CompanyProfilePage = () => {
     fetchData();
   }, [id]);
 
-  const showOverviewSkeleton = useMinDelay(!dataLoaded || !invoicesLoaded, 300);
-  const showDealsSkeleton = useMinDelay(!dataLoaded, 300);
+  const showOverviewSkeleton = !dataLoaded || !invoicesLoaded;
+  const showDealsSkeleton = !dataLoaded;
+  useTopLoadingSignal(showOverviewSkeleton || showDealsSkeleton);
 
   const fetchInvoices = useCallback(async () => {
     setInvoicesLoading(true);
@@ -1050,7 +1051,7 @@ const CompanyProfilePage = () => {
                   ) : (
                   <div className="flex min-w-0" style={{ flex: "1 1 0%", minHeight: 0 }}>
                     {/* Fixed Y-axis, stays put while the plot below scrolls horizontally */}
-                    <div style={{ width: 64, height: "100%", flexShrink: 0 }}>
+                    <div style={{ width: 88, height: "100%", flexShrink: 0 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <ComposedChart data={monthlyIncomeData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
                           <XAxis
@@ -1067,7 +1068,7 @@ const CompanyProfilePage = () => {
                             allowDecimals={false}
                             tickFormatter={(value) => value.toLocaleString("en-IN")}
                             tick={{ fontSize: 12, fontFamily: "'DM Sans', sans-serif", fill: "rgba(33, 32, 31, 0.56)" }}
-                            width={64}
+                            width={88}
                           />
                           <Area type="linear" dataKey="income" stroke="none" fill="none" isAnimationActive={false} />
                         </ComposedChart>
