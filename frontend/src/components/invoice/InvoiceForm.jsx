@@ -1071,12 +1071,12 @@ const InvoiceForm = ({
       />
       <div
         ref={formRef}
-        className={`fixed dc-panel-card z-[10000] w-full md:w-[600px] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${
+        className={`fixed dc-panel-card z-[10000] w-full md:w-[600px] bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${
           isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
       >
-        <form onSubmit={handleSubmit} className="p-4 space-y-6">
-          <div className="flex justify-between items-center mb-4">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
+          <div className="flex justify-between items-center p-4 border-b flex-shrink-0 bg-white">
             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-600" />
               {editingInvoice ? "Edit Invoice" : "Create New Invoice"}
@@ -1091,7 +1091,8 @@ const InvoiceForm = ({
             </button>
           </div>
 
-          <div className="space-y-4">
+          <div className="p-4 space-y-6 overflow-y-auto flex-1">
+            <div className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-slate-700">
@@ -1657,7 +1658,10 @@ const InvoiceForm = ({
                 {numberToWords(finalTotal)}
               </div>
             </div>
+          </div>
+        </div>
 
+        <div className="p-4 border-t flex-shrink-0 bg-white">
             <div className="flex flex-col md:flex-row justify-between items-center gap-3 p-4 bg-gradient-to-r from-slate-50 to-blue-50/30 rounded-lg border border-slate-200/50">
               <button
                 type="submit"

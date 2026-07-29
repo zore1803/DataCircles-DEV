@@ -33,6 +33,10 @@ import TableSkeletonRows from "../common/TableSkeletonRows";
 import NoteCardSkeleton from "../common/NoteCardSkeleton";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import Skeleton from "../common/Skeleton";
+import BulkActionBar from "../common/BulkActionBar";
+import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
+import { exportToCSV } from "../../utils/exportToCSV";
+import { bulkDelete } from "../../utils/bulkOperations";
 import useFillToBottom from "../../hooks/useFillToBottom";
 import useMinDelay from "../../hooks/useMinDelay";
 import { applyColumnFilters } from "../../utils/advancedFilters";
@@ -103,6 +107,8 @@ export default function CompanyNotesTab({ showStats = true }) {
   const [notes, setNotes] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
 
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
@@ -177,6 +183,13 @@ export default function CompanyNotesTab({ showStats = true }) {
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    // A single press does nothing: the column menu opens from its own chevron
+    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
+    // meant the FIRST press of every double-click popped the menu, whose
+    // full-screen backdrop then swallowed the second press — making the header
+    // effectively un-double-clickable. Drag still starts on the second press.
+    if (e.detail < 2) return;
 
     e.preventDefault();
     window.getSelection?.()?.removeAllRanges();
@@ -507,6 +520,16 @@ export default function CompanyNotesTab({ showStats = true }) {
     });
   }, [filteredNotes, sortConfig]);
 
+  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+    items: filteredNotes,
+    onDelete: () => setShowBulkDeleteModal(true)
+  });
+
+  // Keeps the bulk strip mounted for one beat after deselect so its
+  // slide-out animation can play instead of vanishing on the same frame.
+  const { visible: bulkStripVisible, closing: bulkStripClosing } =
+    useBulkStrip(selectedItems.length);
+
   const [listPage, setListPage] = useState(1);
   const [listLimit, setListLimit] = useState(10);
 
@@ -521,6 +544,36 @@ export default function CompanyNotesTab({ showStats = true }) {
     if (page < 1 || page > listTotalPages) return;
     setListPage(page);
   };
+
+  const handleExportSelected = () => {
+    const dataToExport = notes.filter(n => selectedItems.includes(n._id)).map(n => ({
+      "Title": n.title || "Untitled Note",
+      "Type": "General Note",
+      "Author": typeof n.user === "object" ? n.user?.name || "Unknown" : "Unknown",
+      "Created At": n.createdAt ? new Date(n.createdAt).toLocaleString() : "",
+    }));
+    const headers = Object.keys(dataToExport[0] || {}).join(",");
+    const rows = dataToExport.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    exportToCSV([headers, ...rows], `notes_export_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkActionLoading(true);
+    try {
+      await bulkDelete("notes", selectedItems);
+      setNotes?.(prev => prev.filter(n => !selectedItems.includes(n._id)));
+      toast.success(`${selectedItems.length} note(s) deleted`);
+      clearSelection();
+      setShowBulkDeleteModal(false);
+    } catch (error) {
+      console.error("Bulk delete failed:", error);
+      toast.error("Failed to delete notes");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleSelectAllAcrossPages = () => selectAll(filteredNotes);
 
   const handleListLimitChange = (newLimit) => {
     setListLimit(newLimit);
@@ -659,6 +712,17 @@ export default function CompanyNotesTab({ showStats = true }) {
           <Skeleton height={44} width={86} shape="rect" className="rounded-full flex-shrink-0" />
           <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
         </div>
+      ) : viewMode === "list" && bulkStripVisible ? (
+        <BulkActionBar
+          isClosing={bulkStripClosing}
+          selectedCount={selectedItems.length}
+          entityName="note"
+          onSelectAll={handleSelectAllAcrossPages}
+          onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onDelete={() => setShowBulkDeleteModal(true)}
+          onCancel={clearSelection}
+        />
       ) : (
       <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
         <div className="relative flex-1 h-full">
@@ -811,6 +875,14 @@ export default function CompanyNotesTab({ showStats = true }) {
                 are painted with inset boxShadow on each <th> instead. */}
             <thead className="bg-[#F5F7FA] sticky top-0 z-30">
               <tr>
+                <th style={{ width: 44, height: 56, boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA" }} className="px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={selectedItems.length > 0 && selectedItems.length === paginatedNotes.length}
+                    onChange={(e) => e.target.checked ? selectAll(paginatedNotes) : clearSelection()}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                  />
+                </th>
                 {orderedColumns.map((col, idx) => {
                   const isLast = idx === orderedColumns.length - 1;
                   const isDragging = draggedColKey === col.id;
@@ -956,12 +1028,13 @@ export default function CompanyNotesTab({ showStats = true }) {
             <tbody className="divide-y divide-[#E1E4EA] bg-white">
               {paginatedNotes.length === 0 ? (
                 <tr>
-                  <td colSpan={orderedColumns.length} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
+                  <td colSpan={orderedColumns.length + 1} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
                     No notes found.
                   </td>
                 </tr>
               ) : (
                 paginatedNotes.map((note) => {
+                  const isSelected = selectedItems.includes(note._id);
                   const cells = {
                     title: (
                         <td key="title" style={{ height: 64 }} className="px-3 text-left truncate border-r border-b border-[#E1E4EA]">
@@ -1053,7 +1126,17 @@ export default function CompanyNotesTab({ showStats = true }) {
                     ),
                   };
                   return (
-                    <tr key={note._id} className="hover:bg-gray-50 transition-colors group">
+                    <tr key={note._id} className={`hover:bg-gray-50 transition-colors group ${isSelected ? "!bg-blue-50" : ""}`}>
+                      <td style={{ height: 64, width: 44 }} onClick={e => e.stopPropagation()} className="px-3 border-r border-b border-[#E1E4EA]">
+                        <div className="flex justify-center items-center w-full">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleItem(note._id)}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                          />
+                        </div>
+                      </td>
                       {/* Cells indexed by column id and rendered through orderedColumns,
                           so hide/pin in the header moves its data cell too. */}
                       {orderedColumns.map((col) => {
@@ -1225,6 +1308,34 @@ export default function CompanyNotesTab({ showStats = true }) {
           ))}
         </div>,
         document.body,
+      )}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Delete</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Delete {selectedItems.length} selected note{selectedItems.length !== 1 ? 's' : ''}? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkActionLoading ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -12,6 +12,11 @@ import { applyColumnFilters } from "../../utils/advancedFilters";
 import TableSkeletonRows from "../common/TableSkeletonRows";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import Skeleton from "../common/Skeleton";
+import BulkActionBar from "../common/BulkActionBar";
+import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
+import { exportToCSV } from "../../utils/exportToCSV";
+import { bulkDelete } from "../../utils/bulkOperations";
+import API from "../../services/api";
 import {
   Search,
   Filter,
@@ -122,9 +127,75 @@ const INVOICE_FILTER_COLUMNS = [
 export default function CompanyInvoicesTab({ invoices, summary, loading, showStats = true, deals = [], refreshInvoices }) {
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  const getInvoiceFieldValue = (invoice, key) => {
+    switch (key) {
+      case "deal":
+        return invoice.deal?.title || "";
+      case "issueDate":
+        return invoice.issueDate ? new Date(invoice.issueDate).getTime() : 0;
+      case "dueDate":
+        return getDateRangeLabel(invoice.dueDate);
+      case "amount":
+        return getAmountRangeLabel(invoice.amount);
+      case "status":
+        return invoice.status || "Draft";
+      default:
+        return invoice[key];
+    }
+  };
+
+  const filteredInvoices = useMemo(() => {
+    let result = invoices;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter(
+        (inv) =>
+          (inv.invoiceNumber || "").toLowerCase().includes(q) ||
+          (inv.status || "").toLowerCase().includes(q) ||
+          (inv.deal?.title || "").toLowerCase().includes(q),
+      );
+    }
+    return applyColumnFilters(result, selectedFilters, getInvoiceFieldValue);
+  }, [invoices, searchTerm, selectedFilters]);
+
+  const sortedInvoices = useMemo(() => {
+    if (!sortConfig.key) return filteredInvoices;
+    return [...filteredInvoices].sort((a, b) => {
+      let aVal = getInvoiceFieldValue(a, sortConfig.key);
+      let bVal = getInvoiceFieldValue(b, sortConfig.key);
+      if (sortConfig.key === "amount") {
+        aVal = a.amount || 0;
+        bVal = b.amount || 0;
+      } else if (sortConfig.key === "dueDate") {
+        aVal = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+        bVal = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      }
+      const aCmp = typeof aVal === "number" ? aVal : (aVal || "").toString().toLowerCase();
+      const bCmp = typeof bVal === "number" ? bVal : (bVal || "").toString().toLowerCase();
+      if (aCmp < bCmp) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aCmp > bCmp) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredInvoices, sortConfig]);
+
+  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+    items: filteredInvoices,
+    onDelete: () => setShowBulkDeleteModal(true)
+  });
+
+  // Keeps the bulk strip mounted for one beat after deselect so its
+  // slide-out animation can play instead of vanishing on the same frame.
+  const { visible: bulkStripVisible, closing: bulkStripClosing } =
+    useBulkStrip(selectedItems.length);
+
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
+  const [bulkStatusValue, setBulkStatusValue] = useState("");
 
   const handleSort = (key, forceDirection = null) => {
     setSortConfig((prev) => {
@@ -209,6 +280,13 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    // A single press does nothing: the column menu opens from its own chevron
+    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
+    // meant the FIRST press of every double-click popped the menu, whose
+    // full-screen backdrop then swallowed the second press — making the header
+    // effectively un-double-clickable. Drag still starts on the second press.
+    if (e.detail < 2) return;
 
     e.preventDefault();
     window.getSelection?.()?.removeAllRanges();
@@ -344,56 +422,6 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
     document.addEventListener("mouseup", onMouseUp);
   };
 
-  const getInvoiceFieldValue = (invoice, key) => {
-    switch (key) {
-      case "deal":
-        return invoice.deal?.title || "";
-      case "issueDate":
-        return invoice.issueDate ? new Date(invoice.issueDate).getTime() : 0;
-      case "dueDate":
-        return getDateRangeLabel(invoice.dueDate);
-      case "amount":
-        return getAmountRangeLabel(invoice.amount);
-      case "status":
-        return invoice.status || "Draft";
-      default:
-        return invoice[key];
-    }
-  };
-
-  const filteredInvoices = useMemo(() => {
-    let result = invoices;
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      result = result.filter(
-        (inv) =>
-          (inv.invoiceNumber || "").toLowerCase().includes(q) ||
-          (inv.status || "").toLowerCase().includes(q) ||
-          (inv.deal?.title || "").toLowerCase().includes(q),
-      );
-    }
-    return applyColumnFilters(result, selectedFilters, getInvoiceFieldValue);
-  }, [invoices, searchTerm, selectedFilters]);
-
-  const sortedInvoices = useMemo(() => {
-    if (!sortConfig.key) return filteredInvoices;
-    return [...filteredInvoices].sort((a, b) => {
-      let aVal = getInvoiceFieldValue(a, sortConfig.key);
-      let bVal = getInvoiceFieldValue(b, sortConfig.key);
-      if (sortConfig.key === "amount") {
-        aVal = a.amount || 0;
-        bVal = b.amount || 0;
-      } else if (sortConfig.key === "dueDate") {
-        aVal = a.dueDate ? new Date(a.dueDate).getTime() : 0;
-        bVal = b.dueDate ? new Date(b.dueDate).getTime() : 0;
-      }
-      const aCmp = typeof aVal === "number" ? aVal : (aVal || "").toString().toLowerCase();
-      const bCmp = typeof bVal === "number" ? bVal : (bVal || "").toString().toLowerCase();
-      if (aCmp < bCmp) return sortConfig.direction === "asc" ? -1 : 1;
-      if (aCmp > bCmp) return sortConfig.direction === "asc" ? 1 : -1;
-      return 0;
-    });
-  }, [filteredInvoices, sortConfig]);
 
   const totalInvoiced = summary?.totalAmount || 0;
   const totalCount = summary?.totalInvoices || invoices.length;
@@ -420,6 +448,55 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
     if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
   };
+
+  const handleExportSelected = () => {
+    const dataToExport = invoices.filter(inv => selectedItems.includes(inv._id)).map(inv => ({
+      "Invoice Number": inv.invoiceNumber || "",
+      "Deal": inv.deal?.title || "",
+      "Invoice Date": inv.issueDate ? new Date(inv.issueDate).toLocaleDateString() : "",
+      "Due Date": inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "",
+      "Status": inv.status || "Draft",
+      "Amount": inv.amount || 0,
+    }));
+    const headers = Object.keys(dataToExport[0] || {}).join(",");
+    const rows = dataToExport.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    exportToCSV([headers, ...rows], `invoices_export_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkActionLoading(true);
+    try {
+      await bulkDelete("invoices", selectedItems);
+      refreshInvoices?.();
+      toast.success(`${selectedItems.length} invoice(s) deleted`);
+      clearSelection();
+      setShowBulkDeleteModal(false);
+    } catch (error) {
+      console.error("Bulk delete failed:", error);
+      toast.error("Failed to delete invoices");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkUpdateStatus = async () => {
+    if (!bulkStatusValue) return;
+    setBulkActionLoading(true);
+    try {
+      await Promise.all(selectedItems.map(id => API.patch(`/invoices/${id}`, { status: bulkStatusValue })));
+      refreshInvoices?.();
+      toast.success(`Status updated for ${selectedItems.length} invoice(s)`);
+      clearSelection();
+      setShowBulkStatusModal(false);
+    } catch (error) {
+      console.error("Bulk update failed:", error);
+      toast.error("Failed to update invoices");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleSelectAllAcrossPages = () => selectAll(filteredInvoices);
 
   const handleLimitChange = (newLimit) => {
     setLimit(newLimit);
@@ -528,6 +605,18 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
           <Skeleton height={44} width={86} shape="rect" className="rounded-full flex-shrink-0" />
           <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
         </div>
+      ) : bulkStripVisible ? (
+        <BulkActionBar
+          isClosing={bulkStripClosing}
+          selectedCount={selectedItems.length}
+          entityName="invoice"
+          onSelectAll={handleSelectAllAcrossPages}
+          onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onUpdateStatus={() => setShowBulkStatusModal(true)}
+          onDelete={() => setShowBulkDeleteModal(true)}
+          onCancel={clearSelection}
+        />
       ) : (
         <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
@@ -539,7 +628,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by invoice by number, deal, or status..."
+              placeholder="Search invoices by number, deal, or status..."
               className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
               style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
             />
@@ -583,6 +672,14 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
         >
           <thead className="sticky top-0 z-30 bg-[#F5F7FA] border-b border-[#E1E4EA]">
             <tr>
+              <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
+                <input
+                  type="checkbox"
+                  checked={selectedItems.length > 0 && selectedItems.length === paginatedInvoices.length}
+                  onChange={(e) => e.target.checked ? selectAll(paginatedInvoices) : clearSelection()}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                />
+              </th>
               {orderedColumns.map((col, idx) => {
                 const isLast = idx === orderedColumns.length - 1;
                 const isDragging = draggedColKey === col.id;
@@ -601,9 +698,6 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                     className={`px-3 py-2.5 font-medium text-[#525866] text-xs border-b border-[#E1E4EA] cursor-grab active:cursor-grabbing ${isLast ? "" : "border-r"} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                   >
                     <div className={`flex items-center justify-between w-full group ${loading ? "[&_button]:invisible" : ""}`}>
-                      {/* Header label swaps to a skeleton bar on the same flag as the
-                          body rows, so the whole table resolves in one step. Controls
-                          are hidden rather than unmounted to keep the layout stable. */}
                       {loading ? <Skeleton width="65%" height={12} /> : <span className="truncate flex-1 min-w-0" title={col.label}>{col.label}</span>}
                       <button
                         onClick={(e) => {
@@ -616,7 +710,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                           const rect = e.currentTarget.getBoundingClientRect();
                           let calculatedLeft = rect.right - 190;
                           if (isLast) {
-                            calculatedLeft -= 80; // Push inward for last column to prevent shadow bleeding outside table
+                            calculatedLeft -= 80;
                           }
                           setColumnMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
                           setOpenColumnMenuKey(col.id);
@@ -710,18 +804,19 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
             {loading ? (
               <TableSkeletonRows
                 columns={orderedColumns.map(c => colWidths[c.id])}
-                hasCheckbox={false}
+                hasCheckbox={true}
                 numRows={limit}
                 rowHeight={54}
               />
             ) : paginatedInvoices.length === 0 ? (
               <tr>
-                <td colSpan={orderedColumns.length} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
+                <td colSpan={orderedColumns.length + 1} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
                   No invoices found.
                 </td>
               </tr>
             ) : (
               paginatedInvoices.map((invoice) => {
+                const isSelected = selectedItems.includes(invoice._id);
                 const issueDate = invoice.issueDate
                   ? new Date(invoice.issueDate).toLocaleDateString("en-US", {
                     day: "numeric",
@@ -737,7 +832,17 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                   })
                   : "—";
                 return (
-                  <tr key={invoice._id} className="hover:bg-gray-50 transition-colors group">
+                  <tr key={invoice._id} className={`hover:bg-gray-50 transition-colors group ${isSelected ? "!bg-blue-50" : ""}`}>
+                    <td style={{ height: 54, width: 44 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                      <div className="flex justify-center items-center w-full">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleItem(invoice._id)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
+                    </td>
                     {orderedColumns.map((col, idx) => {
                       const isLast = idx === orderedColumns.length - 1;
                       const isDragging = draggedColKey === col.id;
@@ -966,6 +1071,73 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
           ))}
         </div>,
         document.body,
+      )}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Delete</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Delete {selectedItems.length} selected invoice{selectedItems.length !== 1 ? 's' : ''}? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkActionLoading ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBulkStatusModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-left">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Update Status for {selectedItems.length} Invoices</h3>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select New Status</label>
+                <select
+                  value={bulkStatusValue}
+                  onChange={(e) => setBulkStatusValue(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="" disabled>Select a status...</option>
+                  {INVOICE_STATUS_OPTIONS.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowBulkStatusModal(false)}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkUpdateStatus}
+                  disabled={bulkActionLoading || !bulkStatusValue}
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkActionLoading ? "Updating..." : "Update"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

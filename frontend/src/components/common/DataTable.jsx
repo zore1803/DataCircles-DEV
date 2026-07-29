@@ -81,6 +81,25 @@ export default function DataTable({
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    if (e.detail === 1) {
+      e.stopPropagation();
+      if (openColMenuKey === colId) {
+        setOpenColMenuKey(null);
+        setColMenuPos(null);
+        return;
+      }
+      const th = e.currentTarget;
+      const rect = th.getBoundingClientRect();
+      let calculatedLeft = rect.right - 190;
+      if (th.cellIndex === th.parentNode.cells.length - 1) {
+        calculatedLeft -= 80;
+      }
+      setColMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
+      setOpenColMenuKey(colId);
+      return;
+    }
+
     if (!onColumnReorder) return;
 
     e.preventDefault();

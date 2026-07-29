@@ -430,13 +430,13 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
         className={`
           fixed dc-panel-card z-[10002] 
           w-full sm:w-[500px] md:w-[600px]
-          max-w-full bg-white shadow-2xl overflow-y-auto 
+          max-w-full bg-white shadow-2xl flex flex-col
           transform transition-transform duration-300 ease-in-out font-inter
           ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
-        <form onSubmit={handleSubmit} className="p-8">
-          <div className="flex justify-between items-center mb-8">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
+          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0">
             <h2 className="text-[24px] font-bold text-[#111216]">
               Create New Contact
             </h2>
@@ -462,7 +462,7 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
             </button>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-6 overflow-y-auto flex-1 p-8">
             {/* Name - Now with validation */}
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
@@ -596,7 +596,7 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
             )}
           </div>
 
-          <div className="mt-12 pt-6 border-t border-[#F2F2F7] flex gap-4">
+          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}

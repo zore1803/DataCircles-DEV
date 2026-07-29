@@ -634,6 +634,7 @@ function Deals() {
   const [showStats, setShowStats] = useState(true);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const searchInputRef = useRef(null);
+  const tableScrollRef = useRef(null);
   const [dealsCurrentPage, setDealsCurrentPage] = useState(1);
   const [dealsPerPage, setDealsPerPage] = useState(50);
   const [dealsEditingPage, setDealsEditingPage] = useState(false);
@@ -2557,8 +2558,9 @@ function Deals() {
             {/* Bulk-actions banner now lives in the fixed title strip (replaces it when rows are selected) */}
 
             <div className="relative bg-white border border-[#E1E4EA] -mx-6">
-              <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "866px" }}>
+              <div ref={tableScrollRef} className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "866px" }}>
                 <DealsTable
+                  scrollContainerRef={tableScrollRef}
                   sortedTableDeals={paginatedTableDeals}
                   selectedRows={selectedRows}
                   handleSelectAll={handleSelectAll}
