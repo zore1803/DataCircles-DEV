@@ -18,6 +18,7 @@ import {
   Search,
   Filter,
   X,
+  Edit3,
   Link as LinkIcon,
   ExternalLink,
   List,
@@ -613,7 +614,7 @@ const FileCard = ({ file, onView, onDelete, isLast }) => {
   );
 };
 
-const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, isFirst, isLast }) => (
+const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, isFirst, isLast, isEditing, editingName, onEditingNameChange, onSaveEdit, onCancelEdit }) => (
   <div className="transition-all">
     <div
       className="flex items-center justify-between gap-2"
@@ -634,7 +635,23 @@ const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, on
           <RowFolderIcon size={20} style={{ color: "#525252" }} className="flex-shrink-0" />
         )}
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-medium text-gray-900 truncate">{folder.name}</h3>
+          {isEditing ? (
+            <input
+              autoFocus
+              type="text"
+              value={editingName}
+              onChange={(e) => onEditingNameChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onSaveEdit();
+                if (e.key === "Escape") onCancelEdit();
+              }}
+              onBlur={onSaveEdit}
+              onClick={(e) => e.stopPropagation()}
+              className="text-sm font-medium text-gray-900 truncate bg-transparent border-b border-blue-500 focus:outline-none w-full"
+            />
+          ) : (
+            <h3 className="text-sm font-medium text-gray-900 truncate">{folder.name || "Untitled"}</h3>
+          )}
           <p className="text-xs text-gray-500">
             {folder.files?.length || 0} {folder.files?.length === 1 ? 'item' : 'items'}
           </p>
@@ -642,14 +659,24 @@ const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, on
       </div>
       <div className="flex items-center flex-shrink-0" style={{ gap: 12 }}>
         <button
-          onClick={() => onDelete(folder._id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (folder._id === "NEW") {
+              onCancelEdit();
+            } else {
+              onDelete(folder._id);
+            }
+          }}
           className="hover:opacity-70 transition-opacity"
           title="Delete"
         >
           <RowDeleteIcon size={20} style={{ color: "#CD3636" }} />
         </button>
         <button
-          onClick={() => onEdit(folder)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(folder);
+          }}
           className="hover:opacity-70 transition-opacity"
           title="Rename"
         >
@@ -1034,6 +1061,8 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
     editingId: null,
     initialName: "",
   });
+  const [inlineEditingId, setInlineEditingId] = useState(null);
+  const [inlineEditingName, setInlineEditingName] = useState("");
   const [linkModalOpen, setLinkModalOpen] = useState(false);
 
   useEffect(() => {
@@ -1090,6 +1119,23 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
       }
     }
   };
+
+  const handleInlineSave = async (id) => {
+    if (!inlineEditingId) return; // Prevent double save
+    const nameToSave = inlineEditingName.trim() || "Untitled Folder";
+    setInlineEditingId(null);
+    setInlineEditingName("");
+    
+    if (id === "NEW") {
+      await createFolder(nameToSave);
+    } else {
+      const folder = folders.find(f => f._id === id);
+      if (folder && folder.name !== nameToSave) {
+        await renameFolder(id, nameToSave);
+      }
+    }
+  };
+
 
   const deleteFolder = async (folderId) => {
     const folder = folders.find((f) => f._id === folderId);
@@ -1616,9 +1662,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
           </div>
 
           <button
-            onClick={() =>
-              setModalState({ isOpen: true, editingId: null, initialName: "" })
-            }
+            onClick={() => {
+              setInlineEditingId("NEW");
+              setInlineEditingName("New Folder");
+            }}
             className="flex items-center justify-center flex-shrink-0"
             style={{
               boxSizing: "border-box",
@@ -1640,13 +1687,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
         {/* Folders List / Grid */}
         {!isLoading && folderViewMode === "grid" && filteredFolders.length === 0 ? (
           <button
-            onClick={() =>
-              setModalState({
-                isOpen: true,
-                editingId: null,
-                initialName: "",
-              })
-            }
+            onClick={() => {
+              setInlineEditingId("NEW");
+              setInlineEditingName("New Folder");
+            }}
             className="flex flex-col items-center justify-center w-full text-gray-500 hover:text-blue-600 transition-colors bg-gray-50"
             style={{
               boxSizing: "border-box",
@@ -1682,14 +1726,39 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                   <Skeleton width={100} height={18} />
                 </div>
               ))
-            ) : paginatedFolders.map((folder) => (
+            ) : (inlineEditingId === "NEW" ? [{ _id: "NEW", name: inlineEditingName, files: [] }, ...paginatedFolders] : paginatedFolders).map((folder) => (
               <div key={folder._id} className="flex justify-center items-center w-full">
                 <div
                   onClick={() => setOpenFolderId(folder._id)}
-                  className="flex flex-col justify-center items-center cursor-pointer hover:bg-gray-50 transition-colors"
+                  className="relative group flex flex-col justify-center items-center cursor-pointer hover:bg-gray-50 transition-colors"
                   style={{ boxSizing: "border-box", width: "100%", maxWidth: 220, height: 170, borderRadius: 12, padding: "12px 0", gap: 2 }}
                 >
-                <GridFolderIcon size={100} />
+                  <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <button
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setInlineEditingId(folder._id);
+                        setInlineEditingName(folder.name);
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-all cursor-pointer"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        if (folder._id === "NEW") {
+                          setInlineEditingId(null);
+                        } else {
+                          deleteFolder(folder._id);
+                        }
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all cursor-pointer"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <GridFolderIcon size={100} />
                 <div
                   className="flex flex-col justify-center items-center"
                   style={{ boxSizing: "border-box", padding: 8, gap: 8, width: 209, height: 40 }}
@@ -1698,26 +1767,43 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                     className="flex flex-col justify-center items-center self-stretch"
                     style={{ boxSizing: "border-box", padding: 0, width: 193, height: 41 }}
                   >
-                    <span
-                      style={{
-                        display: "block",
-                        width: 100,
-                        height: 22,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        textAlign: "center",
-                        fontFamily: "Inter",
-                        fontWeight: 500,
-                        fontSize: 18,
-                        lineHeight: "22px",
-                        letterSpacing: "-0.05em",
-                        color: "#111216",
-                      }}
-                      title={folder.name}
-                    >
-                      {folder.name || "Untitled"}
-                    </span>
+                    {inlineEditingId === folder._id ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={inlineEditingName}
+                        onChange={(e) => setInlineEditingName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleInlineSave(folder._id);
+                          if (e.key === "Escape") { setInlineEditingId(null); setInlineEditingName(""); }
+                        }}
+                        onBlur={() => handleInlineSave(folder._id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-[100px] text-center border-b-2 border-blue-500 focus:outline-none bg-transparent px-1"
+                        style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 18, lineHeight: "22px", color: "#111216" }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          display: "block",
+                          width: 100,
+                          height: 22,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          textAlign: "center",
+                          fontFamily: "Inter",
+                          fontWeight: 500,
+                          fontSize: 18,
+                          lineHeight: "22px",
+                          letterSpacing: "-0.05em",
+                          color: "#111216",
+                        }}
+                        title={folder.name}
+                      >
+                        {folder.name || "Untitled"}
+                      </span>
+                    )}
                     <span
                       style={{
                         width: 426,
@@ -1793,7 +1879,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                   </div>
                 </div>
               ))
-            ) : paginatedFolders.map((folder, idx) => (
+            ) : (inlineEditingId === "NEW" ? [{ _id: "NEW", name: inlineEditingName, files: [] }, ...paginatedFolders] : paginatedFolders).map((folder, idx) => (
               <FolderCard
                 key={folder._id}
                 folder={folder}
@@ -1801,16 +1887,21 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                 isFirst={idx === 0}
                 isLast={idx === paginatedFolders.length - 1}
                 onToggle={toggleFolder}
-                onEdit={(folder) =>
-                  setModalState({
-                    isOpen: true,
-                    editingId: folder._id,
-                    initialName: folder.name,
-                  })
-                }
+                onEdit={(folder) => {
+                  setInlineEditingId(folder._id);
+                  setInlineEditingName(folder.name);
+                }}
                 onDelete={deleteFolder}
                 onSelect={setSelectedFolderId}
                 onDeleteFile={deleteFile}
+                isEditing={inlineEditingId === folder._id}
+                editingName={inlineEditingName}
+                onEditingNameChange={setInlineEditingName}
+                onSaveEdit={() => handleInlineSave(folder._id)}
+                onCancelEdit={() => {
+                  setInlineEditingId(null);
+                  setInlineEditingName("");
+                }}
               />
             ))}
           </div>

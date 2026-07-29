@@ -96,14 +96,15 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
   const linkedDeal = taskData.relatedEntities?.find((e) => e.entityModel === "Deal")?.entityId;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-end z-[10001] p-4 transition-opacity duration-300"
-      style={{ opacity: isSliding ? 1 : 0 }}
-      onClick={onClose}
-    >
+    <>
       <div
-        className={`bg-white rounded-[26px] w-full max-w-lg h-[90vh] overflow-hidden shadow-2xl border border-gray-100 flex flex-col transform transition-transform duration-300 ${
-          isSliding ? "translate-x-0" : "translate-x-full"
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] transition-opacity duration-300"
+        style={{ opacity: isSliding ? 1 : 0 }}
+        onClick={onClose}
+      />
+      <div
+        className={`fixed dc-panel-card z-[10001] w-full sm:w-[500px] md:w-[600px] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${
+          isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -447,7 +448,7 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

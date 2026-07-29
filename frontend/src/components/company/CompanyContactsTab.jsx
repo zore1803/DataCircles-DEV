@@ -34,9 +34,9 @@ import {
   User,
   Building2,
   Target,
+  ExternalLink,
   Pin,
   PinOff,
-  MoreVertical,
 } from "lucide-react";
 
 const ContactNameIcon = ({ size = 20, ...props }) => (
@@ -804,12 +804,18 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                             <span className="text-[14px] leading-5 font-medium text-[#525866]">
                               {contact.lifecycleStage || contact.status || "-"}
                             </span>
-                            <button
+                            {/* Was a MoreVertical button with no onClick — a dead control.
+                                Replaced with a direct link to the same contact detail route
+                                the Name cell already uses (/contacts/:id), so a row can be
+                                opened from here without depending on which column is visible. */}
+                            <Link
+                              to={`/contacts/${contact._id}`}
+                              onClick={(e) => e.stopPropagation()}
                               className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                              title="More options"
+                              title="Open contact details"
                             >
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
+                              <ExternalLink className="w-4 h-4" />
+                            </Link>
                           </div>
                         </td>
                       );
