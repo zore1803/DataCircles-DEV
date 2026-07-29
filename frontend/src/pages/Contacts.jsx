@@ -2501,6 +2501,15 @@ function Contacts() {
           </div>
         ) : (
         <>
+        <div
+          className={`lg:hidden flex flex-col justify-center gap-1.5 overflow-hidden flex-shrink-0 transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
+        >
+          <h1 className="m-0 leading-tight font-bold text-base text-gray-900 truncate">Contacts</h1>
+          <p className="m-0 leading-tight text-[10px] text-gray-500 font-inter truncate">
+            Manage your contacts and leads
+          </p>
+        </div>
+
         <nav className="hidden lg:flex relative items-stretch h-11 overflow-x-auto flex-shrink-0">
           {[
             { id: "All", label: "All" },
