@@ -1731,9 +1731,8 @@ function Companies() {
       <div className="bg-white overflow-visible">
         {/* Toolbar (Title + Search + Buttons) */}
         <div
-          className={`fixed right-0 h-16 px-6 border-b flex items-center ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
           style={{
-            top: "64px",
             left: "var(--sidebar-width, 0px)",
             zIndex: 40,
             minHeight: "64px",
@@ -1810,8 +1809,10 @@ function Companies() {
               </div>
             </div>
           ) : (
-          <div className="flex items-center gap-4 w-full h-full">
-            <div className="flex-shrink-0 flex flex-col justify-center gap-1.5">
+          <div className="flex items-center gap-2 lg:gap-4 w-full h-full">
+            <div
+              className={`flex-shrink-0 flex flex-col justify-center gap-1.5 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[190px] opacity-100"}`}
+            >
               {showLoadingSkeleton ? (
                 <>
                   <Skeleton width={110} height={18} />
@@ -1819,8 +1820,8 @@ function Companies() {
                 </>
               ) : (
                 <>
-                  <h1 className="m-0 leading-tight font-bold text-lg text-gray-900">Companies</h1>
-                  <p className="m-0 leading-tight text-xs text-gray-500 font-inter">
+                  <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Companies</h1>
+                  <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
                     Manage your organisation contracts
                   </p>
                 </>
@@ -1837,9 +1838,9 @@ function Companies() {
               </div>
             ) : (
             <>
-            <div className="relative flex-1 flex items-center justify-end">
+            <div className="relative flex-1 min-w-0 flex items-center justify-end">
               <div
-                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full`}
+                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
               >
                 <Search
                   strokeWidth={2.5}
@@ -1880,7 +1881,7 @@ function Companies() {
               {isMoreMenuOpen && (
                 <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
                   <div className="px-3 pb-2 mb-2 border-b border-gray-50">
-                    <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 px-1">
+                    <p className="text-[10px] uppercase tracking-wider font-normal lg:font-bold text-gray-400 px-1">
                       Filter by Industry
                     </p>
                   </div>
@@ -1890,7 +1891,7 @@ function Companies() {
                         setFilterIndustry("");
                         setPagination((p) => ({ ...p, currentPage: 1 }));
                       }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${!filterIndustry ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${!filterIndustry ? "bg-blue-50 text-blue-700 font-normal lg:font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
                     >
                       All Industries
                       {!filterIndustry && (
@@ -1904,7 +1905,7 @@ function Companies() {
                           setFilterIndustry(i);
                           setPagination((p) => ({ ...p, currentPage: 1 }));
                         }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between mt-0.5 ${filterIndustry === i ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between mt-0.5 ${filterIndustry === i ? "bg-blue-50 text-blue-700 font-normal lg:font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
                       >
                         {i}
                         {filterIndustry === i && (
@@ -1914,6 +1915,34 @@ function Companies() {
                     ))}
                   </div>
                   <div className="border-t border-gray-50 pt-1">
+                    {/* Filters + Hotlist: mobile-only entries, folded in here instead of their own buttons */}
+                    <button
+                      onClick={() => {
+                        setShowAdvancedFilters(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <FilterIcon size={16} className="text-gray-400" />
+                      Filters
+                      {activeFilters.length > 0 && (
+                        <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                          {activeFilters.length}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowHotlist((prev) => !prev);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
+                      </svg>
+                      {showHotlist ? "Hide Hotlist" : "Hotlist"}
+                    </button>
                     <button
                       onClick={() => {
                         setShowColumnSettings(true);
@@ -1949,10 +1978,10 @@ function Companies() {
               )}
             </div>
 
-            {/* Filters */}
+            {/* Filters — folded into the three-dot menu on mobile */}
             <button
               onClick={() => setShowAdvancedFilters(true)}
-              className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+              className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
               title="Filters"
             >
               <FilterIcon size={16} />
@@ -1963,10 +1992,10 @@ function Companies() {
               )}
             </button>
 
-            {/* Hotlist */}
+            {/* Hotlist — folded into the three-dot menu on mobile */}
             <button
               onClick={() => setShowHotlist(!showHotlist)}
-              className={`inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors ${showHotlist
+              className={`hidden lg:inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors ${showHotlist
                 ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
                 : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
                 }`}
@@ -1982,10 +2011,11 @@ function Companies() {
                 resetForm();
                 setShowForm(true);
               }}
-              className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
+              className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
+              title={showForm ? "Cancel" : "New Company"}
             >
-              <Plus className="w-4 h-4" />
-              {showForm ? "Cancel" : "New Company"}
+              <Plus className="w-4 h-4 flex-shrink-0" />
+              <span className="hidden lg:inline">{showForm ? "Cancel" : "New Company"}</span>
             </button>
             </>
             )}
@@ -1994,10 +2024,9 @@ function Companies() {
         </div>
 
         <div
-          className="overflow-x-auto overflow-y-auto"
+          className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
           style={{
             position: "fixed",
-            top: 128,
             left: "var(--sidebar-width, 0px)",
             right: 0,
             bottom: !loading && !showHotlist ? 64 : 0,

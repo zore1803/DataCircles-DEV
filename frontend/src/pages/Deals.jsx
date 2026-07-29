@@ -2086,9 +2086,8 @@ function Deals() {
 
       {/* New Strip */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 px-6"
+        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
         style={{
-          top: "64px",
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,
           height: "64px",
@@ -2156,25 +2155,24 @@ function Deals() {
           </div>
         ) : (
         <>
-        <div className="flex flex-col gap-1.5 flex-shrink-0">
+        <div
+          className={`flex flex-col gap-1.5 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
+        >
           <h2
-            className="m-0 font-medium"
-            style={{ fontSize: "16px", lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
+            className="m-0 font-medium truncate text-sm sm:text-base"
+            style={{ lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
           >
             Deals
           </h2>
-          <p className="text-[#5B5A64] text-sm m-0 leading-tight">
+          <p className="text-[#5B5A64] text-[10px] sm:text-sm m-0 leading-tight truncate">
             Manage Your Sales Pipeline
           </p>
         </div>
 
-        {/* Spacer pushes the search/filter/switcher/actions group to the right */}
-        <div className="flex-1 min-w-0" />
-
-        {/* Search, Filter, Switcher, Actions — one continuous group with a uniform gap */}
-        <div className="relative flex items-center gap-3 flex-shrink-0">
+        {/* Search — flex-1 so it fills exactly the space freed by the title collapsing, same as Companies */}
+        <div className="relative flex-1 min-w-0 flex items-center justify-end">
           <div
-            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full flex-shrink-0`}
+            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
           >
             <Search
               strokeWidth={2.5}
@@ -2199,11 +2197,14 @@ function Deals() {
               placeholder="Search deals by title, company, or status..."
             />
           </div>
+        </div>
 
-          {/* Filters */}
+        {/* Filters, Switcher, Actions — fixed-size group */}
+        <div className="relative flex items-center gap-2 lg:gap-4 flex-shrink-0">
+          {/* Filters — folded into the three-dot menu on mobile */}
           <button
             onClick={() => setShowFilters(true)}
-            className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
+            className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
             title="Filters"
           >
             <FilterIcon size={15} />
@@ -2214,8 +2215,8 @@ function Deals() {
             )}
           </button>
 
-          {/* List / Kanban Toggle */}
-          <div className="relative flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
+          {/* List / Kanban Toggle — folded into the three-dot menu on mobile */}
+          <div className="hidden lg:flex relative items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
             <span
               className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
               style={{ left: showKanban ? 36 : 4 }}
@@ -2250,6 +2251,46 @@ function Deals() {
 
             {isMoreMenuOpen && (
               <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
+                {/* Filters + List/Kanban: mobile-only entries, folded in here instead of their own controls */}
+                <button
+                  onClick={() => {
+                    setShowFilters(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <FilterIcon size={15} className="text-gray-400" />
+                  Filters
+                  {activeAdvancedFilters.length > 0 && (
+                    <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                      {activeAdvancedFilters.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowKanban(false);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <List className="w-4 h-4 text-gray-400" />
+                  List View
+                  {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowKanban(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                    <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
+                  </svg>
+                  Kanban View
+                  {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                </button>
                 <button
                   onClick={() => {
                     setShowStats((prev) => !prev);
@@ -2327,13 +2368,14 @@ function Deals() {
             )}
           </div>
 
-          {/* Add Deal Button */}
+          {/* Add Deal Button — icon-only on mobile */}
           <button
             onClick={toggleForm}
-            className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
+            title={showForm ? "Cancel" : "New Deal"}
+            className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
           >
-            <Plus className="w-4 h-4" />
-            {showForm ? "Cancel" : "New Deal"}
+            <Plus className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden lg:inline">{showForm ? "Cancel" : "New Deal"}</span>
           </button>
         </div>
         </>
@@ -2342,9 +2384,8 @@ function Deals() {
 
       {showStats && (
       <div
-        className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA]"
+        className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px]"
         style={{
-          top: "128px",
           left: "var(--sidebar-width, 0px)",
           zIndex: 39,
           paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
