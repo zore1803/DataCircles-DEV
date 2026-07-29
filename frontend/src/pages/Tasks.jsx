@@ -2459,10 +2459,9 @@ function Tasks() {
       />
 
       <div
-        className="flex flex-row justify-between items-center px-4 lg:px-6 top-[54px] lg:top-16"
+        className="flex flex-row justify-between items-center px-4 lg:px-6 top-[54px] lg:top-16 gap-2 lg:gap-4"
         style={{
           boxSizing: "border-box",
-          gap: 16,
           height: 64,
           minHeight: 64,
           maxHeight: 64,
@@ -2608,7 +2607,7 @@ function Tasks() {
           </div>
         </div>
 
-        <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
+        <div className="hidden lg:flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
           {activeTab === "tasks" && (
             <div className="hidden lg:flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
               <button
@@ -2740,8 +2739,8 @@ function Tasks() {
         </div>
 
         <div
-          className="flex flex-row items-center flex-shrink-0 w-auto lg:w-[186px]"
-          style={{ gap: 8, height: 40 }}
+          className="flex flex-row items-center flex-shrink-0 w-auto lg:w-[186px] gap-2 lg:gap-4"
+          style={{ height: 40 }}
         >
           <div className="relative" ref={moreMenuRef}>
             <button
