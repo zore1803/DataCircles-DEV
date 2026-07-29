@@ -244,7 +244,7 @@ const ContactDetailsPage = () => {
           <button
             onClick={() => navigate("/contacts")}
             className="flex items-center justify-center bg-white border border-[#E5E5E5] rounded flex-shrink-0"
-            style={{ width: "24px", height: "24px", padding: 0, boxSizing: "border-box" }}
+            style={{ width: "32px", height: "32px", padding: 0, boxSizing: "border-box" }}
             title="Back to Contacts"
           >
             <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
