@@ -2459,10 +2459,9 @@ function Tasks() {
       />
 
       <div
-        className="flex flex-row justify-between items-center"
+        className="flex flex-row justify-between items-center px-4 lg:px-6 top-[54px] lg:top-16"
         style={{
           boxSizing: "border-box",
-          padding: "0px 24px",
           gap: 16,
           height: 64,
           minHeight: 64,
@@ -2471,25 +2470,24 @@ function Tasks() {
           borderBottom: "1px solid #E1E4EA",
           borderRadius: 0,
           position: "fixed",
-          top: "64px",
           left: "var(--sidebar-width, 0px)",
           right: 0,
           zIndex: 40,
         }}
       >
         {showBulkStrip ? (
-          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-6 w-full h-full`}>
-            <div className="flex flex-wrap items-center gap-3">
+          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
+            <div className="flex flex-nowrap lg:flex-wrap items-center gap-3 flex-shrink-0">
               <button
                 onClick={handleExport}
-                className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <Download className="w-4 h-4" />
                 Export
               </button>
               <button
                 onClick={() => (activeTab === "tasks" ? setShowBulkActions(true) : setShowMeetingBulkActions(true))}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <Edit2 className="w-4 h-4" />
                 Bulk Update
@@ -2497,35 +2495,35 @@ function Tasks() {
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={bulkLoading}
-                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
               >
                 <Trash2 className="w-4 h-4" />
                 Delete
               </button>
               <button
                 onClick={() => (activeTab === "tasks" ? setSelectedTasks([]) : setSelectedMeetings([]))}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex-shrink-0 whitespace-nowrap"
               >
                 Clear
               </button>
             </div>
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-5 h-5 text-blue-600" />
-              <span className="text-blue-800 font-semibold font-inter">
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
                 {activeTab === "tasks" ? selectedTasks.length : selectedMeetings.length}{" "}
                 {activeTab === "tasks" ? "task" : "meeting"}
                 {(activeTab === "tasks" ? selectedTasks.length : selectedMeetings.length) !== 1 ? "s" : ""} selected
               </span>
               <button
                 onClick={handleSelectAllAcrossPages}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <CheckSquare className="w-4 h-4" />
                 Select All
               </button>
               <button
                 onClick={handleDeselectAllExtra}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Deselect All
@@ -2577,11 +2575,9 @@ function Tasks() {
           </button>
         </div>
 
-        <div className="flex-1 min-w-0" />
-
-        <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
+        <div className="relative flex-1 min-w-0 flex items-center justify-end">
           <div
-            className={`relative h-10 flex items-center border rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[416px]" : "w-10"} max-w-full flex-shrink-0`}
+            className={`relative h-10 flex items-center border rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
             style={{ borderColor: isSearchExpanded ? "#0085FF" : "rgba(31, 41, 55, 0.1)" }}
           >
             <Search
@@ -2610,9 +2606,11 @@ function Tasks() {
               }
             />
           </div>
+        </div>
 
+        <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
           {activeTab === "tasks" && (
-            <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
+            <div className="hidden lg:flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
               <button
                 onClick={() => setShowMobileFilters(true)}
                 className="relative flex flex-row justify-center items-center flex-shrink-0"
@@ -2671,7 +2669,7 @@ function Tasks() {
           )}
 
           {activeTab === "meetings" && (
-            <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
+            <div className="hidden lg:flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
               <button
                 onClick={() => setShowMobileFilters(true)}
                 className="relative flex flex-row justify-center items-center flex-shrink-0"
@@ -2742,8 +2740,8 @@ function Tasks() {
         </div>
 
         <div
-          className="flex flex-row items-center flex-shrink-0"
-          style={{ gap: 8, width: 186, height: 40 }}
+          className="flex flex-row items-center flex-shrink-0 w-auto lg:w-[186px]"
+          style={{ gap: 8, height: 40 }}
         >
           <div className="relative" ref={moreMenuRef}>
             <button
@@ -2764,6 +2762,73 @@ function Tasks() {
             </button>
             {isMoreMenuOpen && (
               <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
+                {/* Filters + Switcher: mobile-only entries, folded in here instead of their own controls */}
+                <button
+                  onClick={() => {
+                    setShowMobileFilters(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <FilterIcon size={15} className="text-gray-400" />
+                  Filters
+                  {activeAdvancedFilters.length > 0 && (
+                    <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                      {activeAdvancedFilters.length}
+                    </span>
+                  )}
+                </button>
+                {activeTab === "tasks" ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        setShowKanban(false);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <CustomListIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
+                      List View
+                      {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowKanban(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <CustomKanbanIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
+                      Kanban View
+                      {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        setShowMeetingCalendar(false);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <CustomListIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
+                      List View
+                      {!showMeetingCalendar && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowMeetingCalendar(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                      View in Calendar
+                      {showMeetingCalendar && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => {
                     setShowVideoTutorial(true);
@@ -2779,18 +2844,19 @@ function Tasks() {
           </div>
           <button
             onClick={() => (activeTab === "tasks" ? toggleTaskForm() : toggleMeetingForm())}
-            className="flex flex-row justify-center items-center flex-shrink-0"
+            title="New Activity"
+            className="flex flex-row justify-center items-center flex-shrink-0 w-10 lg:w-[138px]"
             style={{
               padding: 12,
               gap: 6,
-              width: 138,
               height: 40,
               background: "#0085FF",
               borderRadius: 96,
             }}
           >
-            <Plus size={18} style={{ color: "#FFFFFF" }} />
+            <Plus size={18} style={{ color: "#FFFFFF" }} className="flex-shrink-0" />
             <span
+              className="hidden lg:inline"
               style={{
                 fontFamily: "Inter",
                 fontWeight: 500,
@@ -2812,10 +2878,9 @@ function Tasks() {
       {activeTab === "tasks" && !showKanban && (
       <>
       <div
-        className="overflow-x-auto overflow-y-auto"
+        className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
         style={{
           position: "fixed",
-          top: 128,
           left: "var(--sidebar-width, 0px)",
           right: 0,
           bottom: !loading ? 64 : 0,
@@ -2939,10 +3004,9 @@ function Tasks() {
       {activeTab === "meetings" && !showMeetingCalendar && (
       <>
       <div
-        className="overflow-x-auto overflow-y-auto"
+        className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
         style={{
           position: "fixed",
-          top: 128,
           left: "var(--sidebar-width, 0px)",
           right: 0,
           bottom: !loading ? 64 : 0,
@@ -3083,9 +3147,9 @@ function Tasks() {
 
         return (
         <div
+          className="top-[118px] lg:top-[128px]"
           style={{
             position: "fixed",
-            top: 128,
             left: "var(--sidebar-width, 0px)",
             right: 0,
             bottom: 24,
@@ -3304,9 +3368,9 @@ function Tasks() {
 
       {activeTab === "tasks" && showKanban && (
         <div
+          className="top-[118px] lg:top-[128px]"
           style={{
             position: "fixed",
-            top: 128,
             left: "var(--sidebar-width, 0px)",
             right: 0,
             bottom: 24,
