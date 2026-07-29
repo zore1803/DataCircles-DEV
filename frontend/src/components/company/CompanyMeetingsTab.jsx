@@ -893,10 +893,9 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                         style={{ width: 10, height: 10, borderRadius: 9999, background: color }}
                       />
                       <div
-                        className="flex flex-col justify-center items-start flex-1"
+                        className="flex flex-col justify-center items-start flex-1 px-3 py-2.5 lg:px-6 lg:py-6"
                         style={{
                           boxSizing: "border-box",
-                          padding: 24,
                           gap: 10,
                           minHeight: 120,
                           border: "1px solid #E1E4EA",
@@ -904,25 +903,25 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                           borderRadius: `${isFirst ? "8px 8px" : "0 0"} ${isLast ? "8px 8px" : "0 0"}`,
                         }}
                       >
-                        <div className="flex flex-row items-start gap-3 lg:gap-[95px]" style={{ width: "100%" }}>
-                          <div className="flex flex-col justify-center items-center flex-shrink-0" style={{ width: 44, gap: 4 }}>
-                            <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, lineHeight: "120%", color: "#1C1C1D", textAlign: "center" }}>
+                        <div className="flex flex-row items-start gap-1.5 lg:gap-[95px]" style={{ width: "100%" }}>
+                          <div className="flex flex-col justify-center items-center flex-shrink-0 w-8 lg:w-[44px]" style={{ gap: 4 }}>
+                            <span className="text-[9px] lg:text-xs" style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#1C1C1D", textAlign: "center" }}>
                               {start.toLocaleDateString("en-US", { month: "short" }).toUpperCase()}
                             </span>
-                            <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 32, lineHeight: "120%", color: "#1C1C1D", textAlign: "center" }}>
+                            <span className="text-lg lg:text-[32px]" style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#1C1C1D", textAlign: "center" }}>
                               {start.getDate()}
                             </span>
-                            <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D", textAlign: "center" }}>
+                            <span className="text-[8px] lg:text-[10px]" style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: "#78788D", textAlign: "center" }}>
                               {start.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
                             </span>
                           </div>
-                          <div className="flex flex-col items-start min-w-0 flex-1 lg:flex-none lg:w-[240px]" style={{ gap: 8 }}>
-                            <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 16, lineHeight: "120%", color: "#1C1C1D" }} className="truncate">
+                          <div className="flex flex-col items-start min-w-0 w-full lg:w-[240px] lg:flex-none" style={{ gap: 8 }}>
+                            <span className="text-[11px] lg:text-base truncate w-full" style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#1C1C1D" }}>
                               {meeting.title || "Untitled Meeting"}
                             </span>
-                            <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
-                              <AlarmClock size={14} style={{ color: "#78788D" }} />
-                              <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
+                            <div className="flex flex-row items-center flex-shrink-0 min-w-0" style={{ gap: 8 }}>
+                              <AlarmClock className="w-2.5 h-2.5 lg:w-3.5 lg:h-3.5 flex-shrink-0" style={{ color: "#78788D" }} />
+                              <span className="text-[8px] lg:text-[10px] truncate" style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: "#78788D" }}>
                                 {start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} - {end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} ({duration} mins)
                               </span>
                             </div>
@@ -932,7 +931,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               const extraAttendees = attendees.length - visibleAttendees.length;
                               if (attendees.length === 0) return null;
                               return (
-                                <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
+                                <div className="hidden lg:flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
                                   <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
                                     Attendees
                                   </span>
@@ -977,16 +976,14 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               );
                             })()}
                           </div>
-                          <div className="flex flex-col items-start flex-shrink-0" style={{ gap: 4 }}>
+                          <div className="flex flex-col items-start flex-shrink-0 min-w-0" style={{ gap: 4 }}>
                             <span
-                              className="inline-flex items-center justify-center flex-shrink-0"
+                              className="inline-flex items-center justify-center flex-shrink-0 text-[9px] lg:text-xs px-1.5 py-0.5 lg:px-3 lg:py-[5px]"
                               style={{
-                                padding: "5px 12px",
                                 borderRadius: 53,
                                 background: "rgba(0, 133, 255, 0.1)",
                                 fontFamily: "Inter",
                                 fontWeight: 500,
-                                fontSize: 12,
                                 lineHeight: "120%",
                                 color: "#0085FF",
                                 whiteSpace: "nowrap",
@@ -994,7 +991,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                             >
                               Upcoming
                             </span>
-                            <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
+                            <div className="hidden lg:flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
                               <span
                                 className="flex items-center justify-center flex-shrink-0"
                                 style={{ width: 16, height: 16, background: "#E1E4EA", borderRadius: 103 }}
@@ -1006,29 +1003,32 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               </span>
                             </div>
                             {meeting.company?.name && (
-                              <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D" }} className="truncate">
+                              <span className="hidden lg:inline truncate" style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
                                 Related to: {meeting.company.name}
                               </span>
                             )}
                           </div>
-                          <div className="flex flex-row items-center flex-shrink-0 flex-1 justify-end" style={{ gap: 8 }}>
-                            <div
-                              className="flex items-center justify-center flex-shrink-0"
-                              style={{ width: 32, height: 32, borderRadius: "50%", background: "#D9D9D9", border: "1px solid #FFFFFF" }}
-                            >
-                              <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, color: "#78788D" }}>
-                                {(meeting.createdBy?.name || "?").charAt(0).toUpperCase()}
-                              </span>
+                          <div className="flex flex-row items-center flex-shrink-0 lg:flex-1 justify-end" style={{ gap: 8 }}>
+                            <div className="hidden lg:flex flex-row items-center" style={{ gap: 8 }}>
+                              <div
+                                className="flex items-center justify-center flex-shrink-0"
+                                style={{ width: 32, height: 32, borderRadius: "50%", background: "#D9D9D9", border: "1px solid #FFFFFF" }}
+                              >
+                                <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, color: "#78788D" }}>
+                                  {(meeting.createdBy?.name || "?").charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div className="flex flex-col items-start" style={{ minWidth: 120 }}>
+                                <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, lineHeight: "120%", color: "#1C1C1D" }} className="truncate">
+                                  {meeting.createdBy?.name || "Unassigned"}
+                                </span>
+                                <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
+                                  Organiser
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex flex-col items-start" style={{ minWidth: 120 }}>
-                              <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, lineHeight: "120%", color: "#1C1C1D" }} className="truncate">
-                                {meeting.createdBy?.name || "Unassigned"}
-                              </span>
-                              <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
-                                Organiser
-                              </span>
-                            </div>
-                            <MoreVertical size={16} style={{ color: "#BEBEC8", marginLeft: 12, flexShrink: 0 }} />
+                            <MoreVertical size={14} className="lg:hidden flex-shrink-0" style={{ color: "#BEBEC8" }} />
+                            <MoreVertical size={16} className="hidden lg:block flex-shrink-0" style={{ color: "#BEBEC8", marginLeft: 12 }} />
                           </div>
                         </div>
                       </div>
@@ -1108,10 +1108,9 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                         style={{ width: 10, height: 10, borderRadius: 9999, background: color }}
                       />
                       <div
-                        className="flex flex-col justify-center items-start flex-1"
+                        className="flex flex-col justify-center items-start flex-1 px-3 py-2.5 lg:px-6 lg:py-6"
                         style={{
                           boxSizing: "border-box",
-                          padding: 24,
                           gap: 10,
                           minHeight: 120,
                           border: "1px solid #E1E4EA",
@@ -1119,25 +1118,25 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                           borderRadius: `${isFirst ? "8px 8px" : "0 0"} ${isLast ? "8px 8px" : "0 0"}`,
                         }}
                       >
-                        <div className="flex flex-row items-start gap-3 lg:gap-[95px]" style={{ width: "100%" }}>
-                          <div className="flex flex-col justify-center items-center flex-shrink-0" style={{ width: 44, gap: 4 }}>
-                            <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, lineHeight: "120%", color: "#1C1C1D", textAlign: "center" }}>
+                        <div className="flex flex-row items-start gap-1.5 lg:gap-[95px]" style={{ width: "100%" }}>
+                          <div className="flex flex-col justify-center items-center flex-shrink-0 w-8 lg:w-[44px]" style={{ gap: 4 }}>
+                            <span className="text-[9px] lg:text-xs" style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#1C1C1D", textAlign: "center" }}>
                               {start.toLocaleDateString("en-US", { month: "short" }).toUpperCase()}
                             </span>
-                            <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 32, lineHeight: "120%", color: "#1C1C1D", textAlign: "center" }}>
+                            <span className="text-lg lg:text-[32px]" style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#1C1C1D", textAlign: "center" }}>
                               {start.getDate()}
                             </span>
-                            <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D", textAlign: "center" }}>
+                            <span className="text-[8px] lg:text-[10px]" style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: "#78788D", textAlign: "center" }}>
                               {start.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
                             </span>
                           </div>
-                          <div className="flex flex-col items-start min-w-0 flex-1 lg:flex-none lg:w-[240px]" style={{ gap: 8 }}>
-                            <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 16, lineHeight: "120%", color: "#1C1C1D" }} className="truncate">
+                          <div className="flex flex-col items-start min-w-0 w-full lg:w-[240px] lg:flex-none" style={{ gap: 8 }}>
+                            <span className="text-[11px] lg:text-base truncate w-full" style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#1C1C1D" }}>
                               {meeting.title || "Untitled Meeting"}
                             </span>
-                            <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
-                              <AlarmClock size={14} style={{ color: "#78788D" }} />
-                              <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
+                            <div className="flex flex-row items-center flex-shrink-0 min-w-0" style={{ gap: 8 }}>
+                              <AlarmClock className="w-2.5 h-2.5 lg:w-3.5 lg:h-3.5 flex-shrink-0" style={{ color: "#78788D" }} />
+                              <span className="text-[8px] lg:text-[10px] truncate" style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: "#78788D" }}>
                                 {start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} - {end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} ({duration} mins)
                               </span>
                             </div>
@@ -1147,7 +1146,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               const extraAttendees = attendees.length - visibleAttendees.length;
                               if (attendees.length === 0) return null;
                               return (
-                                <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
+                                <div className="hidden lg:flex flex-row items-center flex-shrink-0" style={{ gap: 12 }}>
                                   <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
                                     Attendees
                                   </span>
@@ -1192,16 +1191,14 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               );
                             })()}
                           </div>
-                          <div className="flex flex-col items-start flex-shrink-0" style={{ gap: 4 }}>
+                          <div className="flex flex-col items-start flex-shrink-0 min-w-0" style={{ gap: 4 }}>
                             <span
-                              className="inline-flex items-center justify-center flex-shrink-0"
+                              className="inline-flex items-center justify-center flex-shrink-0 text-[9px] lg:text-xs px-1.5 py-0.5 lg:px-3 lg:py-[5px]"
                               style={{
-                                padding: "5px 12px",
                                 borderRadius: 53,
                                 background: "rgba(52, 199, 89, 0.1)",
                                 fontFamily: "Inter",
                                 fontWeight: 500,
-                                fontSize: 12,
                                 lineHeight: "120%",
                                 color: "#34C759",
                                 whiteSpace: "nowrap",
@@ -1209,7 +1206,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                             >
                               Completed
                             </span>
-                            <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
+                            <div className="hidden lg:flex flex-row items-center flex-shrink-0" style={{ gap: 8 }}>
                               <span
                                 className="flex items-center justify-center flex-shrink-0"
                                 style={{ width: 16, height: 16, background: "#E1E4EA", borderRadius: 103 }}
@@ -1221,29 +1218,32 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               </span>
                             </div>
                             {meeting.company?.name && (
-                              <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D" }} className="truncate">
+                              <span className="hidden lg:inline truncate" style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
                                 Related to: {meeting.company.name}
                               </span>
                             )}
                           </div>
-                          <div className="flex flex-row items-center flex-shrink-0 flex-1 justify-end" style={{ gap: 8 }}>
-                            <div
-                              className="flex items-center justify-center flex-shrink-0"
-                              style={{ width: 32, height: 32, borderRadius: "50%", background: "#D9D9D9", border: "1px solid #FFFFFF" }}
-                            >
-                              <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, color: "#78788D" }}>
-                                {(meeting.createdBy?.name || "?").charAt(0).toUpperCase()}
-                              </span>
+                          <div className="flex flex-row items-center flex-shrink-0 lg:flex-1 justify-end" style={{ gap: 8 }}>
+                            <div className="hidden lg:flex flex-row items-center" style={{ gap: 8 }}>
+                              <div
+                                className="flex items-center justify-center flex-shrink-0"
+                                style={{ width: 32, height: 32, borderRadius: "50%", background: "#D9D9D9", border: "1px solid #FFFFFF" }}
+                              >
+                                <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, color: "#78788D" }}>
+                                  {(meeting.createdBy?.name || "?").charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div className="flex flex-col items-start" style={{ minWidth: 120 }}>
+                                <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, lineHeight: "120%", color: "#1C1C1D" }} className="truncate">
+                                  {meeting.createdBy?.name || "Unassigned"}
+                                </span>
+                                <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
+                                  Organiser
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex flex-col items-start" style={{ minWidth: 120 }}>
-                              <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 12, lineHeight: "120%", color: "#1C1C1D" }} className="truncate">
-                                {meeting.createdBy?.name || "Unassigned"}
-                              </span>
-                              <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
-                                Organiser
-                              </span>
-                            </div>
-                            <MoreVertical size={16} style={{ color: "#BEBEC8", marginLeft: 12, flexShrink: 0 }} />
+                            <MoreVertical size={14} className="lg:hidden flex-shrink-0" style={{ color: "#BEBEC8" }} />
+                            <MoreVertical size={16} className="hidden lg:block flex-shrink-0" style={{ color: "#BEBEC8", marginLeft: 12 }} />
                           </div>
                         </div>
                       </div>
