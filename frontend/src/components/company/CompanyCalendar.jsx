@@ -488,7 +488,7 @@ const CompanyCalendar = ({ companyId }) => {
           >
             <ChevronLeft className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" />
           </button>
-          <span className="text-xs lg:text-sm font-semibold text-gray-900 min-w-[64px] lg:min-w-[90px] text-center whitespace-nowrap">
+          <span className="text-xs lg:text-sm font-semibold text-gray-900 max-w-[76px] lg:max-w-none lg:min-w-[90px] text-center truncate lg:whitespace-nowrap">
             {periodLabel}
           </span>
           <button
