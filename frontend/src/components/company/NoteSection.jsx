@@ -143,7 +143,20 @@ const quillFormats = [
 
 // NoteViewer component
 export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
-  if (!isOpen || !note) return null;
+  const [isSliding, setIsSliding] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      setTimeout(() => setIsSliding(true), 10);
+    } else {
+      setIsSliding(false);
+      setTimeout(() => setShouldRender(false), 300);
+    }
+  }, [isOpen]);
+
+  if (!shouldRender || !note) return null;
 
   const formatDate = (dateString) => {
     if (!dateString) return "—";
@@ -185,8 +198,18 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-end z-[10001] p-4 animate-in fade-in duration-300">
-      <div className="bg-white rounded-[26px] dc-panel-w max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 flex flex-col animate-in slide-in-from-right duration-300">
+    <>
+      <div
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] transition-opacity duration-300"
+        style={{ opacity: isSliding ? 1 : 0 }}
+        onClick={onClose}
+      />
+      <div
+        className={`fixed dc-panel-card z-[10001] w-[min(90vw,560px)] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${
+          isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div
           className="flex flex-row justify-between items-center flex-shrink-0"
@@ -576,9 +599,10 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 };
+// Force Vite HMR re-parse
 
 
 // NoteCard component
