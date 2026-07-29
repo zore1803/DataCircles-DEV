@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { createColumnHelper } from "@tanstack/react-table";
+import { ResponsiveContainer, ComposedChart, XAxis, YAxis, Area, Line, CartesianGrid } from "recharts";
 import { TrendingUp, TrendingDown, Search, MoreVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2, Pin, PinOff, EyeOff, Download, X, CheckSquare } from "lucide-react";
 import FilterIcon from "../components/common/FilterIcon";
 import DataTable from "../components/common/DataTable";
 import InvoiceQuickView from "../components/invoice/InvoiceQuickView";
 import Skeleton from "../components/common/Skeleton";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 
 const getRootZoom = () => {
   if (typeof window === "undefined") return 1;
@@ -66,7 +68,7 @@ const getInvoiceFieldValue = (inv, key) => {
 
 const invoiceColumnHelper = createColumnHelper();
 
-const yAxisLabels = ["₹180k", "₹160k", "₹140k", "₹120k", "₹100k", "₹80k", "₹60k", "₹40k", "₹20k", "0"];
+const formatSalesRevenueTick = (value) => (value === 0 ? "0" : `₹${Math.round(value / 1000)}k`);
 
 const InvoicesIcon = ({ size = 20, style }) => (
   <svg width={size} height={size} viewBox="0 0 15 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
@@ -115,6 +117,7 @@ function Dashboard() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  useTopLoadingSignal(loading);
 
   const [user, setUser] = useState({});
   const [tasks, setTasks] = useState([]);
@@ -124,6 +127,8 @@ function Dashboard() {
 
   const [deals, setDeals] = useState([]);
   const [invoices, setInvoices] = useState([]);
+
+  const salesRevenueScrollRef = useRef(null);
 
   const [selectedInvoices, setSelectedInvoices] = useState([]);
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
@@ -1005,6 +1010,91 @@ function Dashboard() {
 
     return { clearedPct, topClient, topClientPct, points, linePath, months: months.map((m) => m.month) };
   }, [invoices, deals, invoiceStats]);
+
+  // Sales Revenue widget — 100 evenly-spaced points across the last 12 months, seeded with a
+  // gentle upward trend and topped up with real invoice totals so the demo chart has a dense curve to scroll through.
+  const monthlySalesRevenueData = useMemo(() => {
+    const pointCount = 100;
+    const totalDays = 365;
+    const now = new Date();
+    const startTime = now.getTime() - totalDays * 24 * 60 * 60 * 1000;
+    const msPerPoint = (totalDays * 24 * 60 * 60 * 1000) / (pointCount - 1);
+
+    // Deterministic pseudo-random noise per point (stable across re-renders) using a seeded hash.
+    const pseudoRandom = (seed) => {
+      const x = Math.sin(seed * 12.9898) * 43758.5453;
+      return x - Math.floor(x);
+    };
+
+    let trailingRevenue = 400000;
+    const points = Array.from({ length: pointCount }, (_, i) => {
+      const d = new Date(startTime + i * msPerPoint);
+      const progress = i / (pointCount - 1);
+      const growthBaseline = 400000 + progress * 500000;
+      const wobble = (pseudoRandom(i) - 0.5) * 220000;
+      // Smooth the noise against the previous point so consecutive values don't jump around.
+      trailingRevenue = trailingRevenue * 0.55 + (growthBaseline + wobble) * 0.45;
+      return {
+        date: d,
+        month: d.toLocaleDateString("en-US", { day: "2-digit", month: "short" }),
+        revenue: Math.max(0, Math.round(trailingRevenue / 500) * 500),
+      };
+    });
+
+    invoices.forEach((inv) => {
+      const date = inv.date || inv.createdAt;
+      if (!date) return;
+      const t = new Date(date).getTime();
+      if (t < startTime || t > now.getTime()) return;
+      const idx = Math.min(pointCount - 1, Math.max(0, Math.round((t - startTime) / msPerPoint)));
+      points[idx].revenue += inv.amount || 0;
+    });
+
+    // Inverse wave: a pure cosine curve (not derived from the noisy data) that starts
+    // high while revenue is low and eases down as revenue trends up over the year —
+    // a clean sinusoidal shape rather than a mirrored copy of the real line.
+    const revenueMax = Math.max(...points.map((p) => p.revenue));
+    const revenueMin = Math.min(...points.map((p) => p.revenue));
+    const mid = (revenueMax + revenueMin) / 2;
+    const amplitude = (revenueMax - revenueMin) / 2;
+    points.forEach((p, i) => {
+      const t = i / (pointCount - 1);
+      p.inverseRevenue = mid + amplitude * Math.cos(t * Math.PI);
+    });
+
+    return points;
+  }, [invoices]);
+
+  const salesRevenueYMax = useMemo(() => {
+    const max = Math.max(0, ...monthlySalesRevenueData.map((m) => m.revenue));
+    if (max === 0) return 100;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(max)));
+    return Math.ceil(max / magnitude) * magnitude;
+  }, [monthlySalesRevenueData]);
+
+  // Only show one tick per calendar month on the X-axis, even though the underlying data is daily.
+  const salesRevenueMonthTicks = useMemo(() => {
+    const ticks = [];
+    let lastMonthKey = null;
+    monthlySalesRevenueData.forEach((p) => {
+      const monthKey = `${p.date.getFullYear()}-${p.date.getMonth()}`;
+      if (monthKey !== lastMonthKey) {
+        ticks.push(p.month);
+        lastMonthKey = monthKey;
+      }
+    });
+    return ticks;
+  }, [monthlySalesRevenueData]);
+
+  const formatSalesRevenueMonthTick = (value) => value.split(" ")[0] || value;
+
+  // Default the Sales Revenue plot to showing the current year (rightmost 12 months);
+  // older years are still reachable by scrolling left.
+  useEffect(() => {
+    if (!loading && salesRevenueScrollRef.current) {
+      salesRevenueScrollRef.current.scrollLeft = salesRevenueScrollRef.current.scrollWidth;
+    }
+  }, [loading, monthlySalesRevenueData]);
 
   // ------------------- Auth Check ---------------------
   useEffect(() => {
@@ -2034,111 +2124,121 @@ function Dashboard() {
       </div>
 
       <div
-        className="box-border flex flex-row items-end self-stretch"
-        style={{ padding: 12, gap: 16, height: 760, maxHeight: 760, border: "1px solid #E1E4EA", borderRadius: 12, marginTop: 16, flexGrow: loading ? 0 : 1, flexShrink: 0 }}
+        className="box-border flex flex-row items-stretch self-stretch"
+        style={{ padding: 12, gap: 16, height: 450, maxHeight: 450, border: "1px solid #E1E4EA", borderRadius: 12, marginTop: 16, flexShrink: 0 }}
       >
-        <div
-          className="flex flex-col justify-between items-start self-stretch flex-shrink-0"
-          style={{ padding: "0px 0px 22px", gap: 16, width: 34, height: 736 }}
-        >
-          {loading
-            ? yAxisLabels.map((label, i) => <Skeleton key={label} width={28} height={10} className="mx-auto" style={{ opacity: 1 - i * 0.03 }} />)
-            : yAxisLabels.map((label) => (
-              <span
-                key={label}
-                className="mx-auto whitespace-nowrap"
-                style={{
-                  fontFamily: "Inter",
-                  fontWeight: 400,
-                  fontSize: 12,
-                  lineHeight: "140%",
-                  textAlign: "center",
-                  color: "rgba(33, 32, 31, 0.56)",
-                }}
-              >
-                {label}
-              </span>
-            ))}
-        </div>
-
         {loading ? (
-          <div className="flex-1" style={{ height: 736, maxHeight: 736, flexShrink: 0 }}>
-            <Skeleton width="100%" height={736} shape="rect" className="rounded-lg" />
+          <div className="flex flex-row flex-1 min-w-0" style={{ gap: 0 }}>
+            <div
+              className="flex flex-col justify-between items-start flex-shrink-0"
+              style={{ width: 64, height: "100%", padding: "8px 0" }}
+            >
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} width={44} height={11} />
+              ))}
+            </div>
+            <div className="flex-1 min-w-0 animate-pulse" style={{ height: "100%" }}>
+              <svg
+                width="100%"
+                height="100%"
+                viewBox="0 0 400 160"
+                preserveAspectRatio="none"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M0 130 C 20 125, 35 118, 50 122 C 65 126, 75 132, 90 128 C 105 124, 115 100, 130 90 C 145 80, 155 96, 170 92 C 185 88, 195 60, 210 50 C 225 40, 235 58, 250 55 C 265 52, 280 68, 295 72 C 310 76, 320 62, 335 66 C 350 70, 365 82, 380 86 L 400 88 L 400 160 L 0 160 Z"
+                  fill="#E5E7EB"
+                />
+                <path
+                  d="M0 130 C 20 125, 35 118, 50 122 C 65 126, 75 132, 90 128 C 105 124, 115 100, 130 90 C 145 80, 155 96, 170 92 C 185 88, 195 60, 210 50 C 225 40, 235 58, 250 55 C 265 52, 280 68, 295 72 C 310 76, 320 62, 335 66 C 350 70, 365 82, 380 86 L 400 88"
+                  stroke="#D1D5DB"
+                  strokeWidth="2"
+                  fill="none"
+                />
+              </svg>
+            </div>
           </div>
         ) : (
-        <div className="flex flex-col flex-1 self-stretch" style={{ gap: 0 }}>
-          <svg
-            className="flex-1 self-stretch"
-            width="100%"
-            height="736"
-            viewBox="0 0 1253 445"
-            fill="none"
-            preserveAspectRatio="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <g opacity="0.8">
-              <path fillRule="evenodd" clipRule="evenodd" d="M1.00009 0V1L1245.11 1V0L1.00009 0Z" fill="#E7E4E3" />
-              <path fillRule="evenodd" clipRule="evenodd" d="M1.00009 111V112L1245.11 112V111L1.00009 111Z" fill="#E7E4E3" />
-              <path fillRule="evenodd" clipRule="evenodd" d="M1.00009 222V223L1245.11 223V222L1.00009 222Z" fill="#E7E4E3" />
-              <path fillRule="evenodd" clipRule="evenodd" d="M1.00009 333V334L1245.11 334V333L1.00009 333Z" fill="#E7E4E3" />
-              <path fillRule="evenodd" clipRule="evenodd" d="M1.00009 444V445L1245.11 445V444L1.00009 444Z" fill="#E7E4E3" />
-            </g>
-            <path
-              d="M8.45635 176.31L1.00009 165.505V380.974H1245.11V172.302C1245.11 168.064 1239.39 166.736 1237.52 170.541L1234.52 176.668L1225.36 161.32L1217.08 191.883L1205.32 176.668L1199.12 169.901L1194.63 155.053L1185.69 124.018L1168.56 155.053V191.883L1158.32 176.668L1133.83 165.992L1114.5 25.7274L1102.34 124.018L1097.43 90.7794L1085.32 52.2827L1076.51 90.7794V120.995L1068.43 169.859L1060.42 154.867L1046.1 146.567L1039.81 111.58L1028.8 150.665L1024.44 127.666L1013.98 55.9615L1012.48 52.2826L998.764 172.173L989.252 52.2826L977.838 21.3453L966.798 130.607L955.537 114.957L949.085 175.18L941.699 150.665L928.382 169.859L922.372 183.273L911.602 200.95L899.004 189.811L885.945 194.604L881.457 169.859L865.935 179.288L860.118 175.18L855.629 214.198L849.479 189.811L838.056 198.164L831.262 228.465L819.326 205.888L804.65 210.205V189.811L789.873 150.665L782.022 198.164L771.292 169.859V146.567H754.884V130.607L744.855 150.665L734.361 159.206V146.567V111.58L726.506 124.018L718.642 130.607L711.247 161.905L704.422 217.26L694.173 205.888V198.164L686.016 189.811L677.81 200.95L670.2 228.465L664.09 179.288V161.905L657.098 150.665L647.705 159.206V175.18L638.727 189.811L624.656 198.164V150.665L615.083 159.206L603.861 214.198L599.373 159.206L593.218 124.018L585.696 111.58L577.201 137.176L567.619 161.905V198.164L556.336 214.198L547.341 198.164L505.374 221.609L496.116 208.45L487.257 221.609V236.004L480.261 247.321V259.368L467.702 270.77V286.671L451.51 295.277L434.169 310.868L419.826 305.022L412.177 316.784L403.2 340.309L387.481 327.97L377.237 322.46L365.975 335.879L358.462 322.46L346.956 316.784V298.686L330.868 310.868L319.248 322.46L310.27 310.868L301.749 301.499L295.012 286.671L285.78 295.277L275.777 310.868L262.973 301.499V286.671L253.737 264.343L245.373 273.605L236.484 286.671L227.252 276.743L218.919 270.77V236.004L212.975 244.081L203.998 267.486V286.671L190.747 279.511V247.321L184.952 238.962L177.088 250.943L171.004 267.486L163.162 259.368L156.012 247.321V236.004L146.049 250.943L129.229 264.343V289.625L115.939 310.868V289.625L108.193 282.486V273.605L101.789 259.368L92.908 273.92L86.7799 264.343V250.943L79.2053 238.962L72.0691 221.609L64.2139 230.974L51.1293 247.321L43.2697 238.962L35.0858 250.943L29.2865 208.45L21.107 198.164V180.035L8.45635 176.31Z"
-              fill="url(#paint0_linear_2_753)"
-              fillOpacity="0.6"
-            />
-            <path
-              d="M1.00009 165.556L8.45635 176.365L21.107 180.092V198.226L29.2865 208.516L35.0858 251.024L43.2697 239.039L51.1293 247.401L64.2139 231.048L72.0691 221.68L79.2053 239.039L86.7799 251.024V264.429L92.908 274.009L101.789 259.453L108.193 273.694V282.578L115.939 289.72V310.971L129.229 289.72V264.429L146.049 251.024L156.012 236.08V247.401L163.162 259.453L171.004 267.573L177.088 251.024L184.952 239.039L190.747 247.401V279.603L203.998 286.765V267.573L212.975 244.16L218.919 236.08V270.859L227.252 276.834L236.484 286.765L245.373 273.694L253.737 264.429L262.973 286.765V301.598L275.777 310.971L285.78 295.374L295.012 286.765L301.749 301.598L310.27 310.971L319.248 322.567L330.868 310.971L346.956 298.785V316.889L358.462 322.567L365.975 335.99L377.237 322.567L387.481 328.078L403.2 340.422L412.177 316.889L419.826 305.123L434.169 310.971L451.51 295.374L467.702 286.765V270.859L480.261 259.453V247.401L487.257 236.08V221.68L496.116 208.516L505.374 221.68L547.341 198.226L556.336 214.267L567.619 198.226V161.955L577.201 137.217L585.696 111.612L593.218 124.055L599.373 159.255L603.861 214.267L615.083 159.255L624.656 150.711V198.226L638.727 189.871L647.705 175.234V159.255L657.098 150.711L664.09 161.955V179.344L670.2 228.539L677.81 201.014L686.016 189.871L694.174 198.226V205.954L704.422 217.329L711.247 161.955L718.642 130.646L726.506 124.055L734.361 111.612V146.611V159.255L744.855 150.711L754.884 130.646V146.611H771.292V169.911L782.022 198.226L789.873 150.711L804.65 189.871V210.272L819.326 205.954L831.262 228.539L838.056 198.226L849.479 189.871L855.629 214.267L860.118 175.234L865.935 179.344L881.457 169.911L885.945 194.665L899.004 189.871L911.602 201.014L922.372 183.33L928.382 169.911L941.699 150.711L949.085 175.234L955.537 114.99L966.798 130.646L977.838 21.3453L989.252 52.2936L998.764 172.227L1012.48 52.2936L1013.98 55.9738L1024.44 127.704L1028.8 150.711L1039.81 111.612L1046.1 146.611L1060.42 154.914L1068.43 169.911L1076.51 121.031V90.804L1085.32 52.2937L1097.43 90.804L1102.34 124.055L1114.5 25.7289L1133.83 166.043L1158.32 176.723L1168.56 191.943V155.1L1185.69 124.055L1194.63 155.1L1199.12 169.954L1205.32 176.723L1217.08 191.943L1225.36 161.369L1234.52 176.723L1245.11 155.1"
-              stroke="#0C4FCD"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <path
-              d="M1245.11 182.625C1197.55 188.794 1121.09 201.389 1051.62 235.617C996.035 263.006 947.623 273.469 913.762 273.469C879.901 273.469 831.529 275.151 727.528 225.524C623.528 175.896 534.039 91.7819 427.619 91.7819C321.2 91.7819 290.055 135.16 265.572 154.026C244.517 170.252 175.141 312.808 1.00009 312.808"
-              stroke="#34C759"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeDasharray="5 5"
-            />
-            <path
-              d="M1247.02 150.953C1250.02 150.953 1252.5 153.547 1252.5 156.811C1252.5 160.074 1250.02 162.667 1247.02 162.667C1244.02 162.667 1241.54 160.074 1241.54 156.811C1241.54 153.547 1244.02 150.953 1247.02 150.953Z"
-              fill="white"
-              stroke="#0C4FCD"
-            />
-            <defs>
-              <linearGradient id="paint0_linear_2_753" x1="1034.65" y1="-514.839" x2="1072.23" y2="356.032" gradientUnits="userSpaceOnUse">
-                <stop offset="0.392082" stopColor="#0C4FCD" />
-                <stop offset="1" stopColor="white" />
-              </linearGradient>
-            </defs>
-          </svg>
+          <div className="flex flex-row flex-1 min-w-0" style={{ gap: 0 }}>
+            {/* Fixed Y-axis, mirrors the Financial Overview chart's fixed axis column */}
+            <div style={{ width: 64, height: "100%", flexShrink: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={monthlySalesRevenueData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+                  <XAxis
+                    dataKey="month"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={false}
+                    padding={{ left: 0, right: 0 }}
+                  />
+                  <YAxis
+                    domain={[0, salesRevenueYMax]}
+                    tickFormatter={formatSalesRevenueTick}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                    width={64}
+                    tick={{ fontSize: 12, fontFamily: "Inter", fill: "rgba(33, 32, 31, 0.56)" }}
+                  />
+                  <Area type="monotone" dataKey="revenue" stroke="none" fill="none" isAnimationActive={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
 
-          <div
-            className="flex flex-row justify-center items-center self-stretch flex-shrink-0"
-            style={{ padding: 0, gap: 8, height: 24 }}
-          >
-            {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((month) => (
-              <span
-                key={month}
-                className="flex items-center justify-center flex-1"
-                style={{
-                  height: 24,
-                  fontFamily: "Inter",
-                  fontWeight: 400,
-                  fontSize: 12,
-                  lineHeight: "20px",
-                  textAlign: "center",
-                  letterSpacing: "-0.02em",
-                  color: "rgba(33, 32, 31, 0.56)",
-                }}
-              >
-                {month}
-              </span>
-            ))}
+            <div
+              ref={salesRevenueScrollRef}
+              className="sales-revenue-chart-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none", cursor: "grab", height: "100%" }}
+            >
+              <div style={{ minWidth: "100%", height: "100%" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={monthlySalesRevenueData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="salesRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0C4FCD" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#0C4FCD" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E7E4E3" vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      ticks={salesRevenueMonthTicks}
+                      tickFormatter={formatSalesRevenueMonthTick}
+                      tickLine={false}
+                      axisLine={false}
+                      padding={{ left: 12, right: 12 }}
+                      tick={{ fontSize: 12, fontFamily: "Inter", fill: "rgba(33, 32, 31, 0.56)" }}
+                    />
+                    <YAxis domain={[0, salesRevenueYMax]} hide />
+                    <Area
+                      type="linear"
+                      dataKey="revenue"
+                      stroke="#0C4FCD"
+                      strokeWidth={2}
+                      fill="url(#salesRevenueGradient)"
+                      isAnimationActive={false}
+                      dot={(dotProps) => {
+                        const { cx, cy, index, key } = dotProps;
+                        if (index !== monthlySalesRevenueData.length - 1) return <Fragment key={key} />;
+                        return <circle key={key} cx={cx} cy={cy} r={6} fill="#FFFFFF" stroke="#0C4FCD" strokeWidth={1} />;
+                      }}
+                    />
+                    <Line
+                      type="natural"
+                      dataKey="inverseRevenue"
+                      stroke="#34C759"
+                      strokeWidth={2}
+                      strokeDasharray="4 3"
+                      dot={false}
+                      activeDot={false}
+                      isAnimationActive={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
-        </div>
         )}
       </div>
 
@@ -2609,19 +2709,19 @@ function Dashboard() {
                   </div>
                 ) : recentDealsWidget.recent.map((row, idx) => (
                 <div key={idx} className="flex flex-col items-start self-stretch flex-shrink-0">
-                  <div className="flex flex-row items-start self-stretch flex-shrink-0" style={{ width: "100%", height: 30 }}>
-                    <div className="flex flex-row justify-start items-center flex-1" style={{ padding: "8px 6px", gap: 10, height: 30 }}>
-                      <span className="self-stretch" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}>
+                  <div className="flex flex-row items-center self-stretch flex-shrink-0" style={{ width: "100%", height: 30 }}>
+                    <div className="flex flex-row justify-start items-center flex-1" style={{ padding: "8px 6px", gap: 10, height: 30, minWidth: 0 }}>
+                      <span className="self-stretch truncate" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}>
                         {row.client}
                       </span>
                     </div>
-                    <div className="flex flex-row justify-start items-center flex-1" style={{ padding: "8px 6px", gap: 10, height: 30 }}>
-                      <span className="self-stretch" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}>
+                    <div className="flex flex-row justify-start items-center flex-1" style={{ padding: "8px 6px", gap: 10, height: 30, minWidth: 0 }}>
+                      <span className="self-stretch truncate" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}>
                         {row.deal}
                       </span>
                     </div>
-                    <div className="flex flex-row justify-end items-center flex-1" style={{ padding: "8px 6px", gap: 10, height: 30 }}>
-                      <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#1F2937", textAlign: "right" }}>
+                    <div className="flex flex-row justify-end items-center flex-1" style={{ padding: "8px 6px", gap: 10, height: 30, minWidth: 0 }}>
+                      <span className="truncate" style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#1F2937", textAlign: "right" }}>
                         {row.amount}
                       </span>
                     </div>

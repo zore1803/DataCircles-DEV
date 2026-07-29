@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import TaskForm from "../components/Task/TaskForm";
 import AdminMeetingForm from "../components/admin/AdminMeetingForm";
 import { useLocation } from "react-router-dom";
@@ -54,9 +55,44 @@ import {
 } from "@tanstack/react-table";
 import AppToaster from "../components/AppToaster";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
-import useMinDelay from "../hooks/useMinDelay";
 
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Month/Week/Day switcher icons — mirrors the ones on the Calendar page.
+const CustomMonthIcon = (props) => (
+  <svg viewBox="20 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M25.1665 15.667V19.0003" />
+    <path d="M31.8335 15.667V19.0003" />
+    <path d="M36 28.1663V18.9997C36 18.5576 35.8244 18.1337 35.5118 17.8212C35.1993 17.5086 34.7754 17.333 34.3333 17.333H22.6667C22.2246 17.333 21.8007 17.5086 21.4882 17.8212C21.1756 18.1337 21 18.5576 21 18.9997V30.6663C21 31.1084 21.1756 31.5323 21.4882 31.8449C21.8007 32.1574 22.2246 32.333 22.6667 32.333H31.8333L36 28.1663Z" />
+    <path d="M21 22.333H36" />
+    <path d="M31 32.333V28.9997C31 28.5576 31.1756 28.1337 31.4882 27.8212C31.8007 27.5086 32.2246 27.333 32.6667 27.333H36" />
+  </svg>
+);
+
+const CustomWeekIcon = (props) => (
+  <svg viewBox="112 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M117.167 15.667V19.0003" />
+    <path d="M123.833 15.667V19.0003" />
+    <path d="M126.333 17.333H114.667C113.746 17.333 113 18.0792 113 18.9997V30.6663C113 31.5868 113.746 32.333 114.667 32.333H126.333C127.254 32.333 128 31.5868 128 30.6663V18.9997C128 18.0792 127.254 17.333 126.333 17.333Z" />
+    <path d="M113 22.333H128" />
+    <path d="M117.167 25.667H117.175" />
+    <path d="M120.5 25.667H120.508" />
+    <path d="M123.833 25.667H123.842" />
+    <path d="M117.167 29H117.175" />
+    <path d="M120.5 29H120.508" />
+    <path d="M123.833 29H123.842" />
+  </svg>
+);
+
+const CustomDayIcon = (props) => (
+  <svg viewBox="210.5 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M218.167 25.667H219V29.0003" />
+    <path d="M222.333 15.667V19.0003" />
+    <path d="M211.5 22.333H226.5" />
+    <path d="M215.667 15.667V19.0003" />
+    <path d="M224.833 17.333H213.167C212.246 17.333 211.5 18.0792 211.5 18.9997V30.6663C211.5 31.5868 212.246 32.333 213.167 32.333H224.833C225.754 32.333 226.5 31.5868 226.5 30.6663V18.9997C226.5 18.0792 225.754 17.333 224.833 17.333Z" />
+  </svg>
+);
 
 // Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>,
 // matching Companies/Contacts' search-highlighting exactly.
@@ -401,6 +437,8 @@ function Tasks() {
   const [activeTab, setActiveTab] = useState("tasks"); // "tasks" or "meetings"
   const [showKanban, setShowKanban] = useState(false);
   const [showMeetingCalendar, setShowMeetingCalendar] = useState(false);
+  const [meetingCalendarDate, setMeetingCalendarDate] = useState(new Date());
+  const [meetingCalendarView, setMeetingCalendarView] = useState("month"); // "month" | "week" | "day"
   const meetingToggleRefs = useRef({});
   const [meetingToggleIndicator, setMeetingToggleIndicator] = useState({ left: 4, width: 32 });
   useEffect(() => {
@@ -410,6 +448,21 @@ function Tasks() {
       setMeetingToggleIndicator({ left: el.offsetLeft, width: el.offsetWidth });
     }
   }, [showMeetingCalendar, activeTab]);
+
+  useEffect(() => {
+    if (!showMeetingCalendar) return;
+    let cancelled = false;
+    API.get("/meetings/all-meetings")
+      .then((res) => {
+        if (!cancelled) setAllMeetingsForCalendar(res.data || []);
+      })
+      .catch(() => {
+        if (!cancelled) toast.error("Failed to load calendar meetings");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showMeetingCalendar]);
 
   // Tasks state
   const [tasks, setTasks] = useState([]);
@@ -428,6 +481,9 @@ function Tasks() {
 
   // Meetings state
   const [meetings, setMeetings] = useState([]);
+  // Separate from the paginated `meetings` list (50/page) — the calendar view
+  // needs every meeting, not just whatever page the list happens to be on.
+  const [allMeetingsForCalendar, setAllMeetingsForCalendar] = useState([]);
   const [showMeetingForm, setShowMeetingForm] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [meetingModalMode, setMeetingModalMode] = useState("create");
@@ -523,8 +579,9 @@ function Tasks() {
     }
   }, [state]);
 
-  const showTaskLoadingSkeleton = useMinDelay(loading && tasks.length === 0, 300);
-  const showMeetingLoadingSkeleton = useMinDelay(loading && meetings.length === 0, 300);
+  const showTaskLoadingSkeleton = loading && tasks.length === 0;
+  const showMeetingLoadingSkeleton = loading && meetings.length === 0;
+  useTopLoadingSignal(showTaskLoadingSkeleton || showMeetingLoadingSkeleton);
 
   // Pagination & Sorting for Tasks
   const [taskPagination, setTaskPagination] = useState({
@@ -2986,6 +3043,255 @@ function Tasks() {
       )}
       </>
       )}
+
+      {activeTab === "meetings" && showMeetingCalendar && (() => {
+        const year = meetingCalendarDate.getFullYear();
+        const month = meetingCalendarDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const firstDay = new Date(year, month, 1).getDay();
+        const startDay = firstDay === 0 ? 6 : firstDay - 1;
+        const prevMonthDays = new Date(year, month, 0).getDate();
+
+        const calDays = [];
+        for (let i = startDay - 1; i >= 0; i--) {
+          calDays.push({ date: new Date(year, month - 1, prevMonthDays - i), isCurrent: false });
+        }
+        for (let i = 1; i <= daysInMonth; i++) {
+          calDays.push({ date: new Date(year, month, i), isCurrent: true });
+        }
+        const remaining = 42 - calDays.length;
+        for (let i = 1; i <= remaining; i++) {
+          calDays.push({ date: new Date(year, month + 1, i), isCurrent: false });
+        }
+
+        const meetingsByDate = {};
+        allMeetingsForCalendar.forEach((m) => {
+          if (!m.scheduledAt) return;
+          const key = new Date(m.scheduledAt).toDateString();
+          if (!meetingsByDate[key]) meetingsByDate[key] = [];
+          meetingsByDate[key].push(m);
+        });
+
+        return (
+        <div
+          style={{
+            position: "fixed",
+            top: 128,
+            left: "var(--sidebar-width, 0px)",
+            right: 0,
+            bottom: 24,
+            padding: "16px 24px 0",
+            overflowY: "auto",
+          }}
+        >
+          <div className="box-border flex flex-col items-start flex-shrink-0 self-stretch bg-white border border-[#E1E4EA] rounded-lg" style={{ padding: 0, gap: 0 }}>
+            {/* Month nav */}
+            <div
+              className="relative box-border flex flex-row justify-between items-center flex-shrink-0 self-stretch"
+              style={{ padding: "6px 16px", width: "100%", height: 60, borderBottom: "1px solid #E0E0E1" }}
+            >
+              <div
+                className="absolute flex flex-row items-center"
+                style={{ left: "50%", top: "50%", transform: "translate(-50%, -50%)", gap: 8 }}
+              >
+                <div className="flex flex-row justify-center items-center flex-shrink-0" style={{ padding: "8px 24px", gap: 10, height: 30, borderRadius: 96 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0085FF", flexShrink: 0 }} />
+                  <span className="whitespace-nowrap" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#0085FF" }}>
+                    {allMeetingsForCalendar.length} Meeting{allMeetingsForCalendar.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-row items-center flex-shrink-0" style={{ height: 32 }}>
+                <button
+                  onClick={() => {
+                    const d = new Date(meetingCalendarDate);
+                    if (meetingCalendarView === "month") d.setMonth(d.getMonth() - 1);
+                    else if (meetingCalendarView === "week") d.setDate(d.getDate() - 7);
+                    else d.setDate(d.getDate() - 1);
+                    setMeetingCalendarDate(d);
+                  }}
+                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                  style={{ width: 48, height: 32, border: "1px solid #E0E0E1", borderRadius: "95px 0px 0px 95px" }}
+                >
+                  <ChevronLeft size={20} style={{ color: "#111216" }} />
+                </button>
+                <div
+                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                  style={{ padding: "0px 16px", minWidth: 94, height: 32, borderWidth: "1px 0px", borderStyle: "solid", borderColor: "#E0E0E1" }}
+                >
+                  <span className="whitespace-nowrap" style={{ fontFamily: "'SF Pro Display', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "17px", color: "#111216" }}>
+                    {meetingCalendarView === "day"
+                      ? meetingCalendarDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                      : meetingCalendarDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    const d = new Date(meetingCalendarDate);
+                    if (meetingCalendarView === "month") d.setMonth(d.getMonth() + 1);
+                    else if (meetingCalendarView === "week") d.setDate(d.getDate() + 7);
+                    else d.setDate(d.getDate() + 1);
+                    setMeetingCalendarDate(d);
+                  }}
+                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                  style={{ width: 48, height: 32, border: "1px solid #E0E0E1", borderRadius: "0px 95px 95px 0px" }}
+                >
+                  <ChevronRight size={20} style={{ color: "#111216" }} />
+                </button>
+              </div>
+
+              <div
+                className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                style={{
+                  padding: 4,
+                  gap: 6,
+                  width: 285,
+                  height: 40,
+                  background: "#FFFFFF",
+                  border: "1px solid #E0E0E1",
+                  boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.1)",
+                  borderRadius: 96,
+                }}
+              >
+                {[
+                  { v: "month", Icon: CustomMonthIcon },
+                  { v: "week", Icon: CustomWeekIcon },
+                  { v: "day", Icon: CustomDayIcon },
+                ].map(({ v, Icon }) => (
+                  <button
+                    key={v}
+                    onClick={() => setMeetingCalendarView(v)}
+                    className="box-border flex flex-row justify-center items-center flex-1"
+                    style={{
+                      padding: "6px 12px",
+                      gap: 6,
+                      height: 32,
+                      background: meetingCalendarView === v ? "#FFFFFF" : "transparent",
+                      border: meetingCalendarView === v ? "1px solid rgba(0, 133, 255, 0.2)" : "none",
+                      boxShadow: meetingCalendarView === v ? "0px 0px 6px rgba(0, 0, 0, 0.1)" : "none",
+                      borderRadius: meetingCalendarView === v ? 96 : 4,
+                    }}
+                  >
+                    <Icon width={16} height={16} style={{ color: meetingCalendarView === v ? "#0085FF" : "#48494C", flexShrink: 0 }} />
+                    <span
+                      className="capitalize whitespace-nowrap"
+                      style={{
+                        fontFamily: "'SF Pro Display', Inter, sans-serif",
+                        fontWeight: 500,
+                        fontSize: 13,
+                        lineHeight: "17px",
+                        color: meetingCalendarView === v ? "#0085FF" : "#48494C",
+                      }}
+                    >
+                      {v}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Day-of-week header */}
+            <div className="flex flex-row items-start flex-shrink-0 self-stretch">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => (
+                <div
+                  key={day}
+                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                  style={{
+                    padding: 16,
+                    gap: 10,
+                    width: "14.2857%",
+                    height: 40,
+                    borderWidth: i === 6 ? "0px 0px 1px 0px" : "0px 1px 1px 0px",
+                    borderStyle: "solid",
+                    borderColor: "#E0E0E1",
+                  }}
+                >
+                  <span className="whitespace-nowrap" style={{ fontFamily: "'SF Pro Display', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "17px", color: "#111216" }}>
+                    {day}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Month grid — meetings only */}
+            {Array.from({ length: 6 }).map((_, weekIdx) => {
+              const weekDays = calDays.slice(weekIdx * 7, weekIdx * 7 + 7);
+              const isCurrentWeek = weekDays.some(
+                (d) => d.date.toDateString() === meetingCalendarDate.toDateString(),
+              );
+              return (
+                <div
+                  key={weekIdx}
+                  className="flex flex-row items-start flex-shrink-0 self-stretch"
+                  style={{ background: meetingCalendarView === "week" && isCurrentWeek ? "#F5F8FF" : "transparent" }}
+                >
+                  {weekDays.map((dayObj, i) => {
+                    const dateKey = dayObj.date.toDateString();
+                    const dayMeetings = meetingsByDate[dateKey] || [];
+                    const visibleMeetings = dayMeetings.slice(0, 3);
+                    const overflowCount = dayMeetings.length - visibleMeetings.length;
+                    const isLastCol = i === 6;
+                    const isLastRow = weekIdx === 5;
+
+                    return (
+                      <div
+                        key={i}
+                        className="box-border flex flex-col items-start flex-shrink-0"
+                        style={{
+                          padding: 16,
+                          gap: 8,
+                          width: "14.2857%",
+                          height: 158,
+                          borderWidth: isLastCol
+                            ? isLastRow ? "0px" : "0px 0px 1px 0px"
+                            : isLastRow ? "0px 1px 0px 0px" : "0px 1px 1px 0px",
+                          borderStyle: "solid",
+                          borderColor: "#E0E0E1",
+                          opacity: dayObj.isCurrent ? 1 : 0.4,
+                          background:
+                            meetingCalendarView === "day" && dateKey === meetingCalendarDate.toDateString()
+                              ? "#F5F8FF"
+                              : "transparent",
+                        }}
+                      >
+                        <span style={{ fontFamily: "'SF Pro Display', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "17px", color: "#111216" }}>
+                          {dayObj.date.getDate()}
+                        </span>
+
+                        <div className="flex flex-col items-start w-full" style={{ gap: 4 }}>
+                          {visibleMeetings.map((m) => (
+                            <div
+                              key={m._id}
+                              className="box-border flex flex-row items-center justify-between w-full"
+                              style={{ padding: "10px 8px", height: 24, background: "#E7EFFF", border: "1px solid #E0E0E1", borderRadius: 4 }}
+                            >
+                              <span className="truncate" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, letterSpacing: "-0.06em", color: "#0952E7" }}>
+                                {m.title || "Meeting"}
+                              </span>
+                              <span className="whitespace-nowrap flex-shrink-0" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, letterSpacing: "-0.06em", color: "#0952E7" }}>
+                                {new Date(m.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                          ))}
+                          {overflowCount > 0 && (
+                            <div className="flex flex-row justify-center items-center" style={{ padding: "2px 8px", gap: 4, background: "#F5F6F6", borderRadius: 100 }}>
+                              <span style={{ fontFamily: "'SF Pro Display', Inter, sans-serif", fontWeight: 500, fontSize: 12, lineHeight: "18px", color: "#111216" }}>
+                                +{overflowCount} more
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        );
+      })()}
 
       {activeTab === "tasks" && showKanban && (
         <div

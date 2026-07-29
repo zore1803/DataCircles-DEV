@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import CustomDropdown from "../common/CustomDropdown";
 import TableSkeletonRows from "../common/TableSkeletonRows";
-import useMinDelay from "../../hooks/useMinDelay";
 
 // TanStack Table
 import {
@@ -784,7 +783,7 @@ export default function DealsTable({
     );
   };
 
-  const showLoadingSkeleton = useMinDelay(loading && sortedTableDeals.length === 0, 300);
+  const showLoadingSkeleton = loading && sortedTableDeals.length === 0;
 
   const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
   const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);

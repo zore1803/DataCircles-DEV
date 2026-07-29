@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useLayoutEffect } from "react";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
-import useMinDelay from "../hooks/useMinDelay";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { createPortal } from "react-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
@@ -166,7 +166,8 @@ function Contacts() {
   });
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const showLoadingSkeleton = useMinDelay(loading && contacts.length === 0, 300);
+  const showLoadingSkeleton = loading && contacts.length === 0;
+  useTopLoadingSignal(showLoadingSkeleton);
   const [contactFieldList, setContactFieldList] = useState([]);
   const [additionalValues, setAdditionalValues] = useState({});
   const [permission, setPermission] = useState("");
@@ -2676,7 +2677,7 @@ function Contacts() {
 
           <button
             onClick={() => handleTabChange(activeTab === "Hotlist" ? "All" : "Hotlist")}
-            className={`inline-flex items-center gap-2 h-11 px-4 rounded-full text-sm font-semibold transition-colors flex-shrink-0 ${activeTab === "Hotlist"
+            className={`inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors flex-shrink-0 ${activeTab === "Hotlist"
               ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
               : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
               }`}
@@ -2689,7 +2690,7 @@ function Contacts() {
 
           <button
             onClick={toggleForm}
-            className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
+            className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors"
           >
             <Plus className="w-4 h-4" />
             {showForm ? "Cancel" : "New Contact"}
