@@ -2828,7 +2828,7 @@ function Tasks() {
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${taskTable.getTotalSize()}px`, tableLayout: "fixed" }}
           >
-            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
+            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
               {taskTable.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
@@ -2850,10 +2850,10 @@ function Tasks() {
                         ) : undefined}
                         style={{
                           width: header.getSize(),
-                          position: isLeftSticky ? "sticky" : "relative",
-                          top: isLeftSticky ? 0 : "auto",
+                          position: "sticky",
+                          top: 0,
                           left: isLeftSticky ? 0 : "auto",
-                          zIndex: isLeftSticky ? 20 : 1,
+                          zIndex: isLeftSticky ? 20 : 15,
                           opacity: isDragging ? 0.35 : 1,
                         }}
                         className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
@@ -2955,7 +2955,7 @@ function Tasks() {
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${meetingTable.getTotalSize()}px`, tableLayout: "fixed" }}
           >
-            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
+            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
               {meetingTable.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
@@ -2977,10 +2977,10 @@ function Tasks() {
                         ) : undefined}
                         style={{
                           width: header.getSize(),
-                          position: isLeftSticky ? "sticky" : "relative",
-                          top: isLeftSticky ? 0 : "auto",
+                          position: "sticky",
+                          top: 0,
                           left: isLeftSticky ? 0 : "auto",
-                          zIndex: isLeftSticky ? 20 : 1,
+                          zIndex: isLeftSticky ? 20 : 15,
                           opacity: isDragging ? 0.35 : 1,
                         }}
                         className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
