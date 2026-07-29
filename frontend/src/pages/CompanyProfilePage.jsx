@@ -798,15 +798,16 @@ const CompanyProfilePage = () => {
                 <MoreVertical size={16} strokeWidth={2.5} />
               </button>
               {showActionsMenu && (
-                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+                <div className="absolute right-0 mt-1 w-32 lg:w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
                   <button
                     onClick={() => {
                       setShowStats((prev) => !prev);
                       setShowActionsMenu(false);
                     }}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                    className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                   >
-                    <Eye size={14} className="text-gray-400" />
+                    <Eye size={12} className="text-gray-400 lg:hidden" />
+                    <Eye size={14} className="text-gray-400 hidden lg:block" />
                     {showStats ? "Hide KPIs" : "Unhide KPIs"}
                   </button>
                   {activeTab === "Deals" && (
@@ -815,9 +816,10 @@ const CompanyProfilePage = () => {
                         setDealsViewMode((prev) => (prev === "board" ? "list" : "board"));
                         setShowActionsMenu(false);
                       }}
-                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                      className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                     >
-                      <LayoutGrid size={14} className="text-gray-400" />
+                      <LayoutGrid size={12} className="text-gray-400 lg:hidden" />
+                      <LayoutGrid size={14} className="text-gray-400 hidden lg:block" />
                       {dealsViewMode === "board" ? "List View" : "Kanban View"}
                     </button>
                   )}
@@ -827,9 +829,9 @@ const CompanyProfilePage = () => {
                       handleEdit();
                       setShowActionsMenu(false);
                     }}
-                    className="lg:hidden flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                    className="lg:hidden flex items-center gap-1.5 w-full px-2 py-1.5 text-xs font-normal text-gray-700 hover:bg-gray-50 text-left"
                   >
-                    <Edit2 size={14} className="text-gray-400" />
+                    <Edit2 size={12} className="text-gray-400" />
                     Edit
                   </button>
                 </div>
