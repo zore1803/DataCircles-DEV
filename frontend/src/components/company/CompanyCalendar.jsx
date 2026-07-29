@@ -499,6 +499,8 @@ const CompanyCalendar = ({ companyId }) => {
           </button>
         </div>
 
+        <div className="flex-1 min-w-0 lg:hidden" />
+
         <div className="relative flex items-center bg-gray-100 rounded-full p-0.5 lg:p-1 flex-shrink-0 overflow-hidden">
           <span
             className="absolute top-0.5 lg:top-1 bottom-0.5 lg:bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
