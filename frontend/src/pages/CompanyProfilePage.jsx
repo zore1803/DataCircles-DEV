@@ -850,7 +850,7 @@ const CompanyProfilePage = () => {
                 <ChevronDown size={14} className="hidden lg:inline" />
               </button>
               {showNewEntryMenu && (
-                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+                <div className="absolute right-0 mt-1 w-32 lg:w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
                   {newEntryOptions.map((option) =>
                     option.tab ? (
                       <button
@@ -860,9 +860,10 @@ const CompanyProfilePage = () => {
                           setActiveTab(option.tab);
                           setShowNewEntryMenu(false);
                         }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                        className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                       >
-                        <option.icon size={14} className="text-gray-400" />
+                        <option.icon size={12} className="text-gray-400 lg:hidden" />
+                        <option.icon size={14} className="text-gray-400 hidden lg:block" />
                         {option.label}
                       </button>
                     ) : (
@@ -870,9 +871,10 @@ const CompanyProfilePage = () => {
                         key={option.label}
                         to={option.href}
                         onClick={() => setShowNewEntryMenu(false)}
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50"
                       >
-                        <option.icon size={14} className="text-gray-400" />
+                        <option.icon size={12} className="text-gray-400 lg:hidden" />
+                        <option.icon size={14} className="text-gray-400 hidden lg:block" />
                         {option.label}
                       </Link>
                     ),
