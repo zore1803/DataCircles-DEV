@@ -316,6 +316,184 @@ const Hotlist = () => {
   // `folders` refetches while this one happens to be open.
   const openFolder = folders?.find((f) => f._id === openFolderId) || null;
 
+  // Computed once, rendered from BOTH the drill-down view and the folder
+  // grid below — this used to live only inside the grid's own JSX, so it was
+  // completely unreachable from the drill-down view (an early return that
+  // never got to that code). Same instance either way; no duplicated modal.
+  const editFolderModal = editingFolder && (
+    <div
+      className="fixed inset-0 z-[100002] bg-black/30 flex items-center justify-center sm:p-6 p-2"
+      role="dialog"
+      aria-modal="true"
+      tabIndex="-1"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") setEditingFolder(null);
+      }}
+    >
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full h-full sm:h-[90vh] flex flex-col outline-none">
+        {/* Modal Header */}
+        <div className="px-6 py-5 border-b border-gray-200 flex-shrink-0 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 truncate">{`Edit: ${editingFolder.name}`}</h3>
+            <p className="text-xs text-gray-500 mt-1">
+              Modify folder name and select companies
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setEditingFolder(null);
+              setSelectedCompanies([]);
+              setSearchTerm("");
+            }}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+            aria-label="Close modal"
+          >
+            <X className="h-5 w-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Modal Content with own scroll */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+          {/* Folder Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Folder Name
+            </label>
+            <input
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              value={editingName}
+              onChange={(e) => setEditingName(e.target.value)}
+              autoFocus
+              maxLength={50}
+              aria-label="Folder name"
+            />
+          </div>
+
+          {/* Selected Companies */}
+          {selectedCompanies.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Selected Companies ({selectedCompanies.length})
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {selectedCompanies.map((company) => (
+                  <span
+                    key={company._id}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs"
+                  >
+                    <span className="truncate max-w-[120px]">
+                      {company.name || "Unknown"}
+                    </span>
+                    <button
+                      onClick={() => removeSelectedCompany(company._id)}
+                      className="hover:bg-blue-200 rounded-full p-0.5"
+                      aria-label="Remove company"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Search & Add Companies */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Add Companies
+            </label>
+            <div className="relative" ref={dropdownRef}>
+              <input
+                ref={searchInputRef}
+                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="Search across all companies..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onFocus={() => setIsDropdownOpen(true)}
+                aria-label="Search companies"
+              />
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+
+              {isDropdownOpen && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {filteredCompanies.length ? (
+                    filteredCompanies.map((company) => {
+                      const isSelected = selectedCompanies.some(
+                        (c) => c._id === company._id,
+                      );
+
+                      return (
+                        <button
+                          key={company._id}
+                          onClick={() => toggleCompany(company)}
+                          className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 ${
+                            isSelected ? "bg-blue-50" : ""
+                          }`}
+                          type="button"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium text-gray-900 text-sm truncate">
+                                {company.name || "Unnamed Company"}
+                              </div>
+                              <div className="text-xs text-gray-600 mt-1 flex flex-col">
+                                {company.industry && (
+                                  <span>Industry: {company.industry}</span>
+                                )}
+                                {company.address && (
+                                  <span>Location: {company.address}</span>
+                                )}
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <Check className="h-4 w-4 text-blue-600" />
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="px-4 py-6 text-center text-gray-500">
+                      <Search className="h-10 w-10 mx-auto text-gray-300 mb-3" />
+                      <p className="text-sm">
+                        {searchTerm ? "No companies found" : "Start typing to search..."}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="px-6 py-4 border-t border-gray-200 flex gap-3 justify-end flex-wrap">
+          <button
+            onClick={() => {
+              setEditingFolder(null);
+              setSelectedCompanies([]);
+              setSearchTerm("");
+            }}
+            className="px-6 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={saveEdit}
+            className={`px-6 py-2.5 rounded-lg font-medium text-white bg-blue-600 hover:bg-blue-700 ${
+              !editingName?.trim() ? "opacity-60 cursor-not-allowed" : ""
+            }`}
+            type="button"
+            disabled={!editingName?.trim()}
+          >
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   // Drill-down: opening a folder replaces the whole grid with a dedicated
   // workspace for just that folder — not an inline accordion, and not a
   // horizontal scroll strip. Everything below wraps/stacks vertically; the
@@ -333,10 +511,11 @@ const Hotlist = () => {
     });
 
     return (
+      <>
       <div className="mx-4 mt-6 space-y-4">
-        {/* Workspace navbar: Back + folder name, search, List/Card toggle —
-            wraps to a second line on narrow widths rather than ever
-            scrolling sideways. */}
+        {/* Workspace navbar: Back + folder name, search, List/Card toggle,
+            Add Companies — wraps to a second line on narrow widths rather
+            than ever scrolling sideways. */}
         <div className="bg-white rounded-xl border border-gray-200 px-6 py-5">
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
@@ -388,6 +567,19 @@ const Hotlist = () => {
                 <List className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Was only reachable via the pencil icon back on the folder grid
+                — this drill-down view had no way to add companies to the
+                folder you're actually looking at. Reuses the exact same
+                edit/add flow (startEdit -> editFolderModal), just triggered
+                from here too. */}
+            <button
+              onClick={() => startEdit(openFolder)}
+              className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#0085FF] text-white text-sm font-medium hover:bg-blue-600 transition-colors flex-shrink-0"
+            >
+              <Plus className="h-4 w-4" />
+              Add Companies
+            </button>
           </div>
         </div>
 
@@ -396,7 +588,14 @@ const Hotlist = () => {
             <div className="text-center py-8 sm:py-12 text-gray-500">
               <Building2 className="h-12 w-12 sm:h-16 sm:w-16 mx-auto text-gray-300 mb-4" />
               <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No companies in this folder</h3>
-              <p className="text-sm">Go back and use the pencil icon to add some.</p>
+              <p className="text-sm mb-4">Add companies to this folder to get started.</p>
+              <button
+                onClick={() => startEdit(openFolder)}
+                className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#0085FF] text-white text-sm font-medium hover:bg-blue-600 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Add Companies
+              </button>
             </div>
           ) : visibleCompanies.length === 0 ? (
             <div className="text-center py-8 sm:py-12 text-gray-500">
@@ -433,10 +632,13 @@ const Hotlist = () => {
           )}
         </div>
       </div>
+      {editFolderModal}
+      </>
     );
   }
 
   return (
+    <>
     <div className="mx-4 mt-6 space-y-4">
       {/* Header Card */}
       <div className="bg-white rounded-xl border border-gray-200 px-6 py-5">
@@ -547,187 +749,9 @@ const Hotlist = () => {
           )}
         </div>
       </div>
-
-        {/* Edit Mode Modal - Mobile Responsive */}
-        {editingFolder && (
-          <div
-            className="fixed inset-0 z-[100002] bg-black/30 flex items-center justify-center sm:p-6 p-2"
-            role="dialog"
-            aria-modal="true"
-            tabIndex="-1"
-            onKeyDown={(e) => {
-              if (e.key === "Escape") setEditingFolder(null);
-            }}
-          >
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full h-full sm:h-[90vh] flex flex-col outline-none">
-              {/* Modal Header */}
-              <div className="px-6 py-5 border-b border-gray-200 flex-shrink-0 flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 truncate">{`Edit: ${editingFolder.name}`}</h3>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Modify folder name and select companies
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    setEditingFolder(null);
-                    setSelectedCompanies([]);
-                    setSearchTerm("");
-                  }}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                  aria-label="Close modal"
-                >
-                  <X className="h-5 w-5 text-gray-500" />
-                </button>
-              </div>
-
-              {/* Modal Content with own scroll */}
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
-                {/* Folder Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Folder Name
-                  </label>
-                  <input
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
-                    autoFocus
-                    maxLength={50}
-                    aria-label="Folder name"
-                  />
-                </div>
-
-                {/* Selected Companies */}
-                {selectedCompanies.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Selected Companies ({selectedCompanies.length})
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedCompanies.map((company) => (
-                        <span
-                          key={company._id}
-                          className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs"
-                        >
-                          <span className="truncate max-w-[120px]">
-                            {company.name || "Unknown"}
-                          </span>
-                          <button
-                            onClick={() => removeSelectedCompany(company._id)}
-                            className="hover:bg-blue-200 rounded-full p-0.5"
-                            aria-label="Remove company"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Search & Add Companies */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Add Companies
-                  </label>
-                  <div className="relative" ref={dropdownRef}>
-                    <input
-                      ref={searchInputRef}
-                      className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Search across all companies..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      onFocus={() => setIsDropdownOpen(true)}
-                      aria-label="Search companies"
-                    />
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-
-                    {isDropdownOpen && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                        {filteredCompanies.length ? (
-                          filteredCompanies.map((company) => {
-                            // ✅ CHANGED: Update check to look through the object array
-                            const isSelected = selectedCompanies.some(
-                              (c) => c._id === company._id,
-                            );
-
-                            return (
-                              <button
-                                key={company._id}
-                                onClick={() => toggleCompany(company)}
-                                className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 ${
-                                  isSelected ? "bg-blue-50" : ""
-                                }`}
-                                type="button"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <div className="font-medium text-gray-900 text-sm truncate">
-                                      {company.name || "Unnamed Company"}
-                                    </div>
-                                    <div className="text-xs text-gray-600 mt-1 flex flex-col">
-                                      {company.industry && (
-                                        <span>
-                                          Industry: {company.industry}
-                                        </span>
-                                      )}
-                                      {company.address && (
-                                        <span>Location: {company.address}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {isSelected && (
-                                    <Check className="h-4 w-4 text-blue-600" />
-                                  )}
-                                </div>
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <div className="px-4 py-6 text-center text-gray-500">
-                            <Search className="h-10 w-10 mx-auto text-gray-300 mb-3" />
-                            <p className="text-sm">
-                              {searchTerm
-                                ? "No companies found"
-                                : "Start typing to search..."}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="px-6 py-4 border-t border-gray-200 flex gap-3 justify-end flex-wrap">
-                <button
-                  onClick={() => {
-                    setEditingFolder(null);
-                    setSelectedCompanies([]);
-                    setSearchTerm("");
-                  }}
-                  className="px-6 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={saveEdit}
-                  className={`px-6 py-2.5 rounded-lg font-medium text-white bg-blue-600 hover:bg-blue-700 ${
-                    !editingName?.trim() ? "opacity-60 cursor-not-allowed" : ""
-                  }`}
-                  type="button"
-                  disabled={!editingName?.trim()}
-                >
-                  Save Changes
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+    </div>
+    {editFolderModal}
+    </>
   );
 };
 
