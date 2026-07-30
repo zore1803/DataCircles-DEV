@@ -1100,7 +1100,7 @@ const InvoiceForm = ({
                   Select Deal *
                 </label>
                 <div className="flex items-center gap-2">
-                  <div className="w-full">
+                  <div className="flex-1 min-w-0">
                     {/* <SearchableDropdown
                       options={localDeals}
                       value={form.deal}
@@ -1129,7 +1129,7 @@ const InvoiceForm = ({
                   <button
                     type="button"
                     onClick={() => setShowQuickDealForm(true)}
-                    className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
                     aria-label="Add new deal"
                   >
                     <Plus className="w-4 h-4" />

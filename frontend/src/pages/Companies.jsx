@@ -143,8 +143,14 @@ function Companies() {
   const [additionalFields, setAdditionalFields] = useState({});
   const [companyFieldNames, setCompanyFieldNames] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Skeleton rows only on a genuinely empty table (first load / after a filter
+  // wipes results) — never while paging, so existing rows stay put.
   const showLoadingSkeleton = loading && companies.length === 0;
-  useTopLoadingSignal(showLoadingSkeleton);
+  // Signal the top progress bar on EVERY fetch, not just the skeleton case.
+  // Paging is server-side here, so page 2 -> 3 has a real network round trip;
+  // the thin top bar is what communicates that now, instead of dimming the
+  // whole table (see the table container below).
+  useTopLoadingSignal(loading);
   const [industries, setIndustries] = useState([]);
   const [industriesLoading, setIndustriesLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -364,23 +370,16 @@ function Companies() {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    if (e.detail === 1) {
-      e.stopPropagation();
-      if (openColMenuKey === colId) {
-        setOpenColMenuKey(null);
-        setColMenuPos(null);
-        return;
-      }
-      const th = e.currentTarget;
-      const rect = th.getBoundingClientRect();
-      let calculatedLeft = rect.right - 190;
-      if (th.cellIndex === th.parentNode.cells.length - 1) {
-        calculatedLeft -= 80;
-      }
-      setColMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
-      setOpenColMenuKey(colId);
-      return;
-    }
+    // REMOVED: an `if (e.detail === 1) { …open the column menu… return; }` block.
+    // It was broken three ways at once. (1) It referenced openColMenuKey /
+    // setOpenColMenuKey / setColMenuPos, which don't exist in this file — the
+    // state here is openColumnMenuKey / setColumnMenuPos — so it threw a
+    // ReferenceError on every header mousedown. (2) Because it threw (and
+    // because it `return`ed early), the movement-threshold drag logic below
+    // never got its mousemove/mouseup listeners attached, so column reordering
+    // could not start. (3) Its position maths was unzoomed and duplicated the
+    // chevron button's own correct, zoom-corrected calculation. The menu opens
+    // solely from that button; a plain click on the header now does nothing.
 
     const th = e.currentTarget;
     const startX = e.clientX;
@@ -519,6 +518,33 @@ function Companies() {
               setRowActionsPos(null);
               return;
             }
+            // Same zoom-corrected, viewport-flipping/clamping position used for
+            // the Deals row-actions menu: anchor to the button's own rect,
+            // divide by ancestor zoom (the menu portals to document.body,
+            // which paints inside this app's dynamic <html> zoom), flip
+            // upward when there isn't room below, and clamp on both axes.
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 160;
+            const MARGIN = 8;
+            // 6 items (View Company, Edit, Move to a Folder, Add to Hotlist,
+            // Star/Unstar, Delete) + one divider + container padding.
+            const MENU_H = 216;
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const viewportH = window.innerHeight / zMenu;
+            const viewportW = window.innerWidth / zMenu;
+            const top = rect.bottom / zMenu + 4;
+            const bottomAnchor = rect.top / zMenu - 4;
+
+            const openUp = viewportH - top < MENU_H + MARGIN;
+            let calcTop = openUp ? bottomAnchor - MENU_H : top;
+            calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+            calcLeft = Math.max(calcLeft, MARGIN);
+
+            setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(company._id);
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -526,10 +552,16 @@ function Companies() {
         >
           <MoreVertical className="w-4 h-4" />
         </button>
-        {isOpen && (
-          <div
-            className="absolute right-0 top-full mt-1 z-[9999] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
-          >
+        {isOpen && rowActionsPos && createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[9998]"
+              onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }}
+            />
+            <div
+              style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+              className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+            >
             <Link
               to={`/companies/${company._id}`}
               onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }}
@@ -597,7 +629,9 @@ function Companies() {
               <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
               Delete
             </button>
-          </div>
+            </div>
+          </>,
+          document.body,
         )}
       </div>
     );
@@ -1381,13 +1415,14 @@ function Companies() {
       ) {
         setIsMoreMenuOpen(false);
       }
-      if (
-        rowActionsRef.current &&
-        !rowActionsRef.current.contains(event.target)
-      ) {
-        setOpenRowActionsId(null);
-        setRowActionsPos(null);
-      }
+      // Row-actions is no longer closed here — it's now portaled to
+      // document.body (see renderRowActionsMenu), which puts it outside
+      // rowActionsRef's DOM subtree. This document-level "mousedown outside"
+      // check would then fire on every mousedown INSIDE the menu too, and
+      // because mousedown runs before the item's own click, it would unmount
+      // the menu before "View Company"/"Edit"/"Delete" etc. ever received the
+      // click. The portaled menu closes itself via its own full-screen
+      // backdrop instead.
       if (
         columnMenuRef.current &&
         !columnMenuRef.current.contains(event.target)
@@ -1862,6 +1897,37 @@ function Companies() {
                         placeholder="Search companies by name, industry, or location..."
                       />
                     </div>
+                  </div>
+
+                  {/* Actions Group */}
+                  <div className="relative flex items-center gap-2 lg:gap-4 flex-shrink-0">
+                    {/* Filters — hidden on mobile, folded into three-dot menu */}
+                    <button
+                      onClick={() => setShowAdvancedFilters(true)}
+                      className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+                      title="Filters"
+                    >
+                      <FilterIcon size={16} />
+                      {activeFilters.length > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                          {activeFilters.length}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Hotlist — hidden on mobile, folded into three-dot menu */}
+                    <button
+                      onClick={() => setShowHotlist(!showHotlist)}
+                      className={`hidden lg:inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors ${showHotlist
+                        ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
+                        : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
+                        }`}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#1F2937" />
+                      </svg>
+                      <span className="font-medium">Hotlist</span>
+                    </button>
 
                     {/* Overflow menu: Industry filter, Columns, Import, Video Tutorial */}
                     <div className="relative" ref={moreMenuRef}>
@@ -1975,46 +2041,18 @@ function Companies() {
                       )}
                     </div>
 
-                    {/* Filters — hidden on mobile, folded into three-dot menu */}
                     <button
-                      onClick={() => setShowAdvancedFilters(true)}
-                      className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
-                      title="Filters"
+                      onClick={() => {
+                        resetForm();
+                        setShowForm(true);
+                      }}
+                      className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
+                      title={showForm ? "Cancel" : "New Company"}
                     >
-                      <FilterIcon size={16} />
-                      {activeFilters.length > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                          {activeFilters.length}
-                        </span>
-                      )}
-                    </button>
-
-                    {/* Hotlist — hidden on mobile, folded into three-dot menu */}
-                    <button
-                      onClick={() => setShowHotlist(!showHotlist)}
-                      className={`hidden lg:inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors ${showHotlist
-                        ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
-                        : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
-                        }`}
-                    >
-                      <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#1F2937" />
-                      </svg>
-                      <span className="font-medium">Hotlist</span>
+                      <Plus className="w-4 h-4 flex-shrink-0" />
+                      <span className="hidden lg:inline">{showForm ? "Cancel" : "New Company"}</span>
                     </button>
                   </div>
-
-                  <button
-                    onClick={() => {
-                      resetForm();
-                      setShowForm(true);
-                    }}
-                    className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
-                    title={showForm ? "Cancel" : "New Company"}
-                  >
-                    <Plus className="w-4 h-4 flex-shrink-0" />
-                    <span className="hidden lg:inline">{showForm ? "Cancel" : "New Company"}</span>
-                  </button>
                 </>
               )}
             </div>
@@ -2027,15 +2065,20 @@ function Companies() {
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
           right: 0,
-          bottom: !loading && !showHotlist ? 64 : 0,
+          bottom: !showLoadingSkeleton && !showHotlist ? 64 : 0,
         }}
       >
         {showHotlist ? (
           <Hotlist />
         ) : (
-          <div
-            className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
-          >
+          // No `loading ? "opacity-60 pointer-events-none"` on this container any
+          // more. Paging is server-side, so that fired on every page change and
+          // dimmed the whole table to 60% for the length of the round trip — the
+          // flash that made paging feel like the data blinked out. The rows never
+          // actually left (showLoadingSkeleton is gated on an empty list), so the
+          // old data now stays fully legible and clickable while the next page
+          // loads; the top progress bar reports the fetch instead.
+          <div className="relative bg-white border border-[#E1E4EA]">
             <table
               className="w-full border-separate border-spacing-0 text-left"
               style={{
@@ -2221,7 +2264,7 @@ function Companies() {
         document.body,
       )}
 
-      {!loading && !showHotlist && (
+      {!showLoadingSkeleton && !showHotlist && (
         <div
           className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
           style={{ left: "var(--sidebar-width, 0px)", height: 64 }}

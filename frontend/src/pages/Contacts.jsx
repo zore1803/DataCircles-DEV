@@ -166,8 +166,14 @@ function Contacts() {
   });
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Skeleton rows only on a genuinely empty table (first load / after a filter
+  // wipes results) — never while paging, so existing rows stay put.
   const showLoadingSkeleton = loading && contacts.length === 0;
-  useTopLoadingSignal(showLoadingSkeleton);
+  // Signal the top progress bar on EVERY fetch, not just the skeleton case.
+  // Paging is server-side here, so page 2 -> 3 has a real network round trip;
+  // the thin top bar is what communicates that now, instead of dimming the
+  // whole table (see the table container below).
+  useTopLoadingSignal(loading);
   const [contactFieldList, setContactFieldList] = useState([]);
   const [additionalValues, setAdditionalValues] = useState({});
   const [permission, setPermission] = useState("");
@@ -307,23 +313,16 @@ function Contacts() {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    if (e.detail === 1) {
-      e.stopPropagation();
-      if (openColMenuKey === colId) {
-        setOpenColMenuKey(null);
-        setColMenuPos(null);
-        return;
-      }
-      const th = e.currentTarget;
-      const rect = th.getBoundingClientRect();
-      let calculatedLeft = rect.right - 190;
-      if (th.cellIndex === th.parentNode.cells.length - 1) {
-        calculatedLeft -= 80;
-      }
-      setColMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
-      setOpenColMenuKey(colId);
-      return;
-    }
+    // REMOVED: an `if (e.detail === 1) { …open the column menu… return; }` block.
+    // It was broken three ways at once. (1) It referenced openColMenuKey /
+    // setOpenColMenuKey / setColMenuPos, which don't exist in this file — the
+    // state here is openColumnMenuKey / setColumnMenuPos — so it threw a
+    // ReferenceError on every header mousedown. (2) Because it threw (and
+    // because it `return`ed early), the movement-threshold drag logic below
+    // never got its mousemove/mouseup listeners attached, so column reordering
+    // could not start. (3) Its position maths was unzoomed and duplicated the
+    // chevron button's own correct, zoom-corrected calculation. The menu opens
+    // solely from that button; a plain click on the header now does nothing.
 
     const th = e.currentTarget;
     const startX = e.clientX;
@@ -780,7 +779,35 @@ function Contacts() {
               closeMenu();
               return;
             }
-            setRowActionsPos({ top: e.clientY + 4, left: e.clientX - 130 });
+            // Was anchored to the raw click coordinates (e.clientX/Y) with no
+            // zoom correction and no flip logic — so the menu's position
+            // depended on exactly where inside the small ⋮ hitbox the click
+            // landed, drifted under this app's dynamic zoom, and always
+            // opened straight down regardless of how close to the bottom of
+            // the screen the row was. Same fix as Deals/Tasks/Companies:
+            // anchor to the button's own rect, divide by ancestor zoom (the
+            // menu portals to document.body, which paints inside the zoom),
+            // flip upward when there isn't room below, clamp on both axes.
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 130;
+            const MARGIN = 8;
+            const MENU_H = 180; // Quick View + Edit + Add to Folder + Star + divider + Delete
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const viewportH = window.innerHeight / zMenu;
+            const viewportW = window.innerWidth / zMenu;
+            const top = rect.bottom / zMenu + 4;
+            const bottomAnchor = rect.top / zMenu - 4;
+
+            const openUp = viewportH - top < MENU_H + MARGIN;
+            let calcTop = openUp ? bottomAnchor - MENU_H : top;
+            calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+            calcLeft = Math.max(calcLeft, MARGIN);
+
+            setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(contact._id);
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -2927,7 +2954,7 @@ function Contacts() {
             position: "fixed",
             left: "var(--sidebar-width, 0px)",
             right: 0,
-            bottom: !showKanban && activeTab !== "Hotlist" && !loading ? 64 : 0,
+            bottom: !showKanban && activeTab !== "Hotlist" && !showLoadingSkeleton ? 64 : 0,
           }}
         >
           {/* Content Area */}
@@ -3048,9 +3075,14 @@ function Contacts() {
               <ContactFolder />
             </div>
           ) : (
-            <div
-              className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
-            >
+            // No `loading ? "opacity-60 pointer-events-none"` on this container any
+            // more. Paging is server-side, so that fired on every page change and
+            // dimmed the whole table to 60% for the length of the round trip — the
+            // flash that made paging feel like the data blinked out. The rows never
+            // actually left (showLoadingSkeleton is gated on an empty list), so the
+            // old data now stays fully legible and clickable while the next page
+            // loads; the top progress bar reports the fetch instead.
+            <div className="relative bg-white border border-[#E1E4EA]">
               <table
                 className="w-full border-separate border-spacing-0 text-left"
                 style={{
@@ -3159,6 +3191,18 @@ function Contacts() {
                               key={row.id}
                               className={`bg-white hover:bg-blue-50 transition-colors cursor-pointer ${selectedContactsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
                               onClick={(e) => {
+                                // While a row-actions (⋮) menu is open — for THIS row or
+                                // any other — a click anywhere on the table should only
+                                // ever close/switch that menu, never also navigate away.
+                                // The menu's own full-screen backdrop is meant to absorb
+                                // that click, but relying on stacking order alone left a
+                                // gap: clicking a different row while a menu was open
+                                // still navigated to that row's detail page. This check
+                                // makes it impossible regardless of the backdrop's
+                                // z-index behavior. Once no menu is open, rows navigate
+                                // normally again — this only guards the "menu is up"
+                                // window, not row-clicking in general.
+                                if (openRowActionsId) return;
                                 if (e.target.closest("button") || e.target.closest("a") || e.target.closest("input")) return;
                                 navigate(`/contacts/${row.original._id}`);
                               }}
@@ -3236,7 +3280,7 @@ function Contacts() {
           document.body,
         )}
 
-        {!showKanban && activeTab !== "Hotlist" && !loading && (
+        {!showKanban && activeTab !== "Hotlist" && !showLoadingSkeleton && (
           <div
             className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
             style={{ left: "var(--sidebar-width, 0px)", height: 64 }}

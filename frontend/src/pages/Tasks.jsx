@@ -579,9 +579,16 @@ function Tasks() {
     }
   }, [state]);
 
+  // Skeleton rows only on a genuinely empty table (first load / after a filter
+  // wipes results) — never while paging, so existing rows stay put.
   const showTaskLoadingSkeleton = loading && tasks.length === 0;
   const showMeetingLoadingSkeleton = loading && meetings.length === 0;
-  useTopLoadingSignal(showTaskLoadingSkeleton || showMeetingLoadingSkeleton);
+  // Signal the top progress bar on EVERY fetch, not just the skeleton case.
+  // Paging is server-side here (/tasks/pagination, /meetings/pagination), so
+  // page 3 -> 4 has a real network round trip; the thin top bar is what
+  // communicates that now, instead of dimming the whole table (see the two
+  // table containers below).
+  useTopLoadingSignal(loading);
 
   // Pagination & Sorting for Tasks
   const [taskPagination, setTaskPagination] = useState({
@@ -652,24 +659,18 @@ function Tasks() {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    if (e.detail === 1) {
-      e.stopPropagation();
-      if (openColMenuKey === colId) {
-        setOpenColMenuKey(null);
-        setColMenuPos(null);
-        return;
-      }
-      const th = e.currentTarget;
-      const rect = th.getBoundingClientRect();
-      let calculatedLeft = rect.right - 190;
-      if (th.cellIndex === th.parentNode.cells.length - 1) {
-        calculatedLeft -= 80;
-      }
-      setColMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
-      setOpenColMenuKey(colId);
-      return;
-    }
-
+    // The column menu has its own trigger — the chevron button in
+    // renderHeaderMenu, with its own onClick, its own zoom-corrected
+    // positioning, and its own boundsRight clamp. This function used to also
+    // open the menu on `e.detail === 1` (i.e. any plain click anywhere on the
+    // header) via an unzoomed, duplicate position calculation that conflicted
+    // with the chevron's correct one — and it `return`ed before the
+    // mousemove/mouseup listeners below were ever attached, so a genuine
+    // single-press-and-drag could never start either. Column reordering here
+    // is movement-threshold based (see DRAG_THRESHOLD below), not
+    // double-click based, so removing this unblocks both: a plain click on
+    // the header now does nothing, and press-and-drag (no double-click
+    // needed) reorders columns.
     const th = e.currentTarget;
     const startX = e.clientX;
     const startY = e.clientY;
@@ -760,16 +761,13 @@ function Tasks() {
   const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
 
-  // Click outside listener for the row-actions ("⋮") menu, matching Companies.
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (rowActionsRef.current && !rowActionsRef.current.contains(event.target)) {
-        setOpenRowActionsId(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  // The row-actions menu is portaled to document.body (see renderRowActionsMenu)
+  // and closes itself via its own full-screen backdrop inside that portal. A
+  // document-level "mousedown outside rowActionsRef" listener doesn't work here:
+  // rowActionsRef only wraps the trigger button, not the portaled menu, so this
+  // would fire on every mousedown INSIDE the menu too — and because it runs on
+  // mousedown (before the item's own click), it would unmount the menu before
+  // the click event ever reaches "View"/"Edit"/"Delete", making them unclickable.
 
   // Lock page scroll while a row-actions or column-options menu is open so the
   // background can't shift/scroll out from under the portal-positioned menu.
@@ -1679,13 +1677,10 @@ function Tasks() {
     const pinSide = getColumnPinSide(colKey);
     return (
       <div className="flex items-center justify-between w-full group">
-        <div
-          className="flex items-center gap-1.5 flex-1 overflow-hidden cursor-pointer select-none"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (sortable) handleSort(colKey);
-          }}
-        >
+        {/* Not clickable — a plain click on the header does nothing now.
+            Sorting lives only in the column menu (Sort Ascending/Descending
+            below); `sortable` still gates whether those two items render. */}
+        <div className="flex items-center gap-1.5 flex-1 overflow-hidden select-none">
           <span className="truncate" title={label}>{label}</span>
         </div>
         <button
@@ -1808,8 +1803,37 @@ function Tasks() {
             e.stopPropagation();
             if (isOpen) {
               setOpenRowActionsId(null);
+              setRowActionsPos(null);
               return;
             }
+            // Same zoom-corrected, viewport-flipping/clamping position used for
+            // the Deals row-actions menu: anchor to the button's own rect (not
+            // the click point), divide by ancestor zoom (the menu portals to
+            // document.body, which paints inside this app's dynamic <html>
+            // zoom), flip upward when there isn't room below, and clamp on
+            // both axes so it can never render off the top/bottom/left/right
+            // of the viewport — which is exactly what was happening for the
+            // last rows on a page before this fix.
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 160;
+            const MARGIN = 8;
+            const MENU_H = 124; // View + Edit + divider + Delete
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const viewportH = window.innerHeight / zMenu;
+            const viewportW = window.innerWidth / zMenu;
+            const top = rect.bottom / zMenu + 4;
+            const bottomAnchor = rect.top / zMenu - 4;
+
+            const openUp = viewportH - top < MENU_H + MARGIN;
+            let calcTop = openUp ? bottomAnchor - MENU_H : top;
+            calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+            calcLeft = Math.max(calcLeft, MARGIN);
+
+            setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(item._id);
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -1817,43 +1841,56 @@ function Tasks() {
         >
           <MoreVertical className="w-4 h-4" />
         </button>
-        {isOpen && (
-          <div className="absolute right-0 top-full mt-1 z-[9999] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenRowActionsId(null);
-                type === "task" ? handleTaskEdit(item) : handleMeetingEdit(item);
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+        {isOpen && rowActionsPos && createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[9998]"
+              onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }}
+            />
+            <div
+              style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+              className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
             >
-              <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
-              View
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenRowActionsId(null);
-                type === "task" ? handleTaskEdit(item) : handleMeetingEdit(item);
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-            >
-              <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
-              Edit
-            </button>
-            <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenRowActionsId(null);
-                handleDelete(item._id, type);
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Delete
-            </button>
-          </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                  type === "task" ? handleTaskEdit(item) : handleMeetingEdit(item);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                View
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                  type === "task" ? handleTaskEdit(item) : handleMeetingEdit(item);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                Edit
+              </button>
+              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                  handleDelete(item._id, type);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete
+              </button>
+            </div>
+          </>,
+          document.body,
         )}
       </div>
     );
@@ -2909,12 +2946,14 @@ function Tasks() {
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
           right: 0,
-          bottom: !loading ? 64 : 0,
+          bottom: !showTaskLoadingSkeleton ? 64 : 0,
         }}
       >
-      <div
-        className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
-      >
+      {/* No `loading ? "opacity-60 pointer-events-none"` here any more — paging is
+          server-side, so it dimmed the whole table on every page change. Rows stay
+          fully legible and clickable while the next page loads; the top progress
+          bar reports the fetch instead. */}
+      <div className="relative bg-white border border-[#E1E4EA]">
           <table
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${taskTable.getTotalSize()}px`, tableLayout: "fixed" }}
@@ -2936,7 +2975,7 @@ function Tasks() {
                           e,
                           colId,
                           TASK_COLUMN_LABELS[colId] || colId,
-                          completedTasks.map((t) => String(getTaskColumnPreviewValue(t, colId))),
+                          tasks.map((t) => String(getTaskColumnPreviewValue(t, colId))),
                           headerGroup.headers.map((h) => h.column.id).filter((id) => id !== "selection"),
                         ) : undefined}
                         style={{
@@ -3016,7 +3055,7 @@ function Tasks() {
           </table>
         </div>
       </div>
-      {!loading && (
+      {!showTaskLoadingSkeleton && (
         <div
           className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
           style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
@@ -3035,12 +3074,14 @@ function Tasks() {
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
           right: 0,
-          bottom: !loading ? 64 : 0,
+          bottom: !showMeetingLoadingSkeleton ? 64 : 0,
         }}
       >
-      <div
-        className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
-      >
+      {/* No `loading ? "opacity-60 pointer-events-none"` here any more — paging is
+          server-side, so it dimmed the whole table on every page change. Rows stay
+          fully legible and clickable while the next page loads; the top progress
+          bar reports the fetch instead. */}
+      <div className="relative bg-white border border-[#E1E4EA]">
           <table
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${meetingTable.getTotalSize()}px`, tableLayout: "fixed" }}
@@ -3142,7 +3183,7 @@ function Tasks() {
           </table>
         </div>
       </div>
-      {!loading && (
+      {!showMeetingLoadingSkeleton && (
         <div
           className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
           style={{ left: "var(--sidebar-width, 0px)", height: 64 }}

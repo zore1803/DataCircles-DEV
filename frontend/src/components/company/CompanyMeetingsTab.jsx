@@ -17,6 +17,7 @@ import {
   AlarmClock,
   Video,
 } from "lucide-react";
+import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import CompanyMeetingForm from "./CompanyMeetingForm";
@@ -758,9 +759,19 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           <table className="w-full border-separate border-spacing-0 text-left" style={{ tableLayout: "fixed", minWidth: totalTableWidth }}>
             <thead className="sticky top-0 z-30 bg-[#F5F7FA] border-b border-[#E1E4EA]">
               <tr>
-                {/* Spacer for the row-select checkbox column. No select-all here —
-                    the bulk-action strip owns Select All / Deselect All. */}
-                <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]" />
+                {/* Page-scoped select-all: ticks exactly the rows on the CURRENT page
+                    (10 per page -> 10, 50 -> 50). Distinct from the bulk strip's
+                    "Select All", which spans every record across all pages. */}
+                <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
+                  <div className="flex justify-center items-center w-full">
+                    <input
+                      type="checkbox"
+                      checked={selectedItems.length > 0 && selectedItems.length === paginatedMeetings.length}
+                      onChange={(e) => e.target.checked ? selectAll(paginatedMeetings) : clearSelection()}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                    />
+                  </div>
+                </th>
                 {orderedColumns.map((col, colIdx) => {
                   const isDragging = draggedColKey === col.id;
                   const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
@@ -1728,49 +1739,14 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
               </select>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleListPageChange(listPage - 1)}
-                disabled={!hasListPrevPage}
-                className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-
-              {listTotalPages > 0 &&
-                getListPageNumbers().map((item, index) => {
-                  if (item === "left-dots" || item === "right-dots") {
-                    return (
-                      <span
-                        key={`${item}-${index}`}
-                        className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
-                      >
-                        ...
-                      </span>
-                    );
-                  }
-                  return (
-                    <button
-                      key={`page-${item}`}
-                      onClick={() => handleListPageChange(item)}
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${item === listPage
-                        ? "bg-blue-600 text-white"
-                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                        }`}
-                    >
-                      {item}
-                    </button>
-                  );
-                })}
-
-              <button
-                onClick={() => handleListPageChange(listPage + 1)}
-                disabled={!hasListNextPage}
-                className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+            <EditablePaginationButtons
+              currentPage={listPage}
+              totalPages={listTotalPages}
+              hasPrevPage={hasListPrevPage}
+              hasNextPage={hasListNextPage}
+              onPageChange={handleListPageChange}
+              getPageNumbers={getListPageNumbers}
+            />
           </div>
         </div>
       )}
