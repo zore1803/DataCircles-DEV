@@ -209,14 +209,19 @@ const DealQuickView = ({ dealId, onClose, onEdit }) => {
         onClick={onClose}
       />
 
-      {/* Slide-in Panel */}
+      {/* Slide-in Panel — dc-panel-card matches the rounded, inset card look
+          used by ContactForm.jsx's Edit modal and ContactQuickView. Closed
+          state uses translate-x-[calc(100%+2rem)] (not plain
+          translate-x-full) because dc-panel-card sits right: 1.5rem inset
+          from the edge — see the matching comment in ContactQuickView.jsx
+          and the .dc-panel-card rule in index.css for why. */}
       <div
         className={`
-          fixed top-0 right-0 h-full dc-panel-w
+          fixed dc-panel-card dc-panel-w
           bg-white shadow-2xl z-[9999]
           transform transition-transform duration-300 ease-in-out
           overflow-hidden
-          ${deal ? "translate-x-0" : "translate-x-full"}
+          ${deal ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
         {/* Sticky Header */}
@@ -255,43 +260,45 @@ const DealQuickView = ({ dealId, onClose, onEdit }) => {
             </div>
           ) : (
             <div className="p-4 sm:p-6">
-              {/* Overview Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <div className="flex items-center gap-3 mb-2">
-                    <IndianRupee className="w-5 h-5 text-blue-600" />
-                    <span className="text-sm font-medium text-gray-600">
+              {/* Overview Block */}
+              <div
+                className="flex flex-col items-start w-full mb-8"
+                style={{ padding: 16, gap: 16, backgroundColor: "#F8FAFC", borderRadius: 14 }}
+              >
+                <div className="flex flex-row items-start w-full" style={{ gap: 16 }}>
+                  {/* Value */}
+                  <div className="flex flex-col items-start flex-1" style={{ gap: 6 }}>
+                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
                       Value
                     </span>
-                  </div>
-                  <p className="text-2xl font-bold text-gray-900">
-                    ₹{formatNumberToIndian(deal.amount || 0)}
-                  </p>
-                </div>
-
-                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <div className="flex items-center gap-3 mb-2">
-                    <StatusBadge status={deal.status} />
-                  </div>
-                  <p className="text-sm font-medium text-gray-600">
-                    Current Stage
-                  </p>
-                </div>
-
-                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Calendar className="w-5 h-5 text-blue-600" />
-                    <span className="text-sm font-medium text-gray-600">
-                      Created
+                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
+                      ₹{formatNumberToIndian(deal.amount || 0)}
                     </span>
                   </div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {new Date(deal.createdAt).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </p>
+
+                  {/* Current Stage */}
+                  <div className="flex flex-col items-start flex-1" style={{ gap: 6 }}>
+                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+                      Current Stage
+                    </span>
+                    <div className="flex items-center -ml-2 -mt-1">
+                      <StatusBadge status={deal.status} />
+                    </div>
+                  </div>
+
+                  {/* Created Date */}
+                  <div className="flex flex-col items-start flex-1" style={{ gap: 6 }}>
+                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+                      Created
+                    </span>
+                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
+                      {new Date(deal.createdAt).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </span>
+                  </div>
                 </div>
               </div>
 

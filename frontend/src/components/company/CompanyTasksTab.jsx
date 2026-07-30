@@ -305,8 +305,11 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
   });
   const [resizingCol, setResizingCol] = useState(null);
   const resizingRef = useRef(null);
+  // +88 for the two fixed 44px leading columns (selection checkbox and the
+  // completion circle), which aren't in colWidths — without them this minWidth
+  // under-reports the real table width and the horizontal scroll stops short.
   const totalTableWidth = useMemo(
-    () => Object.values(colWidths).reduce((sum, w) => sum + w, 0),
+    () => Object.values(colWidths).reduce((sum, w) => sum + w, 0) + 88,
     [colWidths],
   );
 
@@ -568,7 +571,11 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     if (!bulkStatusValue) return;
     setBulkActionLoading(true);
     try {
-      await Promise.all(selectedItems.map(id => API.patch(`/tasks/${id}`, { status: bulkStatusValue })));
+      // PUT, not PATCH — backend/routes/taskRoutes.js only registers
+      // `router.put("/:id")` (and `/:id/status`); there is no PATCH route, so
+      // this previously 404'd on every bulk update. Tasks.jsx's equivalent
+      // handler uses PUT for the same reason.
+      await Promise.all(selectedItems.map(id => API.put(`/tasks/${id}`, { status: bulkStatusValue })));
       setTasks?.(prev => prev.map(t => selectedItems.includes(t._id) ? { ...t, status: bulkStatusValue } : t));
       toast.success(`Status updated for ${selectedItems.length} task(s)`);
       clearSelection();
@@ -775,7 +782,13 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
             <tr>
               {/* Page-scoped select-all: ticks exactly the rows on the CURRENT page
                   (10 per page -> 10, 50 -> 50). Distinct from the bulk strip's
-                  "Select All", which spans every record across all pages. */}
+                  "Select All", which spans every record across all pages.
+                  This is its OWN column now — it previously sat above the
+                  completion-circle column (`__lead`), so a header labelled
+                  "select all rows" was visually attached to a column of
+                  per-task done/not-done toggles, and there was no per-row
+                  selection checkbox anywhere. Matches Tasks.jsx, which has a
+                  dedicated `selection` column separate from its row content. */}
               <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
                 <div className="flex justify-center items-center w-full">
                   <input
@@ -786,6 +799,8 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                   />
                 </div>
               </th>
+              {/* Spacer for the completion-circle column below (`__lead`). */}
+              <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]" />
               {orderedColumns.map((col, idx) => {
                 const isDragging = draggedColKey === col.id;
                 const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
@@ -929,15 +944,21 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
           </thead>
           <tbody className="bg-white">
             {isLoading ? (
+              // hasCheckbox renders ONE leading <td>; the real rows now have TWO
+              // leading columns (selection checkbox + completion circle), so
+              // prepend a 44px width to keep the skeleton's column count aligned
+              // with the header and body.
               <TableSkeletonRows
-                columns={orderedColumns.map(c => colWidths[c.id])}
+                columns={[44, ...orderedColumns.map(c => colWidths[c.id])]}
                 hasCheckbox={true}
                 numRows={listLimit}
                 rowHeight={54}
               />
             ) : paginatedTasks.length === 0 ? (
               <tr>
-                <td colSpan={orderedColumns.length + 1} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
+                {/* +2 for the two leading columns: selection checkbox and the
+                    completion circle (was +1 when selection didn't exist). */}
+                <td colSpan={orderedColumns.length + 2} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
                   No tasks found.
                 </td>
               </tr>
@@ -960,6 +981,28 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                 const primaryAssignee = assignees[0];
                 const avatarUrl = primaryAssignee?.profileUrl || primaryAssignee?.userData?.mainData?.profilePic;
                   const cells = {
+                    // Per-row selection checkbox — this is what was missing.
+                    // `isSelected`/`toggleItem` already existed in this file but
+                    // were never rendered, so bulk selection here was
+                    // unreachable: the strip could never appear. stopPropagation
+                    // keeps ticking a box from also firing the row's
+                    // handleTaskClick and opening the task.
+                    __select: (
+                        <td key="__select" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-center items-center w-full">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                toggleItem(task._id);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                            />
+                          </div>
+                        </td>
+                    ),
                     __lead: (
                         <td key="__lead" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-start">
@@ -1117,7 +1160,8 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                     ),
                   };
                   return (
-                    <tr key={task._id} className="hover:bg-gray-50 transition-colors group cursor-pointer" onClick={() => handleTaskClick(task)}>
+                    <tr key={task._id} className={`transition-colors group cursor-pointer ${isSelected ? "bg-blue-50" : "hover:bg-gray-50"}`} onClick={() => handleTaskClick(task)}>
+                      {cells.__select}
                       {cells.__lead}
                       {/* Body cells are indexed by column id and rendered through
                           orderedColumns, so hiding or pinning a column in the header

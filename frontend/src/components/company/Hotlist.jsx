@@ -13,6 +13,9 @@ import {
   Briefcase,
   Check,
   Menu,
+  ArrowLeft,
+  List,
+  LayoutGrid,
 } from "lucide-react";
 
 const FolderIcon = ({ className = "h-8 w-8" }) => (
@@ -43,7 +46,12 @@ const Hotlist = () => {
   const [editingFolder, setEditingFolder] = useState(null);
   const [editingName, setEditingName] = useState("");
   const [selectedCompanies, setSelectedCompanies] = useState([]);
-  const [openFolderIds, setOpenFolderIds] = useState([]);
+  // Drill-down: which folder's contents currently take over the page (null =
+  // showing the folder grid). Holds the folder's _id — the object itself is
+  // looked up fresh from `folders` on every render, so it stays in sync if
+  // the folder is edited (companies added/removed) while it's open.
+  const [openFolderId, setOpenFolderId] = useState(null);
+  const [folderViewMode, setFolderViewMode] = useState("card"); // "card" | "list"
 
   // Search and selection states
   const [searchTerm, setSearchTerm] = useState("");
@@ -194,14 +202,6 @@ const Hotlist = () => {
     setSelectedCompanies((prev) => prev.filter((c) => c._id !== companyId));
   };
 
-  const toggleFolder = (folderId) => {
-    setOpenFolderIds((prev) =>
-      prev.includes(folderId)
-        ? prev.filter((id) => id !== folderId)
-        : [...prev, folderId]
-    );
-  };
-
   useEffect(() => {
     fetchFolders();
   }, []);
@@ -209,6 +209,129 @@ const Hotlist = () => {
   const visibleFolders = folders?.filter((folder) =>
     folder.name.toLowerCase().includes(folderSearchTerm.trim().toLowerCase()),
   );
+
+  // Looked up by id (not stored as the object itself) so it stays in sync if
+  // `folders` refetches while this one happens to be open.
+  const openFolder = folders?.find((f) => f._id === openFolderId) || null;
+
+  // Drill-down: opening a folder replaces the whole grid with a dedicated,
+  // full-width view for just that folder — not an inline accordion. List/Card
+  // toggle top-right, Back button returns to the folder grid.
+  if (openFolder) {
+    return (
+      <div className="mx-4 mt-6 space-y-4">
+        <div className="bg-white rounded-xl border border-gray-200 px-6 py-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                onClick={() => setOpenFolderId(null)}
+                className="flex items-center gap-1.5 h-9 px-3 rounded-full border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </button>
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-gray-900 truncate">{openFolder.name}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {openFolder.companies?.length || 0} compan{(openFolder.companies?.length || 0) === 1 ? "y" : "ies"}
+                </p>
+              </div>
+            </div>
+
+            {/* List / Card Toggle — same pill pattern as Deals' List/Kanban toggle */}
+            <div className="relative flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
+              <span
+                className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+                style={{ left: folderViewMode === "list" ? 36 : 4 }}
+              />
+              <button
+                onClick={() => setFolderViewMode("card")}
+                className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${folderViewMode === "card" ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                title="Card View"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setFolderViewMode("list")}
+                className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${folderViewMode === "list" ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                title="List View"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+          {!openFolder.companies || openFolder.companies.length === 0 ? (
+            <div className="text-center py-8 sm:py-12 text-gray-500">
+              <Building2 className="h-12 w-12 sm:h-16 sm:w-16 mx-auto text-gray-300 mb-4" />
+              <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No companies in this folder</h3>
+              <p className="text-sm">Go back and use the pencil icon to add some.</p>
+            </div>
+          ) : folderViewMode === "card" ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {openFolder.companies.map((company) => (
+                <Link
+                  key={company._id}
+                  to={`/companies/${company._id}`}
+                  className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all group"
+                >
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <div className="p-1.5 sm:p-2 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors flex-shrink-0">
+                      <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h5 className="font-medium text-gray-900 truncate text-sm sm:text-base">
+                        {company.name || "Unnamed Company"}
+                      </h5>
+                      <div className="mt-1 space-y-1">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                          <Briefcase className="h-3 w-3 flex-shrink-0" />
+                          <span className="truncate">{company.industry || "N/A"}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                          <MapPin className="h-3 w-3 flex-shrink-0" />
+                          <span className="truncate">{company.address || "N/A"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            // Simple compact list — same three fields as the card view, one row
+            // each, rather than the full Companies-table column set.
+            <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
+              {openFolder.companies.map((company) => (
+                <Link
+                  key={company._id}
+                  to={`/companies/${company._id}`}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="p-1.5 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors flex-shrink-0">
+                    <Building2 className="h-3.5 w-3.5 text-blue-600" />
+                  </div>
+                  <span className="font-medium text-gray-900 text-sm truncate flex-shrink-0 w-1/3">
+                    {company.name || "Unnamed Company"}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs text-gray-600 truncate flex-1">
+                    <Briefcase className="h-3 w-3 flex-shrink-0" />
+                    {company.industry || "N/A"}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs text-gray-600 truncate flex-1">
+                    <MapPin className="h-3 w-3 flex-shrink-0" />
+                    {company.address || "N/A"}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-4 mt-6 space-y-4">
@@ -267,84 +390,36 @@ const Hotlist = () => {
         {/* Folders List - Mobile Responsive */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
           {visibleFolders?.map((folder) => (
-            <div key={folder._id} className={openFolderIds.includes(folder._id) ? "col-span-full" : ""}>
-              {/* Folder Tile */}
-              <div className="relative group">
-                <div className="absolute -top-1 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => startEdit(folder)}
-                    className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                  >
-                    <Edit3 className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => deleteFolder(folder._id)}
-                    className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-all"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
+            <div key={folder._id} className="relative group">
+              {/* Folder Tile — clicking it drills into the full-page view above,
+                  it no longer expands inline here. */}
+              <div className="absolute -top-1 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
-                  onClick={() => toggleFolder(folder._id)}
-                  className="flex flex-col items-center text-center w-full pt-2 pb-1 hover:opacity-80 transition-opacity"
+                  onClick={() => startEdit(folder)}
+                  className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
                 >
-                  <FolderIcon className="h-14 w-14" />
-                  <h4 className="mt-2 font-semibold text-gray-900 text-sm truncate max-w-full">
-                    {folder.name}
-                  </h4>
-                  <p className="text-xs text-gray-500">
-                    {folder.companies?.length || 0} companies
-                  </p>
+                  <Edit3 className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => deleteFolder(folder._id)}
+                  className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
 
-              {/* Folder Content - Mobile Responsive */}
-              {openFolderIds.includes(folder._id) && (
-                <div className="border-t border-gray-100 bg-gray-50 p-3 sm:p-4">
-                  {folder.companies?.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {folder.companies.map((company) => (
-                        <Link
-                          key={company._id}
-                          to={`/companies/${company._id}`}
-                          className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all group"
-                        >
-                          <div className="flex items-start gap-2 sm:gap-3">
-                            <div className="p-1.5 sm:p-2 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors flex-shrink-0">
-                              <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h5 className="font-medium text-gray-900 truncate text-sm sm:text-base">
-                                {company.name || "Unnamed Company"}
-                              </h5>
-                              <div className="mt-1 space-y-1">
-                                <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                                  <Briefcase className="h-3 w-3 flex-shrink-0" />
-                                  <span className="truncate">
-                                    {company.industry || "N/A"}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                                  <MapPin className="h-3 w-3 flex-shrink-0" />
-                                  <span className="truncate">
-                                    {company.address || "N/A"}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-6 sm:py-8 text-gray-500">
-                      <Building2 className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-300 mb-3" />
-                      <p className="text-sm">No companies in this folder</p>
-                    </div>
-                  )}
-                </div>
-              )}
+              <button
+                onClick={() => setOpenFolderId(folder._id)}
+                className="flex flex-col items-center text-center w-full pt-2 pb-1 hover:opacity-80 transition-opacity"
+              >
+                <FolderIcon className="h-14 w-14" />
+                <h4 className="mt-2 font-semibold text-gray-900 text-sm truncate max-w-full">
+                  {folder.name}
+                </h4>
+                <p className="text-xs text-gray-500">
+                  {folder.companies?.length || 0} companies
+                </p>
+              </button>
             </div>
           ))}
 

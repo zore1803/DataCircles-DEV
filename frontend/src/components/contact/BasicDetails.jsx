@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import DealsTable from "./DealsTable";
@@ -465,22 +466,30 @@ const LifecycleStages = ({ contact, onContactUpdate }) => {
 
 // Contact Info Card
 const ContactInfoCard = ({ icon: Icon, label, value, action }) => (
-  <div className="p-3 border border-gray-200 rounded-lg hover:border-gray-300 transition-all group relative">
-    <div className="flex items-center justify-between mb-2">
-      <Icon className="w-4 h-4 text-gray-600" />
-      {action}
+  <div className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-all group relative">
+    <div className="w-10 h-10 text-gray-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0 relative">
+      <Icon className="w-5 h-5" />
     </div>
-    <p className="text-xs text-gray-500 mb-1">{label}</p>
-    <p className="text-sm font-medium text-gray-900 truncate">{value || '—'}</p>
+
+    <div className="min-w-0 flex-1 flex flex-col justify-center">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] text-gray-500 truncate">{label}</p>
+        {action && (
+          <div className="flex-shrink-0">
+            {action}
+          </div>
+        )}
+      </div>
+      <p className="font-semibold text-gray-900 text-sm truncate">
+        {value || '—'}
+      </p>
+    </div>
 
     {/* Tooltip - shows on hover if value exists and is long enough to truncate */}
     {value && value.length > 15 && (
       <div className="absolute left-0 right-0 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 pointer-events-none shadow-lg">
         <div className="break-words">{value}</div>
-        {/* Arrow */}
-        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
-          <div className="border-4 border-transparent border-t-gray-900"></div>
-        </div>
+        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
       </div>
     )}
   </div>
@@ -780,38 +789,61 @@ const BasicDetails = ({ contact, company, deals, contactFieldList = [], onContac
       <LifecycleStages contact={contact} onContactUpdate={onContactUpdate} />
 
       {/* Contact Information Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <ContactInfoCard
-          icon={Mail}
-          label="Email"
-          value={contact.email}
-        />
+      <div
+        className="flex flex-col items-start w-full"
+        style={{ padding: 16, gap: 16, backgroundColor: "#F8FAFC", borderRadius: 14 }}
+      >
+        <div className="flex flex-row items-start w-full" style={{ gap: 16 }}>
+          {/* Email */}
+          <div className="flex flex-col items-start flex-1" style={{ gap: 6, minWidth: 0 }}>
+            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+              Email
+            </span>
+            <span className="truncate w-full" style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
+              {contact.email || "—"}
+            </span>
+          </div>
 
-        <ContactInfoCard
-          icon={Phone}
-          label="Phone"
-          value={contact.phone}
-        />
+          {/* Phone */}
+          <div className="flex flex-col items-start flex-1" style={{ gap: 6, minWidth: 0 }}>
+            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+              Phone
+            </span>
+            <span className="truncate w-full" style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
+              {contact.phone || "—"}
+            </span>
+          </div>
 
-        <ContactInfoCard
-          icon={Building2}
-          label="Company"
-          value={company?.name || 'No company'}
-          action={company && (
-            <Link
-              to={`/companies/${company._id}`}
-              className="p-1 text-gray-400 hover:text-gray-900 transition-colors"
-            >
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          )}
-        />
+          {/* Company */}
+          <div className="flex flex-col items-start flex-1" style={{ gap: 6, minWidth: 0 }}>
+            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+              Company
+            </span>
+            <div className="flex items-center gap-1 w-full">
+              <span className="truncate" style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
+                {company?.name || 'No company'}
+              </span>
+              {company && (
+                <Link
+                  to={`/companies/${company._id}`}
+                  className="text-gray-400 hover:text-gray-900 transition-colors flex-shrink-0"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              )}
+            </div>
+          </div>
 
-        <ContactInfoCard
-          icon={TrendingUp}
-          label="Status"
-          value={contact.stageStatus}
-        />
+          {/* Status */}
+          <div className="flex flex-col items-start flex-1" style={{ gap: 6, minWidth: 0 }}>
+            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+              Status
+            </span>
+            <span className="truncate w-full" style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
+              {contact.stageStatus || "—"}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* --- PREMIUM CUSTOM FIELDS RENDERER --- */}

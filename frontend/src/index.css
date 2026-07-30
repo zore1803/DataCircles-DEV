@@ -135,7 +135,12 @@
    by default. */
 .dc-card-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e0 #f1f1f1;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s;
+}
+
+.dc-card-scroll:hover {
+  scrollbar-color: #cbd5e0 transparent;
 }
 
 .dc-card-scroll::-webkit-scrollbar {
@@ -145,12 +150,16 @@
 }
 
 .dc-card-scroll::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent;
 }
 
 .dc-card-scroll::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
+  background: transparent;
   border-radius: 4px;
+}
+
+.dc-card-scroll:hover::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
 }
 
 .dc-card-scroll::-webkit-scrollbar-thumb:hover {

@@ -3026,7 +3026,17 @@ function Tasks() {
                 taskTable.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    onClick={() => handleTaskEdit(row.original)}
+                    onClick={(e) => {
+                      // Was firing on every click inside the row with no guard
+                      // at all, so clicking the ⋮ button — itself inside this
+                      // row — ALSO bubbled up and opened Edit immediately, the
+                      // same instant the row-actions menu tried to open. Same
+                      // fix as Contacts.jsx: skip while any row-actions menu is
+                      // open, and skip clicks on interactive elements.
+                      if (openRowActionsId) return;
+                      if (e.target.closest("button") || e.target.closest("a") || e.target.closest("input")) return;
+                      handleTaskEdit(row.original);
+                    }}
                     className={`group cursor-pointer hover:bg-blue-50 transition-colors ${selectedTasks.includes(row.original._id) ? "bg-blue-50" : "bg-white"}`}
                   >
                     {row.getVisibleCells().map((cell) => {
@@ -3154,7 +3164,11 @@ function Tasks() {
                 meetingTable.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    onClick={() => handleMeetingEdit(row.original)}
+                    onClick={(e) => {
+                      if (openRowActionsId) return;
+                      if (e.target.closest("button") || e.target.closest("a") || e.target.closest("input")) return;
+                      handleMeetingEdit(row.original);
+                    }}
                     className={`group cursor-pointer hover:bg-blue-50 transition-colors ${selectedMeetings.includes(row.original._id) ? "bg-blue-50" : "bg-white"}`}
                   >
                     {row.getVisibleCells().map((cell) => {

@@ -96,13 +96,17 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
         onClick={onClose}
       />
 
-      {/* Slide-in Panel */}
+      {/* Slide-in Panel — dc-panel-card gives the same rounded, inset card
+          look as ContactQuickView/DealQuickView/the Edit modals. Closed
+          state uses translate-x-[calc(100%+2rem)] (not plain
+          translate-x-full) because dc-panel-card sits right: 1.5rem inset —
+          see the matching comment in ContactQuickView.jsx. */}
       <div
         className={`
-          fixed top-0 right-0 h-full dc-panel-w
+          fixed dc-panel-card dc-panel-w
           bg-white shadow-2xl z-[9999] transform transition-transform duration-300
           overflow-y-auto
-          ${company ? "translate-x-0" : "translate-x-full"}
+          ${company ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
         {/* Header */}

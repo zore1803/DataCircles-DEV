@@ -1050,6 +1050,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
   const [openFolderId, setOpenFolderId] = useState("");
   const [newFiles, setNewFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
   const [refresh, setRefresh] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -1287,13 +1288,27 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
       await API.post("/folders/upload", formData);
       setNewFiles([]);
       setRefresh(!refresh);
-      toast.success(`${files.length} file(s) uploaded`);
+      setUploadSuccess(true); // Show success screen instead of toast
     } catch (err) {
       console.log(err);
       toast.error(err.response?.data?.error);
     } finally {
       setUploading(false);
     }
+  };
+
+  // Called when user clicks "Upload More" after a successful upload
+  const handleUploadMore = () => {
+    setUploadSuccess(false);
+    setNewFiles([]);
+  };
+
+  // Called when user clicks "Done" after a successful upload
+  const handleUploadDone = () => {
+    setUploadSuccess(false);
+    setSelectedFolderId("");
+    setNewFiles([]);
+    setUploadMode("file");
   };
 
   const handleAddLink = async ({ name, url }) => {
@@ -1494,7 +1509,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                 {openFolder.files.map((file, idx) => (
                   <div
                     key={idx}
-                    className="relative flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors"
+                    className={`relative flex flex-col items-center justify-center cursor-pointer transition-none ${selectedFileNames.includes(file.fileName) ? "bg-[#CCE8FF]" : "hover:bg-[#E5F3FF] active:bg-[#CCE8FF]"}`}
                     style={{
                       boxSizing: "border-box",
                       width: 206,
@@ -1731,20 +1746,22 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
               <div key={folder._id} className="flex justify-center items-center w-full">
                 <div
                   onClick={() => setOpenFolderId(folder._id)}
-                  className="relative group flex flex-col justify-center items-center cursor-pointer hover:bg-gray-50 transition-colors"
-                  style={{ boxSizing: "border-box", width: "100%", maxWidth: 220, height: 170, borderRadius: 12, padding: "12px 0", gap: 2 }}
+                  className="relative group flex flex-col justify-center items-center cursor-pointer hover:bg-[#E5F3FF] active:bg-[#CCE8FF] transition-none"
+                  style={{ boxSizing: "border-box", width: "100%", maxWidth: 180, height: 160, borderRadius: 8, padding: "12px 8px", gap: 2 }}
                 >
-                  <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <div className="absolute top-1 right-1 flex items-center opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-white/60 backdrop-blur-md shadow-sm border border-white/50 rounded-lg overflow-hidden">
                     <button
                       onClick={(e) => { 
                         e.stopPropagation(); 
                         setInlineEditingId(folder._id);
                         setInlineEditingName(folder.name);
                       }}
-                      className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-all cursor-pointer"
+                      className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
+                      title="Edit"
                     >
                       <Edit3 className="h-4 w-4" />
                     </button>
+                    <div className="w-px h-3 bg-gray-200" />
                     <button
                       onClick={(e) => { 
                         e.stopPropagation(); 
@@ -1754,7 +1771,8 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                           deleteFolder(folder._id);
                         }
                       }}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all cursor-pointer"
+                      className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                      title="Delete"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1762,11 +1780,11 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                   <GridFolderIcon size={100} />
                 <div
                   className="flex flex-col justify-center items-center"
-                  style={{ boxSizing: "border-box", padding: 8, gap: 8, width: 209, height: 40 }}
+                  style={{ boxSizing: "border-box", padding: 8, gap: 4, width: "100%", height: 40 }}
                 >
                   <div
-                    className="flex flex-col justify-center items-center self-stretch"
-                    style={{ boxSizing: "border-box", padding: 0, width: 193, height: 41 }}
+                    className="flex flex-col justify-center items-center self-stretch w-full"
+                    style={{ boxSizing: "border-box", padding: 0, height: 41 }}
                   >
                     {inlineEditingId === folder._id ? (
                       <input
@@ -1780,14 +1798,14 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                         }}
                         onBlur={() => handleInlineSave(folder._id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="w-[100px] text-center border-b-2 border-blue-500 focus:outline-none bg-transparent px-1"
+                        className="w-full text-center border-b-2 border-blue-500 focus:outline-none bg-transparent px-1"
                         style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 18, lineHeight: "22px", color: "#111216" }}
                       />
                     ) : (
                       <span
                         style={{
                           display: "block",
-                          width: 100,
+                          width: "100%",
                           height: 22,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -1807,8 +1825,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                     )}
                     <span
                       style={{
-                        width: 426,
-                        maxWidth: "100%",
+                        width: "100%",
                         height: 19,
                         fontFamily: "Inter",
                         fontWeight: 400,
@@ -1965,6 +1982,87 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
 
         {/* Upload Section */}
         {selectedFolderId && (
+          <>
+          {uploadSuccess ? (
+            /* ── Upload Success Screen ── */
+            <div
+              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+              onClick={handleUploadDone}
+            >
+              <div
+                className="flex flex-col items-center bg-white"
+                style={{
+                  boxSizing: "border-box",
+                  width: 400,
+                  border: "1px solid #EBEBEB",
+                  borderRadius: 8,
+                  padding: "40px 32px 32px",
+                  gap: 0,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Green checkmark circle */}
+                <div
+                  className="flex items-center justify-center flex-shrink-0"
+                  style={{ width: 72, height: 72, borderRadius: "50%", background: "#E8F5E9", marginBottom: 20 }}
+                >
+                  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                    <path d="M8 18.5L14.5 25L28 11" stroke="#22C55E" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+
+                {/* Title */}
+                <p style={{ fontFamily: "Inter Tight", fontWeight: 600, fontSize: 18, lineHeight: "120%", color: "#171717", marginBottom: 8, textAlign: "center" }}>
+                  Upload Successful!
+                </p>
+
+                {/* Sub-text */}
+                <p style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 14, color: "#6B7280", marginBottom: 32, textAlign: "center", lineHeight: "1.5" }}>
+                  Your files have been uploaded successfully.<br />Would you like to upload more files?
+                </p>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-center" style={{ gap: 12, width: "100%" }}>
+                  <button
+                    onClick={handleUploadDone}
+                    className="flex items-center justify-center hover:bg-gray-50 transition-colors"
+                    style={{
+                      flex: 1,
+                      height: 40,
+                      background: "#FFFFFF",
+                      border: "1px solid #EBEBEB",
+                      boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
+                      borderRadius: 116,
+                      fontFamily: "Inter Tight",
+                      fontWeight: 500,
+                      fontSize: 14,
+                      color: "#171717",
+                    }}
+                  >
+                    Done
+                  </button>
+                  <button
+                    onClick={handleUploadMore}
+                    className="flex items-center justify-center hover:opacity-90 transition-opacity"
+                    style={{
+                      flex: 1,
+                      height: 40,
+                      background: "#0085FF",
+                      borderRadius: 116,
+                      fontFamily: "Inter Tight",
+                      fontWeight: 500,
+                      fontSize: 14,
+                      color: "#FFFFFF",
+                      border: "none",
+                    }}
+                  >
+                    Upload More
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+          /* ── Normal Upload Modal ── */
           <div
             className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm"
             onClick={() => {
@@ -2256,6 +2354,9 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
             </div>
           </div>
         )}
+          </>
+        )}
+
 
         <CompanyFilterPanel
           isOpen={showFilterPanel}
