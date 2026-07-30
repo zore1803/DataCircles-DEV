@@ -1691,8 +1691,29 @@ function Contacts() {
     );
   };
 
-  // Debounced search effect
+  // Pagination lives in the Zustand store, so it OUTLIVES this component —
+  // leaving the page on 3 and coming back would otherwise remount still on 3.
+  // Reset to page 1 on unmount so a return visit always starts at page 1 with a
+  // single fetch. Doing it here (on the way out) rather than on mount is what
+  // avoids the flicker: if we reset on mount instead, the first fetch would
+  // already be in flight for page 3, land, paint page-3 rows, and only then get
+  // replaced by page 1.
   useEffect(() => {
+    return () => {
+      setPagination((prev) => ({ ...prev, currentPage: 1 }));
+    };
+  }, [setPagination]);
+
+  // Debounced reset-to-page-1 when the search/tab/filter changes. Skips the
+  // initial mount: on a return visit this used to fire a 300ms-delayed
+  // setPagination that raced the in-flight page-3 fetch, producing exactly the
+  // "page 3 rows appear, then snap to page 1" flicker.
+  const skipInitialPageReset = useRef(true);
+  useEffect(() => {
+    if (skipInitialPageReset.current) {
+      skipInitialPageReset.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
       setPagination((prev) => ({ ...prev, currentPage: 1 }));
     }, 300);

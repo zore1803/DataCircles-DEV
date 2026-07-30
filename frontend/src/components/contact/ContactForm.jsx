@@ -554,8 +554,16 @@ const ContactForm = ({
             {/* Profile Picture */}
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">Profile Picture</label>
-              <div className="flex items-center space-x-4">
-                <div className="relative">
+              {/* Was a single `flex` row for avatar + file-input + Upload button
+                  with no stacking below `sm`. The panel is full viewport width
+                  until the `lg` breakpoint (dc-panel-w), so on an actual phone
+                  the avatar + gap alone ate most of the available width,
+                  squeezing the file-input text and pushing "Upload" to the
+                  edge — the cramped look. Stacks vertically below `sm`,
+                  matching the breakpoint the avatar itself already uses
+                  (w-16 sm:w-20) one line below. */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="relative flex-shrink-0">
                   {profilePreview ? (
                     <img src={profilePreview} alt="Profile" className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-gray-200" />
                   ) : (
@@ -565,17 +573,17 @@ const ContactForm = ({
                     </div>
                   )}
                 </div>
-                <div className="flex-1 flex gap-3">
-                  <div className="flex-1 relative">
+                <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 min-w-0 relative">
                     <input type="file" id="avatar" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                    <div className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 flex items-center text-[14px] text-[#A0A0A0] bg-white">
+                    <div className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 flex items-center text-[14px] text-[#A0A0A0] bg-white truncate">
                       {profilePicture ? profilePicture.name : "Choose a File"}
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => document.getElementById("avatar").click()}
-                    className="bg-[#F2F2F7] text-[#111216] px-8 rounded-xl h-12 text-[14px] font-medium hover:bg-gray-200 transition-colors cursor-pointer"
+                    className="bg-[#F2F2F7] text-[#111216] px-8 rounded-xl h-12 text-[14px] font-medium hover:bg-gray-200 transition-colors cursor-pointer flex-shrink-0"
                   >
                     Upload
                   </button>

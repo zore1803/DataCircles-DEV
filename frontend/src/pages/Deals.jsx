@@ -410,7 +410,7 @@ const ModernKanbanColumn = ({
   isStale,
   loading = false,
 }) => {
-  const { setNodeRef } = useDroppable({ id: status });
+  const { setNodeRef, isOver } = useDroppable({ id: status });
   const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
 
   const totalAmount = deals.reduce((sum, deal) => sum + (parseInt(deal.amount) || 0), 0);
@@ -437,7 +437,7 @@ const ModernKanbanColumn = ({
 
   return (
     <div
-      className="dc-kanban-col flex flex-col items-start flex-shrink-0 bg-white"
+      className="flex flex-col items-start flex-shrink-0 bg-white"
       style={{ width: "340px", border: "1px solid #E7E7E9", borderRadius: "12px", overflow: "hidden" }}
     >
       {/* Header */}
@@ -526,9 +526,12 @@ const ModernKanbanColumn = ({
 
       {/* Scrollable Deals Area — fills remaining column height, any
           additional cards scroll internally instead of growing the page. */}
-      <div className="w-full flex-1 overflow-y-auto custom-scrollbar" style={{ padding: "14px 20px 20px" }}>
+      <div
+        ref={setNodeRef}
+        className={`overflow-y-auto dc-card-scroll w-full px-[18px] pb-[18px] pt-3 transition-colors ${isOver ? "bg-blue-50/40" : ""}`}
+        style={{ maxHeight: "1030px" }}
+      >
         <div
-          ref={setNodeRef}
           className="flex flex-col items-start w-full"
           style={{ gap: "14px" }}
         >
@@ -2577,12 +2580,14 @@ function Deals() {
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
+            {/* overflow-y no longer hidden here — columns now size to their
+                natural content height (like CompanyDealsKanban.jsx's board),
+                so the page itself scrolls to reveal more cards instead of a
+                fixed-height column clipping them. Horizontal scroll for
+                sliding between Open/Won/Lost is unchanged. */}
             <div
-              className="overflow-x-auto overflow-y-hidden scrollbar-hide -mx-6"
-              style={{
-                padding: "16px 24px 24px",
-                "--kanban-top-offset": showStats ? "17.5rem" : "10rem",
-              }}
+              className="overflow-x-auto scrollbar-hide -mx-6"
+              style={{ padding: "16px 24px 24px" }}
             >
               <div className="flex min-w-max" style={{ gap: "16px" }}>
                 {statuses?.map((status) => {

@@ -71,7 +71,12 @@ export default function InvoiceQuickView({ invoice, mode = "view", onClose, onUp
     <>
       <div className="fixed inset-0 bg-black/30 z-[9998]" onClick={onClose} />
 
-      <div className="fixed top-0 right-0 h-full dc-panel-w bg-white shadow-2xl z-[9999] flex flex-col transform transition-transform duration-300 translate-x-0">
+      {/* dc-panel-card matches the rounded, inset card look used by the other
+          QuickView panels. No open/close toggle here (this component is
+          mounted/unmounted by its parent rather than translated off-screen),
+          so translate-x-0 stays fixed — no translate-x-full/calc gotcha to
+          worry about, unlike the other QuickViews. */}
+      <div className="fixed dc-panel-card dc-panel-w bg-white shadow-2xl z-[9999] flex flex-col transform transition-transform duration-300 translate-x-0">
         {/* Header */}
         <div className="flex items-center justify-between px-5 h-16 border-b border-[#E1E4EA] flex-shrink-0">
           <div className="flex flex-col min-w-0">
