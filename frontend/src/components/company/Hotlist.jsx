@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import API from "../../services/api";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import HighlightText from "../common/HighlightText";
 import {
   Search,
   Plus,
@@ -38,6 +39,86 @@ const FolderIcon = ({ className = "h-8 w-8" }) => (
   </svg>
 );
 
+/**
+ * One company, in the "card" arrangement of an opened folder.
+ *
+ * Deliberately a <div> (not <Link>) wrapping the whole surface, with
+ * navigation done via onClick + a button-guard, matching the row-click
+ * pattern already used for Companies/Contacts/Tasks elsewhere in this app.
+ * That's what makes adding an expandable task list here later a small,
+ * additive change instead of a redesign: a <Link> wrapping the entire card
+ * cannot legally contain nested interactive content (a future task list
+ * would have its own buttons/checkboxes — invalid HTML inside <a>, and it
+ * breaks click handling). A plain div with a guarded onClick has no such
+ * ceiling — an expand chevron + a conditionally-rendered task block can be
+ * dropped in below the existing content without touching the grid, the
+ * search, or any other row/card.
+ */
+const FolderCompanyCard = ({ company, query, onOpen }) => (
+  <div
+    onClick={(e) => {
+      if (e.target.closest("button") || e.target.closest("a")) return;
+      onOpen(company._id);
+    }}
+    className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all group cursor-pointer"
+  >
+    <div className="flex items-start gap-2 sm:gap-3">
+      <div className="p-1.5 sm:p-2 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors flex-shrink-0">
+        <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <h5 className="font-medium text-gray-900 truncate text-sm sm:text-base">
+          <HighlightText text={company.name || "Unnamed Company"} query={query} />
+        </h5>
+        <div className="mt-1 space-y-1">
+          <div className="flex items-center gap-1.5 text-xs text-gray-600">
+            <Briefcase className="h-3 w-3 flex-shrink-0" />
+            <span className="truncate"><HighlightText text={company.industry || "N/A"} query={query} /></span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-gray-600">
+            <MapPin className="h-3 w-3 flex-shrink-0" />
+            <span className="truncate"><HighlightText text={company.address || "N/A"} query={query} /></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    {/* Reserved: an expand chevron + conditional task block belong here, as
+        siblings of the row above — no change needed to this component's
+        outer shape or the grid it sits in. */}
+  </div>
+);
+
+/**
+ * One company, in the "list" arrangement — a row in a div-based table (not
+ * a literal <table>/<tr>), for the same forward-compatibility reason as
+ * FolderCompanyCard above: a task block can be added as a sibling <div>
+ * inside this row later without fighting table row/cell semantics.
+ */
+const FolderCompanyRow = ({ company, query, onOpen }) => (
+  <div
+    onClick={(e) => {
+      if (e.target.closest("button") || e.target.closest("a")) return;
+      onOpen(company._id);
+    }}
+    className="grid grid-cols-[auto_1fr_1fr_1fr] items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors group cursor-pointer"
+  >
+    <div className="p-1.5 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors flex-shrink-0">
+      <Building2 className="h-3.5 w-3.5 text-blue-600" />
+    </div>
+    <span className="font-medium text-gray-900 text-sm truncate">
+      <HighlightText text={company.name || "Unnamed Company"} query={query} />
+    </span>
+    <span className="flex items-center gap-1.5 text-xs text-gray-600 truncate">
+      <Briefcase className="h-3 w-3 flex-shrink-0" />
+      <HighlightText text={company.industry || "N/A"} query={query} />
+    </span>
+    <span className="flex items-center gap-1.5 text-xs text-gray-600 truncate">
+      <MapPin className="h-3 w-3 flex-shrink-0" />
+      <HighlightText text={company.address || "N/A"} query={query} />
+    </span>
+  </div>
+);
+
 const Hotlist = () => {
   const [folders, setFolders] = useState([]);
   const [folderSearchTerm, setFolderSearchTerm] = useState("");
@@ -50,8 +131,17 @@ const Hotlist = () => {
   // showing the folder grid). Holds the folder's _id — the object itself is
   // looked up fresh from `folders` on every render, so it stays in sync if
   // the folder is edited (companies added/removed) while it's open.
+  const navigate = useNavigate();
   const [openFolderId, setOpenFolderId] = useState(null);
   const [folderViewMode, setFolderViewMode] = useState("card"); // "card" | "list"
+  // Search scoped to the companies inside whichever folder is currently open —
+  // separate from folderSearchTerm, which searches the folder GRID. Reset
+  // whenever a different folder opens so a stale query doesn't silently
+  // filter the next folder's contents.
+  const [companySearchTerm, setCompanySearchTerm] = useState("");
+  useEffect(() => {
+    setCompanySearchTerm("");
+  }, [openFolderId]);
 
   // Search and selection states
   const [searchTerm, setSearchTerm] = useState("");
@@ -206,23 +296,50 @@ const Hotlist = () => {
     fetchFolders();
   }, []);
 
-  const visibleFolders = folders?.filter((folder) =>
-    folder.name.toLowerCase().includes(folderSearchTerm.trim().toLowerCase()),
-  );
+  // Was matching ONLY folder.name, even though the placeholder says "Search
+  // by companies by name, industry, or location..." — typing a company name,
+  // industry, or address here matched nothing, because it never looked at
+  // the folder's companies at all. Now a folder stays visible if its own
+  // name matches OR any company inside it matches on name/industry/address.
+  const folderQuery = folderSearchTerm.trim().toLowerCase();
+  const visibleFolders = folders?.filter((folder) => {
+    if (!folderQuery) return true;
+    if (folder.name.toLowerCase().includes(folderQuery)) return true;
+    return (folder.companies || []).some((c) =>
+      [c.name, c.industry, c.address].some((field) =>
+        field?.toLowerCase().includes(folderQuery),
+      ),
+    );
+  });
 
   // Looked up by id (not stored as the object itself) so it stays in sync if
   // `folders` refetches while this one happens to be open.
   const openFolder = folders?.find((f) => f._id === openFolderId) || null;
 
-  // Drill-down: opening a folder replaces the whole grid with a dedicated,
-  // full-width view for just that folder — not an inline accordion. List/Card
-  // toggle top-right, Back button returns to the folder grid.
+  // Drill-down: opening a folder replaces the whole grid with a dedicated
+  // workspace for just that folder — not an inline accordion, and not a
+  // horizontal scroll strip. Everything below wraps/stacks vertically; the
+  // page itself scrolls normally for large folders (100+ companies), same
+  // as every other list in this app — no virtualization, no internal
+  // scroll cap, consistent with how the folder grid above already behaves.
   if (openFolder) {
+    const query = companySearchTerm.trim();
+    const q = query.toLowerCase();
+    const visibleCompanies = (openFolder.companies || []).filter((c) => {
+      if (!q) return true;
+      return [c.name, c.industry, c.address].some((field) =>
+        field?.toLowerCase().includes(q),
+      );
+    });
+
     return (
       <div className="mx-4 mt-6 space-y-4">
+        {/* Workspace navbar: Back + folder name, search, List/Card toggle —
+            wraps to a second line on narrow widths rather than ever
+            scrolling sideways. */}
         <div className="bg-white rounded-xl border border-gray-200 px-6 py-5">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
               <button
                 onClick={() => setOpenFolderId(null)}
                 className="flex items-center gap-1.5 h-9 px-3 rounded-full border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
@@ -233,9 +350,21 @@ const Hotlist = () => {
               <div className="min-w-0">
                 <h2 className="text-base font-semibold text-gray-900 truncate">{openFolder.name}</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {openFolder.companies?.length || 0} compan{(openFolder.companies?.length || 0) === 1 ? "y" : "ies"}
+                  {q
+                    ? `${visibleCompanies.length} of ${openFolder.companies?.length || 0} compan${(openFolder.companies?.length || 0) === 1 ? "y" : "ies"}`
+                    : `${openFolder.companies?.length || 0} compan${(openFolder.companies?.length || 0) === 1 ? "y" : "ies"}`}
                 </p>
               </div>
+            </div>
+
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                className="w-full h-10 pl-9 pr-4 border border-gray-200 rounded-full text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                placeholder="Search this folder by name, industry, or location..."
+                value={companySearchTerm}
+                onChange={(e) => setCompanySearchTerm(e.target.value)}
+              />
             </div>
 
             {/* List / Card Toggle — same pill pattern as Deals' List/Kanban toggle */}
@@ -269,63 +398,37 @@ const Hotlist = () => {
               <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No companies in this folder</h3>
               <p className="text-sm">Go back and use the pencil icon to add some.</p>
             </div>
+          ) : visibleCompanies.length === 0 ? (
+            <div className="text-center py-8 sm:py-12 text-gray-500">
+              <Search className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-300 mb-3" />
+              <p className="text-sm">No companies in this folder match "{companySearchTerm}".</p>
+            </div>
           ) : folderViewMode === "card" ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {openFolder.companies.map((company) => (
-                <Link
-                  key={company._id}
-                  to={`/companies/${company._id}`}
-                  className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all group"
-                >
-                  <div className="flex items-start gap-2 sm:gap-3">
-                    <div className="p-1.5 sm:p-2 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors flex-shrink-0">
-                      <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h5 className="font-medium text-gray-900 truncate text-sm sm:text-base">
-                        {company.name || "Unnamed Company"}
-                      </h5>
-                      <div className="mt-1 space-y-1">
-                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                          <Briefcase className="h-3 w-3 flex-shrink-0" />
-                          <span className="truncate">{company.industry || "N/A"}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                          <MapPin className="h-3 w-3 flex-shrink-0" />
-                          <span className="truncate">{company.address || "N/A"}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
+            // Wrapping grid — reads left-to-right, top-to-bottom, wraps to a
+            // new row instead of scrolling sideways. 1/2/3/4 columns as the
+            // viewport widens, so a 100+ company folder is just a taller
+            // page (normal vertical scroll), never a wider one.
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {visibleCompanies.map((company) => (
+                <FolderCompanyCard key={company._id} company={company} query={query} onOpen={(id) => navigate(`/companies/${id}`)} />
               ))}
             </div>
           ) : (
-            // Simple compact list — same three fields as the card view, one row
-            // each, rather than the full Companies-table column set.
-            <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
-              {openFolder.companies.map((company) => (
-                <Link
-                  key={company._id}
-                  to={`/companies/${company._id}`}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors group"
-                >
-                  <div className="p-1.5 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors flex-shrink-0">
-                    <Building2 className="h-3.5 w-3.5 text-blue-600" />
-                  </div>
-                  <span className="font-medium text-gray-900 text-sm truncate flex-shrink-0 w-1/3">
-                    {company.name || "Unnamed Company"}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-xs text-gray-600 truncate flex-1">
-                    <Briefcase className="h-3 w-3 flex-shrink-0" />
-                    {company.industry || "N/A"}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-xs text-gray-600 truncate flex-1">
-                    <MapPin className="h-3 w-3 flex-shrink-0" />
-                    {company.address || "N/A"}
-                  </span>
-                </Link>
-              ))}
+            // Clean vertical list with a proper header row (Company / Industry
+            // / Location), not just stacked cards-as-rows. Div-based, not a
+            // literal <table> — see FolderCompanyRow's comment for why.
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_1fr] items-center gap-3 px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <span className="w-[26px]" />
+                <span>Company</span>
+                <span>Industry</span>
+                <span>Location</span>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {visibleCompanies.map((company) => (
+                  <FolderCompanyRow key={company._id} company={company} query={query} onOpen={(id) => navigate(`/companies/${id}`)} />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -408,13 +511,19 @@ const Hotlist = () => {
                 </button>
               </div>
 
+              {/* Was `hover:opacity-80` only — a much weaker cue than the
+                  card-style hover (border + shadow) already used one level
+                  down for the companies inside a folder (line ~278). Matched
+                  it here: border/shadow/bg lift on hover, plus the icon gets
+                  a subtle scale so the tile reads as clickable, not just
+                  dimming like a disabled control. */}
               <button
                 onClick={() => setOpenFolderId(folder._id)}
-                className="flex flex-col items-center text-center w-full pt-2 pb-1 hover:opacity-80 transition-opacity"
+                className="flex flex-col items-center text-center w-full pt-3 pb-2 px-2 rounded-xl border border-transparent hover:border-blue-200 hover:bg-blue-50/40 hover:shadow-sm transition-all"
               >
-                <FolderIcon className="h-14 w-14" />
+                <FolderIcon className="h-14 w-14 transition-transform group-hover:scale-105" />
                 <h4 className="mt-2 font-semibold text-gray-900 text-sm truncate max-w-full">
-                  {folder.name}
+                  <HighlightText text={folder.name} query={folderSearchTerm} />
                 </h4>
                 <p className="text-xs text-gray-500">
                   {folder.companies?.length || 0} companies
