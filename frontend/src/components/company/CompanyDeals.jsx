@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import API from "../../services/api";
 import QuickDealForm from "../deal/QuickDealForm";
 import toast from "react-hot-toast";
@@ -248,49 +249,14 @@ const CompanyDeals = ({ deals, companyId, setDeals }) => {
               </select>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={!hasPrevPage}
-                className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-
-              {totalPages > 0 &&
-                getPageNumbers().map((item, index) => {
-                  if (item === "left-dots" || item === "right-dots") {
-                    return (
-                      <span
-                        key={`${item}-${index}`}
-                        className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
-                      >
-                        ...
-                      </span>
-                    );
-                  }
-                  return (
-                    <button
-                      key={`page-${item}`}
-                      onClick={() => handlePageChange(item)}
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${item === currentPage
-                        ? "bg-blue-600 text-white"
-                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                        }`}
-                    >
-                      {item}
-                    </button>
-                  );
-                })}
-
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={!hasNextPage}
-                className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+            <EditablePaginationButtons
+              currentPage={currentPage}
+              totalPages={totalPages}
+              hasPrevPage={hasPrevPage}
+              hasNextPage={hasNextPage}
+              onPageChange={handlePageChange}
+              getPageNumbers={getPageNumbers}
+            />
           </div>
         </div>
       )}

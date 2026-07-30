@@ -52,6 +52,7 @@ import {
   IndianRupee,
   Calendar,
 } from "lucide-react";
+import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import QuickDealForm from "../deal/QuickDealForm";
@@ -1254,7 +1255,18 @@ export default function CompanyDealsKanban({
               >
                 <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
                   <tr>
+                    {/* Page-scoped select-all: ticks exactly the rows on the CURRENT page
+                        (10 per page -> 10, 50 -> 50). Distinct from the bulk strip's
+                        "Select All", which spans every record across all pages. */}
                     <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
+                      <div className="flex justify-center items-center w-full">
+                        <input
+                          type="checkbox"
+                          checked={selectedDeals.length > 0 && selectedDeals.length === paginatedDeals.length}
+                          onChange={(e) => setSelectedDeals(e.target.checked ? paginatedDeals.map((d) => d._id) : [])}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
                     </th>
                     {(() => {
                       const allCols = [
@@ -1292,10 +1304,10 @@ export default function CompanyDealsKanban({
                               className={`px-3 py-2.5 font-medium text-[#525866] text-xs border-r border-b border-[#E1E4EA] cursor-grab active:cursor-grabbing transition-colors ${isDragOver ? "bg-blue-100" : ""}`}
                             >
                               <div className="flex items-center justify-between w-full group">
-                                <div
-                                  className="flex items-center gap-1.5 flex-1 overflow-hidden cursor-pointer select-none"
-                                  onClick={() => col.sortable !== false && handleSort(col.id)}
-                                >
+                                {/* Not clickable — a plain click on the header does nothing now.
+                                    Sorting lives only in the column menu (Sort Ascending/Descending
+                                    below), which is what handleSort's direction argument is for. */}
+                                <div className="flex items-center gap-1.5 flex-1 overflow-hidden select-none">
                                   {col.icon && <col.icon className="w-3.5 h-3.5 flex-shrink-0" />}
                                   <span className="truncate">{col.label}</span>
                                 </div>
@@ -1520,12 +1532,36 @@ export default function CompanyDealsKanban({
                                         setRowActionsPos(null);
                                         return;
                                       }
-                                      const menuHeight = 128;
-                                      const wouldOverflow = e.clientY + 4 + menuHeight > window.innerHeight;
-                                      setRowActionsPos({
-                                        top: wouldOverflow ? e.clientY - menuHeight - 4 : e.clientY + 4,
-                                        left: e.clientX - 160,
-                                      });
+                                      // Was anchored to the raw click coordinates
+                                      // (e.clientX/Y) with no zoom correction — so
+                                      // `left: e.clientX - 160` drifted further left
+                                      // the further right on the button you happened
+                                      // to click, and drifted again under this app's
+                                      // dynamic zoom. Same fix as the main Deals
+                                      // table: anchor to the button's own rect,
+                                      // divide by ancestor zoom (the menu portals to
+                                      // document.body, which paints inside the zoom),
+                                      // center vertically on the row rather than
+                                      // hanging off its bottom edge, and clamp both
+                                      // axes to the viewport.
+                                      const zMenu = getAncestorZoom(document.body);
+                                      const MENU_W = 160;
+                                      const MENU_H = 110; // View Deal + Edit Deal + divider + Delete Deal
+                                      const MARGIN = 8;
+
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      const viewportH = window.innerHeight / zMenu;
+                                      const viewportW = window.innerWidth / zMenu;
+
+                                      const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                                      let calcTop = rowCenter - MENU_H / 2;
+                                      calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+                                      let calcLeft = rect.right / zMenu - MENU_W - 12;
+                                      calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                                      calcLeft = Math.max(calcLeft, MARGIN);
+
+                                      setRowActionsPos({ top: calcTop, left: calcLeft });
                                       setOpenRowActionsId(deal._id);
                                     }}
                                     className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -1662,59 +1698,21 @@ export default function CompanyDealsKanban({
                   </select>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={!hasPrevPage}
-                    className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-
-                  {(() => {
-                    const getPageNumbers = () => {
+                  <EditablePaginationButtons
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    hasPrevPage={hasPrevPage}
+                    hasNextPage={hasNextPage}
+                    onPageChange={handlePageChange}
+                    getPageNumbers={() => {
                       const items = [1];
                       if (currentPage > 2) items.push("left-dots");
                       if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
                       if (currentPage < totalPages - 1) items.push("right-dots");
                       if (totalPages > 1) items.push(totalPages);
                       return items;
-                    };
-
-                    return totalPages > 0 && getPageNumbers().map((item, index) => {
-                      if (item === "left-dots" || item === "right-dots") {
-                        return (
-                          <span
-                            key={`${item}-${index}`}
-                            className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
-                          >
-                            ...
-                          </span>
-                        );
-                      }
-                      return (
-                        <button
-                          key={`page-${item}`}
-                          onClick={() => handlePageChange(item)}
-                          className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${item === currentPage
-                            ? "bg-blue-600 text-white"
-                            : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                            }`}
-                        >
-                          {item}
-                        </button>
-                      );
-                    });
-                  })()}
-
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={!hasNextPage}
-                    className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
+                    }}
+                  />
               </div>
             </div>
           )}

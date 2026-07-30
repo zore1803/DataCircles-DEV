@@ -5,15 +5,19 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 const MIN_HEIGHT = 180;
 
 /**
- * Caps a container so it can never extend past the bottom of the viewport, with
- * an optional element (e.g. a pagination bar) reserved below it.
+ * Sizes a container to fill exactly the remaining viewport space, with an
+ * optional element (e.g. a pagination bar) reserved below it — matching how
+ * Companies.jsx/Deals.jsx/Tasks.jsx behave via their own position:fixed +
+ * top/bottom anchoring: the box is always the same height regardless of how
+ * many rows it holds, and a short list leaves empty space inside the box
+ * rather than shrinking it.
  *
- * This is a MAX height, not a fixed one — deliberately. With a fixed height a
- * short list (3–4 rows) would leave a large empty gap inside the box and strand
- * the pagination bar at the bottom of the screen. As a max, the container
- * shrinks to its content when the list is short — so the pagination sits
- * directly beneath the last row — and only starts scrolling internally once the
- * content would otherwise run off-screen.
+ * This is an EXACT height, not a cap — deliberately, to match those pages.
+ * (An earlier version of this hook used max-height instead, so a short list
+ * would shrink the box and let the pagination bar sit right under the last
+ * row. That was a real, intentional design — it was reverted specifically so
+ * these tabs read as consistent with the rest of the app, not because it was
+ * wrong on its own terms.)
  *
  * Why this measures instead of using a `calc(100vh - <constant>)`:
  * the height of everything above the container is not knowable as a constant
@@ -39,7 +43,7 @@ const MIN_HEIGHT = 180;
 export default function useFillToBottom() {
   const containerRef = useRef(null);
   const footerRef = useRef(null);
-  const [maxHeight, setMaxHeight] = useState(null);
+  const [height, setHeight] = useState(null);
 
   const measure = useCallback(() => {
     const el = containerRef.current;
@@ -81,8 +85,8 @@ export default function useFillToBottom() {
     // Space left on screen below the container's top edge, in visual px...
     const availableVisual =
       window.innerHeight - rect.top * rectToVisual - footerReserve;
-    // ...converted back into the CSS px that `max-height` is expressed in.
-    setMaxHeight(Math.max(MIN_HEIGHT, availableVisual / scale));
+    // ...converted back into the CSS px that `height` is expressed in.
+    setHeight(Math.max(MIN_HEIGHT, availableVisual / scale));
   }, []);
 
   useLayoutEffect(() => {
@@ -115,6 +119,6 @@ export default function useFillToBottom() {
   return {
     containerRef,
     footerRef,
-    style: maxHeight == null ? undefined : { maxHeight: `${maxHeight}px` },
+    style: height == null ? undefined : { height: `${height}px` },
   };
 }

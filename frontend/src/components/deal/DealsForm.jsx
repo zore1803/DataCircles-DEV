@@ -658,7 +658,7 @@ const DealsForm = ({
                   <button
                     type="button"
                     onClick={() => setIsAddingStatus(true)}
-                    className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer"
+                    className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer flex-shrink-0"
                     title="Add New Status"
                   >
                     <Plus className="w-5 h-5 text-gray-600" />
@@ -689,7 +689,7 @@ const DealsForm = ({
                 <button
                   type="button"
                   onClick={() => setShowQuickCompanyForm(true)}
-                  className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer"
+                  className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer flex-shrink-0"
                   title="Add New Company"
                 >
                   <Plus className="w-5 h-5 text-gray-600" />
@@ -722,7 +722,7 @@ const DealsForm = ({
                 <button
                   type="button"
                   onClick={() => setShowQuickContactForm(true)}
-                  className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer"
+                  className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer flex-shrink-0"
                   title="Add New Contact"
                 >
                   <Plus className="w-5 h-5 text-gray-600" />
@@ -735,7 +735,7 @@ const DealsForm = ({
 
             {/* Dynamic Additional Fields */}
             {fieldDefinitions.length > 0 && (
-              <div className="pt-4 space-y-6">
+              <div className="pt-4 space-y-6 md:col-span-2">
                 <h3 className="text-[16px] font-bold text-[#111216]">
                   Additional Information
                 </h3>

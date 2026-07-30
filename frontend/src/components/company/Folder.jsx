@@ -28,6 +28,7 @@ import {
   UserCog,
   MoreVertical,
 } from "lucide-react";
+import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import AppToaster from "../AppToaster";
 import FilterIcon from "../common/FilterIcon";
 import CompanyFilterPanel from "./CompanyFilterPanel";
@@ -1948,47 +1949,14 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                 </select>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleListPageChange(listPage - 1)}
-                  disabled={!hasListPrevPage}
-                  className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-
-                {listTotalPages > 0 &&
-                  getListPageNumbers().map((pageNum, index) =>
-                    pageNum === "..." ? (
-                      <span
-                        key={`dots-${index}`}
-                        className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
-                      >
-                        ...
-                      </span>
-                    ) : (
-                      <button
-                        key={`page-${pageNum}`}
-                        onClick={() => handleListPageChange(pageNum)}
-                        className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
-                          pageNum === listPage
-                            ? "bg-blue-600 text-white"
-                            : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    ),
-                  )}
-
-                <button
-                  onClick={() => handleListPageChange(listPage + 1)}
-                  disabled={!hasListNextPage}
-                  className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
+              <EditablePaginationButtons
+                currentPage={listPage}
+                totalPages={listTotalPages}
+                hasPrevPage={hasListPrevPage}
+                hasNextPage={hasListNextPage}
+                onPageChange={handleListPageChange}
+                getPageNumbers={getListPageNumbers}
+              />
             </div>
           </div>
         )}
