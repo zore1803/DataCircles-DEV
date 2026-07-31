@@ -1,9 +1,10 @@
-const { calculateInvoice } = require('./invoiceEngine');
+const { calculateInvoice, toPricingBreakdown } = require('./invoiceEngine');
 const CommercialTransaction = require('../models/CommercialTransaction');
 const RewardUsage = require('../models/RewardUsage');
 const { rewardToModifier } = require('./modifierResolver');
 const { reserveNextAvailableReward, releaseReservation } = require('./referralRewards');
 const { buildCouponModifierForItem } = require('./discountEngine');
+const { isCouponStillEligibleForRenewal } = require('./couponRenewalEligibility');
 const razorpay = require('../config/razorpay');
 
 async function startAddonPurchase({
@@ -64,6 +65,7 @@ async function startAddonPurchase({
   try {
     reservation = await reserveNextAvailableRewardFn(organizationId, {
       subscription: subscription._id,
+      context: 'ADDON_PURCHASE',
     });
   } catch (reserveErr) {
     console.error('Referral reservation failed (proceeding at full price):', reserveErr.message);
@@ -83,7 +85,10 @@ async function startAddonPurchase({
   // same immutability principle as duration/R7. CP3's "stops applying, no
   // error" falls out naturally: buildCouponModifierForItem returns null on
   // no match, a plain no-op.
-  if (subscription.appliedCoupon?.fullRulesSnapshot) {
+  // Coupon P0 fix (found via live QA): gated on the SAME eligibility
+  // question renewal already asked correctly — a first_payment coupon must
+  // not keep discounting every add-on purchase after its one first invoice.
+  if (subscription.appliedCoupon?.fullRulesSnapshot && isCouponStillEligibleForRenewal(subscription.appliedCoupon)) {
     const couponModifier = buildCouponModifierForItem(
       subscription.appliedCoupon.fullRulesSnapshot,
       { key: addonKey, type: 'addon', amount: pricePerUnit * quantity }
@@ -129,7 +134,26 @@ async function startAddonPurchase({
   const couponDiscountAmount = (addonInvoice.modifierBreakdown || []).filter((m) => m.type === 'coupon').reduce((sum, m) => sum + m.amount, 0);
   const referralDiscountAmount = (addonInvoice.modifierBreakdown || []).filter((m) => m.type === 'referral').reduce((sum, m) => sum + m.amount, 0);
   const totalDiscountAmount = addonInvoice.discount || 0;
+  // BILLING_UX_SPEC.md §4 — record the real amount now that pricing knows
+  // it (same reserve-before-pricing reasoning as the upgrade path). Reuses
+  // the existing updateRewardUsageFn injectable rather than adding a new one.
+  if (reservation && referralDiscountAmount > 0) {
+    await updateRewardUsageFn(reservation.usage._id, { amount: referralDiscountAmount });
+  }
   const prorationAmountWithGST = addonInvoice.total;
+  // BILLING_UX_SPEC.md §1.2 — canonical shape, straightforward here since
+  // (unlike plan upgrade) both coupon and referral are pushed directly into
+  // THIS invoice's own resolvedModifiers — no separate baseline-netting
+  // needed, addonInvoice.modifierBreakdown already carries both cleanly.
+  const pricingBreakdown = toPricingBreakdown(addonInvoice, {
+    couponCode: subscription.appliedCoupon?.code,
+    referralPercent: reservation?.reward.rewardType === 'percentage' ? reservation.reward.rewardValue : undefined,
+  });
+  // Line label correction: toPricingBreakdown's default "Prorated Adjustment"
+  // label is generic across upgrade/add-on; name it for what it actually is here.
+  if (pricingBreakdown.pricingLineItems[0]) {
+    pricingBreakdown.pricingLineItems[0].label = `${catalogEntry.displayName} ×${quantity} (prorated)`;
+  }
 
   let commercialTransaction = null;
   try {
@@ -216,6 +240,7 @@ async function startAddonPurchase({
     couponDiscountAmount,
     referralDiscountAmount,
     totalDiscountAmount,
+    pricingBreakdown,
     prorationAmountWithGST,
     orderId: razorpayOrder.id,
     paymentDetails: {

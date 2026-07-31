@@ -24,6 +24,7 @@ const ReferralProgram = require('../models/ReferralProgram');
 const Referral = require('../models/Referral');
 const Reward = require('../models/Reward');
 const RewardUsage = require('../models/RewardUsage');
+const BillingInvoice = require('../models/BillingInvoice');
 
 const razorpayClient = require('../config/razorpay');
 razorpayClient.subscriptions = razorpayClient.subscriptions || {};
@@ -45,7 +46,7 @@ if (process.env.CONFIRM_TEST_DB !== 'yes') {
 let passed = 0;
 let failed = 0;
 async function test(name, fn) {
-  const registry = { Organization: [], User: [], Subscription: [], ReferralCode: [], ReferralProgram: [], Referral: [], Reward: [], RewardUsage: [] };
+  const registry = { Organization: [], User: [], Subscription: [], ReferralCode: [], ReferralProgram: [], Referral: [], Reward: [], RewardUsage: [], BillingInvoice: [] };
   try {
     await fn(registry);
     passed++;
@@ -60,6 +61,7 @@ async function test(name, fn) {
 }
 
 async function cleanup(registry) {
+  await BillingInvoice.deleteMany({ _id: { $in: registry.BillingInvoice } });
   await RewardUsage.deleteMany({ _id: { $in: registry.RewardUsage } });
   await Reward.deleteMany({ _id: { $in: registry.Reward } });
   await Referral.deleteMany({ _id: { $in: registry.Referral } });
@@ -144,7 +146,16 @@ async function main() {
 
     const subscription = await Subscription.findOne({ organization: refereeOrg._id });
     registry.Subscription.push(subscription._id);
-    assert.equal(subscription.totalAmount, plan.monthlyPrice * 0.8, '20% referral discount must reflect in the priced total, immediately, on the first invoice');
+
+    // Bug 1 fix (recurring price corruption, found via live QA): the
+    // referee's discount is one-time (first invoice only) — the FIRST
+    // INVOICE must reflect it, but subscription.totalAmount (the recurring
+    // baseline) must not carry it forward.
+    const signupInvoice = await BillingInvoice.findOne({ subscription: subscription._id, reason: 'NEW_SUBSCRIPTION' });
+    assert.ok(signupInvoice, 'Expected the signup BillingInvoice to have been persisted');
+    registry.BillingInvoice.push(signupInvoice._id);
+    assert.equal(signupInvoice.taxable, plan.monthlyPrice * 0.8, '20% referral discount must reflect in the priced total, immediately, on the first invoice');
+    assert.equal(subscription.totalAmount, plan.monthlyPrice, 'the stored recurring baseline must NOT carry the one-time referral discount forward');
   });
 
   await test('settlement: referral qualifies, referrer gets ONE Reward, referee gets NONE, no RewardUsage for referee', async (registry) => {

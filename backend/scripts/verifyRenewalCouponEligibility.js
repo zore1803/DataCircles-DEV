@@ -92,6 +92,13 @@ async function runCase({ registry, plan, org, durationType, expectDiscount }) {
     discountAmount: 60,
     baseSubtotal: plan.monthlyPrice,
     recurringSubtotal: plan.monthlyPrice - 60,
+    // Renewal now rebuilds the modifier from fullRulesSnapshot against the
+    // actual effective line items (Bug 2 fix) rather than reusing this flat
+    // discountAmount directly — this must resolve to the same ₹60 so the
+    // existing assertions below stay meaningful.
+    fullRulesSnapshot: [
+      { productType: 'plan', productKey: 'growth', discountType: 'fixed', discountValue: 60 },
+    ],
   };
   const subscription = await trackedCreate(Subscription, 'Subscription', registry, baseSubscriptionFields(org._id, plan, appliedCoupon));
 

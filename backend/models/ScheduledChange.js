@@ -30,4 +30,37 @@ const scheduledChangeSchema = new mongoose.Schema({
   commercialTransaction: { type: mongoose.Schema.Types.ObjectId, ref: 'CommercialTransaction' },
 }, { timestamps: true });
 
+// Same class of race as CommercialTransaction's own index
+// (models/CommercialTransaction.js): the cancel-prior-then-create sequence
+// in updateSubscription/cancelSubscription enforces "at most one PENDING
+// record of this type per subscription" only as application logic today —
+// safe only because pendingUpdate is a single overwritten object
+// underneath. Once the read side (renewalEngine.js) makes ScheduledChange
+// authoritative, that legacy backstop disappears, so this index is added
+// now, not deferred.
+//
+// Three separate equality-filtered partial indexes, not one $in-based
+// index — MongoDB's partialFilterExpression only supports
+// equality/$exists/$gt(e)/$lt(e)/$type/$and, not $in. REMOVE_ADDON is
+// deliberately excluded: it legitimately supports multiple coexisting
+// PENDING records (one per addonKey), confirmed by scheduleAddonRemoval's
+// own merge-not-replace behavior — constraining it here would break that.
+// Explicit distinct `name` on each is required, not cosmetic: all three share
+// the key shape {subscription:1}, so MongoDB's auto-generated name
+// ("subscription_1") collides across them and only the first one actually
+// gets created — the other two silently fail to build (IndexKeySpecsConflict)
+// without ever throwing into normal server startup. Confirmed by reproducing
+// against a real database: only the PLAN_CHANGE index existed until these
+// names were added.
+['PLAN_CHANGE', 'BILLING_CYCLE_CHANGE', 'CANCELLATION'].forEach((t) => {
+  scheduledChangeSchema.index(
+    { subscription: 1 },
+    {
+      unique: true,
+      partialFilterExpression: { status: 'PENDING', type: t },
+      name: `scheduledchange_pending_unique_${t.toLowerCase()}`,
+    }
+  );
+});
+
 module.exports = mongoose.model('ScheduledChange', scheduledChangeSchema);

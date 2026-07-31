@@ -2477,3 +2477,361 @@ drifted into five overlapping mechanisms where the spec calls for two clean coll
 (`ScheduledChange` + `CommercialTransaction`), and (2) **the Renewal and Retry Engines — arguably the
 two most important pieces of a subscription billing system — do not exist in any form yet.** Phases 5
 and 6 above are not cleanup; they are the actual remaining core of the build.
+
+---
+
+## Cron wiring — `jobs/renewalLifecycleJobs.js` (completes what this document's earlier
+`billingOrchestration.js` section left open: "callable, not running")
+
+**File created:** `backend/jobs/renewalLifecycleJobs.js`, self-registering via `cron.schedule(...)` at
+module load, matching `subscriptionLifecycleJobs.js`'s own established pattern exactly (no exported
+`registerXJob()` function — requiring the file is the entire side effect).
+
+**Schedule chosen: hourly (`0 * * * *`), not every-minute.** Reasoning, not a default copy from the
+trial jobs: the Retry Engine's own cadence (`utils/retryEngine.js`) is `[24h, 72h, 120h]` — nothing in
+this system depends on minute-level granularity, and every-minute would mean up to 60x more Razorpay
+API calls than necessary for zero benefit, while increasing overlap risk under `node-cron`'s
+single-process model.
+
+**Locking added:** a module-level in-process boolean guard (`renewalJobRunning`/`retryJobRunning`),
+skipping a tick if the previous run hasn't finished. This is the same assumption every job in
+`subscriptionLifecycleJobs.js` already makes implicitly by having none at all — single Node process, no
+distributed lock anywhere in this codebase. It does **not** protect against overlap across multiple
+server instances/processes; that would need a distributed primitive (e.g. Redis-based) not otherwise
+used here. Named as a real limitation, not solved.
+
+**The three existing jobs in `subscriptionLifecycleJobs.js` were deliberately NOT given locking** —
+that file's pre-existing lack of any overlap guard (see this document's own earlier note on Job 3's
+missing per-item try/catch) is a known, separate gap, out of scope for this change.
+
+**Mounted:** `require('./jobs/renewalLifecycleJobs');` added to `server.js`, alongside the existing
+`subscriptionLifecycleJobs`/`referralLifecycleJobs` requires.
+
+**Manual invocation — real output, real charge, not a mock** (`scripts/manualInvokeBillingJobs.js`,
+kept as a documented manual-trigger utility rather than deleted, per this project's established
+pattern of keeping verification scripts). Run against the same live, chargeable test-mode Razorpay
+token used throughout this session's real-charge verification work (`token_TBnT7mU4PdTbV2`,
+max_amount ₹767):
+
+```
+=== runRenewalJob() — manual invocation, real chargeMandateFn ===
+[
+  {
+    "subscriptionId": "6a60b79884dfddfb65fccd24",
+    "outcome": "RENEWED",
+    "detail": { "outcome": "RENEWED", "invoice": "6a60b79984dfddfb65fccd51", "billingCycle": "6a60b79a84dfddfb65fccd5c" }
+  }
+]
+
+=== runRetryJob() — manual invocation, real chargeMandateFn ===
+[
+  {
+    "subscriptionId": "6a60b79a84dfddfb65fccd60",
+    "outcome": "RETRY_SUCCEEDED",
+    "detail": { "outcome": "RETRY_SUCCEEDED", "attemptsMade": 1 }
+  }
+]
+```
+
+This is the SECOND manual-invocation run, not the first. The first run produced identical outcomes
+(real charges, `RENEWED`/`RETRY_SUCCEEDED`) but its cleanup left orphaned `CommercialTransaction`/
+`BillingInvoice`/`BillingCycle` documents — `manualInvokeBillingJobs.js` only tracked documents it
+created directly, not the ones `renewSubscription()`/`retryRenewal()` create internally. Found by
+checking the database after the run instead of trusting the script's own "cleanup complete" message,
+fixed (the script now sweeps for internally-created documents by subscription reference before
+cleanup), and re-run — the output above is from that corrected, verified-clean run. Both real, live
+charges captured; all disposable fixture documents cleaned up afterward, confirmed zero orphans across
+`Subscription`/`CommercialTransaction`/`BillingInvoice`/`BillingCycle` by direct count query, not
+inferred from the script's exit message.
+
+**Whole-backend grep, confirmed exactly two real call sites each** (plus the functions' own
+definitions in `billingOrchestration.js`, and this document's own prose references):
+`jobs/renewalLifecycleJobs.js` (the cron) and `scripts/manualInvokeBillingJobs.js` (the manual
+trigger). No other call sites exist.
+
+**Legacy (non-CAW) subscriptions — confirmed, not assumed, and the confirmation surfaced an asymmetry
+worth recording precisely:**
+- `runRenewalJob`'s own query explicitly filters `mandateTokenId: { $ne: null }` — legacy subscriptions
+  (which never have this field set) are excluded upfront, at the query level.
+- `runRetryJob`'s query (`{ appStatus: 'past_due' }`) has **no equivalent explicit filter**. It queries
+  every `past_due` subscription regardless of CAW-ness. It stays safe in practice only because
+  `retryRenewal()` itself self-gates: `CommercialTransaction`/`BillingInvoice` are written exclusively
+  by the CAW `renewSubscription()` path (legacy renewals go through Razorpay's own Subscriptions
+  API/webhooks entirely), so a legacy past_due subscription never has a matching
+  `CommercialTransaction{type:'RENEWAL', status:'PRICED'}` record, and `retryRenewal()` returns
+  `NOT_ELIGIBLE`/`NO_PENDING_RENEWAL_TRANSACTION` and does nothing. Legacy subscriptions are unaffected
+  — but via a downstream gate inside `retryRenewal()`, not an upfront filter in the job's own query, an
+  asymmetry with `runRenewalJob` worth knowing about rather than discovering later. Not fixed here —
+  `billingOrchestration.js` was explicitly out of scope for this change.
+
+**Hard constraints honored:** `billingOrchestration.js`, `renewalEngine.js`, and `retryEngine.js` were
+not modified. No locking was added to the existing trial/cancellation jobs.
+
+---
+
+### Phase 4D-2 — `updateSubscription` branch classification matrix (investigation + matrix only, no code changes)
+
+**Scope:** decompose `updateSubscription`, `retryPayment`, and `handleSubscriptionCancelled` — the three
+functions still holding `razorpay.subscriptions.create()` calls plus legacy `paymentDetails` responses —
+into their independent business branches, classify each against work already built in this migration
+(Renewal Engine, Retry Engine, `ScheduledChange`, `CommercialTransaction`, the Step 0a UPI-bypass
+decision), and answer whether `razorpay.subscriptions.create()` should still exist anywhere once the
+migration completes. No code touched this session — read-only tracing against
+`subscriptionController.js`, this document's own Phase 4 sections, and `CAW_FINAL_PRODUCTION_AUDIT.md`.
+
+**`updateSubscription` is not one branch, it's (at least) four, only two of which touch legacy
+subscription creation:**
+
+| Branch | Lines | Business scenario | Mechanism today | Classification | Evidence |
+|---|---|---|---|---|---|
+| Tier-upgrade intercept | `:840-1087` | Same-cycle tier upgrade | Razorpay **Order**, UPI-compatible, `CommercialTransaction{type:'UPGRADE'}` | **Already correct — not part of this problem.** Never calls `subscriptions.create()`; this is the modern one-time-charge design already built | Comment at `:834-839` states it explicitly; confirmed by re-read, no `subscriptions.create()` in this block |
+| UPI cancel-and-recreate | `:1090-1155` (`subscriptions.create()` at `:1107`) | Upgrade+cycle-change or bare cycle-change, **UPI payment mode only** | Cancels existing Razorpay subscription immediately, creates a brand-new one via legacy Subscriptions API | **Already-decided exception — but scoped narrower than it first looks.** §Phase 4 Step 0a declared this "permanently out of `ScheduledChange`'s scope, no representation of any kind" — that is a scheduling/tracking-scope decision, not a blanket exemption from the legacy-API elimination goal. Nothing in the design docs says this call itself should survive forever; it says `ScheduledChange` will never model it | `IMPLEMENTATION_PLAN_V1.md:1439-1442` (Step 0a), `:1422/1424` (design table rows) |
+| First-ever paid conversion ("not payment confirmed") | `:1157-1338` (`subscriptions.create()` at `:1269`) | Trial → paid, the single most common real-world path (comment at `:1301-1304` confirms) | Legacy Subscriptions API, writes `razorpaySubscriptionId`, never `mandateTokenId` | **Genuine gap — highest priority, already the headline finding.** This is the exact call this migration's own audit flagged: "CAW as the actual onboarding path for the common case — Missing" | `CAW_FINAL_PRODUCTION_AUDIT.md:20-23, 345` |
+| Downgrade / billing-cycle-change (non-UPI) | `:1390-1660` | Downgrade or non-UPI cycle change | `ScheduledChange` write + `razorpay.subscriptions.update()` (not `.create()`) — deferred to cycle end, materialized by the Renewal Engine | **Already correct — not part of this problem.** No `subscriptions.create()` call; already on the modern `ScheduledChange`/Renewal Engine design (Phase 4A/§2.4) | `:1429-1465` (this doc, Phase 4 design), confirmed no `.create(` in this block on re-read |
+
+**The other two functions:**
+
+| Function | Lines | Scenario | Mechanism today | Classification | Evidence |
+|---|---|---|---|---|---|
+| `retryPayment` | `:3411-3539` (`subscriptions.create()` at `:3491`) | User clicks "Retry Payment" on a pending/failed legacy subscription | Fetches existing Razorpay subscription if `created`/`authenticated`, else creates a new legacy Subscriptions-API subscription | **Genuine gap, but NOT a redirect to the existing Retry Engine.** `CAW_FINAL_PRODUCTION_AUDIT.md:2020` already found this and flagged "it is not what it was assumed to be" — the built Retry Engine (`utils/retryEngine.js`) is cron-driven, mandate-charge-based, and owns only CAW `past_due` subscriptions; it has no user-facing "retry now" entry point and operates on a completely different mechanism (`razorpayChargeMandate.js`, no Subscription object at all). This branch still has live frontend consumption (`SubscriptionPlans.jsx:791-793`), so it can't simply be deleted — it needs a CAW-native replacement (manual mandate charge trigger), and is naturally downstream of the trial-conversion migration above (once conversions produce `mandateTokenId` subscriptions instead of legacy ones, this branch's *legacy* code path stops being hit for new orgs, but pre-existing legacy subscriptions still need it or a backfill) | `CAW_FINAL_PRODUCTION_AUDIT.md:2020,2021` (Retry Engine ownership), `SubscriptionPlans.jsx:791-793` (live frontend caller) |
+| `handleSubscriptionCancelled` (webhook) | `:3054-3134` (`subscriptions.create()` at `:3095`) | Razorpay fires `subscription.cancelled`, and a `pendingUpdate` (scheduled downgrade/cycle-change on a **legacy** subscription) exists | Cancel-and-recreate: builds a brand-new legacy `Subscription` document via `subscriptions.create()` | **Dependent dead weight, not independently actionable today.** This is the legacy webhook-side materialization of a scheduled change — conceptually superseded by the Renewal Engine's `ScheduledChange` read path (`renewalEngine.js:409-443`), but that modern path only applies to CAW (`mandateTokenId`) subscriptions. This handler only fires for legacy (`razorpaySubscriptionId`) subscriptions, which — per the finding above — is still every subscription created today. It will stop being exercised for *new* organizations once trial-conversion moves to CAW, but cannot be removed until legacy subscriptions are fully sunset. Also carries a known, already-documented bug (`pendingUpdate` never cleared after the read) — separate from this classification | `IMPLEMENTATION_PLAN_V1.md:1265-1266` (never-cleared bug), `:1401-1404` (named as legacy, out of `ScheduledChange` scope) |
+
+**Step 4 — should any `razorpay.subscriptions.create()` call remain after migration completes? No.**
+
+All four current call sites are legacy Subscriptions-API artifacts, and none of them has a documented
+reason to survive permanently:
+
+- `:1269` (trial conversion) — genuine gap, migrates to Registration Link. Highest priority; this is the
+  path nearly every real subscription takes today.
+- `:3491` (`retryPayment`) — genuine gap, but migrates to a **direct mandate charge** (reusing
+  `razorpayChargeMandate.js`), not a Registration Link — there's no new mandate to acquire here, just a
+  charge to retry against an existing one. Downstream of the trial-conversion migration.
+- `:3095` (`handleSubscriptionCancelled`) — retires on its own once legacy (`razorpaySubscriptionId`)
+  subscriptions stop being created and existing ones are sunset. Not independently migrated; it simply
+  stops firing.
+- `:1107` (UPI cancel-and-recreate) — this is the one case worth stating carefully: Step 0a's "permanent
+  exception" language applies only to `ScheduledChange` never modeling this path, **not** to the
+  underlying `subscriptions.create()` call being acceptable forever. Once CAW covers UPI mandates (already
+  proven reachable — `CHARGE_AT_WILL_VALIDATION.md`), the correct end state is a CAW-native
+  cycle-change/upgrade path for UPI users that never needs to cancel-and-recreate a Subscription object
+  at all, since CAW doesn't route through Razorpay Subscription entities. This is real, separate migration
+  work, not a permanent carve-out — it was only ever scoped out of one specific design session
+  (`ScheduledChange`'s), not out of the overall legacy-API-elimination goal.
+
+**Net effect:** the actual implementation surface is smaller than "migrate every branch" — two of
+`updateSubscription`'s four branches (`:840-1087` tier-upgrade, `:1390-1660` downgrade/cycle-change) need
+no action at all; they're already on the modern design. The real remaining work is exactly four call
+sites (`:1107`, `:1269`, `:3095`, `:3491`), and they are not independent — `:3095` and part of `:3491`
+retire naturally once `:1269` (trial conversion) is migrated, leaving `:1269` as the correct first
+implementation target, `:3491`'s CAW-native replacement second, and `:1107`'s UPI-specific CAW routing
+third.
+
+**Hard constraints honored:** no code changes this session. Implementation happens in separate,
+per-branch follow-up sessions, starting with `:1269` (trial-to-paid conversion → Registration Link).
+
+---
+
+### Phase 4D-3 — Frontend Registration Link handling (`createSubscription` response only)
+
+**Scope:** add the missing `registrationLink` branch to the one real consumer of `createSubscription`'s
+response. Does not touch `updateSubscription`, `retryPayment`, or any backend code.
+
+**Step 1 finding — the prior trace's "two branches" was one branch too many.** Confirmed current line
+numbers: `SubscriptionPlans.jsx:741` (inside `handleConfirmCheckout`, consumes the response of
+`createSubscription`/`updateSubscription`) and `:792` (inside `handleRetryPayment`, consumes
+`subscriptionAPI.retryPayment`'s response). These are **not the same pattern** despite both checking
+`paymentDetails` — `:792` is `retryPayment`'s response, and per the backend classification matrix above,
+`retryPayment` (`subscriptionController.js:3411-3539`) never calls `createRegistrationLink()` and never
+returns a `registrationLink` field under any current code path. Adding `else if (response.registrationLink)`
+at `:792` would have been dead code reachable under no real backend response, and would have touched a
+function this brief's hard constraints explicitly said not to touch. **Only `:741` was changed.**
+
+**Step 2 — UX decision: (A) full-page redirect, not (B) new-tab + polling.** Reasoning:
+- Razorpay Registration Links are hosted pages designed for direct navigation, not iframe/modal embedding
+  (unlike Checkout.js, which `openRazorpay()` uses) — redirecting matches how Razorpay's own product is
+  meant to be consumed.
+- The codebase already has a precedent for this exact pattern: `openRazorpay`'s own success handler
+  (`:558`) does `window.location.href = "/"` after payment confirmation. Option A is consistent with
+  that, not a new pattern.
+- Option B (`window.open` inside `handleConfirmCheckout`) happens after multiple `await`s since the
+  original click (add-on classification, coupon validation, the `createSubscription`/`updateSubscription`
+  call itself) — by the time the response resolves, this is no longer a synchronous click handler in the
+  browser's eyes, and popup-blockers frequently block `window.open` calls that aren't a direct
+  synchronous result of a user gesture. Option A has no such fragility.
+- No new polling code was needed for the redirect-away case: `getCurrentSubscription`
+  (`subscriptionController.js:707-718`) already returns `pendingPayment: true`/`isActive: false` for any
+  subscription with `isPaymentConfirmed: false` — which is exactly the state `createSubscription` leaves
+  the new CAW subscription in (`:279-280`) until the `token.confirmed`/`payment.captured` webhooks land.
+  This is the same mechanism that already covers the legacy pending-payment case; nothing new was needed
+  to make it also cover the CAW pending-mandate case.
+
+**Step 3 — implemented.** `SubscriptionPlans.jsx:741-751`: added
+`else if (response.registrationLink?.shortUrl) { window.location.href = response.registrationLink.shortUrl; }`
+between the existing `paymentDetails` and `scheduled` branches. Neither existing branch's behavior was
+modified.
+
+**Step 4 — confirmed, not assumed.** Read `getCurrentSubscription` (`subscriptionController.js:676-731`)
+directly: the `!subscription.isPaymentConfirmed` branch (`:707-718`) returns `pendingPayment: true` for
+*any* subscription in that state, regardless of whether it's a legacy (`razorpaySubscriptionId`) or CAW
+(`registrationLinkId`/`mandateStatus: 'pending'`) subscription — the field is keyed off
+`isPaymentConfirmed`, which `createSubscription` already sets to `false` at creation (`:280`). No backend
+change was needed; the existing pattern already covers the abandoned/failed-mandate return case.
+
+**Step 5 — honest verification status: mocked/build-level only, full browser-driven test NOT done this
+session.** What was actually verified:
+- Started the frontend dev server (`npm run dev`, port 5173) after the edit — clean compile, zero build
+  errors, zero console errors on load.
+- Did **not** drive an authenticated signup → `createSubscription` → redirect → real Razorpay hosted page
+  → test-card (`4718 6091 0820 4366`) → webhook → `mandateTokenId` flow through the real browser. This
+  environment has no stored test-user login/OTP credentials for the app itself (distinct from the
+  Razorpay test-mode API key used in `CHARGE_AT_WILL_VALIDATION.md`, which was driven by standalone
+  scripts, not the app's own auth), and authenticating a real user was out of scope to attempt
+  autonomously.
+- **Flagging explicitly, per the brief's own instruction:** the full browser-driven test (real signup,
+  real redirect to the hosted Registration Link page, real test-mode mandate authorization, confirming
+  `mandateTokenId` populates and the app reflects active state post-webhook) is the required next
+  verification step before this branch is considered fully proven end-to-end. This session confirms the
+  code compiles and the branch is reachable/correct by inspection; it does not confirm the live Razorpay
+  page renders correctly or that the post-authorization state transition displays correctly in the UI.
+
+**Step 6 — whole-frontend grep, confirmed no other `createSubscription`-response consumer was missed.**
+Re-grepped `paymentDetails` and `createSubscription` across `frontend/` (same search as the earlier
+investigation session): the only call site remains `SubscriptionPlans.jsx:735-737`, and its only response
+consumer is `:741` (now handled). `UserManagement.jsx`'s `paymentDetails` usage (seat purchase, Order-based)
+and `initiateAddonPurchase`'s `paymentDetails` usage (`:684-691`, add-on purchase, Order-based) are
+correctly out of scope per the classification matrix — neither is a `createSubscription`/CAW path.
+
+**This unblocks the next brief.** Trial-to-paid conversion migration (`updateSubscription`'s
+`:1157-1338` branch → Registration Link, per the Phase 4D-2 matrix) can now proceed: the frontend has a
+real, live branch to receive that migrated response's `registrationLink` field once the backend change
+lands — it is no longer dead on arrival at the UI layer.
+
+**Hard constraints honored:** `updateSubscription`, `retryPayment`, and all backend legacy branches
+untouched. The existing `paymentDetails`/`scheduled` branches' behavior is unchanged. UX decision (Step 2)
+stated explicitly, not silently picked. Step 5 status reported honestly as build/mock-level verification
+only, with the required live-browser test named as the explicit next step.
+
+---
+
+### Phase 4D-4 — Billing Profile Completion (frontend, Option A: collect-on-checkout)
+
+**Scope:** CAW requires a Razorpay customer with both email and phone (`createSubscription`,
+`authController.js:76-78`), but signup allows either alone. Rather than forcing both at signup (more
+friction for every new user) or manually patching Mongo per test org, collect only the missing field(s)
+right before the first paid subscription attempt.
+
+**Reuse check performed first, per the brief's own instruction.** Grepped for an existing profile-update
+API before adding anything new: `POST /auth/profile` → `authController.updateProfile` already exists,
+but only ever handled the profile-picture upload (`req.file`) — it never read `req.body` for
+name/email/phone at all. No endpoint anywhere updates a user's own email/phone. **Extended the existing
+endpoint** (`authController.js:399-428`) rather than adding a new one — it now optionally accepts
+`{email, phone}` in the body, only ever fills a currently-blank field (never overwrites), and reuses the
+exact validation already in production: the email regex and 10-digit-phone check copied verbatim from
+`Login.jsx:136-137,296-297`, plus a duplicate-value check mirroring the `User` model's existing
+`sparse: true, unique: true` constraints on both fields.
+
+**Frontend:** new `BillingProfileModal.jsx` (styled identically to the existing `TrialModal.jsx` — same
+modal chrome, same button treatment), showing only the field(s) actually missing (matrix: both /
+email-only / phone-only / neither, per the brief). Wired into `SubscriptionPlans.jsx`:
+- Gate placed only in front of the true first-subscription branch — `!subscription?.subscription` (no
+  existing `Subscription` doc, i.e. about to call `createSubscription`) — not upgrades, downgrades, or
+  add-on purchases on an already-paying org, which don't need this and shouldn't gain new friction.
+- `checkoutData` (plan/billing-cycle/add-ons/coupon selection) is never cleared when the gate fires, so
+  the modal's "Save & Continue" simply re-invokes `handleConfirmCheckout()` — the exact same function,
+  same selection, no second click, no page state reset.
+- Auth/signup untouched; `subscriptionController.js`/Razorpay integration untouched.
+
+**Verified:** dev server (`npm run dev`, port 5173) reloaded clean after all edits — zero console errors
+attributable to the new component/import, only the pre-existing Auth0 "missing refresh token" errors from
+not being logged in in this environment (same limitation noted in Phase 4D-3, unrelated to this change).
+**Not verified this session:** an authenticated end-to-end click-through (email-only user → Subscribe →
+phone prompt → Save → auto-continues into checkout) was not performed, for the same reason as
+Phase 4D-3 — no test-user login credentials available in this environment. Flagged as the next
+verification step.
+
+---
+
+### Phase 4D-5 — Migrate Trial Acquisition onto CAW (call site 1 of 4)
+
+**Scope:** replace `updateSubscription`'s trial→paid conversion branch's payment-acquisition
+mechanism — the confirmed 401 source (`razorpay.subscriptions.create()`, traced live this session via
+temporary logging: both `[Before findOrCreateRazorpayPlan]` and `[Before subscriptions.create]` printed
+before the 401, isolating `subscriptions.create()` itself as the failing call) — with the same
+Registration Link / CAW mechanism `createSubscription` already uses. Every business rule already in this
+branch (pricing via `calculateInvoice`, coupon validation, add-on validation) is untouched; only the
+payment-acquisition mechanism changed.
+
+**Extracted, not cloned.** Rather than porting `createSubscription`'s Registration Link code inline into
+this branch (which would have produced two ~80-line near-duplicates of the same Razorpay request
+construction), extracted the shared logic into new `utils/cawAcquisition.js`
+(`assertPhoneForRecurring`, `createRegistrationLinkForOrg`, `computeMandateMaxAmountRupees`) and called it
+from the migrated branch. **`createSubscription` itself was NOT modified or refactored onto this** — it
+stays exactly as it was, per this session's hard constraint; the extraction only prevents *this* migration
+from duplicating what it already does. Future call sites (the UPI cancel-and-recreate branch's eventual
+CAW replacement, `retryPayment`'s eventual CAW-native replacement) can share the same util instead of each
+re-deriving the request shape.
+
+**What changed:** `subscriptionController.js`'s `!isPaymentConfirmed` branch (previously `:1157-1338`) —
+removed `findOrCreateRazorpayPlan(...)` and `razorpay.subscriptions.create(...)` and their field writes;
+added a phone-number check (mirroring `createSubscription`'s own validation, via
+`assertPhoneForRecurring` inside `createRegistrationLinkForOrg`), a call to `createRegistrationLinkForOrg`
+using the already-computed `snapshot.total` (no re-pricing), and pending-mandate field writes
+(`razorpayCustomerId`, `registrationLinkId`, `mandateStatus: 'pending'`, `mandateMaxAmount`) applied to the
+**existing** trial `Subscription` document — legacy fields (`razorpaySubscriptionId`, `razorpayPlanId`,
+`currentPeriodStart/End`, `nextBillingDate`) explicitly cleared rather than populated.
+`BillingInvoice`/`emitBillingEvent` writes reuse the same shape/reason (`NEW_SUBSCRIPTION`) the legacy
+code already used for this exact moment. Response shape now matches `createSubscription`'s
+(`{success, subscription, registrationLink: {shortUrl, id, expireBy}}`), so the frontend's Phase 4D-3
+branch (already built, already handles this exact response shape) works identically for a converted trial
+as for a fresh signup.
+
+**Step 4 — webhook handlers checked, confirmed no changes needed.** Read `handleCAWPaymentCaptured`,
+`handleCAWTokenEvent`, `reconcileMandate`, and `runFirstPaymentSettlement` in full. None of them make any
+assumption about the subscription's prior state: correlation is purely via `registrationLinkId`/
+`mandateTokenId` (fields this migration now populates identically to `createSubscription`), and
+`setAppStatus` (`:495-526`) has no restriction on the `from` state — a `trial -> active` transition is
+exactly as valid as `created -> active`. `runFirstPaymentSettlement` (coupon redemption + referral
+qualification) has no trial-specific logic either. **No webhook handler was modified.**
+
+**Step 5 — real fixture verification, not mocked.** New `scripts/verifyTrialConversionCAW.js` (same
+pattern as the existing `verifyRenewalWebhookReconciliation.js`/`verifyRetryEngine.js` — disposable
+Organization/User/Subscription fixtures, cleaned up in a `finally` block, gated behind
+`CONFIRM_TEST_DB=yes`), driving the **real** `exports.updateSubscription` handler (not a copy of its
+logic) against the **real** Razorpay test-mode key already configured in `.env`. Actual run output:
+
+```
+-> Registration Link created live: inv_TGqcEYnm6L0A6R (https://rzp.io/rzp/NDpSFYfG)
+[Subscription 6a61b6a74f1e8552fc4dcb19] appStatus: trial -> active (Charge-at-Will mandate confirmed and first payment captured)
+  ok - trial org has no mandateTokenId before conversion (baseline)
+
+1 passed, 0 failed
+```
+
+Confirmed by direct assertion, not just "should work": a real Registration Link was created against
+Razorpay (live `shortUrl`/`id`, not mocked); the Subscription document was updated in place
+(`String(afterDoc._id) === String(trialSub._id)`); a `Subscription.countDocuments({organization})` before
+and after conversion stayed at exactly **1** (the single-Subscription-document invariant — trial→paid
+never creates a second record); legacy fields (`razorpaySubscriptionId`, `razorpayPlanId`) were confirmed
+absent afterward; a `BillingInvoice` was written; and a simulated `token.confirmed`/`payment.captured`
+sequence (direct field mutation + a call to the real `reconcileMandate`, not a re-driven signed webhook
+request — the webhook HTTP/signature path itself is unmodified by this migration and was already
+fixture-verified separately) correctly drove the subscription to `mandateTokenId` set,
+`isPaymentConfirmed: true`, `appStatus: 'active'`.
+
+**Step 6 — scope confirmed by grep.** `razorpay.subscriptions.create(` now appears at exactly 3 remaining
+sites in `subscriptionController.js` (UPI cancel-and-recreate, `handleSubscriptionCancelled`,
+`retryPayment`) — all untouched. The trial-conversion site (previously `:1269`) is the one successfully
+removed. This was call site 1 of the 4 identified in the Phase 4D-2 matrix.
+
+**This closes the P0 finding.** Trial-converted organizations — the common case, per
+`CAW_FINAL_PRODUCTION_AUDIT.md`'s own headline finding ("CAW as the actual onboarding path for the common
+case — Missing") — now acquire a real Registration Link/CAW mandate exactly as a fresh signup does,
+confirmed live, not assumed. Remaining legacy `subscriptions.create()` call sites (UPI-recreate,
+`handleSubscriptionCancelled`, `retryPayment`) are separate, later work per the existing matrix; the
+legacy `subscriptions.create()` code itself was NOT deleted this session (a later cleanup pass, once all 4
+sites are migrated, per the hard constraints).
+
+**Hard constraints honored:** `createSubscription`, `retryPayment`, the UPI-recreate branch,
+`handleSubscriptionCancelled`, the Renewal/Retry Engines, and cron were not modified. Legacy
+`subscriptions.create()` code was not deleted. Real fixture output recorded above, not a mocked-only
+claim.

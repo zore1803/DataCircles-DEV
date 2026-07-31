@@ -35,18 +35,24 @@ router.get('/current', requireAuth, subscriptionController.getCurrentSubscriptio
 router.post('/trial', requireAuth, adminMiddleware, subscriptionController.startFreeTrial);
 // createSubscription IS the Charge-at-Will implementation (Phase 2) now — no
 // alias, no parallel route. The legacy Subscriptions/Plans implementation
-// (401 on this account, see CAW_BILLING_DESIGN.md §0) is kept unexported in
-// the controller as legacyCreateSubscription_DEPRECATED, not wired to any
-// route, removed in Phase 8.
+// (401 on this account, see CAW_BILLING_DESIGN.md §0) was never wired to any
+// route and has been removed entirely (Phase 7 cleanup).
+router.post('/preview', requireAuth, adminMiddleware, subscriptionController.previewSubscription);
 router.post('/create', requireAuth, adminMiddleware, subscriptionController.createSubscription);
 router.put('/update', requireAuth, adminMiddleware, subscriptionController.updateSubscription);
 router.post('/cancel', requireAuth, adminMiddleware, subscriptionController.cancelSubscription);
+// Escape hatch for the downgrade freeze rule — cancels a scheduled downgrade
+// (pendingUpdate), reverting to no pending plan change. No "edit" endpoint
+// exists by design; re-run the downgrade flow from scratch instead.
+router.post('/downgrade/cancel', requireAuth, adminMiddleware, subscriptionController.cancelScheduledDowngrade);
 
 
 // New payment-related routes
 router.post('/verify-payment', requireAuth, adminMiddleware, subscriptionController.verifyPayment);
 router.get('/payments', requireAuth, adminMiddleware, subscriptionController.getPaymentHistory);
 router.get('/billing-events', requireAuth, adminMiddleware, subscriptionController.getBillingTimeline);
+router.get('/scheduled-changes', requireAuth, adminMiddleware, subscriptionController.getScheduledChanges);
+router.get('/renewal-preview', requireAuth, adminMiddleware, subscriptionController.getRenewalPreview);
 router.get('/payments/:paymentId', requireAuth, adminMiddleware, subscriptionController.getPaymentDetails);
 router.post('/:id/retry-payment', requireAuth, adminMiddleware, subscriptionController.retryPayment);
 
@@ -71,12 +77,26 @@ router.post('/coupons/preview', requireAuth, adminMiddleware, couponController.p
 // Coupon validation at checkout — Organization Admin only, pricing preview only
 router.post('/coupons/validate', requireAuth, adminMiddleware, couponController.validateCoupon);
 
+// C1 — coupon replacement on an already-paid subscription (Manage Subscription
+// page). Remove detaches the current coupon (recomputes recurring baseline,
+// never touches historical redemption); Replace validates + attaches a new
+// one in the same step. Distinct from coupons/preview & coupons/validate
+// above, which only ever preview pricing for a NOT-YET-EXISTING subscription.
+router.delete('/coupon', requireAuth, adminMiddleware, subscriptionController.removeAppliedCoupon);
+router.post('/coupon/replace', requireAuth, adminMiddleware, subscriptionController.replaceAppliedCoupon);
+// Preview-only twins — same pricing logic, no persistence, no BillingEvent —
+// so the frontend confirmation dialogs can show a real before/after amount
+// without running their own pricing math.
+router.get('/coupon/preview-removal', requireAuth, adminMiddleware, subscriptionController.previewRemoveCoupon);
+router.post('/coupon/preview-replace', requireAuth, adminMiddleware, subscriptionController.previewReplaceCoupon);
+
 // Referral code — org-facing (see REFERRAL_SYSTEM_DESIGN.md). Returns the
 // org's existing active code, issuing one lazily on first request.
 router.get('/referrals/code', requireAuth, adminMiddleware, subscriptionController.getOrgReferralCode);
 // Referral overview — org-facing: my code(s), referrals sent, whether I was
 // referred, my rewards (available/reserved/consumed/expired/revoked), summary stats.
 router.get('/referrals/overview', requireAuth, adminMiddleware, subscriptionController.getMyReferralOverview);
+router.get('/referrals/reward-availability', requireAuth, adminMiddleware, subscriptionController.getRewardAvailability);
 // Apply a manually-typed referral code immediately (checkout page's own
 // Apply button) — creates Referral(pending) right away, not gated behind
 // a later Subscribe/Start Trial submission.

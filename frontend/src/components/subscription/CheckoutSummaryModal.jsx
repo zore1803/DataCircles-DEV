@@ -1,6 +1,7 @@
 ﻿// components/subscription/CheckoutSummaryModal.jsx
 import React from "react";
 import { X, ShoppingCart, AlertTriangle, CheckCircle2 } from "lucide-react";
+import OrderSummary from "./OrderSummary";
 
 // Coupons are applied/removed on the plans page (outside checkout) so the
 // customer sees the discount ripple across every plan/add-on card before
@@ -37,6 +38,11 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
     downgradeChecks = [], hasHardBlocker = false, resolutionAddons = {}, resolutionAddonCatalog = {},
     // coupon (new-subscription checkout only)
     appliedCoupon,
+    // BILLING_UX_SPEC.md §0/Option A — backend-computed preview for the
+    // new-subscription branch (signup + trial→paid). null if the preview
+    // call failed, in which case this branch falls back to the legacy
+    // client-computed display below rather than showing nothing.
+    pricingBreakdown,
   } = checkoutData;
 
   const prettyKey = (k) => (k || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -72,9 +78,16 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
 
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[1000004]">
-      <div className="bg-white rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+      {/* Found via live QA: this modal had no scroll/height cap at all — with
+          coupon + referral + add-on rows all showing at once, content could
+          grow taller than the viewport and push the action/close buttons
+          off-screen entirely, with no way to reach them. Fixed by capping
+          the whole modal to the viewport height and making only the middle
+          content scroll — header and action buttons stay pinned and always
+          reachable regardless of how many rows render. */}
+      <div className="bg-white rounded-xl max-w-md w-full mx-4 shadow-2xl max-h-[90vh] flex flex-col">
+        {/* Header — fixed, never scrolls */}
+        <div className="flex items-center justify-between p-8 pb-6 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isAddonRemoval || isPlanDowngrade ? "bg-amber-100" : "bg-blue-100"}`}>
               {isAddonRemoval || isPlanDowngrade
@@ -97,6 +110,8 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
           </button>
         </div>
 
+        {/* Scrollable body — everything between header and actions */}
+        <div className="px-8 pb-2 overflow-y-auto flex-1 min-h-0">
         {/* Line items */}
         {isPlanDowngrade ? (
           <div className="space-y-3 mb-4">
@@ -548,9 +563,11 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
               </div>
             )}
 
-            {/* Coupon effect display only — applied/removed on the plans
-                page, not here. This just confirms what's already active. */}
-            {appliedCoupon && (
+            {/* Coupon effect banner — only the legacy fallback path renders
+                this; when pricingBreakdown is present, OrderSummary's own
+                row set + §1.5 callout (below) covers it, so this would
+                otherwise duplicate the same information. */}
+            {appliedCoupon && !pricingBreakdown && (
               <div className="mt-3 pt-3 border-t border-gray-100">
                 <div className="flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
                   <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
@@ -559,6 +576,16 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
                     <p className="text-xs text-green-700">You saved {formatPrice(appliedCoupon.discountAmount)} today.</p>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* BILLING_UX_SPEC.md §1 — backend-computed Order Summary,
+                replacing this branch's own client-side totals entirely.
+                Falls back to the legacy client-computed block only if the
+                preview call failed (pricingBreakdown is null). */}
+            {pricingBreakdown && (
+              <div className="mt-3">
+                <OrderSummary pricingBreakdown={pricingBreakdown} header="Order Summary" rewardConsumedThisCheckout />
               </div>
             )}
           </div>
@@ -583,6 +610,11 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
                     : "No charge. Removal takes effect at the end of your current billing period."}
                 </p>
               </>
+            ) : pricingBreakdown ? (
+              // Order Summary above already rendered the full row set +
+              // total — nothing further to show here for the new-subscription
+              // branch when the backend preview succeeded.
+              <p className="text-xs text-gray-400 mb-6">GST included in the amount above.</p>
             ) : (() => {
               const gst = Math.round(displayTotal * 0.18);
               const totalWithGST = displayTotal + gst;
@@ -619,50 +651,65 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
           </>
         )}
         {isPlanUpgrade && (() => {
-          const chargeGST = Math.round(proratedAmount * 0.18);
-          const chargeTotal = proratedAmount + chargeGST;
           const recurringGST = Math.round(newRecurringTotal * 0.18);
           const recurringTotal = newRecurringTotal + recurringGST;
-          // proratedAmount is ALREADY post-discount (backend applied whichever
-          // modifiers matched). Reconstruct the pre-discount figure only for
-          // display. Split by source — each field means exactly what its name
-          // says (a real bug, found and fixed: this block used to show
-          // referral-specific copy for what could be a coupon-only discount).
-          const hasCoupon = couponDiscountApplied > 0;
           const hasReferral = referralDiscountApplied > 0;
+          const hasCoupon = couponDiscountApplied > 0;
           const hasDiscount = hasCoupon || hasReferral;
+          // Legacy fallback totals, used only if pricingBreakdown is absent
+          // (updateSubscription failed to return it for some reason).
+          const chargeGST = Math.round(proratedAmount * 0.18);
+          const chargeTotal = proratedAmount + chargeGST;
           const combinedDiscount = couponDiscountApplied + referralDiscountApplied;
           const originalProrated = proratedAmount + combinedDiscount;
           return (
             <>
-              {hasReferral && (
-                <div className="mb-3 rounded-lg bg-purple-50 border border-purple-100 px-3 py-2.5 text-xs text-purple-700">
-                  🎉 <span className="font-semibold">Referral reward applied</span> — you saved {formatPrice(referralDiscountApplied)} on this purchase.
+              {/* BILLING_UX_SPEC.md §1 — backend-computed Order Summary,
+                  replacing this branch's own hand-assembled totals. Falls
+                  back to the legacy block only if pricingBreakdown is missing. */}
+              {pricingBreakdown ? (
+                <div className="mb-3">
+                  <OrderSummary
+                    pricingBreakdown={pricingBreakdown}
+                    header={`Upgrade to ${plan?.name || "New Plan"}`}
+                    contextLine="You'll be charged the prorated difference today."
+                    rewardConsumedThisCheckout
+                  />
                 </div>
+              ) : (
+                <>
+                  {hasReferral && (
+                    <div className="mb-3 rounded-lg bg-purple-50 border border-purple-100 px-3 py-2.5 text-xs text-purple-700">
+                      🎉 <span className="font-semibold">Referral reward applied</span> — you saved {formatPrice(referralDiscountApplied)} on this purchase.
+                    </div>
+                  )}
+                  {hasCoupon && (
+                    <div className="mb-3 rounded-lg bg-green-50 border border-green-100 px-3 py-2.5 text-xs text-green-700">
+                      🎟️ <span className="font-semibold">Coupon applied</span> — you saved {formatPrice(couponDiscountApplied)} on this purchase.
+                    </div>
+                  )}
+                  <div className="text-xs text-gray-500 mb-3 space-y-1 bg-gray-50 rounded-lg p-3">
+                    {hasDiscount ? (
+                      <>
+                        <p className="font-semibold text-gray-700">Charged today (incl. GST)</p>
+                        <div className="flex justify-between"><span>Prorated upgrade</span><span>{formatPrice(originalProrated)}</span></div>
+                        {hasCoupon && <div className="flex justify-between text-green-700"><span>Coupon</span><span>−{formatPrice(couponDiscountApplied)}</span></div>}
+                        {hasReferral && <div className="flex justify-between text-purple-700"><span>Referral reward</span><span>−{formatPrice(referralDiscountApplied)}</span></div>}
+                        <div className="flex justify-between border-t border-gray-200 pt-1"><span>Subtotal</span><span>{formatPrice(proratedAmount)}</span></div>
+                        <div className="flex justify-between"><span>GST (18%)</span><span>{formatPrice(chargeGST)}</span></div>
+                        <div className="flex justify-between border-t border-gray-200 pt-1 font-bold text-gray-900"><span>Pay today</span><span>{formatPrice(chargeTotal)}</span></div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-gray-700">Charged today (incl. GST)</p>
+                        <p>{formatPrice(proratedAmount)} + {formatPrice(chargeGST)} GST = <span className="font-bold text-gray-900">{formatPrice(chargeTotal)}</span></p>
+                      </>
+                    )}
+                  </div>
+                </>
               )}
-              {hasCoupon && (
-                <div className="mb-3 rounded-lg bg-green-50 border border-green-100 px-3 py-2.5 text-xs text-green-700">
-                  🎟️ <span className="font-semibold">Coupon applied</span> — you saved {formatPrice(couponDiscountApplied)} on this purchase.
-                </div>
-              )}
-              <div className="text-xs text-gray-500 mb-6 space-y-1 bg-gray-50 rounded-lg p-3">
-                {hasDiscount ? (
-                  <>
-                    <p className="font-semibold text-gray-700">Charged today (incl. GST)</p>
-                    <div className="flex justify-between"><span>Prorated upgrade</span><span>{formatPrice(originalProrated)}</span></div>
-                    {hasCoupon && <div className="flex justify-between text-green-700"><span>Coupon</span><span>−{formatPrice(couponDiscountApplied)}</span></div>}
-                    {hasReferral && <div className="flex justify-between text-purple-700"><span>Referral reward</span><span>−{formatPrice(referralDiscountApplied)}</span></div>}
-                    <div className="flex justify-between border-t border-gray-200 pt-1"><span>Subtotal</span><span>{formatPrice(proratedAmount)}</span></div>
-                    <div className="flex justify-between"><span>GST (18%)</span><span>{formatPrice(chargeGST)}</span></div>
-                    <div className="flex justify-between border-t border-gray-200 pt-1 font-bold text-gray-900"><span>Pay today</span><span>{formatPrice(chargeTotal)}</span></div>
-                  </>
-                ) : (
-                  <>
-                    <p className="font-semibold text-gray-700">Charged today (incl. GST)</p>
-                    <p>{formatPrice(proratedAmount)} + {formatPrice(chargeGST)} GST = <span className="font-bold text-gray-900">{formatPrice(chargeTotal)}</span></p>
-                  </>
-                )}
-                <p className="mt-1 font-semibold text-gray-700">New recurring from next renewal</p>
+              <div className="text-xs text-gray-500 mb-6 bg-gray-50 rounded-lg p-3">
+                <p className="font-semibold text-gray-700">New recurring from next renewal</p>
                 <p>{formatPrice(newRecurringTotal)}/{cycleLabel} + {formatPrice(recurringGST)} GST = <span className="font-bold text-gray-900">{formatPrice(recurringTotal)}/{cycleLabel}</span></p>
               </div>
             </>
@@ -670,9 +717,10 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
         })()}
         {isPlanDowngrade && <div className="mb-6" />}
         {isAddonRemoval && <div className="mb-6" />}
+        </div>
 
-        {/* Actions */}
-        <div className="space-y-3">
+        {/* Actions — fixed, never scrolls, always reachable */}
+        <div className="space-y-3 p-8 pt-6 flex-shrink-0">
           <button
             onClick={onConfirm}
             disabled={processing || (isPlanDowngrade && hasHardBlocker)}
@@ -694,7 +742,20 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
                 ? `Pay (Prorated) & Add`
                 : `Schedule Removal (no charge)`
             ) : (
-              `Confirm & Pay ${formatPrice(displayTotal + Math.round(displayTotal * 0.18))}/${cycleLabel}`
+              // A1 fix (found via live QA): this used to compute its own total
+              // from displayTotal — a client-side figure derived from the
+              // static plan catalog price (SubscriptionPlans.jsx), re-adding
+              // GST by hand and subtracting only the coupon, never the
+              // referral discount. That diverged from pricingBreakdown.total,
+              // the same backend-verified figure OrderSummary's own "Total
+              // Payable" line already shows above — the button must display
+              // the exact one-time amount being charged right now, so it
+              // reads that same value when available (falling back to the
+              // legacy calc only if the preview failed). Also drops the
+              // "/mo" suffix, which was never correct for a one-time charge.
+              pricingBreakdown
+                ? `Confirm & Pay ${formatPrice(pricingBreakdown.total)}`
+                : `Confirm & Pay ${formatPrice(displayTotal + Math.round(displayTotal * 0.18))}/${cycleLabel}`
             )}
           </button>
           <button

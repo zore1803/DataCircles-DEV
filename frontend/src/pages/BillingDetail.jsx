@@ -134,6 +134,21 @@ const StatusBadge = ({ status, isTrialActive, size = "md" }) => {
       icon: CheckCircle2,
       label: "Completed",
     },
+    // appStatus values (canonical, CAW) — not in the legacy `status` vocabulary above.
+    past_due: {
+      bg: "bg-orange-100",
+      text: "text-orange-800",
+      border: "border-orange-200",
+      icon: AlertCircle,
+      label: "Past Due",
+    },
+    suspended: {
+      bg: "bg-red-100",
+      text: "text-red-800",
+      border: "border-red-200",
+      icon: XCircle,
+      label: "Suspended",
+    },
   };
 
   const config = statusConfig[status] || statusConfig.created;
@@ -1285,7 +1300,7 @@ const BillingDetail = () => {
               </div>
               <div className="flex flex-col items-end gap-2">
                 <StatusBadge
-                  status={sub.status}
+                  status={sub.appStatus}
                   isTrialActive={sub.isTrialActive}
                   size="lg"
                 />

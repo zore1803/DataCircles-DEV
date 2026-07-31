@@ -1,7 +1,7 @@
 # Billing Findings Register — master backlog
 
 > **Consolidated from every investigation in this audit so far** (Trial,
-> Subscription Acquisition, Upgrade). This is the single source of truth for
+> Subscription Acquisition, Upgrade, Downgrade). This is the single source of truth for
 > implementation issues. Architecture Reviews **reference** these BUG IDs
 > rather than restating findings; each finding points **back** to the review
 > section that discusses its architectural significance (the `Arch review:`
@@ -15,9 +15,11 @@
 > **Severity scale:** Critical (money/entitlement wrong) · High (customer-visible
 > incorrect state, no direct money loss) · Medium (inconsistency/UX) · Low (cosmetic/dead code).
 >
-> **ID numbering:** deliberate gaps left between capabilities (006–009, 019–020
-> reserved) so new findings slot in without renumbering. **24 findings exist**;
-> highest ID is 030 but IDs are non-contiguous by design.
+> **ID numbering:** deliberate gaps left between capabilities (006–009, 019–020,
+> 032–039 reserved) so new findings slot in without renumbering. **28 findings
+> exist** (Trial 5, Acquisition 9, Upgrade 10, Cross-capability 1, Downgrade
+> 3); highest ID is 042 but IDs are non-contiguous by design. FEATURE-008/009
+> are tracked separately, not counted in the BUG- total.
 
 ---
 
@@ -154,6 +156,49 @@
 
 ---
 
+## Downgrade
+
+> Phase 1 (15 scenarios enumerated from code) and Phase 2 (extensive live
+> walkthrough) complete. Phase 3 investigation reached the highest-priority
+> question — "which pending state is authoritative at renewal" — and
+> answered it, which reframed most surface-level symptoms into one root
+> cause (BUG-040) rather than a dozen independent bugs. The multi-add-on-type
+> matrix (Seat+Storage+Automation together) was **not** tested — flagged
+> below as an open coverage gap, not a finding. The coupon-lifecycle
+> observations made during this walkthrough are **deliberately NOT
+> registered here** — see the note at the end of this section.
+
+### BUG-040 — No canonical "effective next-renewal state" (root cause / architectural)
+**Severity:** Critical (architectural) · **Status:** Verified · **Arch review:** Pending — Downgrade Architecture Review (Pass 3) not yet written
+**Evidence:** Traced the real renewal-application code directly. `applyScheduledAddonRemovals()` (`addonManagement.js:299-339`), called from `handleSubscriptionCharged` (`subscriptionController.js:2211`, the actual renewal webhook handler), DOES apply `pendingAddonRemovals` at renewal. But `pendingUpdate` (the scheduled-downgrade object) is read by **no code in the renewal path at all** — its only reader anywhere in the codebase is inside `handleSubscriptionCancelled` (`:2232`, reconciliation-at-cancellation code), which a downgrade never triggers (this is the pre-existing Gap A in `KNOWN_BILLING_GAPS.md`). Meanwhile, at least three UI/data surfaces each independently compute "future subscription state" from different, overlapping subsets of `activeAddons` + `pendingAddonRemovals` + `pendingUpdate`: the checkout preview (frontend, live recompute), the "Scheduled Change" card (`pendingUpdate.carriedAddons`, a backend snapshot frozen once at schedule time, `:1204-1208`), and Timeline snapshots (`snapshotOf()` in `billingEvents.js`, which doesn't serialize `pendingAddonRemovals` at all).
+**Impact:** Reproduced live, repeatedly: the exact same underlying subscription state displayed as 3 seats carried forward (checkout), 0 seats (Scheduled Change card), and 2 seats (Timeline) — not because any one view is "wrong," but because none of them defer to a shared, authoritative computation. **Critically, this also means most of the visual disagreement is lower real-world severity than it first appeared** — `pendingUpdate.carriedAddons` is a write-only field, never consumed by the actual renewal logic, so the disagreement is a display/data-integrity problem today, not (yet) a real billing-correctness one. This finding is the direct trigger for the `calculateInvoice()` chokepoint design proposed in `RAZORPAY_MIGRATION.md` §2.
+
+### BUG-041 — All-or-nothing carry-forward filter (partial removal not subtracted)
+**Severity:** Medium (downgraded from initial impression — the affected field is write-only per BUG-040) · **Status:** Verified · **Arch review:** Pending
+**Evidence:** Both `SubscriptionPlans.jsx:411-414` (frontend checkout preview) and `subscriptionController.js:1154-1158` (backend, computed at downgrade-schedule time) use `removal.quantity >= a.quantity` as a binary keep-all/drop-all filter, never a subtraction. Reproduced live: Seat×3, 2 scheduled for removal → filter evaluates `2 >= 3` → false → **all 3** carried forward (correct answer: 1). Same flawed logic duplicated in two files, not one.
+**Impact:** The stored/displayed carry-forward quantity is wrong whenever a *partial* removal is scheduled before a downgrade. Because the specific field it corrupts (`pendingUpdate.carriedAddons`) is never read by real renewal logic (BUG-040), this is a data-quality/display bug rather than a billing-correctness one today — but would become one immediately if BUG-040's root cause is fixed by wiring `pendingUpdate` into renewal without also fixing this filter.
+
+### BUG-042 — Timeline cannot represent a scheduled add-on removal's effect
+**Severity:** Low (reframed from "obvious bug" — may be partially by-design for a not-yet-applied event) · **Status:** Verified (mechanism); Partially Verified (whether the identical Before/After is intentional or an oversight is an architecture-review judgment, not resolved here)
+**Evidence:** `ADDON_REMOVAL_SCHEDULED` is emitted with `before: subscription, after: result.subscription` (`subscriptionController.js:~3096-3101`). `scheduleAddonRemoval()` only ever mutates `pendingAddonRemovals` — never `activeAddons` — and `snapshotOf()` (`billingEvents.js`) does not serialize `pendingAddonRemovals` into the snapshot shape at all. So `before.activeAddons` and `after.activeAddons` are always identical for this event type, by construction.
+**Impact:** Every scheduled-removal Timeline entry shows no visible change, even though a real state change (scheduling) did occur. The scheduling *action* is correctly logged; its *effect* cannot be shown because the snapshot schema has no field for it.
+
+### FEATURE-008 — No user choice on add-on carry-forward during downgrade/upgrade
+**Status:** Confirmed behavior, explicitly classified as a product decision, not a bug
+**Evidence:** `classifyAddonsForPlanChange`'s result is applied unconditionally, both at preview and settlement, in both Upgrade and Downgrade — no confirmation step, no opt-out beyond an informational "Carrying forward" line in the checkout summary.
+**Note:** repeatedly raised during this walkthrough as something that should ask the user (carry all / carry selected / remove all) rather than silently deciding. Recorded here for traceability; not a defect against any stated contract.
+
+### FEATURE-009 — No way to cancel/undo a scheduled downgrade
+**Status:** Confirmed absent, feature gap
+**Evidence:** `SCHEDULE_CANCELLED` exists in the `BillingEvent` type enum but grepping the entire codebase found **no code path that ever emits it** — no endpoint, no controller function, undoes a scheduled `pendingUpdate` once set. Confirmed live: once a downgrade is scheduled, every plan card becomes disabled/"Scheduled" until it takes effect, with no visible or backend path to cancel it early.
+**Note:** the "everything freezes correctly after scheduling" behavior itself was confirmed working as intended during the walkthrough — this finding is specifically about the *absence* of an undo path, not the freeze behavior being wrong.
+
+**Deliberately NOT registered under Downgrade — routed elsewhere:**
+- **Coupon-lifecycle inconsistencies** observed repeatedly during this walkthrough (coupon disappearing from Manage Subscription post-purchase, coupon badge showing on a plan that has no discount rule for it, coupon amount not reflected consistently across Billing/Timeline/checkout) are the **same class of finding as BUG-021/022/023** from the Upgrade capability, now confirmed to also occur during Downgrade and plain add-on purchase flows. Per the standing decision to treat Coupon Lifecycle as its own standalone investigation (not re-derived per-capability), these observations are logged here as a pointer only — the actual findings belong in that investigation once it runs, cross-referencing BUG-021/022/023 rather than duplicating them with new IDs.
+- **Multi-add-on-type matrix** (Seat + Storage + Automation together, compatible+incompatible mixed) — never tested this session. This is a coverage gap, not a finding — flagged in `flows/Downgrade.md` as the one remaining test before the capability can be marked complete.
+
+---
+
 ## Cross-capability (not scoped to one Pass-1 document)
 
 ### BUG-031 — Cancellation eligibility contradicts intended product behavior
@@ -171,14 +216,16 @@
 - Reward consumption never observed live end-to-end (Razorpay test-gateway timeouts).
 - `ReferralProgram` fields stored but unenforced (`stacksWithCoupons`, `honoredDuringTrial`, `minimumActiveDays`).
 
-## Index by severity (for triage) — 25 findings total
+## Index by severity (for triage) — 28 findings total
 
-**Critical (3):** BUG-002, BUG-011, BUG-022
+**Critical (4):** BUG-002, BUG-011, BUG-022, BUG-040
 **High (6):** BUG-010, BUG-021, BUG-023, BUG-025, BUG-026, BUG-031
-**Medium (10):** BUG-001, BUG-004, BUG-005, BUG-012, BUG-013, BUG-015, BUG-024, BUG-027, BUG-028, BUG-029
-**Low (3):** BUG-003, BUG-014, BUG-016
+**Medium (12):** BUG-001, BUG-004, BUG-005, BUG-012, BUG-013, BUG-015, BUG-024, BUG-027, BUG-028, BUG-029, BUG-041
+**Low (4):** BUG-003, BUG-014, BUG-016, BUG-042
 **Unknown, needs investigation before triage (3):** BUG-017, BUG-018, BUG-030
 
-## Index by capability — 25 findings total
-**Trial (5):** BUG-001–005 · **Acquisition (9):** BUG-010–018 · **Upgrade (10):** BUG-021–030 · **Cross-capability (1):** BUG-031 (Upgrade + Add-on Purchase)
-Reserved gaps for future findings: 006–009 (Trial), 019–020 (Acquisition).
+**Feature gaps, tracked separately (2):** FEATURE-008 (no carry-forward choice), FEATURE-009 (no undo-scheduled-downgrade)
+
+## Index by capability — 28 findings total
+**Trial (5):** BUG-001–005 · **Acquisition (9):** BUG-010–018 · **Upgrade (10):** BUG-021–030 · **Cross-capability (1):** BUG-031 (Upgrade + Add-on Purchase) · **Downgrade (3):** BUG-040–042
+Reserved gaps for future findings: 006–009 (Trial), 019–020 (Acquisition), 032–039 (available for Downgrade/coupon-lifecycle findings before 040 block).
