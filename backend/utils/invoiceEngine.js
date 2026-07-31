@@ -205,4 +205,44 @@ function calculateInvoice({ subscription, asOf, changeset = {}, resolvedModifier
   };
 }
 
-module.exports = { calculateInvoice, calculateCommercialAdjustments, SEAT_ADDON_KEY };
+// Maps calculateInvoice()'s return into the canonical pricing-breakdown
+// shape BILLING_UX_SPEC.md §1.2 requires every checkout-facing endpoint to
+// return — one shape, so the frontend's Order Summary component never has
+// to special-case which endpoint it's rendering. Pure formatting/reshaping
+// of values calculateInvoice() already computed — no new arithmetic, per
+// §0's Single Source of Truth principle (this function must never invent a
+// number the engine didn't already produce).
+//
+// @param {Object} invoice - calculateInvoice()'s return value
+// @param {Object} [context]
+// @param {String} [context.couponCode] - the applied coupon's code, for the
+//   "Coupon Discount (CODE)" row label (§1.1). Omit if no coupon applied.
+// @param {Number} [context.referralPercent] - the referral reward's percent
+//   value, for the "Referral Reward (X% off)" row label (§1.1). Omit for a
+//   fixed-amount reward or if none applied.
+// @param {Array} [context.lineLabels] - optional map of invoice.lines[].type
+//   to a human label override (defaults exist for plan/seats/addon).
+function toPricingBreakdown(invoice, { couponCode, referralPercent } = {}) {
+  const couponAmount = (invoice.modifierBreakdown || []).filter((m) => m.type === 'coupon').reduce((s, m) => s + m.amount, 0);
+  const referralAmount = (invoice.modifierBreakdown || []).filter((m) => m.type === 'referral').reduce((s, m) => s + m.amount, 0);
+
+  const DEFAULT_LABELS = { plan: 'Plan Price', seats: 'Seats', addon: 'Add-on', commercial_adjustment: 'Prorated Adjustment' };
+  const pricingLineItems = invoice.lines
+    .filter((l) => l.type !== 'discount' && l.type !== 'tax')
+    .map((l) => ({
+      label: l.quantity ? `${DEFAULT_LABELS[l.type] || l.key} ×${l.quantity}` : (DEFAULT_LABELS[l.type] || l.key),
+      amount: l.amount,
+    }));
+
+  return {
+    pricingLineItems,
+    subtotal: invoice.subtotal,
+    couponDiscount: couponAmount > 0 ? { amount: couponAmount, code: couponCode || null } : null,
+    referralDiscount: referralAmount > 0 ? { amount: referralAmount, percent: referralPercent ?? null } : null,
+    taxableAmount: invoice.taxable,
+    gst: invoice.gst,
+    total: invoice.total,
+  };
+}
+
+module.exports = { calculateInvoice, calculateCommercialAdjustments, toPricingBreakdown, SEAT_ADDON_KEY };

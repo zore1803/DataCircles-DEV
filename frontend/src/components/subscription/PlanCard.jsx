@@ -1,7 +1,10 @@
 ﻿import React, { useState } from "react";
 import { Check, ArrowUp, ArrowDown, CreditCard, Gift, Sparkles, Eye, ChevronDown, ChevronUp, Plus, Minus, X } from "lucide-react";
 import FeaturesModal from "./FeaturesModal";
-import { ruleForProduct, discountForItem } from "../../utils/couponHelpers";
+import RewardAvailabilityBadge from "./RewardAvailabilityBadge";
+import { ruleForProduct, discountForItem, isCouponStillRecurring } from "../../utils/couponHelpers";
+import { deriveSubscriptionUIState, SUBSCRIPTION_UI_STATES } from "../../utils/subscriptionHelpers";
+import { useSubscription } from "../../contexts/SubscriptionContext";
 
 const PlanCard = ({
   plan,
@@ -19,8 +22,10 @@ const PlanCard = ({
   onAddonChange,
   onRemoveAddon,
   couponRules, // per-product discount rules from a coupon applied on the plans page, or null
+  allPlanAddons, // { [planId]: addon[] } — every plan's catalog already fetched this session, used to detect an addon carrying forward under a remapped key (e.g. "seat" -> "extra_seat") during a scheduled downgrade
 }) => {
   const [showFeaturesModal, setShowFeaturesModal] = useState(false);
+  const { removedAddons = [], scheduledChanges = [], keptAddons = [] } = useSubscription();
 
   const getCurrentPrice = () => (plan.trial ? 0 : billingCycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice);
 
@@ -30,6 +35,13 @@ const PlanCard = ({
       currency: "INR",
       minimumFractionDigits: 0,
     }).format(price);
+
+  // Single canonical derivation — see utils/subscriptionHelpers.js. Every
+  // branch below reads THIS, never raw isTrialActive/isPaymentConfirmed/
+  // paymentStatus/status independently (that independent-derivation pattern
+  // is exactly what produced the "Free Trial Active" + "Complete Payment"
+  // shown simultaneously bug — see FRONTEND_CONVERGENCE_PLAN.md Journey 1).
+  const uiState = deriveSubscriptionUIState(currentSubscription);
 
   const isCurrentPlan = () => {
     if (!currentSubscription || !currentSubscription.isPaymentConfirmed) return false;
@@ -41,24 +53,28 @@ const PlanCard = ({
     currentSubscription &&
     currentSubscription.planName === plan.id &&
     currentSubscription.billingCycle === billingCycle &&
-    !currentSubscription.isPaymentConfirmed &&
-    currentSubscription.paymentStatus === "pending_payment";
+    (uiState === SUBSCRIPTION_UI_STATES.PENDING_MANDATE || uiState === SUBSCRIPTION_UI_STATES.PENDING_PAYMENT);
 
   const shouldHidePlan = () =>
     plan.trial &&
     currentSubscription &&
     !currentSubscription.isTrialActive &&
-    currentSubscription.status === "active" &&
+    uiState === SUBSCRIPTION_UI_STATES.ACTIVE &&
     currentSubscription.trialUsed;
 
   const getActionType = () => {
     if (plan.trial) {
-      if (currentSubscription?.isTrialActive) return "Current Trial";
+      // PENDING_MANDATE takes priority over the raw isTrialActive flag —
+      // trial cleanup only runs once the mandate actually confirms
+      // (reconcileMandate), so mid-conversion the flag can still read true.
+      // The trial card must not claim "Current Trial" once a conversion
+      // attempt for a DIFFERENT plan is in flight.
+      if (uiState === SUBSCRIPTION_UI_STATES.TRIAL) return "Current Trial";
       if (currentSubscription?.trialUsed) return "Free Trial Used";
       return "Start Trial";
     }
     if (isPendingPayment()) return "Complete Payment";
-    if (!currentSubscription || currentSubscription.isTrialActive || !currentSubscription.isPaymentConfirmed)
+    if (!currentSubscription || uiState === SUBSCRIPTION_UI_STATES.TRIAL || uiState === SUBSCRIPTION_UI_STATES.PENDING_MANDATE || !currentSubscription.isPaymentConfirmed)
       return "Subscribe";
 
     const planPriority = { starter: 1, growth: 2, business: 3 };
@@ -189,7 +205,12 @@ const PlanCard = ({
   // invoice. Every other card (upgrade/downgrade targets) keeps using catalog
   // + page-level couponRules preview, since those represent a hypothetical
   // future purchase, not what's already billed.
-  const useSubscriptionSnapshot = isCurrentActive && !!currentSubscription?.appliedCoupon?.code;
+  // Coupon P0 fix (found via live QA): the snapshot-discount rendering below
+  // must only apply while the coupon still actually discounts future
+  // billing — a first_payment coupon that already fired stops using this
+  // branch entirely rather than keep showing a stale discounted price the
+  // backend no longer charges.
+  const useSubscriptionSnapshot = isCurrentActive && !!currentSubscription?.appliedCoupon?.code && isCouponStillRecurring(currentSubscription.appliedCoupon);
   const appliedCoupon = useSubscriptionSnapshot ? currentSubscription.appliedCoupon : null;
   const snapshotBaseSubtotal = appliedCoupon?.baseSubtotal ?? liveTotal;
   const snapshotDiscount = appliedCoupon?.discountAmount ?? 0;
@@ -348,28 +369,77 @@ const PlanCard = ({
             <div className="flex flex-wrap gap-1.5">
               {currentSubscription.activeAddons.map((addon) => {
                 const displayName = addon.addonKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-                const pendingRemovals = currentSubscription?.pendingAddonRemovals || [];
-                const removal = pendingRemovals.find((r) => r.addonKey === addon.addonKey);
+                const removal = (removedAddons || []).find((r) => r.addonKey === addon.addonKey);
                 const pendingQty = removal?.quantity || 0;
-                const allPending = addon.quantity - pendingQty <= 0;
-                const removalDate = removal?.effectiveAt
-                  ? new Date(removal.effectiveAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                const remainingQty = Math.max(0, addon.quantity - pendingQty);
+                const allPending = remainingQty <= 0;
+                const removalDateChange = (scheduledChanges || []).find(
+                  (change) => change.type === "REMOVE_ADDON" && change.payload?.addonKey === addon.addonKey
+                );
+                const removalDate = removalDateChange?.effectiveAt
+                  ? new Date(removalDateChange.effectiveAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
                   : null;
+
+                // "allPending" (per removedAddons) is computed by comparing
+                // addonKey strings — but a scheduled plan change can remap
+                // this SAME entitlement to a different key on the target
+                // plan (e.g. Growth's "seat" -> Starter's "extra_seat").
+                // removedAddons has no way to know that's the same thing
+                // continuing, not a real removal — it correctly reports "the
+                // string 'seat' isn't present in the future add-ons," which
+                // reads to a customer as "I'm losing this" when they're not.
+                // Cross-reference by targetKey (the catalog's own equivalence
+                // concept, same one classifyAddonsForPlanChange uses
+                // backend-side) against whatever DID survive under the
+                // target plan's own key, purely for display — this never
+                // changes what's actually scheduled, only how it's labelled.
+                const planChangeSC = allPending
+                  ? (scheduledChanges || []).find((c) => c.type === "PLAN_CHANGE" || c.type === "BILLING_CYCLE_CHANGE")
+                  : null;
+                const myTargetKey = planChangeSC ? addons?.find((a) => a.key === addon.addonKey)?.targetKey : null;
+                const targetPlanCatalog = planChangeSC ? (allPlanAddons?.[planChangeSC.payload?.planId] || []) : [];
+                const carriedEquivalent = myTargetKey
+                  ? (keptAddons || []).find((k) => {
+                      const entry = targetPlanCatalog.find((a) => a.key === k.addonKey);
+                      return entry?.targetKey && entry.targetKey === myTargetKey;
+                    })
+                  : null;
+                const carriedDisplayName = carriedEquivalent
+                  ? carriedEquivalent.addonKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                  : null;
+                // Truly ending — allPending AND no equivalent survives under the target plan.
+                const isTrulyEnding = allPending && !carriedEquivalent;
+
                 return (
                   <span
                     key={addon.addonKey}
-                    title={allPending ? `Removing on ${removalDate || 'cycle end'} — access until then` : undefined}
+                    title={
+                      isTrulyEnding
+                        ? `Removing on ${removalDate || 'cycle end'} — access until then`
+                        : carriedEquivalent
+                        ? `Continues on ${planChangeSC?.payload?.planId || 'the new plan'} as ${carriedDisplayName}`
+                        : undefined
+                    }
                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-                      allPending
+                      isTrulyEnding
                         ? (plan.popular ? "bg-white/10 text-white/60 line-through decoration-white/40" : "bg-gray-100 text-gray-400 line-through")
                         : (plan.popular ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700")
                     }`}
                   >
                     {displayName}
                     {addon.quantity > 1 && <span className="font-bold ml-0.5">×{addon.quantity}</span>}
-                    {allPending ? (
+                    {!allPending && pendingQty > 0 && (
+                      <span className={`ml-1 text-[10px] font-normal ${plan.popular ? "text-white/70" : "text-amber-600"}`}>
+                        {pendingQty} scheduled for removal{removalDate ? ` on ${removalDate}` : ""}
+                      </span>
+                    )}
+                    {isTrulyEnding ? (
                       <span className={`no-underline ml-1 text-[10px] font-normal ${plan.popular ? "text-white/70" : "text-amber-600"}`}>
                         removing {removalDate || 'soon'}
+                      </span>
+                    ) : carriedEquivalent ? (
+                      <span className={`ml-1 text-[10px] font-normal ${plan.popular ? "text-white/70" : "text-blue-600"}`}>
+                        continues after downgrade
                       </span>
                     ) : onRemoveAddon ? (
                       <button
@@ -426,7 +496,7 @@ const PlanCard = ({
               <div className="space-y-3">
                 {addons.map((addon) => {
                   const unitPrice = billingCycle === "yearly" ? addon.price?.yearly : addon.price?.monthly;
-                  const qty = selectedAddons?.[addon.key] ?? 1;
+                  const qty = selectedAddons?.[addon.key] ?? 0;
                   const max = addon.maxQuantityPerOrg ?? 99;
                   const addonRule = couponRules ? ruleForProduct(couponRules, "addon", addon.key) : null;
                   return (
@@ -479,6 +549,11 @@ const PlanCard = ({
             )}
           </div>
         )}
+
+        {/* BILLING_UX_SPEC.md §2.2 — reward badge above the Upgrade action
+            only; a reward doesn't inform Subscribe/Downgrade/cycle-change
+            decisions the same way. */}
+        {action === "Upgrade" && <RewardAvailabilityBadge compact />}
 
         {/* CTA Button */}
         <button

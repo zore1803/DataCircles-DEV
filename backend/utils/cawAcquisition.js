@@ -24,6 +24,20 @@ function computeMandateMaxAmountRupees(firstInvoiceRupees) {
   return firstInvoiceRupees * MANDATE_HEADROOM_MULTIPLIER;
 }
 
+// Fix (found via live QA): the stored phone is always a bare 10-digit
+// string (authController.js's updateProfile validates only /^\d{10}$/,
+// never storing a country code) — but this app is India-only today (per
+// its own signup validation), and Razorpay's hosted Registration Link page
+// was observed re-prompting the customer for a mobile number it had
+// already been given, consistent with receiving a contact value with no
+// country code to recognize. Prefixing +91 here, at the Razorpay-request
+// boundary only, avoids touching the stored format (still bare 10 digits
+// everywhere else — DB uniqueness checks, OTP flows, etc. are unaffected).
+function formatContactForRazorpay(phone) {
+  if (!phone) return phone;
+  return phone.startsWith('+') ? phone : `+91${phone}`;
+}
+
 // Razorpay requires `contact` for recurring Registration Links (confirmed
 // live during CAW validation: "The contact field is required for recurring
 // links"). Throws rather than returning a value so every call site fails the
@@ -61,7 +75,7 @@ async function createRegistrationLinkForOrg({
     customer: {
       name: user.name,
       email: user.email,
-      contact: user.phone,
+      contact: formatContactForRazorpay(user.phone),
     },
     type: 'link',
     amount: amountPaise,
@@ -94,4 +108,5 @@ module.exports = {
   assertPhoneForRecurring,
   createRegistrationLinkForOrg,
   computeMandateMaxAmountRupees,
+  formatContactForRazorpay,
 };

@@ -156,7 +156,16 @@ async function main() {
     assert.ok(subscription.appliedCoupon, 'Expected appliedCoupon to be set on the subscription');
     assert.equal(subscription.appliedCoupon.duration.type, 'first_payment', 'appliedCoupon snapshot must correctly record duration.type: first_payment');
     assert.equal(subscription.appliedCoupon.discountAmount, 60, 'appliedCoupon must record the correct discount amount');
-    assert.equal(subscription.totalAmount, plan.monthlyPrice - 60, 'First invoice must reflect the discount (same math as lifetime would)');
+
+    // Bug 1 fix (recurring price corruption, found via live QA): the first
+    // invoice itself must still reflect the discount — but subscription.totalAmount
+    // (the RECURRING baseline every other surface reads) must NOT, since a
+    // first_payment coupon never applies past the first invoice.
+    const signupInvoice = await BillingInvoice.findOne({ subscription: subscription._id, reason: 'NEW_SUBSCRIPTION' });
+    assert.ok(signupInvoice, 'Expected the signup BillingInvoice to have been persisted');
+    registry.BillingInvoice.push(signupInvoice._id);
+    assert.equal(signupInvoice.taxable, plan.monthlyPrice - 60, 'The first invoice itself must reflect the discount (same math as lifetime would)');
+    assert.equal(subscription.totalAmount, plan.monthlyPrice, 'The stored recurring baseline must NOT include a first_payment discount — it never applies past the first invoice');
 
     // --- 3. Feed this REAL subscription into the REAL renewal engine ---
     // Make it due for renewal and give it a mandate (renewSubscription()'s

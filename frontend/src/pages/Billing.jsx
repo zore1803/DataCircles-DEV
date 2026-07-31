@@ -379,10 +379,10 @@ const Billing = () => {
         "User Count": sub.userCount || 0,
         "Price Per User": `₹${sub.pricePerUser || 0}`,
         "Total Amount": `₹${formatNumberToIndian(sub.totalAmount || 0)}`,
-        Status: sub.isTrialActive
-          ? "Trial Active"
-          : sub.status
-          ? sub.status.charAt(0).toUpperCase() + sub.status.slice(1)
+        // appStatus is canonical (never the legacy `status`, which stays
+        // permanently "created" under CAW — see subscriptionHelpers.js).
+        Status: sub.appStatus
+          ? sub.appStatus.charAt(0).toUpperCase() + sub.appStatus.slice(1)
           : "N/A",
         "Payment Status": sub.isPaymentConfirmed
           ? "Confirmed"
@@ -484,10 +484,10 @@ const Billing = () => {
         "User Count": sub.userCount || 0,
         "Price Per User": `₹${sub.pricePerUser || 0}`,
         "Total Amount": `₹${formatNumberToIndian(sub.totalAmount || 0)}`,
-        Status: sub.isTrialActive
-          ? "Trial Active"
-          : sub.status
-          ? sub.status.charAt(0).toUpperCase() + sub.status.slice(1)
+        // appStatus is canonical (never the legacy `status`, which stays
+        // permanently "created" under CAW — see subscriptionHelpers.js).
+        Status: sub.appStatus
+          ? sub.appStatus.charAt(0).toUpperCase() + sub.appStatus.slice(1)
           : "N/A",
         "Payment Status": sub.isPaymentConfirmed
           ? "Confirmed"

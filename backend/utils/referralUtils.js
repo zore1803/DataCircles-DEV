@@ -167,18 +167,27 @@ async function buildReferralOverview(organizationId) {
     usageByReward.get(key).push(u);
   }
 
+  const CONTEXT_LABELS = { UPGRADE: 'Plan Upgrade', ADDON_PURCHASE: 'Add-on Purchase', RENEWAL: 'Renewal', TRIAL_CONVERSION: 'First Payment', SIGNUP: 'First Payment' };
+
   const now = new Date();
   const rewardsWithStatus = rewards.map((r) => {
     const rUsages = usageByReward.get(r._id.toString()) || [];
-    const consumed = rUsages.some((u) => u.status === 'consumed');
+    const consumedUsage = rUsages.find((u) => u.status === 'consumed');
     const activelyReserved = rUsages.some((u) => u.status === 'reserved' && u.expiresAt > now);
     const expired = r.expiresAt && r.expiresAt <= now;
     let status = 'available';
     if (r.revokedAt) status = 'revoked';
-    else if (consumed) status = 'consumed';
+    else if (consumedUsage) status = 'consumed';
     else if (activelyReserved) status = 'reserved';
     else if (expired) status = 'expired';
-    return { ...r.toObject(), status };
+    return {
+      ...r.toObject(),
+      status,
+      // BILLING_UX_SPEC.md §4 — "Used on Business Upgrade · 27 Jul 2026,"
+      // not a bare "Consumed." null on rewards predating the context field
+      // (rendered without the detail, never a crash) or if not yet consumed.
+      usedOn: consumedUsage ? { label: CONTEXT_LABELS[consumedUsage.context] || null, date: consumedUsage.consumedAt, amount: consumedUsage.amount ?? null } : null,
+    };
   });
 
   return {

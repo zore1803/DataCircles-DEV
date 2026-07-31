@@ -49,6 +49,19 @@ const subscriptionSchema = new mongoose.Schema({
   },
   mandateMaxAmount: { type: Number }, // cap in the same unit as totalAmount; charges above it hard-fail
   mandateExpiresAt: { type: Date },
+  // B2 fix (found via live QA): nothing previously recorded WHEN a
+  // Registration Link/mandate attempt actually began — registrationLinkId
+  // has no companion timestamp, and mandateExpiresAt is only populated
+  // reactively by a later webhook telling us it expired, so it can't answer
+  // "is this pending mandate recent or stale" at page-load time. Set
+  // alongside registrationLinkId/mandateStatus='pending' at both CAW
+  // Registration Link creation sites (createSubscription, updateSubscription's
+  // trial-conversion/re-entry branch) and on any Resume Payment re-entry.
+  // Used only for copy nuance (recent vs. stale pending-setup wording) —
+  // deliberately never used to decide whether to show the full-screen
+  // active-checkout-journey UI, which must stay tied to an actual
+  // current-session action (checkoutJourneyState), not a timestamp.
+  mandateInitiatedAt: { type: Date },
   // Set only if the organization's OWN already-earned referral Reward (as a
   // referrer) was reserved against this first CAW invoice — createSubscription
   // (fresh signup, never trialed) and updateSubscription's trial-conversion

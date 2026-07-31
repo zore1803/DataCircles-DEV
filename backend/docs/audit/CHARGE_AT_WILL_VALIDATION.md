@@ -651,11 +651,157 @@ test mode. Practical consequence for the migration:
   single small real-money live authorization when ready — it is expected to work, not a risk to chase
   further in test mode.
 
+## Test 4 — Failure behaviour
+
+**Method:** direct `POST /v1/payments/create/recurring` calls (raw HTTPS, same technique as the
+decisive Test 1/3 charge), against the confirmed-working, still-valid token `token_TBnT7mU4PdTbV2`
+(customer `cust_T8EOR3KdzSWvZT`, `max_amount: 76700` paise). Five scenarios, each with a fresh Order.
+
+### Scenario A — Charge amount exceeds the token's `max_amount`
+
+**Setup:** Order and charge both set to ₹2,000 (200000 paise), against a token capped at ₹767
+(76700 paise).
+
+**Raw response — HTTP 400:**
+```json
+{"error":{"code":"BAD_REQUEST_ERROR","description":"Payment amount exceeds the maximum amount allowed.","source":"NA","step":"NA","reason":"NA","metadata":{},"field":"max_amount"}}
+```
+
+**Conclusion:** Razorpay enforces `max_amount` itself, at the gateway, before any charge is
+attempted — a clean, structured `400` with `field: "max_amount"`. The application does not need to
+separately guard against this at the request layer, but per Chapter 1 of the domain specification,
+it still needs its own **pre-check** so the customer sees a clear "authorization needs to be
+increased" message rather than a raw gateway error surfacing to them.
+
+### Scenario B — Invalid / nonexistent token id
+
+**Raw response — HTTP 400:**
+```json
+{"error":{"code":"BAD_REQUEST_ERROR","description":"DOES_NOT_EXIST_123456 is not a valid id","source":"internal","step":"payment_initiation","reason":"input_validation_failed","metadata":{}}}
+```
+
+**Conclusion:** clean validation error, easily distinguishable from a real payment decline —
+confirms this failure class can be told apart from a genuine charge failure at the response level.
+
+### Scenario C — Token belongs to a different customer than the one specified in the request
+
+**Setup:** real token, real order, but `customer_id` in the charge request set to a different,
+also-real customer than the token's actual owner.
+
+**Raw response — HTTP 400:**
+```json
+{"error":{"code":"BAD_REQUEST_ERROR","description":"No db records found.","source":"business","step":"NA","reason":"NA","metadata":{}}}
+```
+
+**Conclusion:** Razorpay validates the token↔customer pairing server-side and rejects a mismatch —
+confirms a customer's token can never be charged under a different customer's identity, even by a
+malformed or buggy request on our side.
+
+### Scenario D — Missing `token` field entirely (malformed request)
+
+**Raw response — HTTP 500:**
+```json
+{"error":{"code":"SERVER_ERROR","description":"We are facing some trouble completing your request at the moment. Please try again shortly.","source":"NA","step":"NA","reason":"NA","metadata":{}}}
+```
+
+**Conclusion — a real, actionable finding:** omitting `token` entirely does not produce a clean
+`400` validation error the way scenarios A–C did; it produces a generic `500`. **Implementation
+must treat a `500` from this endpoint as "our own request was malformed," not as "Razorpay is
+down,"** and must never construct a charge request without first confirming a token value is
+present — this should be caught by our own pre-flight validation well before the request is ever
+sent, not relied upon to fail cleanly at Razorpay's end.
+
+### Scenario E — Re-charging an already-attempted Order (same `order_id`, second charge request)
+
+**Setup:** a fresh order (`payment_capture` omitted, matching what an unmodified implementation
+might do), charged once, then charged again against the identical `order_id`.
+
+**Raw responses:** both calls returned **HTTP 200**, each with a **distinct**
+`razorpay_payment_id` (`pay_TFkVjDvREGRyEg` and `pay_TFkVkeU9SjS07b`).
+
+**Order state after both calls** (`orders.fetch`):
+```json
+{ "status": "attempted", "amount_paid": 0, "amount_due": 10000, "attempts": 2 }
+```
+
+**Conclusion — the single most important finding in this test:** **Razorpay's API does not, by
+itself, prevent a second recurring charge attempt against an already-attempted Order.** It happily
+accepts a second request and mints a second, independent Payment record. This directly confirms why
+Law 11 (Chapter 10/20 of the domain specification — "a subscription can never have more than one
+collectible invoice at a time") and Invariant 7 (idempotent webhook handling) must be enforced
+entirely on our own side — Razorpay's gateway is not a safety net for this, and a naive retry
+implementation that doesn't check "have I already attempted this Invoice" before firing a charge
+would genuinely be able to create two live payment attempts against the same commercial intent.
+
+---
+
+## Test 5 — Idempotency (the same recurring charge fired twice)
+
+**Method:** two variants against a *fresh* order each, this time with `payment_capture: 1` set
+explicitly on the order (to rule out the omitted-`payment_capture` gap flagged earlier in this
+document as a factor) — **(A)** sequential: charge, wait, charge again; **(B)** concurrent: both
+requests fired via `Promise.all`, landing at effectively the same instant.
+
+### Part A — Sequential duplicate
+
+**First charge:** HTTP 200, `pay_TFkZ9zu51RsPBV`.
+**Second charge, same order, ~5s later:** HTTP 200, `pay_TFkZHmkIz70a01` — a **second, distinct**
+payment ID, not a rejection and not the same ID returned again.
+**Order state after both:** `{ status: "attempted", amount_paid: 0, amount_due: 10000, attempts: 2 }`
+
+### Part B — Concurrent duplicate
+
+**Both requests fired simultaneously via `Promise.all`:** both returned HTTP 200, again with two
+distinct payment IDs (`pay_TFkZJpqNgIGrnm`, `pay_TFkZJqgLGfjgtV`).
+**Order state after:** `{ status: "attempted", amount_paid: 0, amount_due: 10000, attempts: 2 }`
+
+### Follow-up — the capture-timing wrinkle, resolved
+
+**A dedicated follow-up test polled a fresh charge's payment status directly at +10s, +30s, +60s,
++90s, and +120s elapsed** (no ngrok/webhook listener was available in this environment to redo the
+original live-webhook approach, so this tests the same underlying question — does the payment ever
+actually capture — by observing `payments.fetch` directly over a much longer window instead).
+
+**Result: `status: "created"`, `captured: false` at every single checkpoint, all the way out to two
+full minutes.** This rules out short-delay async settlement as the explanation — whatever is
+happening, it isn't "still processing." **Confirmed, reproducible finding:** a raw-HTTPS
+`/v1/payments/create/recurring` charge against this particular long-lived test token
+(`token_TBnT7mU4PdTbV2`, originally minted in this test account many charges ago across the earlier
+Test 1/2/3 sessions) does not auto-capture within at least two minutes, in contrast to the original
+Test 1/3 session where a comparable raw-HTTPS recurring charge *did* capture, confirmed live via
+webhook. The most likely explanation, given everything else observed in this test-mode account
+across this whole validation effort, is a test-mode-specific anomaly tied to this specific,
+extensively-reused token or account state — not a general property of the Charge-at-Will recurring
+API itself, since the original Test 1/3 result (a clean, fast capture with the identical API call
+shape) remains the one genuinely fresh, from-scratch positive result in this whole document.
+**Flagged as a real, open observation for whoever implements the Renewal/Retry engine: verify
+capture behavior against a freshly-minted token in a clean test, not an old, heavily-reused one,
+before assuming immediate capture is guaranteed** — this does not block implementation, since the
+production design already treats webhook confirmation (not the synchronous API response) as the
+actual signal that a payment succeeded, exactly as Invariant 2 (`CAW_BILLING_DESIGN.md` §5) already
+requires.
+
+**Conclusion — confirmed, regardless of the capture-timing wrinkle above:** firing the same
+recurring-charge intent twice, whether sequentially or truly concurrently, **never produces a
+rejection, a dedup, or a reused payment ID from Razorpay itself.** Every single attempt in both
+Test 4 Scenario E and this test produced its own new Payment record. **This is the concrete,
+API-level proof behind the domain specification's Law 7 ("billing is idempotent") and Law 11 ("one
+collectible invoice at a time") — these guarantees exist entirely because the application enforces
+them, not because the payment gateway does.** Any implementation of the Renewal/Retry/Commercial
+Transaction commit path must check "has this specific Invoice already been successfully charged"
+*before* issuing a `/payments/create/recurring` call, every time, with no exception — Razorpay will
+not catch a missed check.
+
+---
+
 ## Open items carried into next steps
 
-- Complete a from-scratch Test 1 run (needs Browser tool for checkout authorization).
-- Stand up a throwaway webhook listener (separate from the production `/api/subscription/webhook`
-  route) to capture raw webhook payloads and arrival timestamps for Tests 2, 3, 5, 6.
-- Test 4 (failure injection: max_amount exceeded, invalid/expired/cancelled token) can run purely
-  server-side once a valid token exists to test against — either the pre-existing
-  `token_TBnT7mU4PdTbV2` or a freshly created one.
+- Complete a from-scratch Test 1 run (needs Browser tool for checkout authorization). *(Superseded —
+  the Registration Link method was subsequently proven end-to-end live, see "RESOLVED" section
+  above.)*
+- ~~The Test 5 capture-timing wrinkle~~ — **resolved** (see the follow-up above): reproducible out to
+  a full two-minute window against this specific, heavily-reused test token; not a short-delay
+  artifact. Flagged as a "verify against a fresh token" note for implementation, not a blocker.
+- **Tests 4 and 5 are both complete.** All findings above are backed by real, live API evidence
+  against this account's test-mode environment, gathered using the same throwaway-script discipline
+  as every other test in this document.

@@ -238,6 +238,76 @@ function mockReqRes(organizationId) {
     assert.equal(body.effectiveRecurringTotal, null, 'must be null — a cancelled subscription has no future recurring amount to preview');
   });
 
+  await test('effectiveRecurringTotal: coupon covers current plan (Business) but NOT the scheduled target (Growth) — discount must disappear', async (registry) => {
+    // Scheduled-change preview coupon-scope fix (found while tracing C1):
+    // getScheduledChanges() used to reuse appliedCoupon.discountAmount as a
+    // flat, unconditional modifier — never checking whether the coupon's
+    // rules actually cover the TARGET plan. This is the exact scenario that
+    // exposed it: a coupon scoped to Starter/Business but not Growth, with a
+    // scheduled downgrade FROM Business INTO Growth.
+    const org = await Organization.create({ name: 'SC Coupon Scope Fixture 1', code: 'sc-coupon1-' + Date.now() });
+    registry.Organization.push(org._id);
+    const sub = await Subscription.create({
+      organization: org._id, planName: 'business', appStatus: 'active', status: 'active',
+      billingCycle: 'monthly', pricePerUser: 650, userCount: 1, totalAmount: 637,
+      isPaymentConfirmed: true, paymentStatus: 'payment_completed', activeAddons: [],
+      appliedCoupon: {
+        code: 'SC-SCOPE-1', name: 'Business/Starter-only coupon', duration: { type: 'until_cancelled' },
+        discountAmount: 13, baseSubtotal: 650, recurringSubtotal: 637,
+        fullRulesSnapshot: [
+          { productType: 'plan', productKey: 'starter', discountType: 'percentage', discountValue: 2 },
+          { productType: 'plan', productKey: 'business', discountType: 'percentage', discountValue: 2 },
+          // Deliberately no rule for 'growth'.
+        ],
+      },
+    });
+    registry.Subscription.push(sub._id);
+    const sc = await ScheduledChange.create({
+      organization: org._id, subscription: sub._id, type: 'PLAN_CHANGE', status: 'PENDING',
+      effectiveAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      payload: { planId: 'growth', pricePerUser: 450, billingCycle: 'monthly' },
+    });
+    registry.ScheduledChange.push(sc._id);
+
+    const { req, res, get } = mockReqRes(org._id);
+    await getScheduledChanges(req, res);
+    const body = get();
+
+    assert.equal(body.effectiveRecurringTotal, 450, `The coupon has no rule for growth — future total must be the undiscounted ₹450, got ${body.effectiveRecurringTotal} (this is the exact bug: a flat frozen ₹13 was being reused regardless of target plan)`);
+  });
+
+  await test('effectiveRecurringTotal: coupon covers BOTH current plan (Business) and scheduled target (Growth), at different rates — must use the TARGET plan\'s own rate', async (registry) => {
+    const org = await Organization.create({ name: 'SC Coupon Scope Fixture 2', code: 'sc-coupon2-' + Date.now() });
+    registry.Organization.push(org._id);
+    const sub = await Subscription.create({
+      organization: org._id, planName: 'business', appStatus: 'active', status: 'active',
+      billingCycle: 'monthly', pricePerUser: 650, userCount: 1, totalAmount: 637,
+      isPaymentConfirmed: true, paymentStatus: 'payment_completed', activeAddons: [],
+      appliedCoupon: {
+        code: 'SC-SCOPE-2', name: 'Business+Growth coupon, different rates', duration: { type: 'until_cancelled' },
+        discountAmount: 13, baseSubtotal: 650, recurringSubtotal: 637,
+        fullRulesSnapshot: [
+          { productType: 'plan', productKey: 'business', discountType: 'percentage', discountValue: 2 },
+          { productType: 'plan', productKey: 'growth', discountType: 'percentage', discountValue: 5 },
+        ],
+      },
+    });
+    registry.Subscription.push(sub._id);
+    const sc = await ScheduledChange.create({
+      organization: org._id, subscription: sub._id, type: 'PLAN_CHANGE', status: 'PENDING',
+      effectiveAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      payload: { planId: 'growth', pricePerUser: 450, billingCycle: 'monthly' },
+    });
+    registry.ScheduledChange.push(sc._id);
+
+    const { req, res, get } = mockReqRes(org._id);
+    await getScheduledChanges(req, res);
+    const body = get();
+
+    // 5% of 450 = 22.5 -> rounds to 23 per priceLineItems' Math.round.
+    assert.equal(body.effectiveRecurringTotal, 450 - 23, `Growth's own 5% rule must apply (₹23 off), not the frozen business-plan ₹13, got total ${body.effectiveRecurringTotal}`);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   await mongoose.disconnect();
   process.exit(failed > 0 ? 1 : 0);

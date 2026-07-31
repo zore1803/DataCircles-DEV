@@ -582,6 +582,139 @@ transition) and `runFirstPaymentSettlement` (existing idempotent function). Zero
 The timeout-based sweep job (for the case where `payment.captured` truly never arrives at all) remains
 the one open follow-up, not yet built.
 
+**✅ Phase 4 (bounded scope): `calculateInvoice()` built + unit-tested, zero callers changed.** New file
+`utils/invoiceEngine.js` — a thin, pure adapter over the existing `buildPricingSnapshot` (reused, not
+reimplemented), reshaped into the `InvoiceBreakdown` shape from §4. 11 dependency-free unit tests in
+`utils/invoiceEngine.test.js` (no test framework existed in this repo; adding one was out of scope for
+this phase) — all passing, covering plan-only pricing, non-seat add-ons, seat add-ons broken out
+separately (not double-counted), single and multiple modifiers applied in order, `changeset` previews
+that don't mutate the input, and error cases. **Nothing else in the codebase was touched** — confirmed
+via `git status`: only the two new files. `createSubscription`, the webhook handlers, and every existing
+pricing call site keep using `buildPricingSnapshot` directly until a later phase migrates them.
+
+**Correction — an unused function isn't "done" (per review):** the above left `calculateInvoice()`
+built but called nowhere, meaning nothing in the product had actually changed. Fixed: **`createSubscription`
+now calls `calculateInvoice()` instead of `buildPricingSnapshot()` directly** — the one production
+caller, exactly as scoped (no other caller touched). Verified numerically equivalent to the old path on a
+representative case (plan + add-on + fixed coupon): `old.totalAmount/grandTotal` = `270/319` =
+`new.taxable/total` = `270/319`, exact match — this is a genuine swap, not a pricing behavior change.
+`git status` confirms scope: one modified controller file (the import + one call site), the engine
+itself, and its tests — no other file touched.
+
+**✅ Phase 5 (bounded scope): the live upgrade path (`pendingPlanChange`), not the dead one.** Before
+touching anything, found the codebase has **two overlapping legacy upgrade mechanisms**
+(`pendingPlanChange` — referral reservation, addon compatibility split, GST inline; `pendingUpgrade` —
+older, simpler, no referral handling). Confirmed with the product owner that `pendingPlanChange` is the
+live one; `pendingUpgrade` is dead code, left untouched (Phase 8's problem).
+
+Two bounded edits inside `pendingPlanChange`'s confirmation branch only:
+1. **Pricing swapped to `calculateInvoice()`** (same equivalence pattern as Phase 4 — verified
+   numerically identical: `old.totalAmount` = `new.taxable` = `580` on a representative
+   plan+carried-addon+new-seat-addon case).
+2. **Razorpay Plans sync removed for CAW subscriptions only.** The existing code already treated
+   `razorpay.subscriptions.update()` as best-effort — *"works on card, fails on UPI"* — silently falling
+   back to a `needsRazorpaySync` flag never actually reconciled anywhere. Under CAW there is no
+   Razorpay-side "recurring plan" to sync at all: the persisted `pricePerUser`/`activeAddons`/
+   `totalAmount` fields already set on the subscription **are** the source of truth the renewal engine
+   (Phase 6) will read via `calculateInvoice()` every cycle. So for a subscription with `mandateTokenId`
+   set, the sync block is skipped entirely (nothing to call, nothing that can fail, no reconciliation
+   ever needed). **Legacy (non-CAW) subscriptions keep the exact previous try/catch behavior,
+   completely untouched** — same file, same function, but only the CAW branch changed.
+
+All other business rules in this branch — referral reservation/consumption, compatible/incompatible
+add-on carry-forward, incompatible-addon scheduled removal, pending-invite finalization, payment
+recording — **unchanged, not touched.** `git status` confirms: only this one controller file modified
+beyond what Phase 4 already touched.
+
+**Correction (per review): the above was "Phase 5A" at most, not "Phase 5 done."** Traced all ten
+lifecycle scenarios against the actual code before claiming anything further:
+
+| Scenario | Status |
+|---|---|
+| Immediate plan upgrade | 🟡 Partial — pricing + Plans-skip done, but the actual charge is still a manual Order + Checkout widget (`paymentDetails` returned to frontend, line ~1176), **never calls `/payments/create/recurring` against the stored mandate**. Not a silent CAW charge. |
+| Scheduled downgrade | ❌ Not implemented — `pendingUpdate` is written, nothing reads it (no renewal engine yet) |
+| Add add-on | 🟡 Partial — same manual-checkout pattern as upgrade, not a mandate charge |
+| Remove add-on | 🟡 Partial / latent bug — `applyScheduledAddonRemovals` (`addonManagement.js:299-330`) unconditionally calls `razorpay.subscriptions.update()`, no CAW branch at all; currently unreachable for CAW subs only because no renewal engine invokes it yet |
+| Add-on carry-forward at renewal | ❌ Not implemented (needs renewal engine) |
+| Referral earned before first payment | ✅ Fully supported, proven live (Phase 3B) |
+| Referral earned during active subscription | ✅ Unaffected — independent of billing engine |
+| Coupon on upgrade | ❌ Not supported at all — pre-existing gap, `couponCode` is destructured but never used in the upgrade branch, CAW or legacy |
+| Multiple scheduled changes before renewal | ❌ Not implemented — no scheduling/precedence engine exists |
+| Renewal after a pending downgrade | ❌ Not implemented — no renewal engine |
+
+**Superseded — see §4a below.** The "Phase 5B/5C/5D/5E" breakdown originally written here treated
+upgrade/downgrade/add-on/credits as separate features to build one at a time. That was itself still too
+fragmented (per review): a cron that reads `pendingUpdate` is *executing* a business rule, not *defining*
+one, so the renewal engine cannot be "Phase 6, built after upgrades" — the rules it executes have to be
+settled first, and those same rules are what upgrades/add-ons/retries also need. Reframed below.
+
+## 4a. Billing Engine Convergence — the reframe that replaces numbered Phases 5-7
+
+**Stop organizing this as Upgrade / Downgrade / Add-on / Renewal / Retry, five separate features.**
+They are all the same shape — a **Subscription Change** — differing only in three properties:
+
+| Change | Effective | Payment impact | Renewal impact |
+|---|---|---|---|
+| Upgrade | now | charge now (prorated) | higher going forward |
+| Downgrade | next renewal | none now | lower from next cycle |
+| Add add-on | now | charge now (prorated) | includes add-on going forward |
+| Remove add-on | next renewal | none now (no refund) | excludes add-on from next cycle |
+| Seat increase | now | charge now (prorated) | higher going forward |
+| Seat decrease | next renewal | none now | lower from next cycle |
+
+Every one of these is fully described by: **effective date** (now | next renewal), **payment impact**
+(charge now | none), **invoice impact** (what this cycle's/next cycle's invoice contains), **renewal
+impact** (what changes for every subsequent cycle). A "Subscription Change" record with these four
+properties is the one concept the rest of this section builds on — not three separate mechanisms.
+
+**Credits (referral + coupon) are the same kind of thing, one level down:** both are **invoice credits**,
+differing only in *which invoice* they apply to:
+```
+credit earned → apply to the next unpaid invoice
+              → if none exists yet, hold as a balance until one does
+```
+Referral-earned-before-first-payment and referral-earned-during-an-active-subscription are not two
+features — they're the same rule applied at two different moments. Same for coupon-on-upgrade: it's just
+"does an invoice-credit apply to *this* invoice," not a separate coupon-upgrade code path.
+
+**The one pipeline every entry point funnels into** (renewal cron, upgrade endpoint, add-on endpoint,
+retry engine — all become thin entry points into this, not independent implementations):
+```
+calculateInvoice()
+  ↓
+collect scheduled changes effective as of now (pendingUpdate, pendingAddonRemovals, etc.)
+  ↓
+apply lifecycle rules (which changes are effective now vs. still scheduled)
+  ↓
+apply credits (referral/coupon — to this invoice if unpaid, else hold)
+  ↓
+apply discounts
+  ↓
+produce final invoice
+  ↓
+charge (mandate, if payment impact = "now"; skipped if none)
+  ↓
+record payment
+  ↓
+advance subscription (persist the now-effective changes; re-schedule what's still pending)
+```
+
+**What this means concretely for the work ahead:** before writing the renewal cron, the business rules
+this pipeline executes must be settled — what a downgrade means, what add-on removal means, what a
+referral/coupon credit means, what a pending change means — because the cron, the upgrade endpoint, and
+the add-on endpoint all call the *same* pipeline, just triggering it from different entry points. The
+renewal engine does not come "after" upgrades in a phase sequence; it's the same engine, entered from a
+cron instead of an HTTP request. **The remaining work is: settle the Subscription Change model and the
+credit-application rule, then build the one pipeline, then wire each entry point (renewal, upgrade,
+add-on, retry) to call it** — not four separate features in phase order.
+
+**Open questions this reframe surfaces (need answers before the pipeline can be built, not after):**
+1. Does an in-progress `pendingUpdate` (downgrade) get cancelled by a new upgrade, or do they queue?
+2. If multiple changes are scheduled (add-on removal + downgrade), do they all apply atomically at the
+   same renewal, in what order?
+3. Exact credit-application rule: "next unpaid invoice" — is that the invoice being generated right now
+   (mid-pipeline) or a future one if this one's already been charged?
+
 ## 15. How this document (and the schema) evolves
 
 Architecture is frozen at the level of **concepts and invariants** (§1–§8, §14). **Business policy (§9)

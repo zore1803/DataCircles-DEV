@@ -30,6 +30,7 @@ const Referral = require('../models/Referral');
 const Reward = require('../models/Reward');
 const RewardUsage = require('../models/RewardUsage');
 const Coupon = require('../models/Coupon');
+const BillingInvoice = require('../models/BillingInvoice');
 
 const razorpayClient = require('../config/razorpay');
 razorpayClient.subscriptions = razorpayClient.subscriptions || {};
@@ -51,7 +52,7 @@ if (process.env.CONFIRM_TEST_DB !== 'yes') {
 let passed = 0;
 let failed = 0;
 async function test(name, fn) {
-  const registry = { Organization: [], User: [], Subscription: [], ReferralCode: [], ReferralProgram: [], Referral: [], Reward: [], RewardUsage: [], Coupon: [] };
+  const registry = { Organization: [], User: [], Subscription: [], ReferralCode: [], ReferralProgram: [], Referral: [], Reward: [], RewardUsage: [], Coupon: [], BillingInvoice: [] };
   try {
     await fn(registry);
     passed++;
@@ -66,6 +67,7 @@ async function test(name, fn) {
 }
 
 async function cleanup(registry) {
+  await BillingInvoice.deleteMany({ _id: { $in: registry.BillingInvoice } });
   await Coupon.deleteMany({ _id: { $in: registry.Coupon } });
   await RewardUsage.deleteMany({ _id: { $in: registry.RewardUsage } });
   await Reward.deleteMany({ _id: { $in: registry.Reward } });
@@ -168,7 +170,15 @@ async function main() {
     assert.ok(statusCode < 400, `Expected trial conversion to succeed, got ${statusCode}: ${JSON.stringify(jsonBody)}`);
 
     const subscription = await Subscription.findOne({ organization: refereeOrg._id });
-    assert.equal(subscription.totalAmount, plan.monthlyPrice * 0.8, '20% referral discount must reflect at trial-conversion pricing, not just createSubscription');
+
+    // Bug 1 fix (recurring price corruption, found via live QA): the
+    // referee's discount is one-time (first invoice only) — the FIRST
+    // INVOICE must reflect it, but the stored recurring baseline must not.
+    const signupInvoice = await BillingInvoice.findOne({ subscription: subscription._id, reason: 'NEW_SUBSCRIPTION' });
+    assert.ok(signupInvoice, 'Expected the conversion BillingInvoice to have been persisted');
+    registry.BillingInvoice.push(signupInvoice._id);
+    assert.equal(signupInvoice.taxable, plan.monthlyPrice * 0.8, '20% referral discount must reflect at trial-conversion pricing, not just createSubscription');
+    assert.equal(subscription.totalAmount, plan.monthlyPrice, 'the stored recurring baseline must NOT carry the one-time referral discount forward');
   });
 
   await test('referrer: an already-earned Reward is reserved and applied when THIS org converts trial->paid', async (registry) => {
@@ -191,9 +201,18 @@ async function main() {
     assert.ok(statusCode < 400, `Expected trial conversion to succeed, got ${statusCode}: ${JSON.stringify(jsonBody)}`);
 
     const subscription = await Subscription.findOne({ organization: referrerOrg._id });
+
+    // Bug 1 fix (recurring price corruption, found via live QA): an earned
+    // referral Reward is a one-time benefit applied to the first invoice
+    // only — the FIRST INVOICE must reflect it, but the stored recurring
+    // baseline must not carry it forward.
     // calculateInvoice() rounds the DISCOUNT itself (Math.round(subtotal * pct/100)),
     // then subtracts — not the same as rounding the final discounted total.
-    assert.equal(subscription.totalAmount, plan.monthlyPrice - Math.round(plan.monthlyPrice * 0.15), "referrer's earned 15% Reward must apply at their own trial-conversion pricing");
+    const conversionInvoice = await BillingInvoice.findOne({ subscription: subscription._id, reason: 'NEW_SUBSCRIPTION' });
+    assert.ok(conversionInvoice, 'Expected the conversion BillingInvoice to have been persisted');
+    registry.BillingInvoice.push(conversionInvoice._id);
+    assert.equal(conversionInvoice.taxable, plan.monthlyPrice - Math.round(plan.monthlyPrice * 0.15), "referrer's earned 15% Reward must apply at their own trial-conversion pricing");
+    assert.equal(subscription.totalAmount, plan.monthlyPrice, 'the stored recurring baseline must NOT carry the one-time earned-Reward discount forward');
     assert.ok(subscription.pendingReferralRewardUsageId, 'a RewardUsage reservation must be recorded pending settlement');
 
     const usage = await RewardUsage.findById(subscription.pendingReferralRewardUsageId);

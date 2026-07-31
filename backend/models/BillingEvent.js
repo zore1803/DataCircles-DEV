@@ -41,6 +41,11 @@ const billingEventSchema = new mongoose.Schema({
     required: true,
     enum: [
       'SUBSCRIPTION_CREATED',
+      // The real activation moment — see utils/billingEvents.js's
+      // buildEventSummary case for why this is separate from
+      // SUBSCRIPTION_CREATED (found via live QA: nothing previously marked
+      // when a CAW mandate actually got confirmed, only when it was requested).
+      'SUBSCRIPTION_ACTIVATED',
       'TRIAL_STARTED',
       'TRIAL_ENDED',
       'PLAN_UPGRADE',
@@ -70,6 +75,12 @@ const billingEventSchema = new mongoose.Schema({
       'REFERRAL_REWARD_REVOKED',
       'REFERRAL_REWARD_EXPIRED',
       'REFERRAL_DISABLED',
+      // BILLING_UX_SPEC.md §5 — the REFEREE-side counterpart to
+      // REFERRAL_REWARD_EARNED. Never emitted to the referrer (who gets a
+      // Reward object + the *_REWARD_* events above instead); this is the
+      // referee's own timeline entry for their one-time immediate discount,
+      // per the one-benefit-per-participant design (§3).
+      'REFERRAL_DISCOUNT_APPLIED',
     ],
     index: true,
   },

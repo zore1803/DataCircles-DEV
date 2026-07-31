@@ -37,11 +37,32 @@ const rewardUsageSchema = new mongoose.Schema({
   paymentId: { type: String },
   subscription: { type: mongoose.Schema.Types.ObjectId, ref: 'Subscription' },
 
+  // BILLING_UX_SPEC.md §4 — "Saved ₹70," the actual rupee amount this
+  // specific usage discounted. Reservation happens BEFORE pricing at most
+  // call sites (upgrade/add-on's reserve-first pattern), so this is filled
+  // in via recordRewardUsageAmount() once the real amount is known — never
+  // recomputed or guessed at display time. Optional so historical rows
+  // predating this field simply render without the figure, never a crash.
+  amount: { type: Number },
+
+  // BILLING_UX_SPEC.md §4 — "Used on Business Upgrade · 27 Jul 2026," not a
+  // bare "Consumed." Set at reservation time by whichever call site is
+  // reserving (upgrade/add-on/renewal/trial-conversion) — optional so
+  // historical rows predating this field simply render without the detail,
+  // never a crash.
+  context: { type: String, enum: ['UPGRADE', 'ADDON_PURCHASE', 'RENEWAL', 'TRIAL_CONVERSION', 'SIGNUP'] },
+
   status: { type: String, enum: ['reserved', 'consumed', 'released'], default: 'reserved', index: true },
 
   reservedAt: { type: Date, default: Date.now },
   consumedAt: { type: Date },
   releasedAt: { type: Date },
+  // Set only when status transitions to 'released' — why the reservation was
+  // let go, per BILLING_DOMAIN_SPECIFICATION.md Chapter 13.
+  releaseReason: {
+    type: String,
+    enum: ['TIMEOUT', 'PAYMENT_FAILED', 'ADMIN_RELEASE', 'REPLACED_BY_NEW_INVOICE'],
+  },
   expiresAt: { type: Date, required: true },
 }, { timestamps: true });
 

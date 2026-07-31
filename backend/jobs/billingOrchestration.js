@@ -13,18 +13,16 @@
 // isolating one subscription's failure from the rest of the batch.
 
 const Subscription = require('../models/Subscription');
-const ScheduledChange = require('../models/ScheduledChange');
 const { renewSubscription } = require('../utils/renewalEngine');
 const { retryRenewal } = require('../utils/retryEngine');
 
 /**
- * Renewal orchestration. Finds CAW subscriptions due today, with zero
- * PENDING ScheduledChange records (renewSubscription()'s own documented
- * precondition — ScheduledChange application is not built yet, so a due
- * subscription with a real pending change is excluded from this pass rather
- * than sent into an engine that can't handle it; this is selection, not a
- * ScheduledChange read-side migration). Does not retry a failure — a PAST_DUE
- * outcome is simply recorded, per the hard constraint (Retry Engine's job).
+ * Renewal orchestration. Finds CAW subscriptions due today.
+ * renewSubscription() now applies any due ScheduledChange records itself
+ * (Phase 4E) — a subscription with a PENDING change is no longer excluded;
+ * it's the normal case this orchestration layer passes through unchanged.
+ * Does not retry a failure — a PAST_DUE outcome is simply recorded, per the
+ * hard constraint (Retry Engine's job).
  *
  * @param {Object} params
  * @param {Function} params.chargeMandateFn - forwarded unchanged to
@@ -43,18 +41,6 @@ async function runRenewalJob({ chargeMandateFn, now = new Date() } = {}) {
   const results = [];
   for (const subscription of dueSubscriptions) {
     try {
-      const pendingChange = await ScheduledChange.findOne({
-        subscription: subscription._id,
-        status: 'PENDING',
-      });
-      if (pendingChange) {
-        // Excluded from this pass, not an error — renewSubscription()'s own
-        // documented precondition is zero PENDING ScheduledChange records.
-        // Applying one is a later slice's work (ScheduledChange read-side
-        // migration), not this orchestration layer's job.
-        results.push({ subscriptionId: subscription._id, outcome: 'SKIPPED_PENDING_SCHEDULED_CHANGE' });
-        continue;
-      }
       const outcome = await renewSubscription(subscription, { chargeMandateFn });
       results.push({ subscriptionId: subscription._id, outcome: outcome.outcome, detail: outcome });
     } catch (err) {

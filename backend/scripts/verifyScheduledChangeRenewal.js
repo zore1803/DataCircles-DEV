@@ -322,6 +322,119 @@ async function main() {
     assert.equal(invoice.total, expected.total, 'resume must not re-price off a different effective subscription');
   });
 
+  // Fixture 6 — Bug 2 (found via live QA): a coupon scoped to the CURRENT
+  // plan but not the scheduled TARGET plan must stop discounting once that
+  // scheduled change executes at renewal. Before the fix, renewSubscription()
+  // reused subscription.appliedCoupon.discountAmount as a flat
+  // 'entire_invoice' modifier regardless of what was actually being renewed —
+  // this fixture drives the REAL renewSubscription() commit (not just
+  // previewRenewal()) to prove the actual charge is correct, not merely the
+  // dashboard preview number.
+  await test('Fixture 6: scheduled downgrade to a plan the coupon does NOT cover — renewal charge excludes the discount', async (registry) => {
+    const organization = new mongoose.Types.ObjectId();
+    const appliedCoupon = {
+      code: 'TEST-SCOPE-BUG2',
+      name: 'Business/Starter-only coupon',
+      duration: { type: 'until_cancelled' },
+      discountAmount: 8, // frozen from whenever this was first applied — must NOT be reused directly
+      baseSubtotal: 650,
+      recurringSubtotal: 642,
+      fullRulesSnapshot: [
+        { productType: 'plan', productKey: 'starter', discountType: 'percentage', discountValue: 2 },
+        { productType: 'plan', productKey: 'business', discountType: 'percentage', discountValue: 2 },
+        // Deliberately NO rule for 'growth' — the scheduled downgrade target.
+      ],
+    };
+    const subscription = await trackedCreate(Subscription, 'Subscription', registry, baseSubscriptionFields(organization, {
+      planName: 'business',
+      pricePerUser: 650,
+      totalAmount: 637,
+      userCount: 1,
+      appliedCoupon,
+    }));
+    const change = await trackedCreate(ScheduledChange, 'ScheduledChange', registry, {
+      organization,
+      subscription: subscription._id,
+      type: 'PLAN_CHANGE',
+      status: 'PENDING',
+      effectiveAt: new Date(Date.now() - 60 * 1000),
+      payload: { planId: 'growth', pricePerUser: 450 },
+    });
+
+    const expectedNoDiscount = calculateInvoice({
+      subscription: { planName: 'growth', billingCycle: 'monthly', pricePerUser: 450, activeAddons: [] },
+      resolvedModifiers: [],
+    });
+
+    const result = await renewSubscription(subscription, { chargeMandateFn: okCharge });
+    assert.equal(result.outcome, 'RENEWED');
+    const invoice = await BillingInvoice.findById(result.invoice);
+    registry.BillingInvoice.push(invoice._id);
+    registry.BillingCycle.push(result.billingCycle);
+    const ct = await CommercialTransaction.findOne({ subscription: subscription._id, type: 'RENEWAL' });
+    registry.CommercialTransaction.push(ct._id);
+
+    assert.equal(invoice.discount, 0, `The coupon has no rule for growth — discount must be 0, got ${invoice.discount} (this is the exact bug: a flat frozen ₹8 was being reused regardless of target plan)`);
+    assert.equal(invoice.total, expectedNoDiscount.total, 'Renewal must charge the full, undiscounted growth price — not the old business-plan discounted figure');
+
+    const reloaded = await ScheduledChange.findById(change._id);
+    assert.equal(reloaded.status, 'EXECUTED');
+  });
+
+  // Fixture 7 — same scenario, but the coupon DOES cover the target plan
+  // (at a different rate than the current plan) — confirms the fix is
+  // additive, not an over-correction that always suppresses the discount.
+  await test('Fixture 7: scheduled downgrade to a plan the coupon DOES cover — renewal charge applies the correct (new-plan) discount', async (registry) => {
+    const organization = new mongoose.Types.ObjectId();
+    const appliedCoupon = {
+      code: 'TEST-SCOPE-BUG2-COVERED',
+      name: 'Business+Growth coupon, different rates',
+      duration: { type: 'until_cancelled' },
+      discountAmount: 13, // frozen business-plan discount — must NOT be reused directly for growth
+      baseSubtotal: 650,
+      recurringSubtotal: 637,
+      fullRulesSnapshot: [
+        { productType: 'plan', productKey: 'business', discountType: 'percentage', discountValue: 2 },
+        { productType: 'plan', productKey: 'growth', discountType: 'percentage', discountValue: 5 },
+      ],
+    };
+    const subscription = await trackedCreate(Subscription, 'Subscription', registry, baseSubscriptionFields(organization, {
+      planName: 'business',
+      pricePerUser: 650,
+      totalAmount: 637,
+      userCount: 1,
+      appliedCoupon,
+    }));
+    const change = await trackedCreate(ScheduledChange, 'ScheduledChange', registry, {
+      organization,
+      subscription: subscription._id,
+      type: 'PLAN_CHANGE',
+      status: 'PENDING',
+      effectiveAt: new Date(Date.now() - 60 * 1000),
+      payload: { planId: 'growth', pricePerUser: 450 },
+    });
+
+    // 5% of 450 = 22.5 -> rounds to 23 per priceLineItems' Math.round.
+    const expectedWithDiscount = calculateInvoice({
+      subscription: { planName: 'growth', billingCycle: 'monthly', pricePerUser: 450, activeAddons: [] },
+      resolvedModifiers: [{ type: 'coupon', value: { kind: 'fixed', amount: 23 }, appliesTo: 'entire_invoice' }],
+    });
+
+    const result = await renewSubscription(subscription, { chargeMandateFn: okCharge });
+    assert.equal(result.outcome, 'RENEWED');
+    const invoice = await BillingInvoice.findById(result.invoice);
+    registry.BillingInvoice.push(invoice._id);
+    registry.BillingCycle.push(result.billingCycle);
+    const ct = await CommercialTransaction.findOne({ subscription: subscription._id, type: 'RENEWAL' });
+    registry.CommercialTransaction.push(ct._id);
+
+    assert.equal(invoice.discount, 23, `Growth's own 5% rule must apply (₹23), not the frozen business-plan ₹13, got ${invoice.discount}`);
+    assert.equal(invoice.total, expectedWithDiscount.total);
+
+    const reloaded = await ScheduledChange.findById(change._id);
+    assert.equal(reloaded.status, 'EXECUTED');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   await mongoose.disconnect();
   process.exit(failed > 0 ? 1 : 0);

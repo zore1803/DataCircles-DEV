@@ -1,14 +1,31 @@
 // components/subscription/PaymentStatusAlert.jsx
 import React from 'react';
 import { AlertCircle, CreditCard, XCircle, Clock } from 'lucide-react';
-import { hasValidPendingUpdate } from '../../utils/subscriptionHelpers';
+import { hasValidPendingUpdate, deriveSubscriptionUIState, SUBSCRIPTION_UI_STATES } from '../../utils/subscriptionHelpers';
 
-const PaymentStatusAlert = ({ subscription, onRetryPayment, processing }) => {
+// B2 fix (found via live QA): this is the recovery banner for a PERSISTED
+// pending mandate with no active checkout journey happening right now
+// (the full-screen CheckoutJourneyScreen only ever renders for an actual
+// in-session journey — see SubscriptionPlans.jsx's own comment on that
+// condition). mandateInitiatedAt is used ONLY to soften the copy for a
+// genuinely recent attempt — it never gates whether this banner shows, and
+// it never implies anything is "currently happening" the way the old
+// full-screen fallback incorrectly did.
+const RECENT_MANDATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+
+const PaymentStatusAlert = ({ subscription, onRetryPayment, onResumePayment, onChangePlan, processing }) => {
   // Don't show if no subscription exists
   if (!subscription) return null;
 
-  // Hide if trial is active - users don't need to see payment alerts during trial
-  if (subscription.isTrialActive) return null;
+  const uiState = deriveSubscriptionUIState(subscription);
+
+  // Hide during a genuine, not-yet-attempted trial. PENDING_MANDATE (a CAW
+  // conversion attempt already in flight) is intentionally NOT trial here —
+  // that state gets its own "Complete Payment"/mandate-pending message below,
+  // rather than silently hiding behind the trial banner (the two used to be
+  // indistinguishable from raw isTrialActive alone — see
+  // FRONTEND_CONVERGENCE_PLAN.md Journey 1).
+  if (uiState === SUBSCRIPTION_UI_STATES.TRIAL) return null;
 
   // Hide if payment is already confirmed
   if (subscription.isPaymentConfirmed) return null;
@@ -19,6 +36,39 @@ const PaymentStatusAlert = ({ subscription, onRetryPayment, processing }) => {
   if (hasValidPendingUpdate(subscription) || subscription.cancelAtPeriodEnd) return null;
 
   const getAlertContent = () => {
+    if (uiState === SUBSCRIPTION_UI_STATES.PENDING_MANDATE) {
+      // Never the legacy retryPayment endpoint here — that's Order/classic-
+      // Subscriptions-only and not CAW-aware (confirmed by trace: it reads/
+      // writes razorpaySubscriptionId/razorpayPlanId exclusively, both unset
+      // for a real CAW subscription). Resume Payment re-enters the real
+      // Registration Link flow via updateSubscription instead (see
+      // SubscriptionPlans.jsx's handleResumePayment).
+      const initiatedAt = subscription.mandateInitiatedAt ? new Date(subscription.mandateInitiatedAt) : null;
+      const isRecent = initiatedAt && (Date.now() - initiatedAt.getTime()) < RECENT_MANDATE_WINDOW_MS;
+      const planLabel = subscription.planName
+        ? subscription.planName.charAt(0).toUpperCase() + subscription.planName.slice(1)
+        : 'your';
+
+      let trialNote = '';
+      if (subscription.isTrialActive) {
+        trialNote = ' You can keep using your trial while you complete this.';
+      } else if (subscription.trialUsed) {
+        trialNote = ' Your trial has ended — complete payment to activate your subscription.';
+      }
+
+      return {
+        icon: <Clock className="w-5 h-5" />,
+        bgColor: 'bg-blue-50',
+        borderColor: 'border-blue-200',
+        textColor: 'text-blue-800',
+        title: 'Payment Setup Incomplete',
+        message: isRecent
+          ? `Your ${planLabel} subscription hasn't been activated yet — the payment authorization on Razorpay wasn't completed.${trialNote}`
+          : `Your ${planLabel} subscription still hasn't been activated. The payment authorization on Razorpay was never completed.${trialNote}`,
+        showResume: true,
+        showChangePlan: true,
+      };
+    }
     switch (subscription.paymentStatus) {
       case 'pending_payment':
         return {
@@ -111,6 +161,38 @@ const PaymentStatusAlert = ({ subscription, onRetryPayment, processing }) => {
                   </>
                 )}
               </button>
+            </div>
+          )}
+          {(alertContent.showResume || alertContent.showChangePlan) && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {alertContent.showResume && (
+                <button
+                  onClick={onResumePayment}
+                  disabled={processing}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-colors"
+                >
+                  {processing ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Resuming...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      Resume Payment
+                    </>
+                  )}
+                </button>
+              )}
+              {alertContent.showChangePlan && (
+                <button
+                  onClick={onChangePlan}
+                  disabled={processing}
+                  className="bg-white text-blue-700 border border-blue-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Change Plan
+                </button>
+              )}
             </div>
           )}
         </div>

@@ -87,14 +87,15 @@
 // completely untouched — those subscriptions keep renewing via
 // handleSubscriptionCharged/Razorpay's own webhooks, unrelated to this file.
 
-const { calculateInvoice } = require('./invoiceEngine');
+const { calculateInvoice, toPricingBreakdown } = require('./invoiceEngine');
 const BillingInvoice = require('../models/BillingInvoice');
 const BillingCycle = require('../models/BillingCycle');
 const CommercialTransaction = require('../models/CommercialTransaction');
 const ScheduledChange = require('../models/ScheduledChange');
-const { reserveNextAvailableReward, consumeReservation } = require('./referralRewards');
+const { reserveNextAvailableReward, consumeReservation, getNextAvailableReward, recordRewardUsageAmount } = require('./referralRewards');
 const { rewardToModifier } = require('./modifierResolver');
 const { isCouponStillEligibleForRenewal } = require('./couponRenewalEligibility');
+const { buildCouponModifierForLineItems } = require('./discountEngine');
 // Reused, not reimplemented — same helper subscriptionLifecycleJobs.js already
 // imports this way; appends to Subscription.appStatusHistory automatically.
 const { setAppStatus } = require('../controllers/subscriptionController');
@@ -204,19 +205,31 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
       return { outcome: 'CANCELLED', reason: 'SCHEDULED_CANCELLATION', scheduledChange: cancellation._id };
     }
 
-    // R7 — reuse appliedCoupon as a flat fixed-amount modifier, gated on
-    // isCouponStillEligibleForRenewal() (utils/couponRenewalEligibility.js).
-    // Evaluated fresh, right here, every renewal — same pipeline position as
-    // R8's reward check below, per C2's timing rule ("eligibility evaluated
-    // at the exact moment the invoice is generated, no grace window"), not
-    // read from a cached/stale value computed earlier.
+    // R7 — gated on isCouponStillEligibleForRenewal() (duration.type — is
+    // this coupon eligible for a FUTURE commercial event at all), evaluated
+    // fresh every renewal, same pipeline position as R8's reward check below.
+    //
+    // FIX (found via live QA — a downgrade scheduled before a coupon-bearing
+    // subscription's first renewal exposed this): this previously reused
+    // subscription.appliedCoupon.discountAmount — a FLAT amount frozen from
+    // whenever the coupon was first applied — as an 'entire_invoice' modifier,
+    // regardless of what plan/add-ons are actually being renewed. That's
+    // wrong the instant the renewed composition differs from the
+    // application-time composition (a scheduled plan change, a changed
+    // add-on set, even without any scheduled change at all) — the coupon may
+    // not cover the new plan, or may cover it at a different rate. Now built
+    // fresh from fullRulesSnapshot against the actual EFFECTIVE line items
+    // (post-scheduled-change plan + add-ons), the exact same per-item
+    // eligibility helper CP3 already proved correct for upgrade/add-on
+    // commit — never a second, hand-rolled approximation.
     const resolvedModifiers = [];
-    if (subscription.appliedCoupon?.discountAmount && isCouponStillEligibleForRenewal(subscription.appliedCoupon)) {
-      resolvedModifiers.push({
-        type: 'coupon',
-        value: { kind: 'fixed', amount: subscription.appliedCoupon.discountAmount },
-        appliesTo: 'entire_invoice',
-      });
+    if (subscription.appliedCoupon?.fullRulesSnapshot && isCouponStillEligibleForRenewal(subscription.appliedCoupon)) {
+      const effectiveLineItems = [
+        { key: effective.planName, type: 'plan', amount: effective.pricePerUser },
+        ...effective.activeAddons.map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
+      ];
+      const couponModifier = buildCouponModifierForLineItems(subscription.appliedCoupon.fullRulesSnapshot, effectiveLineItems);
+      if (couponModifier) resolvedModifiers.push(couponModifier);
     }
 
     // R8 — referral reward as a renewal-time modifier. Same
@@ -227,6 +240,7 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
     // resumed attempt never re-reserves).
     const rewardReservation = await reserveNextAvailableReward(subscription.organization, {
       subscription: subscription._id,
+      context: 'RENEWAL',
     });
     if (rewardReservation) {
       resolvedModifiers.push(rewardToModifier(rewardReservation.reward));
@@ -237,6 +251,15 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
     // is a fresh full-period charge, same shape as createSubscription's own
     // call).
     const invoice = calculateInvoice({ subscription: effective, resolvedModifiers });
+
+    // BILLING_UX_SPEC.md §4 — record the real amount now that pricing knows
+    // it (reserve-before-pricing, same reasoning as upgrade/add-on).
+    if (rewardReservation) {
+      const referralAmountAtRenewal = (invoice.modifierBreakdown || []).filter((m) => m.type === 'referral').reduce((s, m) => s + m.amount, 0);
+      if (referralAmountAtRenewal > 0) {
+        await recordRewardUsageAmount(rewardReservation.usage._id, referralAmountAtRenewal);
+      }
+    }
 
     newPeriodStart = subscription.currentPeriodEnd;
     newPeriodEnd = computeNextPeriodEnd(subscription);
@@ -275,7 +298,28 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
       // rewardUsageId (R8): stored so a resumed attempt (R13.5) recovers the
       // already-reserved reward instead of reserving a second one — same
       // pattern as orderId/period dates already stored here.
-      target: { billingInvoice: billingInvoice._id, total: invoice.total, newPeriodStart, newPeriodEnd, appliedScheduledChangeIds: appliedIds, rewardUsageId },
+      //
+      // effectiveState (P0 fix, found via live QA): the exact commercial
+      // state calculateInvoice() priced THIS renewal against — planName,
+      // billingCycle, pricePerUser, activeAddons, and the resulting
+      // totalAmount. Stored here (not just used transiently) so Step 6 below
+      // can synchronize the real Subscription document to it after charge
+      // success, on BOTH a fresh renewal and a resumed one (a resumed run
+      // never recomputes `effective`, so without this stored snapshot it
+      // would have nothing to sync from). Closes the exact gap the upgrade
+      // commit bug also had: pricing computed the right answer, but the
+      // canonical Subscription document silently never received it.
+      target: {
+        billingInvoice: billingInvoice._id, total: invoice.total, newPeriodStart, newPeriodEnd,
+        appliedScheduledChangeIds: appliedIds, rewardUsageId,
+        effectiveState: {
+          planName: effective.planName,
+          billingCycle: effective.billingCycle,
+          pricePerUser: effective.pricePerUser,
+          activeAddons: effective.activeAddons,
+          totalAmount: invoice.taxable,
+        },
+      },
       latestInvoice: billingInvoice._id,
     });
 
@@ -292,6 +336,27 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
   // 'COMMITTED' means the charge already succeeded on a prior attempt — do
   // NOT call chargeMandateFn again. This is the entire point of this slice.
   if (commercialTransaction.status !== 'COMMITTED') {
+    // R11 mandate-capacity guard (previously missing — CAW_BILLING_DESIGN.md
+    // §10 documents "a charge never exceeds mandateMaxAmount" as a hard
+    // failure, but no code actually compared invoice.total to it before this
+    // call reached Razorpay). Checked here, before chargeMandateFn, so an
+    // over-cap renewal never becomes a live API call at all — same
+    // clean-failure shape (PAST_DUE, non-terminal transaction) as a charge
+    // Razorpay itself declines, just detected one step earlier.
+    if (
+      typeof subscription.mandateMaxAmount === 'number' &&
+      billingInvoice.total > subscription.mandateMaxAmount
+    ) {
+      setAppStatus(subscription, 'past_due', 'Renewal amount exceeds mandate capacity');
+      await subscription.save();
+      return {
+        outcome: 'PAST_DUE',
+        reason: 'MANDATE_CAPACITY_EXCEEDED',
+        invoice: billingInvoice._id,
+        transaction: commercialTransaction._id,
+      };
+    }
+
     // R11/R12 — charge the mandate. Injected so this slice's tests don't
     // touch real Razorpay; the real charge call is whichever session wires
     // actual Charge-at-Will invocation (already-proven pattern per R11's own
@@ -409,6 +474,34 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
     subscription.currentPeriodStart = newPeriodStart;
     subscription.currentPeriodEnd = newPeriodEnd;
     subscription.nextBillingDate = newPeriodEnd;
+
+    // P0 SYNCHRONIZATION FIX (found via live QA, same bug class as the
+    // upgrade-commit fix): calculateInvoice() priced this renewal correctly
+    // (coupon eligibility, referral reward, scheduled changes all folded
+    // into `effective` before charging), but nothing ever wrote that result
+    // back onto the canonical Subscription document — only the billing
+    // PERIOD advanced above. planName/billingCycle/pricePerUser/activeAddons/
+    // totalAmount all kept whatever they were BEFORE this renewal, silently
+    // diverging from the invoice that was actually charged. Every screen
+    // reading Subscription.totalAmount directly (dashboard, plan cards,
+    // Manage Subscription) would show a stale number the instant a renewal
+    // changed anything — a coupon losing eligibility, a scheduled downgrade,
+    // an add-on change. Sourced from commercialTransaction.target.effectiveState
+    // (captured at pricing time, see the CommercialTransaction.create() above)
+    // rather than the local `effective` variable, so this also works on a
+    // RESUMED renewal, which never recomputes `effective` this call.
+    // Optional-chained: a CommercialTransaction PRICED before this fix
+    // shipped won't have effectiveState — skipped, not crashed, exactly like
+    // this project's other "predates this field" fields.
+    if (commercialTransaction.target?.effectiveState) {
+      const es = commercialTransaction.target.effectiveState;
+      subscription.planName = es.planName;
+      subscription.billingCycle = es.billingCycle;
+      subscription.pricePerUser = es.pricePerUser;
+      subscription.activeAddons = es.activeAddons;
+      subscription.totalAmount = es.totalAmount;
+    }
+
     await subscription.save();
     if (_injectFailureAfter === 'SUBSCRIPTION_ADVANCED') {
       throw new Error('TEST-INJECTED FAILURE after SUBSCRIPTION_ADVANCED');
@@ -567,4 +660,45 @@ async function buildEffectiveSubscription(subscription, now) {
 // current time to ask "what's due today" (renewal's own use), or a
 // sufficiently-far-future time to ask "what will this become once
 // everything currently scheduled has executed" (preview's use).
-module.exports = { renewSubscription, buildEffectiveSubscription, applyScheduledChange, addBillingCycle };
+// BILLING_UX_SPEC.md §2.2 — "what would the next renewal actually charge,
+// right now." Read-only twin of renewSubscription()'s own pricing steps
+// (buildEffectiveSubscription -> R7 coupon eligibility -> R8 referral
+// modifier -> calculateInvoice()) — same functions, same order, but uses
+// getNextAvailableReward (a plain read) instead of
+// reserveNextAvailableReward, and creates no BillingInvoice/
+// CommercialTransaction/RewardUsage. Never called from renewSubscription()
+// itself or any webhook — this exists purely for the billing dashboard's
+// "Next Renewal" preview (§2.2) to show a real engine-computed number
+// instead of a client-side guess, per §0.
+async function previewRenewal(subscription) {
+  const farFuture = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000);
+  const { effective } = await buildEffectiveSubscription(subscription, farFuture);
+
+  // Same fix as renewSubscription()'s R7 step above, same reasoning — this
+  // preview must price the actual effective (post-scheduled-change) line
+  // items through fullRulesSnapshot, not reuse a flat frozen discountAmount
+  // that ignores what's actually being renewed.
+  const resolvedModifiers = [];
+  if (subscription.appliedCoupon?.fullRulesSnapshot && isCouponStillEligibleForRenewal(subscription.appliedCoupon)) {
+    const effectiveLineItems = [
+      { key: effective.planName, type: 'plan', amount: effective.pricePerUser },
+      ...effective.activeAddons.map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
+    ];
+    const couponModifier = buildCouponModifierForLineItems(subscription.appliedCoupon.fullRulesSnapshot, effectiveLineItems);
+    if (couponModifier) resolvedModifiers.push(couponModifier);
+  }
+
+  const availableReward = await getNextAvailableReward(subscription.organization);
+  if (availableReward) {
+    resolvedModifiers.push(rewardToModifier(availableReward));
+  }
+
+  const invoice = calculateInvoice({ subscription: effective, resolvedModifiers });
+
+  return toPricingBreakdown(invoice, {
+    couponCode: subscription.appliedCoupon?.code,
+    referralPercent: availableReward?.rewardType === 'percentage' ? availableReward.rewardValue : undefined,
+  });
+}
+
+module.exports = { renewSubscription, buildEffectiveSubscription, applyScheduledChange, addBillingCycle, previewRenewal };

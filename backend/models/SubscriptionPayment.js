@@ -6,11 +6,16 @@ const subscriptionPaymentSchema = new mongoose.Schema({
     ref: 'Organization', 
     required: true 
   },
-  subscription: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Subscription', 
-    required: true 
+  subscription: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Subscription',
+    required: true
   },
+  // Phase 1 — schema only, nullable, unused until Phase 3 wires
+  // CommercialTransaction/BillingInvoice into the payment flow (see
+  // IMPLEMENTATION_PLAN_V1.md §1.5). Which specific invoice this payment was
+  // charged against, once BillingInvoice exists as its own collection.
+  invoice: { type: mongoose.Schema.Types.ObjectId, ref: 'BillingInvoice' },
   razorpayPaymentId: { type: String, unique: true },
   razorpayOrderId: { type: String },
   razorpaySignature: { type: String },
