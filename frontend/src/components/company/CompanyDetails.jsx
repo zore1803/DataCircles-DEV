@@ -25,6 +25,7 @@ const CompanyDetails = ({
   paymentSummary,
   loadingPayment,
   isExpanded,
+  isQuickView,
 }) => {
   const [showEmptyFields, setShowEmptyFields] = useState(false);
 
@@ -443,7 +444,7 @@ const handleOwnerChange = async (newOwnerId) => {
                   <h3 className="text-sm font-bold text-gray-800 tracking-wide uppercase">General Information</h3>
                 </div>
                 <div className="p-5">
-                  <div className={isExpanded ? "grid grid-cols-1 gap-4 text-sm" : "grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"}>
+                  <div className={isExpanded || isQuickView ? "grid grid-cols-1 gap-4 text-sm" : "grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"}>
                     {visibleFields.map((field, idx) => (
                       <div key={idx} className="flex flex-col sm:flex-row sm:items-start sm:gap-4 border-b border-gray-100 pb-3 last:border-0 last:pb-0">
                         <span className="text-gray-500 font-medium w-40 flex-shrink-0 mb-1 sm:mb-0">
@@ -467,7 +468,7 @@ const handleOwnerChange = async (newOwnerId) => {
                   <h3 className="text-sm font-bold text-gray-800 tracking-wide uppercase">{categoryName}</h3>
                 </div>
                 <div className="p-5">
-                  <div className={isExpanded ? "grid grid-cols-1 gap-4 text-sm" : "grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"}>
+                  <div className={isExpanded || isQuickView ? "grid grid-cols-1 gap-4 text-sm" : "grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"}>
                     {categoryFields.map((field, idx) => (
                       <div key={`additional-${idx}`} className="flex flex-col sm:flex-row sm:items-start sm:gap-4 border-b border-gray-100 pb-3 last:border-0 last:pb-0">
                         <span className="text-gray-500 font-medium w-40 flex-shrink-0 mb-1 sm:mb-0">

@@ -310,7 +310,7 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
 
                   <div className="overflow-x-hidden">
                     {activeTabRight === "Notes" && (
-                      <NoteSection contactId={contactId} />
+                      <NoteSection contactId={contactId} isQuickView={true} />
                     )}
                     {activeTabRight === "Tasks" && (
                       <div className="overflow-x-auto">

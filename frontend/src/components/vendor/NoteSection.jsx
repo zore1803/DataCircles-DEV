@@ -98,12 +98,18 @@ const NoteCard = ({ note, onEdit, onDelete, onView, vendorName }) => {
     }
   };
 
-  const getPreviewText = (html) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const getPreviewText = (html, expand = false) => {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
     const text = tempDiv.textContent || tempDiv.innerText || '';
-    return text.length > 80 ? text.substring(0, 80) + '...' : text;
+    if (expand) return text;
+    return text.length > 150 ? text.substring(0, 150) + '...' : text;
   };
+
+  const rawText = getPreviewText(note.note, true);
+  const isLong = rawText.length > 150;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-3 hover:border-gray-300 transition-all group">
@@ -137,9 +143,19 @@ const NoteCard = ({ note, onEdit, onDelete, onView, vendorName }) => {
         </div>
       </div>
       
-      <p className="text-gray-700 text-sm leading-relaxed mb-2">
-        {getPreviewText(note.note)}
-      </p>
+      <div className="flex flex-col items-start w-full gap-2 mb-2">
+        <p className={`text-gray-700 text-sm leading-relaxed w-full ${isExpanded ? "" : "line-clamp-3"}`}>
+          {getPreviewText(note.note, isExpanded)}
+        </p>
+        {isLong && (
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-blue-600 hover:text-blue-800 text-xs font-semibold transition-colors mt-1"
+          >
+            {isExpanded ? "Show Less" : "Read More"}
+          </button>
+        )}
+      </div>
 
       <div className="flex items-center gap-1 text-xs text-gray-500">
         <User className="w-3 h-3" />
@@ -241,7 +257,7 @@ const NoteEditor = ({
 };
 
 // Main NoteSection Component
-const NoteSection = () => {
+const NoteSection = ({ isQuickView }) => {
   const { id: vendorId } = useParams();
   const [notes, setNotes] = useState([]);
   const [vendor, setVendor] = useState(null);
@@ -252,6 +268,7 @@ const NoteSection = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [showAllNotes, setShowAllNotes] = useState(false);
 
   const fetchNotes = useCallback(async () => {
     try {
@@ -403,7 +420,7 @@ const NoteSection = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredNotes.map((note) => (
+          {(isQuickView && !showAllNotes ? filteredNotes.slice(0, 5) : filteredNotes).map((note) => (
             <NoteCard
               key={note._id}
               note={note}
@@ -413,6 +430,26 @@ const NoteSection = () => {
               vendorName={vendor?.name || 'Vendor'}
             />
           ))}
+          {isQuickView && !showAllNotes && filteredNotes.length > 5 && (
+            <div className="pt-4 flex justify-center">
+              <button
+                onClick={() => setShowAllNotes(true)}
+                className="px-6 py-2.5 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm w-full md:w-auto shadow-sm"
+              >
+                View All Notes ({filteredNotes.length})
+              </button>
+            </div>
+          )}
+          {isQuickView && showAllNotes && (
+            <div className="pt-4 flex justify-center">
+              <button
+                onClick={() => setShowAllNotes(false)}
+                className="px-6 py-2.5 text-blue-600 font-semibold hover:bg-blue-50 transition-colors text-sm rounded-lg"
+              >
+                Show Less
+              </button>
+            </div>
+          )}
         </div>
       )}
 

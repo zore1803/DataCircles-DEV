@@ -727,6 +727,7 @@ export default function DealsTable({
                     setRowActionsPos({ top: calcTop, left: calcLeft });
                     setOpenRowActionsId(deal._id);
                   }}
+                  data-row-actions-trigger={deal._id}
                   className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                   title="More actions"
                 >
@@ -734,7 +735,38 @@ export default function DealsTable({
                 </button>
                 {isActionsOpen && rowActionsPos && createPortal(
                   <>
-                    <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+                    <div
+                      className="fixed inset-0 z-[9998]"
+                      onClick={(e) => {
+                        // Was: always just close. Bug this fixes: while a menu
+                        // is open, this backdrop sits ABOVE every other row's
+                        // ⋮ button (z-9998, portaled to body), so clicking a
+                        // DIFFERENT row's button hit this backdrop first —
+                        // closing the current menu, but the click never
+                        // reached the real button, so opening the new row's
+                        // menu needed a second, separate click.
+                        //
+                        // Fix: briefly make the backdrop invisible to hit-testing
+                        // so elementFromPoint reports what's actually under the
+                        // cursor (the backdrop would otherwise always report
+                        // itself, being on top). If that's another row's
+                        // trigger button, dispatch a real click on it — its
+                        // own onClick (position calc, setOpenRowActionsId) runs
+                        // completely unchanged, this only decides whether that
+                        // click reaches it or the menu just closes.
+                        const backdrop = e.currentTarget;
+                        backdrop.style.pointerEvents = "none";
+                        const elAtPoint = document.elementFromPoint(e.clientX, e.clientY);
+                        backdrop.style.pointerEvents = "";
+                        const trigger = elAtPoint?.closest("[data-row-actions-trigger]");
+                        if (trigger) {
+                          trigger.click();
+                          return;
+                        }
+                        setOpenRowActionsId(null);
+                        setRowActionsPos(null);
+                      }}
+                    />
                     <div
                       ref={rowActionsRef}
                       style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
