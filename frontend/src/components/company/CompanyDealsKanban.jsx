@@ -1343,7 +1343,7 @@ export default function CompanyDealsKanban({
                                     <div
                                       ref={colMenuRef}
                                       style={{ position: "fixed", top: colMenuPos.top, left: colMenuPos.left }}
-                                      className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                                      className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
                                     >
                                       <button
                                         onClick={() => {
@@ -1351,9 +1351,9 @@ export default function CompanyDealsKanban({
                                           setColMenuPos(null);
                                           pinSide === "left" ? unpinColumn(col.id) : pinColumnToSide(col.id, "left");
                                         }}
-                                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                                       >
-                                        {pinSide === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                                        {pinSide === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
                                         Pin to Left
                                       </button>
                                       <button
@@ -1362,9 +1362,9 @@ export default function CompanyDealsKanban({
                                           setColMenuPos(null);
                                           pinSide === "right" ? unpinColumn(col.id) : pinColumnToSide(col.id, "right");
                                         }}
-                                        className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                                       >
-                                        {pinSide === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                                        {pinSide === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
                                         Pin to Right
                                       </button>
 
@@ -1376,9 +1376,9 @@ export default function CompanyDealsKanban({
                                               setColMenuPos(null);
                                               handleSort(col.id, "asc");
                                             }}
-                                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                                           >
-                                            <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                                            <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                                             Sort Ascending
                                           </button>
                                           <button
@@ -1387,9 +1387,9 @@ export default function CompanyDealsKanban({
                                               setColMenuPos(null);
                                               handleSort(col.id, "desc");
                                             }}
-                                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                                           >
-                                            <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                                            <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                                             Sort Descending
                                           </button>
                                         </>
@@ -1403,9 +1403,9 @@ export default function CompanyDealsKanban({
                                           setColMenuPos(null);
                                           hideColumn(col.id);
                                         }}
-                                        className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                                       >
-                                        <EyeOff className="w-4 h-4 text-[#1C1B1F]" />
+                                        <EyeOff className="w-3.5 h-3.5 text-[#1C1B1F]" />
                                         Hide Column
                                       </button>
                                     </div>

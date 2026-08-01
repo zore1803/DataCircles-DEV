@@ -54,7 +54,7 @@ const FolderIcon = ({ className = "h-8 w-8" }) => (
  * dropped in below the existing content without touching the grid, the
  * search, or any other row/card.
  */
-const FolderCompanyCard = ({ company, query, onOpen }) => (
+const FolderCompanyCard = ({ company, query, onOpen, onEdit, onRemove }) => (
   <div
     onClick={(e) => {
       if (e.target.closest("button") || e.target.closest("a")) return;
@@ -81,6 +81,27 @@ const FolderCompanyCard = ({ company, query, onOpen }) => (
           </div>
         </div>
       </div>
+
+      {/* Always visible, not hover-only — same reasoning as the list row:
+          hover-only actions are undiscoverable and don't work on touch. The
+          card's onClick has a closest("button") guard, so these never also
+          trigger navigation. */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          onClick={() => onEdit(company._id)}
+          className="p-1.5 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+          title="Open company to edit"
+        >
+          <Edit3 className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={() => onRemove(company)}
+          className="p-1.5 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+          title="Remove from this hotlist"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
     {/* Reserved: an expand chevron + conditional task block belong here, as
         siblings of the row above — no change needed to this component's
@@ -94,28 +115,56 @@ const FolderCompanyCard = ({ company, query, onOpen }) => (
  * FolderCompanyCard above: a task block can be added as a sibling <div>
  * inside this row later without fighting table row/cell semantics.
  */
-const FolderCompanyRow = ({ company, query, onOpen }) => (
+const FolderCompanyRow = ({ company, query, onOpen, onEdit, onRemove }) => (
   <div
     onClick={(e) => {
       if (e.target.closest("button") || e.target.closest("a")) return;
       onOpen(company._id);
     }}
-    className="grid grid-cols-[auto_1fr_1fr_1fr] items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors group cursor-pointer"
+    // No grid `gap` — cells carry their own padding and a right border instead,
+    // so the vertical column dividers run edge-to-edge with no break between
+    // them (a gap would leave the divider floating with blank space either
+    // side, which is why this isn't just `gap-3` + `border-r`).
+    className="grid grid-cols-[auto_1fr_1fr_1fr_auto] items-stretch hover:bg-gray-50 transition-colors group cursor-pointer"
   >
-    <div className="p-1.5 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors flex-shrink-0">
-      <Building2 className="h-3.5 w-3.5 text-blue-600" />
+    <div className="flex items-center px-4 py-3 border-r border-gray-100">
+      <div className="p-1.5 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors flex-shrink-0">
+        <Building2 className="h-3.5 w-3.5 text-blue-600" />
+      </div>
     </div>
-    <span className="font-medium text-gray-900 text-sm truncate">
-      <HighlightText text={company.name || "Unnamed Company"} query={query} />
-    </span>
-    <span className="flex items-center gap-1.5 text-xs text-gray-600 truncate">
+    <div className="flex items-center px-4 py-3 border-r border-gray-100 min-w-0">
+      <span className="font-medium text-gray-900 text-sm truncate">
+        <HighlightText text={company.name || "Unnamed Company"} query={query} />
+      </span>
+    </div>
+    <div className="flex items-center gap-1.5 px-4 py-3 border-r border-gray-100 min-w-0 text-xs text-gray-600">
       <Briefcase className="h-3 w-3 flex-shrink-0" />
-      <HighlightText text={company.industry || "N/A"} query={query} />
-    </span>
-    <span className="flex items-center gap-1.5 text-xs text-gray-600 truncate">
+      <span className="truncate"><HighlightText text={company.industry || "N/A"} query={query} /></span>
+    </div>
+    <div className="flex items-center gap-1.5 px-4 py-3 border-r border-gray-100 min-w-0 text-xs text-gray-600">
       <MapPin className="h-3 w-3 flex-shrink-0" />
-      <HighlightText text={company.address || "N/A"} query={query} />
-    </span>
+      <span className="truncate"><HighlightText text={company.address || "N/A"} query={query} /></span>
+    </div>
+
+    {/* Actions — always visible now, not hover-only. Hover-only buttons are
+        undiscoverable (you can't tell the action exists until you happen to
+        mouse over the row) and unusable on touch, where there is no hover. */}
+    <div className="flex items-center gap-1 px-3 py-3 flex-shrink-0">
+      <button
+        onClick={() => onEdit(company._id)}
+        className="p-1.5 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+        title="Open company to edit"
+      >
+        <Edit3 className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={() => onRemove(company)}
+        className="p-1.5 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+        title="Remove from this hotlist"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
   </div>
 );
 
@@ -276,6 +325,38 @@ const Hotlist = () => {
         toast.error(error.response?.data?.message || "An active subscription is required to make changes.", { id: loadingToast });
       } else {
         toast.error(error.response?.data?.error || "Failed to delete folder", { id: loadingToast });
+      }
+    }
+  };
+
+  // Removes a company FROM THIS HOTLIST FOLDER only — it does NOT delete the
+  // company record from the CRM. A hotlist is a saved shortlist, so "remove"
+  // here means "take it off this list"; the company, its deals, contacts and
+  // history are all untouched and it still exists on the Companies page.
+  // Deleting the actual company record from a shortlist view would be a
+  // surprising and destructive default, so that is deliberately not what this
+  // does. Uses the existing PUT /company-folders/:id/remove-company endpoint.
+  const removeCompanyFromFolder = async (folderId, company) => {
+    if (
+      !window.confirm(
+        `Remove "${company.name || "this company"}" from this hotlist?\n\nThis only takes it off the list — the company itself is not deleted.`,
+      )
+    )
+      return;
+
+    const loadingToast = toast.loading("Removing from hotlist...");
+
+    try {
+      await API.put(`/company-folders/${folderId}/remove-company`, {
+        companyId: company._id,
+      });
+      toast.success("Removed from hotlist", { id: loadingToast });
+      fetchFolders();
+    } catch (error) {
+      if (error.response?.status === 402) {
+        toast.error(error.response?.data?.message || "An active subscription is required to make changes.", { id: loadingToast });
+      } else {
+        toast.error(error.response?.data?.error || "Failed to remove from hotlist", { id: loadingToast });
       }
     }
   };
@@ -583,54 +664,79 @@ const Hotlist = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
-          {!openFolder.companies || openFolder.companies.length === 0 ? (
-            <div className="text-center py-8 sm:py-12 text-gray-500">
-              <Building2 className="h-12 w-12 sm:h-16 sm:w-16 mx-auto text-gray-300 mb-4" />
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No companies in this folder</h3>
-              <p className="text-sm mb-4">Add companies to this folder to get started.</p>
-              <button
-                onClick={() => startEdit(openFolder)}
-                className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#0085FF] text-white text-sm font-medium hover:bg-blue-600 transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                Add Companies
-              </button>
+        {/* No outer white card wrapper here any more. The list/grid used to sit
+            inside `bg-white rounded-xl border p-6`, which put a bordered box
+            inside another bordered box — a visible double frame with dead
+            padding between them, and it stretched full-height regardless of
+            content. Now each view supplies its own single surface, so the
+            content reads as sitting on the page background rather than in a
+            nested panel. */}
+        {!openFolder.companies || openFolder.companies.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 text-center py-10 sm:py-14 px-6 text-gray-500">
+            <Building2 className="h-12 w-12 sm:h-16 sm:w-16 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No companies in this folder</h3>
+            <p className="text-sm mb-4">Add companies to this folder to get started.</p>
+            <button
+              onClick={() => startEdit(openFolder)}
+              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#0085FF] text-white text-sm font-medium hover:bg-blue-600 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add Companies
+            </button>
+          </div>
+        ) : visibleCompanies.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 text-center py-10 sm:py-14 px-6 text-gray-500">
+            <Search className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-300 mb-3" />
+            <p className="text-sm">No companies in this folder match "{companySearchTerm}".</p>
+          </div>
+        ) : folderViewMode === "card" ? (
+          // Wrapping grid — reads left-to-right, top-to-bottom, wraps to a new
+          // row instead of scrolling sideways. 1/2/3/4 columns as the viewport
+          // widens, so a 100+ company folder is just a taller page (normal
+          // vertical scroll), never a wider one. Cards are their own surfaces,
+          // so there's no wrapper panel behind them.
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {visibleCompanies.map((company) => (
+              <FolderCompanyCard
+                key={company._id}
+                company={company}
+                query={query}
+                onOpen={(id) => navigate(`/companies/${id}`)}
+                onEdit={(id) => navigate(`/companies/${id}`)}
+                onRemove={(c) => removeCompanyFromFolder(openFolder._id, c)}
+              />
+            ))}
+          </div>
+        ) : (
+          // Clean vertical list with a proper header row. Div-based, not a
+          // literal <table> — see FolderCompanyRow's comment for why. This
+          // bordered container IS the single surface now.
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            {/* Header cell structure mirrors FolderCompanyRow exactly — same
+                column template, same per-cell padding, same right borders — so
+                the vertical dividers line up continuously from header through
+                every row. */}
+            <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_1fr_auto] items-stretch bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <span className="px-4 py-2.5 border-r border-gray-200 w-[26px] box-content" />
+              <span className="px-4 py-2.5 border-r border-gray-200">Company</span>
+              <span className="px-4 py-2.5 border-r border-gray-200">Industry</span>
+              <span className="px-4 py-2.5 border-r border-gray-200">Location</span>
+              <span className="px-3 py-2.5">Actions</span>
             </div>
-          ) : visibleCompanies.length === 0 ? (
-            <div className="text-center py-8 sm:py-12 text-gray-500">
-              <Search className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-300 mb-3" />
-              <p className="text-sm">No companies in this folder match "{companySearchTerm}".</p>
-            </div>
-          ) : folderViewMode === "card" ? (
-            // Wrapping grid — reads left-to-right, top-to-bottom, wraps to a
-            // new row instead of scrolling sideways. 1/2/3/4 columns as the
-            // viewport widens, so a 100+ company folder is just a taller
-            // page (normal vertical scroll), never a wider one.
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            <div className="divide-y divide-gray-100">
               {visibleCompanies.map((company) => (
-                <FolderCompanyCard key={company._id} company={company} query={query} onOpen={(id) => navigate(`/companies/${id}`)} />
+                <FolderCompanyRow
+                  key={company._id}
+                  company={company}
+                  query={query}
+                  onOpen={(id) => navigate(`/companies/${id}`)}
+                  onEdit={(id) => navigate(`/companies/${id}`)}
+                  onRemove={(c) => removeCompanyFromFolder(openFolder._id, c)}
+                />
               ))}
             </div>
-          ) : (
-            // Clean vertical list with a proper header row (Company / Industry
-            // / Location), not just stacked cards-as-rows. Div-based, not a
-            // literal <table> — see FolderCompanyRow's comment for why.
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_1fr] items-center gap-3 px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <span className="w-[26px]" />
-                <span>Company</span>
-                <span>Industry</span>
-                <span>Location</span>
-              </div>
-              <div className="divide-y divide-gray-100">
-                {visibleCompanies.map((company) => (
-                  <FolderCompanyRow key={company._id} company={company} query={query} onOpen={(id) => navigate(`/companies/${id}`)} />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
       {editFolderModal}
       </>

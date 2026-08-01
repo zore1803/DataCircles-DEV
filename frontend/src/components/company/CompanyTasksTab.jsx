@@ -12,6 +12,7 @@ import {
   ChevronRight,
   ChevronUp,
   ChevronDown,
+  EyeOff,
   ListChecks,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
@@ -867,7 +868,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                           <div
                             ref={columnMenuRef}
                             style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
-                            className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
+                            className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
                           >
                             <button
                               onClick={() => {
@@ -875,9 +876,9 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                                 setColumnMenuPos(null);
                                 getColumnPinSide(col.id) === "left" ? unpinColumn(col.id) : pinColumnToSide(col.id, "left");
                               }}
-                              className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${getColumnPinSide(col.id) === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${getColumnPinSide(col.id) === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                             >
-                              {getColumnPinSide(col.id) === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                              {getColumnPinSide(col.id) === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
                               Pin to Left
                             </button>
                             <button
@@ -886,9 +887,9 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                                 setColumnMenuPos(null);
                                 getColumnPinSide(col.id) === "right" ? unpinColumn(col.id) : pinColumnToSide(col.id, "right");
                               }}
-                              className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${getColumnPinSide(col.id) === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${getColumnPinSide(col.id) === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                             >
-                              {getColumnPinSide(col.id) === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
+                              {getColumnPinSide(col.id) === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
                               Pin to Right
                             </button>
                             <button
@@ -898,9 +899,9 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                                 handleSort(col.id, "asc");
                                 setListPage(1);
                               }}
-                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                             >
-                              <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
+                              <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                               Sort Ascending
                             </button>
                             <button
@@ -910,9 +911,9 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                                 handleSort(col.id, "desc");
                                 setListPage(1);
                               }}
-                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                             >
-                              <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
+                              <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                               Sort Descending
                             </button>
                             <div className="w-full border-t border-[#F1F1F5] my-0.5" />
@@ -922,8 +923,9 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                                 setColumnMenuPos(null);
                                 toggleHideColumn(col.id);
                               }}
-                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap text-[#161618] hover:bg-gray-50"
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap text-[#161618] hover:bg-gray-50"
                             >
+                              <EyeOff className="w-3.5 h-3.5 text-[#1C1B1F]" />
                               Hide Column
                             </button>
                           </div>

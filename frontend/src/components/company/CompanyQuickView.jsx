@@ -221,7 +221,7 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
               </div>
 
               <div className="mt-6">
-                {activeTab === "Notes" && <NoteSection companyId={companyId} />}
+                {activeTab === "Notes" && <NoteSection companyId={companyId} isQuickView={true} />}
                 {activeTab === "Tasks" && (
                   <CompanyTasksTable
                     companyId={companyId}
