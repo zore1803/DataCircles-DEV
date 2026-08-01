@@ -30,26 +30,7 @@ export default function VendorsHub() {
   };
 
   return (
-    <div>
-      <div className="border-b border-gray-200 bg-white rounded-t-xl overflow-hidden mb-6">
-        <nav className="flex overflow-x-auto whitespace-nowrap no-scrollbar px-2 sm:px-4">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => handleTabChange(tab.key)}
-              className={`flex items-center justify-center gap-2 min-w-[130px] sm:min-w-[150px] px-3 sm:px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
-                activeTab === tab.key
-                  ? "border-blue-600 text-blue-600 bg-white font-bold"
-                  : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-              }`}
-            >
-              <tab.icon className="w-4 h-4" />
-              <span className="truncate">{tab.label}</span>
-            </button>
-          ))}
-        </nav>
-      </div>
-
+    <div className="w-full h-full">
       {activeTab === "vendors" ? <Vendors /> : <PaymentPage />}
     </div>
   );
