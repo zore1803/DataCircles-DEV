@@ -58,6 +58,7 @@ import BillingDetail from "./pages/BillingDetail";
 import AdminCalendar from "./pages/Calender";
 import Onboarding from "./pages/Onboarding";
 import PlanManagement from "./pages/PlanManagement";
+import Accounting from "./pages/Accounting";
 import PromotionsAndRewards from "./pages/PromotionsAndRewards";
 import SalesReturn from "./pages/SalesReturn";
 import SalesSubscription from "./pages/SalesSubscription";
@@ -586,6 +587,14 @@ function App() {
               element={
                 <PrivateRoute>
                   <Invoices1 />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/accounting"
+              element={
+                <PrivateRoute>
+                  <Accounting />
                 </PrivateRoute>
               }
             />

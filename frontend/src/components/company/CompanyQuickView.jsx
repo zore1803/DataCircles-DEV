@@ -33,6 +33,8 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
   const [tasks, setTasks] = useState([]);
   const [meetings, setMeetings] = useState([]);
   const [companyFieldNames, setCompanyFieldNames] = useState([]);
+  const [paymentSummary, setPaymentSummary] = useState(null);
+  const [loadingPayment, setLoadingPayment] = useState(true);
 
   const { currentCompanyIds } = useCompanyStore();
 
@@ -56,10 +58,13 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
 
   const loadCompany = async (id) => {
     setLoading(true);
+    setLoadingPayment(true);
     try {
-      const [resCompany, resFields] = await Promise.all([
+      const [resCompany, resFields, resSubsidiaries, resContacts] = await Promise.all([
         API.get(`/companies/${id}`),
         API.get("/company-fields"),
+        API.get(`/companies/${id}/subsidiaries`).catch(() => ({ data: [] })),
+        API.get("/contacts").catch(() => ({ data: [] })),
       ]);
 
       setCompany(resCompany.data);
@@ -67,15 +72,30 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
         setCompanyFieldNames(resFields.data.fields);
       }
 
-      // Optional: load related data if needed in quick view
-      // const resContacts = await API.get("/contacts");
-      // setContacts(resContacts.data.filter(c => c.company?._id === id));
-      // etc.
+      const subsidiaryIds = resSubsidiaries.data.map(sub => sub._id);
+      setContacts(
+        resContacts.data.filter(
+          c => c.company?._id === id || subsidiaryIds.includes(c.company?._id)
+        )
+      );
+
+      // Fetch payment summary separately
+      API.get(`/invoices/company/${id}/summary`)
+        .then(res => {
+          setPaymentSummary(res.data);
+          setLoadingPayment(false);
+        })
+        .catch(err => {
+          console.error("Failed to load payment summary", err);
+          setPaymentSummary(null);
+          setLoadingPayment(false);
+        });
 
       setLoading(false);
     } catch (err) {
       toast.error("Failed to load company details");
       setLoading(false);
+      setLoadingPayment(false);
       onClose();
     }
   };
@@ -199,6 +219,8 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
             <CompanyDetails
               data={company}
               contacts={contacts}
+              paymentSummary={paymentSummary}
+              loadingPayment={loadingPayment}
               isQuickView={true} // You can pass prop to make it more compact if needed
             />
 
