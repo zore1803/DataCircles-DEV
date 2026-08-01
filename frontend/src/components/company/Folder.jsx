@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import HighlightText from "../common/HighlightText";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
@@ -615,7 +616,7 @@ const FileCard = ({ file, onView, onDelete, isLast }) => {
   );
 };
 
-const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, isFirst, isLast, isEditing, editingName, onEditingNameChange, onSaveEdit, onCancelEdit }) => (
+const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, isFirst, isLast, isEditing, editingName, onEditingNameChange, onSaveEdit, onCancelEdit, searchTerm }) => (
   <div className="transition-all">
     <div
       className="flex items-center justify-between gap-2"
@@ -651,7 +652,7 @@ const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, on
               className="text-sm font-medium text-gray-900 truncate bg-transparent border-b border-blue-500 focus:outline-none w-full"
             />
           ) : (
-            <h3 className="text-sm font-medium text-gray-900 truncate">{folder.name || "Untitled"}</h3>
+            <h3 className="text-sm font-medium text-gray-900 truncate"><HighlightText text={folder.name || "Untitled"} highlight={searchTerm || ""} /></h3>
           )}
           <p className="text-xs text-gray-500">
             {folder.files?.length || 0} {folder.files?.length === 1 ? 'item' : 'items'}
@@ -1820,7 +1821,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                         }}
                         title={folder.name}
                       >
-                        {folder.name || "Untitled"}
+                        <HighlightText text={folder.name || "Untitled"} highlight={searchTerm} />
                       </span>
                     )}
                     <span
@@ -1916,6 +1917,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                 editingName={inlineEditingName}
                 onEditingNameChange={setInlineEditingName}
                 onSaveEdit={() => handleInlineSave(folder._id)}
+                searchTerm={searchTerm}
                 onCancelEdit={() => {
                   setInlineEditingId(null);
                   setInlineEditingName("");

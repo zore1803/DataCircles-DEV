@@ -55,9 +55,8 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
         setCompany(companyRes.data);
       }
 
-      const dealsRes = await API.get("/deals");
-      const filteredDeals = dealsRes.data.filter((d) => d.contact?._id === id);
-      setDeals(filteredDeals);
+      const dealsRes = await API.get(`/deals?contact=${id}`);
+      setDeals(dealsRes.data);
 
       setLoading(false);
     } catch (err) {
@@ -278,6 +277,7 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
                           company={company}
                           deals={deals}
                           isQuickView={true}
+                          onDealCreated={() => loadContact(contactId)}
                         />
                       </div>
                     )}

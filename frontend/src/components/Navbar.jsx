@@ -24,6 +24,7 @@ import {
   ChartColumnIncreasing,
   CreditCard,
   Tag,
+  Calculator,
 } from "lucide-react";
 import API from "../services/api";
 import dataCirclesLogo from "../assets/Datacircles logo.png";
@@ -137,6 +138,7 @@ const Navbar = () => {
       dropdownType: "activity",
     },
     { name: "Accounts", isHeader: true },
+    { name: "Accounting", href: "/accounting", icon: Calculator },
     { name: "Sales", icon: BarChart3, isDropdown: true, dropdownType: "sales" },
     {
       name: "Procurement",

@@ -30,6 +30,15 @@ router.get(
 );
 
 router.get(
+  "/company/:companyId/summary",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "read"),
+  checkPermission("invoices", "readonly"),
+  invoiceController.getCompanyInvoiceSummary
+);
+
+router.get(
   "/company/:companyId",
   requireAuth,
   subscriptionGate,
