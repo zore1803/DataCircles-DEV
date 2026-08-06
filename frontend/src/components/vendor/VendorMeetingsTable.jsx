@@ -122,7 +122,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
   /* ── Pagination — same client-side "first ... current ... last" pattern
      CompanyMeetingsTab uses. Filters/search reset back to page 1. */
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(5);
   useEffect(() => {
     setPage(1);
   }, [search, selectedFilters]);
@@ -438,7 +438,6 @@ const VendorMeetingsTable = ({ vendorId }) => {
           columnSizing={columnSizing}
           onColumnSizingChange={setColumnSizing}
           variant="card"
-          maxHeight={560}
           loading={loading}
           rowClassName={(m) => (selectedItems.includes(m._id) ? "!bg-blue-50" : "")}
           emptyContent={
@@ -455,19 +454,21 @@ const VendorMeetingsTable = ({ vendorId }) => {
             </div>
           }
         />
+        
+        <div className="border-t border-[#E1E4EA] px-5">
+          <TablePaginationFooter
+            currentPage={page}
+            totalPages={totalPages}
+            totalCount={filteredMeetings.length}
+            limit={limit}
+            onPageChange={goToPage}
+            onLimitChange={(n) => {
+              setLimit(n);
+              setPage(1);
+            }}
+          />
+        </div>
       </div>
-
-      <TablePaginationFooter
-        currentPage={page}
-        totalPages={totalPages}
-        totalCount={filteredMeetings.length}
-        limit={limit}
-        onPageChange={goToPage}
-        onLimitChange={(n) => {
-          setLimit(n);
-          setPage(1);
-        }}
-      />
 
       <CompanyFilterPanel
         isOpen={showFilterPanel}
