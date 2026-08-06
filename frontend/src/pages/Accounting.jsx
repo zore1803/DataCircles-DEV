@@ -43,10 +43,12 @@ import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceFo
 import QuotationForm from "../components/quotation/QuotationForm";
 import DeliveryChallanForm from "../components/deliveryChallan/DeliveryChallanForm";
 import InvoiceStylePreview from "../components/invoice/InvoiceStylePreview";
+import InvoiceLivePreview from "../components/invoice/InvoiceLivePreview";
 import PerformaInvoiceStylePreview from "../components/PerformaInvoice/PerformaInvoiceStylePreview";
 import QuickBrandingModal from "../components/invoice/QuickBrandingModal";
 import QuickDealForm from "../components/deal/QuickDealForm";
 import { getAncestorZoom } from "../utils/domUtils";
+import { exportToCSV } from "../utils/exportToCSV";
 import useMinDelay from "../hooks/useMinDelay";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
@@ -57,10 +59,9 @@ const SectionHeader = ({ number, title }) => (
     <div className="flex items-center justify-center w-5 h-5 rounded-full bg-[#F0F6FF] text-[#0085FF] text-[10px] font-semibold flex-shrink-0">
       {number}
     </div>
-    <span className="text-[12px] font-semibold text-[#1F2937] whitespace-nowrap">
+    <span className="text-[15px] font-semibold text-[#1F2937] whitespace-nowrap">
       {title}
     </span>
-    <div className="flex-1 h-px bg-[#E1E4EA]"></div>
   </div>
 );
 
@@ -614,28 +615,147 @@ const FieldLabel = ({ children, required }) => (
 
 /* The "Add Invoice" experience for the Invoices tab: details on the left,
    live preview on the right. */
-const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
-  const [form, setForm] = useState({
-    deal: "",
-    style: "",
-    date: "",
-    dueDate: "",
-    receiverGSTIN: "",
-    isTaxInvoice: false,
-    transactionType: "intra",
-    gstRate: 18,
-    invoicePrefix: "INV-",
-    invoiceSuffix: "",
-    invoiceNumber: "",
-    nextInvoiceNumber: 1,
-    items: [blankItem()],
-    discount: { type: "fixed", value: 0 },
-    status: "Draft",
-  });
+const CreateInvoicePanel = ({
+  deals,
+  onClose,
+  onCreated,
+  onAddDeal,
+  initialDoc = null,
+  onFullView,
+}) => {
+  const isEditing = !!initialDoc;
+  const [form, setForm] = useState(() =>
+    initialDoc
+      ? {
+          deal: initialDoc.deal?._id || initialDoc.deal || "",
+          style: initialDoc.style || "",
+          date: initialDoc.date ? initialDoc.date.slice(0, 10) : "",
+          dueDate: initialDoc.dueDate ? initialDoc.dueDate.slice(0, 10) : "",
+          receiverGSTIN: initialDoc.receiverGSTIN || "",
+          isTaxInvoice: initialDoc.isTaxInvoice || false,
+          transactionType: initialDoc.transactionType || "intra",
+          gstRate: initialDoc.gstRate || 18,
+          invoicePrefix: initialDoc.invoicePrefix || "INV-",
+          invoiceSuffix: initialDoc.invoiceSuffix || "",
+          invoiceNumber: initialDoc.invoiceNumber || "",
+          nextInvoiceNumber: initialDoc.nextInvoiceNumber || 1,
+          items:
+            initialDoc.items && initialDoc.items.length
+              ? initialDoc.items.map((item) => ({
+                  _id: item.itemId || item._id,
+                  name: item.name,
+                  description: item.description || "",
+                  rate: item.rate,
+                  quantity: item.quantity,
+                  hsn: item.hsn || "",
+                  isVariant: item.isVariant || false,
+                  parentItemId: item.parentItemId || null,
+                  discountType: item.discountType || "amount",
+                  discount: item.discount || 0,
+                }))
+              : [blankItem()],
+          discount: initialDoc.discount || { type: "fixed", value: 0 },
+          status: initialDoc.status || "Draft",
+        }
+      : {
+          deal: "",
+          style: "",
+          date: "",
+          dueDate: "",
+          receiverGSTIN: "",
+          isTaxInvoice: false,
+          transactionType: "intra",
+          gstRate: 18,
+          invoicePrefix: "INV-",
+          invoiceSuffix: "",
+          invoiceNumber: "",
+          nextInvoiceNumber: 1,
+          items: [blankItem()],
+          discount: { type: "fixed", value: 0 },
+          status: "Draft",
+        }
+  );
   const [catalogue, setCatalogue] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [docSettings, setDocSettings] = useState({ invoicePrefix: "INV-", invoiceSuffix: "", invoicePrefixes: ["INV-"], invoiceSuffixes: [], nextInvoiceNumber: 1, documentTypeSettings: { invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] } } });
+  const [orgDetails, setOrgDetails] = useState(null);
+  const [bankDetails, setBankDetails] = useState(null);
+  const [docSettings, setDocSettings] = useState({
+    invoicePrefix: "INV-",
+    invoiceSuffix: "",
+    invoicePrefixes: ["INV-"],
+    invoiceSuffixes: [],
+    nextInvoiceNumber: 1,
+    documentTypeSettings: {
+      invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] },
+    },
+  });
+
+  // Draggable split between the form (left) and the preview (right).
+  const splitRef = useRef(null);
+  const [leftPct, setLeftPct] = useState(50);
+
+  // The preview renders at a fixed design width and is scaled to fit the panel
+  // (like zooming an image) so resizing never reflows the invoice layout.
+  const PREVIEW_BASE_W = 760;
+  const previewAreaRef = useRef(null);
+  const sheetRef = useRef(null);
+  const [previewScale, setPreviewScale] = useState(1);
+  const [sheetHeight, setSheetHeight] = useState(0);
+  useLayoutEffect(() => {
+    const area = previewAreaRef.current;
+    if (!area) return;
+    const update = () => {
+      const avail = area.clientWidth - 12; // minus the p-1.5 padding
+      const s = Math.max(0.1, avail / PREVIEW_BASE_W);
+      setPreviewScale(s);
+      if (sheetRef.current)
+        setSheetHeight(sheetRef.current.offsetHeight * s);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(area);
+    if (sheetRef.current) ro.observe(sheetRef.current);
+    return () => ro.disconnect();
+  }, [leftPct]);
+  const startSplitDrag = (e) => {
+    e.preventDefault();
+    const container = splitRef.current;
+    if (!container) return;
+    const onMove = (ev) => {
+      const rect = container.getBoundingClientRect();
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      setLeftPct(Math.min(70, Math.max(30, pct)));
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
+  // Same branding + bank details the backend feeds into the PDF, so the live
+  // preview shows the real seller header, GSTIN and bank block.
+  useEffect(() => {
+    (async () => {
+      try {
+        const [b, bank] = await Promise.allSettled([
+          API.get("/branding"),
+          API.get("/bank-details"),
+        ]);
+        if (b.status === "fulfilled") setOrgDetails(b.value.data || null);
+        if (bank.status === "fulfilled")
+          setBankDetails(bank.value.data || null);
+      } catch (err) {
+        console.error("Fetch branding/bank error:", err);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const fetchItems = async () => {
@@ -775,7 +895,7 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
 
     try {
       setSubmitting(true);
-      await API.post("/invoices", {
+      const payload = {
         ...form,
         invoicePrefix: form.invoicePrefix?.trim() || docSettings.invoicePrefix || "INV-",
         invoiceSuffix: form.invoiceSuffix ?? docSettings.invoiceSuffix ?? "",
@@ -797,16 +917,22 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
           discountType: it.discountType,
           discount: parseFloat(it.discount) || 0,
         })),
-      });
-      toast.success(isDraft ? "Saved as draft!" : "Invoice created successfully!");
+      };
+      if (isEditing) {
+        await API.put(`/invoices/${initialDoc._id}`, payload);
+        toast.success(isDraft ? "Saved as draft!" : "Invoice updated successfully!");
+      } else {
+        await API.post("/invoices", payload);
+        toast.success(isDraft ? "Saved as draft!" : "Invoice created successfully!");
+      }
       onCreated();
       onClose();
     } catch (err) {
       toast.error(
         err.response?.data?.error ||
-        `Failed to ${isDraft ? "save draft" : "create invoice"}`
+        `Failed to ${isEditing ? "update invoice" : isDraft ? "save draft" : "create invoice"}`
       );
-      console.error("Create invoice error:", err);
+      console.error(`${isEditing ? "Update" : "Create"} invoice error:`, err);
     } finally {
       setSubmitting(false);
     }
@@ -817,16 +943,138 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
 
   const dealOptions = deals.map((d) => ({ value: d._id, label: d.title }));
   const inputClass =
-    "w-full h-8 px-2.5 rounded-lg border border-[#E1E4EA] bg-white text-[13px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] transition-colors";
+    "w-full h-10 px-2.5 rounded-lg border border-[#E1E4EA] bg-white text-[13px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] transition-colors";
+
+  // Catalogue descriptions can be stored as rich-text HTML; show plain text in
+  // the description field instead of raw markup.
+  const stripHtml = (html) => {
+    if (!html) return "";
+    if (!/[<&]/.test(html)) return html;
+    const tmp = document.createElement("div");
+    tmp.innerHTML = html;
+    return (tmp.textContent || tmp.innerText || "").replace(/\s+/g, " ").trim();
+  };
+
+  // Grid template for the wide (row/list) item layout — includes an HSN column
+  // only for tax invoices. Card layout ignores this and stacks fields.
+  const itemRowCols = form.isTaxInvoice
+    ? "@2xl:grid-cols-[1.3fr_1.3fr_0.7fr_0.7fr_0.55fr_1.1fr_0.9fr_32px]"
+    : "@2xl:grid-cols-[1.5fr_1.5fr_0.8fr_0.6fr_1.2fr_0.9fr_32px]";
 
   return (
     <div
       className="fixed right-0 bottom-0 bg-white z-[60] flex flex-col top-[54px] lg:top-16"
       style={{ left: "var(--sidebar-width, 0px)" }}
     >
+      {/* Single continuous resizer line spanning the strip + panels, so the
+          divider reads as one line from the navbar down. */}
+      <div
+        onMouseDown={startSplitDrag}
+        title="Drag to resize"
+        style={{ left: `calc(0.5rem + (100% - 1rem) * ${leftPct / 100} + 3px)` }}
+        className="hidden lg:flex absolute top-3 bottom-3 w-4 -translate-x-1/2 cursor-col-resize items-center justify-center gap-[3px] z-20 group"
+      >
+        <span className="w-px h-full rounded-full bg-[#E1E4EA] group-hover:bg-[#0085FF] group-active:bg-[#0085FF] transition-colors" />
+        <span className="w-px h-full rounded-full bg-[#E1E4EA] group-hover:bg-[#0085FF] group-active:bg-[#0085FF] transition-colors" />
+      </div>
+      {/* Fixed top strip — one 64px header bar (same height as the Companies
+          toolbar), not part of the scrolling panels. */}
+      <div className="flex-shrink-0 h-16 flex items-stretch bg-white px-2 shadow-[0_3px_5px_-3px_rgba(0,0,0,0.12)]">
+        {/* Left: form header */}
+        <div
+          style={{ width: `${leftPct}%` }}
+          className="max-lg:!w-1/2 flex items-stretch px-3 lg:px-4 lg:pr-6 min-w-0 self-stretch"
+        >
+          <div className="w-full flex items-center justify-between gap-2 border-b border-[#E1E4EA]">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-[#1F2937] truncate">
+                {isEditing ? "Edit Invoice" : "Create New Invoice"}
+              </h2>
+              <p className="text-[11px] text-[#99A0AE] truncate">
+                {isEditing
+                  ? "Update the details of this invoice."
+                  : "Fill in the details to create and send a professional invoice."}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={submitting}
+                className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed shadow-sm flex-shrink-0"
+              >
+                <FileText className="w-3.5 h-3.5 text-[#525866]" />
+                Save as Draft
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
+              >
+                {submitting
+                  ? isEditing
+                    ? "Updating..."
+                    : "Creating..."
+                  : isEditing
+                    ? "Update Invoice"
+                    : "Create Invoice"}
+                {!submitting && <ChevronRight className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+        {/* Gap reserved for the absolute resizer line — no bottom border here,
+            so the strip line reads as two separate parts (left / right). */}
+        <div className="hidden lg:block w-1.5 flex-shrink-0 self-stretch" />
+        {/* Right: preview header */}
+        <div className="flex-1 min-w-0 flex items-stretch px-3 lg:pl-6 self-stretch">
+          <div className="w-full flex items-center justify-between gap-4 border-b border-[#E1E4EA]">
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold text-[#1F2937] truncate">
+              Invoice Preview
+            </h2>
+            <p className="text-xs text-[#99A0AE] truncate">
+              This is how your invoice will appear to the customer.
+            </p>
+          </div>
+          <div className="relative flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowTemplates((v) => !v)}
+              className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Change Template
+            </button>
+            {showTemplates && (
+              <div className="absolute right-0 mt-2 w-44 bg-white border border-[#E1E4EA] rounded-xl shadow-lg py-1 z-50">
+                {INVOICE_STYLES.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      setField("style", s);
+                      setShowTemplates(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${form.style === s
+                        ? "text-[#0085FF] font-medium"
+                        : "text-gray-700"
+                      }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          </div>
+        </div>
+      </div>
+
       {/* Frame 2147225003 — the two panels sit side by side, each scrolling
           independently, so neither one's height depends on the other. */}
-      <div className="flex-1 min-h-0 flex flex-col lg:flex-row items-stretch p-2 gap-2 overflow-hidden">
+      <div ref={splitRef} className="flex-1 min-h-0 flex flex-col lg:flex-row items-stretch px-2 pb-2 pt-0 gap-0 overflow-hidden">
         {/* Left: form. Frame 1351649637
             The scrolling element itself must NOT be a flex container: when a
             flex item's parent has `overflow` other than visible, the spec
@@ -841,30 +1089,13 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
             wrapper isn't itself inside an overflow context, so its children
             keep their natural `min-height: auto` and the outer box scrolls
             for real instead of silently crushing them. */}
-        <div className="w-full lg:w-1/2 flex-shrink-0 bg-white border border-[#E1E4EA]/50 rounded-lg p-3 lg:p-4 overflow-y-auto self-stretch">
+        <div
+          style={{ width: `${leftPct}%` }}
+          className="@container max-lg:!w-full flex-shrink-0 bg-white p-3 lg:p-4 lg:pr-6 overflow-y-auto self-stretch"
+        >
           <div className="w-full flex flex-col items-start gap-1">
-          <div className="w-full flex items-start justify-between gap-2 mb-1">
-            <div>
-              <h2 className="text-sm font-semibold text-[#1F2937]">
-                Create New Invoice
-              </h2>
-              <p className="text-[11px] text-[#99A0AE] mt-0.5">
-                Fill in the details to create and send a professional invoice.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleSaveDraft}
-              disabled={submitting}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-[#E1E4EA] rounded-md text-[12px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed shadow-sm flex-shrink-0"
-            >
-              <FileText className="w-3 h-3 text-[#525866]" />
-              Save as Draft
-            </button>
-          </div>
-
           <SectionHeader number="01" title="Invoice Details" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2 w-full">
+          <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-3 gap-y-2 w-full">
             <div className="flex flex-col gap-1">
               <FieldLabel required>Select Deal</FieldLabel>
               <div className="flex items-center gap-2">
@@ -879,7 +1110,7 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
                   type="button"
                   onClick={onAddDeal}
                   title="Create a new deal"
-                  className="w-8 h-8 flex-shrink-0 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white flex items-center justify-center transition-colors"
+                  className="w-10 h-10 flex-shrink-0 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white flex items-center justify-center transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -899,14 +1130,18 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
 
             <div className="flex flex-col gap-1">
               <FieldLabel required>Invoice Date</FieldLabel>
-              <div className="relative">
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setField("date", e.target.value)}
-                  className={`${inputClass} pr-10 [&::-webkit-calendar-picker-indicator]:opacity-0`}
-                />
-                <Calendar className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              {/* Reserve the same 32px + gap the Select Deal "+" button takes,
+                  so this input lines up with the deal picker's width. */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 min-w-0">
+                  <input
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => setField("date", e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div className="w-8 flex-shrink-0" aria-hidden="true" />
               </div>
             </div>
 
@@ -917,9 +1152,8 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
                   type="date"
                   value={form.dueDate}
                   onChange={(e) => setField("dueDate", e.target.value)}
-                  className={`${inputClass} pr-10 [&::-webkit-calendar-picker-indicator]:opacity-0`}
+                  className={inputClass}
                 />
-                <Calendar className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
           </div>
@@ -986,13 +1220,17 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2 w-full">
             <div className="flex flex-col gap-1">
               <FieldLabel required>Receiver GSTIN</FieldLabel>
-              <input
-                type="text"
-                value={form.receiverGSTIN}
-                onChange={(e) => setField("receiverGSTIN", e.target.value)}
-                placeholder="Enter Receiver GSTIN (e.g., 22AAAAA0000A1Z5)"
-                className={inputClass}
-              />
+              {/* Match the Select Deal picker width (reserve the "+" button space). */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={form.receiverGSTIN}
+                  onChange={(e) => setField("receiverGSTIN", e.target.value)}
+                  placeholder="Enter Receiver GSTIN (e.g., 22AAAAA0000A1Z5)"
+                  className={`${inputClass} flex-1 min-w-0`}
+                />
+                <div className="w-8 flex-shrink-0" aria-hidden="true" />
+              </div>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -1025,14 +1263,13 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
             </div>
           </div>
 
-          {/* Items */}
+          {/* Items — one card per line item, every field labelled and
+              full-width so nothing is cramped regardless of panel width. */}
           <SectionHeader number="03" title="Invoice Items" />
-          <div className="border border-[#E1E4EA] rounded-lg overflow-hidden mb-1 w-full">
+          <div className="w-full flex flex-col gap-2 @2xl:gap-0 mb-1">
+            {/* Column header — only shown in the wide (row/list) layout. */}
             <div
-              className={`grid gap-1.5 px-2.5 py-1.5 bg-[#F9FAFB] border-b border-[#E1E4EA] text-[11px] text-[#525866] ${form.isTaxInvoice
-                  ? "grid-cols-[1.2fr_1.1fr_0.55fr_0.65fr_0.55fr_1fr_0.9fr_32px]"
-                  : "grid-cols-[1.3fr_1.3fr_0.7fr_0.6fr_1.1fr_0.9fr_32px]"
-                }`}
+              className={`hidden @2xl:grid @2xl:items-center gap-2 px-2 pb-1 text-[11px] font-medium text-[#525866] ${itemRowCols}`}
             >
               <span>Item</span>
               <span>Description</span>
@@ -1040,120 +1277,206 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
               <span>Rate (₹)</span>
               <span>Qty</span>
               <span>Discount</span>
-              <span>Amount (₹)</span>
+              <span className="text-right">Amount</span>
               <span />
             </div>
 
-            {form.items.map((item, index) => (
-              <div
-                key={index}
-                className={`grid gap-1.5 px-2.5 py-1.5 items-center border-b last:border-b-0 border-[#E1E4EA] ${form.isTaxInvoice
-                    ? "grid-cols-[1.2fr_1.1fr_0.55fr_0.65fr_0.55fr_1fr_0.9fr_32px]"
-                    : "grid-cols-[1.3fr_1.3fr_0.7fr_0.6fr_1.1fr_0.9fr_32px]"
-                  }`}
-              >
-                <PickerSelect
-                  value={item._id}
-                  options={catalogue.map((c) => ({
-                    value: c._id,
-                    label: c.displayName,
-                  }))}
-                  placeholder="Search items or variants"
-                  onSelect={(o) => {
-                    const picked = catalogue.find((c) => c._id === o.value);
-                    if (!picked) return;
-                    updateItem(index, {
-                      _id: picked._id,
-                      name: picked.name,
-                      description: picked.description,
-                      rate: picked.sellingPrice ?? "",
-                      hsn: picked.hsnSac || "",
-                      isVariant: picked.isVariant,
-                      parentItemId: picked.parentItemId,
-                    });
-                  }}
-                />
-                <input
-                  value={item.description}
-                  onChange={(e) =>
-                    updateItem(index, { description: e.target.value })
-                  }
-                  placeholder="Item Description"
-                  className="h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF]"
-                />
-                {form.isTaxInvoice && (
-                  <input
-                    value={item.hsn}
-                    onChange={(e) => updateItem(index, { hsn: e.target.value })}
-                    placeholder="HSN"
-                    className="h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF]"
-                  />
-                )}
-                <input
-                  type="number"
-                  min="0"
-                  value={item.rate}
-                  onChange={(e) => updateItem(index, { rate: e.target.value })}
-                  className="w-full h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] focus:outline-none focus:border-[#0085FF]"
-                />
-                <input
-                  type="number"
-                  min="1"
-                  value={item.quantity}
-                  onChange={(e) => updateItem(index, { quantity: e.target.value })}
-                  className="h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] text-center focus:outline-none focus:border-[#0085FF]"
-                />
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min="0"
-                    value={item.discount}
-                    onChange={(e) => {
-                      const rawValue = e.target.value;
-                      const parsed = parseFloat(rawValue) || 0;
-                      const base = lineTotal(item);
-                      let clamped = rawValue;
-                      if (item.discountType === "amount" && parsed > base) {
-                        clamped = base;
-                        toast.error("Item discount cannot exceed item total.");
-                      } else if (item.discountType === "percentage" && parsed > 100) {
-                        clamped = 100;
-                        toast.error("Percentage discount cannot exceed 100%.");
-                      }
-                      updateItem(index, { discount: clamped });
-                    }}
-                    className="w-full min-w-0 h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] focus:outline-none focus:border-[#0085FF]"
-                  />
-                  <select
-                    value={item.discountType}
-                    onChange={(e) =>
-                      updateItem(index, { discountType: e.target.value })
-                    }
-                    className="h-8 px-1 rounded-lg border border-[#E1E4EA] text-[11px] text-gray-600 bg-white focus:outline-none focus:border-[#0085FF] flex-shrink-0"
-                  >
-                    <option value="amount">₹</option>
-                    <option value="percentage">%</option>
-                  </select>
-                </div>
-                <span className="text-[13px] font-medium text-[#1F2937] text-right pr-1">
-                  {money(lineTotal(item) - itemDiscountAmount(item))}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeItem(index)}
-                  title="Remove item"
-                  className="w-6 h-6 flex items-center justify-center text-red-500 hover:bg-red-50 rounded transition-colors"
+            {form.items.map((item, index) => {
+              const numInput =
+                "w-full h-10 px-2.5 rounded-lg border border-[#E1E4EA] text-[13px] focus:outline-none focus:border-[#0085FF] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+              const txtInput =
+                "w-full h-10 px-2.5 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF]";
+              // Label shows in card mode, hidden in the wide row layout (the
+              // column header covers it there).
+              const lbl =
+                "text-[11px] font-medium text-[#525866] mb-1 block @2xl:hidden";
+              return (
+                <div
+                  key={index}
+                  className={`grid grid-cols-1 @md:grid-cols-2 gap-x-3 gap-y-2 border border-[#E1E4EA] rounded-lg p-3 bg-white @2xl:items-center @2xl:gap-2 @2xl:border-0 @2xl:border-b @2xl:rounded-none @2xl:p-0 @2xl:px-2 @2xl:py-1.5 @2xl:last:border-b-0 ${itemRowCols}`}
                 >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
+                  {/* Card-only header: index + remove (hidden in row layout) */}
+                  <div className="flex items-center justify-between mb-1 @md:col-span-2 @2xl:hidden">
+                    <span className="text-[12px] font-semibold text-[#1F2937]">
+                      Item {index + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      title="Remove item"
+                      disabled={form.items.length === 1}
+                      className="w-7 h-7 flex items-center justify-center text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Item picker */}
+                  <div className="@md:col-span-2 @2xl:col-span-1 min-w-0">
+                    <label className={lbl}>Item</label>
+                    <PickerSelect
+                      value={item._id}
+                      options={catalogue.map((c) => ({
+                        value: c._id,
+                        label: c.displayName,
+                      }))}
+                      placeholder="Search items or variants"
+                      onSelect={(o) => {
+                        const picked = catalogue.find(
+                          (c) => c._id === o.value
+                        );
+                        if (!picked) return;
+                        updateItem(index, {
+                          _id: picked._id,
+                          name: picked.name,
+                          description: stripHtml(picked.description),
+                          rate: picked.sellingPrice ?? "",
+                          hsn: picked.hsnSac || "",
+                          isVariant: picked.isVariant,
+                          parentItemId: picked.parentItemId,
+                        });
+                      }}
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div className="@md:col-span-2 @2xl:col-span-1 min-w-0">
+                    <label className={lbl}>Description</label>
+                    <input
+                      value={item.description}
+                      onChange={(e) =>
+                        updateItem(index, { description: e.target.value })
+                      }
+                      placeholder="Item description"
+                      className={txtInput}
+                    />
+                  </div>
+
+                  {/* HSN (tax invoices only) */}
+                  {form.isTaxInvoice && (
+                    <div className="min-w-0">
+                      <label className={lbl}>HSN / SAC</label>
+                      <input
+                        value={item.hsn}
+                        onChange={(e) =>
+                          updateItem(index, { hsn: e.target.value })
+                        }
+                        placeholder="HSN"
+                        className={txtInput}
+                      />
+                    </div>
+                  )}
+
+                  {/* Rate */}
+                  <div className="min-w-0">
+                    <label className={lbl}>Rate (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={item.rate}
+                      onChange={(e) =>
+                        updateItem(index, { rate: e.target.value })
+                      }
+                      placeholder="0.00"
+                      className={numInput}
+                    />
+                  </div>
+
+                  {/* Quantity */}
+                  <div className="min-w-0">
+                    <label className={lbl}>Qty</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={item.quantity}
+                      onChange={(e) =>
+                        updateItem(index, { quantity: e.target.value })
+                      }
+                      placeholder="1"
+                      className={numInput}
+                    />
+                  </div>
+
+                  {/* Discount + type */}
+                  <div className="min-w-0">
+                    <label className={lbl}>Discount</label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.discount}
+                        onChange={(e) => {
+                          const rawValue = e.target.value;
+                          const parsed = parseFloat(rawValue) || 0;
+                          const base = lineTotal(item);
+                          let clamped = rawValue;
+                          if (
+                            item.discountType === "amount" &&
+                            parsed > base
+                          ) {
+                            clamped = base;
+                            toast.error(
+                              "Item discount cannot exceed item total."
+                            );
+                          } else if (
+                            item.discountType === "percentage" &&
+                            parsed > 100
+                          ) {
+                            clamped = 100;
+                            toast.error(
+                              "Percentage discount cannot exceed 100%."
+                            );
+                          }
+                          updateItem(index, { discount: clamped });
+                        }}
+                        placeholder="0"
+                        className={`${numInput} flex-1 min-w-0`}
+                      />
+                      <select
+                        value={item.discountType}
+                        onChange={(e) =>
+                          updateItem(index, { discountType: e.target.value })
+                        }
+                        className="h-10 px-1.5 rounded-lg border border-[#E1E4EA] text-[13px] text-gray-700 bg-white focus:outline-none focus:border-[#0085FF] flex-shrink-0"
+                      >
+                        <option value="amount">₹</option>
+                        <option value="percentage">%</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Row-layout amount cell (hidden in card mode) */}
+                  <span className="hidden @2xl:block text-right text-[13px] font-semibold text-[#1F2937] pr-1">
+                    {money(lineTotal(item) - itemDiscountAmount(item))}
+                  </span>
+
+                  {/* Row-layout remove button (hidden in card mode) */}
+                  <button
+                    type="button"
+                    onClick={() => removeItem(index)}
+                    title="Remove item"
+                    disabled={form.items.length === 1}
+                    className="hidden @2xl:flex w-8 h-8 items-center justify-center text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+
+                  {/* Card-only amount footer (hidden in row layout) */}
+                  <div className="flex items-center justify-between border-t border-[#E1E4EA] mt-2 pt-2 @md:col-span-2 @2xl:hidden">
+                    <span className="text-[12px] text-[#525866]">Amount</span>
+                    <span className="text-[14px] font-semibold text-[#1F2937]">
+                      {money(lineTotal(item) - itemDiscountAmount(item))}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <button
             type="button"
             onClick={addItem}
-            className="w-full h-8 min-h-[32px] flex-shrink-0 flex items-center justify-center gap-2 rounded-lg bg-white border border-[#0085FF]/20 text-sm font-medium text-[#0085FF] hover:bg-blue-50 transition-colors"
+            className="w-full h-10 min-h-[40px] flex-shrink-0 flex items-center justify-center gap-2 rounded-lg bg-white border border-[#0085FF]/20 text-sm font-medium text-[#0085FF] hover:bg-blue-50 transition-colors"
           >
             <Plus className="w-4 h-4" />
             Add Another Item
@@ -1164,7 +1487,12 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
             {/* Invoice-level discount, applied after the per-item ones */}
             <div className="flex flex-col gap-1">
               <FieldLabel>Invoice Discount</FieldLabel>
+              {/* Leading unit (₹ / %) with an up/down toggle built into the
+                  field — switches the discount type in place, no separate
+                  switcher. Reserve the same trailing space as Invoice Date so
+                  the two fields line up in width. */}
               <div className="flex items-center gap-2">
+              <div className="relative flex items-center flex-1 min-w-0 h-10 rounded-lg border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
                 <input
                   type="number"
                   min="0"
@@ -1190,37 +1518,36 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
                     }
                     setField("discount", { ...form.discount, value: clamped });
                   }}
-                  className="flex-1 h-8 px-2.5 rounded-lg border border-[#E1E4EA] text-[13px] focus:outline-none focus:border-[#0085FF]"
+                  className="flex-1 min-w-0 h-full px-2.5 text-[13px] focus:outline-none"
                 />
-                <div className="inline-flex rounded-full border border-[#E1E4EA] overflow-hidden flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setField("discount", { ...form.discount, type: "fixed" })
-                    }
-                    className={`w-8 h-8 text-[13px] font-medium transition-colors ${form.discount.type === "fixed"
-                        ? "bg-[#0085FF] text-white"
-                        : "text-gray-600 hover:bg-gray-50"
-                      }`}
-                  >
-                    ₹
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setField("discount", {
-                        ...form.discount,
-                        type: "percentage",
-                      })
-                    }
-                    className={`w-8 h-8 text-[13px] font-medium border-l border-[#E1E4EA] transition-colors ${form.discount.type === "percentage"
-                        ? "bg-[#0085FF] text-white"
-                        : "text-gray-600 hover:bg-gray-50"
-                      }`}
-                  >
-                    %
-                  </button>
+                <div className="flex items-stretch h-full">
+                  <span className="w-7 flex items-center justify-center text-[13px] font-semibold text-[#0085FF]">
+                    {form.discount.type === "percentage" ? "%" : "₹"}
+                  </span>
+                  <div className="flex flex-col justify-center">
+                    {[ChevronUp, ChevronDown].map((Icon, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        title="Switch between ₹ and %"
+                        onClick={() =>
+                          setField("discount", {
+                            ...form.discount,
+                            type:
+                              form.discount.type === "percentage"
+                                ? "fixed"
+                                : "percentage",
+                          })
+                        }
+                        className={`w-5 h-2.5 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded transition-colors ${i === 1 ? "-mt-0.5" : ""}`}
+                      >
+                        <Icon className="w-3 h-3" />
+                      </button>
+                    ))}
+                  </div>
                 </div>
+              </div>
+                <div className="w-8 flex-shrink-0" aria-hidden="true" />
               </div>
             </div>
 
@@ -1268,68 +1595,58 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
                   </p>
                 </div>
               </div>
-
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="self-end h-9 px-5 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {submitting ? "Creating..." : "Create Invoice"}
-                {!submitting && <ChevronRight className="w-4 h-4" />}
-              </button>
             </div>
           </div>
           </div>
         </div>
 
+        {/* Gap reserved for the absolute resizer line (rendered at panel level). */}
+        <div className="hidden lg:block w-1.5 flex-shrink-0" />
+
         {/* Right: preview. Frame 1351649638 — stretches to fill whatever's left beside the form panel. */}
-        <div className="w-full lg:flex-1 min-w-0 flex-shrink-0 bg-white border border-[#E1E4EA]/50 rounded-lg p-3 flex flex-col items-start gap-4 self-stretch">
-          {/* Frame 2147225004 */}
-          <div className="w-full flex items-center justify-between gap-4 flex-shrink-0">
-            <div>
-              <h2 className="text-[15px] font-semibold text-[#1F2937]">
-                Invoice Preview
-              </h2>
-              <p className="text-xs text-[#99A0AE] mt-0.5">
-                This is how your invoice will appear to the customer.
-              </p>
-            </div>
-            <div className="relative flex-shrink-0">
+        <div className="w-full lg:flex-1 min-w-0 bg-white p-3 lg:pl-6 flex flex-col items-start gap-4 self-stretch">
+
+          {/* Live invoice preview — mirrors the structure of the downloaded /
+              printed document and reflects the form's changes in real time. */}
+          <div
+            ref={previewAreaRef}
+            className="group w-full flex-1 min-h-0 self-stretch overflow-y-auto overflow-x-hidden relative p-1.5"
+          >
+            {/* Full-view button — appears on hover, opens the same document
+                viewer as the eye action in the list (edit mode only). */}
+            {isEditing && onFullView && (
               <button
                 type="button"
-                onClick={() => setShowTemplates((v) => !v)}
-                className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+                onClick={() => onFullView(initialDoc)}
+                title="Full view"
+                className="absolute top-3 right-3 z-10 flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#1F2937] text-white text-xs font-medium shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
               >
-                <Pencil className="w-3.5 h-3.5" />
-                Change Template
+                <Eye className="w-3.5 h-3.5" />
+                Full view
               </button>
-              {showTemplates && (
-                <div className="absolute right-0 mt-2 w-44 bg-white border border-[#E1E4EA] rounded-xl shadow-lg py-1 z-50">
-                  {INVOICE_STYLES.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => {
-                        setField("style", s);
-                        setShowTemplates(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${form.style === s
-                          ? "text-[#0085FF] font-medium"
-                          : "text-gray-700"
-                        }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              )}
+            )}
+            {/* Fixed-width sheet scaled to fit — resizing zooms the invoice
+                instead of reflowing it. Outer div reserves the scaled height. */}
+            <div style={{ height: sheetHeight || undefined }}>
+              <div
+                ref={sheetRef}
+                style={{
+                  width: PREVIEW_BASE_W,
+                  transform: `scale(${previewScale})`,
+                  transformOrigin: "top left",
+                }}
+              >
+                <InvoiceLivePreview
+                  form={form}
+                  orgDetails={orgDetails}
+                  bankDetails={bankDetails}
+                  invoiceNumber={initialDoc?.invoiceNumber}
+                  dealName={dealOptions.find((d) => d.value === form.deal)?.label}
+                  amountInWords={numberToWords(finalTotal)}
+                />
+              </div>
             </div>
           </div>
-
-          {/* Rectangle 4595 — Invoice preview placeholder. 
-              Responsive without fixed size, strictly filling the available height without scrolling. */}
-          <div className="w-full flex-1 min-h-0 self-stretch bg-[#D9D9D9] rounded overflow-hidden relative" />
         </div>
       </div>
     </div>
@@ -1648,6 +1965,7 @@ const Accounting = () => {
   // UI state
   const [selectedIds, setSelectedIds] = useState([]);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
+  const [editPanelDoc, setEditPanelDoc] = useState(null);
   const [showQuickDealForm, setShowQuickDealForm] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -1673,13 +1991,32 @@ const Accounting = () => {
   const [deleteDocType, setDeleteDocType] = useState(null);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false);
+  const [bulkUpdateStatus, setBulkUpdateStatus] = useState("");
+  const [bulkUpdating, setBulkUpdating] = useState(false);
+  // Delays the bulk-strip's unmount so it can play a slide-out-right exit
+  // animation on deselect (mirroring the slide-in-left entrance) — same as
+  // the Companies page.
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    const active = selectedIds.length > 0;
+    if (active) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [selectedIds.length]);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [convertDocId, setConvertDocId] = useState(null);
   const [convertDocType, setConvertDocType] = useState(null);
   const [convertTargetType, setConvertTargetType] = useState(null);
-  const [editingId, setEditingId] = useState(null);
-  const [tempInvoiceValue, setTempInvoiceValue] = useState("");
-  const [renamingLoading, setRenamingLoading] = useState(false);
 
   useEffect(() => {
     const handleClickOutside = () => {
@@ -1885,6 +2222,70 @@ const Accounting = () => {
     }
   };
 
+  // Export the selected rows on the active tab to a CSV, client-side.
+  const handleExportSelected = () => {
+    if (selectedIds.length === 0) return;
+    const selectedSet = new Set(selectedIds);
+    const docs = currentDocuments.filter((d) => selectedSet.has(d._id));
+    if (docs.length === 0) return;
+    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const header = ["ID", "Deal", "Issue Date", "Due Date", "Amount", "Status"];
+    const rows = docs.map((d) =>
+      [
+        `#${d[numberKeyFor(activeTab)] ?? ""}`,
+        d.deal?.title || "N/A",
+        d.date ? new Date(d.date).toLocaleDateString() : "",
+        d.dueDate ? new Date(d.dueDate).toLocaleDateString() : "",
+        d.amount ?? 0,
+        d.status || "",
+      ]
+        .map(esc)
+        .join(",")
+    );
+    exportToCSV(
+      [header.map(esc).join(","), ...rows],
+      `${apiPathFor(activeTab)}-export.csv`
+    );
+    toast.success(`Exported ${docs.length} ${docNameFor(activeTab)}${docs.length !== 1 ? "s" : ""}`);
+  };
+
+  // Bulk update: apply a chosen status to every selected document. Fans out the
+  // single-status route in parallel since there's no batch endpoint.
+  const confirmBulkUpdate = async () => {
+    if (selectedIds.length === 0 || !bulkUpdateStatus) return;
+    const type = activeTab;
+    try {
+      setBulkUpdating(true);
+      setLoading((prev) => ({ ...prev, [type]: true }));
+      const results = await Promise.allSettled(
+        selectedIds.map((id) =>
+          API.put(`/${apiPathFor(type)}/status/${id}`, {
+            status: bulkUpdateStatus,
+          })
+        )
+      );
+      const failed = results.filter((r) => r.status === "rejected").length;
+      await fetchData(type);
+      setSelectedIds([]);
+      if (failed === 0) {
+        toast.success(
+          `${results.length} ${docNameFor(type)}${results.length !== 1 ? "s" : ""
+          } updated to ${bulkUpdateStatus}`
+        );
+      } else {
+        toast.error(`Failed to update ${failed} of ${selectedIds.length} documents`);
+      }
+    } catch (err) {
+      toast.error(`Failed to update ${type} documents`);
+      console.error(`Bulk update ${type} documents error:`, err);
+    } finally {
+      setBulkUpdating(false);
+      setLoading((prev) => ({ ...prev, [type]: false }));
+      setShowBulkUpdateModal(false);
+      setBulkUpdateStatus("");
+    }
+  };
+
   const checkBrandingBeforeInvoice = async () => {
     try {
       const response = await API.get("/branding/invoice-check");
@@ -1952,40 +2353,6 @@ const Accounting = () => {
       setShowDeleteModal(false);
       setDeleteDocId(null);
       setDeleteDocType(null);
-    }
-  };
-
-  const startEditInvoice = (doc, type) => {
-    setEditingId(doc._id);
-    setTempInvoiceValue(doc[numberKeyFor(type)] ?? "");
-  };
-
-  const saveInvoiceName = async (docId, type) => {
-    const newValue = (tempInvoiceValue || "").trim();
-    if (!newValue) {
-      toast.error("Invoice number cannot be empty");
-      return;
-    }
-    try {
-      setRenamingLoading(true);
-      await API.patch(`/${apiPathFor(type)}/number/${docId}`, {
-        [numberKeyFor(type)]: newValue,
-      });
-      toast.success("Updated successfully");
-      await fetchData(type);
-      setEditingId(null);
-      setTempInvoiceValue("");
-    } catch (err) {
-      if (err?.response?.status === 409) {
-        toast.error(`${newValue} already exists!`);
-      } else {
-        toast.error(
-          err?.response?.data?.message || "Failed to update invoice number"
-        );
-        console.error("Rename error:", err);
-      }
-    } finally {
-      setRenamingLoading(false);
     }
   };
 
@@ -2145,31 +2512,22 @@ const Accounting = () => {
         return (
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-blue-600 flex-shrink-0" />
-            {editingId === doc._id ? (
-              <input
-                value={tempInvoiceValue}
-                autoFocus
-                onChange={(e) => setTempInvoiceValue(e.target.value)}
-                onBlur={() => saveInvoiceName(doc._id, activeTab)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveInvoiceName(doc._id, activeTab);
-                  if (e.key === "Escape") {
-                    setEditingId(null);
-                    setTempInvoiceValue("");
-                  }
-                }}
-                className="border px-2 py-1 text-sm rounded w-40"
-                disabled={renamingLoading}
-              />
-            ) : (
-              <span
-                onClick={() => startEditInvoice(doc, activeTab)}
-                className="text-sm font-semibold text-blue-600 cursor-pointer hover:underline truncate"
-                title="Click to edit"
-              >
-                #{doc[numberKeyFor(activeTab)]}
-              </span>
-            )}
+            <span
+              onClick={() => {
+                // Invoices open the full two-pane edit screen; the other
+                // document types keep their existing side form.
+                if (activeTab === "tax") {
+                  setEditPanelDoc(doc);
+                  setShowCreatePanel(true);
+                } else {
+                  handleEdit(doc, activeTab);
+                }
+              }}
+              className="text-sm font-semibold text-blue-600 cursor-pointer hover:underline truncate"
+              title="Open to edit"
+            >
+              #{doc[numberKeyFor(activeTab)]}
+            </span>
           </div>
         );
 
@@ -2332,44 +2690,73 @@ const Accounting = () => {
 
       <div className="bg-[#F9FAFB] min-h-screen -mx-4 sm:-mx-6 lg:-mx-8 -mt-6">
         {/* Bulk selection strip — overlays the toolbar when rows are selected,
-            mirroring the Companies page behaviour. */}
-        {selectedIds.length > 0 && (
+            mirroring the Companies page layout and slide animation. */}
+        {showBulkStrip && (
           <div
-            className="fixed right-0 h-[72px] px-4 lg:px-[24px] border-b border-blue-200 bg-blue-50 flex items-center justify-between gap-4 top-[54px] lg:top-16 overflow-x-auto"
+            className="fixed right-0 h-[72px] px-4 lg:px-[24px] border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
             style={{ left: "var(--sidebar-width, 0px)", zIndex: 41 }}
           >
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
-              <span className="text-blue-800 font-semibold whitespace-nowrap">
-                {selectedIds.length} selected
-              </span>
-              <button
-                onClick={handleSelectAll}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
-              >
-                <CheckSquare className="w-4 h-4" />
-                {selectedIds.length === currentDocuments.length &&
-                  currentDocuments.length > 0
-                  ? "Deselect All"
-                  : "Select All"}
-              </button>
-            </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <button
-                onClick={() => setShowBulkDeleteModal(true)}
-                disabled={bulkDeleting}
-                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete
-              </button>
-              <button
-                onClick={() => setSelectedIds([])}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
-              >
-                <X className="w-4 h-4" />
-                Cancel
-              </button>
+            <div
+              className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}
+            >
+              {/* Left: bulk action buttons */}
+              <div className="flex flex-nowrap lg:flex-wrap items-center gap-3 flex-shrink-0">
+                <button
+                  onClick={handleExportSelected}
+                  className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  <Download className="w-4 h-4" />
+                  Export
+                </button>
+                <button
+                  onClick={() => {
+                    setBulkUpdateStatus("");
+                    setShowBulkUpdateModal(true);
+                  }}
+                  className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  <Pencil className="w-4 h-4" />
+                  Bulk Update
+                </button>
+                <button
+                  onClick={() => setShowBulkDeleteModal(true)}
+                  disabled={bulkDeleting}
+                  className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete
+                </button>
+                <button
+                  onClick={() => setSelectedIds([])}
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  <X className="w-4 h-4" />
+                  Cancel
+                </button>
+              </div>
+              {/* Right: selection count + select/deselect all */}
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
+                  {selectedIds.length} selected
+                </span>
+                <button
+                  onClick={() =>
+                    setSelectedIds(currentDocuments.map((d) => d._id))
+                  }
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  Select All
+                </button>
+                <button
+                  onClick={() => setSelectedIds([])}
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  <X className="w-4 h-4" />
+                  Deselect All
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -2508,6 +2895,7 @@ const Accounting = () => {
                   // Invoices get the new two-pane create screen; the other document
                   // types keep their existing forms.
                   if (activeTab === "tax") {
+                    setEditPanelDoc(null);
                     setShowCreatePanel(true);
                     return;
                   }
@@ -3032,8 +3420,14 @@ const Accounting = () => {
         {/* New two-pane create screen for invoices */}
         {showCreatePanel && (
           <CreateInvoicePanel
+            key={editPanelDoc?._id || "new"}
             deals={deals}
-            onClose={() => setShowCreatePanel(false)}
+            initialDoc={editPanelDoc}
+            onFullView={(doc) => handleView(doc, "tax")}
+            onClose={() => {
+              setShowCreatePanel(false);
+              setEditPanelDoc(null);
+            }}
             onCreated={() => fetchData("tax")}
             onAddDeal={async () => {
               if (companies.length === 0 || contacts.length === 0) {
@@ -3238,6 +3632,56 @@ const Accounting = () => {
                 >
                   <Trash2 className="w-4 h-4" />
                   {bulkDeleting ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showBulkUpdateModal && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100003]">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-blue-100 p-2 rounded-lg">
+                  <Pencil className="w-5 h-5 text-blue-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">Bulk Update</h2>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Set a status for{" "}
+                <strong>{selectedIds.length}</strong> selected{" "}
+                {docNameFor(activeTab)}
+                {selectedIds.length !== 1 ? "s" : ""}.
+              </p>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Status
+              </label>
+              <select
+                value={bulkUpdateStatus}
+                onChange={(e) => setBulkUpdateStatus(e.target.value)}
+                className="w-full mb-6 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+              >
+                <option value="">Select status…</option>
+                {statusOptions.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowBulkUpdateModal(false)}
+                  disabled={bulkUpdating}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmBulkUpdate}
+                  disabled={bulkUpdating || !bulkUpdateStatus}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Pencil className="w-4 h-4" />
+                  {bulkUpdating ? "Updating..." : "Update"}
                 </button>
               </div>
             </div>
