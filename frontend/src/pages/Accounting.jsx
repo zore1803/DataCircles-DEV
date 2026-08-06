@@ -533,11 +533,71 @@ const PickerSelect = ({
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [dropdownStyle, setDropdownStyle] = useState({});
   const wrapRef = useRef(null);
+  const dropdownRef = useRef(null);
+
+  const updatePosition = useCallback(() => {
+    if (open && wrapRef.current) {
+      // rect is VISUAL px; this dropdown portals to document.body, which
+      // paints inside the app's dynamic <html> zoom, so every rect-derived
+      // value has to be divided by that zoom or it drifts off-position —
+      // same correction the column menu and drag ghost already apply.
+      const zoom = getAncestorZoom(document.body);
+      const rect = wrapRef.current.getBoundingClientRect();
+      const left = rect.left / zoom;
+      const top = rect.top / zoom;
+      const bottom = rect.bottom / zoom;
+      const triggerWidth = rect.width / zoom;
+      const viewportWidth = window.innerWidth / zoom;
+      const viewportHeight = window.innerHeight / zoom;
+      const spaceBelow = viewportHeight - bottom;
+      const spaceAbove = top;
+      const MARGIN = 8;
+
+      // Item pickers sit in narrow grid columns — tying the dropdown's width
+      // to the trigger's own width (as narrow as ~80px there) is what made
+      // it look like a crushed little box. Give it a real minimum width
+      // instead, and clamp so it never runs past the right edge.
+      const width = Math.max(triggerWidth, 260);
+      let left_ = Math.min(left, viewportWidth - width - MARGIN);
+      left_ = Math.max(left_, MARGIN);
+
+      let style = {
+        position: "fixed",
+        left: `${left_}px`,
+        width: `${width}px`,
+        zIndex: 99999, // Ensure it floats above dialogs
+      };
+
+      if (spaceBelow < 256 && spaceAbove > spaceBelow) {
+        style.bottom = `${viewportHeight - top + 4}px`;
+        style.maxHeight = `${Math.min(256, spaceAbove - 16)}px`;
+      } else {
+        style.top = `${bottom + 4}px`;
+        style.maxHeight = `${Math.min(256, spaceBelow - 16)}px`;
+      }
+      setDropdownStyle(style);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      updatePosition();
+      window.addEventListener("resize", updatePosition);
+      window.addEventListener("scroll", updatePosition, true);
+      return () => {
+        window.removeEventListener("resize", updatePosition);
+        window.removeEventListener("scroll", updatePosition, true);
+      };
+    }
+  }, [open, updatePosition]);
 
   useEffect(() => {
     const onDocClick = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+      const clickedInWrap = wrapRef.current && wrapRef.current.contains(e.target);
+      const clickedInDropdown = dropdownRef.current && dropdownRef.current.contains(e.target);
+      if (!clickedInWrap && !clickedInDropdown) setOpen(false);
     };
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
@@ -551,11 +611,11 @@ const PickerSelect = ({
     : options;
 
   return (
-    <div ref={wrapRef} className="relative w-full">
+    <div ref={wrapRef} className="relative w-full min-w-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full h-10 flex items-center gap-2 px-3 rounded-lg border border-[#E1E4EA] bg-white text-left hover:border-[#C9CFD8] focus:outline-none focus:border-[#0085FF] transition-colors"
+        className="w-full min-w-0 h-10 flex items-center gap-2 px-3 rounded-lg border border-[#E1E4EA] bg-white text-left hover:border-[#C9CFD8] focus:outline-none focus:border-[#0085FF] transition-colors"
       >
         {Icon && <Icon className="w-4 h-4 text-gray-400 flex-shrink-0" />}
         <span
@@ -567,10 +627,14 @@ const PickerSelect = ({
         <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
       </button>
 
-      {open && (
-        <div className="absolute left-0 right-0 mt-1 bg-white border border-[#E1E4EA] rounded-lg shadow-lg z-50 max-h-64 overflow-auto">
+      {open && createPortal(
+        <div
+          ref={dropdownRef}
+          style={dropdownStyle}
+          className="bg-white border border-[#E1E4EA] rounded-lg shadow-xl flex flex-col overflow-hidden"
+        >
           {searchable && (
-            <div className="p-2 sticky top-0 bg-white border-b border-[#E1E4EA]">
+            <div className="p-2 bg-white border-b border-[#E1E4EA] flex-shrink-0">
               <input
                 autoFocus
                 value={query}
@@ -580,25 +644,28 @@ const PickerSelect = ({
               />
             </div>
           )}
-          {filtered.length === 0 && (
-            <p className="px-3 py-3 text-sm text-gray-400">No results</p>
-          )}
-          {filtered.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => {
-                onSelect(o);
-                setOpen(false);
-                setQuery("");
-              }}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${o.value === value ? "text-[#0085FF] font-medium" : "text-gray-700"
-                }`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
+          <div className="overflow-y-auto flex-1">
+            {filtered.length === 0 && (
+              <p className="px-3 py-3 text-sm text-gray-400">No results</p>
+            )}
+            {filtered.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => {
+                  onSelect(o);
+                  setOpen(false);
+                  setQuery("");
+                }}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors ${o.value === value ? "bg-blue-50 text-blue-600 font-medium" : "text-gray-700"
+                  }`}
+              >
+                <span className="flex-1 truncate">{o.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -985,14 +1052,14 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
                     updateItem(index, { description: e.target.value })
                   }
                   placeholder="Item Description"
-                  className="h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF]"
+                  className="w-full min-w-0 h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF]"
                 />
                 {form.isTaxInvoice && (
                   <input
                     value={item.hsn}
                     onChange={(e) => updateItem(index, { hsn: e.target.value })}
                     placeholder="HSN"
-                    className="h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF]"
+                    className="w-full min-w-0 h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF]"
                   />
                 )}
                 <input
@@ -1000,14 +1067,14 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
                   min="0"
                   value={item.rate}
                   onChange={(e) => updateItem(index, { rate: e.target.value })}
-                  className="w-full h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] focus:outline-none focus:border-[#0085FF]"
+                  className="w-full min-w-0 h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] focus:outline-none focus:border-[#0085FF]"
                 />
                 <input
                   type="number"
                   min="1"
                   value={item.quantity}
                   onChange={(e) => updateItem(index, { quantity: e.target.value })}
-                  className="h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] text-center focus:outline-none focus:border-[#0085FF]"
+                  className="w-full min-w-0 h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] text-center focus:outline-none focus:border-[#0085FF]"
                 />
                 <div className="flex items-center gap-1">
                   <input
