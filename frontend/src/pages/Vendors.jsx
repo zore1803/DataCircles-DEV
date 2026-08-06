@@ -42,9 +42,12 @@ import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
 import { useLocation } from "react-router-dom";
 import ImportVendors from "../components/vendor/ImportVendors";
 import toast from "react-hot-toast";
-import logo from "/DataCircles.png";
 import AppToaster from "../components/AppToaster";
+import HighlightText from "../components/common/HighlightText";
 import { getAncestorZoom } from "../utils/domUtils";
+import useMinDelay from "../hooks/useMinDelay";
+import Skeleton from "../components/common/Skeleton";
+import TableSkeletonRows from "../components/common/TableSkeletonRows";
 
 function useOutsideClick(ref, callback) {
   useEffect(() => {
@@ -114,6 +117,28 @@ function Vendors() {
   const [showForm, setShowForm] = useState(false);
   const [selectedVendors, setSelectedVendors] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // Delays the bulk-strip's unmount so it can play a slide-out-right exit
+  // animation on deselect (mirroring the slide-in entrance) — same mechanism
+  // Companies.jsx uses so the toolbar and the bulk strip feel identical.
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    if (selectedVendors.length > 0) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVendors.length]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     vendorId: "",
@@ -149,6 +174,12 @@ function Vendors() {
   // Toolbar UI state — same shape as Accounting.jsx's action row.
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+
+  // Search expand/collapse animation — same mechanics as Companies.jsx: the
+  // title/subtitle shrink away and the search pill grows via a width
+  // transition, instead of the field just appearing/disappearing.
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
 
   // Column order / visibility / pinning / widths — in-memory only, same
   // scheme as Accounting.jsx (no persistence, matched on purpose for parity).
@@ -483,7 +514,7 @@ function Vendors() {
             to={`/vendors/${vendor._id}`}
             className="text-blue-600 font-bold text-sm hover:text-blue-700 transition-colors truncate block"
           >
-            {vendor.name}
+            <HighlightText text={vendor.name} query={searchTerm} />
           </Link>
         );
       case "email":
@@ -492,7 +523,7 @@ function Vendors() {
             href={`mailto:${vendor.email}`}
             className="text-sm text-gray-700 hover:text-blue-600 transition-colors truncate block"
           >
-            {vendor.email}
+            <HighlightText text={vendor.email} query={searchTerm} />
           </a>
         ) : (
           <span className="text-sm text-gray-400">—</span>
@@ -503,7 +534,7 @@ function Vendors() {
             href={`tel:${vendor.phone}`}
             className="text-sm text-gray-700 hover:text-blue-600 transition-colors truncate block"
           >
-            {vendor.phone}
+            <HighlightText text={vendor.phone} query={searchTerm} />
           </a>
         ) : (
           <span className="text-sm text-gray-400">—</span>
@@ -511,13 +542,20 @@ function Vendors() {
       case "company":
         return (
           <span className="text-sm text-gray-700 capitalize font-medium truncate block">
-            {vendor.company || "—"}
+            {vendor.company ? (
+              <HighlightText text={vendor.company} query={searchTerm} />
+            ) : (
+              "—"
+            )}
           </span>
         );
       case "address":
         return (
           <span className="text-sm text-gray-700 truncate block">
-            {truncateText(getFieldValue(vendor, "address"), 40)}
+            <HighlightText
+              text={truncateText(getFieldValue(vendor, "address"), 40)}
+              query={searchTerm}
+            />
           </span>
         );
       case "balance":
@@ -529,7 +567,10 @@ function Vendors() {
       default:
         return (
           <span className="text-sm text-gray-700 truncate block">
-            {truncateText(String(getFieldValue(vendor, colId)), 30)}
+            <HighlightText
+              text={truncateText(String(getFieldValue(vendor, colId)), 30)}
+              query={searchTerm}
+            />
           </span>
         );
     }
@@ -648,6 +689,7 @@ function Vendors() {
   };
 
   const handleBulkDeleteVendors = async (itemIds) => {
+    setBulkDeleting(true);
     try {
       await Promise.all(itemIds.map((id) => API.delete(`/vendors/${id}`)));
       await fetchVendors();
@@ -656,6 +698,8 @@ function Vendors() {
       toast.success(`Successfully deleted ${itemIds.length} vendors`);
     } catch (err) {
       toast.error(err.response?.data?.error || "Bulk delete failed");
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -872,28 +916,139 @@ function Vendors() {
     setSelectedVendors([]);
   };
 
+  // One flag drives every skeleton on the page — header, table body, and
+  // pagination all appear and resolve together, same as Companies.jsx.
+  // useMinDelay holds it for 300ms so a fast fetch doesn't flash the
+  // placeholders.
+  const showLoadingSkeleton = useMinDelay(loading && vendors.length === 0, 300);
+
   return (
-    <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-sm flex flex-col overflow-hidden relative z-0 w-full">
+    <>
       <AppToaster />
 
-      <div className="box-border flex flex-row justify-between items-center px-6 py-3 gap-4 w-full h-[72px] bg-white border-b border-[#E1E4EA] flex-shrink-0">
-        <div className="flex flex-col justify-center">
-          <h1 className="text-[20px] font-semibold text-[#1F2937] leading-[28px] tracking-[-0.02em]">Vendors</h1>
-          <p className="text-[14px] text-[#525866] leading-[20px] font-normal">Manage your vendors.</p>
-        </div>
+      {/* Fixed toolbar — same positioning Companies.jsx uses (pinned right
+          below the app header, not part of the scrolling page), and the
+          same trick for bulk mode: instead of a banner pushed below the
+          toolbar, the bulk-action strip slides in and takes over this exact
+          bar, so nothing shifts and it feels identical to Companies.jsx. */}
+      <div
+        className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${
+          showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"
+        }`}
+        style={{ left: "var(--sidebar-width, 0px)", zIndex: 40 }}
+      >
+        {showBulkStrip ? (
+          <div
+            className={`${
+              bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"
+            } flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}
+          >
+            <div className="flex flex-nowrap items-center gap-3 flex-shrink-0">
+              <button
+                onClick={() => setShowBulkActions(true)}
+                className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <Edit2 className="w-4 h-4" />
+                Bulk Update
+              </button>
+              <button
+                onClick={() => setShowBulkDeleteModal(true)}
+                disabled={bulkDeleting}
+                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+              <button
+                onClick={exitSelectionMode}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            </div>
+            <div className="flex flex-nowrap items-center gap-3 flex-shrink-0">
+              <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
+                {selectedVendors.length} vendor
+                {selectedVendors.length !== 1 ? "s" : ""} selected
+              </span>
+              <button
+                onClick={() => setSelectedVendors(vendors.map((v) => v._id))}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Select All
+              </button>
+              <button
+                onClick={exitSelectionMode}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <X className="w-4 h-4" />
+                Deselect All
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 lg:gap-4 w-full h-full">
+            <div
+              className={`flex-shrink-0 flex flex-col justify-center overflow-hidden transition-all duration-300 ease-in-out ${
+                isSearchExpanded ? "w-0 opacity-0" : "w-[190px] opacity-100"
+              }`}
+            >
+              {showLoadingSkeleton ? (
+                <>
+                  <Skeleton width={80} height={18} className="mb-1" />
+                  <Skeleton width={130} height={12} />
+                </>
+              ) : (
+                <>
+                  <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Vendors</h1>
+                  <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
+                    Manage your vendors.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="flex-1" />
+
+        {showLoadingSkeleton ? (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Skeleton width={44} height={44} shape="circle" />
+            <Skeleton width={44} height={44} shape="circle" />
+            <Skeleton width={44} height={44} shape="circle" />
+            <Skeleton width={130} height={44} shape="circle" />
+          </div>
+        ) : (
         <div className="flex flex-row items-center gap-2 h-[44px] flex-shrink-0">
-          <div className="relative flex items-center h-11 w-[220px] sm:w-[300px] lg:w-[380px] rounded-full border border-[#E1E4EA] bg-white focus-within:border-[#0085FF] transition-colors">
+          <div
+            className={`relative h-11 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${
+              isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-11"
+            } max-w-full`}
+          >
             <Search
               size={18}
               strokeWidth={2}
-              className="absolute left-3.5 text-[#1F2937] pointer-events-none"
+              className="absolute left-3.5 text-[#1F2937] cursor-pointer z-10 flex-shrink-0"
+              onClick={() => {
+                setIsSearchExpanded(true);
+                searchInputRef.current?.focus();
+              }}
             />
             <input
+              ref={searchInputRef}
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              onFocus={() => setIsSearchExpanded(true)}
+              onBlur={() => {
+                if (!searchTerm) setIsSearchExpanded(false);
+              }}
               placeholder="Search by vendor name, ID, company, or email..."
-              className="w-full h-full bg-transparent rounded-full pl-11 pr-4 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none"
+              className={`w-full h-full bg-transparent rounded-full pl-11 pr-4 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none transition-opacity duration-200 cursor-pointer ${
+                isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"
+              }`}
             />
           </div>
 
@@ -1003,6 +1158,9 @@ function Vendors() {
             </span>
           </button>
         </div>
+        )}
+            </div>
+        )}
       </div>
 
       {showForm && (
@@ -1052,64 +1210,48 @@ function Vendors() {
         />
       )}
 
-      {selectedVendors.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <CheckSquare className="w-5 h-5 text-blue-600" />
-            <span className="text-blue-800 font-semibold font-inter">
-              {selectedVendors.length} vendor
-              {selectedVendors.length !== 1 ? "s" : ""} selected
-            </span>
-          </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowBulkActions(true)}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <Edit2 className="w-4 h-4" />
-              Bulk Update
-            </button>
-            <button
-              onClick={exitSelectionMode}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       {showImport && (
-        <div className="mb-4">
-          <ImportVendors
-            isOpen={true}
-            onClose={() => setShowImport(false)}
-            vendorFieldNames={vendorFields}
-            onImportSuccess={fetchVendors}
-          />
-        </div>
+        <ImportVendors
+          isOpen={true}
+          onClose={() => setShowImport(false)}
+          vendorFieldNames={vendorFields}
+          onImportSuccess={fetchVendors}
+        />
       )}
 
-      {/* Hidden columns are recoverable — same affordance as Accounting.jsx. */}
-      {hiddenCols.length > 0 && (
-        <div className="flex justify-end mb-2">
-          <button
-            onClick={() => setHiddenCols([])}
-            className="h-8 px-3 flex items-center gap-1.5 rounded-full bg-white border border-[#E1E4EA] text-xs font-medium text-[#525866] hover:bg-gray-50 transition-colors"
-          >
-            Show {hiddenCols.length} hidden column
-            {hiddenCols.length > 1 ? "s" : ""}
-          </button>
-        </div>
-      )}
+      {/* Fixed table area — same offsets Companies.jsx uses: starts right
+          below the 64px toolbar (which itself starts below the 54/64px app
+          header), and stops 64px short of the bottom to leave room for the
+          fixed pagination bar. */}
+      <div
+        className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
+        style={{
+          position: "fixed",
+          left: "var(--sidebar-width, 0px)",
+          right: 0,
+          bottom: pagination.totalCount > 0 ? 64 : 0,
+        }}
+      >
+        {/* Hidden columns are recoverable — same affordance as Accounting.jsx. */}
+        {hiddenCols.length > 0 && (
+          <div className="flex justify-end p-2 sticky left-0">
+            <button
+              onClick={() => setHiddenCols([])}
+              className="h-8 px-3 flex items-center gap-1.5 rounded-full bg-white border border-[#E1E4EA] shadow-sm text-xs font-medium text-[#525866] hover:bg-gray-50 transition-colors"
+            >
+              Show {hiddenCols.length} hidden column
+              {hiddenCols.length > 1 ? "s" : ""}
+            </button>
+          </div>
+        )}
 
-      <div className="overflow-x-auto min-h-[400px]">
+        <div className="bg-white border border-[#E1E4EA]">
           <table
             className="border-separate border-spacing-0 text-left"
             style={{ minWidth: "100%", width: tableWidth, tableLayout: "fixed" }}
           >
-            <thead className="bg-[#F5F7FA] select-none">
+            <thead className="bg-[#F5F7FA] sticky top-0 z-20 select-none">
               <tr>
                 <th
                   data-col-id="selection"
@@ -1197,31 +1339,15 @@ function Vendors() {
               </tr>
             </thead>
             <tbody className="bg-white">
-              {loading && vendors.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={orderedColumns.length + 1}
-                    className="px-6 py-12 text-center"
-                  >
-                    <div className="flex flex-col items-center justify-center">
-                      <img
-                        src={logo}
-                        alt="Loading..."
-                        className="animate-spin-smooth drop-shadow-lg"
-                        style={{
-                          width: "48px",
-                          height: "48px",
-                          animationDuration: "1.8s",
-                          filter: "invert(100%)",
-                        }}
-                      />
-                      <p className="mt-3 text-gray-600 font-medium">
-                        Loading Vendors...
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              ) : vendors.length === 0 ? (
+              {showLoadingSkeleton && (
+                <TableSkeletonRows
+                  numRows={pagination.limit}
+                  columns={orderedColumns.map((c) => colWidths[c.id])}
+                  hasCheckbox
+                  checkboxWidth={colWidths.selection}
+                />
+              )}
+              {!showLoadingSkeleton && vendors.length === 0 && (
                 <tr>
                   <td
                     colSpan={orderedColumns.length + 1}
@@ -1232,7 +1358,8 @@ function Vendors() {
                     <p className="text-sm">Try adjusting your search or filters</p>
                   </td>
                 </tr>
-              ) : (
+              )}
+              {!showLoadingSkeleton &&
                 vendors.map((vendor) => (
                   <tr
                     key={vendor._id}
@@ -1336,16 +1463,31 @@ function Vendors() {
                       )
                     )}
                   </tr>
-                ))
-              )}
+                ))}
             </tbody>
           </table>
         </div>
+      </div>
 
-        {/* Pagination — same "first ... current ... last" editable pattern
-            and per-page selector as Companies.jsx. */}
-        {!loading && pagination.totalCount > 0 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-[#E1E4EA] sm:px-6">
+      {/* Pagination — its own fixed strip pinned to the bottom, same
+          treatment Companies.jsx gives it, with the exact "first ... current
+          ... last" editable pattern and per-page selector. */}
+      {(showLoadingSkeleton || pagination.totalCount > 0) && (
+        <div
+          className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
+          style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+        >
+          {showLoadingSkeleton ? (
+            <div className="w-full px-4 py-3 flex items-center justify-between sm:px-6">
+              <Skeleton width={190} height={14} />
+              <div className="flex items-center gap-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} width={32} height={32} shape="circle" />
+                ))}
+              </div>
+            </div>
+          ) : (
+          <div className="w-full px-4 py-3 flex items-center justify-between sm:px-6">
             <div className="flex-1 flex justify-between sm:hidden">
               <button
                 onClick={() => handlePageChange(pagination.currentPage - 1)}
@@ -1481,7 +1623,9 @@ function Vendors() {
               </div>
             </div>
           </div>
-        )}
+          )}
+        </div>
+      )}
 
       {/* Shared column popup — one menu, used by every column. */}
       {openColumnMenuKey &&
@@ -1676,6 +1820,54 @@ function Vendors() {
         </div>
       )}
 
+      {/* Bulk delete confirmation — same structure as Companies.jsx's. */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
+                Confirm Bulk Delete
+              </h3>
+              <p className="text-sm text-gray-500 font-inter mb-6">
+                Are you sure you want to delete{" "}
+                <strong>{selectedVendors.length}</strong> vendor
+                {selectedVendors.length !== 1 ? "s" : ""}? This action cannot
+                be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkDeleting}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    await handleBulkDeleteVendors(selectedVendors);
+                    setShowBulkDeleteModal(false);
+                  }}
+                  disabled={bulkDeleting}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm flex items-center justify-center gap-2 min-w-[120px]"
+                >
+                  {bulkDeleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Delete All"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <VendorPaymentForm
         open={showPaymentModal}
         vendorId={paymentForm.vendorId}
@@ -1696,7 +1888,7 @@ function Vendors() {
         fieldConfig={vendorFieldConfig}
         module="vendors"
       />
-    </div>
+    </>
   );
 }
 

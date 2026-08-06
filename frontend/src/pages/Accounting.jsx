@@ -38,6 +38,7 @@ import { createPortal } from "react-dom";
 import API from "../services/api";
 import toast from "react-hot-toast";
 import AppToaster from "../components/AppToaster";
+import HighlightText from "../components/common/HighlightText";
 import InvoiceForm from "../components/invoice/InvoiceForm";
 import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceForm";
 import QuotationForm from "../components/quotation/QuotationForm";
@@ -2141,7 +2142,7 @@ const Accounting = () => {
                 className="text-sm font-semibold text-blue-600 cursor-pointer hover:underline truncate"
                 title="Click to edit"
               >
-                #{doc[numberKeyFor(activeTab)]}
+                #<HighlightText text={doc[numberKeyFor(activeTab)]} query={searchTerms[activeTab]} />
               </span>
             )}
           </div>
@@ -2150,7 +2151,11 @@ const Accounting = () => {
       case "deal":
         return (
           <span className="block truncate text-sm text-[#1C1B1F] font-medium">
-            {doc.deal?.title || "N/A"}
+            {doc.deal?.title ? (
+              <HighlightText text={doc.deal.title} query={searchTerms[activeTab]} />
+            ) : (
+              "N/A"
+            )}
           </span>
         );
 
