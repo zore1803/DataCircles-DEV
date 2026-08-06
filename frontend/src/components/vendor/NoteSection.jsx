@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
 import API from "../../services/api";
@@ -269,6 +270,11 @@ const NoteSection = ({ isQuickView }) => {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [showAllNotes, setShowAllNotes] = useState(false);
+  const [portalTarget, setPortalTarget] = useState(null);
+
+  useEffect(() => {
+    setPortalTarget(document.getElementById("tab-actions-portal"));
+  }, []);
 
   const fetchNotes = useCallback(async () => {
     try {
@@ -378,19 +384,17 @@ const NoteSection = ({ isQuickView }) => {
     <div className="h-full">
       <AppToaster />
       
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <StickyNote className="w-4 h-4" />
-          <span>{filteredNotes.length} notes</span>
-        </div>
+      <div className="mt-2" />
+      {portalTarget && createPortal(
         <button
           onClick={() => setIsEditorOpen(true)}
           className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
         >
           <Plus className="w-4 h-4" />
-          New Note
-        </button>
-      </div>
+          <span>New Note</span>
+        </button>,
+        portalTarget
+      )}
 
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />

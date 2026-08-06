@@ -22,6 +22,10 @@ const paymentSchema = new mongoose.Schema(
       required: true,
     },
     notes: String,
+    // Transaction reference (UTR / cheque no. / txn id). Rendered on the payment
+    // receipt (components/vendor/venerPaymentPreview.tsx), which read this field
+    // before the schema carried it.
+    reference: String,
     direction: { type: String, enum: ["IN", "OUT"], required: true },
   },
   { timestamps: true }

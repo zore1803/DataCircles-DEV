@@ -1,20 +1,83 @@
-import React, { useState, useEffect } from "react";
-import { ChevronDown, Plus, Calendar } from "lucide-react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { Plus, Calendar, Search, Trash2, Eye } from "lucide-react";
 import API from "../../services/api";
 import VendorTaskForm from "./VendorTaskForm";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
+import DataTable from "../common/DataTable";
+import BulkActionBar from "../common/BulkActionBar";
+import CompanyFilterPanel from "../company/CompanyFilterPanel";
+import FilterIcon from "../common/FilterIcon";
+import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import toast from "react-hot-toast";
+
+/* Columns offered in the filter panel. `options` seeds the dropdown with the
+   schema's full enum so a value is still filterable when no row currently uses
+   it (models/Task.js). */
+const TASK_FILTER_COLUMNS = [
+  { key: "status", label: "Status", options: ["Pending", "In Progress", "Completed"] },
+  { key: "priority", label: "Priority", options: ["low", "medium", "high"] },
+  { key: "assignedTo", label: "Assigned To" },
+];
+
+const getTaskFieldValue = (task, key) => {
+  switch (key) {
+    case "status":
+      return task.status;
+    case "priority":
+      return task.priority;
+    case "assignedTo":
+      return task.users?.map((u) => u?.name).filter(Boolean).join(", ");
+    default:
+      return task[key];
+  }
+};
+
+const STATUS_BADGE = {
+  Pending: "bg-gray-100 text-gray-700",
+  "In Progress": "bg-blue-50 text-blue-700",
+  Completed: "bg-green-50 text-green-700",
+  Cancelled: "bg-gray-200 text-gray-700",
+};
+
+const PRIORITY_BADGE = {
+  high: "bg-red-50 text-red-600",
+  medium: "bg-amber-50 text-amber-700",
+  low: "bg-gray-100 text-gray-600",
+};
+
+const stripHtml = (html) => String(html || "").replace(/<[^>]*>/g, "").trim();
+
+const formatDate = (iso) =>
+  iso
+    ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "—";
 
 const VendorTasksTable = ({ vendorId }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [statusFilter, setStatusFilter] = useState("");
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [vendorName, setVendorName] = useState("");
+  const [portalTarget, setPortalTarget] = useState(null);
+
+  const [search, setSearch] = useState("");
+  const [selectedFilters, setSelectedFilters] = useState({});
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [columnSizing, setColumnSizing] = useState({});
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    setPortalTarget(document.getElementById("tab-actions-portal"));
+  }, []);
+
+  const refetchTasks = useCallback(async () => {
+    const response = await API.get(`/tasks/vendor/${vendorId}`);
+    setTasks(response.data || []);
+  }, [vendorId]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -23,9 +86,7 @@ const VendorTasksTable = ({ vendorId }) => {
         setLoading(false);
         return;
       }
-
-      const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(vendorId);
-      if (!isValidObjectId) {
+      if (!/^[0-9a-fA-F]{24}$/.test(vendorId)) {
         setError("Invalid Vendor ID format");
         setLoading(false);
         return;
@@ -33,37 +94,91 @@ const VendorTasksTable = ({ vendorId }) => {
 
       try {
         setLoading(true);
-        // Fetch tasks for the specific vendor
-        const response = await API.get(`/tasks/vendor/${vendorId}`);
-        setTasks(response.data || []);
-        
-        // Fetch users for assignment
-        const usersResponse = await API.get("/auth/all-user");
-        setUsers(usersResponse.data.allUsers || []);
-        
-        // Fetch vendor details for name
-        const vendorResponse = await API.get(`/vendors/${vendorId}`);
-        setVendorName(vendorResponse.data.name || "");
-        
+        await refetchTasks();
         setError(null);
       } catch (err) {
         setError("Failed to load tasks");
-        console.error("Error fetching data:", err);
+        console.error("Error fetching tasks:", err);
         toast.error("Failed to load tasks.");
-      } finally {
         setLoading(false);
+        return;
       }
+
+      // Supporting data only — the task list already rendered above, so a
+      // failure here (e.g. a 403 on the permission-gated user list) must not
+      // blank out tasks that loaded fine.
+      try {
+        const usersResponse = await API.get("/auth/all-user");
+        setUsers(usersResponse.data?.allUsers || []);
+      } catch (err) {
+        console.error("Error fetching users for task assignment:", err);
+      }
+
+      try {
+        const vendorResponse = await API.get(`/vendors/${vendorId}`);
+        setVendorName(vendorResponse.data?.name || "");
+      } catch (err) {
+        console.error("Error fetching vendor name:", err);
+      }
+
+      setLoading(false);
     };
 
     fetchData();
-  }, [vendorId]);
+  }, [vendorId, refetchTasks]);
+
+  /* ── Search + filter ── */
+  const filteredTasks = useMemo(() => {
+    let rows = tasks;
+
+    const term = search.trim().toLowerCase();
+    if (term) {
+      rows = rows.filter((t) =>
+        [t.title, stripHtml(t.description), t.status, t.priority, getTaskFieldValue(t, "assignedTo")]
+          .some((v) => String(v || "").toLowerCase().includes(term)),
+      );
+    }
+
+    Object.entries(selectedFilters).forEach(([key, values]) => {
+      if (!values?.length) return;
+      rows = rows.filter((t) => values.includes(String(getTaskFieldValue(t, key) ?? "")));
+    });
+
+    return rows;
+  }, [tasks, search, selectedFilters]);
+
+  const activeFilterCount = Object.values(selectedFilters).reduce(
+    (n, arr) => n + (arr?.length || 0),
+    0,
+  );
+
+  /* ── Bulk selection ── */
+  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+    items: filteredTasks,
+  });
+  const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedItems.length);
+
+  const handleBulkDelete = async () => {
+    if (!selectedItems.length) return;
+    if (!window.confirm(`Delete ${selectedItems.length} task(s)? This cannot be undone.`)) return;
+    setIsDeleting(true);
+    try {
+      await Promise.all(selectedItems.map((id) => API.delete(`/tasks/${id}`)));
+      await refetchTasks();
+      clearSelection();
+      toast.success("Tasks deleted!");
+    } catch (err) {
+      console.error("Bulk delete failed:", err);
+      toast.error(err.response?.data?.error || "Failed to delete some tasks.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleTaskSave = async (taskData) => {
     try {
       await API.post("/tasks", taskData);
-      // Refetch tasks
-      const response = await API.get(`/tasks/vendor/${vendorId}`);
-      setTasks(response.data || []);
+      await refetchTasks();
       toast.success("Task created!");
       setShowTaskForm(false);
     } catch (err) {
@@ -80,9 +195,7 @@ const VendorTasksTable = ({ vendorId }) => {
   const handleTaskDelete = async (taskId) => {
     try {
       await API.delete(`/tasks/${taskId}`);
-      // Refetch tasks
-      const response = await API.get(`/tasks/vendor/${vendorId}`);
-      setTasks(response.data || []);
+      await refetchTasks();
       toast.success("Task deleted!");
       handleCloseTaskModal();
     } catch (err) {
@@ -96,62 +209,147 @@ const VendorTasksTable = ({ vendorId }) => {
     }
   };
 
-  const handleTaskClick = (task) => {
-    setSelectedTask(task);
-    setIsTaskModalOpen(true);
-  };
-
   const handleCloseTaskModal = () => {
     setIsTaskModalOpen(false);
     setSelectedTask(null);
   };
 
-  const getRelatedToName = (task) => {
-    return vendorName || "N/A";
-  };
+  const getRelatedToName = () => vendorName || "N/A";
 
-  const formatDate = (isoDate) => {
-    const date = new Date(isoDate);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
-  const getStatusBadge = (status) => {
-    const statusStyles = {
-      Pending: "bg-gray-100 text-gray-700",
-      "To Do": "bg-gray-100 text-gray-700",
-      "In Progress": "bg-gray-200 text-gray-800",
-      Completed: "bg-gray-100 text-gray-900",
-      Cancelled: "bg-gray-200 text-gray-700",
-    };
-    return statusStyles[status] || "bg-gray-100 text-gray-800";
-  };
-
-  const filteredTasks = statusFilter
-    ? tasks.filter((task) => task.status === statusFilter)
-    : tasks;
-
-  if (loading) {
-    return (
-      <div className="animate-pulse">
-        <div className="flex items-center justify-between mb-4">
-          <div className="h-5 bg-gray-200 rounded w-24"></div>
-          <div className="flex space-x-2">
-            <div className="h-8 bg-gray-200 rounded w-20"></div>
-            <div className="h-8 bg-gray-200 rounded w-24"></div>
+  /* ── Columns ── */
+  const columns = useMemo(
+    () => [
+      {
+        id: "selection",
+        size: 44,
+        enableResizing: false,
+        header: () => (
+          <div className="flex justify-center items-center w-full">
+            <input
+              type="checkbox"
+              checked={filteredTasks.length > 0 && selectedItems.length === filteredTasks.length}
+              onChange={(e) => (e.target.checked ? selectAll(filteredTasks) : clearSelection())}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
           </div>
-        </div>
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 bg-gray-200 rounded-lg"></div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-center items-center w-full">
+            <input
+              type="checkbox"
+              checked={selectedItems.includes(row.original._id)}
+              onChange={() => toggleItem(row.original._id)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
+      },
+      {
+        id: "title",
+        accessorKey: "title",
+        size: 240,
+        header: "Task",
+        cell: ({ row }) => (
+          <span className="font-medium text-gray-900 truncate block" title={row.original.title}>
+            {row.original.title}
+          </span>
+        ),
+      },
+      {
+        id: "description",
+        size: 260,
+        header: "Description",
+        cell: ({ row }) => {
+          const text = stripHtml(row.original.description);
+          return (
+            <span className="text-gray-600 truncate block" title={text}>
+              {text || "—"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "status",
+        size: 130,
+        header: "Status",
+        cell: ({ row }) => (
+          <span
+            className={`inline-flex px-2 py-1 text-xs font-medium rounded ${
+              STATUS_BADGE[row.original.status] || "bg-gray-100 text-gray-800"
+            }`}
+          >
+            {row.original.status === "Pending" ? "To Do" : row.original.status}
+          </span>
+        ),
+      },
+      {
+        id: "priority",
+        size: 110,
+        header: "Priority",
+        cell: ({ row }) => (
+          <span
+            className={`inline-flex px-2 py-1 text-xs font-medium rounded capitalize ${
+              PRIORITY_BADGE[row.original.priority] || "bg-gray-100 text-gray-600"
+            }`}
+          >
+            {row.original.priority || "—"}
+          </span>
+        ),
+      },
+      {
+        id: "dueDate",
+        size: 140,
+        header: "Due Date",
+        cell: ({ row }) => <span className="text-gray-700">{formatDate(row.original.dueDate)}</span>,
+      },
+      {
+        id: "assignedTo",
+        size: 170,
+        header: "Assigned To",
+        cell: ({ row }) => {
+          const names = getTaskFieldValue(row.original, "assignedTo");
+          return (
+            <span className="text-gray-700 truncate block" title={names}>
+              {names || "Unassigned"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        size: 100,
+        enableResizing: false,
+        header: "Actions",
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedTask(row.original);
+                setIsTaskModalOpen(true);
+              }}
+              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
+              title="View"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm("Delete this task?")) handleTaskDelete(row.original._id);
+              }}
+              className="p-1 text-gray-500 hover:text-red-600 transition-colors"
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [filteredTasks, selectedItems, selectAll, clearSelection, toggleItem],
+  );
 
   if (error) {
     return (
@@ -163,114 +361,95 @@ const VendorTasksTable = ({ vendorId }) => {
   }
 
   return (
-    <div className="h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2 text-sm text-gray-600">
+    <div className="h-full mt-2">
+      {/* Action buttons, portaled into the tab header */}
+      {portalTarget &&
+        createPortal(
+          <>
+            <div className="relative h-9">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search tasks..."
+                className="h-9 w-56 pl-9 pr-3 border border-gray-300 rounded-full text-sm focus:outline-none focus:border-blue-300"
+              />
+            </div>
+            <button
+              onClick={() => setShowFilterPanel(true)}
+              className="relative flex items-center justify-center gap-2 h-9 px-3 text-sm font-medium text-gray-800 bg-white border border-gray-300 rounded-full hover:bg-gray-50 flex-shrink-0"
+            >
+              <FilterIcon className="w-4 h-4" />
+              Filter
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setShowTaskForm(true)}
+              className="flex items-center gap-1 h-9 px-3 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span>New Task</span>
+            </button>
+          </>,
+          portalTarget,
+        )}
+
+      {stripVisible ? (
+        <BulkActionBar
+          selectedCount={selectedItems.length}
+          entityName="task"
+          isClosing={stripClosing}
+          onSelectAll={() => selectAll(filteredTasks)}
+          onDeselectAll={clearSelection}
+          onDelete={handleBulkDelete}
+          isDeleting={isDeleting}
+        />
+      ) : (
+        <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
           <Calendar className="w-4 h-4" />
           <span>{filteredTasks.length} tasks</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="appearance-none bg-white border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:border-gray-400"
-            >
-              <option value="">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Completed">Completed</option>
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-          </div>
-          <button
-            onClick={() => setShowTaskForm(true)}
-            className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            New Task
-          </button>
-        </div>
-      </div>
-
-      {/* Tasks List */}
-      {filteredTasks.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-          <Calendar className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-          <p className="text-sm text-gray-600 mb-1">
-            {statusFilter ? `No ${statusFilter.toLowerCase()} tasks` : "No tasks yet"}
-          </p>
-          <p className="text-xs text-gray-500">
-            {statusFilter ? "Try changing the filter" : "Tasks will appear here once created"}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredTasks.map((task) => (
-            <div
-              key={task._id}
-              onClick={() => handleTaskClick(task)}
-              className="bg-white rounded-lg border border-gray-200 p-3 hover:border-gray-300 transition-all cursor-pointer group"
-            >
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-gray-900 truncate">
-                    {task.title}
-                  </h4>
-                  {task.description && (
-                    <div 
-                      dangerouslySetInnerHTML={{ __html: task.description }}
-                      className="text-xs text-gray-600 mt-1 line-clamp-1"
-                    />
-                  )}
-                </div>
-                <span
-                  className={`inline-flex px-2 py-1 text-xs font-medium rounded capitalize whitespace-nowrap ${getStatusBadge(
-                    task.status
-                  )}`}
-                >
-                  {task.status === "Pending" ? "To Do" : task.status}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    <span>{task.dueDate ? formatDate(task.dueDate) : "No due date"}</span>
-                  </div>
-                </div>
-                {task.users?.length > 0 && (
-                  <span className="text-gray-600">
-                    {task.users.map((user) => user.name || "Unknown").join(", ")}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
       )}
 
-      {/* Summary Stats */}
-      {filteredTasks.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 mt-4">
-          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <div className="text-gray-600 text-xs font-medium mb-1">Pending</div>
-            <div className="text-gray-900 text-xl font-bold">
-              {tasks.filter((m) => m.status === "Pending" || m.status === "In Progress").length}
-            </div>
+      <DataTable
+        data={filteredTasks}
+        columns={columns}
+        columnSizing={columnSizing}
+        onColumnSizingChange={setColumnSizing}
+        variant="card"
+        maxHeight={560}
+        loading={loading}
+        rowClassName={(t) => (selectedItems.includes(t._id) ? "!bg-blue-50" : "")}
+        emptyContent={
+          <div className="flex flex-col items-center gap-2">
+            <Calendar className="w-10 h-10 text-gray-400" />
+            <p className="text-sm text-gray-600">
+              {search || activeFilterCount ? "No tasks match your filters" : "No tasks yet"}
+            </p>
+            <p className="text-xs text-gray-500">
+              {search || activeFilterCount
+                ? "Try clearing the search or filters"
+                : "Tasks will appear here once created"}
+            </p>
           </div>
-          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <div className="text-gray-600 text-xs font-medium mb-1">Completed</div>
-            <div className="text-gray-900 text-xl font-bold">
-              {tasks.filter((m) => m.status === "Completed").length}
-            </div>
-          </div>
-        </div>
-      )}
+        }
+      />
 
-      {/* VendorTaskForm */}
+      <CompanyFilterPanel
+        isOpen={showFilterPanel}
+        onClose={() => setShowFilterPanel(false)}
+        columns={TASK_FILTER_COLUMNS}
+        data={tasks}
+        getFieldValue={getTaskFieldValue}
+        selected={selectedFilters}
+        onApply={setSelectedFilters}
+      />
+
       {showTaskForm && (
         <VendorTaskForm
           open={showTaskForm}
@@ -283,7 +462,6 @@ const VendorTasksTable = ({ vendorId }) => {
         />
       )}
 
-      {/* Task Details Modal */}
       {selectedTask && (
         <TaskDetailsModal
           open={isTaskModalOpen}
