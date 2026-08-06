@@ -165,10 +165,6 @@ const Navbar = () => {
   ];
 
   const salesChildren = [
-    { name: "Quote", href: "/invoices?tab=quotation" },
-    { name: "Invoices", href: "/invoices?tab=tax" },
-    { name: "Proforma Invoice", href: "/invoices?tab=performa" },
-    { name: "Delivery Challan", href: "/invoices?tab=deliveryChallan" },
     { name: "Sales Return", href: "/sales-return" },
     { name: "Subscription", href: "/sales-subscription" },
     { name: "E-Invoicing", href: "/e-invoicing" },
