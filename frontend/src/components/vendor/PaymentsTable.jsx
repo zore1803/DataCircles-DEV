@@ -118,7 +118,7 @@ const PaymentsTable = ({ payments, vendor }) => {
   /* ── Pagination — same client-side "first ... current ... last" pattern
      CompanyInvoicesTab uses. Search/filters reset back to page 1. */
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(5);
   useEffect(() => {
     setPage(1);
   }, [search, selectedFilters]);
@@ -622,7 +622,6 @@ const PaymentsTable = ({ payments, vendor }) => {
           columnSizing={columnSizing}
           onColumnSizingChange={setColumnSizing}
           variant="card"
-          maxHeight={560}
           rowClassName={(p) => (selectedItems.includes(p._id) ? "!bg-blue-50" : "")}
           emptyContent={
             <div className="flex flex-col items-center gap-3">
@@ -648,19 +647,21 @@ const PaymentsTable = ({ payments, vendor }) => {
             </div>
           }
         />
+        
+        <div className="border-t border-[#E1E4EA] px-5">
+          <TablePaginationFooter
+            currentPage={page}
+            totalPages={totalPages}
+            totalCount={filteredPayments.length}
+            limit={limit}
+            onPageChange={goToPage}
+            onLimitChange={(n) => {
+              setLimit(n);
+              setPage(1);
+            }}
+          />
+        </div>
       </div>
-
-      <TablePaginationFooter
-        currentPage={page}
-        totalPages={totalPages}
-        totalCount={filteredPayments.length}
-        limit={limit}
-        onPageChange={goToPage}
-        onLimitChange={(n) => {
-          setLimit(n);
-          setPage(1);
-        }}
-      />
 
       <CompanyFilterPanel
         isOpen={showFilterPanel}

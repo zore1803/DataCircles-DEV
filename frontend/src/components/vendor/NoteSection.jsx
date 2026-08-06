@@ -554,7 +554,7 @@ const NoteSection = () => {
   /* ── Pagination — same client-side "first ... current ... last" pattern
      CompanyNotesTab uses. Search/filters reset back to page 1. */
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(5);
   useEffect(() => {
     setPage(1);
   }, [searchTerm, selectedFilters]);
@@ -847,7 +847,6 @@ const NoteSection = () => {
             columnSizing={columnSizing}
             onColumnSizingChange={setColumnSizing}
             variant="card"
-            maxHeight={560}
             rowClassName={(n) => (selectedItems.includes(n._id) ? "!bg-blue-50" : "")}
             emptyContent={
               <div className="flex flex-col items-center gap-2">
@@ -866,20 +865,35 @@ const NoteSection = () => {
               </div>
             }
           />
+          <div className="border-t border-[#E1E4EA] px-5">
+            <TablePaginationFooter
+              currentPage={page}
+              totalPages={totalPages}
+              totalCount={filteredNotes.length}
+              limit={limit}
+              onPageChange={goToPage}
+              onLimitChange={(n) => {
+                setLimit(n);
+                setPage(1);
+              }}
+            />
+          </div>
         </div>
       )}
 
-      <TablePaginationFooter
-        currentPage={page}
-        totalPages={totalPages}
-        totalCount={filteredNotes.length}
-        limit={limit}
-        onPageChange={goToPage}
-        onLimitChange={(n) => {
-          setLimit(n);
-          setPage(1);
-        }}
-      />
+      {viewMode === "grid" && (
+        <TablePaginationFooter
+          currentPage={page}
+          totalPages={totalPages}
+          totalCount={filteredNotes.length}
+          limit={limit}
+          onPageChange={goToPage}
+          onLimitChange={(n) => {
+            setLimit(n);
+            setPage(1);
+          }}
+        />
+      )}
 
       <CompanyFilterPanel
         isOpen={showFilterPanel}

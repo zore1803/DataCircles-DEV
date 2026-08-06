@@ -37,6 +37,7 @@ import ImportVendors from "../components/vendor/ImportVendors";
 import toast from "react-hot-toast";
 import AppToaster from "../components/AppToaster";
 import HighlightText from "../components/common/HighlightText";
+import TablePaginationFooter from "../components/common/TablePaginationFooter";
 import { getAncestorZoom } from "../utils/domUtils";
 import useMinDelay from "../hooks/useMinDelay";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
@@ -159,7 +160,7 @@ function Vendors() {
     currentPage: 1,
     totalPages: 0,
     totalCount: 0,
-    limit: 10,
+    limit: 5,
     hasNextPage: false,
     hasPrevPage: false,
   });
@@ -480,20 +481,6 @@ function Vendors() {
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   };
-
-  // Pagination — exact "first ... current ... last" editable pattern from
-  // Companies.jsx.
-  const [editingPage, setEditingPage] = useState(false);
-  const [pageInput, setPageInput] = useState("");
-  const pageItems = useMemo(() => {
-    const { currentPage, totalPages } = pagination;
-    const items = [1];
-    if (currentPage > 2) items.push("left-dots");
-    if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
-    if (currentPage < totalPages - 1) items.push("right-dots");
-    if (totalPages > 1) items.push(totalPages);
-    return items;
-  }, [pagination]);
 
   // Get field value from vendor
   const getFieldValue = (vendor, columnKey) => {
@@ -1020,10 +1007,6 @@ function Vendors() {
         ) : (
           <div className="flex items-center gap-2 lg:gap-4 w-full h-full">
             <div
-              /* `lg:!w-auto lg:!opacity-100` is what keeps the "Vendors / Manage
-                 your vendors." heading on screen when the search box expands —
-                 without it the title collapsed on desktop too. Only mobile
-                 still yields the space, exactly as Companies.jsx does it. */
               className={`flex-shrink-0 flex flex-col justify-center gap-1.5 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${
                 isSearchExpanded ? "w-0 opacity-0" : "w-[190px] opacity-100"
               }`}
@@ -1334,15 +1317,7 @@ function Vendors() {
                         {pinnedCols[col.id] && (
                           <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
                         )}
-                        {isSortable && sortConfig.key === col.id && (
-                          <span className="flex-shrink-0 text-[#0085FF]">
-                            {sortConfig.direction === "asc" ? (
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            ) : (
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            )}
-                          </span>
-                        )}
+
                         {col.id !== "actions" && (
                           <button
                             onClick={(e) => openColumnMenu(e, col.id)}
@@ -1496,9 +1471,7 @@ function Vendors() {
         </div>
       </div>
 
-      {/* Pagination — its own fixed strip pinned to the bottom, same
-          treatment Companies.jsx gives it, with the exact "first ... current
-          ... last" editable pattern and per-page selector. */}
+      {/* Pagination — its own fixed strip pinned to the bottom */}
       {(showLoadingSkeleton || pagination.totalCount > 0) && (
         <div
           className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
@@ -1514,142 +1487,15 @@ function Vendors() {
               </div>
             </div>
           ) : (
-          <div className="w-full px-4 py-3 flex items-center justify-between sm:px-6">
-            <div className="flex-1 flex justify-between sm:hidden">
-              <button
-                onClick={() => handlePageChange(pagination.currentPage - 1)}
-                disabled={!pagination.hasPrevPage}
-                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => handlePageChange(pagination.currentPage + 1)}
-                disabled={!pagination.hasNextPage}
-                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
-
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div className="flex items-center space-x-2">
-                <p className="text-sm text-gray-700 font-inter">
-                  Showing{" "}
-                  <span className="font-semibold">
-                    {(pagination.currentPage - 1) * pagination.limit + 1}
-                  </span>{" "}
-                  to{" "}
-                  <span className="font-semibold">
-                    {Math.min(
-                      pagination.currentPage * pagination.limit,
-                      pagination.totalCount
-                    )}
-                  </span>{" "}
-                  of <span className="font-semibold">{pagination.totalCount}</span>{" "}
-                  results
-                </p>
-                <select
-                  value={pagination.limit}
-                  onChange={(e) => handleLimitChange(parseInt(e.target.value))}
-                  className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
-                >
-                  <option value={10}>10 per page</option>
-                  <option value={20}>20 per page</option>
-                  <option value={50}>50 per page</option>
-                  <option value={100}>100 per page</option>
-                  <option value={150}>150 per page</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handlePageChange(pagination.currentPage - 1)}
-                  disabled={!pagination.hasPrevPage}
-                  className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-
-                {pagination.totalPages > 0 &&
-                  (() => {
-                    const { currentPage, totalPages } = pagination;
-                    const commitPage = () => {
-                      const n = parseInt(pageInput, 10);
-                      if (!Number.isNaN(n)) {
-                        handlePageChange(Math.min(Math.max(n, 1), totalPages));
-                      }
-                      setEditingPage(false);
-                    };
-
-                    return pageItems.map((item, index) => {
-                      if (item === "left-dots" || item === "right-dots") {
-                        return (
-                          <span
-                            key={`${item}-${index}`}
-                            className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none"
-                          >
-                            ....
-                          </span>
-                        );
-                      }
-                      const isCurrent = item === currentPage;
-                      if (isCurrent && editingPage) {
-                        return (
-                          <input
-                            key="page-edit"
-                            autoFocus
-                            type="number"
-                            min={1}
-                            max={totalPages}
-                            value={pageInput}
-                            onChange={(e) => setPageInput(e.target.value)}
-                            onBlur={commitPage}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") commitPage();
-                              if (e.key === "Escape") setEditingPage(false);
-                            }}
-                            className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          />
-                        );
-                      }
-                      return (
-                        <button
-                          key={`page-${item}`}
-                          onClick={() => handlePageChange(item)}
-                          onDoubleClick={() => {
-                            if (isCurrent) {
-                              setPageInput(String(currentPage));
-                              setEditingPage(true);
-                            }
-                          }}
-                          title={
-                            isCurrent
-                              ? "Double-click to type a page number"
-                              : undefined
-                          }
-                          className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
-                            isCurrent
-                              ? "bg-blue-600 text-white"
-                              : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                          }`}
-                        >
-                          {item}
-                        </button>
-                      );
-                    });
-                  })()}
-
-                <button
-                  onClick={() => handlePageChange(pagination.currentPage + 1)}
-                  disabled={!pagination.hasNextPage}
-                  className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
+            <TablePaginationFooter
+              currentPage={pagination.currentPage}
+              totalPages={pagination.totalPages}
+              totalCount={pagination.totalCount}
+              limit={pagination.limit}
+              onPageChange={handlePageChange}
+              onLimitChange={handleLimitChange}
+              className="w-full px-4 py-3 flex items-center justify-between sm:px-6"
+            />
           )}
         </div>
       )}

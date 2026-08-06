@@ -17,7 +17,8 @@ export default function TablePaginationFooter({
   limit,
   onPageChange,
   onLimitChange,
-  limitOptions = [10, 20, 50, 100],
+  limitOptions = [5, 10, 20, 50, 100],
+  className = "w-full bg-transparent py-3 flex items-center justify-between",
 }) {
   if (totalCount === 0) return null;
 
@@ -38,7 +39,7 @@ export default function TablePaginationFooter({
   })();
 
   return (
-    <div className="w-full bg-transparent py-3 mt-3 flex items-center justify-between">
+    <div className={className}>
       <div className="flex-1 flex justify-between sm:hidden">
         <button
           onClick={() => onPageChange(currentPage - 1)}
@@ -57,17 +58,15 @@ export default function TablePaginationFooter({
       </div>
 
       <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-        <div className="flex items-center space-x-2">
-          <p className="text-sm text-gray-700 font-inter">
-            Showing <span className="font-semibold">{startItem}</span> to{" "}
-            <span className="font-semibold">{endItem}</span> of{" "}
-            <span className="font-semibold">{totalCount}</span> results
+        <div className="flex items-center gap-4">
+          <p className="text-sm text-gray-600 font-medium">
+            Showing {startItem} to {endItem} of {totalCount} results
           </p>
           {onLimitChange && (
             <select
               value={limit}
               onChange={(e) => onLimitChange(parseInt(e.target.value, 10))}
-              className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer bg-white"
             >
               {limitOptions.map((n) => (
                 <option key={n} value={n}>

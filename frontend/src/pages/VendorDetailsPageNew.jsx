@@ -362,11 +362,11 @@ const VendorDetailsPageNew = () => {
       {/* ═══════════════════════════════════════════════════════════
           SECTION 1 — HEADER (White Background, 3 Columns)
          ═══════════════════════════════════════════════════════════ */}
-      <div className="bg-white px-6 sm:px-8 pt-2 pb-6 border-b border-gray-200">
-        <div className="mx-auto flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative">
+      <div className="bg-white border-b border-gray-200">
+        <div className="mx-auto flex flex-col lg:flex-row items-stretch relative">
           
           {/* LEFT: Vendor Info Stack */}
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-4 lg:flex-1 py-6 pl-6 sm:pl-8 pr-4">
             {vendor ? (
               <ProfilePicture
                 contact={{ name: vendor.name, avatar: vendor.avatar || vendor.logo }}
@@ -428,10 +428,10 @@ const VendorDetailsPageNew = () => {
           </div>
 
           {/* RIGHT SIDE: Action Toolbar + Relationship Health Gauge */}
-          <div className="flex flex-col lg:flex-row items-center lg:items-end gap-6 lg:gap-14 w-full lg:w-auto mt-4 lg:mt-0 justify-between lg:justify-end">
+          <div className="flex flex-col lg:flex-row items-center lg:items-start w-full lg:w-auto lg:flex-1 lg:justify-end">
             
             {/* Action Toolbar */}
-            <div className="flex items-center justify-center gap-3">
+            <div className="flex items-start justify-center gap-2 sm:gap-3 py-6 px-4 lg:px-6 lg:ml-auto">
               <ActionIconButton icon={PhoneCall} colorClass="text-blue-500" title="Call" />
               <ActionIconButton icon={Mail} colorClass="text-blue-500" title="Email" />
               <ActionIconButton icon={Video} colorClass="text-purple-500" title="Video Meeting" />
@@ -479,7 +479,7 @@ const VendorDetailsPageNew = () => {
             </div>
 
             {/* Relationship Health Gauge */}
-            <div className="hidden sm:flex justify-end">
+            <div className="hidden sm:flex flex-col items-center justify-start border-l border-gray-200 py-6 pr-6 sm:pr-8 pl-6 lg:pl-10 lg:w-[260px]">
               <RelationshipGauge score={82} label="Excellent" />
             </div>
           </div>

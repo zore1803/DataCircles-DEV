@@ -152,7 +152,7 @@ const VendorTasksTable = ({ vendorId }) => {
      CompanyTasksTab uses for its own list view. Filters/search reset back to
      page 1 so a narrowed result set never opens on an out-of-range page. */
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(5);
   useEffect(() => {
     setPage(1);
   }, [search, selectedFilters]);
@@ -451,7 +451,6 @@ const VendorTasksTable = ({ vendorId }) => {
           columnSizing={columnSizing}
           onColumnSizingChange={setColumnSizing}
           variant="card"
-          maxHeight={560}
           loading={loading}
           rowClassName={(t) => (selectedItems.includes(t._id) ? "!bg-blue-50" : "")}
           emptyContent={
@@ -468,19 +467,21 @@ const VendorTasksTable = ({ vendorId }) => {
             </div>
           }
         />
+        
+        <div className="border-t border-[#E1E4EA] px-5">
+          <TablePaginationFooter
+            currentPage={page}
+            totalPages={totalPages}
+            totalCount={filteredTasks.length}
+            limit={limit}
+            onPageChange={goToPage}
+            onLimitChange={(n) => {
+              setLimit(n);
+              setPage(1);
+            }}
+          />
+        </div>
       </div>
-
-      <TablePaginationFooter
-        currentPage={page}
-        totalPages={totalPages}
-        totalCount={filteredTasks.length}
-        limit={limit}
-        onPageChange={goToPage}
-        onLimitChange={(n) => {
-          setLimit(n);
-          setPage(1);
-        }}
-      />
 
       <CompanyFilterPanel
         isOpen={showFilterPanel}
