@@ -21,16 +21,9 @@ import {
   Trash2,
   Truck,
   Upload,
-  Building2,
   CheckSquare,
-  MapPin,
   History,
-  IndianRupee,
-  User,
-  SlidersHorizontal,
-  Settings,
-  Mail,
-  Phone,
+  Download,
   FileText,
   Pin,
   PinOff,
@@ -46,8 +39,11 @@ import AppToaster from "../components/AppToaster";
 import HighlightText from "../components/common/HighlightText";
 import { getAncestorZoom } from "../utils/domUtils";
 import useMinDelay from "../hooks/useMinDelay";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
+import FilterIcon from "../components/common/FilterIcon";
+import ExportModal from "../components/common/ExportModal";
 
 function useOutsideClick(ref, callback) {
   useEffect(() => {
@@ -66,17 +62,18 @@ function useOutsideClick(ref, callback) {
 // Fixed columns every vendor has. Custom fields (from vendorFields) are
 // appended after these, and "actions" always comes last.
 const BASE_COLUMN_DEFS = [
-  { id: "name", label: "Name", icon: User, required: true, width: 200 },
-  { id: "email", label: "Email", icon: Mail, width: 220 },
-  { id: "phone", label: "Phone", icon: Phone, width: 160 },
-  { id: "company", label: "Company", icon: Building2, width: 180 },
-  { id: "address", label: "Address", icon: MapPin, width: 260 },
-  { id: "balance", label: "Closing Balance", icon: IndianRupee, width: 160 },
+  { id: "name", label: "Name", required: true, width: 200 },
+  { id: "email", label: "Email", width: 220 },
+  { id: "phone", label: "Phone", width: 160 },
+  { id: "company", label: "Company", width: 180 },
+  { id: "address", label: "Address", width: 260 },
+  // Wider than the others so "CLOSING BALANCE" renders in full rather than
+  // truncating to "CLOSING BAL...".
+  { id: "balance", label: "Closing Balance", width: 190 },
 ];
 const ACTIONS_COLUMN_DEF = {
   id: "actions",
   label: "Actions",
-  icon: MoreVertical,
   required: true,
   sortable: false,
   width: 120,
@@ -117,6 +114,7 @@ function Vendors() {
   const [showForm, setShowForm] = useState(false);
   const [selectedVendors, setSelectedVendors] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
@@ -188,7 +186,6 @@ function Vendors() {
       (vendorFields || []).map((field) => ({
         id: field.name || field,
         label: field.name || field,
-        icon: Settings,
       })),
     [vendorFields]
   );
@@ -201,6 +198,26 @@ function Vendors() {
     allColumnDefs.forEach((c) => (map[c.id] = c));
     return map;
   }, [allColumnDefs]);
+
+  // Column list handed to the shared ExportModal. Same shape Companies.jsx
+  // passes: { key, label, isCustomField }. "actions" is a UI-only column, so
+  // it is dropped — everything else, including vendor custom fields, is
+  // offered as an exportable column.
+  const baseColumnIds = useMemo(
+    () => new Set(BASE_COLUMN_DEFS.map((c) => c.id)),
+    []
+  );
+  const exportColumns = useMemo(
+    () =>
+      allColumnDefs
+        .filter((c) => c.id !== "actions")
+        .map((c) => ({
+          key: c.id,
+          label: c.label,
+          isCustomField: !baseColumnIds.has(c.id),
+        })),
+    [allColumnDefs, baseColumnIds]
+  );
 
   const [columnOrder, setColumnOrder] = useState(() =>
     [...BASE_COLUMN_DEFS, ACTIONS_COLUMN_DEF].map((c) => c.id)
@@ -512,7 +529,7 @@ function Vendors() {
         return (
           <Link
             to={`/vendors/${vendor._id}`}
-            className="text-blue-600 font-bold text-sm hover:text-blue-700 transition-colors truncate block"
+            className="text-blue-600 font-bold text-sm underline hover:text-blue-700 transition-colors truncate block"
           >
             <HighlightText text={vendor.name} query={searchTerm} />
           </Link>
@@ -921,6 +938,10 @@ function Vendors() {
   // useMinDelay holds it for 300ms so a fast fetch doesn't flash the
   // placeholders.
   const showLoadingSkeleton = useMinDelay(loading && vendors.length === 0, 300);
+  // `loading` toggles around every fetchVendors() call, including page/limit
+  // changes — same source Companies.jsx feeds its top-edge bar from, so
+  // paging here now gets the identical progress flash Companies.jsx shows.
+  useTopLoadingSignal(loading);
 
   return (
     <>
@@ -944,6 +965,13 @@ function Vendors() {
             } flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}
           >
             <div className="flex flex-nowrap items-center gap-3 flex-shrink-0">
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </button>
               <button
                 onClick={() => setShowBulkActions(true)}
                 className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
@@ -992,7 +1020,11 @@ function Vendors() {
         ) : (
           <div className="flex items-center gap-2 lg:gap-4 w-full h-full">
             <div
-              className={`flex-shrink-0 flex flex-col justify-center overflow-hidden transition-all duration-300 ease-in-out ${
+              /* `lg:!w-auto lg:!opacity-100` is what keeps the "Vendors / Manage
+                 your vendors." heading on screen when the search box expands —
+                 without it the title collapsed on desktop too. Only mobile
+                 still yields the space, exactly as Companies.jsx does it. */
+              className={`flex-shrink-0 flex flex-col justify-center gap-1.5 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${
                 isSearchExpanded ? "w-0 opacity-0" : "w-[190px] opacity-100"
               }`}
             >
@@ -1065,9 +1097,8 @@ function Vendors() {
                   : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
               }`}
             >
-              <SlidersHorizontal
-                size={18}
-                strokeWidth={2}
+              <FilterIcon
+                size={16}
                 className={filterCompany ? "text-[#0085FF]" : "text-[#1F2937]"}
               />
             </button>
@@ -1272,7 +1303,6 @@ function Vendors() {
                 </th>
 
                 {orderedColumns.map((col) => {
-                  const Icon = col.icon;
                   const isSortable = col.sortable !== false;
                   const isDragging = draggedColKey === col.id;
                   const isDragOver =
@@ -1300,9 +1330,6 @@ function Vendors() {
                       } active:cursor-grabbing`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        {Icon && (
-                          <Icon className="w-4 h-4 text-[#525866] flex-shrink-0" />
-                        )}
                         <span className="truncate flex-1">{col.label}</span>
                         {pinnedCols[col.id] && (
                           <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
@@ -1887,6 +1914,15 @@ function Vendors() {
         onBulkDelete={handleBulkDeleteVendors}
         fieldConfig={vendorFieldConfig}
         module="vendors"
+      />
+
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        columns={exportColumns}
+        selectedIds={selectedVendors}
+        exportUrl="/vendors/export-selected"
+        fileName="Exported_Vendors.csv"
       />
     </>
   );

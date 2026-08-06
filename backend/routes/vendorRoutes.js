@@ -65,6 +65,15 @@ router.delete("/payments/:paymentId",
   vendorController.deletePaymentById
 );
 
+// Export selected vendors as CSV - specific route before /:id
+router.post("/export-selected",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("vendors", "read"),
+  checkPermission("vendors", "readonly"),
+  vendorController.exportSelectedVendors
+);
+
 // Get Vendor by ID
 router.get("/:id",
   requireAuth,
