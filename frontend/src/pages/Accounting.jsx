@@ -51,6 +51,7 @@ import DeliveryChallanForm from "../components/deliveryChallan/DeliveryChallanFo
 import InvoiceStylePreview from "../components/invoice/InvoiceStylePreview";
 import InvoiceLivePreview from "../components/invoice/InvoiceLivePreview";
 import TemplateDrawer from "../components/invoice/TemplateDrawer";
+import NotesTermsDrawer from "../components/invoice/NotesTermsDrawer";
 import { buildDocumentHtml } from "../../../shared/documentTemplates.js";
 import useNavReset from "../hooks/useNavReset";
 import PerformaInvoiceStylePreview from "../components/PerformaInvoice/PerformaInvoiceStylePreview";
@@ -73,6 +74,25 @@ const SectionHeader = ({ number, title }) => (
       {title}
     </span>
   </div>
+);
+
+/* Drops the organization's saved boilerplate (Settings → document defaults)
+   into a notes/terms box, so the same footer text doesn't have to be retyped
+   on every document. Disabled — with the reason in the tooltip — when there's
+   nothing saved yet or the box already holds exactly that text; appends rather
+   than overwrites when the box has other content. */
+/* Opens the Notes & Terms drawer. Inserting the saved default text now lives
+   inside that drawer, next to the field it applies to. */
+const OpenNotesTermsButton = ({ label, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title="Edit notes and terms"
+    className="inline-flex items-center gap-1 text-[12px] font-medium text-[#0085FF] hover:underline flex-shrink-0"
+  >
+    <Plus className="w-3 h-3" />
+    {label}
+  </button>
 );
 
 /* Tab labels shown in the pill selector, mapped to the document type keys the
@@ -568,7 +588,7 @@ const PickerSelect = ({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full h-10 flex items-center gap-2 px-3 rounded-lg border border-[#E1E4EA] bg-white text-left hover:border-[#C9CFD8] focus:outline-none focus:border-[#0085FF] transition-colors"
+        className="w-full h-10 flex items-center gap-2 px-3 rounded-[25px] border border-[#E1E4EA] bg-white text-left hover:border-[#C9CFD8] focus:outline-none focus:border-[#0085FF] transition-colors"
       >
         {Icon && <Icon className="w-4 h-4 text-gray-400 flex-shrink-0" />}
         <span
@@ -725,6 +745,8 @@ const CreateInvoicePanel = ({
     invoicePrefixes: ["INV-"],
     invoiceSuffixes: [],
     nextInvoiceNumber: 1,
+    defaultNotes: "",
+    defaultTerms: "",
     documentTypeSettings: {
       invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] },
     },
@@ -738,6 +760,8 @@ const CreateInvoicePanel = ({
   // Collapses the preview entirely so the form gets the full width — useful
   // when filling in a long item list on a narrow screen.
   const [hidePreview, setHidePreview] = useState(false);
+  // null when closed; otherwise the section to focus ("notes" | "terms").
+  const [notesDrawer, setNotesDrawer] = useState(null);
   // Width the two columns actually use; the split only applies while the
   // preview is on screen.
   const formWidth = hidePreview ? "100%" : `${leftPct}%`;
@@ -913,6 +937,8 @@ const CreateInvoicePanel = ({
           invoicePrefixes: res.data?.invoicePrefixes || ["INV-"],
           invoiceSuffixes: res.data?.invoiceSuffixes || [],
           nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
+          defaultNotes: res.data?.defaultNotes || "",
+          defaultTerms: res.data?.defaultTerms || "",
           documentTypeSettings: res.data?.documentTypeSettings || { invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] } },
         });
         setForm((prev) => ({
@@ -1074,10 +1100,13 @@ const CreateInvoicePanel = ({
 
   const handleSaveDraft = () => submitInvoice("Draft");
 
-  // The template this document renders with: its own pinned style if it has
-  // one, otherwise the organization's — the same order the backend resolves in
-  // for the PDF. Used by the preview *and* the print window so all three agree.
-  const previewTemplate = form.style || orgTemplate;
+  // The template this document renders with. The organization's choice wins
+  // outright: htmlDocumentPdf.resolveTemplate ignores the document's stored
+  // `style` entirely, and every document saved before that change still
+  // carries style:"Classic" from the old schema default. Honouring it here
+  // would pin the preview to Classic forever *and* disagree with the PDF.
+  // Used by the preview *and* the print window so all three agree.
+  const previewTemplate = orgTemplate;
 
   // Prints exactly what the preview shows — the same shared fragment the PDF
   // is rendered from — including edits that haven't been saved yet, rather
@@ -1141,7 +1170,7 @@ const CreateInvoicePanel = ({
 
   const dealOptions = deals.map((d) => ({ value: d._id, label: d.title }));
   const inputClass =
-    "w-full h-10 px-2.5 rounded-lg border border-[#E1E4EA] bg-white text-[13px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] transition-colors";
+    "w-full h-10 px-2.5 rounded-[25px] border border-[#E1E4EA] bg-white text-[13px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] transition-colors";
 
   // Catalogue descriptions can be stored as rich-text HTML; show plain text in
   // the description field instead of raw markup.
@@ -1493,9 +1522,9 @@ const CreateInvoicePanel = ({
 
             {form.items.map((item, index) => {
               const numInput =
-                "w-full h-10 px-2.5 rounded-lg border border-[#E1E4EA] text-[13px] focus:outline-none focus:border-[#0085FF] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+                "w-full h-10 px-2.5 rounded-[25px] border border-[#E1E4EA] text-[13px] focus:outline-none focus:border-[#0085FF] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
               const txtInput =
-                "w-full h-10 px-2.5 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF]";
+                "w-full h-10 px-2.5 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF]";
               // Label shows in card mode, hidden in the wide row layout (the
               // column header covers it there).
               const lbl =
@@ -1639,7 +1668,7 @@ const CreateInvoicePanel = ({
                         onChange={(e) =>
                           updateItem(index, { discountType: e.target.value })
                         }
-                        className="h-10 px-1.5 rounded-lg border border-[#E1E4EA] text-[13px] text-gray-700 bg-white focus:outline-none focus:border-[#0085FF] flex-shrink-0"
+                        className="h-10 px-1.5 rounded-[25px] border border-[#E1E4EA] text-[13px] text-gray-700 bg-white focus:outline-none focus:border-[#0085FF] flex-shrink-0"
                       >
                         <option value="amount">₹</option>
                         <option value="percentage">%</option>
@@ -1690,7 +1719,7 @@ const CreateInvoicePanel = ({
                           updateItem(index, { showDescription: false });
                       }}
                       placeholder="Describe this item — appears under its name on the document"
-                      className="w-full px-2.5 py-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
+                      className="w-full px-2.5 py-2 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
                     />
                   ) : (
                     <button
@@ -1723,28 +1752,40 @@ const CreateInvoicePanel = ({
               Left empty, that footer block simply doesn't appear. They sit
               side by side: both are short, and the document prints them as one
               footer block. Stacks again when the form is narrow. */}
-          <div className="grid grid-cols-1 @2xl:grid-cols-2 gap-x-6 gap-y-2 w-full">
+          <div className="grid grid-cols-1 @2xl:grid-cols-2 gap-x-6 gap-y-2 w-full mt-3">
             <div className="flex flex-col">
-              <SectionHeader number={sectionNo.notes} title="Notes" />
+              <div className="flex items-center justify-between gap-2">
+                <SectionHeader number={sectionNo.notes} title="Notes" />
+                <OpenNotesTermsButton
+                  label="Add Notes"
+                  onClick={() => setNotesDrawer("notes")}
+                />
+              </div>
               <textarea
                 rows={4}
                 value={form.notes}
                 onChange={(e) => setField("notes", e.target.value)}
                 placeholder={`A short message to the customer, e.g. "Thank you for the business!"`}
-                className="w-full px-3 py-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
+                className="w-full px-3 py-2 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
               />
             </div>
             <div className="flex flex-col">
-              <SectionHeader
-                number={sectionNo.terms}
-                title="Terms and Conditions"
-              />
+              <div className="flex items-center justify-between gap-2">
+                <SectionHeader
+                  number={sectionNo.terms}
+                  title="Terms and Conditions"
+                />
+                <OpenNotesTermsButton
+                  label="Add Terms"
+                  onClick={() => setNotesDrawer("terms")}
+                />
+              </div>
               <textarea
                 rows={4}
                 value={form.terms}
                 onChange={(e) => setField("terms", e.target.value)}
                 placeholder={"1. Goods once sold cannot be taken back or exchanged.\n2. Subject to local jurisdiction."}
-                className="w-full px-3 py-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
+                className="w-full px-3 py-2 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
               />
             </div>
           </div>
@@ -1759,7 +1800,7 @@ const CreateInvoicePanel = ({
                   switcher. Reserve the same trailing space as Invoice Date so
                   the two fields line up in width. */}
               <div className="flex items-center gap-2">
-              <div className="relative flex items-center flex-1 min-w-0 h-10 rounded-lg border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
+              <div className="relative flex items-center flex-1 min-w-0 h-10 rounded-[25px] border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
                 <input
                   type="number"
                   min="0"
@@ -1968,6 +2009,19 @@ const CreateInvoicePanel = ({
 
       {/* Full view — the same live preview at full size, driven by the current
           (possibly unsaved) form state, so it always shows what's on screen. */}
+      {/* Opened by the "Add Notes" / "Add Terms" links beside those sections.
+          Writes to the same form fields the inline boxes use, so the preview
+          updates as you type either way. */}
+      <NotesTermsDrawer
+        isOpen={notesDrawer !== null}
+        focus={notesDrawer || "notes"}
+        onClose={() => setNotesDrawer(null)}
+        type={type}
+        docName={docName}
+        onApplyNotes={(v) => setField("notes", v)}
+        onApplyTerms={(v) => setField("terms", v)}
+      />
+
       {/* Opened by "Change Template" above — edits the organization-wide
           choice, so closing it refreshes orgTemplate and the preview restyles. */}
       <TemplateDrawer

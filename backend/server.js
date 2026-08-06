@@ -113,6 +113,9 @@ app.use("/api/bank-details", bankDetailsRoutes);
 const documentTemplateSettingsRoutes = require("./routes/documentTemplateSettings");
 app.use("/api/document-templates", documentTemplateSettingsRoutes);
 
+const documentFooterTemplateRoutes = require("./routes/documentFooterTemplates");
+app.use("/api/document-footers", documentFooterTemplateRoutes);
+
 const kanbanBoardRoutes = require('./routes/kanbanBoard');
 app.use('/api/kanban', kanbanBoardRoutes);
 

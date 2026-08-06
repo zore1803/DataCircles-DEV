@@ -20,6 +20,8 @@ const createDefaultDocumentTypeSettings = () => ({
 function DocumentSettings() {
   const [form, setForm] = useState({
     nextInvoiceNumber: 1,
+    defaultNotes: "",
+    defaultTerms: "",
     documentTypeSettings: createDefaultDocumentTypeSettings(),
   });
   const [newValues, setNewValues] = useState({
@@ -47,6 +49,8 @@ function DocumentSettings() {
 
         setForm({
           nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
+          defaultNotes: res.data?.defaultNotes || "",
+          defaultTerms: res.data?.defaultTerms || "",
           documentTypeSettings: {
             invoice: normalizeSection("invoice", { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] }),
             quote: normalizeSection("quote", { prefix: "QT", suffix: "", prefixes: ["QT", "QTN"], suffixes: [] }),
@@ -77,6 +81,8 @@ function DocumentSettings() {
         invoiceSuffixes: invoiceSection.suffixes || [],
         documentTypeSettings: form.documentTypeSettings,
         nextInvoiceNumber: Number(form.nextInvoiceNumber) || 1,
+        defaultNotes: form.defaultNotes,
+        defaultTerms: form.defaultTerms,
       });
       toast.success("Document settings updated");
     } catch (error) {
@@ -250,6 +256,40 @@ function DocumentSettings() {
                 </div>
               );
             })()}
+          </div>
+
+          {/* Footer boilerplate. The document editor's "Add Notes" / "Add
+              Terms" buttons drop these into a document on request; nothing is
+              applied automatically, so existing documents are untouched. */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+            <div>
+              <h4 className="text-sm font-semibold text-gray-800">Default Notes &amp; Terms</h4>
+              <p className="text-sm text-gray-500">
+                Saved once here, then inserted with one click while creating a document.
+              </p>
+            </div>
+
+            <label className="flex flex-col gap-2 text-sm">
+              <span className="font-medium text-gray-700">Notes</span>
+              <textarea
+                rows={3}
+                value={form.defaultNotes}
+                onChange={(e) => setForm((prev) => ({ ...prev, defaultNotes: e.target.value }))}
+                placeholder="Thank you for the business!"
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 resize-y"
+              />
+            </label>
+
+            <label className="flex flex-col gap-2 text-sm">
+              <span className="font-medium text-gray-700">Terms and Conditions</span>
+              <textarea
+                rows={4}
+                value={form.defaultTerms}
+                onChange={(e) => setForm((prev) => ({ ...prev, defaultTerms: e.target.value }))}
+                placeholder={"1. Goods once sold cannot be taken back or exchanged.\n2. Subject to local jurisdiction."}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 resize-y"
+              />
+            </label>
           </div>
 
           <button

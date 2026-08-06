@@ -63,6 +63,29 @@ const documentSettingsSchema = new mongoose.Schema(
       default: 1,
       min: 1,
     },
+    // Boilerplate the editor can drop into a document's footer on request.
+    // Stored per organization; documents keep their own copy once inserted.
+    //
+    // The two flat fields below are the org-wide fallback and predate per-type
+    // text. The *ByType maps hold the real values, keyed by document type
+    // (tax | performa | quotation | deliveryChallan); a type with no entry
+    // falls back to the flat field, so existing settings keep working.
+    defaultNotes: {
+      type: String,
+      default: '',
+    },
+    defaultTerms: {
+      type: String,
+      default: '',
+    },
+    defaultNotesByType: {
+      type: Object,
+      default: {},
+    },
+    defaultTermsByType: {
+      type: Object,
+      default: {},
+    },
   },
   { timestamps: true }
 );
