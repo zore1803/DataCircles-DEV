@@ -1546,8 +1546,8 @@ const Header = () => {
       </header>
 
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-[9992] bg-[#FAFAFA] h-[54px] flex items-center">
-        <div className="w-full max-w-[440px] mx-auto flex items-center justify-between px-4 py-2 gap-3 h-full border-b border-[#ECECEC]">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-[9992] bg-[#FAFAFA] h-[54px] flex items-center border-b border-[#ECECEC]">
+        <div className="w-full max-w-[440px] mx-auto flex items-center justify-between px-4 py-2 gap-3 h-full">
           {/* Logo — opens the sidebar on mobile */}
           <img
             src={dataCirclesLogo}
@@ -1606,7 +1606,7 @@ const Header = () => {
                     className="fixed inset-0 z-[9999] cursor-default"
                     onClick={handleAddMenuClose}
                   />
-                  <div className="absolute right-0 top-10 w-[min(168px,calc(100vw-32px))] max-h-[70vh] overflow-y-auto bg-white rounded-xl shadow-2xl border border-gray-100 z-[10000] py-2.5 flex flex-col transition-all duration-300 ease-in-out">
+                  <div className="absolute right-0 top-10 w-[min(150px,calc(100vw-32px))] max-h-[70vh] overflow-y-auto bg-white rounded-xl shadow-2xl border border-gray-100 z-[10000] py-2.5 flex flex-col transition-all duration-300 ease-in-out">
                     <div className="flex-1 px-2.5">
                       <div className="mb-1.5">
                         <h3 className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1 px-1.5">
