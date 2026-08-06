@@ -1,4 +1,5 @@
 const puppeteer = require("puppeteer");
+const qrcode = require("qrcode-generator");
 const { getTemplatesForOrg } = require("../controllers/documentTemplateSettingsController");
 
 /*
@@ -58,13 +59,35 @@ async function resolveTemplate(doc, organization, DEFAULT_TEMPLATE, type) {
   }
 }
 
+/*
+ * Encodes the document's UPI pay link as an inline SVG QR.
+ *
+ * Error correction 'M' with a 1-module quiet zone: the link is short, and M
+ * keeps the modules large enough to scan reliably off a printed page. SVG
+ * rather than a raster so it stays sharp at print resolution.
+ */
+function renderUpiQr(buildUpiUri, doc, options) {
+  const uri = buildUpiUri(doc, options);
+  if (!uri) return "";
+  try {
+    const qr = qrcode(0, "M");
+    qr.addData(uri);
+    qr.make();
+    return qr.createSvgTag({ cellSize: 4, margin: 1, scalable: true });
+  } catch (err) {
+    // A missing QR shouldn't cost the customer their invoice.
+    console.error("UPI QR generation failed:", err.message);
+    return "";
+  }
+}
+
 module.exports = async function htmlDocumentPdf(
   doc,
   bankDetails,
   orgDetails,
   type = "tax"
 ) {
-  const { buildDocumentHtml, DEFAULT_TEMPLATE } = await loadTemplates();
+  const { buildDocumentHtml, DEFAULT_TEMPLATE, buildUpiUri } = await loadTemplates();
 
   const template = await resolveTemplate(
     doc,
@@ -78,6 +101,7 @@ module.exports = async function htmlDocumentPdf(
     template,
     orgDetails,
     bankDetails,
+    upiQrSvg: renderUpiQr(buildUpiUri, doc, { type, orgDetails }),
   });
 
   // A4 at 96dpi is 794px wide; with the 16px page margins the content box is

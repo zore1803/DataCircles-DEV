@@ -44,6 +44,7 @@
     "number-to-words": "^1.2.4",
     "pdfkit": "^0.17.1",
     "puppeteer": "^25.5.0",
+    "qrcode-generator": "^2.0.4",
     "rate-limit-redis": "^4.2.3",
     "razorpay": "^2.9.6",
     "redis": "^5.10.0",

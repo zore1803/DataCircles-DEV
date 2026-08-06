@@ -135,6 +135,50 @@ export function numberToWords(num) {
  * totals block all reconcile with each other instead of disagreeing by the
  * discount.
  */
+/*
+ * Default payee for the invoice QR. Override per call via the `upiId` option
+ * once this becomes an organization setting.
+ */
+export const DEFAULT_UPI_ID = "rzore430@oksbi";
+
+/*
+ * Builds the UPI deep link a payment app reads when the invoice QR is scanned.
+ *
+ * The scheme is fixed by NPCI: `pa` (payee address/VPA), `pn` (payee name),
+ * `am` (amount), `cu` (currency), `tn` (transaction note). Apps like GPay,
+ * PhonePe and Paytm prefill the amount and payee from these, so the customer
+ * only confirms.
+ *
+ * The amount is taken from the same computeDocument() total the invoice
+ * prints, so the QR can never disagree with the figure on the page. It's sent
+ * with exactly two decimals — UPI rejects other formats.
+ *
+ * Kept here rather than in the callers so the preview and the PDF encode a
+ * byte-identical string.
+ */
+export function buildUpiUri(doc, options = {}) {
+  const { type = "tax", orgDetails, upiId = DEFAULT_UPI_ID, amount } = options;
+  const vpa = (upiId || "").trim();
+  if (!vpa) return "";
+
+  const total =
+    amount !== undefined ? Number(amount) : computeDocument(doc, type).grandTotal;
+  if (!(total > 0)) return "";
+
+  const numberKey = NUMBER_KEY[type] || NUMBER_KEY.tax;
+  const params = new URLSearchParams({
+    pa: vpa,
+    pn: (orgDetails?.companyName || "Payee").trim(),
+    am: total.toFixed(2),
+    cu: "INR",
+  });
+  const ref = doc?.[numberKey];
+  if (ref) params.set("tn", `${DOC_LABEL[type] || "Invoice"} ${ref}`);
+
+  // URLSearchParams encodes spaces as "+", which some UPI apps read literally.
+  return `upi://pay?${params.toString().replace(/\+/g, "%20")}`;
+}
+
 export function computeDocument(doc, type = "tax") {
   const supportsTax = type !== "deliveryChallan";
   const taxFlagKey = type === "quotation" ? "isTaxQuotation" : "isTaxInvoice";
@@ -266,6 +310,14 @@ const BASE_CSS = `
 .dcsheet .dc-totals { display: grid; grid-template-columns: 1fr 1fr; border: var(--line-w) solid var(--line); border-top: 0; }
 .dcsheet .dc-totals-left { border-right: var(--line-w) solid var(--line); padding: var(--pad); }
 .dcsheet .dc-totals-left > div { margin-bottom: 4px; }
+.dcsheet .dc-bank-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.dcsheet .dc-bank { min-width: 0; }
+.dcsheet .dc-bank > div { margin-bottom: 4px; }
+.dcsheet .dc-qr { flex-shrink: 0; text-align: center; width: 104px; }
+/* The encoder emits a viewBox-only <svg>; pin the rendered size here so the
+   module stays crisp in print instead of inheriting an arbitrary width. */
+.dcsheet .dc-qr-img svg { width: 104px; height: 104px; display: block; }
+.dcsheet .dc-qr-cap { font-size: 9px; font-weight: bold; margin-top: 2px; }
 .dcsheet .dc-totals-right { padding: var(--pad); }
 .dcsheet .dc-trow { display: flex; justify-content: space-between; }
 .dcsheet .dc-trow.sep { border-bottom: var(--line-w) solid var(--line); padding-bottom: 4px; }
@@ -556,6 +608,9 @@ export function buildDocumentHtml(doc, options = {}) {
     bankDetails,
     dealName: dealNameOverride,
     documentNumber,
+    // Pre-encoded UPI QR (see buildUpiUri) and the VPA to print under it.
+    upiQrSvg,
+    upiId,
   } = options;
 
   const tpl = DOCUMENT_TEMPLATES.includes(template) ? template : DEFAULT_TEMPLATE;
@@ -622,6 +677,20 @@ export function buildDocumentHtml(doc, options = {}) {
         }</span><span>- &#8377;${fmt(t.documentDiscount)}</span></div>`
       : "";
 
+  /*
+   * Scan-to-pay block. The caller encodes the UPI link (buildUpiUri) into an
+   * SVG and passes it in — the encoder is a per-side dependency, but the link
+   * it encodes and the layout around it are defined here, so preview and PDF
+   * stay identical. No QR is drawn for a zero-total or non-payable document.
+   */
+  const qrBlock =
+    upiQrSvg && t.grandTotal > 0
+      ? `<div class="dc-qr">
+          <div class="dc-qr-img">${upiQrSvg}</div>
+          <div class="dc-qr-cap">Scan to pay</div>
+        </div>`
+      : "";
+
   const css = BASE_CSS + (TEMPLATE_CSS[tpl] || "");
 
   return `<style>${css}</style>
@@ -682,11 +751,16 @@ export function buildDocumentHtml(doc, options = {}) {
     <div class="dc-totals-left">
       <div>Total Items / Qty : ${t.rows.length} / ${t.totalQty}</div>
       <div>Total amount (in words): INR ${esc(t.amountInWords)}</div>
-      <div class="dc-label dc-mt">Bank Details:</div>
-      <div>Bank: ${esc(bank.bank || "—")}</div>
-      <div>Account #: ${esc(bank.accountNumber || "—")}</div>
-      <div>IFSC: ${esc(bank.ifscCode || "—")}</div>
-      <div>Branch: ${esc(bank.branch || "—")}</div>
+      <div class="dc-bank-row">
+        <div class="dc-bank">
+          <div class="dc-label dc-mt">Bank Details:</div>
+          <div>Bank: ${esc(bank.bank || "—")}</div>
+          <div>Account #: ${esc(bank.accountNumber || "—")}</div>
+          <div>IFSC: ${esc(bank.ifscCode || "—")}</div>
+          <div>Branch: ${esc(bank.branch || "—")}</div>
+        </div>
+        ${qrBlock}
+      </div>
     </div>
     <div class="dc-totals-right">
       <div class="dc-trow"><span class="dc-label">Taxable Amount</span><span>&#8377;${fmt(t.grossTaxable)}</span></div>

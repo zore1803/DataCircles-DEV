@@ -44,6 +44,21 @@ function normalizeDocumentTypeSettingsMap(documentTypeSettings = {}) {
   return normalized;
 }
 
+// Footer text keyed by document type. Only the accounting document types this
+// app actually renders a footer for are accepted, so a malformed payload can't
+// grow the document arbitrarily.
+const FOOTER_DOC_TYPES = ['tax', 'performa', 'quotation', 'deliveryChallan'];
+
+function normalizeFooterMap(map) {
+  const out = {};
+  if (!map || typeof map !== 'object') return out;
+  for (const key of FOOTER_DOC_TYPES) {
+    if (map[key] === undefined || map[key] === null) continue;
+    out[key] = map[key].toString();
+  }
+  return out;
+}
+
 function normalizeInvoiceNumberSettings(settings = {}) {
   const documentTypeSettings = normalizeDocumentTypeSettingsMap(settings.documentTypeSettings || {});
   const invoiceSetting = documentTypeSettings.invoice;
@@ -63,6 +78,12 @@ function normalizeInvoiceNumberSettings(settings = {}) {
     invoiceSuffixes: invoiceSuffixes.length ? invoiceSuffixes : (invoiceSetting.suffixes || []),
     nextInvoiceNumber,
     documentTypeSettings,
+    defaultNotes: (settings.defaultNotes || '').toString(),
+    defaultTerms: (settings.defaultTerms || '').toString(),
+    // Per-document-type footer text. Types with nothing saved are simply
+    // absent; callers fall back to the flat defaultNotes/defaultTerms above.
+    defaultNotesByType: normalizeFooterMap(settings.defaultNotesByType),
+    defaultTermsByType: normalizeFooterMap(settings.defaultTermsByType),
     documentTypes: Object.entries(DEFAULT_DOCUMENT_TYPES).map(([key, value]) => ({ key, label: value.label })),
   };
 }
@@ -213,8 +234,36 @@ async function saveDocumentSettingsForOrganization(organizationId, payload = {})
     nextInvoiceNumber: normalized.nextInvoiceNumber,
   };
 
+  // Footer boilerplate is only touched when the caller sends it, so saving
+  // numbering settings alone can't wipe it.
+  if (payload.defaultNotes !== undefined) {
+    settingsPayload.defaultNotes = (payload.defaultNotes || '').toString();
+  }
+  if (payload.defaultTerms !== undefined) {
+    settingsPayload.defaultTerms = (payload.defaultTerms || '').toString();
+  }
+  // Merged rather than replaced: the editor saves one document type at a time,
+  // so sending just that key must not clear the others.
+  if (payload.defaultNotesByType !== undefined) {
+    settingsPayload.defaultNotesByType = {
+      ...(existing?.defaultNotesByType || {}),
+      ...normalizeFooterMap(payload.defaultNotesByType),
+    };
+  }
+  if (payload.defaultTermsByType !== undefined) {
+    settingsPayload.defaultTermsByType = {
+      ...(existing?.defaultTermsByType || {}),
+      ...normalizeFooterMap(payload.defaultTermsByType),
+    };
+  }
+
   if (existing) {
     Object.assign(existing, settingsPayload);
+    // Schema type Object: mongoose won't diff the nested keys on its own, so
+    // say explicitly that these paths changed or the save is a no-op.
+    for (const p of ['documentTypeSettings', 'defaultNotesByType', 'defaultTermsByType']) {
+      if (settingsPayload[p] !== undefined) existing.markModified(p);
+    }
     await existing.save();
     return existing;
   }

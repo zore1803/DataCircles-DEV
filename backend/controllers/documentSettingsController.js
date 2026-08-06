@@ -12,7 +12,7 @@ exports.getDocumentSettings = async (req, res) => {
 
 exports.updateDocumentSettings = async (req, res) => {
   try {
-    const { invoicePrefix, invoiceSuffix, nextInvoiceNumber, documentTypeSettings, invoicePrefixes, invoiceSuffixes } = req.body || {};
+    const { invoicePrefix, invoiceSuffix, nextInvoiceNumber, documentTypeSettings, invoicePrefixes, invoiceSuffixes, defaultNotes, defaultTerms, defaultNotesByType, defaultTermsByType } = req.body || {};
     const saved = await saveDocumentSettingsForOrganization(req.user.organization, {
       invoicePrefix,
       invoiceSuffix,
@@ -20,6 +20,10 @@ exports.updateDocumentSettings = async (req, res) => {
       documentTypeSettings,
       invoicePrefixes,
       invoiceSuffixes,
+      defaultNotes,
+      defaultTerms,
+      defaultNotesByType,
+      defaultTermsByType,
     });
 
     res.json({

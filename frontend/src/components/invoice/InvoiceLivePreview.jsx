@@ -1,6 +1,8 @@
 import React, { useMemo } from "react";
+import qrcode from "qrcode-generator";
 import {
   buildDocumentHtml,
+  buildUpiUri,
   DEFAULT_TEMPLATE,
 } from "../../../../shared/documentTemplates.js";
 
@@ -38,6 +40,21 @@ const InvoiceLivePreview = ({
       isTaxQuotation: taxOn,
     };
 
+    // Same encoder settings the PDF uses, so the preview shows the identical
+    // QR the customer will scan off the printed page.
+    let upiQrSvg = "";
+    const uri = buildUpiUri(doc, { type, orgDetails });
+    if (uri) {
+      try {
+        const qr = qrcode(0, "M");
+        qr.addData(uri);
+        qr.make();
+        upiQrSvg = qr.createSvgTag({ cellSize: 4, margin: 1, scalable: true });
+      } catch {
+        upiQrSvg = ""; // a missing QR shouldn't blank the whole preview
+      }
+    }
+
     return buildDocumentHtml(doc, {
       type,
       template,
@@ -45,6 +62,7 @@ const InvoiceLivePreview = ({
       bankDetails,
       dealName,
       documentNumber: invoiceNumber,
+      upiQrSvg,
     });
   }, [
     form,
