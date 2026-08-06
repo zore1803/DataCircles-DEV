@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import API from "../../services/api";
 import { useParams } from "react-router-dom";
-import { createPortal } from "react-dom";
 import { autoTable } from "jspdf-autotable";
 import {
   Edit,
@@ -27,9 +26,11 @@ import VendorPaymentForm from "../vendor/VendorPaymentForm";
 import PaymentPreview from "../vendor/venerPaymentPreview";
 import DataTable from "../common/DataTable";
 import BulkActionBar from "../common/BulkActionBar";
+import TablePaginationFooter from "../common/TablePaginationFooter";
 import CompanyFilterPanel from "../company/CompanyFilterPanel";
 import FilterIcon from "../common/FilterIcon";
 import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
+import { useTopLoadingSignal } from "../common/TopLoadingBar";
 import { Search } from "lucide-react";
 import toast from "react-hot-toast";
 import AppToaster from "../AppToaster";
@@ -50,10 +51,8 @@ const PaymentsTable = ({ payments, vendor }) => {
   const [showForm, setShowForm] = useState(false);
   const [formDirection, setFormDirection] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [_error, setError] = useState("");
+  const [_success, setSuccess] = useState("");
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState(null);
@@ -61,18 +60,12 @@ const PaymentsTable = ({ payments, vendor }) => {
   const [receiptPayment, setReceiptPayment] = useState(null);
   const [vendorFields, setVendorFields] = useState([]);
   const [additionalFieldValues, setAdditionalFieldValues] = useState({});
-  const [showFilters, setShowFilters] = useState(false);
   const [showKPIs, setShowKPIs] = useState(true);
-  const [portalTarget, setPortalTarget] = useState(null);
   const [search, setSearch] = useState("");
   const [selectedFilters, setSelectedFilters] = useState({});
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [columnSizing, setColumnSizing] = useState({});
   const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    setPortalTarget(document.getElementById("tab-actions-portal"));
-  }, []);
 
   useEffect(() => {
     setLocalPayments(payments || []);
@@ -99,12 +92,7 @@ const PaymentsTable = ({ payments, vendor }) => {
   };
 
   const filteredPayments = useMemo(() => {
-    let rows = localPayments.filter((payment) => {
-      const paymentDate = new Date(payment.paymentDate);
-      const start = startDate ? new Date(startDate) : null;
-      const end = endDate ? new Date(endDate) : null;
-      return (!start || paymentDate >= start) && (!end || paymentDate <= end);
-    });
+    let rows = localPayments;
 
     const term = search.trim().toLowerCase();
     if (term) {
@@ -120,11 +108,38 @@ const PaymentsTable = ({ payments, vendor }) => {
     });
 
     return rows;
-  }, [localPayments, startDate, endDate, search, selectedFilters]);
+  }, [localPayments, search, selectedFilters]);
 
   const activeFilterCount = Object.values(selectedFilters).reduce(
     (n, arr) => n + (arr?.length || 0),
     0,
+  );
+
+  /* ── Pagination — same client-side "first ... current ... last" pattern
+     CompanyInvoicesTab uses. Search/filters reset back to page 1. */
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  useEffect(() => {
+    setPage(1);
+  }, [search, selectedFilters]);
+  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / limit));
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  // Brief top-edge progress flash on page change — same visual language as
+  // Companies.jsx's server-paginated list, even though this data is already
+  // in memory (client-side slice) rather than a fresh network round trip.
+  const [isPaging, setIsPaging] = useState(false);
+  useTopLoadingSignal(isPaging);
+  const goToPage = (n) => {
+    if (n === page) return;
+    setIsPaging(true);
+    setPage(n);
+    setTimeout(() => setIsPaging(false), 220);
+  };
+  const paginatedPayments = useMemo(
+    () => filteredPayments.slice((page - 1) * limit, page * limit),
+    [filteredPayments, page, limit],
   );
 
   const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
@@ -235,13 +250,6 @@ const PaymentsTable = ({ payments, vendor }) => {
     setShowUpdateModal(true);
   };
 
-  const handleUpdateSuccess = () => {
-    setShowUpdateModal(false);
-    setSelectedVendor(null);
-    toast.success("Vendor updated!");
-    setError("");
-  };
-
   const handleEditPayment = (payment) => {
     setSelectedPayment(payment);
     setFormDirection(payment.direction);
@@ -283,11 +291,6 @@ const PaymentsTable = ({ payments, vendor }) => {
     }
   };
 
-  const clearFilters = () => {
-    setStartDate("");
-    setEndDate("");
-  };
-
   // Calculate statistics
   const stats = {
     totalPaymentsIn: filteredPayments.filter((p) => p.direction === "IN").length,
@@ -302,50 +305,180 @@ const PaymentsTable = ({ payments, vendor }) => {
 
   const netBalance = stats.totalAmountIn - stats.totalAmountOut;
 
+  /* ── Columns ──
+     `bank` and `reference` are surfaced here for the first time; they were
+     stored on the Payment but only ever visible inside the receipt preview. */
+  const columns = useMemo(
+    () => [
+      {
+        id: "selection",
+        size: 44,
+        enableResizing: false,
+        header: () => (
+          <div className="flex justify-center items-center w-full">
+            <input
+              type="checkbox"
+              checked={
+                paginatedPayments.length > 0 &&
+                paginatedPayments.every((p) => selectedItems.includes(p._id))
+              }
+              onChange={(e) => (e.target.checked ? selectAll(paginatedPayments) : clearSelection())}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-center items-center w-full">
+            <input
+              type="checkbox"
+              checked={selectedItems.includes(row.original._id)}
+              onChange={() => toggleItem(row.original._id)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
+      },
+      {
+        id: "reference_id",
+        size: 110,
+        header: "ID",
+        cell: ({ row }) => (
+          <span className="text-xs font-mono font-medium text-gray-900">
+            {row.original.direction === "OUT" ? "OUT" : "IN"}-
+            {row.original._id.slice(-4).toUpperCase()}
+          </span>
+        ),
+      },
+      {
+        id: "paymentDate",
+        size: 150,
+        header: "Date / Time",
+        cell: ({ row }) => (
+          <div className="flex flex-col leading-tight">
+            <span className="text-sm font-medium text-gray-900">
+              {new Date(row.original.paymentDate).toLocaleDateString()}
+            </span>
+            <span className="text-xs text-gray-500">
+              {new Date(row.original.paymentDate).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+        ),
+      },
+      {
+        id: "direction",
+        size: 110,
+        header: "Status",
+        cell: ({ row }) => (
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+              row.original.direction === "OUT"
+                ? "bg-blue-100 text-blue-800"
+                : "bg-blue-600 text-white"
+            }`}
+          >
+            {row.original.direction === "OUT" ? (
+              <ArrowUpCircle className="w-3 h-3" />
+            ) : (
+              <ArrowDownCircle className="w-3 h-3" />
+            )}
+            {row.original.direction === "OUT" ? "Out" : "In"}
+          </span>
+        ),
+      },
+      {
+        id: "paymentType",
+        size: 130,
+        header: "Mode",
+        cell: ({ row }) => (
+          <span className="text-sm text-gray-700">{row.original.paymentType || "—"}</span>
+        ),
+      },
+      {
+        id: "bank",
+        size: 120,
+        header: "Bank",
+        cell: ({ row }) => (
+          <span className="text-sm text-gray-700">{row.original.bank || "—"}</span>
+        ),
+      },
+      {
+        id: "reference",
+        size: 170,
+        header: "Reference",
+        cell: ({ row }) => (
+          <span className="text-sm text-gray-700 truncate block" title={row.original.reference}>
+            {row.original.reference || "—"}
+          </span>
+        ),
+      },
+      {
+        id: "amount",
+        size: 140,
+        header: "Amount",
+        cell: ({ row }) => (
+          <span
+            className={`text-sm font-bold ${
+              row.original.direction === "OUT" ? "text-red-600" : "text-green-600"
+            }`}
+          >
+            {row.original.direction === "OUT" ? "−" : "+"} ₹{row.original.amount.toFixed(2)}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        size: 120,
+        enableResizing: false,
+        header: "Actions",
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEditPayment(row.original);
+              }}
+              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
+              title="Edit"
+            >
+              <Edit className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleQuickDeletePayment(row.original);
+              }}
+              className="p-1 text-gray-500 hover:text-red-600 transition-colors"
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleViewReceipt(row.original);
+              }}
+              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
+              title="View receipt"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [paginatedPayments, selectedItems, selectAll, clearSelection, toggleItem],
+  );
+
   return (
     <div className="space-y-6">
       <AppToaster />
 
-      {/* Action Buttons (Portaled to Tab Header) */}
-      {portalTarget && createPortal(
-        <>
-          <button
-            onClick={() => handleOpenForm("IN")}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-800 transition-colors"
-          >
-            <ArrowDownCircle className="w-4 h-4" />
-            <span>Got</span>
-          </button>
-          <button
-            onClick={() => handleOpenForm("OUT")}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-700 text-white text-sm font-medium rounded-lg hover:bg-blue-900 transition-colors"
-          >
-            <ArrowUpCircle className="w-4 h-4" />
-            <span>Gave</span>
-          </button>
-          <button
-            onClick={handleViewPDF}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleEditClick}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-            title="Edit Vendor"
-          >
-            <Edit className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setShowKPIs(!showKPIs)}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-            title={showKPIs ? "Hide KPIs" : "Show KPIs"}
-          >
-            {showKPIs ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
-        </>,
-        portalTarget
-      )}
+      {/* Action Buttons (Portaled to Tab Header) removed */}
+
       
       {/* Stats Cards */}
       {showKPIs && (
@@ -415,43 +548,118 @@ const PaymentsTable = ({ payments, vendor }) => {
           isDeleting={isDeleting}
         />
       ) : (
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <CreditCard className="w-4 h-4" />
-          <span>{filteredPayments.length} payments</span>
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+          <div className="relative flex-1 h-full">
+            <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search payments..."
+              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+            />
+          </div>
+          <button
+            onClick={() => setShowFilterPanel(true)}
+            className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+            style={{
+              height: "44px",
+              borderColor: activeFilterCount > 0 ? "#0085FF" : "#E1E4EA",
+            }}
+          >
+            <FilterIcon size={16} />
+            Filter
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => handleOpenForm("IN")}
+            className="flex items-center justify-center gap-2 h-[44px] px-4 bg-blue-600 text-white text-sm font-medium rounded-full hover:bg-blue-800 transition-colors flex-shrink-0 shadow-sm"
+          >
+            <ArrowDownCircle size={18} />
+            <span>Got</span>
+          </button>
+          <button
+            onClick={() => handleOpenForm("OUT")}
+            className="flex items-center justify-center gap-2 h-[44px] px-4 bg-blue-700 text-white text-sm font-medium rounded-full hover:bg-blue-900 transition-colors flex-shrink-0 shadow-sm"
+          >
+            <ArrowUpCircle size={18} />
+            <span>Gave</span>
+          </button>
+          <button
+            onClick={handleViewPDF}
+            className="flex items-center justify-center h-[44px] w-[44px] border border-[#E1E4EA] text-gray-700 rounded-full hover:bg-gray-50 transition-colors flex-shrink-0"
+            title="Download PDF"
+          >
+            <Download size={18} />
+          </button>
+          <button
+            onClick={handleEditClick}
+            className="flex items-center justify-center h-[44px] w-[44px] border border-[#E1E4EA] text-gray-700 rounded-full hover:bg-gray-50 transition-colors flex-shrink-0"
+            title="Edit Vendor"
+          >
+            <Edit size={18} />
+          </button>
+          <button
+            onClick={() => setShowKPIs(!showKPIs)}
+            className="flex items-center justify-center h-[44px] w-[44px] border border-[#E1E4EA] text-gray-700 rounded-full hover:bg-gray-50 transition-colors flex-shrink-0"
+            title={showKPIs ? "Hide KPIs" : "Show KPIs"}
+          >
+            {showKPIs ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
         </div>
       )}
 
-      <DataTable
-        data={filteredPayments}
-        columns={columns}
-        columnSizing={columnSizing}
-        onColumnSizingChange={setColumnSizing}
-        variant="card"
-        maxHeight={560}
-        rowClassName={(p) => (selectedItems.includes(p._id) ? "!bg-blue-50" : "")}
-        emptyContent={
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-              <CreditCard className="w-8 h-8 text-gray-400" />
+      <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
+        <DataTable
+          data={paginatedPayments}
+          columns={columns}
+          loading={loading}
+          columnSizing={columnSizing}
+          onColumnSizingChange={setColumnSizing}
+          variant="card"
+          maxHeight={560}
+          rowClassName={(p) => (selectedItems.includes(p._id) ? "!bg-blue-50" : "")}
+          emptyContent={
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                <CreditCard className="w-8 h-8 text-gray-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900 mb-1">No Payments Found</h3>
+                <p className="text-sm text-gray-600">
+                  {search || activeFilterCount
+                    ? "Try clearing the search or filters."
+                    : "Add your first payment to get started."}
+                </p>
+              </div>
+              {!search && !activeFilterCount && (
+                <button
+                  onClick={() => handleOpenForm("IN")}
+                  className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                >
+                  Add Payment
+                </button>
+              )}
             </div>
-            <div>
-              <h3 className="text-base font-bold text-gray-900 mb-1">No Payments Found</h3>
-              <p className="text-sm text-gray-600">
-                {search || activeFilterCount
-                  ? "Try clearing the search or filters."
-                  : "Add your first payment to get started."}
-              </p>
-            </div>
-            {!search && !activeFilterCount && (
-              <button
-                onClick={() => handleOpenForm("IN")}
-                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
-              >
-                Add Payment
-              </button>
-            )}
-          </div>
-        }
+          }
+        />
+      </div>
+
+      <TablePaginationFooter
+        currentPage={page}
+        totalPages={totalPages}
+        totalCount={filteredPayments.length}
+        limit={limit}
+        onPageChange={goToPage}
+        onLimitChange={(n) => {
+          setLimit(n);
+          setPage(1);
+        }}
       />
 
       <CompanyFilterPanel

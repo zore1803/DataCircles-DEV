@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { createPortal } from "react-dom";
 import { Plus, Calendar, Search, Trash2, Eye } from "lucide-react";
 import API from "../../services/api";
 import VendorTaskForm from "./VendorTaskForm";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
 import DataTable from "../common/DataTable";
 import BulkActionBar from "../common/BulkActionBar";
+import TablePaginationFooter from "../common/TablePaginationFooter";
 import CompanyFilterPanel from "../company/CompanyFilterPanel";
 import FilterIcon from "../common/FilterIcon";
 import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
+import { useTopLoadingSignal } from "../common/TopLoadingBar";
 import toast from "react-hot-toast";
 
 /* Columns offered in the filter panel. `options` seeds the dropdown with the
@@ -62,17 +63,12 @@ const VendorTasksTable = ({ vendorId }) => {
   const [selectedTask, setSelectedTask] = useState(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [vendorName, setVendorName] = useState("");
-  const [portalTarget, setPortalTarget] = useState(null);
 
   const [search, setSearch] = useState("");
   const [selectedFilters, setSelectedFilters] = useState({});
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [columnSizing, setColumnSizing] = useState({});
   const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    setPortalTarget(document.getElementById("tab-actions-portal"));
-  }, []);
 
   const refetchTasks = useCallback(async () => {
     const response = await API.get(`/tasks/vendor/${vendorId}`);
@@ -152,7 +148,38 @@ const VendorTasksTable = ({ vendorId }) => {
     0,
   );
 
-  /* ── Bulk selection ── */
+  /* ── Pagination — same client-side "first ... current ... last" pattern
+     CompanyTasksTab uses for its own list view. Filters/search reset back to
+     page 1 so a narrowed result set never opens on an out-of-range page. */
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  useEffect(() => {
+    setPage(1);
+  }, [search, selectedFilters]);
+  const totalPages = Math.max(1, Math.ceil(filteredTasks.length / limit));
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  // Brief top-edge progress flash on page change — same visual language as
+  // Companies.jsx's server-paginated list, even though this data is already
+  // in memory (client-side slice) rather than a fresh network round trip.
+  const [isPaging, setIsPaging] = useState(false);
+  useTopLoadingSignal(isPaging);
+  const goToPage = (n) => {
+    if (n === page) return;
+    setIsPaging(true);
+    setPage(n);
+    setTimeout(() => setIsPaging(false), 220);
+  };
+  const paginatedTasks = useMemo(
+    () => filteredTasks.slice((page - 1) * limit, page * limit),
+    [filteredTasks, page, limit],
+  );
+
+  /* ── Bulk selection ──
+     Selection tracks the full filtered set (so the bulk strip's "Select All"
+     spans every page), but the header checkbox only ever ticks the rows
+     visible on the CURRENT page — same split CompanyTasksTab uses. */
   const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
     items: filteredTasks,
   });
@@ -227,8 +254,11 @@ const VendorTasksTable = ({ vendorId }) => {
           <div className="flex justify-center items-center w-full">
             <input
               type="checkbox"
-              checked={filteredTasks.length > 0 && selectedItems.length === filteredTasks.length}
-              onChange={(e) => (e.target.checked ? selectAll(filteredTasks) : clearSelection())}
+              checked={
+                paginatedTasks.length > 0 &&
+                paginatedTasks.every((t) => selectedItems.includes(t._id))
+              }
+              onChange={(e) => (e.target.checked ? selectAll(paginatedTasks) : clearSelection())}
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
             />
           </div>
@@ -348,7 +378,7 @@ const VendorTasksTable = ({ vendorId }) => {
         ),
       },
     ],
-    [filteredTasks, selectedItems, selectAll, clearSelection, toggleItem],
+    [paginatedTasks, selectedItems, selectAll, clearSelection, toggleItem],
   );
 
   if (error) {
@@ -362,42 +392,7 @@ const VendorTasksTable = ({ vendorId }) => {
 
   return (
     <div className="h-full mt-2">
-      {/* Action buttons, portaled into the tab header */}
-      {portalTarget &&
-        createPortal(
-          <>
-            <div className="relative h-9">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search tasks..."
-                className="h-9 w-56 pl-9 pr-3 border border-gray-300 rounded-full text-sm focus:outline-none focus:border-blue-300"
-              />
-            </div>
-            <button
-              onClick={() => setShowFilterPanel(true)}
-              className="relative flex items-center justify-center gap-2 h-9 px-3 text-sm font-medium text-gray-800 bg-white border border-gray-300 rounded-full hover:bg-gray-50 flex-shrink-0"
-            >
-              <FilterIcon className="w-4 h-4" />
-              Filter
-              {activeFilterCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setShowTaskForm(true)}
-              className="flex items-center gap-1 h-9 px-3 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Task</span>
-            </button>
-          </>,
-          portalTarget,
-        )}
+      {/* Action Buttons (Portaled to Tab Header) removed */}
 
       {stripVisible ? (
         <BulkActionBar
@@ -410,34 +405,81 @@ const VendorTasksTable = ({ vendorId }) => {
           isDeleting={isDeleting}
         />
       ) : (
-        <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-          <Calendar className="w-4 h-4" />
-          <span>{filteredTasks.length} tasks</span>
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+          <div className="relative flex-1 h-full">
+            <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tasks..."
+              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+            />
+          </div>
+          <button
+            onClick={() => setShowFilterPanel(true)}
+            className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+            style={{
+              height: "44px",
+              borderColor: activeFilterCount > 0 ? "#0085FF" : "#E1E4EA",
+            }}
+          >
+            <FilterIcon size={16} />
+            Filter
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowTaskForm(true)}
+            className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
+            style={{ width: "44px", height: "44px", borderColor: "rgba(31, 41, 55, 0.1)" }}
+          >
+            <Plus size={20} className="text-gray-700" />
+          </button>
         </div>
       )}
 
-      <DataTable
-        data={filteredTasks}
-        columns={columns}
-        columnSizing={columnSizing}
-        onColumnSizingChange={setColumnSizing}
-        variant="card"
-        maxHeight={560}
-        loading={loading}
-        rowClassName={(t) => (selectedItems.includes(t._id) ? "!bg-blue-50" : "")}
-        emptyContent={
-          <div className="flex flex-col items-center gap-2">
-            <Calendar className="w-10 h-10 text-gray-400" />
-            <p className="text-sm text-gray-600">
-              {search || activeFilterCount ? "No tasks match your filters" : "No tasks yet"}
-            </p>
-            <p className="text-xs text-gray-500">
-              {search || activeFilterCount
-                ? "Try clearing the search or filters"
-                : "Tasks will appear here once created"}
-            </p>
-          </div>
-        }
+      <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
+        <DataTable
+          data={paginatedTasks}
+          columns={columns}
+          columnSizing={columnSizing}
+          onColumnSizingChange={setColumnSizing}
+          variant="card"
+          maxHeight={560}
+          loading={loading}
+          rowClassName={(t) => (selectedItems.includes(t._id) ? "!bg-blue-50" : "")}
+          emptyContent={
+            <div className="flex flex-col items-center gap-2">
+              <Calendar className="w-10 h-10 text-gray-400" />
+              <p className="text-sm text-gray-600">
+                {search || activeFilterCount ? "No tasks match your filters" : "No tasks yet"}
+              </p>
+              <p className="text-xs text-gray-500">
+                {search || activeFilterCount
+                  ? "Try clearing the search or filters"
+                  : "Tasks will appear here once created"}
+              </p>
+            </div>
+          }
+        />
+      </div>
+
+      <TablePaginationFooter
+        currentPage={page}
+        totalPages={totalPages}
+        totalCount={filteredTasks.length}
+        limit={limit}
+        onPageChange={goToPage}
+        onLimitChange={(n) => {
+          setLimit(n);
+          setPage(1);
+        }}
       />
 
       <CompanyFilterPanel

@@ -428,7 +428,7 @@ const VendorDetailsPageNew = () => {
           </div>
 
           {/* RIGHT SIDE: Action Toolbar + Relationship Health Gauge */}
-          <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-14 w-full lg:w-auto mt-4 lg:mt-0 justify-between lg:justify-end">
+          <div className="flex flex-col lg:flex-row items-center lg:items-end gap-6 lg:gap-14 w-full lg:w-auto mt-4 lg:mt-0 justify-between lg:justify-end">
             
             {/* Action Toolbar */}
             <div className="flex items-center justify-center gap-3">
@@ -490,37 +490,37 @@ const VendorDetailsPageNew = () => {
         {/* ═══════════════════════════════════════════════════════════
             SECTION 3 & 5 — TABS & CONTENT
            ═══════════════════════════════════════════════════════════ */}
+        {/* TABS */}
+        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+          <div className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
+            <span
+              className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+              style={{ left: tabIndicator.left, width: tabIndicator.width }}
+            />
+            {tabs.map((tab) => (
+              <button
+                key={tab}
+                ref={(el) => (tabRefs.current[tab] = el)}
+                onClick={() => setActiveTab(tab)}
+                className={`relative z-10 flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                  activeTab === tab
+                    ? "text-[#0085FF]"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          <div id="tab-actions-portal" className="flex items-center gap-2"></div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_319px] gap-6">
           
-          {/* ── Left Column: Tabs + Active Tab Content ── */}
+          {/* ── Left Column: Active Tab Content ── */}
           <div className="min-w-0 flex flex-col">
             
-            {/* TABS */}
-            <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
-              <div className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
-                <span
-                  className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
-                  style={{ left: tabIndicator.left, width: tabIndicator.width }}
-                />
-                {tabs.map((tab) => (
-                  <button
-                    key={tab}
-                    ref={(el) => (tabRefs.current[tab] = el)}
-                    onClick={() => setActiveTab(tab)}
-                    className={`relative z-10 flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                      activeTab === tab
-                        ? "text-[#0085FF]"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
-              <div id="tab-actions-portal" className="flex items-center gap-2"></div>
-            </div>
 
-            {/* CONTENT */}
             <div className="min-h-[400px]">
             {activeTab === "Payments" && (
               showSkeleton ? (
@@ -621,7 +621,10 @@ const VendorDetailsPageNew = () => {
               </div>
 
               {/* Feed Items */}
-              <div className="space-y-4">
+              <div 
+                className="space-y-4 overflow-y-auto [&::-webkit-scrollbar]:hidden" 
+                style={{ maxHeight: "340px", scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
                 {showSkeleton ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <div key={i} className="flex items-start gap-2.5">

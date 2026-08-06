@@ -599,3 +599,66 @@ exports.deletePaymentById = async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 };
+
+// Export selected vendors as CSV.
+// Mirrors companyController.exportSelectedCompanies so the shared
+// components/common/ExportModal can drive both pages unchanged.
+exports.exportSelectedVendors = async (req, res) => {
+  try {
+    const { selectedIds, columns } = req.body;
+
+    if (!selectedIds || selectedIds.length === 0) {
+      return res.status(400).json({ error: "No vendors selected for export" });
+    }
+
+    // Fetch every selected vendor regardless of pagination, scoped to the org
+    // so one tenant can never export another's rows.
+    const vendors = await Vendor.find({
+      _id: { $in: selectedIds },
+      organization: req.user.organization,
+    }).lean();
+
+    const headerRow = columns.map((c) => `"${c.label}"`).join(",");
+
+    const dataRows = vendors.map((vendor) =>
+      columns
+        .map((c) => {
+          let val = "";
+
+          if (c.isCustomField) {
+            const field = vendor.additionalFields?.find((f) => f.key === c.key);
+            val = field ? field.value : "";
+          } else if (c.key === "address") {
+            // Address is a subdocument; flatten it to one readable cell.
+            val = [
+              vendor.address?.line1,
+              vendor.address?.line2,
+              vendor.address?.city,
+              vendor.address?.state,
+              vendor.address?.pincode,
+              vendor.address?.country,
+            ]
+              .filter(Boolean)
+              .join(", ");
+          } else {
+            val = vendor[c.key] ?? "";
+          }
+
+          if (typeof val === "object" && val !== null) val = JSON.stringify(val);
+          val = String(val).replace(/"/g, '""');
+
+          return `"${val}"`;
+        })
+        .join(","),
+    );
+
+    const csvContent = [headerRow, ...dataRows].join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="Exported_Vendors.csv"');
+    res.status(200).send(csvContent);
+  } catch (error) {
+    console.error("Vendor export error:", error);
+    res.status(500).json({ error: "Failed to export vendors" });
+  }
+};
