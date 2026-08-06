@@ -42,6 +42,7 @@ import logo from "/DataCircles.png";
 import BillingCenter from "../components/settings/BillingCenter";
 import Referrals from "../components/settings/Referrals";
 import UserManagement from "./UserManagement";
+import DocumentSettings from "../components/settings/DocumentSettings";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -186,6 +187,18 @@ const Settings = () => {
       borderColor: "border-purple-200",
       hoverBg: "hover:bg-purple-50",
       component: <BankDetails />,
+      category: "Billing",
+    },
+    {
+      id: "document-settings",
+      icon: <FileText className="w-5 h-5" />,
+      label: "Document Settings",
+      description: "Set invoice numbering defaults and document preferences",
+      color: "text-sky-600",
+      bgColor: "bg-sky-50",
+      borderColor: "border-sky-200",
+      hoverBg: "hover:bg-sky-50",
+      component: <DocumentSettings />,
       category: "Billing",
     },
     {
