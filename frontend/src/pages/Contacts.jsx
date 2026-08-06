@@ -166,8 +166,14 @@ function Contacts() {
   });
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Skeleton rows only on a genuinely empty table (first load / after a filter
+  // wipes results) — never while paging, so existing rows stay put.
   const showLoadingSkeleton = loading && contacts.length === 0;
-  useTopLoadingSignal(showLoadingSkeleton);
+  // Signal the top progress bar on EVERY fetch, not just the skeleton case.
+  // Paging is server-side here, so page 2 -> 3 has a real network round trip;
+  // the thin top bar is what communicates that now, instead of dimming the
+  // whole table (see the table container below).
+  useTopLoadingSignal(loading);
   const [contactFieldList, setContactFieldList] = useState([]);
   const [additionalValues, setAdditionalValues] = useState({});
   const [permission, setPermission] = useState("");
@@ -276,6 +282,7 @@ function Contacts() {
   const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
   const [columnMenuPos, setColumnMenuPos] = useState(null);
   const columnMenuRef = useRef(null);
+  const tableScrollRef = useRef(null);
 
   // Close any open portal menu on scroll instead of locking the page in place —
   // the background stays freely scrollable, and the menu just disappears since
@@ -305,6 +312,17 @@ function Contacts() {
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    // REMOVED: an `if (e.detail === 1) { …open the column menu… return; }` block.
+    // It was broken three ways at once. (1) It referenced openColMenuKey /
+    // setOpenColMenuKey / setColMenuPos, which don't exist in this file — the
+    // state here is openColumnMenuKey / setColumnMenuPos — so it threw a
+    // ReferenceError on every header mousedown. (2) Because it threw (and
+    // because it `return`ed early), the movement-threshold drag logic below
+    // never got its mousemove/mouseup listeners attached, so column reordering
+    // could not start. (3) Its position maths was unzoomed and duplicated the
+    // chevron button's own correct, zoom-corrected calculation. The menu opens
+    // solely from that button; a plain click on the header now does nothing.
 
     const th = e.currentTarget;
     const startX = e.clientX;
@@ -761,7 +779,35 @@ function Contacts() {
               closeMenu();
               return;
             }
-            setRowActionsPos({ top: e.clientY + 4, left: e.clientX - 130 });
+            // Was anchored to the raw click coordinates (e.clientX/Y) with no
+            // zoom correction and no flip logic — so the menu's position
+            // depended on exactly where inside the small ⋮ hitbox the click
+            // landed, drifted under this app's dynamic zoom, and always
+            // opened straight down regardless of how close to the bottom of
+            // the screen the row was. Same fix as Deals/Tasks/Companies:
+            // anchor to the button's own rect, divide by ancestor zoom (the
+            // menu portals to document.body, which paints inside the zoom),
+            // flip upward when there isn't room below, clamp on both axes.
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 130;
+            const MARGIN = 8;
+            const MENU_H = 180; // Quick View + Edit + Add to Folder + Star + divider + Delete
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const viewportH = window.innerHeight / zMenu;
+            const viewportW = window.innerWidth / zMenu;
+            const top = rect.bottom / zMenu + 4;
+            const bottomAnchor = rect.top / zMenu - 4;
+
+            const openUp = viewportH - top < MENU_H + MARGIN;
+            let calcTop = openUp ? bottomAnchor - MENU_H : top;
+            calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+            calcLeft = Math.max(calcLeft, MARGIN);
+
+            setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(contact._id);
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -928,7 +974,19 @@ function Contacts() {
                       setColumnMenuPos(null);
                       return;
                     }
-                    setColumnMenuPos({ top: e.clientY + 4, left: e.clientX - 160 });
+                    // rect + boundsRight are VISUAL px; the menu is portaled into
+                    // document.body, which paints inside the dynamic <html> zoom, so
+                    // every rect-derived value we set must be divided by that zoom
+                    // (same correction as the drag-ghost above). Without it the menu
+                    // drifts right by rect.right * (zoom - 1) — worst on the last columns.
+                    const zMenu = getAncestorZoom(document.body);
+                    const MENU_W = 160;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const boundsRight = tableScrollRef.current?.getBoundingClientRect().right ?? window.innerWidth;
+                    let calcLeft = rect.right / zMenu - MENU_W;
+                    calcLeft = Math.min(calcLeft, boundsRight / zMenu - MENU_W - 8);
+                    calcLeft = Math.max(calcLeft, 8);
+                    setColumnMenuPos({ top: rect.bottom / zMenu + 4, left: calcLeft });
                     setOpenColumnMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -1221,9 +1279,9 @@ function Contacts() {
 
   // Long-press-to-select is disabled on touch devices — mobile rows should
   // only enter selection via the checkbox itself, never by holding the row.
-  const handleTouchStart = () => {};
+  const handleTouchStart = () => { };
 
-  const handleTouchEnd = () => {};
+  const handleTouchEnd = () => { };
 
   // Exit selection mode
   const exitSelectionMode = () => {
@@ -1633,8 +1691,29 @@ function Contacts() {
     );
   };
 
-  // Debounced search effect
+  // Pagination lives in the Zustand store, so it OUTLIVES this component —
+  // leaving the page on 3 and coming back would otherwise remount still on 3.
+  // Reset to page 1 on unmount so a return visit always starts at page 1 with a
+  // single fetch. Doing it here (on the way out) rather than on mount is what
+  // avoids the flicker: if we reset on mount instead, the first fetch would
+  // already be in flight for page 3, land, paint page-3 rows, and only then get
+  // replaced by page 1.
   useEffect(() => {
+    return () => {
+      setPagination((prev) => ({ ...prev, currentPage: 1 }));
+    };
+  }, [setPagination]);
+
+  // Debounced reset-to-page-1 when the search/tab/filter changes. Skips the
+  // initial mount: on a return visit this used to fire a 300ms-delayed
+  // setPagination that raced the in-flight page-3 fetch, producing exactly the
+  // "page 3 rows appear, then snap to page 1" flicker.
+  const skipInitialPageReset = useRef(true);
+  useEffect(() => {
+    if (skipInitialPageReset.current) {
+      skipInitialPageReset.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
       setPagination((prev) => ({ ...prev, currentPage: 1 }));
     }, 300);
@@ -2500,145 +2579,160 @@ function Contacts() {
             </div>
           </div>
         ) : (
-        <>
-        <div
-          className={`lg:hidden flex flex-col justify-center gap-1.5 overflow-hidden flex-shrink-0 transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
-        >
-          <h1 className="m-0 leading-tight font-bold text-base text-gray-900 truncate">Contacts</h1>
-          <p className="m-0 leading-tight text-[10px] text-gray-500 font-inter truncate">
-            Manage your contacts and leads
-          </p>
-        </div>
-
-        <nav className="hidden lg:flex relative items-stretch h-11 overflow-x-auto flex-shrink-0">
-          {[
-            { id: "All", label: "All" },
-            { id: "Leads", label: "Leads" },
-            { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
-            { id: "Customers", label: "Customers" },
-          ].map(({ id, label }) => (
-            <button
-              key={id}
-              ref={(el) => (tabRefs.current[id] = el)}
-              onClick={() => handleTabChange(id)}
-              className="flex items-center justify-center px-4 h-full whitespace-nowrap"
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 600,
-                fontSize: "14px",
-                letterSpacing: "-0.04em",
-                color: activeTab === id ? "#0085FF" : "#44444A",
-              }}
-            >
-              {label}
-            </button>
-          ))}
-          <span
-            className="absolute bottom-0 pointer-events-none transition-all duration-300 ease-out"
-            style={{ left: tabIndicator.left, width: tabIndicator.width, height: 3, background: "#0085FF" }}
-          />
-        </nav>
-
-        {activeTab !== "Hotlist" && (
-          <div className="relative flex-1 min-w-0 flex items-center justify-end">
+          <>
             <div
-              className={`relative h-10 flex items-center border border-[rgba(31,41,55,0.1)] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
+              className={`lg:hidden flex flex-col justify-center gap-1.5 overflow-hidden flex-shrink-0 transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
             >
-              <Search
-                strokeWidth={2.5}
-                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
-                onClick={() => {
-                  setIsSearchExpanded(true);
-                  searchInputRef.current?.focus();
-                }}
-              />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onFocus={() => setIsSearchExpanded(true)}
-                onBlur={() => {
-                  if (!searchTerm) setIsSearchExpanded(false);
-                }}
-                className={`w-full h-full pl-10 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
-                placeholder="Search by contact by name, company, or status..."
-              />
+              <h1 className="m-0 leading-tight font-bold text-base text-gray-900 truncate">Contacts</h1>
+              <p className="m-0 leading-tight text-[10px] text-gray-500 font-inter truncate">
+                Manage your contacts and leads
+              </p>
             </div>
-          </div>
-        )}
 
-        <div className="flex items-center gap-2 lg:gap-4 flex-shrink-0">
-          {activeTab !== "Hotlist" && (
-            <>
-              <button
-                onClick={() => setShowAdvancedFilters(true)}
-                className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
-                title="Filters"
-              >
-                <FilterIcon size={15} />
-                {activeFilters.length > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                    {activeFilters.length}
-                  </span>
-                )}
-              </button>
+            <nav className="hidden lg:flex relative items-stretch h-11 overflow-x-auto flex-shrink-0">
+              {[
+                { id: "All", label: "All" },
+                { id: "Leads", label: "Leads" },
+                { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
+                { id: "Customers", label: "Customers" },
+              ].map(({ id, label }) => (
+                <button
+                  key={id}
+                  ref={(el) => (tabRefs.current[id] = el)}
+                  onClick={() => handleTabChange(id)}
+                  className="flex items-center justify-center px-4 h-full whitespace-nowrap"
+                  style={{
+                    fontFamily: "Inter",
+                    fontWeight: 600,
+                    fontSize: "14px",
+                    letterSpacing: "-0.04em",
+                    color: activeTab === id ? "#0085FF" : "#44444A",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+              <span
+                className="absolute bottom-0 pointer-events-none transition-all duration-300 ease-out"
+                style={{ left: tabIndicator.left, width: tabIndicator.width, height: 3, background: "#0085FF" }}
+              />
+            </nav>
 
-              <div className="hidden lg:flex relative items-center gap-1.5 bg-[#F1F1F5] rounded-full p-1 flex-shrink-0 overflow-hidden">
-                <span
-                  className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-[0_0_6px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
-                  style={{ left: showKanban ? 42 : 4 }}
-                />
-                <button
-                  onClick={() => setShowKanban(false)}
-                  className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "text-[#0085FF]" : "text-[#525252]"
-                    }`}
-                  title="List View"
+            {activeTab !== "Hotlist" && (
+              <div className="relative flex-1 min-w-0 flex items-center justify-end">
+                <div
+                  className={`relative h-10 flex items-center border border-[rgba(31,41,55,0.1)] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
                 >
-                  <List className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setShowKanban(true)}
-                  className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "text-[#0085FF]" : "text-[#525252]"
-                    }`}
-                  title="Kanban View"
-                >
-                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={showKanban ? "#0085FF" : "#525252"} />
-                  </svg>
-                </button>
+                  <Search
+                    strokeWidth={2.5}
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+                    onClick={() => {
+                      setIsSearchExpanded(true);
+                      searchInputRef.current?.focus();
+                    }}
+                  />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onFocus={() => setIsSearchExpanded(true)}
+                    onBlur={() => {
+                      if (!searchTerm) setIsSearchExpanded(false);
+                    }}
+                    className={`w-full h-full pl-10 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                    placeholder="Search by contact by name, company, or status..."
+                  />
+                </div>
               </div>
-            </>
-          )}
+            )}
 
-          <div className="relative" ref={moreMenuRef}>
-            <button
-              onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-              className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
-              title="More options"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2 lg:gap-4 flex-shrink-0">
+              {activeTab !== "Hotlist" && (
+                <>
+                  <button
+                    onClick={() => setShowAdvancedFilters(true)}
+                    className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
+                    title="Filters"
+                  >
+                    <FilterIcon size={15} />
+                    {activeFilters.length > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                        {activeFilters.length}
+                      </span>
+                    )}
+                  </button>
 
-            {isMoreMenuOpen && (
-              <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
-                {/* Switcher + Hotlist: mobile-only entries, folded in here instead of their own controls */}
-                {activeTab !== "Hotlist" && (
-                  <>
+                  <div className="hidden lg:flex relative items-center gap-1.5 bg-[#F1F1F5] rounded-full p-1 flex-shrink-0 overflow-hidden">
+                    <span
+                      className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-[0_0_6px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
+                      style={{ left: showKanban ? 42 : 4 }}
+                    />
                     <button
-                      onClick={() => {
-                        setShowKanban(false);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      onClick={() => setShowKanban(false)}
+                      className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "text-[#0085FF]" : "text-[#525252]"
+                        }`}
+                      title="List View"
                     >
-                      <List className="w-4 h-4 text-gray-400" />
-                      List View
-                      {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                      <List className="w-4 h-4" />
                     </button>
                     <button
+                      onClick={() => setShowKanban(true)}
+                      className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "text-[#0085FF]" : "text-[#525252]"
+                        }`}
+                      title="Kanban View"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={showKanban ? "#0085FF" : "#525252"} />
+                      </svg>
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <div className="relative" ref={moreMenuRef}>
+                <button
+                  onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                  className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+                  title="More options"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+
+                {isMoreMenuOpen && (
+                  <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
+                    {/* Switcher + Hotlist: mobile-only entries, folded in here instead of their own controls */}
+                    {activeTab !== "Hotlist" && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setShowKanban(false);
+                            setIsMoreMenuOpen(false);
+                          }}
+                          className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <List className="w-4 h-4 text-gray-400" />
+                          List View
+                          {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowKanban(true);
+                            setIsMoreMenuOpen(false);
+                          }}
+                          className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                            <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
+                          </svg>
+                          Kanban View
+                          {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                        </button>
+                      </>
+                    )}
+                    <button
                       onClick={() => {
-                        setShowKanban(true);
+                        handleTabChange(activeTab === "Hotlist" ? "All" : "Hotlist");
                         setIsMoreMenuOpen(false);
                       }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -2646,104 +2740,89 @@ function Contacts() {
                       <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
                         <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
                       </svg>
-                      Kanban View
-                      {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                      {activeTab === "Hotlist" ? "Hide Hotlist" : "Hotlist"}
                     </button>
-                  </>
+                    <button
+                      onClick={() => {
+                        setShowVideoTutorial(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      Video Tutorial
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowImport(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Upload className="w-4 h-4 text-gray-400" />
+                      Import
+                    </button>
+                    <Link
+                      to="/settings/forms?module=Contact"
+                      onClick={() => setIsMoreMenuOpen(false)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      Forms
+                    </Link>
+                    <button
+                      onClick={() => {
+                        setShowColumnSettings(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Settings className="w-4 h-4 text-gray-400" />
+                      Columns
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowAdvancedFilters(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Filter className="w-4 h-4 text-gray-400" />
+                      Filters
+                      {activeFilters.length > 0 && (
+                        <span className="ml-auto bg-blue-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">
+                          {activeFilters.length}
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 )}
-                <button
-                  onClick={() => {
-                    handleTabChange(activeTab === "Hotlist" ? "All" : "Hotlist");
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-                    <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
-                  </svg>
-                  {activeTab === "Hotlist" ? "Hide Hotlist" : "Hotlist"}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowVideoTutorial(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  Video Tutorial
-                </button>
-                <button
-                  onClick={() => {
-                    setShowImport(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Upload className="w-4 h-4 text-gray-400" />
-                  Import
-                </button>
-                <Link
-                  to="/settings/forms?module=Contact"
-                  onClick={() => setIsMoreMenuOpen(false)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  Forms
-                </Link>
-                <button
-                  onClick={() => {
-                    setShowColumnSettings(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Settings className="w-4 h-4 text-gray-400" />
-                  Columns
-                </button>
-                <button
-                  onClick={() => {
-                    setShowAdvancedFilters(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Filter className="w-4 h-4 text-gray-400" />
-                  Filters
-                  {activeFilters.length > 0 && (
-                    <span className="ml-auto bg-blue-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">
-                      {activeFilters.length}
-                    </span>
-                  )}
-                </button>
               </div>
-            )}
-          </div>
 
-          <button
-            onClick={() => handleTabChange(activeTab === "Hotlist" ? "All" : "Hotlist")}
-            className={`hidden lg:inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors flex-shrink-0 ${activeTab === "Hotlist"
-              ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
-              : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
-              }`}
-          >
-            <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={activeTab === "Hotlist" ? "#1D4ED8" : "#1F2937"} />
-            </svg>
-            <span className="font-medium">Hotlist</span>
-          </button>
+              <button
+                onClick={() => handleTabChange(activeTab === "Hotlist" ? "All" : "Hotlist")}
+                className={`hidden lg:inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors flex-shrink-0 ${activeTab === "Hotlist"
+                  ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
+                  : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
+                  }`}
+              >
+                <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={activeTab === "Hotlist" ? "#1D4ED8" : "#1F2937"} />
+                </svg>
+                <span className="font-medium">Hotlist</span>
+              </button>
 
-          <button
-            onClick={toggleForm}
-            title={showForm ? "Cancel" : "New Contact"}
-            className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
-          >
-            <Plus className="w-4 h-4 flex-shrink-0" />
-            <span className="hidden lg:inline">{showForm ? "Cancel" : "New Contact"}</span>
-          </button>
+              <button
+                onClick={toggleForm}
+                title={showForm ? "Cancel" : "New Contact"}
+                className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
+              >
+                <Plus className="w-4 h-4 flex-shrink-0" />
+                <span className="hidden lg:inline">{showForm ? "Cancel" : "New Contact"}</span>
+              </button>
 
-        </div>
-        </>
+            </div>
+          </>
         )}
       </div>
 
@@ -2890,135 +2969,141 @@ function Contacts() {
       {/* Main Content Card */}
       <div className="bg-white overflow-visible">
         <div
+          ref={tableScrollRef}
           className={`${showKanban ? "overflow-x-auto overflow-y-hidden" : "overflow-x-auto overflow-y-auto"} top-[118px] lg:top-[128px]`}
           style={{
             position: "fixed",
             left: "var(--sidebar-width, 0px)",
             right: 0,
-            bottom: !showKanban && activeTab !== "Hotlist" && !loading ? 64 : 0,
+            bottom: !showKanban && activeTab !== "Hotlist" && !showLoadingSkeleton ? 64 : 0,
           }}
         >
-        {/* Content Area */}
-        {showKanban ? (
-          <div className="flex gap-4 px-6 pt-6 pb-2 h-full">
-            {["New", "Contacted", "Interested", "Unqualified"].map((col) => {
-              const count = sortedContacts.filter(
-                (c) => (c.stageStatus || "New") === col
-              ).length;
-              return (
-                <div
-                  key={col}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const contactId = e.dataTransfer.getData("contactId");
-                    const fromStatus = e.dataTransfer.getData("fromStatus");
-                    if (contactId && fromStatus !== col) {
-                      handleKanbanItemMove(contactId, col);
-                    }
-                  }}
-                  className="border border-[#E1E4EA] rounded-lg flex-shrink-0 overflow-hidden flex flex-col h-full"
-                  style={{ width: "340px" }}
-                >
+          {/* Content Area */}
+          {showKanban ? (
+            <div className="flex gap-4 px-6 pt-6 pb-2 h-full">
+              {["New", "Contacted", "Interested", "Unqualified"].map((col) => {
+                const count = sortedContacts.filter(
+                  (c) => (c.stageStatus || "New") === col
+                ).length;
+                return (
                   <div
-                    className="flex items-center gap-1.5"
-                    style={{ height: "46px", background: "#F5F7FA", padding: "0 18px" }}
+                    key={col}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const contactId = e.dataTransfer.getData("contactId");
+                      const fromStatus = e.dataTransfer.getData("fromStatus");
+                      if (contactId && fromStatus !== col) {
+                        handleKanbanItemMove(contactId, col);
+                      }
+                    }}
+                    className="border border-[#E1E4EA] rounded-lg flex-shrink-0 overflow-hidden flex flex-col h-full"
+                    style={{ width: "340px" }}
                   >
-                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}>
-                      {col}
-                    </span>
-                    <span
-                      className="flex items-center justify-center rounded-full bg-white border border-[#E5E5EC]"
-                      style={{ width: "22px", height: "22px", boxShadow: "0px 1px 2px rgba(82, 88, 102, 0.06)" }}
+                    <div
+                      className="flex items-center gap-1.5"
+                      style={{ height: "46px", background: "#F5F7FA", padding: "0 18px" }}
                     >
-                      <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#161618" }}>
-                        {count}
+                      <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}>
+                        {col}
                       </span>
-                    </span>
-                  </div>
+                      <span
+                        className="flex items-center justify-center rounded-full bg-white border border-[#E5E5EC]"
+                        style={{ width: "22px", height: "22px", boxShadow: "0px 1px 2px rgba(82, 88, 102, 0.06)" }}
+                      >
+                        <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#161618" }}>
+                          {count}
+                        </span>
+                      </span>
+                    </div>
 
-                  <div className="flex-1 overflow-y-auto flex flex-col gap-3 p-3 custom-scrollbar">
-                    {sortedContacts
-                      .filter((c) => (c.stageStatus || "New") === col)
-                      .map((contact) => (
-                        <div
-                          key={contact._id}
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData("contactId", contact._id);
-                            e.dataTransfer.setData("fromStatus", col);
-                            const node = e.currentTarget;
-                            const clone = node.cloneNode(true);
-                            clone.style.width = `${node.offsetWidth}px`;
-                            clone.style.position = "absolute";
-                            clone.style.top = "-9999px";
-                            clone.style.left = "-9999px";
-                            clone.style.opacity = "1";
-                            document.body.appendChild(clone);
-                            e.dataTransfer.setDragImage(clone, node.offsetWidth / 2, 20);
-                            requestAnimationFrame(() => document.body.removeChild(clone));
-                          }}
-                          onClick={() => navigate(`/contacts/${contact._id}`)}
-                          className="flex flex-col bg-white border border-[#E5E5EC] rounded-[10px] cursor-pointer hover:shadow-sm transition-shadow active:cursor-grabbing"
-                          style={{ padding: "16px", gap: "16px" }}
-                        >
-                          <div className="flex items-center gap-2 w-full">
-                            <ProfilePicture contact={contact} />
-                            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-2.5 w-full">
+                    <div className="flex-1 overflow-y-auto flex flex-col gap-3 p-3 custom-scrollbar">
+                      {sortedContacts
+                        .filter((c) => (c.stageStatus || "New") === col)
+                        .map((contact) => (
+                          <div
+                            key={contact._id}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("contactId", contact._id);
+                              e.dataTransfer.setData("fromStatus", col);
+                              const node = e.currentTarget;
+                              const clone = node.cloneNode(true);
+                              clone.style.width = `${node.offsetWidth}px`;
+                              clone.style.position = "absolute";
+                              clone.style.top = "-9999px";
+                              clone.style.left = "-9999px";
+                              clone.style.opacity = "1";
+                              document.body.appendChild(clone);
+                              e.dataTransfer.setDragImage(clone, node.offsetWidth / 2, 20);
+                              requestAnimationFrame(() => document.body.removeChild(clone));
+                            }}
+                            onClick={() => navigate(`/contacts/${contact._id}`)}
+                            className="flex flex-col bg-white border border-[#E5E5EC] rounded-[10px] cursor-pointer hover:shadow-sm transition-shadow active:cursor-grabbing"
+                            style={{ padding: "16px", gap: "16px" }}
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <ProfilePicture contact={contact} />
+                              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2.5 w-full">
+                                  <span
+                                    className="truncate"
+                                    style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: "16px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
+                                  >
+                                    {contact.name}
+                                  </span>
+                                  <MoreVertical className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
+                                </div>
                                 <span
                                   className="truncate"
-                                  style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: "16px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
+                                  style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "150%", letterSpacing: "-0.06em", color: "#525252" }}
                                 >
-                                  {contact.name}
+                                  {contact.company?.name || "—"}
                                 </span>
-                                <MoreVertical className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
                               </div>
+                            </div>
+
+                            <div className="w-full border-t border-[#F1F1F5]" />
+
+                            <div className="flex items-center gap-2 w-full">
+                              <Phone className="w-4 h-4 text-[#525252] flex-shrink-0" />
                               <span
                                 className="truncate"
-                                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "150%", letterSpacing: "-0.06em", color: "#525252" }}
+                                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}
                               >
-                                {contact.company?.name || "—"}
+                                {contact.phone || "—"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 w-full">
+                              <Mail className="w-4 h-4 text-[#525252] flex-shrink-0" />
+                              <span
+                                className="truncate"
+                                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}
+                              >
+                                {contact.email || "—"}
                               </span>
                             </div>
                           </div>
-
-                          <div className="w-full border-t border-[#F1F1F5]" />
-
-                          <div className="flex items-center gap-2 w-full">
-                            <Phone className="w-4 h-4 text-[#525252] flex-shrink-0" />
-                            <span
-                              className="truncate"
-                              style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}
-                            >
-                              {contact.phone || "—"}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2 w-full">
-                            <Mail className="w-4 h-4 text-[#525252] flex-shrink-0" />
-                            <span
-                              className="truncate"
-                              style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}
-                            >
-                              {contact.email || "—"}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : activeTab === "Hotlist" ? (
-          <div className="px-6 pt-6">
-            <ContactFolder />
-          </div>
-        ) : (
-          <div
-            className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
-          >
+                );
+              })}
+            </div>
+          ) : activeTab === "Hotlist" ? (
+            <div className="px-6 pt-6">
+              <ContactFolder />
+            </div>
+          ) : (
+            // No `loading ? "opacity-60 pointer-events-none"` on this container any
+            // more. Paging is server-side, so that fired on every page change and
+            // dimmed the whole table to 60% for the length of the round trip — the
+            // flash that made paging feel like the data blinked out. The rows never
+            // actually left (showLoadingSkeleton is gated on an empty list), so the
+            // old data now stays fully legible and clickable while the next page
+            // loads; the top progress bar reports the fetch instead.
+            <div className="relative bg-white border border-[#E1E4EA]">
               <table
                 className="w-full border-separate border-spacing-0 text-left"
                 style={{
@@ -3054,126 +3139,138 @@ function Contacts() {
                   const firstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
 
                   return (
-                <>
-                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <tr key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => {
-                        const colId = header.column.id;
-                        const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
-                        const isRightSticky = rightPinnedKeys.includes(colId);
-                        const isSticky = isLeftSticky || isRightSticky;
-                        const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
-                        const isRightBoundary = colId === firstRightPinnedKey;
-                        const isDraggable = colId !== "selection";
-                        const isDragging = draggedColKey === colId;
-                        const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+                    <>
+                      <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
+                        {table.getHeaderGroups().map((headerGroup) => (
+                          <tr key={headerGroup.id}>
+                            {headerGroup.headers.map((header) => {
+                              const colId = header.column.id;
+                              const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                              const isRightSticky = rightPinnedKeys.includes(colId);
+                              const isSticky = isLeftSticky || isRightSticky;
+                              const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                              const isRightBoundary = colId === firstRightPinnedKey;
+                              const isDraggable = colId !== "selection";
+                              const isDragging = draggedColKey === colId;
+                              const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
 
-                        return (
-                          <th
-                            key={header.id}
-                            data-col-id={colId}
-                            onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
-                            style={{
-                              width: header.getSize(),
-                              position: isSticky ? "sticky" : "relative",
-                              left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
-                              right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
-                              zIndex: isSticky ? 20 : 1,
-                              opacity: isDragging ? 0.35 : 1,
-                            }}
-                            className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
-                              ? "border-r-2 border-r-gray-300"
-                              : "last:border-r-0"
-                              } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
-                          >
-                            <div className="w-full min-w-0">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext(),
-                              )}
-                            </div>
+                              return (
+                                <th
+                                  key={header.id}
+                                  data-col-id={colId}
+                                  onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
+                                  style={{
+                                    width: header.getSize(),
+                                    position: isSticky ? "sticky" : "relative",
+                                    left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                    right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                    zIndex: isSticky ? 20 : 1,
+                                    opacity: isDragging ? 0.35 : 1,
+                                  }}
+                                  className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
+                                    ? "border-r-2 border-r-gray-300"
+                                    : "last:border-r-0"
+                                    } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                                >
+                                  <div className="w-full min-w-0">
+                                    {flexRender(
+                                      header.column.columnDef.header,
+                                      header.getContext(),
+                                    )}
+                                  </div>
 
-                            {colId !== "selection" && header.column.getCanResize() && (
-                              <div
-                                data-resize-handle="true"
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  header.getResizeHandler()(e);
-                                }}
-                                onTouchStart={header.getResizeHandler()}
-                                className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
-                              />
-                            )}
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </thead>
+                                  {colId !== "selection" && header.column.getCanResize() && (
+                                    <div
+                                      data-resize-handle="true"
+                                      onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        header.getResizeHandler()(e);
+                                      }}
+                                      onTouchStart={header.getResizeHandler()}
+                                      className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
+                                    />
+                                  )}
+                                </th>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </thead>
 
-                <tbody className="bg-white">
-                  {showLoadingSkeleton ? (
-                    <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox checkboxWidth={50} />
-                  ) : sortedContacts.length === 0 ? (
-                    <tr>
-                      <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
-                        <p className="font-medium">No contacts found</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    table.getRowModel().rows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className={`bg-white hover:bg-blue-50 transition-colors cursor-pointer ${selectedContactsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
-                        onClick={(e) => {
-                          if (e.target.closest("button") || e.target.closest("a") || e.target.closest("input")) return;
-                          navigate(`/contacts/${row.original._id}`);
-                        }}
-                      >
-                        {row.getVisibleCells().map((cell) => {
-                          const colId = cell.column.id;
-                          const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
-                          const isRightSticky = rightPinnedKeys.includes(colId);
-                          const isSticky = isLeftSticky || isRightSticky;
-                          const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
-                          const isRightBoundary = colId === firstRightPinnedKey;
-                          const isColDragging = draggedColKey === colId;
-
-                          return (
-                            <td
-                              key={cell.id}
-                              onClick={(e) => { if (colId === "selection") e.stopPropagation(); }}
-                              style={{
-                                width: cell.column.getSize(),
-                                position: isSticky ? "sticky" : "static",
-                                left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
-                                right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
-                                zIndex: isSticky ? 10 : 1,
-                                opacity: isColDragging ? 0.35 : 1,
-                              }}
-                              className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
-                                ? "border-r-2 border-r-gray-200"
-                                : "last:border-r-0"
-                                } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
-                            >
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext(),
-                              )}
+                      <tbody className="bg-white">
+                        {showLoadingSkeleton ? (
+                          <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox checkboxWidth={50} />
+                        ) : sortedContacts.length === 0 ? (
+                          <tr>
+                            <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
+                              <p className="font-medium">No contacts found</p>
                             </td>
-                          );
-                        })}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-                </>
+                          </tr>
+                        ) : (
+                          table.getRowModel().rows.map((row) => (
+                            <tr
+                              key={row.id}
+                              className={`bg-white hover:bg-blue-50 transition-colors cursor-pointer ${selectedContactsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                              onClick={(e) => {
+                                // While a row-actions (⋮) menu is open — for THIS row or
+                                // any other — a click anywhere on the table should only
+                                // ever close/switch that menu, never also navigate away.
+                                // The menu's own full-screen backdrop is meant to absorb
+                                // that click, but relying on stacking order alone left a
+                                // gap: clicking a different row while a menu was open
+                                // still navigated to that row's detail page. This check
+                                // makes it impossible regardless of the backdrop's
+                                // z-index behavior. Once no menu is open, rows navigate
+                                // normally again — this only guards the "menu is up"
+                                // window, not row-clicking in general.
+                                if (openRowActionsId) return;
+                                if (e.target.closest("button") || e.target.closest("a") || e.target.closest("input")) return;
+                                navigate(`/contacts/${row.original._id}`);
+                              }}
+                            >
+                              {row.getVisibleCells().map((cell) => {
+                                const colId = cell.column.id;
+                                const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                                const isRightSticky = rightPinnedKeys.includes(colId);
+                                const isSticky = isLeftSticky || isRightSticky;
+                                const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                                const isRightBoundary = colId === firstRightPinnedKey;
+                                const isColDragging = draggedColKey === colId;
+
+                                return (
+                                  <td
+                                    key={cell.id}
+                                    onClick={(e) => { if (colId === "selection") e.stopPropagation(); }}
+                                    style={{
+                                      width: cell.column.getSize(),
+                                      position: isSticky ? "sticky" : "static",
+                                      left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                      right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                      zIndex: isSticky ? 10 : 1,
+                                      opacity: isColDragging ? 0.35 : 1,
+                                    }}
+                                    className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
+                                      ? "border-r-2 border-r-gray-200"
+                                      : "last:border-r-0"
+                                      } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
+                                  >
+                                    {flexRender(
+                                      cell.column.columnDef.cell,
+                                      cell.getContext(),
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </>
                   );
                 })()}
               </table>
-          </div>
-        )}
+            </div>
+          )}
         </div>
 
         {dragGhost && createPortal(
@@ -3204,7 +3301,7 @@ function Contacts() {
           document.body,
         )}
 
-        {!showKanban && activeTab !== "Hotlist" && !loading && (
+        {!showKanban && activeTab !== "Hotlist" && !showLoadingSkeleton && (
           <div
             className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
             style={{ left: "var(--sidebar-width, 0px)", height: 64 }}

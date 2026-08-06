@@ -1,16 +1,26 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
+import BulkActionBar from "../common/BulkActionBar";
 import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
   DndContext,
+  DragOverlay,
   closestCorners,
-  useDraggable,
   useDroppable,
   useSensor,
   useSensors,
   PointerSensor,
+  KeyboardSensor,
 } from "@dnd-kit/core";
+import {
+  useSortable,
+  SortableContext,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { getAncestorZoom } from "../../utils/domUtils";
 import {
   Search,
   Filter,
@@ -42,6 +52,7 @@ import {
   IndianRupee,
   Calendar,
 } from "lucide-react";
+import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import QuickDealForm from "../deal/QuickDealForm";
@@ -51,6 +62,8 @@ import { applyColumnFilters } from "../../utils/advancedFilters";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import DealCardSkeleton from "../common/DealCardSkeleton";
 import Skeleton from "../common/Skeleton";
+import useFillToBottom from "../../hooks/useFillToBottom";
+import { formatNumberToIndian } from "../../utils/numberFormatter";
 
 const AMOUNT_RANGES = [
   { label: "Under ₹10,000", test: (v) => v < 10000 },
@@ -64,20 +77,6 @@ const getAmountRangeLabel = (amount) => {
   return AMOUNT_RANGES.find((r) => r.test(num))?.label || "";
 };
 
-const daysAgo = (date) =>
-  Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
-
-const DATE_RANGES = [
-  { label: "Today", test: (d) => daysAgo(d) < 1 },
-  { label: "This Week", test: (d) => daysAgo(d) < 7 },
-  { label: "This Month", test: (d) => daysAgo(d) < 30 },
-  { label: "Older", test: (d) => daysAgo(d) >= 30 },
-];
-
-const getDateRangeLabel = (date) => {
-  if (!date) return "";
-  return DATE_RANGES.find((r) => r.test(date))?.label || "";
-};
 
 const DEAL_FILTER_COLUMNS = (statuses) => [
   { key: "stage", label: "Stage", options: statuses },
@@ -145,32 +144,25 @@ const Avatar = ({ name, className = "" }) => (
   </div>
 );
 
-const DealCard = ({ deal }) => {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: deal._id });
+// Card geometry/appearance lives here once so the sortable card and the drag
+// overlay can never drift apart. Unchanged from the previous implementation.
+const DEAL_CARD_BOX = {
+  width: "300px",
+  height: "132px",
+  padding: "16px",
+  gap: "16px",
+  borderColor: "#E5E5EC",
+};
+const DEAL_CARD_CLASS =
+  "box-border flex flex-col items-start bg-white border rounded-[10px] mb-3 hover:shadow-sm transition-shadow overflow-hidden";
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.5 : 1,
-    width: "300px",
-    height: "132px",
-    padding: "16px",
-    gap: "16px",
-    borderColor: "#E5E5EC",
-  };
-
+// Inner markup only — no drag wiring, no navigation. Rendered by both shells below.
+const DealCardContent = ({ deal }) => {
   const tagLabel = deal.company?.name || deal.company?.industry || deal.contact?.name;
   const avatarNames = [deal.contact?.name, deal.user?.name].filter(Boolean);
 
   return (
-    <Link
-      to={`/deals/${deal._id}`}
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      className="box-border flex flex-col items-start bg-white border rounded-[10px] mb-3 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow overflow-hidden"
-    >
+    <>
       <div className="flex flex-col items-start gap-2 w-full">
         <div className="flex items-center justify-between w-full">
           <span
@@ -209,45 +201,186 @@ const DealCard = ({ deal }) => {
           </div>
         )}
       </div>
+    </>
+  );
+};
+
+// The in-list card. Still a <Link>, so a plain click navigates exactly as before —
+// the sensor's 8px activation constraint means a click never starts a drag, and a
+// drag never fires the link. `transition` (which useDraggable did not provide) is
+// what lets neighbouring cards glide aside instead of snapping.
+const DealCard = ({ deal }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: deal._id });
+
+  const style = {
+    ...DEAL_CARD_BOX,
+    transform: CSS.Transform.toString(transform),
+    transition,
+    // The original stays in place, faded, while the overlay follows the cursor.
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <Link
+      to={`/deals/${deal._id}`}
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      className={`${DEAL_CARD_CLASS} cursor-grab active:cursor-grabbing`}
+    >
+      <DealCardContent deal={deal} />
     </Link>
   );
 };
 
-const KanbanColumn = ({ status, deals }) => {
+// The floating preview. Deliberately a plain <div>, not a <Link>: it must never be
+// clickable or navigable, and pointer-events-none keeps it from stealing hit-testing
+// from the columns underneath it during the drag.
+const DealCardOverlay = ({ deal }) => (
+  <div
+    style={{ ...DEAL_CARD_BOX, cursor: "grabbing" }}
+    className={`${DEAL_CARD_CLASS} shadow-lg pointer-events-none`}
+  >
+    <DealCardContent deal={deal} />
+  </div>
+);
+
+// Presentation ported verbatim from ModernKanbanColumn in pages/Deals.jsx so the
+// company-profile Deals tab and the standalone /deals board look identical:
+// same 340px shell, #F5F7FA header, pill counter, per-status tinted summary card
+// and week-over-week trend badge.
+const KanbanColumn = ({ status, deals, colorTheme = "blue", onAddClick, loading = false }) => {
   const { setNodeRef, isOver } = useDroppable({ id: status });
-  const total = deals.reduce((sum, d) => sum + (d.amount || 0), 0);
+  const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
+
+  const totalAmount = deals.reduce((sum, deal) => sum + (parseInt(deal.amount) || 0), 0);
+  const formattedTotal = formatNumberToIndian(totalAmount);
+
+  const trendPct = useMemo(() => {
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+    const thisWeekStart = now - 7 * oneDay;
+    const lastWeekStart = now - 14 * oneDay;
+    const inRange = (deal, start, end) => {
+      const t = new Date(deal.createdAt).getTime();
+      return t >= start && t < end;
+    };
+    const sumAmount = (list) => list.reduce((sum, d) => sum + (parseInt(d.amount) || 0), 0);
+    const thisWeek = sumAmount(deals.filter((d) => inRange(d, thisWeekStart, now)));
+    const lastWeek = sumAmount(deals.filter((d) => inRange(d, lastWeekStart, thisWeekStart)));
+    if (lastWeek === 0) return thisWeek === 0 ? 0 : 100;
+    return Math.max(-999, Math.min(999, Math.round(((thisWeek - lastWeek) / lastWeek) * 100)));
+  }, [deals]);
+
+  const tintColor =
+    colorTheme === "green" ? "0, 201, 80" : colorTheme === "red" ? "232, 34, 34" : "179, 204, 255";
 
   return (
     <div
-      className={`flex flex-col flex-shrink-0 w-[340px] bg-white border border-gray-200 rounded-xl transition-colors ${isOver ? "bg-blue-50 border-blue-300" : ""
-        }`}
+      className="flex flex-col items-start flex-shrink-0 bg-white"
+      style={{ width: "340px", border: "1px solid #E7E7E9", borderRadius: "12px", overflow: "hidden" }}
     >
-      <div className="h-[46px] flex items-center justify-between px-[18px] bg-gray-50 rounded-t-xl border-b border-gray-200 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <h4 className="text-sm font-semibold text-gray-900">{status}</h4>
-          <span className="w-5 h-5 flex items-center justify-center text-[11px] font-bold bg-white text-gray-600 rounded-full">
-            {deals.length}
+      {/* Header */}
+      <div
+        className="flex flex-row justify-between items-center w-full flex-shrink-0"
+        style={{ height: "46px", padding: "0 18px", background: "#F5F7FA" }}
+      >
+        <div className="flex items-center gap-1.5">
+          <span
+            className="truncate"
+            style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}
+          >
+            {status}
+          </span>
+          <span
+            className="flex items-center justify-center flex-shrink-0"
+            style={{
+              width: "22px",
+              height: "22px",
+              background: "#FFFFFF",
+              border: "1px solid #E5E5EC",
+              boxShadow: "0px 1px 2px rgba(82, 88, 102, 0.06)",
+              borderRadius: "20px",
+              fontFamily: "Inter",
+              fontWeight: 600,
+              fontSize: "12px",
+              lineHeight: "15px",
+              letterSpacing: "-0.02em",
+              color: "#161618",
+            }}
+          >
+            {loading ? <Skeleton width={14} height={12} /> : deals.length}
           </span>
         </div>
-        <MoreVertical size={14} className="text-gray-300" />
+        <button
+          onClick={onAddClick}
+          className="flex items-center justify-center cursor-pointer hover:opacity-70 transition-opacity flex-shrink-0"
+          title="Add deal"
+        >
+          <Plus className="w-4 h-4" style={{ color: "#BEBEC8" }} />
+        </button>
       </div>
 
-      {deals.length > 0 && (
-        <div className="px-[18px] pt-5 flex-shrink-0">
-          <div className="h-[67px] flex items-center justify-between bg-white bg-gradient-to-br from-white to-[#B3CCFF]/20 border border-[#E1E4EA] rounded-[10px] px-4">
-            <p className="text-lg font-bold text-gray-900">
-              ₹{total.toLocaleString("en-IN")}
-            </p>
-          </div>
-        </div>
-      )}
+      <div className="w-full flex-shrink-0" style={{ height: "1px", background: "#E7E7E9" }} />
 
-      {/* Capped to ~7 cards tall (7*132 + 6*12 gaps); further deals scroll internally. */}
-      <div ref={setNodeRef} className="overflow-y-auto dc-card-scroll px-[18px] pb-[18px] pt-3" style={{ maxHeight: "1030px" }}>
+      {/* Summary card — always visible, unlike the old version which hid it when empty */}
+      <div className="w-full flex-shrink-0" style={{ padding: "20px 20px 0" }}>
+        <div
+          className="box-border flex flex-row justify-between items-center w-full"
+          style={{
+            padding: "16px",
+            gap: "10px",
+            background: `linear-gradient(94.22deg, rgba(255, 255, 255, 0) -7.06%, rgba(${tintColor}, 0.2) 101.14%), #FFFFFF`,
+            border: "1px solid #E5E5EC",
+            borderRadius: "10px",
+          }}
+        >
+          {loading ? (
+            <Skeleton width={90} height={22} />
+          ) : (
+            <span
+              className="truncate"
+              style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "22px", lineHeight: "150%", letterSpacing: "-0.03em", color: "#48494C", minWidth: 0 }}
+            >
+              ₹{formattedTotal}
+            </span>
+          )}
+          {!loading && (
+            <span
+              className="flex-shrink-0"
+              style={{
+                fontFamily: "Inter",
+                fontWeight: 500,
+                fontSize: "12px",
+                lineHeight: "15px",
+                letterSpacing: "-0.02em",
+                color: trendPct >= 0 ? "#0747A6" : "#E82222",
+                marginLeft: "auto",
+              }}
+            >
+              {trendPct >= 0 ? "+" : ""}{trendPct}%
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Cards — capped to ~7 tall, then scrolls internally. */}
+      <div
+        ref={setNodeRef}
+        className={`overflow-y-auto dc-card-scroll w-full px-[18px] pb-[18px] pt-3 transition-colors ${isOver ? "bg-blue-50/40" : ""}`}
+        style={{ maxHeight: "1030px" }}
+      >
         <div className="min-h-[80px]">
-          {deals.map((deal) => (
-            <DealCard key={deal._id} deal={deal} />
-          ))}
+          <SortableContext id={status} items={dealIds} strategy={verticalListSortingStrategy}>
+            {deals.map((deal) => (
+              <DealCard key={deal._id} deal={deal} />
+            ))}
+          </SortableContext>
+          {/* Slack below the last card so dropping at the end of a long column
+              doesn't require hitting the final card precisely. */}
+          <div className="h-10 w-full" />
         </div>
       </div>
     </div>
@@ -265,9 +398,17 @@ export default function CompanyDealsKanban({
   setViewMode: setControlledViewMode,
   isLoading = false,
 }) {
+  // 8px of travel before a drag begins. This is what keeps a plain click on a card
+  // navigating to the deal instead of being swallowed as a drag — do not lower it.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
+  // The deal being dragged, captured on drag start. Serves two purposes: it feeds
+  // the DragOverlay, and it preserves the ORIGINAL status — which onDragOver
+  // overwrites in `deals` as soon as the pointer crosses into another column.
+  const [activeDeal, setActiveDeal] = useState(null);
 
   const [showDealForm, setShowDealForm] = useState(false);
   const [statuses, setStatuses] = useState([]);
@@ -276,7 +417,11 @@ export default function CompanyDealsKanban({
   const [selectedFilters, setSelectedFilters] = useState({});
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
 
-  const handleSort = (key) => {
+  // An explicit `direction` (from the column menu's Sort Ascending / Sort
+  // Descending items) sets that direction outright. Called without one — e.g.
+  // clicking the header label — it toggles, as before.
+  const handleSort = (key, direction) => {
+    if (direction) { setSortConfig({ key, direction }); return; }
     setSortConfig((prev) =>
       prev.key === key
         ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
@@ -286,6 +431,15 @@ export default function CompanyDealsKanban({
   const [localViewMode, setLocalViewMode] = useState("board");
   const viewMode = controlledViewMode ?? localViewMode;
   const setViewMode = setControlledViewMode ?? setLocalViewMode;
+  // Caps the list-view table at the bottom of the viewport so changing rows-per-page
+  // scrolls internally instead of growing the page — same treatment as the Contacts,
+  // Invoices, Tasks, Notes and Meetings tabs.
+  const {
+    containerRef: fillContainerRef,
+    footerRef: fillFooterRef,
+    style: fillStyle,
+  } = useFillToBottom();
+
   const [currentPage, setCurrentPage] = useState(1);
   const [editingPage, setEditingPage] = useState(false);
   const [pageInput, setPageInput] = useState("");
@@ -349,6 +503,13 @@ export default function CompanyDealsKanban({
   const startColumnDrag = (e, colId, label, fallbackOrder) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    // A single press does nothing: the column menu opens from its own chevron
+    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
+    // meant the FIRST press of every double-click popped the menu, whose
+    // full-screen backdrop then swallowed the second press — making the header
+    // effectively un-double-clickable. Drag still starts on the second press.
+    if (e.detail < 2) return;
 
     const th = e.currentTarget;
     const startX = e.clientX;
@@ -788,21 +949,66 @@ export default function CompanyDealsKanban({
     },
   ];
 
-  const handleDragEnd = async (event) => {
-    const { active, over } = event;
+  // `over.id` is a column id when hovering the column body, but another deal's id
+  // when hovering a card — sortable items are droppables too. Both handlers below
+  // need the same resolution, so it lives in one place.
+  const resolveDropStatus = (overId) => {
+    if (!overId) return null;
+    const id = overId.toString();
+    if (statuses.includes(id)) return id;
+    const overDeal = deals.find((d) => d._id.toString() === id);
+    return overDeal ? overDeal.status || "Open" : null;
+  };
+
+  const handleDragStart = ({ active }) => {
+    const deal = deals.find((d) => d._id.toString() === active.id.toString());
+    // Shallow COPY, not a reference. Today every setDeals call replaces objects via
+    // map+spread so a reference would survive intact, but the snapshot is the only
+    // record of the pre-drag status (used for persistence and rollback) — copying
+    // makes that guarantee independent of how state happens to be updated.
+    setActiveDeal(deal ? { ...deal } : null);
+  };
+
+  // Optimistically move the deal into the hovered column mid-drag. The column
+  // counts, totals and trend badges are all derived from `deals`, so this is what
+  // makes them update live; it also lets the destination column open a real gap,
+  // because the card genuinely joins that column's SortableContext.
+  const handleDragOver = ({ active, over }) => {
     if (!over) return;
+    const activeId = active.id.toString();
+    if (activeId === over.id.toString()) return;
 
-    const dealId = active.id.toString();
-    const newStatus = over.id.toString();
-    const deal = deals.find((d) => d._id.toString() === dealId);
-    if (!deal || deal.status === newStatus) return;
+    const dragged = deals.find((d) => d._id.toString() === activeId);
+    if (!dragged) return;
 
-    const oldStatus = deal.status || "Open";
+    const overStatus = resolveDropStatus(over.id);
+    // Same column: dnd-kit handles the reordering animation itself, nothing to do.
+    if (!overStatus || (dragged.status || "Open") === overStatus) return;
 
     setDeals((prev) =>
-      prev.map((d) =>
-        d._id.toString() === dealId ? { ...d, status: newStatus } : d,
-      ),
+      prev.map((d) => (d._id.toString() === activeId ? { ...d, status: overStatus } : d)),
+    );
+  };
+
+  const handleDragCancel = () => setActiveDeal(null);
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    const dragged = activeDeal;
+    setActiveDeal(null);
+    if (!over || !dragged) return;
+
+    const dealId = active.id.toString();
+    const newStatus = resolveDropStatus(over.id);
+    // Read the original status from the drag-start snapshot, NOT from `deals` —
+    // handleDragOver has already rewritten it there.
+    const oldStatus = dragged.status || "Open";
+    if (!newStatus || newStatus === oldStatus) return;
+
+    // handleDragOver has usually applied this already, but not if the drop landed
+    // without an intervening over event — keep it idempotent.
+    setDeals((prev) =>
+      prev.map((d) => (d._id.toString() === dealId ? { ...d, status: newStatus } : d)),
     );
 
     try {
@@ -841,17 +1047,14 @@ export default function CompanyDealsKanban({
               : kpiTiles.map((tile) => (
                 <div
                   key={tile.label}
-                  className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
+                  className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
                 >
-                  <div className="flex lg:hidden flex-shrink-0 text-blue-600">
-                    <tile.icon size={20} />
-                  </div>
-                  <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                     <tile.icon size={20} />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">{tile.label}</p>
-                    <p className="truncate w-full text-xs sm:text-sm font-semibold text-gray-900">
+                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate">
                       {tile.value}
                     </p>
                   </div>
@@ -871,120 +1074,80 @@ export default function CompanyDealsKanban({
           <Skeleton width={88} height={44} shape="rounded" className="!rounded-full flex-shrink-0" />
           <Skeleton width={44} height={44} shape="circle" className="flex-shrink-0" />
         </div>
-      ) : showBulkStrip ? (
-        <div
-          className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInRight"} flex flex-wrap items-center justify-end gap-6 bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4`}
-          style={{ minHeight: 44 }}
-        >
-          <div className="flex items-center gap-3 py-2">
-            <span className="text-blue-800 font-semibold text-sm">
-              {selectedDeals.length} deal{selectedDeals.length !== 1 ? "s" : ""} selected
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 py-2">
-            <button
-              onClick={handleSelectAllAcrossPages}
-              className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Select All
-            </button>
-            <button
-              onClick={handleDeselectAllExtra}
-              className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Deselect All
-            </button>
-            <button
-              onClick={handleExportSelectedDeals}
-              className="px-3.5 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 transition-colors"
-            >
-              Export
-            </button>
-            <button
-              onClick={() => setShowBulkStatusModal(true)}
-              className="px-3.5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Bulk Update
-            </button>
-            <button
-              onClick={() => setShowBulkDeleteModal(true)}
-              className="px-3.5 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Delete
-            </button>
-            <button
-              onClick={() => setSelectedDeals([])}
-              className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+) : showBulkStrip ? (
+        <BulkActionBar
+          isClosing={bulkStripClosing}
+          selectedCount={selectedDeals.length}
+          entityName="deal"
+          onSelectAll={handleSelectAllAcrossPages}
+          onDeselectAll={handleDeselectAllExtra}
+          onExport={handleExportSelectedDeals}
+          onUpdateStatus={() => setShowBulkStatusModal(true)}
+          onDelete={() => setShowBulkDeleteModal(true)}
+          onCancel={() => setSelectedDeals([])}
+        />
       ) : (
-      <div className="flex items-center gap-2 lg:gap-4 mb-4 h-8 lg:h-11">
-        <div className="relative flex-1 h-full">
-          <Search
-            size={14}
-            className="absolute left-3 lg:left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50 lg:w-5 lg:h-5"
-          />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search deals by name, contact, or status..."
-            className="w-full h-full pl-8 lg:pl-10 pr-3 lg:pr-3.5 border rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
-            style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
-          />
-        </div>
-        <button
-          onClick={() => setShowFilterPanel(true)}
-          className="relative flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 h-full text-xs lg:text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
-          style={{
-            borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
-          }}
-        >
-          <FilterIcon size={12} className="lg:hidden" />
-          <FilterIcon size={16} className="hidden lg:block" />
-          <span className="hidden lg:inline">Filter</span>
-          {Object.values(selectedFilters).flat().length > 0 && (
-            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
-              {Object.values(selectedFilters).flat().length}
-            </span>
-          )}
-        </button>
-        <div className="relative flex items-center gap-1 lg:gap-1.5 p-0.5 lg:p-1 bg-[#E9EAEB] rounded-full flex-shrink-0 overflow-hidden h-full">
-          <span
-            className="absolute top-0.5 lg:top-1 w-7 h-7 lg:w-9 lg:h-9 rounded-full bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
-            style={{ left: viewMode === "list" ? "calc(100% - 30px)" : 2 }}
-          />
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+          <div className="relative flex-1 h-full">
+            <Search
+              size={20}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50"
+            />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search deals by name, contact, or status..."
+              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+            />
+          </div>
           <button
-            onClick={() => setViewMode("board")}
-            className={`relative z-10 w-7 h-7 lg:w-9 lg:h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "board" ? "text-blue-600" : "text-gray-500"
-              }`}
+            onClick={() => setShowFilterPanel(true)}
+            className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+            style={{
+              height: "44px",
+              borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
+            }}
           >
-            <LayoutGrid size={13} className="lg:hidden" />
-            <LayoutGrid size={16} className="hidden lg:block" />
+            <FilterIcon size={16} />
+            Filter
+            {Object.values(selectedFilters).flat().length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+                {Object.values(selectedFilters).flat().length}
+              </span>
+            )}
           </button>
+          <div className="relative flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0 overflow-hidden" style={{ height: "44px" }}>
+            <span
+              className="absolute top-1 w-9 h-9 rounded-full bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
+              style={{ left: viewMode === "list" ? 46 : 4 }}
+            />
+            <button
+              onClick={() => setViewMode("board")}
+              className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "board" ? "text-blue-600" : "text-gray-500"
+                }`}
+            >
+              <LayoutGrid size={16} />
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "list" ? "text-blue-600" : "text-gray-500"
+                }`}
+            >
+              <ListIcon size={16} />
+            </button>
+          </div>
           <button
-            onClick={() => setViewMode("list")}
-            className={`relative z-10 w-7 h-7 lg:w-9 lg:h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "list" ? "text-blue-600" : "text-gray-500"
-              }`}
+            type="button"
+            onClick={() => setShowDealForm(true)}
+            className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
+            style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
+            title="Add Deal"
           >
-            <ListIcon size={13} className="lg:hidden" />
-            <ListIcon size={16} className="hidden lg:block" />
+            <Plus size={20} />
           </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowDealForm(true)}
-          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0 w-8 h-8 lg:w-11 lg:h-11"
-          style={{ borderColor: "#E1E4EA" }}
-          title="Add Deal"
-        >
-          <Plus size={14} className="lg:hidden" />
-          <Plus size={20} className="hidden lg:block" />
-        </button>
-      </div>
       )}
 
       {showDealForm && (
@@ -1033,17 +1196,51 @@ export default function CompanyDealsKanban({
             ))}
           </div>
         ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-          <div className="flex gap-4 overflow-x-auto pb-2" style={{ "--kanban-top-offset": "16rem" }}>
-            {statuses.map((status) => (
-              <KanbanColumn
-                key={status}
-                status={status}
-                deals={dealsByStatus[status] || []}
-              />
-            ))}
-          </div>
-        </DndContext>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
+            <div className="flex gap-4 overflow-x-auto pb-2" style={{ "--kanban-top-offset": "16rem" }}>
+              {statuses.map((status) => (
+                <KanbanColumn
+                  key={status}
+                  status={status}
+                  deals={dealsByStatus[status] || []}
+                  colorTheme={status === "Won" ? "green" : status === "Lost" ? "red" : "blue"}
+                  onAddClick={() => setShowDealForm(true)}
+                />
+              ))}
+            </div>
+
+            {/* Floating preview that tracks the cursor. Rendered as a plain div, never
+              a <Link>, so it can't navigate or capture clicks.
+
+              PORTALED TO document.body ON PURPOSE. #root carries `zoom: 0.75`, and
+              CSS `zoom` makes #root the containing block for position:fixed. dnd-kit
+              positions the overlay from getBoundingClientRect() (visual px) and then
+              applies a translate — but painted inside #root both get multiplied by
+              0.75, so the card drifts above the cursor, increasingly so the further
+              you drag. document.body sits outside that zoom, so the coordinates line
+              up 1:1. createPortal keeps the React tree (and DndContext) intact.
+
+              The inner wrapper re-applies the same zoom, because dnd-kit sizes the
+              overlay to the source card's VISUAL rect (225x99, not 300x132) — without
+              it the floating card would render a third larger than the real ones. */}
+            {createPortal(
+              <DragOverlay dropAnimation={null}>
+                {activeDeal ? (
+                  <div style={{ zoom: getAncestorZoom(document.getElementById("root")) }}>
+                    <DealCardOverlay deal={activeDeal} />
+                  </div>
+                ) : null}
+              </DragOverlay>,
+              document.body,
+            )}
+          </DndContext>
         )
       ) : (
         <>
@@ -1051,346 +1248,386 @@ export default function CompanyDealsKanban({
             className="box-border flex flex-col items-stretch bg-white self-stretch"
             style={{ border: "1px solid #E1E4EA", borderRadius: "8px" }}
           >
-            <div className="w-full overflow-x-auto overflow-y-auto" style={{ maxHeight: "596px" }}>
-            <table
-              className="text-sm text-left border-separate"
-              style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%", borderSpacing: 0 }}
-            >
-              <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
-                <tr>
-                  <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-[#E1E4EA]">
-                    <div className="flex justify-center items-center w-full">
-                      <input
-                        type="checkbox"
-                        checked={selectedDeals.length === paginatedDeals.length && paginatedDeals.length > 0}
-                        onChange={handleSelectAllDeals}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                      />
-                    </div>
-                  </th>
-                  {(() => {
-                    const allCols = [
-                      { id: "dealId", label: "Deal ID", width: 127, sortable: false },
-                      { id: "title", label: "Deal Name", width: 185, icon: FileText },
-                      { id: "contact", label: "Contact", width: 150, icon: User },
-                      { id: "stage", label: "Stage", width: 131, icon: Tag },
-                      { id: "amount", label: "Amount", width: 123, icon: IndianRupee },
-                      { id: "lastUpdated", label: "Last Updated", width: 171, icon: Calendar, sortable: false },
-                    ].filter((col) => !hiddenColumns.includes(col.id));
-                    const orderRank = (id) => {
-                      const idx = columnOrder.indexOf(id);
-                      return idx === -1 ? columnOrder.length + allCols.findIndex((c) => c.id === id) : idx;
-                    };
-                    const fallbackOrder = allCols.map((c) => c.id);
-                    return allCols
-                      .slice()
-                      .sort((a, b) => {
-                        const rank = (id) => (getColumnPinSide(id) === "left" ? 0 : getColumnPinSide(id) === "right" ? 2 : 1);
-                        const pinDiff = rank(a.id) - rank(b.id);
-                        if (pinDiff !== 0) return pinDiff;
-                        return orderRank(a.id) - orderRank(b.id);
-                      })
-                      .map((col) => {
-                    const isMenuOpen = openColMenuKey === col.id;
-                    const pinSide = getColumnPinSide(col.id);
-                    const isDragging = draggedColKey === col.id;
-                    const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
-                    return (
-                      <th
-                        key={col.id}
-                        data-col-id={col.id}
-                        onMouseDown={(e) => startColumnDrag(e, col.id, col.label, fallbackOrder)}
-                        style={{ width: colWidths[col.id], height: 56, position: "relative", opacity: isDragging ? 0.35 : 1 }}
-                        className={`px-3 py-2.5 font-medium text-[#525866] text-xs border-r border-[#E1E4EA] cursor-grab active:cursor-grabbing transition-colors ${isDragOver ? "bg-blue-100" : ""}`}
-                      >
-                        <div className="flex items-center justify-between w-full group">
-                          <div
-                            className="flex items-center gap-1.5 flex-1 overflow-hidden cursor-pointer select-none"
-                            onClick={() => col.sortable !== false && handleSort(col.id)}
-                          >
-                            {col.icon && <col.icon className="w-3.5 h-3.5 flex-shrink-0" />}
-                            <span className="truncate">{col.label}</span>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isMenuOpen) {
-                                setOpenColMenuKey(null);
-                                setColMenuPos(null);
-                                return;
-                              }
-                              setColMenuPos({ top: e.clientY + 4, left: e.clientX - 190 });
-                              setOpenColMenuKey(col.id);
-                            }}
-                            className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
-                            title="Column options"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-
-                          {isMenuOpen && colMenuPos && createPortal(
-                            <>
-                              <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColMenuKey(null); setColMenuPos(null); }} />
-                              <div
-                                ref={colMenuRef}
-                                style={{ position: "fixed", top: colMenuPos.top, left: colMenuPos.left }}
-                                className="w-[190px] z-[9999] bg-white border border-[#E5E5EC] rounded-xl shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-2 flex flex-col gap-1 animate-in fade-in zoom-in duration-150 origin-top-right"
-                              >
-                                <button
-                                  onClick={() => {
-                                    setOpenColMenuKey(null);
-                                    setColMenuPos(null);
-                                    pinSide === "left" ? unpinColumn(col.id) : pinColumnToSide(col.id, "left");
-                                  }}
-                                  className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
-                                >
-                                  {pinSide === "left" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
-                                  Pin to Left
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setOpenColMenuKey(null);
-                                    setColMenuPos(null);
-                                    pinSide === "right" ? unpinColumn(col.id) : pinColumnToSide(col.id, "right");
-                                  }}
-                                  className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
-                                >
-                                  {pinSide === "right" ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4 text-[#1C1B1F]" />}
-                                  Pin to Right
-                                </button>
-
-                                {col.sortable !== false && (
-                                  <>
-                                    <button
-                                      onClick={() => {
-                                        setOpenColMenuKey(null);
-                                        setColMenuPos(null);
-                                        handleSort(col.id);
-                                      }}
-                                      className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                                    >
-                                      <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
-                                      Sort Ascending
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setOpenColMenuKey(null);
-                                        setColMenuPos(null);
-                                        handleSort(col.id);
-                                      }}
-                                      className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                                    >
-                                      <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
-                                      Sort Descending
-                                    </button>
-                                  </>
-                                )}
-
-                                <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-
-                                <button
-                                  onClick={() => {
-                                    setOpenColMenuKey(null);
-                                    setColMenuPos(null);
-                                    hideColumn(col.id);
-                                  }}
-                                  className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                                >
-                                  <EyeOff className="w-4 h-4 text-[#1C1B1F]" />
-                                  Hide Column
-                                </button>
-                              </div>
-                            </>,
-                            document.body,
-                          )}
-                        </div>
-
-                        <div
-                          data-resize-handle="true"
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                            startResize(e, col.id);
-                          }}
-                          className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"
-                            }`}
-                        />
-                      </th>
-                    );
-                  });
-                  })()}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E1E4EA] bg-white">
-                {paginatedDeals.length === 0 ? (
+            <div ref={fillContainerRef} style={fillStyle} className="w-full overflow-x-auto overflow-y-auto">
+              <table
+                className="text-sm text-left border-separate"
+                style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%", borderSpacing: 0 }}
+              >
+                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500 font-medium">
-                      No deals found.
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedDeals.map((deal) => {
-                    const lastUpdated = deal.updatedAt
-                      ? new Date(deal.updatedAt).toLocaleDateString("en-US", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })
-                      : "—";
-                    const pillStyle =
-                      deal.status === "Won"
-                        ? { backgroundColor: "rgba(0, 201, 80, 0.1)", color: "#00A63E" }
-                        : deal.status === "Lost"
-                          ? { backgroundColor: "rgba(232, 34, 34, 0.1)", color: "#E82222" }
-                          : { backgroundColor: "rgba(0, 133, 255, 0.1)", color: "#0085FF" };
-                    const isActionsOpen = openRowActionsId === deal._id;
-                    const dealIdShort = `DL-${deal._id.slice(-5).toUpperCase()}`;
-                    const isSelected = selectedDeals.includes(deal._id);
-                    return (
-                      <tr key={deal._id} className={`hover:bg-gray-50 transition-colors group ${isSelected ? "!bg-blue-50" : ""}`}>
-                        <td style={{ height: 54, width: 44 }} className="px-3 border-r border-[#E1E4EA]">
-                          <div className="flex justify-center items-center w-full">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleSelectDeal(deal._id)}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                            />
-                          </div>
-                        </td>
-                        {!hiddenColumns.includes("dealId") && (
-                          <td
-                            style={{ height: 54 }}
-                            className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left border-r border-[#E1E4EA]"
-                          >
-                            <HighlightText text={dealIdShort} query={searchTerm} />
-                          </td>
-                        )}
-                        {!hiddenColumns.includes("title") && (
-                          <td style={{ height: 54 }} className="px-3 text-left border-r border-[#E1E4EA]">
-                            <Link
-                              to={`/deals/${deal._id}`}
-                              className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
+                    {/* Page-scoped select-all: ticks exactly the rows on the CURRENT page
+                        (10 per page -> 10, 50 -> 50). Distinct from the bulk strip's
+                        "Select All", which spans every record across all pages. */}
+                    <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
+                      <div className="flex justify-center items-center w-full">
+                        <input
+                          type="checkbox"
+                          checked={selectedDeals.length > 0 && selectedDeals.length === paginatedDeals.length}
+                          onChange={(e) => setSelectedDeals(e.target.checked ? paginatedDeals.map((d) => d._id) : [])}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
+                    </th>
+                    {(() => {
+                      const allCols = [
+                        { id: "dealId", label: "Deal ID", width: 127, sortable: false },
+                        { id: "title", label: "Deal Name", width: 185 },
+                        { id: "contact", label: "Contact", width: 150 },
+                        { id: "stage", label: "Stage", width: 131 },
+                        { id: "amount", label: "Amount", width: 123 },
+                        { id: "lastUpdated", label: "Last Updated", width: 171, sortable: false },
+                      ].filter((col) => !hiddenColumns.includes(col.id));
+                      const orderRank = (id) => {
+                        const idx = columnOrder.indexOf(id);
+                        return idx === -1 ? columnOrder.length + allCols.findIndex((c) => c.id === id) : idx;
+                      };
+                      const fallbackOrder = allCols.map((c) => c.id);
+                      return allCols
+                        .slice()
+                        .sort((a, b) => {
+                          const rank = (id) => (getColumnPinSide(id) === "left" ? 0 : getColumnPinSide(id) === "right" ? 2 : 1);
+                          const pinDiff = rank(a.id) - rank(b.id);
+                          if (pinDiff !== 0) return pinDiff;
+                          return orderRank(a.id) - orderRank(b.id);
+                        })
+                        .map((col) => {
+                          const isMenuOpen = openColMenuKey === col.id;
+                          const pinSide = getColumnPinSide(col.id);
+                          const isDragging = draggedColKey === col.id;
+                          const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
+                          return (
+                            <th
+                              key={col.id}
+                              data-col-id={col.id}
+                              onMouseDown={(e) => startColumnDrag(e, col.id, col.label, fallbackOrder)}
+                              style={{ width: colWidths[col.id], height: 56, position: "relative", opacity: isDragging ? 0.35 : 1 }}
+                              className={`px-3 py-2.5 font-medium text-[#525866] text-xs border-r border-b border-[#E1E4EA] cursor-grab active:cursor-grabbing transition-colors ${isDragOver ? "bg-blue-100" : ""}`}
                             >
-                              <HighlightText text={deal.title || "Deal Name"} query={searchTerm} />
-                            </Link>
-                          </td>
-                        )}
-                        {!hiddenColumns.includes("contact") && (
-                          <td
-                            style={{ height: 54 }}
-                            className="px-3 text-[14px] leading-5 font-medium text-[#222530] truncate text-left border-r border-[#E1E4EA]"
-                          >
-                            <HighlightText text={deal.contact?.name || "-"} query={searchTerm} />
-                          </td>
-                        )}
-                        {!hiddenColumns.includes("stage") && (
-                          <td style={{ height: 54 }} className="px-3 border-r border-[#E1E4EA]">
-                            <div className="flex items-center justify-start">
-                              <span
-                                style={{ width: 80, height: 24, padding: "5px 12px", borderRadius: 53, ...pillStyle }}
-                                className="inline-flex items-center justify-center text-xs font-medium"
-                              >
-                                <HighlightText text={deal.status || "Open"} query={searchTerm} />
-                              </span>
-                            </div>
-                          </td>
-                        )}
-                        {!hiddenColumns.includes("amount") && (
-                          <td
-                            style={{ height: 54 }}
-                            className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left border-r border-[#E1E4EA]"
-                          >
-                            <HighlightText text={`₹${(deal.amount || 0).toLocaleString("en-IN")}`} query={searchTerm} />
-                          </td>
-                        )}
-                        {!hiddenColumns.includes("lastUpdated") && (
-                          <td
-                            style={{ height: 54 }}
-                            className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap"
-                          >
-                            <div className="flex items-center justify-between gap-2" onMouseDown={(e) => e.stopPropagation()}>
-                              <HighlightText text={lastUpdated} query={searchTerm} />
-                              <div className="relative flex items-center justify-center flex-shrink-0">
+                              <div className="flex items-center justify-between w-full group">
+                                {/* Not clickable — a plain click on the header does nothing now.
+                                    Sorting lives only in the column menu (Sort Ascending/Descending
+                                    below), which is what handleSort's direction argument is for. */}
+                                <div className="flex items-center gap-1.5 flex-1 overflow-hidden select-none">
+                                  {col.icon && <col.icon className="w-3.5 h-3.5 flex-shrink-0" />}
+                                  <span className="truncate">{col.label}</span>
+                                </div>
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (isActionsOpen) {
-                                      setOpenRowActionsId(null);
-                                      setRowActionsPos(null);
+                                    if (isMenuOpen) {
+                                      setOpenColMenuKey(null);
+                                      setColMenuPos(null);
                                       return;
                                     }
-                                    const menuHeight = 128;
-                                    const wouldOverflow = e.clientY + 4 + menuHeight > window.innerHeight;
-                                    setRowActionsPos({
-                                      top: wouldOverflow ? e.clientY - menuHeight - 4 : e.clientY + 4,
-                                      left: e.clientX - 160,
-                                    });
-                                    setOpenRowActionsId(deal._id);
+                                    // rect is VISUAL px; the menu is portaled into document.body,
+                                    // which paints inside the dynamic <html> zoom, so rect-derived
+                                    // values must be divided by that zoom to line up with the button.
+                                    const zMenu = getAncestorZoom(document.body);
+                                    const MENU_W = 190;
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    let calcLeft = rect.right / zMenu - MENU_W;
+                                    calcLeft = Math.min(calcLeft, window.innerWidth / zMenu - MENU_W - 8);
+                                    calcLeft = Math.max(calcLeft, 8);
+                                    setColMenuPos({ top: rect.bottom / zMenu + 4, left: calcLeft });
+                                    setOpenColMenuKey(col.id);
                                   }}
-                                  className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                                  title="More actions"
+                                  className="ml-1 p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                                  title="Column options"
                                 >
-                                  <MoreVertical className="w-4 h-4" />
+                                  <ChevronDown className="w-3.5 h-3.5" />
                                 </button>
-                                {isActionsOpen && rowActionsPos && createPortal(
-                              <>
-                                <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
-                                <div
-                                  ref={rowActionsRef}
-                                  style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-                                  className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
-                                >
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setOpenRowActionsId(null);
-                                      setRowActionsPos(null);
-                                      navigate(`/deals/${deal._id}`);
-                                    }}
-                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                                  >
-                                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                                    View Deal
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setOpenRowActionsId(null);
-                                      setRowActionsPos(null);
-                                      navigate(`/deals/${deal._id}`);
-                                    }}
-                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                                    Edit Deal
-                                  </button>
-                                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setOpenRowActionsId(null);
-                                      setRowActionsPos(null);
-                                      setDealToDelete(deal);
-                                    }}
-                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                    Delete Deal
-                                  </button>
-                                </div>
-                              </>,
-                              document.body,
-                            )}
+
+                                {isMenuOpen && colMenuPos && createPortal(
+                                  <>
+                                    <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColMenuKey(null); setColMenuPos(null); }} />
+                                    <div
+                                      ref={colMenuRef}
+                                      style={{ position: "fixed", top: colMenuPos.top, left: colMenuPos.left }}
+                                      className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                                    >
+                                      <button
+                                        onClick={() => {
+                                          setOpenColMenuKey(null);
+                                          setColMenuPos(null);
+                                          pinSide === "left" ? unpinColumn(col.id) : pinColumnToSide(col.id, "left");
+                                        }}
+                                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                                      >
+                                        {pinSide === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                                        Pin to Left
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setOpenColMenuKey(null);
+                                          setColMenuPos(null);
+                                          pinSide === "right" ? unpinColumn(col.id) : pinColumnToSide(col.id, "right");
+                                        }}
+                                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                                      >
+                                        {pinSide === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                                        Pin to Right
+                                      </button>
+
+                                      {col.sortable !== false && (
+                                        <>
+                                          <button
+                                            onClick={() => {
+                                              setOpenColMenuKey(null);
+                                              setColMenuPos(null);
+                                              handleSort(col.id, "asc");
+                                            }}
+                                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                          >
+                                            <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                            Sort Ascending
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setOpenColMenuKey(null);
+                                              setColMenuPos(null);
+                                              handleSort(col.id, "desc");
+                                            }}
+                                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                          >
+                                            <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                            Sort Descending
+                                          </button>
+                                        </>
+                                      )}
+
+                                      <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+
+                                      <button
+                                        onClick={() => {
+                                          setOpenColMenuKey(null);
+                                          setColMenuPos(null);
+                                          hideColumn(col.id);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                      >
+                                        <EyeOff className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                        Hide Column
+                                      </button>
+                                    </div>
+                                  </>,
+                                  document.body,
+                                )}
                               </div>
+
+                              <div
+                                data-resize-handle="true"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  startResize(e, col.id);
+                                }}
+                                className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"
+                                  }`}
+                              />
+                            </th>
+                          );
+                        });
+                    })()}
+                  </tr>
+                </thead>
+                {/* Row dividers live on the CELLS (border-b), not on <tr>: this table is
+                    `border-separate`, and the separated-borders model ignores borders set
+                    on rows/row-groups — so a `divide-y` here would paint nothing. Matches
+                    the Contacts/Tasks tables, which draw both lines per cell. */}
+                <tbody className="bg-white">
+                  {paginatedDeals.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-12 text-center text-gray-500 font-medium">
+                        No deals found.
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedDeals.map((deal) => {
+                      const lastUpdated = deal.updatedAt
+                        ? new Date(deal.updatedAt).toLocaleDateString("en-US", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })
+                        : "—";
+                      const pillStyle =
+                        deal.status === "Won"
+                          ? { backgroundColor: "rgba(0, 201, 80, 0.1)", color: "#00A63E" }
+                          : deal.status === "Lost"
+                            ? { backgroundColor: "rgba(232, 34, 34, 0.1)", color: "#E82222" }
+                            : { backgroundColor: "rgba(0, 133, 255, 0.1)", color: "#0085FF" };
+                      const isActionsOpen = openRowActionsId === deal._id;
+                      const dealIdShort = `DL-${deal._id.slice(-5).toUpperCase()}`;
+                      const isSelected = selectedDeals.includes(deal._id);
+                      return (
+                        <tr key={deal._id} className={`hover:bg-gray-50 transition-colors group ${isSelected ? "!bg-blue-50" : ""}`}>
+                          <td style={{ height: 54, width: 44 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                            <div className="flex justify-center items-center w-full">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleSelectDeal(deal._id)}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                              />
                             </div>
                           </td>
-                        )}
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                          {!hiddenColumns.includes("dealId") && (
+                            <td
+                              style={{ height: 54 }}
+                              className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left border-r border-b border-[#E1E4EA]"
+                            >
+                              <HighlightText text={dealIdShort} query={searchTerm} />
+                            </td>
+                          )}
+                          {!hiddenColumns.includes("title") && (
+                            <td style={{ height: 54 }} className="px-3 text-left border-r border-b border-[#E1E4EA]">
+                              <Link
+                                to={`/deals/${deal._id}`}
+                                className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
+                              >
+                                <HighlightText text={deal.title || "Deal Name"} query={searchTerm} />
+                              </Link>
+                            </td>
+                          )}
+                          {!hiddenColumns.includes("contact") && (
+                            <td
+                              style={{ height: 54 }}
+                              className="px-3 text-[14px] leading-5 font-medium text-[#222530] truncate text-left border-r border-b border-[#E1E4EA]"
+                            >
+                              <HighlightText text={deal.contact?.name || "-"} query={searchTerm} />
+                            </td>
+                          )}
+                          {!hiddenColumns.includes("stage") && (
+                            <td style={{ height: 54 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                              <div className="flex items-center justify-start">
+                                <span
+                                  style={{ width: 80, height: 24, padding: "5px 12px", borderRadius: 53, ...pillStyle }}
+                                  className="inline-flex items-center justify-center text-xs font-medium"
+                                >
+                                  <HighlightText text={deal.status || "Open"} query={searchTerm} />
+                                </span>
+                              </div>
+                            </td>
+                          )}
+                          {!hiddenColumns.includes("amount") && (
+                            <td
+                              style={{ height: 54 }}
+                              className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left border-r border-b border-[#E1E4EA]"
+                            >
+                              <HighlightText text={`₹${(deal.amount || 0).toLocaleString("en-IN")}`} query={searchTerm} />
+                            </td>
+                          )}
+                          {!hiddenColumns.includes("lastUpdated") && (
+                            <td
+                              style={{ height: 54 }}
+                              className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap border-b border-[#E1E4EA]"
+                            >
+                              <div className="flex items-center justify-between gap-2" onMouseDown={(e) => e.stopPropagation()}>
+                                <HighlightText text={lastUpdated} query={searchTerm} />
+                                <div className="relative flex items-center justify-center flex-shrink-0">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isActionsOpen) {
+                                        setOpenRowActionsId(null);
+                                        setRowActionsPos(null);
+                                        return;
+                                      }
+                                      // Was anchored to the raw click coordinates
+                                      // (e.clientX/Y) with no zoom correction — so
+                                      // `left: e.clientX - 160` drifted further left
+                                      // the further right on the button you happened
+                                      // to click, and drifted again under this app's
+                                      // dynamic zoom. Same fix as the main Deals
+                                      // table: anchor to the button's own rect,
+                                      // divide by ancestor zoom (the menu portals to
+                                      // document.body, which paints inside the zoom),
+                                      // center vertically on the row rather than
+                                      // hanging off its bottom edge, and clamp both
+                                      // axes to the viewport.
+                                      const zMenu = getAncestorZoom(document.body);
+                                      const MENU_W = 160;
+                                      const MENU_H = 110; // View Deal + Edit Deal + divider + Delete Deal
+                                      const MARGIN = 8;
+
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      const viewportH = window.innerHeight / zMenu;
+                                      const viewportW = window.innerWidth / zMenu;
+
+                                      const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                                      let calcTop = rowCenter - MENU_H / 2;
+                                      calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+                                      let calcLeft = rect.right / zMenu - MENU_W - 12;
+                                      calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                                      calcLeft = Math.max(calcLeft, MARGIN);
+
+                                      setRowActionsPos({ top: calcTop, left: calcLeft });
+                                      setOpenRowActionsId(deal._id);
+                                    }}
+                                    className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                                    title="More actions"
+                                  >
+                                    <MoreVertical className="w-4 h-4" />
+                                  </button>
+                                  {isActionsOpen && rowActionsPos && createPortal(
+                                    <>
+                                      <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+                                      <div
+                                        ref={rowActionsRef}
+                                        style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+                                        className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                                      >
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setOpenRowActionsId(null);
+                                            setRowActionsPos(null);
+                                            navigate(`/deals/${deal._id}`);
+                                          }}
+                                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                        >
+                                          <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                          View Deal
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setOpenRowActionsId(null);
+                                            setRowActionsPos(null);
+                                            navigate(`/deals/${deal._id}`);
+                                          }}
+                                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                          Edit Deal
+                                        </button>
+                                        <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setOpenRowActionsId(null);
+                                            setRowActionsPos(null);
+                                            setDealToDelete(deal);
+                                          }}
+                                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                          Delete Deal
+                                        </button>
+                                      </div>
+                                    </>,
+                                    document.body,
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
 
             {dragGhost && createPortal(
@@ -1418,8 +1655,13 @@ export default function CompanyDealsKanban({
               document.body,
             )}
 
-            {totalCount > 0 && (
-            <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6 border-t border-[#E1E4EA] rounded-b-lg">
+          </div>
+
+          {totalCount > 0 && (
+            <div
+              ref={fillFooterRef}
+              className="w-full bg-transparent px-4 py-3 mt-3 flex items-center justify-between sm:px-6"
+            >
               <div className="flex-1 flex justify-between sm:hidden">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
@@ -1456,86 +1698,24 @@ export default function CompanyDealsKanban({
                   </select>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={!hasPrevPage}
-                    className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-
-                  {(() => {
-                    const commitPage = () => {
-                      const n = parseInt(pageInput, 10);
-                      if (!Number.isNaN(n)) handlePageChange(Math.min(Math.max(n, 1), totalPages));
-                      setEditingPage(false);
-                    };
-                    const items = [1];
-                    if (currentPage > 2) items.push("left-dots");
-                    if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
-                    if (currentPage < totalPages - 1) items.push("right-dots");
-                    if (totalPages > 1) items.push(totalPages);
-
-                    return items.map((item, index) => {
-                      if (item === "left-dots" || item === "right-dots") {
-                        return (
-                          <span key={`${item}-${index}`} className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none">
-                            ....
-                          </span>
-                        );
-                      }
-                      const isCurrent = item === currentPage;
-                      if (isCurrent && editingPage) {
-                        return (
-                          <input
-                            key="page-edit"
-                            autoFocus
-                            type="number"
-                            min={1}
-                            max={totalPages}
-                            value={pageInput}
-                            onChange={(e) => setPageInput(e.target.value)}
-                            onBlur={commitPage}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") commitPage();
-                              if (e.key === "Escape") setEditingPage(false);
-                            }}
-                            className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          />
-                        );
-                      }
-                      return (
-                        <button
-                          key={`page-${item}`}
-                          onClick={() => handlePageChange(item)}
-                          onDoubleClick={() => {
-                            if (isCurrent) {
-                              setPageInput(String(currentPage));
-                              setEditingPage(true);
-                            }
-                          }}
-                          title={isCurrent ? "Double-click to type a page number" : undefined}
-                          className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${isCurrent ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
-                        >
-                          {item}
-                        </button>
-                      );
-                    });
-                  })()}
-
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={!hasNextPage}
-                    className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
+                  <EditablePaginationButtons
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    hasPrevPage={hasPrevPage}
+                    hasNextPage={hasNextPage}
+                    onPageChange={handlePageChange}
+                    getPageNumbers={() => {
+                      const items = [1];
+                      if (currentPage > 2) items.push("left-dots");
+                      if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
+                      if (currentPage < totalPages - 1) items.push("right-dots");
+                      if (totalPages > 1) items.push(totalPages);
+                      return items;
+                    }}
+                  />
               </div>
             </div>
-            )}
-          </div>
+          )}
         </>
       )}
 

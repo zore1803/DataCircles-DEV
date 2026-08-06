@@ -21,6 +21,7 @@
 .dc-loader-fill {
   min-height: 100vh;
 }
+
 @media (min-width: 1024px) {
   .dc-loader-fill {
     min-height: calc(100vh / var(--dynamic-zoom, 1));
@@ -36,15 +37,41 @@
 .dc-kanban-col {
   height: 520px;
 }
+
 @media (min-width: 1024px) {
   .dc-kanban-col {
     height: calc((100vh - var(--kanban-top-offset, 20rem)) / var(--dynamic-zoom, 1));
   }
 }
 
+/* NOTE: a `.dc-fill-to-bottom` calc() utility used to live here, for sizing a
+   panel to end at the bottom of the viewport. It was removed — the height of
+   the content above such a panel is not expressible as a constant on a page
+   whose header can reflow (KPI toggle, wrapped text, notice banner, and a
+   grid that changes column count at the 1024px breakpoint), so it needed a
+   different magic number per breakpoint per state and still drifted.
+   Use `hooks/useFillToBottom.js` instead, which measures the real position. */
+
+/* Right-anchored slide-in panels (Create Deal / Invoice / Contact) render as an
+   inset, rounded CARD instead of a full-bleed square flush to the viewport edges.
+   Height is whatever is left after the inset, so it always fits the screen and the
+   body scrolls internally — the global scrollbar rules below already hide the bar in
+   both WebKit and Firefox, so no extra utility is needed here.
+   NOTE: these values land inside #root's 0.75 desktop zoom, so 1.5rem paints as
+   ~18px on screen. Pair with translate-x-[calc(100%+2rem)] for the closed state —
+   plain translate-x-full only moves the panel by its own width and would leave the
+   right-hand inset visible as a sliver. */
+.dc-panel-card {
+  top: 1.5rem;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  border-radius: 16px;
+}
+
 .dc-panel-w {
   width: 100%;
 }
+
 @media (min-width: 1024px) {
   .dc-panel-w {
     width: 33.333vw;
@@ -72,7 +99,7 @@
 }
 
 ::-webkit-scrollbar {
-    display: none;
+  display: none;
 }
 
 * {
@@ -108,7 +135,12 @@
    by default. */
 .dc-card-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e0 #f1f1f1;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s;
+}
+
+.dc-card-scroll:hover {
+  scrollbar-color: #cbd5e0 transparent;
 }
 
 .dc-card-scroll::-webkit-scrollbar {
@@ -118,12 +150,16 @@
 }
 
 .dc-card-scroll::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent;
 }
 
 .dc-card-scroll::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
+  background: transparent;
   border-radius: 4px;
+}
+
+.dc-card-scroll:hover::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
 }
 
 .dc-card-scroll::-webkit-scrollbar-thumb:hover {
@@ -149,7 +185,7 @@
 }
 
 /* === Global font setup (optional) === */
-@theme{
+@theme {
   --font-sf: 'Inter', sans-serif;
   --font-inter: 'Inter', sans-serif;
   --font-space: 'Inter', sans-serif;
@@ -159,34 +195,36 @@
   font-family: 'Inter', sans-serif !important;
 }
 
-body{
+body {
   font-family: var(--font-inter);
   font-weight: 500;
 }
 
-label{
+label {
   font-family: var(--font-sf);
 
 }
 
-button{
+button {
   font-family: var(--font-sf);
 
 }
 
-h1{
+h1 {
   font-family: var(--font-sf);
   font-weight: 500;
 }
 
-h6{
+h6 {
   font-family: var(--font-space);
 }
+
 @theme {
-  --primary-color: linear-gradient(190deg, #7E7AE8 0%, #0033FF 50%, #7E7AE8 100%);    /* your secondary color */
-  --primary-hover: #3C38BD;      
-  --secondary-color: #585BEB;  
-  --secondary-hover: #274BA3;      
+  --primary-color: linear-gradient(190deg, #7E7AE8 0%, #0033FF 50%, #7E7AE8 100%);
+  /* your secondary color */
+  --primary-hover: #3C38BD;
+  --secondary-color: #585BEB;
+  --secondary-hover: #274BA3;
 }
 
 /* Primary button */
@@ -194,12 +232,12 @@ h6{
   background-image: var(--primary-color);
   color: white;
   cursor: pointer;
+
 }
 
 .btn-primary:hover {
   background-color: var(--primary-hover);
-  color:white
-  
+  color: white
 }
 
 /* Secondary button */
@@ -207,7 +245,7 @@ h6{
   background-color: var(--secondary-color);
   color: white;
   cursor: pointer;
-   
+
 }
 
 .btn-secondary:hover {
@@ -215,8 +253,13 @@ h6{
 }
 
 @keyframes spin-smooth {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .animate-spin-smooth {
@@ -225,10 +268,11 @@ h6{
 
 
 @theme {
-  --primary-color: linear-gradient(190deg, #7E7AE8 0%, #0033FF 50%, #7E7AE8 100%);    /* your secondary color */
-  --primary-hover: #3C38BD;      
-  --secondary-color: #585BEB;  
-  --secondary-hover: #274BA3;      
+  --primary-color: linear-gradient(190deg, #7E7AE8 0%, #0033FF 50%, #7E7AE8 100%);
+  /* your secondary color */
+  --primary-hover: #3C38BD;
+  --secondary-color: #585BEB;
+  --secondary-hover: #274BA3;
 }
 
 /* Primary button */
@@ -240,8 +284,7 @@ h6{
 
 .btn-primary:hover {
   background-color: var(--primary-hover);
-  color:white
-  
+  color: white
 }
 
 /* Secondary button */
@@ -249,7 +292,7 @@ h6{
   background-color: var(--secondary-color);
   color: white;
   cursor: pointer;
-   
+
 }
 
 .btn-secondary:hover {
@@ -257,8 +300,13 @@ h6{
 }
 
 @keyframes spin-smooth {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .animate-spin-smooth {
@@ -267,10 +315,11 @@ h6{
 
 
 @theme {
-  --primary-color: linear-gradient(190deg, #7E7AE8 0%, #0033FF 50%, #7E7AE8 100%);    /* your secondary color */
-  --primary-hover: #3C38BD;      
-  --secondary-color: #585BEB;  
-  --secondary-hover: #274BA3;      
+  --primary-color: linear-gradient(190deg, #7E7AE8 0%, #0033FF 50%, #7E7AE8 100%);
+  /* your secondary color */
+  --primary-hover: #3C38BD;
+  --secondary-color: #585BEB;
+  --secondary-hover: #274BA3;
 }
 
 /* Primary button */
@@ -282,8 +331,7 @@ h6{
 
 .btn-primary:hover {
   background-color: var(--primary-hover);
-  color:white
-  
+  color: white
 }
 
 /* Secondary button */
@@ -291,7 +339,7 @@ h6{
   background-color: var(--secondary-color);
   color: white;
   cursor: pointer;
-   
+
 }
 
 .btn-secondary:hover {
@@ -299,8 +347,13 @@ h6{
 }
 
 @keyframes spin-smooth {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .animate-spin-smooth {
@@ -311,6 +364,7 @@ h6{
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -321,6 +375,7 @@ h6{
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -343,6 +398,7 @@ h6{
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -353,6 +409,7 @@ h6{
     transform: translateX(100%);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;
@@ -368,6 +425,7 @@ h6{
     transform: translateX(-100%);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;
@@ -383,6 +441,7 @@ h6{
     transform: translateX(0);
     opacity: 1;
   }
+
   to {
     transform: translateX(100%);
     opacity: 0;
@@ -398,6 +457,7 @@ h6{
     transform: translateX(0);
     opacity: 1;
   }
+
   to {
     transform: translateX(-100%);
     opacity: 0;
@@ -413,20 +473,52 @@ h6{
 }
 
 @keyframes shakeCycle {
+
   /* 0–80% = shaking (≈2 seconds) */
-  0%   { transform: rotate(0deg); }
-  10%  { transform: rotate(-10deg); }
-  20%  { transform: rotate(10deg); }
-  30%  { transform: rotate(-6deg); }
-  40%  { transform: rotate(6deg); }
-  50%  { transform: rotate(10deg); }
-  60%  { transform: rotate(-10deg); }
-  70%  { transform: rotate(6deg); }
-  80%  { transform: rotate(0deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  10% {
+    transform: rotate(-10deg);
+  }
+
+  20% {
+    transform: rotate(10deg);
+  }
+
+  30% {
+    transform: rotate(-6deg);
+  }
+
+  40% {
+    transform: rotate(6deg);
+  }
+
+  50% {
+    transform: rotate(10deg);
+  }
+
+  60% {
+    transform: rotate(-10deg);
+  }
+
+  70% {
+    transform: rotate(6deg);
+  }
+
+  80% {
+    transform: rotate(0deg);
+  }
 
   /* 80–100% = pause (no movement) */
-  80.1% { transform: rotate(0deg); }
-  100%  { transform: rotate(0deg); }
+  80.1% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(0deg);
+  }
 }
 
 button {
@@ -435,9 +527,12 @@ button {
 
 /* Subtle pulse animation for trial badge */
 @keyframes subtle-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
   }
+
   50% {
     box-shadow: 0 0 0 4px rgba(59, 130, 246, 0);
   }
@@ -452,6 +547,7 @@ button {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -468,11 +564,9 @@ button {
 
 /* Progress bar hatching texture */
 .bg-hatched {
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 10px,
-    rgba(0, 0, 0, 0.03) 10px,
-    rgba(0, 0, 0, 0.03) 20px
-  );
+  background-image: repeating-linear-gradient(45deg,
+      transparent,
+      transparent 10px,
+      rgba(0, 0, 0, 0.03) 10px,
+      rgba(0, 0, 0, 0.03) 20px);
 }

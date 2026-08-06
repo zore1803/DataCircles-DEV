@@ -143,7 +143,20 @@ const quillFormats = [
 
 // NoteViewer component
 export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
-  if (!isOpen || !note) return null;
+  const [isSliding, setIsSliding] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      setTimeout(() => setIsSliding(true), 10);
+    } else {
+      setIsSliding(false);
+      setTimeout(() => setShouldRender(false), 300);
+    }
+  }, [isOpen]);
+
+  if (!shouldRender || !note) return null;
 
   const formatDate = (dateString) => {
     if (!dateString) return "—";
@@ -185,8 +198,18 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-end z-[10001] p-4 animate-in fade-in duration-300">
-      <div className="bg-white rounded-[26px] dc-panel-w max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 flex flex-col animate-in slide-in-from-right duration-300">
+    <>
+      <div
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] transition-opacity duration-300"
+        style={{ opacity: isSliding ? 1 : 0 }}
+        onClick={onClose}
+      />
+      <div
+        className={`fixed dc-panel-card z-[10001] w-[min(90vw,560px)] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${
+          isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div
           className="flex flex-row justify-between items-center flex-shrink-0"
@@ -576,9 +599,10 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 };
+// Force Vite HMR re-parse
 
 
 // NoteCard component
@@ -606,12 +630,18 @@ export const NoteCard = ({ note, onEdit, onDelete, onView }) => {
     }
   };
 
-  const getPreviewText = (html) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const getPreviewText = (html, expand = false) => {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
     const text = tempDiv.textContent || tempDiv.innerText || '';
-    return text.length > 120 ? text.substring(0, 120) + '...' : text;
+    if (expand) return text;
+    return text.length > 150 ? text.substring(0, 150) + '...' : text;
   };
+
+  const rawText = getPreviewText(note.note, true);
+  const isLong = rawText.length > 150;
 
   return (
     <div
@@ -699,12 +729,22 @@ export const NoteCard = ({ note, onEdit, onDelete, onView }) => {
             </div>
           </div>
 
-          <p
-            className="line-clamp-3 w-full"
-            style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}
-          >
-            {getPreviewText(note.note)}
-          </p>
+          <div className="flex flex-col items-start w-full gap-2">
+            <p
+              className={`w-full ${isExpanded ? "" : "line-clamp-3"}`}
+              style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "160%", color: "#525866" }}
+            >
+              {getPreviewText(note.note, isExpanded)}
+            </p>
+            {isLong && (
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="text-blue-600 hover:text-blue-800 text-xs font-semibold transition-colors mt-1"
+              >
+                {isExpanded ? "Show Less" : "Read More"}
+              </button>
+            )}
+          </div>
         </div>
 
         <div
@@ -975,7 +1015,7 @@ export const NoteEditor = ({
 
 
 // Main NoteSection component
-const NoteSection = ({ companyId: propCompanyId }) => {
+const NoteSection = ({ companyId: propCompanyId, isQuickView }) => {
   const { id: paramCompanyId } = useParams();
   const companyId = propCompanyId || paramCompanyId;
   const [notes, setNotes] = useState([]);
@@ -991,6 +1031,7 @@ const NoteSection = ({ companyId: propCompanyId }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [showAllNotes, setShowAllNotes] = useState(false);
 
   const fetchNotes = useCallback(async () => {
     try {
@@ -1174,7 +1215,7 @@ const NoteSection = ({ companyId: propCompanyId }) => {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredNotes.map((note) => (
+          {(isQuickView && !showAllNotes ? filteredNotes.slice(0, 5) : filteredNotes).map((note) => (
             <NoteCard
               key={note._id}
               note={note}
@@ -1183,6 +1224,26 @@ const NoteSection = ({ companyId: propCompanyId }) => {
               onView={handleView}
             />
           ))}
+          {isQuickView && !showAllNotes && filteredNotes.length > 5 && (
+            <div className="pt-4 flex justify-center">
+              <button
+                onClick={() => setShowAllNotes(true)}
+                className="px-6 py-2.5 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm w-full md:w-auto shadow-sm"
+              >
+                View All Notes ({filteredNotes.length})
+              </button>
+            </div>
+          )}
+          {isQuickView && showAllNotes && (
+            <div className="pt-4 flex justify-center">
+              <button
+                onClick={() => setShowAllNotes(false)}
+                className="px-6 py-2.5 text-blue-600 font-semibold hover:bg-blue-50 transition-colors text-sm rounded-lg"
+              >
+                Show Less
+              </button>
+            </div>
+          )}
         </div>
       )}
 

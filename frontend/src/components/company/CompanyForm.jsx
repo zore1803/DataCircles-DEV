@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import API from "../../services/api";
 import { Twitter, Linkedin, Facebook, FolderOpen, ChevronDown } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
@@ -475,7 +476,7 @@ const CompanyForm = ({
   });
 
 
-  return (
+  return createPortal(
     <>
       {/* Responsive backdrop */}
       <div
@@ -527,16 +528,16 @@ const CompanyForm = ({
       {/* Responsive modal container */}
       <div
         className={`
-          fixed inset-y-0 right-0 z-[10001]
-          dc-panel-w bg-white shadow-2xl overflow-y-auto
+          fixed dc-panel-card z-[10001]
+          dc-panel-w bg-white shadow-2xl flex flex-col overflow-hidden
           transform transition-transform duration-300 ease-in-out font-inter
-          ${isOpen ? "translate-x-0" : "translate-x-full"}
+          ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
         {/* Responsive form container */}
-        <form onSubmit={handleSubmit} className="p-8">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
           {/* Header */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0 bg-white">
             <h2 className="text-[24px] font-bold text-[#111216]">
               {form._id ? "Edit Company" : "Create New Company"}
             </h2>
@@ -562,8 +563,9 @@ const CompanyForm = ({
             </button>
           </div>
 
-          {/* Form fields */}
-          <div className="space-y-6">
+          <div className="flex-1 overflow-y-auto p-8">
+            {/* Form fields */}
+            <div className="space-y-6">
             {/* Company Name */}
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
@@ -874,9 +876,10 @@ const CompanyForm = ({
               {success}
             </div>
           )}
+          </div>
 
           {/* Action buttons */}
-          <div className="mt-12 pt-6 border-t border-[#F2F2F7] flex gap-4">
+          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
@@ -898,7 +901,8 @@ const CompanyForm = ({
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 

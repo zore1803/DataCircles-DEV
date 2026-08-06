@@ -55,9 +55,8 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
         setCompany(companyRes.data);
       }
 
-      const dealsRes = await API.get("/deals");
-      const filteredDeals = dealsRes.data.filter((d) => d.contact?._id === id);
-      setDeals(filteredDeals);
+      const dealsRes = await API.get(`/deals?contact=${id}`);
+      setDeals(dealsRes.data);
 
       setLoading(false);
     } catch (err) {
@@ -86,18 +85,40 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
         onClick={onClose}
       />
 
-      {/* Slide-in Panel – improved responsive widths */}
+      {/* Slide-in Panel – improved responsive widths.
+          dc-panel-card gives it the same rounded, inset-from-the-edges card
+          look as the Edit Contact modal (dc-panel-card + dc-panel-w there
+          too) — this was plain top-0/right-0/h-full before, flush to the
+          viewport with square corners, which is why it looked like a
+          different, flatter component next to Edit.
+          Closed state MUST be translate-x-[calc(100%+2rem)], not plain
+          translate-x-full — dc-panel-card sits right: 1.5rem inset from the
+          edge, so translating by only the panel's own width leaves that
+          1.5rem sliver still on-screen when "closed" (documented on
+          .dc-panel-card in index.css; same fix already applied in
+          ContactForm.jsx). */}
       <div
         className={`
-          fixed top-0 right-0 h-full dc-panel-w
+          fixed dc-panel-card dc-panel-w
           bg-white shadow-2xl z-[9999]
           transform transition-transform duration-300 ease-in-out
           overflow-hidden
-          ${contact ? "translate-x-0" : "translate-x-full"}
+          flex flex-col
+          ${contact ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
-        {/* Sticky Header – better spacing & truncation */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 z-20 px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
+        {/* Header — was `sticky top-0` inside a content area sized by a
+            hardcoded `h-[calc(100%-68px)]` guess at the header's height.
+            Real header height varies (name length wrapping, prev/next arrows
+            only showing when currentContactIds.length > 1), so that guess
+            being off left too little gap between the header and whatever
+            content follows it — the title/H1 name and the Deals card both
+            sat almost flush against it. Now a normal (non-sticky) flex-column
+            child: the panel itself is flex flex-col above, this is
+            flex-shrink-0, and the content below is flex-1 — so the content
+            area's start position is always exactly the header's real
+            rendered height, never a guess. */}
+        <div className="flex-shrink-0 bg-white border-b border-gray-200 z-20 px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <button
               onClick={onClose}
@@ -148,8 +169,9 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
           </div>
         </div>
 
-        {/* Scrollable Content Area */}
-        <div className="h-[calc(100%-68px)] overflow-y-auto overscroll-contain">
+        {/* Scrollable Content Area — flex-1 fills whatever space the header
+            (above) didn't take, instead of a fixed height guess. */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
@@ -255,6 +277,7 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
                           company={company}
                           deals={deals}
                           isQuickView={true}
+                          onDealCreated={() => loadContact(contactId)}
                         />
                       </div>
                     )}
@@ -287,7 +310,7 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
 
                   <div className="overflow-x-hidden">
                     {activeTabRight === "Notes" && (
-                      <NoteSection contactId={contactId} />
+                      <NoteSection contactId={contactId} isQuickView={true} />
                     )}
                     {activeTabRight === "Tasks" && (
                       <div className="overflow-x-auto">

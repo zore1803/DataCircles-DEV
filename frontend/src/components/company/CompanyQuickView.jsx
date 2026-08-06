@@ -33,6 +33,8 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
   const [tasks, setTasks] = useState([]);
   const [meetings, setMeetings] = useState([]);
   const [companyFieldNames, setCompanyFieldNames] = useState([]);
+  const [paymentSummary, setPaymentSummary] = useState(null);
+  const [loadingPayment, setLoadingPayment] = useState(true);
 
   const { currentCompanyIds } = useCompanyStore();
 
@@ -56,10 +58,13 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
 
   const loadCompany = async (id) => {
     setLoading(true);
+    setLoadingPayment(true);
     try {
-      const [resCompany, resFields] = await Promise.all([
+      const [resCompany, resFields, resSubsidiaries, resContacts] = await Promise.all([
         API.get(`/companies/${id}`),
         API.get("/company-fields"),
+        API.get(`/companies/${id}/subsidiaries`).catch(() => ({ data: [] })),
+        API.get("/contacts").catch(() => ({ data: [] })),
       ]);
 
       setCompany(resCompany.data);
@@ -67,15 +72,30 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
         setCompanyFieldNames(resFields.data.fields);
       }
 
-      // Optional: load related data if needed in quick view
-      // const resContacts = await API.get("/contacts");
-      // setContacts(resContacts.data.filter(c => c.company?._id === id));
-      // etc.
+      const subsidiaryIds = resSubsidiaries.data.map(sub => sub._id);
+      setContacts(
+        resContacts.data.filter(
+          c => c.company?._id === id || subsidiaryIds.includes(c.company?._id)
+        )
+      );
+
+      // Fetch payment summary separately
+      API.get(`/invoices/company/${id}/summary`)
+        .then(res => {
+          setPaymentSummary(res.data);
+          setLoadingPayment(false);
+        })
+        .catch(err => {
+          console.error("Failed to load payment summary", err);
+          setPaymentSummary(null);
+          setLoadingPayment(false);
+        });
 
       setLoading(false);
     } catch (err) {
       toast.error("Failed to load company details");
       setLoading(false);
+      setLoadingPayment(false);
       onClose();
     }
   };
@@ -96,13 +116,17 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
         onClick={onClose}
       />
 
-      {/* Slide-in Panel */}
+      {/* Slide-in Panel — dc-panel-card gives the same rounded, inset card
+          look as ContactQuickView/DealQuickView/the Edit modals. Closed
+          state uses translate-x-[calc(100%+2rem)] (not plain
+          translate-x-full) because dc-panel-card sits right: 1.5rem inset —
+          see the matching comment in ContactQuickView.jsx. */}
       <div
         className={`
-          fixed top-0 right-0 h-full dc-panel-w
+          fixed dc-panel-card dc-panel-w
           bg-white shadow-2xl z-[9999] transform transition-transform duration-300
           overflow-y-auto
-          ${company ? "translate-x-0" : "translate-x-full"}
+          ${company ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
         {/* Header */}
@@ -195,6 +219,8 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
             <CompanyDetails
               data={company}
               contacts={contacts}
+              paymentSummary={paymentSummary}
+              loadingPayment={loadingPayment}
               isQuickView={true} // You can pass prop to make it more compact if needed
             />
 
@@ -217,7 +243,7 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
               </div>
 
               <div className="mt-6">
-                {activeTab === "Notes" && <NoteSection companyId={companyId} />}
+                {activeTab === "Notes" && <NoteSection companyId={companyId} isQuickView={true} />}
                 {activeTab === "Tasks" && (
                   <CompanyTasksTable
                     companyId={companyId}

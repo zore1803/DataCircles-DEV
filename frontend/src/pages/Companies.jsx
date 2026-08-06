@@ -7,6 +7,7 @@ import API from "../services/api";
 import { Link } from "react-router-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
+import HighlightText from "../components/common/HighlightText";
 import {
   Plus,
   X,
@@ -126,30 +127,6 @@ const getAncestorZoom = (el) => {
   return z || 1;
 };
 
-const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-// Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>.
-const HighlightText = ({ text, query }) => {
-  const str = text === null || text === undefined ? "" : String(text);
-  const q = (query || "").trim();
-  if (!q) return <>{str}</>;
-
-  const parts = str.split(new RegExp(`(${escapeRegExp(q)})`, "gi"));
-  return (
-    <>
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
-          <mark key={i} className="bg-yellow-200 text-inherit rounded-sm px-0.5">
-            {part}
-          </mark>
-        ) : (
-          part
-        ),
-      )}
-    </>
-  );
-};
-
 function Companies() {
   const [companies, setCompanies] = useState([]);
   const [form, setForm] = useState({
@@ -166,8 +143,14 @@ function Companies() {
   const [additionalFields, setAdditionalFields] = useState({});
   const [companyFieldNames, setCompanyFieldNames] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Skeleton rows only on a genuinely empty table (first load / after a filter
+  // wipes results) — never while paging, so existing rows stay put.
   const showLoadingSkeleton = loading && companies.length === 0;
-  useTopLoadingSignal(showLoadingSkeleton);
+  // Signal the top progress bar on EVERY fetch, not just the skeleton case.
+  // Paging is server-side here, so page 2 -> 3 has a real network round trip;
+  // the thin top bar is what communicates that now, instead of dimming the
+  // whole table (see the table container below).
+  useTopLoadingSignal(loading);
   const [industries, setIndustries] = useState([]);
   const [industriesLoading, setIndustriesLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -187,6 +170,7 @@ function Companies() {
   const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
   const [columnMenuPos, setColumnMenuPos] = useState(null);
   const columnMenuRef = useRef(null);
+  const tableScrollRef = useRef(null);
   const [quickHotlistCompanyId, setQuickHotlistCompanyId] = useState(null);
   const [starredCompanies, setStarredCompanies] = useState(() => {
     const saved = localStorage.getItem("starred_companies");
@@ -386,6 +370,17 @@ function Companies() {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
+    // REMOVED: an `if (e.detail === 1) { …open the column menu… return; }` block.
+    // It was broken three ways at once. (1) It referenced openColMenuKey /
+    // setOpenColMenuKey / setColMenuPos, which don't exist in this file — the
+    // state here is openColumnMenuKey / setColumnMenuPos — so it threw a
+    // ReferenceError on every header mousedown. (2) Because it threw (and
+    // because it `return`ed early), the movement-threshold drag logic below
+    // never got its mousemove/mouseup listeners attached, so column reordering
+    // could not start. (3) Its position maths was unzoomed and duplicated the
+    // chevron button's own correct, zoom-corrected calculation. The menu opens
+    // solely from that button; a plain click on the header now does nothing.
+
     const th = e.currentTarget;
     const startX = e.clientX;
     const startY = e.clientY;
@@ -523,6 +518,33 @@ function Companies() {
               setRowActionsPos(null);
               return;
             }
+            // Same zoom-corrected, viewport-flipping/clamping position used for
+            // the Deals row-actions menu: anchor to the button's own rect,
+            // divide by ancestor zoom (the menu portals to document.body,
+            // which paints inside this app's dynamic <html> zoom), flip
+            // upward when there isn't room below, and clamp on both axes.
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 160;
+            const MARGIN = 8;
+            // 6 items (View Company, Edit, Move to a Folder, Add to Hotlist,
+            // Star/Unstar, Delete) + one divider + container padding.
+            const MENU_H = 216;
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const viewportH = window.innerHeight / zMenu;
+            const viewportW = window.innerWidth / zMenu;
+            const top = rect.bottom / zMenu + 4;
+            const bottomAnchor = rect.top / zMenu - 4;
+
+            const openUp = viewportH - top < MENU_H + MARGIN;
+            let calcTop = openUp ? bottomAnchor - MENU_H : top;
+            calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+            calcLeft = Math.max(calcLeft, MARGIN);
+
+            setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(company._id);
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -530,10 +552,16 @@ function Companies() {
         >
           <MoreVertical className="w-4 h-4" />
         </button>
-        {isOpen && (
-          <div
-            className="absolute right-0 top-full mt-1 z-[9999] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
-          >
+        {isOpen && rowActionsPos && createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[9998]"
+              onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }}
+            />
+            <div
+              style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+              className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+            >
             <Link
               to={`/companies/${company._id}`}
               onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }}
@@ -601,7 +629,9 @@ function Companies() {
               <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
               Delete
             </button>
-          </div>
+            </div>
+          </>,
+          document.body,
         )}
       </div>
     );
@@ -684,7 +714,19 @@ function Companies() {
                       setColumnMenuPos(null);
                       return;
                     }
-                    setColumnMenuPos({ top: e.clientY + 4, left: e.clientX - 160 });
+                    // rect + boundsRight are VISUAL px; the menu is portaled into
+                    // document.body, which paints inside the dynamic <html> zoom, so
+                    // every rect-derived value we set must be divided by that zoom
+                    // (same correction as the drag-ghost above). Without it the menu
+                    // drifts right by rect.right * (zoom - 1) — worst on the last columns.
+                    const zMenu = getAncestorZoom(document.body);
+                    const MENU_W = 160;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const boundsRight = tableScrollRef.current?.getBoundingClientRect().right ?? window.innerWidth;
+                    let calcLeft = rect.right / zMenu - MENU_W;
+                    calcLeft = Math.min(calcLeft, boundsRight / zMenu - MENU_W - 8);
+                    calcLeft = Math.max(calcLeft, 8);
+                    setColumnMenuPos({ top: rect.bottom / zMenu + 4, left: calcLeft });
                     setOpenColumnMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -961,9 +1003,9 @@ function Companies() {
 
   // Long-press-to-select is disabled on touch devices — mobile rows should
   // only enter selection via the checkbox itself, never by holding the row.
-  const handleTouchStart = () => {};
+  const handleTouchStart = () => { };
 
-  const handleTouchEnd = () => {};
+  const handleTouchEnd = () => { };
 
   // Truncate text
   const truncateText = (text, maxLength = 30) => {
@@ -979,7 +1021,29 @@ function Companies() {
   };
 
   // Debounced search effect
+  // Pagination lives in the Zustand store, so it OUTLIVES this component —
+  // leaving the page on 3 and coming back would otherwise remount still on 3.
+  // Reset to page 1 on unmount so a return visit always starts at page 1 with a
+  // single fetch. Doing it here (on the way out) rather than on mount is what
+  // avoids the flicker: if we reset on mount instead, the first fetch would
+  // already be in flight for page 3, land, paint page-3 rows, and only then get
+  // replaced by page 1.
   useEffect(() => {
+    return () => {
+      setPagination((prev) => ({ ...prev, currentPage: 1 }));
+    };
+  }, [setPagination]);
+
+  // Debounced reset-to-page-1 when the search/filter changes. Skips the initial
+  // mount: on a return visit this used to fire a 300ms-delayed setPagination
+  // that raced the in-flight page-3 fetch, producing exactly the
+  // "page 3 rows appear, then snap to page 1" flicker.
+  const skipInitialPageReset = useRef(true);
+  useEffect(() => {
+    if (skipInitialPageReset.current) {
+      skipInitialPageReset.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
       setPagination((prev) => ({ ...prev, currentPage: 1 }));
     }, 300);
@@ -1373,13 +1437,14 @@ function Companies() {
       ) {
         setIsMoreMenuOpen(false);
       }
-      if (
-        rowActionsRef.current &&
-        !rowActionsRef.current.contains(event.target)
-      ) {
-        setOpenRowActionsId(null);
-        setRowActionsPos(null);
-      }
+      // Row-actions is no longer closed here — it's now portaled to
+      // document.body (see renderRowActionsMenu), which puts it outside
+      // rowActionsRef's DOM subtree. This document-level "mousedown outside"
+      // check would then fire on every mousedown INSIDE the menu too, and
+      // because mousedown runs before the item's own click, it would unmount
+      // the menu before "View Company"/"Edit"/"Delete" etc. ever received the
+      // click. The portaled menu closes itself via its own full-screen
+      // backdrop instead.
       if (
         columnMenuRef.current &&
         !columnMenuRef.current.contains(event.target)
@@ -1800,429 +1865,436 @@ function Companies() {
               </div>
             </div>
           ) : (
-          <div className="flex items-center gap-2 lg:gap-4 w-full h-full">
-            <div
-              className={`flex-shrink-0 flex flex-col justify-center gap-1.5 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[190px] opacity-100"}`}
-            >
+            <div className="flex items-center gap-2 lg:gap-4 w-full h-full">
+              <div
+                className={`flex-shrink-0 flex flex-col justify-center gap-1.5 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[190px] opacity-100"}`}
+              >
+                {showLoadingSkeleton ? (
+                  <>
+                    <Skeleton width={110} height={18} />
+                    <Skeleton width={170} height={12} />
+                  </>
+                ) : (
+                  <>
+                    <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Companies</h1>
+                    <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
+                      Manage your organisation contracts
+                    </p>
+                  </>
+                )}
+              </div>
+
               {showLoadingSkeleton ? (
-                <>
-                  <Skeleton width={110} height={18} />
-                  <Skeleton width={170} height={12} />
-                </>
+                <div className="relative flex-1 flex items-center justify-end gap-3">
+                  <Skeleton width={40} height={40} shape="circle" />
+                  <Skeleton width={40} height={40} shape="circle" />
+                  <Skeleton width={40} height={40} shape="circle" />
+                  <Skeleton width={90} height={40} shape="circle" />
+                  <Skeleton width={140} height={40} shape="circle" />
+                </div>
               ) : (
                 <>
-                  <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Companies</h1>
-                  <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
-                    Manage your organisation contracts
-                  </p>
-                </>
-              )}
-            </div>
-
-            {showLoadingSkeleton ? (
-              <div className="relative flex-1 flex items-center justify-end gap-3">
-                <Skeleton width={40} height={40} shape="circle" />
-                <Skeleton width={40} height={40} shape="circle" />
-                <Skeleton width={40} height={40} shape="circle" />
-                <Skeleton width={90} height={40} shape="circle" />
-                <Skeleton width={140} height={40} shape="circle" />
-              </div>
-            ) : (
-            <>
-            <div className="relative flex-1 min-w-0 flex items-center justify-end">
-              <div
-                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
-              >
-                <Search
-                  strokeWidth={2.5}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
-                  onClick={() => {
-                    setIsSearchExpanded(true);
-                    searchInputRef.current?.focus();
-                  }}
-                />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onFocus={() => setIsSearchExpanded(true)}
-                  onBlur={() => {
-                    if (!searchTerm) setIsSearchExpanded(false);
-                  }}
-                  className={`w-full h-full pl-9 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
-                  placeholder="Search companies by name, industry, or location..."
-                />
-              </div>
-            </div>
-
-            {/* Overflow menu: Industry filter, Columns, Import, Video Tutorial */}
-            <div className="relative" ref={moreMenuRef}>
-              <button
-                onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-                className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
-                title="More options"
-              >
-                <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
-                {filterIndustry && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
-                )}
-              </button>
-
-              {isMoreMenuOpen && (
-                <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
-                  <div className="px-3 pb-2 mb-2 border-b border-gray-50">
-                    <p className="text-[10px] uppercase tracking-wider font-normal lg:font-bold text-gray-400 px-1">
-                      Filter by Industry
-                    </p>
-                  </div>
-                  <div className="max-h-[200px] overflow-y-auto px-1 custom-scrollbar mb-2">
-                    <button
-                      onClick={() => {
-                        setFilterIndustry("");
-                        setPagination((p) => ({ ...p, currentPage: 1 }));
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${!filterIndustry ? "bg-blue-50 text-blue-700 font-normal lg:font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
+                  <div className="relative flex-1 min-w-0 flex items-center justify-end">
+                    <div
+                      className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
                     >
-                      All Industries
-                      {!filterIndustry && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                      )}
-                    </button>
-                    {getUniqueIndustries().map((i) => (
-                      <button
-                        key={i}
+                      <Search
+                        strokeWidth={2.5}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
                         onClick={() => {
-                          setFilterIndustry(i);
-                          setPagination((p) => ({ ...p, currentPage: 1 }));
+                          setIsSearchExpanded(true);
+                          searchInputRef.current?.focus();
                         }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between mt-0.5 ${filterIndustry === i ? "bg-blue-50 text-blue-700 font-normal lg:font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
-                      >
-                        {i}
-                        {filterIndustry === i && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                        )}
-                      </button>
-                    ))}
+                      />
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onFocus={() => setIsSearchExpanded(true)}
+                        onBlur={() => {
+                          if (!searchTerm) setIsSearchExpanded(false);
+                        }}
+                        className={`w-full h-full pl-9 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                        placeholder="Search companies by name, industry, or location..."
+                      />
+                    </div>
                   </div>
-                  <div className="border-t border-gray-50 pt-1">
-                    {/* Filters + Hotlist: mobile-only entries, folded in here instead of their own buttons */}
+
+                  {/* Actions Group */}
+                  <div className="relative flex items-center gap-2 lg:gap-4 flex-shrink-0">
+                    {/* Filters — hidden on mobile, folded into three-dot menu */}
                     <button
-                      onClick={() => {
-                        setShowAdvancedFilters(true);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      onClick={() => setShowAdvancedFilters(true)}
+                      className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+                      title="Filters"
                     >
-                      <FilterIcon size={16} className="text-gray-400" />
-                      Filters
+                      <FilterIcon size={16} />
                       {activeFilters.length > 0 && (
-                        <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                        <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                           {activeFilters.length}
                         </span>
                       )}
                     </button>
+
+                    {/* Hotlist — hidden on mobile, folded into three-dot menu */}
                     <button
-                      onClick={() => {
-                        setShowHotlist((prev) => !prev);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      onClick={() => setShowHotlist(!showHotlist)}
+                      className={`hidden lg:inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors ${showHotlist
+                        ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
+                        : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
+                        }`}
                     >
-                      <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
+                      <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#1F2937" />
                       </svg>
-                      {showHotlist ? "Hide Hotlist" : "Hotlist"}
+                      <span className="font-medium">Hotlist</span>
                     </button>
+
+                    {/* Overflow menu: Industry filter, Columns, Import, Video Tutorial */}
+                    <div className="relative" ref={moreMenuRef}>
+                      <button
+                        onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                        className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
+                        title="More options"
+                      >
+                        <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
+                        {filterIndustry && (
+                          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
+                        )}
+                      </button>
+                      {isMoreMenuOpen && (
+                        <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
+                          <div className="px-3 pb-2 mb-2 border-b border-gray-50">
+                            <p className="text-[10px] uppercase tracking-wider font-normal lg:font-bold text-gray-400 px-1">
+                              Filter by Industry
+                            </p>
+                          </div>
+                          <div className="max-h-[200px] overflow-y-auto px-1 custom-scrollbar mb-2">
+                            <button
+                              onClick={() => {
+                                setFilterIndustry("");
+                                setPagination((p) => ({ ...p, currentPage: 1 }));
+                              }}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${!filterIndustry ? "bg-blue-50 text-blue-700 font-normal lg:font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
+                            >
+                              All Industries
+                              {!filterIndustry && (
+                                <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                              )}
+                            </button>
+                            {getUniqueIndustries().map((i) => (
+                              <button
+                                key={i}
+                                onClick={() => {
+                                  setFilterIndustry(i);
+                                  setPagination((p) => ({ ...p, currentPage: 1 }));
+                                }}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between mt-0.5 ${filterIndustry === i ? "bg-blue-50 text-blue-700 font-normal lg:font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
+                              >
+                                {i}
+                                {filterIndustry === i && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="border-t border-gray-50 pt-1">
+                            {/* Filters + Hotlist: mobile-only entries */}
+                            <button
+                              onClick={() => {
+                                setShowAdvancedFilters(true);
+                                setIsMoreMenuOpen(false);
+                              }}
+                              className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <FilterIcon size={16} className="text-gray-400" />
+                              Filters
+                              {activeFilters.length > 0 && (
+                                <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                                  {activeFilters.length}
+                                </span>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowHotlist((prev) => !prev);
+                                setIsMoreMenuOpen(false);
+                              }}
+                              className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                                <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
+                              </svg>
+                              {showHotlist ? "Hide Hotlist" : "Hotlist"}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowColumnSettings(true);
+                                setIsMoreMenuOpen(false);
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Settings className="w-4 h-4 text-gray-400" />
+                              Columns
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowImport(true);
+                                setIsMoreMenuOpen(false);
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Upload className="w-4 h-4 text-gray-400" />
+                              Import
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowVideoTutorial(true);
+                                setIsMoreMenuOpen(false);
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <FileText className="w-4 h-4 text-gray-400" />
+                              Video Tutorial
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <button
                       onClick={() => {
-                        setShowColumnSettings(true);
-                        setIsMoreMenuOpen(false);
+                        resetForm();
+                        setShowForm(true);
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
+                      title={showForm ? "Cancel" : "New Company"}
                     >
-                      <Settings className="w-4 h-4 text-gray-400" />
-                      Columns
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowImport(true);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      <Upload className="w-4 h-4 text-gray-400" />
-                      Import
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowVideoTutorial(true);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      <FileText className="w-4 h-4 text-gray-400" />
-                      Video Tutorial
+                      <Plus className="w-4 h-4 flex-shrink-0" />
+                      <span className="hidden lg:inline">{showForm ? "Cancel" : "New Company"}</span>
                     </button>
                   </div>
-                </div>
+                </>
               )}
             </div>
-
-            {/* Filters — folded into the three-dot menu on mobile */}
-            <button
-              onClick={() => setShowAdvancedFilters(true)}
-              className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
-              title="Filters"
-            >
-              <FilterIcon size={16} />
-              {activeFilters.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                  {activeFilters.length}
-                </span>
-              )}
-            </button>
-
-            {/* Hotlist — folded into the three-dot menu on mobile */}
-            <button
-              onClick={() => setShowHotlist(!showHotlist)}
-              className={`hidden lg:inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors ${showHotlist
-                ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
-                : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
-                }`}
-            >
-              <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#1F2937" />
-              </svg>
-              <span className="font-medium">Hotlist</span>
-            </button>
-
-            <button
-              onClick={() => {
-                resetForm();
-                setShowForm(true);
-              }}
-              className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
-              title={showForm ? "Cancel" : "New Company"}
-            >
-              <Plus className="w-4 h-4 flex-shrink-0" />
-              <span className="hidden lg:inline">{showForm ? "Cancel" : "New Company"}</span>
-            </button>
-            </>
-            )}
-          </div>
           )}
         </div>
 
-        <div
-          className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
-          style={{
-            position: "fixed",
-            left: "var(--sidebar-width, 0px)",
-            right: 0,
-            bottom: !loading && !showHotlist ? 64 : 0,
-          }}
-        >
+      <div
+        className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
+        style={{
+          position: "fixed",
+          left: "var(--sidebar-width, 0px)",
+          right: 0,
+          bottom: !showLoadingSkeleton && !showHotlist ? 64 : 0,
+        }}
+      >
         {showHotlist ? (
           <Hotlist />
         ) : (
-          <div
-            className={`relative bg-white border border-[#E1E4EA] ${loading ? "pointer-events-none opacity-60" : ""}`}
-          >
-              <table
-                className="w-full border-separate border-spacing-0 text-left"
-                style={{
-                  minWidth: `${table.getTotalSize()}px`,
-                  tableLayout: "fixed",
-                }}
-              >
-                {(() => {
-                  const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
-                  const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
-                  const allHeaders = table.getHeaderGroups()[0]?.headers || [];
+          // No `loading ? "opacity-60 pointer-events-none"` on this container any
+          // more. Paging is server-side, so that fired on every page change and
+          // dimmed the whole table to 60% for the length of the round trip — the
+          // flash that made paging feel like the data blinked out. The rows never
+          // actually left (showLoadingSkeleton is gated on an empty list), so the
+          // old data now stays fully legible and clickable while the next page
+          // loads; the top progress bar reports the fetch instead.
+          <div className="relative bg-white border border-[#E1E4EA]">
+            <table
+              className="w-full border-separate border-spacing-0 text-left"
+              style={{
+                minWidth: `${table.getTotalSize()}px`,
+                tableLayout: "fixed",
+              }}
+            >
+              {(() => {
+                const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+                const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+                const allHeaders = table.getHeaderGroups()[0]?.headers || [];
 
-                  const pinnedLeftOffsets = {};
-                  let cumulativeLeft = 0;
-                  allHeaders.forEach((h) => {
-                    const isLeftStickyCol = h.column.id === "selection" || leftPinnedKeys.includes(h.column.id);
-                    if (isLeftStickyCol) {
-                      pinnedLeftOffsets[h.column.id] = cumulativeLeft;
-                      cumulativeLeft += h.getSize();
-                    }
-                  });
+                const pinnedLeftOffsets = {};
+                let cumulativeLeft = 0;
+                allHeaders.forEach((h) => {
+                  const isLeftStickyCol = h.column.id === "selection" || leftPinnedKeys.includes(h.column.id);
+                  if (isLeftStickyCol) {
+                    pinnedLeftOffsets[h.column.id] = cumulativeLeft;
+                    cumulativeLeft += h.getSize();
+                  }
+                });
 
-                  const pinnedRightOffsets = {};
-                  let cumulativeRight = 0;
-                  [...allHeaders].reverse().forEach((h) => {
-                    if (rightPinnedKeys.includes(h.column.id)) {
-                      pinnedRightOffsets[h.column.id] = cumulativeRight;
-                      cumulativeRight += h.getSize();
-                    }
-                  });
+                const pinnedRightOffsets = {};
+                let cumulativeRight = 0;
+                [...allHeaders].reverse().forEach((h) => {
+                  if (rightPinnedKeys.includes(h.column.id)) {
+                    pinnedRightOffsets[h.column.id] = cumulativeRight;
+                    cumulativeRight += h.getSize();
+                  }
+                });
 
-                  const lastLeftPinnedKey = leftPinnedKeys.length > 0 ? leftPinnedKeys[leftPinnedKeys.length - 1] : null;
-                  const firstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
+                const lastLeftPinnedKey = leftPinnedKeys.length > 0 ? leftPinnedKeys[leftPinnedKeys.length - 1] : null;
+                const firstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
 
-                  return (
-                <>
-                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <tr key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => {
-                        const colId = header.column.id;
-                        const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
-                        const isRightSticky = rightPinnedKeys.includes(colId);
-                        const isSticky = isLeftSticky || isRightSticky;
-                        const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
-                        const isRightBoundary = colId === firstRightPinnedKey;
-                        const isDraggable = colId !== "selection";
-                        const isDragging = draggedColKey === colId;
-                        const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+                return (
+                  <>
+                    <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
+                      {table.getHeaderGroups().map((headerGroup) => (
+                        <tr key={headerGroup.id}>
+                          {headerGroup.headers.map((header) => {
+                            const colId = header.column.id;
+                            const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                            const isRightSticky = rightPinnedKeys.includes(colId);
+                            const isSticky = isLeftSticky || isRightSticky;
+                            const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                            const isRightBoundary = colId === firstRightPinnedKey;
+                            const isDraggable = colId !== "selection";
+                            const isDragging = draggedColKey === colId;
+                            const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
 
-                        return (
-                          <th
-                            key={header.id}
-                            data-col-id={colId}
-                            onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
-                            style={{
-                              width: header.getSize(),
-                              position: isSticky ? "sticky" : "relative",
-                              left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
-                              right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
-                              zIndex: isSticky ? 20 : 1,
-                              opacity: isDragging ? 0.35 : 1,
-                            }}
-                            className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
-                              ? "border-r-2 border-r-gray-300"
-                              : "last:border-r-0"
-                              } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
-                          >
-                            <div className="w-full min-w-0">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext(),
-                              )}
-                            </div>
-
-                            {colId !== "selection" && header.column.getCanResize() && (
-                              <div
-                                data-resize-handle="true"
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  header.getResizeHandler()(e);
+                            return (
+                              <th
+                                key={header.id}
+                                data-col-id={colId}
+                                onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
+                                style={{
+                                  width: header.getSize(),
+                                  position: isSticky ? "sticky" : "relative",
+                                  left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                  right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                  zIndex: isSticky ? 20 : 1,
+                                  opacity: isDragging ? 0.35 : 1,
                                 }}
-                                onTouchStart={header.getResizeHandler()}
-                                className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
-                              />
-                            )}
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </thead>
+                                className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
+                                  ? "border-r-2 border-r-gray-300"
+                                  : "last:border-r-0"
+                                  } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                              >
+                                <div className="w-full min-w-0">
+                                  {flexRender(
+                                    header.column.columnDef.header,
+                                    header.getContext(),
+                                  )}
+                                </div>
 
-                <tbody className="bg-white">
-                  {showLoadingSkeleton ? (
-                    <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox />
-                  ) : companies.length === 0 ? (
-                    <tr>
-                      <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
-                        <p className="font-medium">No companies found</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    table.getRowModel().rows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className={`bg-white hover:bg-blue-50 transition-colors ${selectedCompaniesSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
-                        onMouseDown={() => handleMouseDown(row.original._id)}
-                        onMouseUp={handleMouseUp}
-                        onMouseLeave={handleMouseUp}
-                        onTouchStart={() => handleTouchStart(row.original._id)}
-                        onTouchEnd={handleTouchEnd}
-                      >
-                        {row.getVisibleCells().map((cell) => {
-                          const colId = cell.column.id;
-                          const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
-                          const isRightSticky = rightPinnedKeys.includes(colId);
-                          const isSticky = isLeftSticky || isRightSticky;
-                          const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
-                          const isRightBoundary = colId === firstRightPinnedKey;
-                          const isColDragging = draggedColKey === colId;
+                                {colId !== "selection" && header.column.getCanResize() && (
+                                  <div
+                                    data-resize-handle="true"
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                      header.getResizeHandler()(e);
+                                    }}
+                                    onTouchStart={header.getResizeHandler()}
+                                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
+                                  />
+                                )}
+                              </th>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </thead>
 
-                          return (
-                            <td
-                              key={cell.id}
-                              style={{
-                                width: cell.column.getSize(),
-                                position: isSticky ? "sticky" : "static",
-                                left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
-                                right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
-                                zIndex: isSticky ? 10 : 1,
-                                opacity: isColDragging ? 0.35 : 1,
-                              }}
-                              className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
-                                ? "border-r-2 border-r-gray-200"
-                                : "last:border-r-0"
-                                } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
-                            >
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext(),
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-                </>
-                  );
-                })()}
-              </table>
-          </div>
-        )}
-        </div>
+                    <tbody className="bg-white">
+                      {showLoadingSkeleton ? (
+                        <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox />
+                      ) : companies.length === 0 ? (
+                        <tr>
+                          <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
+                            <p className="font-medium">No companies found</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        table.getRowModel().rows.map((row) => (
+                          <tr
+                            key={row.id}
+                            className={`bg-white hover:bg-blue-50 transition-colors ${selectedCompaniesSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                            onMouseDown={() => handleMouseDown(row.original._id)}
+                            onMouseUp={handleMouseUp}
+                            onMouseLeave={handleMouseUp}
+                            onTouchStart={() => handleTouchStart(row.original._id)}
+                            onTouchEnd={handleTouchEnd}
+                          >
+                            {row.getVisibleCells().map((cell) => {
+                              const colId = cell.column.id;
+                              const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                              const isRightSticky = rightPinnedKeys.includes(colId);
+                              const isSticky = isLeftSticky || isRightSticky;
+                              const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                              const isRightBoundary = colId === firstRightPinnedKey;
+                              const isColDragging = draggedColKey === colId;
 
-        {dragGhost && createPortal(
-          <div
-            ref={ghostElRef}
-            style={{
-              position: "fixed",
-              top: -9999,
-              left: -9999,
-              width: dragGhost.width,
-              zIndex: 10000,
-              pointerEvents: "none",
-            }}
-            className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
-          >
-            <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
-              <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
-            </div>
-            {dragGhost.previewRows.map((rowVal, i) => (
-              <div
-                key={i}
-                className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0"
-              >
-                <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
-              </div>
-            ))}
-          </div>,
-          document.body,
-        )}
-
-        {!loading && !showHotlist && (
-          <div
-            className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
-            style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
-          >
-            {PaginationControls()}
+                              return (
+                                <td
+                                  key={cell.id}
+                                  style={{
+                                    width: cell.column.getSize(),
+                                    position: isSticky ? "sticky" : "static",
+                                    left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                    right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                    zIndex: isSticky ? 10 : 1,
+                                    opacity: isColDragging ? 0.35 : 1,
+                                  }}
+                                  className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
+                                    ? "border-r-2 border-r-gray-200"
+                                    : "last:border-r-0"
+                                    } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
+                                >
+                                  {flexRender(
+                                    cell.column.columnDef.cell,
+                                    cell.getContext(),
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </>
+                );
+              })()}
+            </table>
           </div>
         )}
       </div>
+
+      {dragGhost && createPortal(
+        <div
+          ref={ghostElRef}
+          style={{
+            position: "fixed",
+            top: -9999,
+            left: -9999,
+            width: dragGhost.width,
+            zIndex: 10000,
+            pointerEvents: "none",
+          }}
+          className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+        >
+          <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+            <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+          </div>
+          {dragGhost.previewRows.map((rowVal, i) => (
+            <div
+              key={i}
+              className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0"
+            >
+              <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
+
+      {!showLoadingSkeleton && !showHotlist && (
+        <div
+          className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
+          style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+        >
+          {PaginationControls()}
+        </div>
+      )}
+    </div>
 
       {/* Bulk Delete Confirmation Modal */}
       {showBulkDeleteModal && (
@@ -2310,13 +2382,14 @@ function Companies() {
         selectedCompanyIds={quickHotlistCompanyId ? [quickHotlistCompanyId] : []}
         onComplete={() => setQuickHotlistCompanyId(null)}
       />
+
       {/* Export Selected Companies Modal */}
       <ExportModal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
         columns={defaultColumns}
-        selectedIds={selectedCompanies} //  Pass the Array of IDs
-        exportUrl="/companies/export-selected" // The backend route
+        selectedIds={selectedCompanies}
+        exportUrl="/companies/export-selected"
         fileName="Exported_Companies.csv"
       />
 
@@ -2330,7 +2403,7 @@ function Companies() {
         setNoteContent={setNoteContent}
         taggedContacts={taggedContacts}
         setTaggedContacts={setTaggedContacts}
-        contacts={allContacts} // Pass all contacts for tagging
+        contacts={allContacts}
         onSave={handleBulkNoteSave}
         loading={bulkLoading}
         isEditing={false}
@@ -2342,7 +2415,7 @@ function Companies() {
           onClose={() => setQuickViewCompanyId(null)}
           onEdit={(company) => {
             handleEdit(company);
-            setQuickViewCompanyId(null); // optional: close quick view after opening edit
+            setQuickViewCompanyId(null);
           }}
         />
       )}

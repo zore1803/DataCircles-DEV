@@ -101,6 +101,7 @@ export default function DealsTable({
   starredDeals = [],
   toggleStar,
   searchTerm = "",
+  scrollContainerRef,
 }) {
   const [columnSizing, setColumnSizing] = useState({});
 
@@ -177,6 +178,17 @@ export default function DealsTable({
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
+    // The column menu has its own trigger — the chevron button in
+    // renderHeaderMenu, with its own onClick, its own zoom-corrected
+    // positioning, and its own boundsRight clamp. This function used to also
+    // open the menu on `e.detail === 1` (i.e. any plain click anywhere on the
+    // header), which fired on every single click — not just the button — and
+    // `return`ed before the mousemove/mouseup listeners below were ever
+    // attached, so a genuine single-press-and-drag could never start either.
+    // Column reordering here is movement-threshold based (see DRAG_THRESHOLD
+    // below), not double-click based, so removing this unblocks both: a plain
+    // click on the header now does nothing, and press-and-drag (single click,
+    // no double-click needed) reorders columns.
     const th = e.currentTarget;
     const startX = e.clientX;
     const startY = e.clientY;
@@ -323,13 +335,10 @@ export default function DealsTable({
     const pinSide = getColumnPinSide(colKey);
     return (
       <div className="flex items-center justify-between w-full group">
-        <div
-          className="flex items-center gap-2 flex-1 overflow-hidden cursor-pointer select-none"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (sortable) handleSort(colKey);
-          }}
-        >
+        {/* Not clickable — a plain click on the header does nothing now. Sorting
+            lives only in the column menu (Sort Ascending/Descending below);
+            `sortable` still gates whether those two menu items render at all. */}
+        <div className="flex items-center gap-2 flex-1 overflow-hidden select-none">
           <span className="truncate" title={label}>{label}</span>
         </div>
         <button
@@ -340,7 +349,19 @@ export default function DealsTable({
               setColMenuPos(null);
               return;
             }
-            setColMenuPos({ top: e.clientY + 4, left: e.clientX - 160 });
+            // rect + boundsRight are VISUAL px; the menu is portaled into
+            // document.body, which paints inside the dynamic <html> zoom, so
+            // every rect-derived value we set must be divided by that zoom
+            // (same correction as the drag-ghost above). Without it the menu
+            // drifts right by rect.right * (zoom - 1) — worst on the last columns.
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 160;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const boundsRight = scrollContainerRef?.current?.getBoundingClientRect().right ?? window.innerWidth;
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, boundsRight / zMenu - MENU_W - 8);
+            calcLeft = Math.max(calcLeft, 8);
+            setColMenuPos({ top: rect.bottom / zMenu + 4, left: calcLeft });
             setOpenColMenuKey(colKey);
           }}
           className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
@@ -662,14 +683,51 @@ export default function DealsTable({
                       setRowActionsPos(null);
                       return;
                     }
-                    const menuHeight = 128;
-                    const wouldOverflow = e.clientY + 4 + menuHeight > window.innerHeight;
-                    setRowActionsPos({
-                      top: wouldOverflow ? e.clientY - menuHeight - 4 : e.clientY + 4,
-                      left: e.clientX - 130,
-                    });
+                    // Same zoom correction as the column-menu positioning above:
+                    // rect + window dimensions are VISUAL px, the menu is
+                    // portaled into document.body which paints inside the
+                    // dynamic <html> zoom, so everything must be divided by
+                    // that zoom before being used as a fixed-position value.
+                    // Previously this used the raw click coordinates
+                    // (e.clientX/Y) instead of the button's own rect, which
+                    // made the menu's position depend on exactly where inside
+                    // the small ⋮ hitbox the click landed, and never applied
+                    // this correction at all — so it also drifted under zoom.
+                    const zMenu = getAncestorZoom(document.body);
+                    const MENU_W = 130;
+                    const MARGIN = 8;
+                    // Actual rendered height depends on permission: read-write
+                    // shows Quick View + a divider + Edit + Delete; read-only
+                    // shows Quick View alone.
+                    const MENU_H = permission === "read-write" ? 110 : 44;
+
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const viewportH = window.innerHeight / zMenu;
+                    const viewportW = window.innerWidth / zMenu;
+
+                    // Anchor to the row's own vertical CENTER rather than
+                    // hanging the menu's top edge off the button's bottom
+                    // edge. A 3-4 item menu is taller than a single row, so
+                    // anchoring at the bottom edge always made it spill down
+                    // across the next 2-3 rows below the one actually
+                    // clicked — reading as "floating in the wrong place"
+                    // rather than attached to the row. Centering on the row,
+                    // then clamping to the viewport, handles rows near either
+                    // edge without a separate up/down flip branch.
+                    const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                    let calcTop = rowCenter - MENU_H / 2;
+                    calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+                    // A little left of flush-right against the button, per
+                    // direct feedback that flush-right sat too far right.
+                    let calcLeft = rect.right / zMenu - MENU_W - 12;
+                    calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                    calcLeft = Math.max(calcLeft, MARGIN);
+
+                    setRowActionsPos({ top: calcTop, left: calcLeft });
                     setOpenRowActionsId(deal._id);
                   }}
+                  data-row-actions-trigger={deal._id}
                   className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                   title="More actions"
                 >
@@ -677,7 +735,38 @@ export default function DealsTable({
                 </button>
                 {isActionsOpen && rowActionsPos && createPortal(
                   <>
-                    <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+                    <div
+                      className="fixed inset-0 z-[9998]"
+                      onClick={(e) => {
+                        // Was: always just close. Bug this fixes: while a menu
+                        // is open, this backdrop sits ABOVE every other row's
+                        // ⋮ button (z-9998, portaled to body), so clicking a
+                        // DIFFERENT row's button hit this backdrop first —
+                        // closing the current menu, but the click never
+                        // reached the real button, so opening the new row's
+                        // menu needed a second, separate click.
+                        //
+                        // Fix: briefly make the backdrop invisible to hit-testing
+                        // so elementFromPoint reports what's actually under the
+                        // cursor (the backdrop would otherwise always report
+                        // itself, being on top). If that's another row's
+                        // trigger button, dispatch a real click on it — its
+                        // own onClick (position calc, setOpenRowActionsId) runs
+                        // completely unchanged, this only decides whether that
+                        // click reaches it or the menu just closes.
+                        const backdrop = e.currentTarget;
+                        backdrop.style.pointerEvents = "none";
+                        const elAtPoint = document.elementFromPoint(e.clientX, e.clientY);
+                        backdrop.style.pointerEvents = "";
+                        const trigger = elAtPoint?.closest("[data-row-actions-trigger]");
+                        if (trigger) {
+                          trigger.click();
+                          return;
+                        }
+                        setOpenRowActionsId(null);
+                        setRowActionsPos(null);
+                      }}
+                    />
                     <div
                       ref={rowActionsRef}
                       style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
