@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { NAV_RESET_EVENT } from "../hooks/useNavReset";
+
+
 import {
   LayoutDashboard,
   Building,
@@ -28,6 +31,21 @@ import {
 } from "lucide-react";
 import API from "../services/api";
 import dataCirclesLogo from "../assets/Datacircles logo.png";
+/*
+ * Clicking the nav entry for the page you're already on is a no-op as far as
+ * the router is concerned — the path doesn't change, so nothing re-renders and
+ * any panel or drawer layered over the page stays open. Announce it instead so
+ * those pages can drop back to their base view.
+ *
+ * Only an exact match is intercepted: from a sub-route like /companies/123 the
+ * click still needs to navigate up to /companies.
+ */
+const handleSamePageNav = (e, href) => {
+  if (typeof window === "undefined" || window.location.pathname !== href) return;
+  e.preventDefault();
+  window.dispatchEvent(new CustomEvent(NAV_RESET_EVENT, { detail: { path: href } }));
+};
+
 
 const ContactsIcon = (props) => (
   <svg viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -427,7 +445,8 @@ const Navbar = () => {
               >
                 <Link
                   to={child.href}
-                  onClick={() => {
+                  onClick={(e) => {
+                    handleSamePageNav(e, child.href);
                     setIsMobileOpen(false);
                     setIsOpen(false);
                     setHoveredIndex(null);
@@ -575,7 +594,8 @@ const Navbar = () => {
                   >
                     <Link
                       to={item.href}
-                      onClick={() => {
+                      onClick={(e) => {
+                        handleSamePageNav(e, item.href);
                         setIsMobileOpen(false);
                         setSalesOpen(false);
                         setProcurementOpen(false);

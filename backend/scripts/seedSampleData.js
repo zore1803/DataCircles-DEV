@@ -116,7 +116,7 @@ const createdDeals = await Deal.insertMany(dealData);
       organization: organizationId,
       status: index % 2 === 0 ? 'Pending' : 'Paid',
       discount: { type: 'percentage', value: 5 },
-      style: 'Classic',
+      style: '',
       isTaxInvoice: false,
       items: [
         {

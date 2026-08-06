@@ -143,9 +143,13 @@ function Companies() {
   const [additionalFields, setAdditionalFields] = useState({});
   const [companyFieldNames, setCompanyFieldNames] = useState([]);
   const [loading, setLoading] = useState(true);
-  // Skeleton rows only on a genuinely empty table (first load / after a filter
-  // wipes results) — never while paging, so existing rows stay put.
-  const showLoadingSkeleton = loading && companies.length === 0;
+  // Toolbar/search-bar skeleton only for the very first load. Once the page
+  // has loaded once, a search/filter that narrows results to zero must NOT
+  // re-skeleton the toolbar — that unmounted the search input mid-typing and
+  // read as the whole page reloading on every keystroke.
+  const hasLoadedOnceRef = useRef(false);
+  const showLoadingSkeleton =
+    loading && companies.length === 0 && !hasLoadedOnceRef.current;
   // Signal the top progress bar on EVERY fetch, not just the skeleton case.
   // Paging is server-side here, so page 2 -> 3 has a real network round trip;
   // the thin top bar is what communicates that now, instead of dimming the
@@ -1207,6 +1211,7 @@ function Companies() {
     } finally {
       setLoading(false);
       setShowImport(false);
+      hasLoadedOnceRef.current = true;
     }
   };
 

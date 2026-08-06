@@ -1,11 +1,9 @@
 const PerformaInvoice = require("../models/ProformaInvoice");
 const BankDetails = require("../models/BankDetails");
-const generatePdf = require("../utils/generatePdf");
-const modernPdf = require("../utils/modernPdf");
-const minimalPdf = require("../utils/minimalPdf");
-const ElegantPdf = require("../utils/ElegantPdf");
+const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const mongoose = require("mongoose");
 const Branding = require("../models/Branding");
+const Deal = require("../models/Deal");
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -29,6 +27,8 @@ const createPerformaInvoice = async (req, res) => {
       status,
       items,
       style,
+      notes,
+      terms,
       isTaxInvoice,
       signature,
       signatureType,
@@ -97,7 +97,9 @@ const createPerformaInvoice = async (req, res) => {
       amount,
       status,
       items,
-      style: style || "Classic",
+      style: style || "",
+      notes: notes || "",
+      terms: terms || "",
       isTaxInvoice: isTaxInvoice || false,
       signature,
       signatureType: signatureType || "text",
@@ -129,10 +131,14 @@ const getAllPerformaInvoices = async (req, res) => {
     let query = { organization: req.user.organization };
 
     if (search) {
+      const matchingDeals = await Deal.find(
+        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { _id: 1 }
+      );
       query.$or = [
         { status: { $regex: search, $options: "i" } },
         { performaInvoiceNumber: { $regex: search, $options: "i" } },
-        { "deal.title": { $regex: search, $options: "i" } },
+        { deal: { $in: matchingDeals.map((d) => d._id) } },
         { receiverGSTIN: { $regex: search, $options: "i" } }, // Added receiverGSTIN to search
       ];
     }
@@ -166,11 +172,24 @@ const getAllPerformaInvoicesPaginated = async (req, res) => {
 
     // Search functionality
     if (search) {
+      const matchingDeals = await Deal.find(
+        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { _id: 1 }
+      );
       query.$or = [
         { performaInvoiceNumber: { $regex: search, $options: "i" } },
         { status: { $regex: search, $options: "i" } },
-        { "deal.title": { $regex: search, $options: "i" } },
+        { deal: { $in: matchingDeals.map((d) => d._id) } },
         { receiverGSTIN: { $regex: search, $options: "i" } }, // Added receiverGSTIN to search
+        {
+          $expr: {
+            $regexMatch: {
+              input: { $toString: "$amount" },
+              regex: search,
+              options: "i",
+            },
+          },
+        },
       ];
     }
 
@@ -257,24 +276,10 @@ const downloadPerformaInvoice = async (req, res) => {
     const OrgDetails = await Branding.findOne({
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
-    let pdfBuffer;
-
-    switch (performaInvoice.style) {
-      case "Classic":
-        pdfBuffer = await generatePdf(performaInvoice, bankDetails, OrgDetails);
-        break;
-      case "Modern":
-        pdfBuffer = await modernPdf(performaInvoice, bankDetails, OrgDetails);
-        break;
-      case "Minimal":
-        pdfBuffer = await minimalPdf(performaInvoice, bankDetails, OrgDetails);
-        break;
-      case "Elegant":
-        pdfBuffer = await ElegantPdf(performaInvoice, bankDetails, OrgDetails);
-        break;
-      default:
-        pdfBuffer = await generatePdf(performaInvoice, bankDetails, OrgDetails);
-    }
+        // The template comes from the document's own `style` when it has one,
+    // otherwise from the organization's document settings — resolved inside
+    // htmlDocumentPdf, which renders the same markup as the live preview.
+    const pdfBuffer = await htmlDocumentPdf(performaInvoice, bankDetails, OrgDetails, "performa");
 
     res.set({
       "Content-Type": "application/pdf",
@@ -321,6 +326,8 @@ const updatePerformaInvoice = async (req, res) => {
       status,
       items,
       style,
+      notes,
+      terms,
       isTaxInvoice,
       signature,
       signatureType,
@@ -363,6 +370,8 @@ const updatePerformaInvoice = async (req, res) => {
         status,
         items,
         style,
+        notes,
+        terms,
         isTaxInvoice,
         signature,
         signatureType,
