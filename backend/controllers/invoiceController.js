@@ -8,6 +8,8 @@ const BankDetails = require("../models/BankDetails");
 const Branding = require("../models/Branding");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
+const DocumentSettings = require("../models/DocumentSettings");
+const { getDocumentSettingsForOrganization, resolveInvoiceNumber } = require("../utils/documentNumbering");
 
 const calculateItemAmount = (item) => {
   const rate = parseFloat(item.rate) || 0;
@@ -66,6 +68,10 @@ const createInvoice = async (req, res) => {
       receiverGSTIN,
       transactionType,
       gstRate,
+      invoicePrefix,
+      invoiceSuffix,
+      invoiceNumber,
+      nextInvoiceNumber,
     } = req.body;
 
     // Validate items
@@ -154,31 +160,47 @@ const createInvoice = async (req, res) => {
     //   return res.status(400).json({ error: "Provided amount does not match calculated amount" });
     // }
 
-    // ✅ Extract numeric part from INV-XXX format
-    const extractINVNumber = (invNumber) => {
-      const match = invNumber?.match(/^INV-(\d+)$/);
-      return match ? parseInt(match[1], 10) : 0;
-    };
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const hasCustomInvoiceDetails = typeof invoicePrefix !== "undefined" || typeof invoiceSuffix !== "undefined" || typeof nextInvoiceNumber !== "undefined";
+    const explicitNumber = typeof invoiceNumber === "string" && invoiceNumber.trim()
+      ? Number(invoiceNumber.trim())
+      : null;
+    const nextNumberFromSettings = Number.isFinite(Number(nextInvoiceNumber))
+      ? Number(nextInvoiceNumber)
+      : documentSettings.nextInvoiceNumber;
 
-    // ✅ Get all invoices and extract the highest INV number
-    const invoices = await Invoice.find({
-      organization: req.user.organization,
-      invoiceNumber: { $regex: /^INV-\d+$/ },
-    })
-      .select("invoiceNumber")
-      .session(session);
+    const lastInvoice = await Invoice.findOne({ organization: req.user.organization }).sort({ createdAt: -1 }).lean();
+    const lastInvoiceNumber = lastInvoice?.invoiceNumber || null;
 
-    // ✅ Find the maximum INV number
-    let maxINVNumber = 0;
-    invoices.forEach((inv) => {
-      const invNumber = extractINVNumber(inv.invoiceNumber);
-      if (invNumber > maxINVNumber) {
-        maxINVNumber = invNumber;
-      }
+    const resolvedInvoiceNumber = resolveInvoiceNumber({
+      settings: {
+        ...documentSettings,
+        invoicePrefix: invoicePrefix ?? documentSettings.invoicePrefix,
+        invoiceSuffix: invoiceSuffix ?? documentSettings.invoiceSuffix,
+        nextInvoiceNumber: nextNumberFromSettings,
+      },
+      providedNumber: Number.isFinite(explicitNumber) ? explicitNumber : null,
+      lastInvoiceNumber,
     });
 
-    // ✅ Generate new unique invoice number
-    const invoiceNumber = `INV-${maxINVNumber + 1}`;
+    const finalInvoiceNumber = resolvedInvoiceNumber.invoiceNumber;
+    const nextNumberForSettings = Number.isFinite(explicitNumber)
+      ? explicitNumber + 1
+      : resolvedInvoiceNumber.nextInvoiceNumber;
+
+    const settingsUpdate = {
+      invoicePrefix: invoicePrefix ?? documentSettings.invoicePrefix,
+      invoiceSuffix: invoiceSuffix ?? documentSettings.invoiceSuffix,
+      nextInvoiceNumber: nextNumberForSettings,
+    };
+
+    if (hasCustomInvoiceDetails || !documentSettings || !documentSettings.invoicePrefix) {
+      await DocumentSettings.findOneAndUpdate(
+        { organization: req.user.organization },
+        { $set: settingsUpdate },
+        { upsert: true, new: true, session }
+      );
+    }
 
     const invoice = new Invoice({
       deal,
@@ -195,7 +217,7 @@ const createInvoice = async (req, res) => {
       receiverGSTIN,
       transactionType: isTaxInvoice ? transactionType || "intra" : undefined,
       gstRate: isTaxInvoice ? gstRate || 18 : undefined,
-      invoiceNumber,
+      invoiceNumber: finalInvoiceNumber,
       user: req.user.id,
       organization: req.user.organization,
     });

@@ -624,6 +624,10 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
     isTaxInvoice: false,
     transactionType: "intra",
     gstRate: 18,
+    invoicePrefix: "INV-",
+    invoiceSuffix: "",
+    invoiceNumber: "",
+    nextInvoiceNumber: 1,
     items: [blankItem()],
     discount: { type: "fixed", value: 0 },
     status: "Draft",
@@ -631,6 +635,7 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
   const [catalogue, setCatalogue] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [docSettings, setDocSettings] = useState({ invoicePrefix: "INV-", invoiceSuffix: "", invoicePrefixes: ["INV-"], invoiceSuffixes: [], nextInvoiceNumber: 1, documentTypeSettings: { invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] } } });
 
   useEffect(() => {
     const fetchItems = async () => {
@@ -667,6 +672,32 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
       }
     };
     fetchItems();
+  }, []);
+
+  useEffect(() => {
+    const loadDocSettings = async () => {
+      try {
+        const res = await API.get("/document-settings");
+        setDocSettings({
+          invoicePrefix: res.data?.invoicePrefix || "INV-",
+          invoiceSuffix: res.data?.invoiceSuffix || "",
+          invoicePrefixes: res.data?.invoicePrefixes || ["INV-"],
+          invoiceSuffixes: res.data?.invoiceSuffixes || [],
+          nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
+          documentTypeSettings: res.data?.documentTypeSettings || { invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] } },
+        });
+        setForm((prev) => ({
+          ...prev,
+          invoicePrefix: res.data?.invoicePrefix || "INV-",
+          invoiceSuffix: res.data?.invoiceSuffix || "",
+          nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
+        }));
+      } catch (error) {
+        console.error("Failed to load document settings", error);
+      }
+    };
+
+    loadDocSettings();
   }, []);
 
   const setField = (key, value) => setForm((p) => ({ ...p, [key]: value }));
@@ -746,6 +777,10 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
       setSubmitting(true);
       await API.post("/invoices", {
         ...form,
+        invoicePrefix: form.invoicePrefix?.trim() || docSettings.invoicePrefix || "INV-",
+        invoiceSuffix: form.invoiceSuffix ?? docSettings.invoiceSuffix ?? "",
+        invoiceNumber: form.invoiceNumber?.toString().trim() || undefined,
+        nextInvoiceNumber: form.nextInvoiceNumber ?? docSettings.nextInvoiceNumber ?? 1,
         status: statusValue,
         style: form.style || "Classic",
         receiverGSTIN: form.receiverGSTIN.trim().toUpperCase(),
@@ -889,7 +924,65 @@ const CreateInvoicePanel = ({ deals, onClose, onCreated, onAddDeal }) => {
             </div>
           </div>
 
-          <SectionHeader number="02" title="Billing & Tax Information" />
+          <SectionHeader number="02" title="Invoice Numbering" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2 w-full">
+            <div className="flex flex-col gap-1">
+              <FieldLabel>Prefix</FieldLabel>
+              <select
+                value={form.invoicePrefix || "INV-"}
+                onChange={(e) => setField("invoicePrefix", e.target.value)}
+                className={inputClass}
+              >
+                {(docSettings.documentTypeSettings?.invoice?.prefixes || docSettings.invoicePrefixes || ["INV-"]).map((prefix) => (
+                  <option key={prefix} value={prefix}>
+                    {prefix}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <FieldLabel>Suffix</FieldLabel>
+              <select
+                value={form.invoiceSuffix || ""}
+                onChange={(e) => setField("invoiceSuffix", e.target.value)}
+                className={inputClass}
+              >
+                <option value="">None</option>
+                {(docSettings.documentTypeSettings?.invoice?.suffixes || docSettings.invoiceSuffixes || []).map((suffix) => (
+                  <option key={suffix} value={suffix}>
+                    {suffix}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <FieldLabel>Invoice Number</FieldLabel>
+              <input
+                type="number"
+                min="1"
+                value={form.invoiceNumber ?? ""}
+                onChange={(e) => setField("invoiceNumber", e.target.value)}
+                className={inputClass}
+                placeholder="Leave empty to auto-increment"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <FieldLabel>Next Number</FieldLabel>
+              <input
+                type="number"
+                min="1"
+                value={form.nextInvoiceNumber ?? 1}
+                onChange={(e) => setField("nextInvoiceNumber", Number(e.target.value) || 1)}
+                className={inputClass}
+              />
+              <p className="text-[11px] text-[#99A0AE]">If you leave the invoice number empty, the next number will be taken from the latest invoice in the database and incremented by 1.</p>
+            </div>
+          </div>
+
+          <SectionHeader number="03" title="Billing & Tax Information" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2 w-full">
             <div className="flex flex-col gap-1">
               <FieldLabel required>Receiver GSTIN</FieldLabel>

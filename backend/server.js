@@ -104,6 +104,9 @@ app.use('/api/auth', authRoutes);
 const brandingRoutes = require('./routes/brandingRoutes');
 app.use('/api/branding', brandingRoutes);
 
+const documentSettingsRoutes = require('./routes/documentSettingsRoutes');
+app.use('/api/document-settings', documentSettingsRoutes);
+
 const bankDetailsRoutes = require("./routes/bankDetails");
 app.use("/api/bank-details", bankDetailsRoutes);
 
