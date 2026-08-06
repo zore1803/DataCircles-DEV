@@ -806,15 +806,16 @@ const CompanyProfilePage = () => {
                 <MoreVertical size={16} strokeWidth={2.5} />
               </button>
               {showActionsMenu && (
-                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+                <div className="absolute right-0 mt-1 w-32 lg:w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
                   <button
                     onClick={() => {
                       setShowStats((prev) => !prev);
                       setShowActionsMenu(false);
                     }}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                    className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                   >
-                    <Eye size={14} className="text-gray-400" />
+                    <Eye size={12} className="text-gray-400 lg:hidden" />
+                    <Eye size={14} className="text-gray-400 hidden lg:block" />
                     {showStats ? "Hide KPIs" : "Unhide KPIs"}
                   </button>
                   {activeTab === "Deals" && (
@@ -823,9 +824,10 @@ const CompanyProfilePage = () => {
                         setDealsViewMode((prev) => (prev === "board" ? "list" : "board"));
                         setShowActionsMenu(false);
                       }}
-                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                      className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                     >
-                      <LayoutGrid size={14} className="text-gray-400" />
+                      <LayoutGrid size={12} className="text-gray-400 lg:hidden" />
+                      <LayoutGrid size={14} className="text-gray-400 hidden lg:block" />
                       {dealsViewMode === "board" ? "List View" : "Kanban View"}
                     </button>
                   )}
@@ -835,9 +837,9 @@ const CompanyProfilePage = () => {
                       handleEdit();
                       setShowActionsMenu(false);
                     }}
-                    className="lg:hidden flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                    className="lg:hidden flex items-center gap-1.5 w-full px-2 py-1.5 text-xs font-normal text-gray-700 hover:bg-gray-50 text-left"
                   >
-                    <Edit2 size={14} className="text-gray-400" />
+                    <Edit2 size={12} className="text-gray-400" />
                     Edit
                   </button>
                 </div>
@@ -856,7 +858,7 @@ const CompanyProfilePage = () => {
                 <ChevronDown size={14} className="hidden lg:inline" />
               </button>
               {showNewEntryMenu && (
-                <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+                <div className="absolute right-0 mt-1 w-32 lg:w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
                   {newEntryOptions.map((option) =>
                     option.tab ? (
                       <button
@@ -866,9 +868,10 @@ const CompanyProfilePage = () => {
                           setActiveTab(option.tab);
                           setShowNewEntryMenu(false);
                         }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                        className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                       >
-                        <option.icon size={14} className="text-gray-400" />
+                        <option.icon size={12} className="text-gray-400 lg:hidden" />
+                        <option.icon size={14} className="text-gray-400 hidden lg:block" />
                         {option.label}
                       </button>
                     ) : (
@@ -876,9 +879,10 @@ const CompanyProfilePage = () => {
                         key={option.label}
                         to={option.href}
                         onClick={() => setShowNewEntryMenu(false)}
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50"
                       >
-                        <option.icon size={14} className="text-gray-400" />
+                        <option.icon size={12} className="text-gray-400 lg:hidden" />
+                        <option.icon size={14} className="text-gray-400 hidden lg:block" />
                         {option.label}
                       </Link>
                     ),
@@ -992,16 +996,19 @@ const CompanyProfilePage = () => {
               : statTiles.map((tile) => (
                 <div
                   key={tile.label}
-                  className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
+                  className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
                 >
-                  <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                    <tile.icon width={20} height={20} />
+                  </div>
+                  <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
                     <tile.icon width={22} height={21} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[11px] text-gray-500 truncate">
+                    <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">
                       {tile.label}
                     </p>
-                    <p className="text-sm font-semibold text-gray-900 truncate">
+                    <p className="truncate w-full text-xs sm:text-sm font-semibold text-gray-900">
                       {tile.value}
                     </p>
                   </div>
@@ -1017,7 +1024,7 @@ const CompanyProfilePage = () => {
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_319px] gap-4">
               <div className="space-y-4 min-w-0">
                 {/* Deal Pipeline */}
-                <div className="h-[162px] bg-white border border-gray-200 rounded-lg p-5">
+                <div className="h-[162px] bg-white border border-gray-200 rounded-lg p-5 overflow-hidden">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-900">
                       {showOverviewSkeleton ? <Skeleton width={110} height={14} /> : <>Deal Pipeline ({deals.length})</>}
@@ -1057,7 +1064,7 @@ const CompanyProfilePage = () => {
                       {pipelineData.map((stage, idx) => (
                         <div
                           key={stage.key}
-                          className={`flex-1 flex flex-col justify-center ${stage.color} ${idx > 0 ? "-ml-3 pl-8 pr-5" : "pl-8 pr-5"}`}
+                          className={`flex-1 min-w-0 flex flex-col justify-center ${stage.color} ${idx > 0 ? "-ml-2 sm:-ml-3 pl-6 pr-2 sm:pl-8 sm:pr-5" : "pl-6 pr-2 sm:pl-8 sm:pr-5"}`}
                           style={{
                             clipPath:
                               idx === pipelineData.length - 1
@@ -1065,11 +1072,11 @@ const CompanyProfilePage = () => {
                                 : "polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%, 20px 50%)",
                           }}
                         >
-                          <p className="text-xs font-medium">{stage.label}</p>
-                          <p className="text-[11px] opacity-70">
+                          <p className="truncate w-full text-[10px] sm:text-xs font-medium">{stage.label}</p>
+                          <p className="truncate w-full text-[9px] sm:text-[11px] opacity-70">
                             {stage.count} Deal{stage.count !== 1 ? "s" : ""}
                           </p>
-                          <p className="text-sm font-semibold">
+                          <p className="truncate w-full text-[11px] sm:text-sm font-semibold">
                             ₹{stage.amount.toLocaleString("en-IN")}
                           </p>
                         </div>
@@ -1092,17 +1099,20 @@ const CompanyProfilePage = () => {
                       : financialTiles.map((tile) => (
                         <div
                           key={tile.label}
-                          className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl"
+                          className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl min-w-0"
                         >
-                          <div className="w-10 h-10 bg-white text-gray-500 rounded-lg flex items-center justify-center flex-shrink-0 border border-gray-200">
+                          <div className="flex lg:hidden flex-shrink-0 text-gray-500">
+                            <tile.icon width={20} height={20} />
+                          </div>
+                          <div className="hidden lg:flex w-10 h-10 bg-white text-gray-500 rounded-lg items-center justify-center flex-shrink-0 border border-gray-200">
                             <tile.icon width={20} height={20} />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[11px] text-gray-500 truncate">
+                            <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">
                               {tile.label}
                             </p>
                             <p
-                              className={`text-sm font-semibold truncate ${tile.valueClassName || "text-gray-900"}`}
+                              className={`truncate w-full text-xs sm:text-sm font-semibold ${tile.valueClassName || "text-gray-900"}`}
                             >
                               {tile.value}
                             </p>

@@ -32,6 +32,7 @@ import {
   Pin,
   PinOff,
   EyeOff,
+  CheckSquare,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
@@ -1324,7 +1325,7 @@ const Accounting = () => {
     currentPage: 1,
     totalPages: 0,
     totalCount: 0,
-    limit: 10,
+    limit: 50,
     hasNextPage: false,
     hasPrevPage: false,
   };
@@ -1624,7 +1625,8 @@ const Accounting = () => {
   const [showQuickDealForm, setShowQuickDealForm] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
-  const [showSearch, setShowSearch] = useState(false);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -1637,11 +1639,14 @@ const Accounting = () => {
   const [viewerType, setViewerType] = useState(null);
   const [viewerDoc, setViewerDoc] = useState(null);
   const [openConvertMenu, setOpenConvertMenu] = useState(null);
+  const [convertMenuPos, setConvertMenuPos] = useState(null);
   const [showBrandingModal, setShowBrandingModal] = useState(false);
   const [pendingInvoiceCreation, setPendingInvoiceCreation] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteDocId, setDeleteDocId] = useState(null);
   const [deleteDocType, setDeleteDocType] = useState(null);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [convertDocId, setConvertDocId] = useState(null);
   const [convertDocType, setConvertDocType] = useState(null);
@@ -1652,13 +1657,28 @@ const Accounting = () => {
 
   useEffect(() => {
     const handleClickOutside = () => {
-      if (openConvertMenu) setOpenConvertMenu(null);
+      if (openConvertMenu) {
+        setOpenConvertMenu(null);
+        setConvertMenuPos(null);
+      }
       if (showFilterMenu) setShowFilterMenu(false);
+    };
+    // The convert menu is fixed-positioned, so any scroll would leave it
+    // floating at stale coordinates — close it instead of tracking.
+    const handleScroll = () => {
+      if (openConvertMenu) {
+        setOpenConvertMenu(null);
+        setConvertMenuPos(null);
+      }
     };
     if (openConvertMenu || showFilterMenu) {
       document.addEventListener("click", handleClickOutside);
+      window.addEventListener("scroll", handleScroll, true);
     }
-    return () => document.removeEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
   }, [openConvertMenu, showFilterMenu]);
 
   useEffect(() => {
@@ -1805,6 +1825,38 @@ const Accounting = () => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  };
+
+  // Bulk delete every selected document on the active tab. There's no
+  // dedicated batch endpoint, so fan out the single-delete route in parallel.
+  const confirmBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    const type = activeTab;
+    try {
+      setBulkDeleting(true);
+      setLoading((prev) => ({ ...prev, [type]: true }));
+      const results = await Promise.allSettled(
+        selectedIds.map((id) => API.delete(`/${apiPathFor(type)}/${id}`))
+      );
+      const failed = results.filter((r) => r.status === "rejected").length;
+      await fetchData(type);
+      setSelectedIds([]);
+      if (failed === 0) {
+        toast.success(
+          `${selectedIds.length} ${docNameFor(type)}${selectedIds.length !== 1 ? "s" : ""
+          } deleted successfully`
+        );
+      } else {
+        toast.error(`Failed to delete ${failed} of ${selectedIds.length} documents`);
+      }
+    } catch (err) {
+      toast.error(`Failed to delete ${type} documents`);
+      console.error(`Bulk delete ${type} documents error:`, err);
+    } finally {
+      setBulkDeleting(false);
+      setLoading((prev) => ({ ...prev, [type]: false }));
+      setShowBulkDeleteModal(false);
+    }
   };
 
   const checkBrandingBeforeInvoice = async () => {
@@ -2061,7 +2113,7 @@ const Accounting = () => {
     setPageInput("");
   }, [activeTab]);
 
-  const renderCell = (colId, doc, index) => {
+  const renderCell = (colId, doc) => {
     switch (colId) {
       case "number":
         return (
@@ -2178,22 +2230,37 @@ const Accounting = () => {
                 title="Convert"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setOpenConvertMenu(
-                    openConvertMenu === doc._id ? null : doc._id
-                  );
+                  if (openConvertMenu === doc._id) {
+                    setOpenConvertMenu(null);
+                    setConvertMenuPos(null);
+                    return;
+                  }
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const MENU_WIDTH = 240;
+                  const MENU_HEIGHT = 160;
+                  // Open leftward so the menu never runs off the right edge,
+                  // and flip above the button when it would overflow the bottom.
+                  const left = Math.max(8, rect.right - MENU_WIDTH);
+                  const openUp =
+                    rect.bottom + MENU_HEIGHT > window.innerHeight;
+                  const top = openUp
+                    ? rect.top - MENU_HEIGHT - 4
+                    : rect.bottom + 4;
+                  setConvertMenuPos({ top, left });
+                  setOpenConvertMenu(doc._id);
                 }}
                 className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
               >
                 <Repeat className="w-4 h-4" />
               </button>
-              {openConvertMenu === doc._id && (
+              {openConvertMenu === doc._id && convertMenuPos && (
                 <div
-                  className={`absolute ${currentDocuments.length === 1
-                      ? "top-[-10px] -translate-y-1/2"
-                      : index === 0
-                        ? "top-1/2 -translate-y-1/2"
-                        : "bottom-full mb-2"
-                    } right-0 w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-50`}
+                  style={{
+                    position: "fixed",
+                    top: convertMenuPos.top,
+                    left: convertMenuPos.left,
+                  }}
+                  className="w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-[100]"
                 >
                   <div className="py-1">
                     {["tax", "performa", "quotation", "deliveryChallan"]
@@ -2238,6 +2305,48 @@ const Accounting = () => {
       <AppToaster />
 
       <div className="bg-[#F9FAFB] min-h-screen -mx-4 sm:-mx-6 lg:-mx-8 -mt-6">
+        {/* Bulk selection strip — overlays the toolbar when rows are selected,
+            mirroring the Companies page behaviour. */}
+        {selectedIds.length > 0 && (
+          <div
+            className="fixed right-0 h-[72px] px-4 lg:px-[24px] border-b border-blue-200 bg-blue-50 flex items-center justify-between gap-4 top-[54px] lg:top-16 overflow-x-auto"
+            style={{ left: "var(--sidebar-width, 0px)", zIndex: 41 }}
+          >
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <span className="text-blue-800 font-semibold whitespace-nowrap">
+                {selectedIds.length} selected
+              </span>
+              <button
+                onClick={handleSelectAll}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <CheckSquare className="w-4 h-4" />
+                {selectedIds.length === currentDocuments.length &&
+                  currentDocuments.length > 0
+                  ? "Deselect All"
+                  : "Select All"}
+              </button>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <button
+                onClick={() => setShowBulkDeleteModal(true)}
+                disabled={bulkDeleting}
+                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+              <button
+                onClick={() => setSelectedIds([])}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
         {/* 2nd Header - Tab Bar & Actions Row */}
         <div
           className="fixed right-0 h-[72px] px-4 lg:px-[24px] border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[54px] lg:top-16"
@@ -2276,48 +2385,39 @@ const Accounting = () => {
             </div>
           ) : (
             <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
-              {/* Search field — expands in place of the search button */}
-              {showSearch ? (
-                <div className="relative flex items-center h-11 w-[220px] sm:w-[300px] lg:w-[380px] rounded-full border border-[#E1E4EA] bg-white focus-within:border-[#0085FF] transition-colors">
-                  <Search
-                    size={18}
-                    strokeWidth={2}
-                    className="absolute left-3.5 text-[#1F2937] pointer-events-none"
-                  />
-                  <input
-                    autoFocus
-                    type="text"
-                    value={searchTerms[activeTab]}
-                    onChange={(e) =>
-                      setSearchTerms((prev) => ({
-                        ...prev,
-                        [activeTab]: e.target.value,
-                      }))
-                    }
-                    placeholder={`Search by ${activeTab === "tax" ? "invoice" : "document"
-                      } ID, deal, or date...`}
-                    className="w-full h-full bg-transparent rounded-full pl-11 pr-10 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none"
-                  />
-                  <button
-                    onClick={() => {
-                      setSearchTerms((prev) => ({ ...prev, [activeTab]: "" }));
-                      setShowSearch(false);
-                    }}
-                    className="absolute right-3 text-gray-400 hover:text-gray-600"
-                    title="Close search"
-                  >
-                    <X size={16} strokeWidth={2} />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowSearch(true)}
-                  title="Search"
-                  className="flex items-center justify-center w-11 h-11 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0 bg-white"
-                >
-                  <Search size={18} strokeWidth={2} className="text-[#1F2937]" />
-                </button>
-              )}
+              {/* Search field — expands in place from the search icon,
+                  matching the Companies strip behaviour. */}
+              <div
+                className={`relative h-11 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-11"} max-w-full flex-shrink-0`}
+              >
+                <Search
+                  size={18}
+                  strokeWidth={2}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#1F2937] w-[18px] h-[18px] cursor-pointer z-10 flex-shrink-0"
+                  onClick={() => {
+                    setIsSearchExpanded(true);
+                    searchInputRef.current?.focus();
+                  }}
+                />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchTerms[activeTab]}
+                  onChange={(e) =>
+                    setSearchTerms((prev) => ({
+                      ...prev,
+                      [activeTab]: e.target.value,
+                    }))
+                  }
+                  onFocus={() => setIsSearchExpanded(true)}
+                  onBlur={() => {
+                    if (!searchTerms[activeTab]) setIsSearchExpanded(false);
+                  }}
+                  placeholder={`Search by ${activeTab === "tax" ? "invoice" : "document"
+                    } ID, deal, or date...`}
+                  className={`w-full h-full bg-transparent rounded-full pl-11 pr-4 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                />
+              </div>
 
               {/* Filter Button — status filter */}
               <div className="relative flex-shrink-0">
@@ -2451,8 +2551,6 @@ const Accounting = () => {
                 </th>
 
                 {orderedColumns.map((col) => {
-                  const Icon = col.icon;
-                  const sortKey = fieldFor(col, activeTab);
                   const isDragging = draggedColKey === col.id;
                   const isDragOver =
                     dragOverColKey === col.id &&
@@ -2475,9 +2573,6 @@ const Accounting = () => {
                         } active:cursor-grabbing`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        {Icon && (
-                          <Icon className="w-4 h-4 text-[#525866] flex-shrink-0" />
-                        )}
                         <span className="truncate flex-1">
                           {typeof col.label === "function"
                             ? col.label(activeTab)
@@ -2485,15 +2580,6 @@ const Accounting = () => {
                         </span>
                         {pinnedCols[col.id] && (
                           <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                        )}
-                        {sortKey && sortConfigs[activeTab].key === sortKey && (
-                          <span className="flex-shrink-0 text-[#0085FF]">
-                            {sortConfigs[activeTab].direction === "asc" ? (
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            ) : (
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            )}
-                          </span>
                         )}
                         {/* Actions isn't a data column — nothing to sort, pin or
                           hide, so it gets no options button at all instead of
@@ -2533,7 +2619,7 @@ const Accounting = () => {
                   </td>
                 </tr>
               )}
-              {!showLoadingSkeleton && currentDocuments.map((doc, index) => (
+              {!showLoadingSkeleton && currentDocuments.map((doc) => (
                 <tr
                   key={doc?._id}
                   className={`bg-white hover:bg-blue-50 transition-colors ${selectedIds.includes(doc._id) ? "!bg-blue-50" : ""
@@ -2567,7 +2653,7 @@ const Accounting = () => {
                       }}
                       className="px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] overflow-hidden bg-inherit"
                     >
-                      {renderCell(col.id, doc, index)}
+                      {renderCell(col.id, doc)}
                     </td>
                   ))}
                 </tr>
@@ -3093,6 +3179,44 @@ const Accounting = () => {
           onConfirm={confirmDelete}
           docType={deleteDocType}
         />
+        {showBulkDeleteModal && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100003]">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-red-100 p-2 rounded-lg">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Confirm Deletion
+                </h2>
+              </div>
+              <p className="text-sm text-gray-600 mb-6">
+                Are you sure you want to delete{" "}
+                <strong>{selectedIds.length}</strong> selected{" "}
+                {docNameFor(activeTab)}
+                {selectedIds.length !== 1 ? "s" : ""}? This action cannot be
+                undone.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkDeleting}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmBulkDelete}
+                  disabled={bulkDeleting}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {bulkDeleting ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <ConvertConfirmModal
           isOpen={showConvertModal}
           onClose={() => setShowConvertModal(false)}
