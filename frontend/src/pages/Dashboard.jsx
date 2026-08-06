@@ -469,7 +469,16 @@ function Dashboard() {
                       setInvoiceColMenuPos(null);
                       return;
                     }
-                    setInvoiceColMenuPos({ top: e.clientY + 4, left: e.clientX - 190 });
+                    // rect is VISUAL px; the menu is portaled into document.body, which
+                    // paints inside the dynamic <html> zoom, so rect-derived values must
+                    // be divided by that zoom to line up with the trigger button.
+                    const zMenu = getRootZoom();
+                    const MENU_W = 190;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    let calcLeft = rect.right / zMenu - MENU_W;
+                    calcLeft = Math.min(calcLeft, window.innerWidth / zMenu - MENU_W - 8);
+                    calcLeft = Math.max(calcLeft, 8);
+                    setInvoiceColMenuPos({ top: rect.bottom / zMenu + 4, left: calcLeft });
                     setOpenInvoiceColMenuKey(vc.key);
                   }}
                   className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"

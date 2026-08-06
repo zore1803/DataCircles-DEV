@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import API from "../services/api";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
+import useMinDelay from "../hooks/useMinDelay";
 import CompanyDealsKanban from "../components/company/CompanyDealsKanban";
 import CompanyContactsTab from "../components/company/CompanyContactsTab";
 import CompanyInvoicesTab from "../components/company/CompanyInvoicesTab";
@@ -583,9 +584,16 @@ const CompanyProfilePage = () => {
     fetchData();
   }, [id]);
 
-  const showOverviewSkeleton = !dataLoaded || !invoicesLoaded;
-  const showDealsSkeleton = !dataLoaded;
-  useTopLoadingSignal(showOverviewSkeleton || showDealsSkeleton);
+  // Overview renders invoice-derived tiles alongside deal/task data, so it
+  // legitimately has to wait for both fetches.
+  const showOverviewSkeleton = useMinDelay(!dataLoaded || !invoicesLoaded, 300);
+  // Everything that comes out of the single fetchData batch — contacts, deals,
+  // meetings, tasks, folders. Deliberately NOT gated on invoicesLoaded: those
+  // tabs don't render invoice data, so waiting on that request would leave
+  // their skeletons up long after their own data had arrived.
+  const showRecordsSkeleton = useMinDelay(!dataLoaded, 300);
+
+  useTopLoadingSignal(showOverviewSkeleton || showRecordsSkeleton);
 
   const fetchInvoices = useCallback(async () => {
     setInvoicesLoading(true);
@@ -1636,7 +1644,7 @@ const CompanyProfilePage = () => {
                 contacts={contacts}
                 viewMode={dealsViewMode}
                 setViewMode={setDealsViewMode}
-                isLoading={showDealsSkeleton}
+                isLoading={showRecordsSkeleton}
               />
             )}
             {activeTab === "Contacts" && (
@@ -1648,6 +1656,7 @@ const CompanyProfilePage = () => {
                 companyId={id}
                 company={company}
                 setContacts={setContacts}
+                isLoading={showRecordsSkeleton}
               />
             )}
             {activeTab === "Invoices" && (
@@ -1662,7 +1671,7 @@ const CompanyProfilePage = () => {
             )}
             {activeTab === "Notes" && <CompanyNotesTab showStats={showStats} />}
             {activeTab === "Tasks" && (
-              <CompanyTasksTab companyId={id} tasks={tasks} setTasks={setTasks} showStats={showStats} />
+              <CompanyTasksTab companyId={id} tasks={tasks} setTasks={setTasks} showStats={showStats} isLoading={showRecordsSkeleton} />
             )}
             {activeTab === "Meetings" && (
               <CompanyMeetingsTab
@@ -1670,9 +1679,10 @@ const CompanyProfilePage = () => {
                 meetings={meetings}
                 setMeetings={setMeetings}
                 showStats={showStats}
+                isLoading={showRecordsSkeleton}
               />
             )}
-            {activeTab === "Folders" && <CompanyFolderTab showStats={showStats} />}
+            {activeTab === "Folders" && <CompanyFolderTab showStats={showStats} isLoading={showRecordsSkeleton} />}
             {activeTab === "Calendar" && <CompanyCalendar companyId={id} />}
         </div>
       </div>

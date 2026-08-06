@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import API from "../../services/api";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import QuickCompanyForm from "../company/QuickCompanyForm";
@@ -464,7 +465,7 @@ const DealsForm = ({
     }
   };
 
-  return (
+  return createPortal(
     <>
       {/* QuickCompanyForm Modal */}
       {showQuickCompanyForm && (
@@ -532,11 +533,11 @@ const DealsForm = ({
 
       {/* Modal Container */}
       <div
- className={`fixed top-0 right-0 h-screen z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-full"
+        className={`fixed dc-panel-card z-[10001] dc-panel-w bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
           }`}
       >
-        <form onSubmit={handleSubmit} className="p-8">
-          <div className="flex justify-between items-center mb-8">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
+          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0 bg-white">
             <h2 className="text-[24px] font-bold text-[#111216]">
               {form._id ? "Edit Deal" : "Create New Deal"}
             </h2>
@@ -550,8 +551,9 @@ const DealsForm = ({
               </svg>
             </button>
           </div>
-
-          <div className="space-y-6">
+          
+          <div className="flex-1 overflow-y-auto p-8 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
             {/* Title */}
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
@@ -656,7 +658,7 @@ const DealsForm = ({
                   <button
                     type="button"
                     onClick={() => setIsAddingStatus(true)}
-                    className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer"
+                    className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer flex-shrink-0"
                     title="Add New Status"
                   >
                     <Plus className="w-5 h-5 text-gray-600" />
@@ -687,7 +689,7 @@ const DealsForm = ({
                 <button
                   type="button"
                   onClick={() => setShowQuickCompanyForm(true)}
-                  className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer"
+                  className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer flex-shrink-0"
                   title="Add New Company"
                 >
                   <Plus className="w-5 h-5 text-gray-600" />
@@ -720,7 +722,7 @@ const DealsForm = ({
                 <button
                   type="button"
                   onClick={() => setShowQuickContactForm(true)}
-                  className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer"
+                  className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer flex-shrink-0"
                   title="Add New Contact"
                 >
                   <Plus className="w-5 h-5 text-gray-600" />
@@ -733,7 +735,7 @@ const DealsForm = ({
 
             {/* Dynamic Additional Fields */}
             {fieldDefinitions.length > 0 && (
-              <div className="pt-4 space-y-6">
+              <div className="pt-4 space-y-6 md:col-span-2">
                 <h3 className="text-[16px] font-bold text-[#111216]">
                   Additional Information
                 </h3>
@@ -764,9 +766,10 @@ const DealsForm = ({
               {success}
             </div>
           )}
+          </div>
 
           {/* Action Buttons */}
-          <div className="mt-12 pt-6 border-t border-[#F2F2F7] flex gap-4">
+          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
@@ -784,7 +787,8 @@ const DealsForm = ({
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 

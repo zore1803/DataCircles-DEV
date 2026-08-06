@@ -76,8 +76,11 @@ const createDeal = async (req, res) => {
 
 const getAllDeals = async (req, res) => {
   try {
-    const { search } = req.query;
+    const { search, contact, company } = req.query;
     let query = { organization: req.user.organization };
+
+    if (contact) query.contact = contact;
+    if (company) query.company = company;
 
     if (search) {
       query.$or = [

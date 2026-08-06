@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import API from "../../services/api";
 import SearchableDropdown from "./SearchableDropdown";
 import { Upload, Plus, Twitter, Linkedin, Facebook, FolderOpen, ChevronDown } from "lucide-react";
@@ -477,7 +478,7 @@ const ContactForm = ({
   });
 
 
-  return (
+  return createPortal(
     <>
       {showQuickCompanyForm && (
         <QuickCompanyForm
@@ -526,13 +527,13 @@ const ContactForm = ({
       />
 
       <div
- className={`fixed inset-y-0 right-0 z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 font-inter ${isOpen ? "translate-x-0" : "translate-x-full"
+        className={`fixed dc-panel-card z-[10001] dc-panel-w bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
           }`}
       >
-        <form onSubmit={handleSubmit} className="p-8">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
 
           {/* Header */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0 bg-white">
             <h2 className="text-[24px] font-bold text-[#111216]">
               {form._id ? "Edit Contact" : "Create New Contact"}
             </h2>
@@ -547,13 +548,22 @@ const ContactForm = ({
             </button>
           </div>
 
-          <div className="space-y-6">
+          <div className="flex-1 overflow-y-auto p-8">
+            <div className="space-y-6">
 
             {/* Profile Picture */}
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">Profile Picture</label>
-              <div className="flex items-center space-x-4">
-                <div className="relative">
+              {/* Was a single `flex` row for avatar + file-input + Upload button
+                  with no stacking below `sm`. The panel is full viewport width
+                  until the `lg` breakpoint (dc-panel-w), so on an actual phone
+                  the avatar + gap alone ate most of the available width,
+                  squeezing the file-input text and pushing "Upload" to the
+                  edge — the cramped look. Stacks vertically below `sm`,
+                  matching the breakpoint the avatar itself already uses
+                  (w-16 sm:w-20) one line below. */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="relative flex-shrink-0">
                   {profilePreview ? (
                     <img src={profilePreview} alt="Profile" className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-gray-200" />
                   ) : (
@@ -563,17 +573,17 @@ const ContactForm = ({
                     </div>
                   )}
                 </div>
-                <div className="flex-1 flex gap-3">
-                  <div className="flex-1 relative">
+                <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 min-w-0 relative">
                     <input type="file" id="avatar" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                    <div className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 flex items-center text-[14px] text-[#A0A0A0] bg-white">
+                    <div className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 flex items-center text-[14px] text-[#A0A0A0] bg-white truncate">
                       {profilePicture ? profilePicture.name : "Choose a File"}
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => document.getElementById("avatar").click()}
-                    className="bg-[#F2F2F7] text-[#111216] px-8 rounded-xl h-12 text-[14px] font-medium hover:bg-gray-200 transition-colors cursor-pointer"
+                    className="bg-[#F2F2F7] text-[#111216] px-8 rounded-xl h-12 text-[14px] font-medium hover:bg-gray-200 transition-colors cursor-pointer flex-shrink-0"
                   >
                     Upload
                   </button>
@@ -725,9 +735,10 @@ const ContactForm = ({
               {success}
             </div>
           )}
+          </div>
 
           {/* Action buttons */}
-          <div className="mt-12 pt-6 border-t border-[#F2F2F7] flex gap-4">
+          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
@@ -745,7 +756,8 @@ const ContactForm = ({
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 

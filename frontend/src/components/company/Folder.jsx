@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import HighlightText from "../common/HighlightText";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
@@ -18,6 +19,7 @@ import {
   Search,
   Filter,
   X,
+  Edit3,
   Link as LinkIcon,
   ExternalLink,
   List,
@@ -27,10 +29,14 @@ import {
   UserCog,
   MoreVertical,
 } from "lucide-react";
+import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import AppToaster from "../AppToaster";
 import FilterIcon from "../common/FilterIcon";
 import CompanyFilterPanel from "./CompanyFilterPanel";
 import { applyColumnFilters } from "../../utils/advancedFilters";
+import TableSkeletonRows from "../common/TableSkeletonRows";
+import Skeleton from "../common/Skeleton";
+import useFillToBottom from "../../hooks/useFillToBottom";
 
 const FOLDER_ITEM_COUNT_RANGES = [
   { label: "Empty", test: (n) => n === 0 },
@@ -610,7 +616,7 @@ const FileCard = ({ file, onView, onDelete, isLast }) => {
   );
 };
 
-const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, isFirst, isLast }) => (
+const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, isFirst, isLast, isEditing, editingName, onEditingNameChange, onSaveEdit, onCancelEdit, searchTerm }) => (
   <div className="transition-all">
     <div
       className="flex items-center justify-between gap-2"
@@ -631,7 +637,23 @@ const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, on
           <RowFolderIcon size={20} style={{ color: "#525252" }} className="flex-shrink-0" />
         )}
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-medium text-gray-900 truncate">{folder.name}</h3>
+          {isEditing ? (
+            <input
+              autoFocus
+              type="text"
+              value={editingName}
+              onChange={(e) => onEditingNameChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onSaveEdit();
+                if (e.key === "Escape") onCancelEdit();
+              }}
+              onBlur={onSaveEdit}
+              onClick={(e) => e.stopPropagation()}
+              className="text-sm font-medium text-gray-900 truncate bg-transparent border-b border-blue-500 focus:outline-none w-full"
+            />
+          ) : (
+            <h3 className="text-sm font-medium text-gray-900 truncate"><HighlightText text={folder.name || "Untitled"} highlight={searchTerm || ""} /></h3>
+          )}
           <p className="text-xs text-gray-500">
             {folder.files?.length || 0} {folder.files?.length === 1 ? 'item' : 'items'}
           </p>
@@ -639,14 +661,24 @@ const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, on
       </div>
       <div className="flex items-center flex-shrink-0" style={{ gap: 12 }}>
         <button
-          onClick={() => onDelete(folder._id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (folder._id === "NEW") {
+              onCancelEdit();
+            } else {
+              onDelete(folder._id);
+            }
+          }}
           className="hover:opacity-70 transition-opacity"
           title="Delete"
         >
           <RowDeleteIcon size={20} style={{ color: "#CD3636" }} />
         </button>
         <button
-          onClick={() => onEdit(folder)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(folder);
+          }}
           className="hover:opacity-70 transition-opacity"
           title="Rename"
         >
@@ -999,32 +1031,31 @@ const AddLinkModal = ({ isOpen, onClose, onSubmit }) => {
   );
 };
 
-const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
+// `showStats` is intentionally not accepted any more: it used to feed the
+// old calc()-based height offset. useFillToBottom measures the container's real
+// position instead, so a KPI-row toggle is handled automatically. CompanyFolderTab
+// still passes it harmlessly.
+const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }) => {
   const { id: paramCompanyId } = useParams();
+  const {
+    containerRef: fillContainerRef,
+    footerRef: fillFooterRef,
+    style: fillStyle,
+  } = useFillToBottom();
   const companyId = propCompanyId || paramCompanyId;
   const [folders, setFolders] = useState([]);
   const [selectedFolderId, setSelectedFolderId] = useState("");
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [selectedFileNames, setSelectedFileNames] = useState([]);
   const [fileSearchTerm, setFileSearchTerm] = useState("");
-  const [isFileSearchExpanded, setIsFileSearchExpanded] = useState(false);
-  const fileSearchInputRef = useRef(null);
   const [openFolderId, setOpenFolderId] = useState("");
   const [newFiles, setNewFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
   const [refresh, setRefresh] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [folderViewMode, setFolderViewMode] = useState("grid");
-  const [isLgUp, setIsLgUp] = useState(
-    () => typeof window !== "undefined" && window.innerWidth >= 1024
-  );
-  useEffect(() => {
-    const mql = window.matchMedia("(min-width: 1024px)");
-    const handler = (e) => setIsLgUp(e.matches);
-    mql.addEventListener("change", handler);
-    return () => mql.removeEventListener("change", handler);
-  }, []);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({});
   const [uploadMode, setUploadMode] = useState("file"); // "file" or "link"
@@ -1033,6 +1064,8 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
     editingId: null,
     initialName: "",
   });
+  const [inlineEditingId, setInlineEditingId] = useState(null);
+  const [inlineEditingName, setInlineEditingName] = useState("");
   const [linkModalOpen, setLinkModalOpen] = useState(false);
 
   useEffect(() => {
@@ -1089,6 +1122,23 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
       }
     }
   };
+
+  const handleInlineSave = async (id) => {
+    if (!inlineEditingId) return; // Prevent double save
+    const nameToSave = inlineEditingName.trim() || "Untitled Folder";
+    setInlineEditingId(null);
+    setInlineEditingName("");
+    
+    if (id === "NEW") {
+      await createFolder(nameToSave);
+    } else {
+      const folder = folders.find(f => f._id === id);
+      if (folder && folder.name !== nameToSave) {
+        await renameFolder(id, nameToSave);
+      }
+    }
+  };
+
 
   const deleteFolder = async (folderId) => {
     const folder = folders.find((f) => f._id === folderId);
@@ -1239,13 +1289,27 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
       await API.post("/folders/upload", formData);
       setNewFiles([]);
       setRefresh(!refresh);
-      toast.success(`${files.length} file(s) uploaded`);
+      setUploadSuccess(true); // Show success screen instead of toast
     } catch (err) {
       console.log(err);
       toast.error(err.response?.data?.error);
     } finally {
       setUploading(false);
     }
+  };
+
+  // Called when user clicks "Upload More" after a successful upload
+  const handleUploadMore = () => {
+    setUploadSuccess(false);
+    setNewFiles([]);
+  };
+
+  // Called when user clicks "Done" after a successful upload
+  const handleUploadDone = () => {
+    setUploadSuccess(false);
+    setSelectedFolderId("");
+    setNewFiles([]);
+    setUploadMode("file");
   };
 
   const handleAddLink = async ({ name, url }) => {
@@ -1340,10 +1404,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
         {openFolderId && openFolder ? (
           <div className="min-h-[400px]">
             <div
-              className="relative flex items-center justify-between w-full flex-shrink-0"
+              className="flex items-center justify-between w-full flex-shrink-0"
               style={{ height: 32, margin: "0 auto 18px 0" }}
             >
-              <div className="flex items-center min-w-0 flex-1 lg:flex-initial lg:flex-shrink-0" style={{ gap: 10, height: 20 }}>
+              <div className="flex items-center flex-shrink-0" style={{ gap: 10, width: 160, height: 20 }}>
                 <button
                   onClick={() => setOpenFolderId("")}
                   style={{
@@ -1374,25 +1438,9 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
                 </span>
               </div>
 
-              <div className="flex items-center flex-shrink-0" style={{ gap: 12 }}>
-                {/* Mobile: icon-only button when collapsed */}
-                {!isFileSearchExpanded && (
-                  <button
-                    onClick={() => {
-                      setIsFileSearchExpanded(true);
-                      setTimeout(() => fileSearchInputRef.current?.focus(), 0);
-                    }}
-                    className="lg:hidden flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 text-gray-400 flex-shrink-0"
-                  >
-                    <Search className="w-4 h-4" />
-                  </button>
-                )}
-
-                {/* Mobile: expanded input slides in from the right, overlaying the breadcrumb.
-                    Desktop: always shown inline, always full width. */}
+              <div className="flex items-center flex-shrink-0" style={{ gap: 12, width: 329, height: 32 }}>
                 <div
-                  className={`absolute inset-y-0 right-[96px] z-20 flex items-center overflow-hidden bg-white transition-[left] duration-300 ease-out lg:static lg:!left-auto lg:!right-auto lg:overflow-visible ${isFileSearchExpanded ? "left-0 opacity-100" : "left-[calc(100%-32px)] opacity-0 pointer-events-none lg:opacity-100"
-                    }`}
+                  className="relative flex items-center flex-shrink-0"
                   style={{
                     boxSizing: "border-box",
                     padding: "0 14px",
@@ -1405,15 +1453,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
                 >
                   <Search className="text-gray-900 opacity-50 w-4 h-4 flex-shrink-0" />
                   <input
-                    ref={fileSearchInputRef}
                     type="text"
                     placeholder="Search file by name..."
                     value={fileSearchTerm}
                     onChange={(e) => setFileSearchTerm(e.target.value)}
-                    onFocus={() => setIsFileSearchExpanded(true)}
-                    onBlur={() => {
-                      if (!fileSearchTerm) setIsFileSearchExpanded(false);
-                    }}
                     className="w-full h-full bg-transparent border-none outline-none text-xs leading-normal"
                     style={{ color: "#1F2937", opacity: 0.9 }}
                   />
@@ -1467,7 +1510,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
                 {openFolder.files.map((file, idx) => (
                   <div
                     key={idx}
-                    className="relative flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors"
+                    className={`relative flex flex-col items-center justify-center cursor-pointer transition-none ${selectedFileNames.includes(file.fileName) ? "bg-[#CCE8FF]" : "hover:bg-[#E5F3FF] active:bg-[#CCE8FF]"}`}
                     style={{
                       boxSizing: "border-box",
                       width: 206,
@@ -1567,28 +1610,35 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
         ) : (
         <>
         {/* Search + Controls */}
-        <div className="flex items-center gap-2 lg:gap-4 mb-4 h-8 lg:h-11">
+        {isLoading ? (
+          <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+            <Skeleton height={44} shape="rect" className="flex-1 rounded-full" />
+            <Skeleton height={44} width={96} shape="rect" className="rounded-full flex-shrink-0" />
+            <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
+          </div>
+        ) : (
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
-            <Search className="absolute left-3 lg:left-3.5 top-1/2 transform -translate-y-1/2 text-gray-900 opacity-50 w-3.5 h-3.5 lg:w-5 lg:h-5" />
+            <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-900 opacity-50 w-5 h-5" />
             <input
               type="text"
               placeholder="Search folder by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-full pl-8 lg:pl-10 pr-3 lg:pr-3.5 border rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
+              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
               style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
             />
           </div>
           <button
             onClick={() => setShowFilterPanel(true)}
-            className="relative flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 h-full text-xs lg:text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+            className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
             style={{
+              height: "44px",
               borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
             }}
           >
-            <FilterIcon size={12} className="lg:hidden" />
-            <FilterIcon size={16} className="hidden lg:block" />
-            <span className="hidden lg:inline">Filter</span>
+            <FilterIcon size={16} />
+            Filter
             {Object.values(selectedFilters).flat().length > 0 && (
               <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
                 {Object.values(selectedFilters).flat().length}
@@ -1597,60 +1647,67 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
           </button>
 
           <div
-            className="relative flex flex-row items-center flex-shrink-0 p-0.5 lg:p-1 gap-1 lg:gap-1.5 w-16 h-8 lg:w-[86px] lg:h-11 rounded-full"
-            style={{ background: "#E9EAEB" }}
+            className="relative flex flex-row items-center flex-shrink-0"
+            style={{ padding: 4, gap: 6, width: 86, height: 44, background: "#E9EAEB", borderRadius: 95 }}
           >
             <span
-              className="absolute top-0.5 lg:top-1 w-7 h-7 lg:w-9 lg:h-9 rounded-full transition-all duration-300 ease-out pointer-events-none"
+              className="absolute transition-all duration-300 ease-out pointer-events-none"
               style={{
-                left: folderViewMode === "grid" ? "calc(100% - 30px)" : 2,
+                top: 4,
+                left: folderViewMode === "grid" ? 46 : 4,
+                width: 36,
+                height: 36,
                 background: "#FFFFFF",
                 boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.05)",
+                borderRadius: 107,
               }}
             />
             <button
               onClick={() => setFolderViewMode("list")}
-              className="relative z-10 flex items-center justify-center flex-shrink-0 w-7 h-7 lg:w-9 lg:h-9 rounded-full"
+              className="relative z-10 flex items-center justify-center flex-shrink-0"
+              style={{ padding: 8, gap: 10, width: 36, height: 36, borderRadius: 107 }}
             >
-              <List size={13} style={{ color: folderViewMode === "list" ? "#0085FF" : "#404040" }} className="lg:hidden" />
-              <List size={20} style={{ color: folderViewMode === "list" ? "#0085FF" : "#404040" }} className="hidden lg:block" />
+              <List size={20} style={{ color: folderViewMode === "list" ? "#0085FF" : "#404040" }} />
             </button>
             <button
               onClick={() => setFolderViewMode("grid")}
-              className="relative z-10 flex items-center justify-center flex-shrink-0 w-7 h-7 lg:w-9 lg:h-9 rounded-full"
+              className="relative z-10 flex items-center justify-center flex-shrink-0"
+              style={{ padding: 8, gap: 10, width: 36, height: 36, borderRadius: 107 }}
             >
-              <LayoutGrid size={13} style={{ color: folderViewMode === "grid" ? "#0085FF" : "#404040" }} className="lg:hidden" />
-              <LayoutGrid size={20} style={{ color: folderViewMode === "grid" ? "#0085FF" : "#404040" }} className="hidden lg:block" />
+              <LayoutGrid size={20} style={{ color: folderViewMode === "grid" ? "#0085FF" : "#404040" }} />
             </button>
           </div>
 
           <button
-            onClick={() =>
-              setModalState({ isOpen: true, editingId: null, initialName: "" })
-            }
-            className="flex items-center justify-center flex-shrink-0 w-8 h-8 lg:w-11 lg:h-11 rounded-full"
+            onClick={() => {
+              setInlineEditingId("NEW");
+              setInlineEditingName("New Folder");
+            }}
+            className="flex items-center justify-center flex-shrink-0"
             style={{
               boxSizing: "border-box",
+              padding: 12,
+              gap: 8,
+              width: 44,
+              height: 44,
               background: "#FFFFFF",
               border: "1px solid rgba(31, 41, 55, 0.3)",
+              borderRadius: 95,
             }}
             title="New Folder"
           >
-            <CreateNewFolderIcon size={14} style={{ color: "#404040" }} className="lg:hidden" />
-            <CreateNewFolderIcon size={20} style={{ color: "#404040" }} className="hidden lg:block" />
+            <CreateNewFolderIcon size={20} style={{ color: "#404040" }} />
           </button>
         </div>
+        )}
 
         {/* Folders List / Grid */}
-        {folderViewMode === "grid" && filteredFolders.length === 0 ? (
+        {!isLoading && folderViewMode === "grid" && filteredFolders.length === 0 ? (
           <button
-            onClick={() =>
-              setModalState({
-                isOpen: true,
-                editingId: null,
-                initialName: "",
-              })
-            }
+            onClick={() => {
+              setInlineEditingId("NEW");
+              setInlineEditingName("New Folder");
+            }}
             className="flex flex-col items-center justify-center w-full text-gray-500 hover:text-blue-600 transition-colors bg-gray-50"
             style={{
               boxSizing: "border-box",
@@ -1664,59 +1721,112 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
           </button>
         ) : folderViewMode === "grid" ? (
           <div
-            className="w-full grid lg:grid-cols-5"
+            ref={fillContainerRef}
+            className="w-full relative"
             style={{
               boxSizing: "border-box",
               width: "100%",
-              height: 482,
               borderRadius: 8,
               padding: 0,
-              gap: "1.2px",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+              gap: "16px",
               alignContent: "flex-start",
               overflowY: "auto",
-              gridTemplateColumns: isLgUp ? undefined : "repeat(auto-fill, minmax(130px, 1fr))",
+              ...fillStyle,
             }}
           >
-            {paginatedFolders.map((folder) => (
-              <div
-                key={folder._id}
-                onClick={() => setOpenFolderId(folder._id)}
-                className="flex flex-col justify-center items-center cursor-pointer hover:bg-gray-50 transition-colors"
-                style={{ boxSizing: "border-box", width: "100%", height: 150, borderRadius: 8, gap: 2 }}
-              >
-                <GridFolderIcon size={100} />
+            {isLoading ? (
+              [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((_, idx) => (
+                <div key={idx} className="flex flex-col justify-center items-center" style={{ boxSizing: "border-box", width: "100%", height: 150, borderRadius: 8, gap: 12 }}>
+                  <Skeleton width={100} height={100} className="rounded-xl" />
+                  <Skeleton width={100} height={18} />
+                </div>
+              ))
+            ) : (inlineEditingId === "NEW" ? [{ _id: "NEW", name: inlineEditingName, files: [] }, ...paginatedFolders] : paginatedFolders).map((folder) => (
+              <div key={folder._id} className="flex justify-center items-center w-full">
+                <div
+                  onClick={() => setOpenFolderId(folder._id)}
+                  className="relative group flex flex-col justify-center items-center cursor-pointer hover:bg-[#E5F3FF] active:bg-[#CCE8FF] transition-none"
+                  style={{ boxSizing: "border-box", width: "100%", maxWidth: 180, height: 160, borderRadius: 8, padding: "12px 8px", gap: 2 }}
+                >
+                  <div className="absolute top-1 right-1 flex items-center opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-white/60 backdrop-blur-md shadow-sm border border-white/50 rounded-lg overflow-hidden">
+                    <button
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setInlineEditingId(folder._id);
+                        setInlineEditingName(folder.name);
+                      }}
+                      className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
+                      title="Edit"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </button>
+                    <div className="w-px h-3 bg-gray-200" />
+                    <button
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        if (folder._id === "NEW") {
+                          setInlineEditingId(null);
+                        } else {
+                          deleteFolder(folder._id);
+                        }
+                      }}
+                      className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <GridFolderIcon size={100} />
                 <div
                   className="flex flex-col justify-center items-center"
-                  style={{ boxSizing: "border-box", padding: 8, gap: 8, width: 209, height: 40 }}
+                  style={{ boxSizing: "border-box", padding: 8, gap: 4, width: "100%", height: 40 }}
                 >
                   <div
-                    className="flex flex-col justify-center items-center self-stretch"
-                    style={{ boxSizing: "border-box", padding: 0, width: 193, height: 41 }}
+                    className="flex flex-col justify-center items-center self-stretch w-full"
+                    style={{ boxSizing: "border-box", padding: 0, height: 41 }}
                   >
+                    {inlineEditingId === folder._id ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={inlineEditingName}
+                        onChange={(e) => setInlineEditingName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleInlineSave(folder._id);
+                          if (e.key === "Escape") { setInlineEditingId(null); setInlineEditingName(""); }
+                        }}
+                        onBlur={() => handleInlineSave(folder._id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full text-center border-b-2 border-blue-500 focus:outline-none bg-transparent px-1"
+                        style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 18, lineHeight: "22px", color: "#111216" }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          height: 22,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          textAlign: "center",
+                          fontFamily: "Inter",
+                          fontWeight: 500,
+                          fontSize: 18,
+                          lineHeight: "22px",
+                          letterSpacing: "-0.05em",
+                          color: "#111216",
+                        }}
+                        title={folder.name}
+                      >
+                        <HighlightText text={folder.name || "Untitled"} highlight={searchTerm} />
+                      </span>
+                    )}
                     <span
                       style={{
-                        display: "block",
-                        width: 100,
-                        height: 22,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        textAlign: "center",
-                        fontFamily: "Inter",
-                        fontWeight: 500,
-                        fontSize: 18,
-                        lineHeight: "22px",
-                        letterSpacing: "-0.05em",
-                        color: "#111216",
-                      }}
-                      title={folder.name}
-                    >
-                      {folder.name || "Untitled"}
-                    </span>
-                    <span
-                      style={{
-                        width: 426,
-                        maxWidth: "100%",
+                        width: "100%",
                         height: 19,
                         fontFamily: "Inter",
                         fontWeight: 400,
@@ -1731,10 +1841,11 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
                     </span>
                   </div>
                 </div>
+                </div>
               </div>
             ))}
           </div>
-        ) : filteredFolders.length === 0 ? (
+        ) : !isLoading && filteredFolders.length === 0 ? (
           <button
             onClick={() =>
               setModalState({
@@ -1755,8 +1866,39 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
             <span className="text-sm font-medium">Create New Folder</span>
           </button>
         ) : (
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            {paginatedFolders.map((folder, idx) => (
+          <div
+            ref={fillContainerRef}
+            className="border border-gray-200 rounded-lg overflow-x-hidden overflow-y-auto"
+            style={fillStyle}
+          >
+            {isLoading ? (
+              [1, 2, 3, 4, 5, 6].map((_, idx) => (
+                <div key={idx} className="transition-all">
+                  <div
+                    className="flex items-center justify-between gap-2"
+                    style={{
+                      boxSizing: "border-box",
+                      padding: "11px 12px 11px 24px",
+                      background: "#FFFFFF",
+                      borderTop: idx === 0 ? "none" : "1px solid #E1E4EA",
+                    }}
+                  >
+                    <div className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                      <Skeleton width={20} height={20} className="flex-shrink-0" />
+                      <div className="flex-1 min-w-0 flex flex-col gap-1">
+                        <Skeleton width={150} height={16} />
+                        <Skeleton width={80} height={12} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Skeleton width={20} height={20} />
+                      <Skeleton width={20} height={20} />
+                      <Skeleton width={20} height={20} />
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (inlineEditingId === "NEW" ? [{ _id: "NEW", name: inlineEditingName, files: [] }, ...paginatedFolders] : paginatedFolders).map((folder, idx) => (
               <FolderCard
                 key={folder._id}
                 folder={folder}
@@ -1764,23 +1906,32 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
                 isFirst={idx === 0}
                 isLast={idx === paginatedFolders.length - 1}
                 onToggle={toggleFolder}
-                onEdit={(folder) =>
-                  setModalState({
-                    isOpen: true,
-                    editingId: folder._id,
-                    initialName: folder.name,
-                  })
-                }
+                onEdit={(folder) => {
+                  setInlineEditingId(folder._id);
+                  setInlineEditingName(folder.name);
+                }}
                 onDelete={deleteFolder}
                 onSelect={setSelectedFolderId}
                 onDeleteFile={deleteFile}
+                isEditing={inlineEditingId === folder._id}
+                editingName={inlineEditingName}
+                onEditingNameChange={setInlineEditingName}
+                onSaveEdit={() => handleInlineSave(folder._id)}
+                searchTerm={searchTerm}
+                onCancelEdit={() => {
+                  setInlineEditingId(null);
+                  setInlineEditingName("");
+                }}
               />
             ))}
           </div>
         )}
 
         {folderViewMode === "list" && listTotalCount > 0 && (
-          <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+          <div
+            ref={fillFooterRef}
+            className="w-full bg-transparent px-4 py-3 mt-3 flex items-center justify-between sm:px-6"
+          >
             <div className="flex-1 flex justify-between sm:hidden">
               <button
                 onClick={() => handleListPageChange(listPage - 1)}
@@ -1817,47 +1968,14 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
                 </select>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleListPageChange(listPage - 1)}
-                  disabled={!hasListPrevPage}
-                  className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-
-                {listTotalPages > 0 &&
-                  getListPageNumbers().map((pageNum, index) =>
-                    pageNum === "..." ? (
-                      <span
-                        key={`dots-${index}`}
-                        className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
-                      >
-                        ...
-                      </span>
-                    ) : (
-                      <button
-                        key={`page-${pageNum}`}
-                        onClick={() => handleListPageChange(pageNum)}
-                        className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
-                          pageNum === listPage
-                            ? "bg-blue-600 text-white"
-                            : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    ),
-                  )}
-
-                <button
-                  onClick={() => handleListPageChange(listPage + 1)}
-                  disabled={!hasListNextPage}
-                  className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
+              <EditablePaginationButtons
+                currentPage={listPage}
+                totalPages={listTotalPages}
+                hasPrevPage={hasListPrevPage}
+                hasNextPage={hasListNextPage}
+                onPageChange={handleListPageChange}
+                getPageNumbers={getListPageNumbers}
+              />
             </div>
           </div>
         )}
@@ -1866,6 +1984,87 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
 
         {/* Upload Section */}
         {selectedFolderId && (
+          <>
+          {uploadSuccess ? (
+            /* ── Upload Success Screen ── */
+            <div
+              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+              onClick={handleUploadDone}
+            >
+              <div
+                className="flex flex-col items-center bg-white"
+                style={{
+                  boxSizing: "border-box",
+                  width: 400,
+                  border: "1px solid #EBEBEB",
+                  borderRadius: 8,
+                  padding: "40px 32px 32px",
+                  gap: 0,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Green checkmark circle */}
+                <div
+                  className="flex items-center justify-center flex-shrink-0"
+                  style={{ width: 72, height: 72, borderRadius: "50%", background: "#E8F5E9", marginBottom: 20 }}
+                >
+                  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                    <path d="M8 18.5L14.5 25L28 11" stroke="#22C55E" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+
+                {/* Title */}
+                <p style={{ fontFamily: "Inter Tight", fontWeight: 600, fontSize: 18, lineHeight: "120%", color: "#171717", marginBottom: 8, textAlign: "center" }}>
+                  Upload Successful!
+                </p>
+
+                {/* Sub-text */}
+                <p style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 14, color: "#6B7280", marginBottom: 32, textAlign: "center", lineHeight: "1.5" }}>
+                  Your files have been uploaded successfully.<br />Would you like to upload more files?
+                </p>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-center" style={{ gap: 12, width: "100%" }}>
+                  <button
+                    onClick={handleUploadDone}
+                    className="flex items-center justify-center hover:bg-gray-50 transition-colors"
+                    style={{
+                      flex: 1,
+                      height: 40,
+                      background: "#FFFFFF",
+                      border: "1px solid #EBEBEB",
+                      boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
+                      borderRadius: 116,
+                      fontFamily: "Inter Tight",
+                      fontWeight: 500,
+                      fontSize: 14,
+                      color: "#171717",
+                    }}
+                  >
+                    Done
+                  </button>
+                  <button
+                    onClick={handleUploadMore}
+                    className="flex items-center justify-center hover:opacity-90 transition-opacity"
+                    style={{
+                      flex: 1,
+                      height: 40,
+                      background: "#0085FF",
+                      borderRadius: 116,
+                      fontFamily: "Inter Tight",
+                      fontWeight: 500,
+                      fontSize: 14,
+                      color: "#FFFFFF",
+                      border: "none",
+                    }}
+                  >
+                    Upload More
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+          /* ── Normal Upload Modal ── */
           <div
             className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm"
             onClick={() => {
@@ -2157,6 +2356,9 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange }) => {
             </div>
           </div>
         )}
+          </>
+        )}
+
 
         <CompanyFilterPanel
           isOpen={showFilterPanel}

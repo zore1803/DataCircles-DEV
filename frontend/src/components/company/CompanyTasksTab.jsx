@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
+import { createPortal } from "react-dom";
+import { getAncestorZoom } from "../../utils/domUtils";
 import {
   Search,
   Filter,
@@ -9,29 +12,29 @@ import {
   ChevronRight,
   ChevronUp,
   ChevronDown,
+  EyeOff,
   ListChecks,
 } from "lucide-react";
+import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import CompanyTaskForm from "./CompanyTaskForm";
+import HighlightText from "../common/HighlightText";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
 import FilterIcon from "../common/FilterIcon";
 import CompanyFilterPanel from "./CompanyFilterPanel";
+import TableSkeletonRows from "../common/TableSkeletonRows";
+import StatTileSkeleton from "../common/StatTileSkeleton";
+import Skeleton from "../common/Skeleton";
+import BulkActionBar from "../common/BulkActionBar";
+import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
+import { exportToCSV } from "../../utils/exportToCSV";
+import { bulkDelete } from "../../utils/bulkOperations";
+import useFillToBottom from "../../hooks/useFillToBottom";
 import { applyColumnFilters } from "../../utils/advancedFilters";
 
 const TASK_STATUS_OPTIONS = ["Completed", "In-Progress"];
 const TASK_PRIORITY_OPTIONS = ["Low", "Medium", "High"];
-const daysAgo = (date) => Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
-const DATE_RANGES = [
-  { label: "Today", test: (d) => daysAgo(d) < 1 },
-  { label: "This Week", test: (d) => daysAgo(d) < 7 },
-  { label: "This Month", test: (d) => daysAgo(d) < 30 },
-  { label: "Older", test: (d) => daysAgo(d) >= 30 },
-];
-const getDateRangeLabel = (date) => {
-  if (!date) return "";
-  return DATE_RANGES.find((r) => r.test(date))?.label || "";
-};
 const TASK_FILTER_COLUMNS = [
   { key: "status", label: "Status", options: TASK_STATUS_OPTIONS },
   { key: "priority", label: "Priority", options: TASK_PRIORITY_OPTIONS },
@@ -111,14 +114,188 @@ const BriefcaseIcon = ({ size = 14, ...props }) => (
   </svg>
 );
 
-export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showStats = true }) {
+export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showStats = true, isLoading = false }) {
+  // Keeps the table box a fixed height ending at the bottom of the screen, so
+  // changing rows-per-page scrolls internally instead of growing the page.
+  const {
+    containerRef: fillContainerRef,
+    footerRef: fillFooterRef,
+    style: fillStyle,
+  } = useFillToBottom();
+
   const [searchTerm, setSearchTerm] = useState("");
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
+  const [bulkStatusValue, setBulkStatusValue] = useState("");
   const [users, setUsers] = useState([]);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [pinnedColumn, setPinnedColumn] = useState(null);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [leftPinned, setLeftPinned] = useState(new Set());
+  const [rightPinned, setRightPinned] = useState(new Set());
+  const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
+  const [columnMenuPos, setColumnMenuPos] = useState(null);
+  const columnMenuRef = useRef(null);
+
+  const BASE_COLUMNS = useMemo(() => [
+    { id: "title", label: "Task", width: 264, pinnable: true },
+    { id: "assignedTo", label: "Assigned to", width: 190, pinnable: true },
+    { id: "status", label: "Status", width: 160, pinnable: true },
+    { id: "priority", label: "Priority", width: 148, pinnable: true },
+    { id: "dueDate", label: "Due Date", width: 166, pinnable: true },
+    { id: "progress", label: "Progress", width: 362, pinnable: true },
+  ], []);
+
+  const [columnOrder, setColumnOrder] = useState(() => BASE_COLUMNS.map(c => c.id));
+  const [draggedColKey, setDraggedColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
+  const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
+
+  const orderedColumns = useMemo(() => {
+    const sortedBase = [...BASE_COLUMNS].sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
+    const visible = sortedBase.filter((c) => !hiddenColumns.has(c.id));
+    const left = visible.filter((c) => leftPinned.has(c.id));
+    const right = visible.filter((c) => rightPinned.has(c.id));
+    const unpinned = visible.filter((c) => !leftPinned.has(c.id) && !rightPinned.has(c.id));
+    return [...left, ...unpinned, ...right];
+  }, [BASE_COLUMNS, hiddenColumns, leftPinned, rightPinned, columnOrder]);
+
+  const pinColumnToSide = (colId, side) => {
+    if (side === "left") {
+      setLeftPinned((prev) => new Set(prev).add(colId));
+      setRightPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+    } else {
+      setRightPinned((prev) => new Set(prev).add(colId));
+      setLeftPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+    }
+  };
+
+  const unpinColumn = (colId) => {
+    setLeftPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+    setRightPinned((prev) => { const next = new Set(prev); next.delete(colId); return next; });
+  };
+
+  const toggleHideColumn = (colId) => {
+    setHiddenColumns((prev) => { const next = new Set(prev); next.add(colId); return next; });
+  };
+
+  const getColumnPinSide = (colId) => {
+    if (leftPinned.has(colId)) return "left";
+    if (rightPinned.has(colId)) return "right";
+    return null;
+  };
+
+  const startColumnDrag = (e, colId) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    // A single press does nothing: the column menu opens from its own chevron
+    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
+    // meant the FIRST press of every double-click popped the menu, whose
+    // full-screen backdrop then swallowed the second press — making the header
+    // effectively un-double-clickable. Drag still starts on the second press.
+    if (e.detail < 2) return;
+
+    e.preventDefault();
+    window.getSelection?.()?.removeAllRanges();
+
+    const th = e.currentTarget;
+    const rect = th.getBoundingClientRect();
+    const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
+    
+    const previewRows = (tasks || []).slice(0, 10).map((t) => {
+      let val = t[colId];
+      if (colId === 'assignedTo') val = val?.name || "Unassigned";
+      if (typeof val === 'object' && val !== null) val = val?.name || val?.title || "";
+      return String(val ?? "").trim() || "—";
+    });
+
+    const zGhost = getAncestorZoom(document.body);
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    dragOverRef.current = null;
+    setDraggedColKey(colId);
+    setDragOverColKey(null);
+    document.body.style.userSelect = "none";
+
+    setDragGhost({
+      label,
+      previewRows,
+      offsetX,
+      offsetY,
+      width: rect.width / zGhost,
+      height: rect.height / zGhost,
+    });
+
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const visualTop = clientY - offsetY;
+      const visualLeft = clientX - offsetX;
+      el.style.top = `${visualTop / zGhost}px`;
+      el.style.left = `${visualLeft / zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+    };
+    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
+
+    const handleMouseMove = (moveEvent) => {
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) {
+        handleColumnReorder(colId, overKey);
+      }
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    if (!draggedKey || draggedKey === targetKey) return;
+    setColumnOrder((prev) => {
+      const newOrder = [...prev];
+      const draggedIdx = newOrder.indexOf(draggedKey);
+      const targetIdx = newOrder.indexOf(targetKey);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedKey);
+      return newOrder;
+    });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(e.target)) {
+        setOpenColumnMenuKey(null);
+        setColumnMenuPos(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const [colWidths, setColWidths] = useState({
     title: 264,
     assignedTo: 190,
@@ -129,13 +306,20 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
   });
   const [resizingCol, setResizingCol] = useState(null);
   const resizingRef = useRef(null);
+  // +88 for the two fixed 44px leading columns (selection checkbox and the
+  // completion circle), which aren't in colWidths — without them this minWidth
+  // under-reports the real table width and the horizontal scroll stops short.
   const totalTableWidth = useMemo(
-    () => Object.values(colWidths).reduce((sum, w) => sum + w, 0),
+    () => Object.values(colWidths).reduce((sum, w) => sum + w, 0) + 88,
     [colWidths],
   );
 
+  // Kept so the existing header Pin button and double-click-to-pin keep working;
+  // they now write to the same left/right pin state the column menu uses, rather
+  // than a second independent `pinnedColumn` value.
   const togglePinColumn = (colId) => {
-    setPinnedColumn((prev) => (prev === colId ? null : colId));
+    if (getColumnPinSide(colId)) unpinColumn(colId);
+    else pinColumnToSide(colId, "left");
   };
 
   const startResize = (e, colId) => {
@@ -228,7 +412,8 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
   };
 
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
-  const handleSort = (key) => {
+  const handleSort = (key, direction) => {
+    if (direction) { setSortConfig({ key, direction }); return; }
     setSortConfig((prev) =>
       prev.key === key
         ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
@@ -286,11 +471,26 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     }
   };
 
+  // Every column the table renders, flattened to one searchable string. Built from
+  // BASE_COLUMNS + getTaskFieldValue (the same accessor the columns and sorting use)
+  // so adding a column can't silently leave it out of search, plus the extra bits a
+  // cell shows that the accessor doesn't cover: the linked entity, EVERY assignee
+  // rather than just the first, and the human due-date label.
+  const getTaskSearchText = (task) => {
+    const parts = BASE_COLUMNS.map((c) => getTaskFieldValue(task, c.id));
+    const linked = task.relatedEntities?.[0]?.entityId;
+    parts.push(linked?.name || linked?.title || "");
+    parts.push(getTaskAssignees(task).map((a) => a?.name || "").join(" "));
+    const due = formatTaskDueLabel(task.dueDate);
+    parts.push(due ? `${due.day || ""} ${due.time || ""}` : "");
+    return parts.filter(Boolean).join(" ").toLowerCase();
+  };
+
   const filteredTasks = useMemo(() => {
     let result = tasks;
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      result = result.filter((t) => (t.title || "").toLowerCase().includes(q));
+      result = result.filter((t) => getTaskSearchText(t).includes(q));
     }
     return applyColumnFilters(result, selectedFilters, getTaskFieldValue);
   }, [tasks, searchTerm, selectedFilters]);
@@ -312,6 +512,16 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     });
   }, [filteredTasks, sortConfig]);
 
+  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+    items: filteredTasks,
+    onDelete: () => setShowBulkDeleteModal(true)
+  });
+
+  // Keeps the bulk strip mounted for one beat after deselect so its
+  // slide-out animation can play instead of vanishing on the same frame.
+  const { visible: bulkStripVisible, closing: bulkStripClosing } =
+    useBulkStrip(selectedItems.length);
+
   const paginatedTasks = useMemo(
     () => sortedTasks.slice((listPage - 1) * listLimit, listPage * listLimit),
     [sortedTasks, listPage, listLimit],
@@ -329,24 +539,70 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     setListPage(page);
   };
 
+  const handleExportSelected = () => {
+    const dataToExport = tasks.filter(t => selectedItems.includes(t._id)).map(t => ({
+      "Task": t.title || "",
+      "Assigned to": getTaskAssignees(t).map(u => u.name).join(", "),
+      "Status": t.status === "Completed" ? "Completed" : "In-Progress",
+      "Priority": t.priority || "",
+      "Due Date": t.dueDate ? new Date(t.dueDate).toLocaleDateString() : "",
+    }));
+    const headers = Object.keys(dataToExport[0] || {}).join(",");
+    const rows = dataToExport.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    exportToCSV([headers, ...rows], `tasks_export_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkActionLoading(true);
+    try {
+      await bulkDelete("tasks", selectedItems);
+      setTasks?.(prev => prev.filter(t => !selectedItems.includes(t._id)));
+      toast.success(`${selectedItems.length} task(s) deleted`);
+      clearSelection();
+      setShowBulkDeleteModal(false);
+    } catch (error) {
+      console.error("Bulk delete failed:", error);
+      toast.error("Failed to delete tasks");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkUpdateStatus = async () => {
+    if (!bulkStatusValue) return;
+    setBulkActionLoading(true);
+    try {
+      // PUT, not PATCH — backend/routes/taskRoutes.js only registers
+      // `router.put("/:id")` (and `/:id/status`); there is no PATCH route, so
+      // this previously 404'd on every bulk update. Tasks.jsx's equivalent
+      // handler uses PUT for the same reason.
+      await Promise.all(selectedItems.map(id => API.put(`/tasks/${id}`, { status: bulkStatusValue })));
+      setTasks?.(prev => prev.map(t => selectedItems.includes(t._id) ? { ...t, status: bulkStatusValue } : t));
+      toast.success(`Status updated for ${selectedItems.length} task(s)`);
+      clearSelection();
+      setShowBulkStatusModal(false);
+    } catch (error) {
+      console.error("Bulk update failed:", error);
+      toast.error("Failed to update tasks");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleSelectAllAcrossPages = () => selectAll(filteredTasks);
+
   const handleListLimitChange = (newLimit) => {
     setListLimit(newLimit);
     setListPage(1);
   };
 
   const getListPageNumbers = () => {
-    const delta = 2;
-    const range = [];
-    const rangeWithDots = [];
-    for (let i = Math.max(2, listPage - delta); i <= Math.min(listTotalPages - 1, listPage + delta); i++) {
-      range.push(i);
-    }
-    if (listPage - delta > 2) rangeWithDots.push(1, "...");
-    else rangeWithDots.push(1);
-    rangeWithDots.push(...range);
-    if (listPage + delta < listTotalPages - 1) rangeWithDots.push("...", listTotalPages);
-    else if (listTotalPages > 1) rangeWithDots.push(listTotalPages);
-    return rangeWithDots.filter((item, index, arr) => index === 0 || arr[index - 1] !== item);
+    const items = [1];
+    if (listPage > 2) items.push("left-dots");
+    if (listPage !== 1 && listPage !== listTotalPages) items.push(listPage);
+    if (listPage < listTotalPages - 1) items.push("right-dots");
+    if (listTotalPages > 1) items.push(listTotalPages);
+    return items;
   };
 
   const total = tasks.length;
@@ -398,42 +654,42 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
       {/* KPI Tiles */}
       {showStats && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            {kpiTiles.map((tile) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
+            ) : (
+              kpiTiles.map((tile) => (
               <div
                 key={tile.label}
-                className="min-h-[72px] lg:h-[72px] flex items-center lg:items-end gap-3 px-3 py-3 lg:py-0 bg-white border border-gray-200 rounded-xl box-border min-w-0"
+                className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
               >
-                <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                   <tile.icon size={20} />
                 </div>
-                <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
-                  <tile.icon size={20} />
-                </div>
-                <div className="min-w-0 flex-1 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-0.5 lg:gap-2">
+                <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">{tile.label}</p>
-                    <p className="truncate w-full text-sm sm:text-base font-semibold text-gray-900">{tile.value}</p>
+                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
+                    <p className="text-base font-semibold text-gray-900">{tile.value}</p>
                   </div>
                   {tile.subtitle && (
                     <span
-                      className="flex items-center flex-shrink-0 min-w-0 max-w-full text-[10px] lg:text-xs"
+                      className="flex items-center flex-shrink-0"
                       style={{
                         gap: 4,
                         color: tile.subtitleColor,
                         fontFamily: "Inter",
                         fontWeight: 400,
+                        fontSize: 12,
                         lineHeight: "120%",
                       }}
                     >
-                      <tile.subtitleIcon size={12} className="flex-shrink-0 lg:hidden" />
-                      <tile.subtitleIcon size={14} className="flex-shrink-0 hidden lg:block" />
-                      <span className="truncate">{tile.subtitle}</span>
+                      <tile.subtitleIcon size={14} />
+                      {tile.subtitle}
                     </span>
                   )}
                 </div>
               </div>
-            ))}
+            )))}
           </div>
 
           <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
@@ -441,47 +697,67 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
       )}
 
       {/* Search + Controls */}
-      <div className="flex items-center gap-2 lg:gap-4 mb-4 h-8 lg:h-11">
-        <div className="relative flex-1 h-full">
-          <Search size={14} className="absolute left-3 lg:left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50 lg:w-5 lg:h-5" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by tasks by name, team, or deal..."
-            className="w-full h-full pl-8 lg:pl-10 pr-3 lg:pr-3.5 border rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
-            style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
-          />
+      {isLoading ? (
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+          <Skeleton height={44} shape="rect" className="flex-1 rounded-full" />
+          <Skeleton height={44} width={86} shape="rect" className="rounded-full flex-shrink-0" />
+          <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
         </div>
-        <button
-          onClick={() => setShowFilterPanel(true)}
-          className="relative flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 h-full text-xs lg:text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
-          style={{
-            borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
-          }}
-        >
-          <FilterIcon size={12} className="lg:hidden" />
-          <FilterIcon size={16} className="hidden lg:block" />
-          <span className="hidden lg:inline">Filter</span>
-          {Object.values(selectedFilters).flat().length > 0 && (
-            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
-              {Object.values(selectedFilters).flat().length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setShowTaskForm(true)}
-          className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0 w-8 h-8 lg:w-11 lg:h-11"
-          style={{ borderColor: "#E1E4EA" }}
-          title="Add Task"
-        >
-          <Plus size={14} className="lg:hidden" />
-          <Plus size={20} className="hidden lg:block" />
-        </button>
-      </div>
+      ) : bulkStripVisible ? (
+        <BulkActionBar
+          isClosing={bulkStripClosing}
+          selectedCount={selectedItems.length}
+          entityName="task"
+          onSelectAll={handleSelectAllAcrossPages}
+          onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onUpdateStatus={() => setShowBulkStatusModal(true)}
+          onDelete={() => setShowBulkDeleteModal(true)}
+          onCancel={clearSelection}
+        />
+      ) : (
+        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+          <div className="relative flex-1 h-full">
+            <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by tasks..."
+              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+            />
+          </div>
+          <button
+            onClick={() => setShowFilterPanel(true)}
+            className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+            style={{
+              height: "44px",
+              borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
+            }}
+          >
+            <FilterIcon size={16} />
+            Filter
+            {Object.values(selectedFilters).flat().length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+                {Object.values(selectedFilters).flat().length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowTaskForm(true)}
+            className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
+            style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
+            title="Add Task"
+          >
+            <Plus size={20} />
+          </button>
+        </div>
+      )}
 
-      {/* Task list or empty state */}
-      {tasks.length === 0 ? (
+      {/* Task list or empty state. */}
+      {!isLoading && tasks.length === 0 ? (
         <button
           onClick={() => setShowTaskForm(true)}
           className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
@@ -491,68 +767,171 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
         </button>
       ) : (
       <div
-        className="box-border flex flex-col items-start w-full bg-white overflow-x-auto"
-        style={{ border: "1px solid #E1E4EA", borderRadius: 8 }}
+        ref={fillContainerRef}
+        className="box-border flex flex-col items-start w-full bg-white overflow-x-auto overflow-y-auto"
+        style={{
+          ...fillStyle,
+          border: "1px solid #E1E4EA",
+          borderRadius: 8,
+        }}
       >
         <table
           className="text-sm text-left border-collapse"
           style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%" }}
         >
-          <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+          <thead className="sticky top-0 z-30 bg-[#F5F7FA] border-b border-[#E1E4EA]">
             <tr>
-              <th style={{ width: 51, height: 56 }} className="px-3" />
-              {[
-                { id: "title", label: "Task", width: 264, pinnable: true },
-                { id: "assignedTo", label: "Assigned to", width: 190, pinnable: true },
-                { id: "status", label: "Status", width: 160, pinnable: true },
-                { id: "priority", label: "Priority", width: 148, pinnable: true },
-                { id: "dueDate", label: "Due Date", width: 166, pinnable: true },
-                { id: "progress", label: "Progress", width: 362, pinnable: true },
-              ].map((col) => {
-                const isPinned = pinnedColumn === col.id;
+              {/* Page-scoped select-all: ticks exactly the rows on the CURRENT page
+                  (10 per page -> 10, 50 -> 50). Distinct from the bulk strip's
+                  "Select All", which spans every record across all pages.
+                  This is its OWN column now — it previously sat above the
+                  completion-circle column (`__lead`), so a header labelled
+                  "select all rows" was visually attached to a column of
+                  per-task done/not-done toggles, and there was no per-row
+                  selection checkbox anywhere. Matches Tasks.jsx, which has a
+                  dedicated `selection` column separate from its row content. */}
+              <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
+                <div className="flex justify-center items-center w-full">
+                  <input
+                    type="checkbox"
+                    checked={selectedItems.length > 0 && selectedItems.length === paginatedTasks.length}
+                    onChange={(e) => e.target.checked ? selectAll(paginatedTasks) : clearSelection()}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                  />
+                </div>
+              </th>
+              {/* Spacer for the completion-circle column below (`__lead`). */}
+              <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]" />
+              {orderedColumns.map((col, idx) => {
+                const isDragging = draggedColKey === col.id;
+                const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
                 return (
                   <th
                     key={col.id}
-                    style={{ width: colWidths[col.id], height: 56, position: "relative" }}
-                    className={`py-2.5 font-medium text-[#525252] text-xs border-r border-[#E1E4EA] ${
+                    data-col-id={col.id}
+                    onMouseDown={(e) => startColumnDrag(e, col.id)}
+                    style={{
+                      width: colWidths[col.id],
+                      height: 56,
+                      position: "relative",
+                      opacity: isDragging ? 0.35 : 1,
+                      boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                    }}
+                    className={`py-2.5 font-medium text-[#525252] text-xs cursor-grab active:cursor-grabbing ${
                       col.id === "title" ? "pl-6 pr-3" : "px-3"
-                    }`}
+                    } ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                   >
-                    <div className="flex items-center justify-between w-full">
+                    <div className={`flex items-center justify-between w-full ${isLoading ? "[&_button]:invisible" : ""}`}>
                       {col.pinnable ? (
                         <div
                           className="relative flex items-center justify-start flex-1 group cursor-pointer select-none min-w-0"
                           onDoubleClick={() => togglePinColumn(col.id)}
                         >
                           <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                            <span className="truncate">{col.label}</span>
+                            {isLoading ? <Skeleton width="65%" height={12} /> : <span className="truncate flex-1 min-w-0" title={col.label}>{col.label}</span>}
                           </div>
-                          <button
-                            onClick={() => togglePinColumn(col.id)}
-                            className={`ml-2 p-1 rounded hover:bg-gray-200 transition-opacity flex-shrink-0 ${
-                              isPinned ? "opacity-100 text-blue-600" : "opacity-0 group-hover:opacity-100 text-gray-400"
-                            }`}
-                            title={isPinned ? "Unpin Column" : "Pin Column"}
-                          >
-                            {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
-                          </button>
                         </div>
                       ) : null}
                       <button
-                        onClick={() => handleSort(col.id)}
-                        className="ml-1 p-0.5 rounded hover:bg-gray-200 flex-shrink-0"
-                        title="Sort"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (openColumnMenuKey === col.id) {
+                            setOpenColumnMenuKey(null);
+                            setColumnMenuPos(null);
+                            return;
+                          }
+                          // rect is VISUAL px; the menu is portaled into document.body, which paints
+                          // inside the dynamic <html> zoom, so rect-derived values must be divided by
+                          // that zoom or the browser applies it twice. The resulting drift is
+                          // PROPORTIONAL to the button's x position (pos x (zoom-1)), which is why it
+                          // was invisible on the first column and obvious on the last — and why the
+                          // old fixed `-80` nudge for the last column could never be right everywhere.
+                          // MENU_W and the +4/8 gaps are already in portal space, so they are NOT divided.
+                          const zMenu = getAncestorZoom(document.body);
+                          const MENU_W = 190;
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          let calculatedLeft = rect.right / zMenu - MENU_W;
+                          calculatedLeft = Math.min(calculatedLeft, window.innerWidth / zMenu - MENU_W - 8);
+                          calculatedLeft = Math.max(calculatedLeft, 8);
+                          setColumnMenuPos({ top: rect.bottom / zMenu + 4, left: calculatedLeft });
+                          setOpenColumnMenuKey(col.id);
+                        }}
+                        className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                        title="Column options"
                       >
-                        {sortConfig.key === col.id ? (
-                          sortConfig.direction === "asc" ? (
-                            <ChevronUp className="w-3.5 h-3.5 text-blue-600" />
-                          ) : (
-                            <ChevronDown className="w-3.5 h-3.5 text-blue-600" />
-                          )
-                        ) : (
-                          <ChevronDown className="w-3.5 h-3.5 text-gray-300" />
-                        )}
+                        <ChevronDown className="w-3.5 h-3.5" />
                       </button>
+
+                      {openColumnMenuKey === col.id && columnMenuPos && createPortal(
+                        <>
+                          <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColumnMenuKey(null); setColumnMenuPos(null); }} />
+                          <div
+                            ref={columnMenuRef}
+                            style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
+                            className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                          >
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                getColumnPinSide(col.id) === "left" ? unpinColumn(col.id) : pinColumnToSide(col.id, "left");
+                              }}
+                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${getColumnPinSide(col.id) === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                            >
+                              {getColumnPinSide(col.id) === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                              Pin to Left
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                getColumnPinSide(col.id) === "right" ? unpinColumn(col.id) : pinColumnToSide(col.id, "right");
+                              }}
+                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${getColumnPinSide(col.id) === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                            >
+                              {getColumnPinSide(col.id) === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                              Pin to Right
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                handleSort(col.id, "asc");
+                                setListPage(1);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                              Sort Ascending
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                handleSort(col.id, "desc");
+                                setListPage(1);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                              Sort Descending
+                            </button>
+                            <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                            <button
+                              onClick={() => {
+                                setOpenColumnMenuKey(null);
+                                setColumnMenuPos(null);
+                                toggleHideColumn(col.id);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap text-[#161618] hover:bg-gray-50"
+                            >
+                              <EyeOff className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                              Hide Column
+                            </button>
+                          </div>
+                        </>,
+                        document.body
+                      )}
                     </div>
                     <div
                       onMouseDown={(e) => startResize(e, col.id)}
@@ -565,15 +944,29 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
               })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#E1E4EA] bg-white">
-            {paginatedTasks.length === 0 ? (
+          <tbody className="bg-white">
+            {isLoading ? (
+              // hasCheckbox renders ONE leading <td>; the real rows now have TWO
+              // leading columns (selection checkbox + completion circle), so
+              // prepend a 44px width to keep the skeleton's column count aligned
+              // with the header and body.
+              <TableSkeletonRows
+                columns={[44, ...orderedColumns.map(c => colWidths[c.id])]}
+                hasCheckbox={true}
+                numRows={listLimit}
+                rowHeight={54}
+              />
+            ) : paginatedTasks.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center text-gray-500 font-medium">
+                {/* +2 for the two leading columns: selection checkbox and the
+                    completion circle (was +1 when selection didn't exist). */}
+                <td colSpan={orderedColumns.length + 2} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
                   No tasks found.
                 </td>
               </tr>
             ) : (
               paginatedTasks.map((task) => {
+                const isSelected = selectedItems.includes(task._id);
                 const isCompleted = task.status === "Completed";
                 const assignees = getTaskAssignees(task);
                 const progress = getTaskProgress(task);
@@ -589,151 +982,203 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                 const textDecoration = isCompleted ? "line-through" : "none";
                 const primaryAssignee = assignees[0];
                 const avatarUrl = primaryAssignee?.profileUrl || primaryAssignee?.userData?.mainData?.profilePic;
-                return (
-                  <tr key={task._id} className="hover:bg-gray-50 transition-colors group cursor-pointer" onClick={() => handleTaskClick(task)}>
-                    <td style={{ height: 60 }} className="px-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-start">
-                        <CircleCheckIcon checked={isCompleted} className="flex-shrink-0" />
-                      </div>
-                    </td>
-                    <td style={{ height: 60 }} className="pl-6 pr-3 py-3">
-                      <div className="flex flex-col gap-0.5">
-                        <span
-                          style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "20px", color: "#0E121B", textDecoration }}
-                          className="truncate"
-                        >
-                          {task.title || "Untitled Task"}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <BriefcaseIcon className="flex-shrink-0" />
-                          <span
-                            style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#8D8D8E", textDecoration }}
-                            className="truncate"
-                          >
-                            Related to: {linkedEntity?.entityId?.name || linkedEntity?.entityId?.title || "(Deal Name)"}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      {primaryAssignee ? (
-                        <div className="flex items-center justify-start gap-2">
-                          {avatarUrl ? (
-                            <img
-                              src={avatarUrl}
-                              alt={primaryAssignee.name}
-                              className="rounded-full object-cover flex-shrink-0 border border-white"
-                              style={{ width: 32, height: 32 }}
+                  const cells = {
+                    // Per-row selection checkbox — this is what was missing.
+                    // `isSelected`/`toggleItem` already existed in this file but
+                    // were never rendered, so bulk selection here was
+                    // unreachable: the strip could never appear. stopPropagation
+                    // keeps ticking a box from also firing the row's
+                    // handleTaskClick and opening the task.
+                    __select: (
+                        <td key="__select" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-center items-center w-full">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                toggleItem(task._id);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                             />
-                          ) : (
-                            <div
-                              className="rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0 border border-white"
-                              style={{ width: 32, height: 32 }}
-                            >
-                              {primaryAssignee.name?.charAt(0)?.toUpperCase() || "?"}
-                            </div>
-                          )}
-                          <div className="flex flex-col min-w-0">
+                          </div>
+                        </td>
+                    ),
+                    __lead: (
+                        <td key="__lead" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-start">
+                            <CircleCheckIcon checked={isCompleted} className="flex-shrink-0" />
+                          </div>
+                        </td>
+                    ),
+                    title: (
+                        <td key="title" style={{ height: 60 }} className="pl-6 pr-3 py-3 border-r border-b border-[#E1E4EA]">
+                          <div className="flex flex-col gap-0.5">
                             <span
                               style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "20px", color: "#0E121B", textDecoration }}
                               className="truncate"
                             >
-                              {primaryAssignee.name}
-                              {assignees.length > 1 ? ` +${assignees.length - 1}` : ""}
+                              <HighlightText text={task.title || "Untitled Task"} query={searchTerm} />
                             </span>
-                            <span
-                              style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#8D8D8E", textDecoration }}
-                              className="truncate"
-                            >
-                              {primaryAssignee.role || "Team Member"}
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <BriefcaseIcon className="flex-shrink-0" />
+                              <span
+                                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#8D8D8E", textDecoration }}
+                                className="truncate"
+                              >
+                                Related to: <HighlightText text={linkedEntity?.entityId?.name || linkedEntity?.entityId?.title || "(Deal Name)"} query={searchTerm} />
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      <span
-                        className="inline-flex items-center justify-center"
-                        style={{
-                          padding: "5px 12px",
-                          borderRadius: 53,
-                          backgroundColor: isCompleted ? "rgba(0, 201, 80, 0.1)" : "rgba(0, 133, 255, 0.1)",
-                          fontFamily: "Inter",
-                          fontWeight: 500,
-                          fontSize: 12,
-                          lineHeight: "120%",
-                          color: isCompleted ? "#00C950" : "#0085FF",
-                        }}
-                      >
-                        {isCompleted ? "Completed" : "In-Progress"}
-                      </span>
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      {priority ? (
-                        <span
-                          className="inline-flex items-center justify-center"
-                          style={{
-                            padding: "5px 12px",
-                            borderRadius: 53,
-                            backgroundColor: (priorityStyles[priority] || priorityStyles.medium).bg,
-                            fontFamily: "Inter",
-                            fontWeight: 500,
-                            fontSize: 12,
-                            lineHeight: "120%",
-                            color: (priorityStyles[priority] || priorityStyles.medium).color,
-                          }}
-                        >
-                          {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      <div className="flex flex-col gap-0.5">
-                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866", textDecoration }}>
-                          {dueLabel.day} {dueLabel.time}
-                        </span>
-                        {isCompleted ? (
-                          <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#00C950" }}>
-                            Completed
+                        </td>
+                    ),
+                    assignedTo: (
+                        <td key="assignedTo" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          {primaryAssignee ? (
+                            <div className="flex items-center justify-start gap-2">
+                              {avatarUrl ? (
+                                <img
+                                  src={avatarUrl}
+                                  alt={primaryAssignee.name}
+                                  className="rounded-full object-cover flex-shrink-0 border border-white"
+                                  style={{ width: 32, height: 32 }}
+                                />
+                              ) : (
+                                <div
+                                  className="rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0 border border-white"
+                                  style={{ width: 32, height: 32 }}
+                                >
+                                  {primaryAssignee.name?.charAt(0)?.toUpperCase() || "?"}
+                                </div>
+                              )}
+                              <div className="flex flex-col min-w-0">
+                                <span
+                                  style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "20px", color: "#0E121B", textDecoration }}
+                                  className="truncate"
+                                >
+                                  <HighlightText text={primaryAssignee.name} query={searchTerm} />
+                                  {assignees.length > 1 ? ` +${assignees.length - 1}` : ""}
+                                </span>
+                                <span
+                                  style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#8D8D8E", textDecoration }}
+                                  className="truncate"
+                                >
+                                  {primaryAssignee.role || "Team Member"}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                    ),
+                    status: (
+                        <td key="status" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          <span
+                            className="inline-flex items-center justify-center"
+                            style={{
+                              padding: "5px 12px",
+                              borderRadius: 53,
+                              backgroundColor: isCompleted ? "rgba(0, 201, 80, 0.1)" : "rgba(0, 133, 255, 0.1)",
+                              fontFamily: "Inter",
+                              fontWeight: 500,
+                              fontSize: 12,
+                              lineHeight: "120%",
+                              color: isCompleted ? "#00C950" : "#0085FF",
+                            }}
+                          >
+                            <HighlightText text={isCompleted ? "Completed" : "In-Progress"} query={searchTerm} />
                           </span>
-                        ) : (
-                          isOverdue && (
-                            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#CD3636" }}>
-                              Overdue
+                        </td>
+                    ),
+                    priority: (
+                        <td key="priority" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          {priority ? (
+                            <span
+                              className="inline-flex items-center justify-center"
+                              style={{
+                                padding: "5px 12px",
+                                borderRadius: 53,
+                                backgroundColor: (priorityStyles[priority] || priorityStyles.medium).bg,
+                                fontFamily: "Inter",
+                                fontWeight: 500,
+                                fontSize: 12,
+                                lineHeight: "120%",
+                                color: (priorityStyles[priority] || priorityStyles.medium).color,
+                              }}
+                            >
+                              <HighlightText text={priority.charAt(0).toUpperCase() + priority.slice(1)} query={searchTerm} />
                             </span>
-                          )
-                        )}
-                      </div>
-                    </td>
-                    <td style={{ height: 60 }} className="px-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 rounded-full overflow-hidden" style={{ height: 5, backgroundColor: "#D9D9D9" }}>
-                          <div
-                            className="h-full rounded-full"
-                            style={{ width: `${progress}%`, backgroundColor: progress === 100 ? "#00C950" : "#0085FF" }}
-                          />
-                        </div>
-                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866" }} className="flex-shrink-0">
-                          {progress}%
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTaskClick(task);
-                          }}
-                          className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
-                          title="More options"
-                        >
-                          <MoreVertIcon className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                    ),
+                    dueDate: (
+                        <td key="dueDate" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                          <div className="flex flex-col gap-0.5">
+                            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866", textDecoration }}>
+                              <HighlightText text={`${dueLabel.day} ${dueLabel.time}`} query={searchTerm} />
+                            </span>
+                            {isCompleted ? (
+                              <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#00C950" }}>
+                                Completed
+                              </span>
+                            ) : (
+                              isOverdue && (
+                                <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#CD3636" }}>
+                                  Overdue
+                                </span>
+                              )
+                            )}
+                          </div>
+                        </td>
+                    ),
+                    progress: (
+                        <td key="progress" style={{ height: 60 }} className="px-3 border-b border-[#E1E4EA]">
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 rounded-full overflow-hidden" style={{ height: 5, backgroundColor: "#D9D9D9" }}>
+                              <div
+                                className="h-full rounded-full"
+                                style={{ width: `${progress}%`, backgroundColor: progress === 100 ? "#00C950" : "#0085FF" }}
+                              />
+                            </div>
+                            <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866" }} className="flex-shrink-0">
+                              {progress}%
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTaskClick(task);
+                              }}
+                              className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
+                              title="More options"
+                            >
+                              <MoreVertIcon className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                    ),
+                  };
+                  return (
+                    <tr key={task._id} className={`transition-colors group cursor-pointer ${isSelected ? "bg-blue-50" : "hover:bg-gray-50"}`} onClick={() => handleTaskClick(task)}>
+                      {cells.__select}
+                      {cells.__lead}
+                      {/* Body cells are indexed by column id and rendered through
+                          orderedColumns, so hiding or pinning a column in the header
+                          moves/removes the matching cell too. Each <td> is unchanged. */}
+                      {orderedColumns.map((col) => {
+                        const isDragging = draggedColKey === col.id;
+                        const cell = cells[col.id];
+                        if (!cell) return null;
+                        if (isDragging) {
+                          return React.cloneElement(cell, { style: { ...cell.props.style, opacity: 0.35 } });
+                        }
+                        return cell;
+                      })}
+                    </tr>
+                  );
               })
             )}
           </tbody>
@@ -742,7 +1187,10 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
       )}
 
       {listTotalCount > 0 && (
-        <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+        <div
+          ref={fillFooterRef}
+          className="w-full bg-transparent px-4 py-3 mt-3 flex items-center justify-between sm:px-6"
+        >
           <div className="flex-1 flex justify-between sm:hidden">
             <button
               onClick={() => handleListPageChange(listPage - 1)}
@@ -779,47 +1227,14 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
               </select>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleListPageChange(listPage - 1)}
-                disabled={!hasListPrevPage}
-                className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-
-              {listTotalPages > 0 &&
-                getListPageNumbers().map((pageNum, index) =>
-                  pageNum === "..." ? (
-                    <span
-                      key={`dots-${index}`}
-                      className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-500"
-                    >
-                      ...
-                    </span>
-                  ) : (
-                    <button
-                      key={`page-${pageNum}`}
-                      onClick={() => handleListPageChange(pageNum)}
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
-                        pageNum === listPage
-                          ? "bg-blue-600 text-white"
-                          : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  ),
-                )}
-
-              <button
-                onClick={() => handleListPageChange(listPage + 1)}
-                disabled={!hasListNextPage}
-                className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+            <EditablePaginationButtons
+              currentPage={listPage}
+              totalPages={listTotalPages}
+              hasPrevPage={hasListPrevPage}
+              hasNextPage={hasListNextPage}
+              onPageChange={handleListPageChange}
+              getPageNumbers={getListPageNumbers}
+            />
           </div>
         </div>
       )}
@@ -863,6 +1278,98 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
         onEdit={handleEditTask}
         onClose={() => setIsDetailsOpen(false)}
       />
+
+      {dragGhost && createPortal(
+        <div
+          ref={ghostElRef}
+          style={{
+            position: "fixed",
+            top: -9999,
+            left: -9999,
+            width: dragGhost.width,
+            zIndex: 10000,
+            pointerEvents: "none",
+          }}
+          className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+        >
+          <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+            <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+          </div>
+          {dragGhost.previewRows.map((rowVal, i) => (
+            <div key={i} className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0">
+              <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Delete</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Delete {selectedItems.length} selected task{selectedItems.length !== 1 ? 's' : ''}? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkActionLoading ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBulkStatusModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-left">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Update Status for {selectedItems.length} Tasks</h3>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select New Status</label>
+                <select
+                  value={bulkStatusValue}
+                  onChange={(e) => setBulkStatusValue(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="" disabled>Select a status...</option>
+                  {TASK_STATUS_OPTIONS.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowBulkStatusModal(false)}
+                  disabled={bulkActionLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkUpdateStatus}
+                  disabled={bulkActionLoading || !bulkStatusValue}
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkActionLoading ? "Updating..." : "Update"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,18 +1,76 @@
-import React, { useMemo, useState } from "react";
-import { X, ChevronDown, ChevronRight } from "lucide-react";
-import FilterIcon from "../common/FilterIcon";
+import React, { useMemo, useState, useRef, useEffect } from "react";
+import { X, ChevronDown } from "lucide-react";
 
-// Amazon-style faceted filter panel for the company profile sub-tabs (Deals,
-// Contacts, Invoices, Notes, Tasks, Meetings): a list of columns, click one to
-// reveal the actual distinct values present in the data for that column as
-// checkboxes, select some, hit Apply.
-//
-// columns: [{ key, label }]
-// data: the raw list of items currently shown, used to derive each column's
-//   distinct values
-// getFieldValue(item, key): resolves the raw value of `key` on `item`
-// selected: { [columnKey]: string[] } currently-applied selections (controlled)
-// onApply(selected): called with the full selection map when Apply is clicked
+// A custom dropdown component for each filter column
+const FilterDropdown = ({ label, options, selected, onToggle }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Format placeholder safely
+  const placeholder = label.endsWith("s") ? `All ${label}` : (label.endsWith("us") ? `All ${label}es` : `All ${label}s`);
+
+  return (
+    <div className="flex flex-col gap-1.5 w-full relative" ref={dropdownRef}>
+      <label className="text-sm font-medium text-gray-700">{label}</label>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-between w-full border border-gray-200 rounded-lg px-3 py-2 cursor-pointer bg-white hover:border-gray-300 transition-colors min-h-[42px]"
+      >
+        <div className="flex flex-wrap gap-1.5 items-center overflow-hidden">
+          {selected.length === 0 ? (
+            <span className="text-sm text-gray-500">{placeholder}</span>
+          ) : (
+            selected.map(val => (
+              <span key={val} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-medium">
+                <span className="truncate max-w-[120px]">{val}</span>
+                <X 
+                  size={14} 
+                  className="cursor-pointer hover:text-blue-900 transition-colors rounded-full hover:bg-blue-100 p-px" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggle(val);
+                  }}
+                />
+              </span>
+            ))
+          )}
+        </div>
+        <ChevronDown size={16} className={`text-gray-400 flex-shrink-0 ml-2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-100 rounded-lg shadow-xl z-[100] max-h-60 overflow-y-auto py-1">
+          {options.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-500 italic">No options</div>
+          ) : (
+            options.map(opt => (
+              <label key={opt} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={selected.includes(opt)}
+                  onChange={() => onToggle(opt)}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+                <span className="text-sm text-gray-700 truncate">{opt}</span>
+              </label>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function CompanyFilterPanel({
   isOpen,
   onClose,
@@ -21,10 +79,7 @@ export default function CompanyFilterPanel({
   getFieldValue,
   selected = {},
   onApply,
-  title = "Filters",
-  subtitle = "Filter this list by column",
 }) {
-  const [expandedColumn, setExpandedColumn] = useState(null);
   const [draft, setDraft] = useState(selected);
 
   React.useEffect(() => {
@@ -34,18 +89,23 @@ export default function CompanyFilterPanel({
   const valuesByColumn = useMemo(() => {
     const map = {};
     columns.forEach((col) => {
-      // Columns with an explicit `options` list (e.g. Stage, Amount ranges)
-      // always show the full fixed set, regardless of what's in the current data.
-      if (col.options) {
-        map[col.key] = col.options;
-        return;
-      }
-      const set = new Set();
+      const fromData = new Set();
       data.forEach((item) => {
         const v = getFieldValue(item, col.key);
-        if (v !== undefined && v !== null && v !== "") set.add(String(v));
+        if (v !== undefined && v !== null && v !== "") fromData.add(String(v));
       });
-      map[col.key] = Array.from(set).sort();
+
+      if (!col.options) {
+        map[col.key] = Array.from(fromData).sort();
+        return;
+      }
+
+      const declared = col.options.map(String);
+      const declaredSet = new Set(declared);
+      const extras = Array.from(fromData)
+        .filter((v) => !declaredSet.has(v))
+        .sort();
+      map[col.key] = [...declared, ...extras];
     });
     return map;
   }, [columns, data, getFieldValue]);
@@ -62,11 +122,6 @@ export default function CompanyFilterPanel({
     });
   };
 
-  const totalSelected = Object.values(draft).reduce(
-    (sum, arr) => sum + (arr?.length || 0),
-    0,
-  );
-
   const handleApply = () => {
     const cleaned = Object.fromEntries(
       Object.entries(draft).filter(([, arr]) => arr && arr.length > 0),
@@ -78,104 +133,57 @@ export default function CompanyFilterPanel({
   const handleClear = () => {
     setDraft({});
     onApply({});
+    setTimeout(() => {
+      onClose();
+    }, 400); // Small delay so user sees it clear before closing
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-end z-[10001] p-4 animate-in fade-in duration-300"
+    <div 
+      className="fixed inset-0 z-[10001] bg-transparent"
       onClick={onClose}
     >
-      <div
-        className="bg-white rounded-[26px] dc-panel-w max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 flex flex-col animate-in slide-in-from-right duration-300"
-        onClick={(e) => e.stopPropagation()}
+      <div 
+        className="absolute top-[220px] right-[24px] md:right-[60px] lg:right-[80px] bg-white rounded-xl shadow-[0px_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 w-full max-w-[320px] flex flex-col animate-in fade-in zoom-in-95 duration-200"
+        onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 pt-5 pb-6 bg-gray-50/50 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <FilterIcon size={20} className="text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-gray-900 font-sf">{title}</h2>
-              <p className="text-xs text-gray-500 font-inter">{subtitle}</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900 font-sf">Filters</h2>
+          <button 
+            onClick={onClose} 
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X size={20} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {columns.map((col) => {
-            const isExpanded = expandedColumn === col.key;
-            const values = valuesByColumn[col.key] || [];
-            const selectedCount = draft[col.key]?.length || 0;
-
-            return (
-              <div key={col.key} className="border-b border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setExpandedColumn(isExpanded ? null : col.key)}
-                  className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
-                >
-                  <span className="text-sm font-medium text-gray-800 flex items-center gap-2">
-                    {col.label}
-                    {selectedCount > 0 && (
-                      <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                        {selectedCount}
-                      </span>
-                    )}
-                  </span>
-                  {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
-                  )}
-                </button>
-
-                {isExpanded && (
-                  <div className="px-5 pb-4 space-y-2 max-h-56 overflow-y-auto">
-                    {values.length === 0 ? (
-                      <p className="text-xs text-gray-400 italic">
-                        No values available for this column.
-                      </p>
-                    ) : (
-                      values.map((value) => (
-                        <label
-                          key={value}
-                          className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={(draft[col.key] || []).includes(value)}
-                            onChange={() => toggleValue(col.key, value)}
-                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          <span className="truncate">{value}</span>
-                        </label>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        {/* Body */}
+        <div className="px-6 py-5 flex flex-col gap-5">
+          {columns.map(col => (
+             <FilterDropdown 
+                key={col.key}
+                label={col.label}
+                options={valuesByColumn[col.key] || []}
+                selected={draft[col.key] || []}
+                onToggle={(val) => toggleValue(col.key, val)}
+             />
+          ))}
         </div>
 
-        <div className="p-4 border-t border-gray-200 flex gap-3 bg-white flex-shrink-0">
-          <button
+        {/* Footer */}
+        <div className="p-5 flex items-center gap-3">
+          <button 
             onClick={handleClear}
             className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-200 transition-colors"
           >
-            Clear All
+            Reset
           </button>
-          <button
+          <button 
             onClick={handleApply}
-            className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
+            className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm"
           >
-            Apply Filters{totalSelected > 0 ? ` (${totalSelected})` : ""}
+            Apply Filters
           </button>
         </div>
       </div>

@@ -25,8 +25,10 @@ const CompanyDetails = ({
   paymentSummary,
   loadingPayment,
   isExpanded,
+  isQuickView,
 }) => {
   const [showEmptyFields, setShowEmptyFields] = useState(false);
+  const [showAllContacts, setShowAllContacts] = useState(false);
 
   // CompanyFields Template State
   const [companyFieldsTemplate, setCompanyFieldsTemplate] = useState([]);
@@ -443,7 +445,7 @@ const handleOwnerChange = async (newOwnerId) => {
                   <h3 className="text-sm font-bold text-gray-800 tracking-wide uppercase">General Information</h3>
                 </div>
                 <div className="p-5">
-                  <div className={isExpanded ? "grid grid-cols-1 gap-4 text-sm" : "grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"}>
+                  <div className={isExpanded || isQuickView ? "grid grid-cols-1 gap-4 text-sm" : "grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"}>
                     {visibleFields.map((field, idx) => (
                       <div key={idx} className="flex flex-col sm:flex-row sm:items-start sm:gap-4 border-b border-gray-100 pb-3 last:border-0 last:pb-0">
                         <span className="text-gray-500 font-medium w-40 flex-shrink-0 mb-1 sm:mb-0">
@@ -467,7 +469,7 @@ const handleOwnerChange = async (newOwnerId) => {
                   <h3 className="text-sm font-bold text-gray-800 tracking-wide uppercase">{categoryName}</h3>
                 </div>
                 <div className="p-5">
-                  <div className={isExpanded ? "grid grid-cols-1 gap-4 text-sm" : "grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"}>
+                  <div className={isExpanded || isQuickView ? "grid grid-cols-1 gap-4 text-sm" : "grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"}>
                     {categoryFields.map((field, idx) => (
                       <div key={`additional-${idx}`} className="flex flex-col sm:flex-row sm:items-start sm:gap-4 border-b border-gray-100 pb-3 last:border-0 last:pb-0">
                         <span className="text-gray-500 font-medium w-40 flex-shrink-0 mb-1 sm:mb-0">
@@ -505,15 +507,18 @@ const handleOwnerChange = async (newOwnerId) => {
             Loading payment information...
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className={isExpanded || isQuickView ? "grid grid-cols-2 gap-4" : "grid grid-cols-1 md:grid-cols-4 gap-4"}>
+            <div className="bg-white border border-gray-200 rounded-lg p-4 min-w-0">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-gray-500">
+                <span className="text-xs font-medium text-gray-500 truncate mr-2">
                   Total Invoiced
                 </span>
-                <IndianRupee className="w-4 h-4 text-gray-400" />
+                <IndianRupee className="w-4 h-4 text-gray-400 flex-shrink-0" />
               </div>
-              <p className="text-2xl font-semibold text-gray-900">
+              <p 
+                className="text-lg md:text-2xl font-semibold text-gray-900 truncate"
+                title={`₹${paymentSummary?.totalAmount?.toLocaleString() || 0}`}
+              >
                 ₹{paymentSummary?.totalAmount?.toLocaleString() || 0}
               </p>
               <p className="text-xs text-gray-500 mt-1">
@@ -522,37 +527,46 @@ const handleOwnerChange = async (newOwnerId) => {
               </p>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="bg-white border border-gray-200 rounded-lg p-4 min-w-0">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-gray-500">
+                <span className="text-xs font-medium text-gray-500 truncate mr-2">
                   Amount Paid
                 </span>
-                <div className="w-2 h-2 rounded-full"></div>
+                <div className="w-2 h-2 rounded-full flex-shrink-0"></div>
               </div>
-              <p className="text-2xl font-semibold">
+              <p 
+                className="text-lg md:text-2xl font-semibold truncate"
+                title={`₹${paymentSummary?.amountPaid?.toLocaleString() || 0}`}
+              >
                 ₹{paymentSummary?.amountPaid?.toLocaleString() || 0}
               </p>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="bg-white border border-gray-200 rounded-lg p-4 min-w-0">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-gray-500">
+                <span className="text-xs font-medium text-gray-500 truncate mr-2">
                   Amount Due
                 </span>
-                <div className="w-2 h-2 rounded-full"></div>
+                <div className="w-2 h-2 rounded-full flex-shrink-0"></div>
               </div>
-              <p className="text-2xl font-semibold">
+              <p 
+                className="text-lg md:text-2xl font-semibold truncate"
+                title={`₹${paymentSummary?.amountDue?.toLocaleString() || 0}`}
+              >
                 ₹{paymentSummary?.amountDue?.toLocaleString() || 0}
               </p>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="bg-white border border-gray-200 rounded-lg p-4 min-w-0">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-gray-500">
+                <span className="text-xs font-medium text-gray-500 truncate mr-2">
                   Overdue
                 </span>
               </div>
-              <p className="text-2xl font-semibold">
+              <p 
+                className="text-lg md:text-2xl font-semibold truncate"
+                title={`₹${paymentSummary?.overdueAmount?.toLocaleString() || 0}`}
+              >
                 ₹{paymentSummary?.overdueAmount?.toLocaleString() || 0}
               </p>
             </div>
@@ -573,42 +587,63 @@ const handleOwnerChange = async (newOwnerId) => {
             No contacts found for this company or its subsidiaries.
           </div>
         ) : (
-          <div
-            className={
-              isExpanded
-                ? "grid grid-cols-1 md:grid-cols-2 gap-4"
-                : "grid grid-cols-1 gap-4"
-            }
-          >
-            {contacts.map((contact) => (
-              <Link
-                to={`/contacts/${contact._id}`}
-                key={contact._id}
-                className="group flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-blue-300 transition-all"
-              >
-                {/* Contact Avatar Fallback */}
-                <div className="w-10 h-10 bg-blue-100 group-hover:bg-blue-200 transition-colors rounded-full flex items-center justify-center font-semibold text-blue-700 flex-shrink-0">
-                  {contact.name?.charAt(0) || "?"}
-                </div>
+          <div className="space-y-4">
+            <div
+              className={
+                isExpanded
+                  ? "grid grid-cols-1 md:grid-cols-2 gap-4"
+                  : "grid grid-cols-1 gap-4"
+              }
+            >
+              {(isQuickView && !showAllContacts ? contacts.slice(0, 5) : contacts).map((contact) => (
+                <Link
+                  to={`/contacts/${contact._id}`}
+                  key={contact._id}
+                  className="group flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-blue-300 transition-all min-w-0"
+                >
+                  {/* Contact Avatar Fallback */}
+                  <div className="w-10 h-10 bg-blue-100 group-hover:bg-blue-200 transition-colors rounded-full flex items-center justify-center font-semibold text-blue-700 flex-shrink-0">
+                    {contact.name?.charAt(0) || "?"}
+                  </div>
 
-                {/* Contact Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors">
-                    {contact.name}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {contact.email || contact.phone || "No contact info"}
-                  </p>
-
-                  {/* Subsidiary Badge */}
-                  {contact.company?._id && (
-                    <span className="inline-block mt-1.5 px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-medium rounded text-xs">
-                      {contact.company?.name}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            ))}
+                  {/* Contact Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors" title={contact.name}>
+                      {contact.name}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate" title={contact.email}>
+                      {contact.email}
+                    </p>
+                    {contact.company && contact.company.name !== data.name && (
+                      <span className="inline-block mt-1 px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] font-medium border border-indigo-100 truncate max-w-full">
+                        {contact.company.name}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+            
+            {isQuickView && !showAllContacts && contacts.length > 5 && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  onClick={() => setShowAllContacts(true)}
+                  className="px-6 py-2.5 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm w-full md:w-auto shadow-sm"
+                >
+                  View All Contacts ({contacts.length})
+                </button>
+              </div>
+            )}
+            {isQuickView && showAllContacts && contacts.length > 5 && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  onClick={() => setShowAllContacts(false)}
+                  className="px-6 py-2.5 text-blue-600 font-semibold hover:bg-blue-50 transition-colors text-sm rounded-lg"
+                >
+                  Show Less
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

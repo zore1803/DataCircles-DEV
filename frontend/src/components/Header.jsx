@@ -1338,6 +1338,15 @@ const Header = () => {
             <span className="text-base font-semibold text-gray-900">
               Tasks & Meetings
             </span>
+          ) : location.pathname.startsWith("/accounting") ? (
+            <div className="flex flex-col justify-center gap-[6px]">
+              <h1 className="m-0 leading-[120%] font-medium text-[16px] text-[#0E121B] tracking-[-0.5px]">
+                Accounting
+              </h1>
+              <p className="m-0 leading-[14px] text-[12px] text-[#525866] font-inter">
+                Create, manage, and track all your documents
+              </p>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               {getBreadcrumb().map((crumb, idx, arr) => {

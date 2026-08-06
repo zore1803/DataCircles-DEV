@@ -283,6 +283,51 @@ const getInvoicesByCompany = async (req, res) => {
   }
 };
 
+const getCompanyInvoiceSummary = async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    // Find all deals for this company
+    const deals = await Deal.find({
+      company: companyId,
+      organization: req.user.organization,
+    }).select("_id");
+
+    const dealIds = deals.map((d) => d._id);
+
+    // Fetch only the necessary fields to compute summary
+    const invoices = await Invoice.find({
+      deal: { $in: dealIds },
+      organization: req.user.organization,
+    }).select("amount status dueDate");
+
+    const summary = {
+      totalInvoices: invoices.length,
+      totalAmount: 0,
+      amountPaid: 0,
+      amountDue: 0,
+      overdueAmount: 0,
+    };
+
+    invoices.forEach((invoice) => {
+      summary.totalAmount += invoice.amount;
+
+      if (invoice.status === "Paid") {
+        summary.amountPaid += invoice.amount;
+      } else {
+        summary.amountDue += invoice.amount;
+        if (invoice.dueDate && new Date(invoice.dueDate) < new Date()) {
+          summary.overdueAmount += invoice.amount;
+        }
+      }
+    });
+
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const getAllInvoicesPaginated = async (req, res) => {
   try {
     // Pagination parameters
@@ -664,5 +709,6 @@ module.exports = {
   updateInvoice,
   updateStatus,
   getInvoicesByCompany,
+  getCompanyInvoiceSummary,
   updateInvoiceNumber,
 };
