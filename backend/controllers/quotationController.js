@@ -1,12 +1,10 @@
 const Quotation = require("../models/quotation");
 const BankDetails = require("../models/BankDetails");
 const Branding = require("../models/Branding");
-const generatePdf = require("../utils/generatePdf");
-const modernPdf = require("../utils/modernPdf");
-const minimalPdf = require("../utils/minimalPdf");
-const ElegantPdf = require("../utils/ElegantPdf");
+const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
+const Deal = require("../models/Deal");
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -31,6 +29,8 @@ exports.createQuotation = async (req, res) => {
       status,
       items,
       style,
+      notes,
+      terms,
       isTaxQuotation,
       signature,
       signatureType,
@@ -92,7 +92,9 @@ exports.createQuotation = async (req, res) => {
       amount,
       status,
       items,
-      style: style || "Classic",
+      style: style || "",
+      notes: notes || "",
+      terms: terms || "",
       isTaxQuotation: isTaxQuotation || false,
       signature,
       signatureType: signatureType || "text",
@@ -122,10 +124,14 @@ exports.getAllQuotations = async (req, res) => {
     const { search } = req.query;
     let query = { organization: req.user.organization };
     if (search) {
+      const matchingDeals = await Deal.find(
+        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { _id: 1 }
+      );
       query.$or = [
         { status: { $regex: search, $options: "i" } },
         { quotationNumber: { $regex: search, $options: "i" } },
-        { "deal.title": { $regex: search, $options: "i" } },
+        { deal: { $in: matchingDeals.map((d) => d._id) } },
         { receiverGSTIN: { $regex: search, $options: "i" } },
       ];
     }
@@ -154,11 +160,24 @@ exports.getAllQuotationsPaginated = async (req, res) => {
 
     const query = { organization: req.user.organization };
     if (search) {
+      const matchingDeals = await Deal.find(
+        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { _id: 1 }
+      );
       query.$or = [
         { quotationNumber: { $regex: search, $options: "i" } },
         { status: { $regex: search, $options: "i" } },
-        { "deal.title": { $regex: search, $options: "i" } },
+        { deal: { $in: matchingDeals.map((d) => d._id) } },
         { receiverGSTIN: { $regex: search, $options: "i" } },
+        {
+          $expr: {
+            $regexMatch: {
+              input: { $toString: "$amount" },
+              regex: search,
+              options: "i",
+            },
+          },
+        },
       ];
     }
     if (status) query.status = status;
@@ -224,23 +243,10 @@ exports.downloadQuotation = async (req, res) => {
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
 
-    let pdfBuffer;
-    switch (quotation.style) {
-      case "Classic":
-        pdfBuffer = await generatePdf(quotation, bankDetails, orgDetails);
-        break;
-      case "Modern":
-        pdfBuffer = await modernPdf(quotation, bankDetails, orgDetails);
-        break;
-      case "Minimal":
-        pdfBuffer = await minimalPdf(quotation, bankDetails, orgDetails);
-        break;
-      case "Elegant":
-        pdfBuffer = await ElegantPdf(quotation, bankDetails, orgDetails);
-        break;
-      default:
-        pdfBuffer = await generatePdf(quotation, bankDetails, orgDetails);
-    }
+    // The template comes from the document's own `style` when it has one,
+    // otherwise from the organization's document settings — resolved inside
+    // htmlDocumentPdf, which renders the same markup as the live preview.
+    const pdfBuffer = await htmlDocumentPdf(quotation, bankDetails, orgDetails, "quotation");
 
     res.set({
       "Content-Type": "application/pdf",
@@ -286,6 +292,8 @@ exports.updateQuotation = async (req, res) => {
       status,
       items,
       style,
+      notes,
+      terms,
       isTaxQuotation,
       signature,
       signatureType,
@@ -323,6 +331,8 @@ exports.updateQuotation = async (req, res) => {
         status,
         items,
         style,
+        notes,
+        terms,
         isTaxQuotation,
         signature,
         signatureType,
@@ -394,23 +404,10 @@ exports.sendQuotationEmail = async (req, res) => {
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
 
-    let pdfBuffer;
-    switch (quotation.style) {
-      case "Classic":
-        pdfBuffer = await generatePdf(quotation, bankDetails, orgDetails);
-        break;
-      case "Modern":
-        pdfBuffer = await modernPdf(quotation, bankDetails, orgDetails);
-        break;
-      case "Minimal":
-        pdfBuffer = await minimalPdf(quotation, bankDetails, orgDetails);
-        break;
-      case "Elegant":
-        pdfBuffer = await ElegantPdf(quotation, bankDetails, orgDetails);
-        break;
-      default:
-        pdfBuffer = await generatePdf(quotation, bankDetails, orgDetails);
-    }
+    // The template comes from the document's own `style` when it has one,
+    // otherwise from the organization's document settings — resolved inside
+    // htmlDocumentPdf, which renders the same markup as the live preview.
+    const pdfBuffer = await htmlDocumentPdf(quotation, bankDetails, orgDetails, "quotation");
 
     const transporter = nodemailer.createTransport({
       service: "gmail",

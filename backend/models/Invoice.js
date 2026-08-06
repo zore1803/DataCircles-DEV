@@ -21,7 +21,13 @@ const invoiceSchema = new mongoose.Schema({
       min: 0,
     },
   },
-  style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant'], default: 'Classic' },
+  // Template override for this invoice only. Empty means "follow the
+  // organization's template" (DocumentSettings), so changing that setting
+  // restyles every document that hasn't picked a template of its own.
+  style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant', 'Compact', 'Corporate', 'Vibrant', 'Mono', ''], default: '' },
+  // Free-text footer blocks, printed on the document when present.
+  notes: { type: String, default: '' },
+  terms: { type: String, default: '' },
   isTaxInvoice: { type: Boolean, default: false },
   signature: { type: String },
   signatureType: { type: String, enum: ['text', 'upload'], default: 'text' },

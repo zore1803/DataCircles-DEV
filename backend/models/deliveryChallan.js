@@ -29,7 +29,10 @@ const deliveryChallanSchema = new mongoose.Schema({
     type: { type: String, enum: ['fixed', 'percentage'], required: true },
     value: { type: Number, required: true, min: 0 },
   },
-  style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant'], default: 'Classic' },
+  // Free-text footer blocks, printed on the document when present.
+  notes: { type: String, default: '' },
+  terms: { type: String, default: '' },
+  style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant', 'Compact', 'Corporate', 'Vibrant', 'Mono', ''], default: '' },
   signature: { type: String },
   signatureType: { type: String, enum: ['text', 'upload'], default: 'text' },
   items: [itemSchema],

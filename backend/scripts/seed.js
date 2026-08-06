@@ -93,7 +93,7 @@ const seedDatabase = async () => {
         organization: orgId,
         status: statuses[Math.floor(Math.random() * statuses.length)],
         discount: { type: 'fixed', value: 0 },
-        style: 'Classic',
+        style: '',
         transactionType: 'intra',
         gstRate: 18,
         items: generateDummyItems(items)

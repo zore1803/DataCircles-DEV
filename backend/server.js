@@ -110,6 +110,9 @@ app.use('/api/document-settings', documentSettingsRoutes);
 const bankDetailsRoutes = require("./routes/bankDetails");
 app.use("/api/bank-details", bankDetailsRoutes);
 
+const documentTemplateSettingsRoutes = require("./routes/documentTemplateSettings");
+app.use("/api/document-templates", documentTemplateSettingsRoutes);
+
 const kanbanBoardRoutes = require('./routes/kanbanBoard');
 app.use('/api/kanban', kanbanBoardRoutes);
 

@@ -1,9 +1,6 @@
 const Invoice = require("../models/Invoice");
 const Counter = require("../models/Counter");
-const generatePdf = require("../utils/generatePdf");
-const modernPdf = require("../utils/modernPdf");
-const minimalPdf = require("../utils/minimalPdf");
-const ElegantPdf = require("../utils/ElegantPdf");
+const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const BankDetails = require("../models/BankDetails");
 const Branding = require("../models/Branding");
 const mongoose = require("mongoose");
@@ -62,6 +59,8 @@ const createInvoice = async (req, res) => {
       status,
       items,
       style,
+      notes,
+      terms,
       isTaxInvoice,
       signature,
       signatureType,
@@ -211,6 +210,8 @@ const createInvoice = async (req, res) => {
       status,
       items,
       style,
+      notes,
+      terms,
       isTaxInvoice,
       signature,
       signatureType,
@@ -370,12 +371,25 @@ const getAllInvoicesPaginated = async (req, res) => {
 
     // Search functionality
     if (search) {
+      const matchingDeals = await Deal.find(
+        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { _id: 1 }
+      );
       query.$or = [
         { invoiceNumber: { $regex: search, $options: "i" } },
         { status: { $regex: search, $options: "i" } },
-        { "deal.title": { $regex: search, $options: "i" } },
+        { deal: { $in: matchingDeals.map((d) => d._id) } },
         { receiverGSTIN: { $regex: search, $options: "i" } }, // Added receiverGSTIN to search
         { transactionType: { $regex: search, $options: "i" } },
+        {
+          $expr: {
+            $regexMatch: {
+              input: { $toString: "$amount" },
+              regex: search,
+              options: "i",
+            },
+          },
+        },
       ];
     }
 
@@ -460,24 +474,10 @@ const downloadInvoice = async (req, res) => {
     const OrgDetails = await Branding.findOne({
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
-    let pdfBuffer;
-
-    switch (invoice.style) {
-      case "Classic":
-        pdfBuffer = await generatePdf(invoice, bankDetails, OrgDetails);
-        break;
-      case "Modern":
-        pdfBuffer = await modernPdf(invoice, bankDetails, OrgDetails);
-        break;
-      case "Minimal":
-        pdfBuffer = await minimalPdf(invoice, bankDetails, OrgDetails);
-        break;
-      case "Elegant":
-        pdfBuffer = await ElegantPdf(invoice, bankDetails, OrgDetails);
-        break;
-      default:
-        pdfBuffer = await generatePdf(invoice, bankDetails, OrgDetails);
-    }
+        // The template comes from the document's own `style` when it has one,
+    // otherwise from the organization's document settings — resolved inside
+    // htmlDocumentPdf, which renders the same markup as the live preview.
+    const pdfBuffer = await htmlDocumentPdf(invoice, bankDetails, OrgDetails, "tax");
 
     res.set({
       "Content-Type": "application/pdf",
@@ -521,6 +521,8 @@ const updateInvoice = async (req, res) => {
       status,
       items,
       style,
+      notes,
+      terms,
       isTaxInvoice,
       signature,
       signatureType,
@@ -609,6 +611,8 @@ const updateInvoice = async (req, res) => {
         status,
         items,
         style,
+        notes,
+        terms,
         isTaxInvoice,
         signature,
         signatureType,

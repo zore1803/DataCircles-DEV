@@ -1,12 +1,10 @@
 const DeliveryChallan = require("../models/deliveryChallan");
 const BankDetails = require("../models/BankDetails");
 const Branding = require("../models/Branding");
-const generatePdf = require("../utils/generatePdf");
-const modernPdf = require("../utils/modernPdf");
-const minimalPdf = require("../utils/minimalPdf");
-const ElegantPdf = require("../utils/ElegantPdf");
+const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
+const Deal = require("../models/Deal");
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -31,6 +29,8 @@ exports.createDeliveryChallan = async (req, res) => {
       status,
       items,
       style,
+      notes,
+      terms,
       signature,
       signatureType,
       discount,
@@ -90,7 +90,9 @@ exports.createDeliveryChallan = async (req, res) => {
       amount,
       status,
       items,
-      style: style || "Classic",
+      style: style || "",
+      notes: notes || "",
+      terms: terms || "",
       signature,
       signatureType: signatureType || "text",
       discount,
@@ -118,10 +120,14 @@ exports.getAllDeliveryChallans = async (req, res) => {
     const { search } = req.query;
     let query = { organization: req.user.organization };
     if (search) {
+      const matchingDeals = await Deal.find(
+        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { _id: 1 }
+      );
       query.$or = [
         { status: { $regex: search, $options: "i" } },
         { deliveryChallanNumber: { $regex: search, $options: "i" } },
-        { "deal.title": { $regex: search, $options: "i" } },
+        { deal: { $in: matchingDeals.map((d) => d._id) } },
       ];
     }
 
@@ -149,10 +155,23 @@ exports.getAllDeliveryChallansPaginated = async (req, res) => {
 
     const query = { organization: req.user.organization };
     if (search) {
+      const matchingDeals = await Deal.find(
+        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { _id: 1 }
+      );
       query.$or = [
         { deliveryChallanNumber: { $regex: search, $options: "i" } },
         { status: { $regex: search, $options: "i" } },
-        { "deal.title": { $regex: search, $options: "i" } },
+        { deal: { $in: matchingDeals.map((d) => d._id) } },
+        {
+          $expr: {
+            $regexMatch: {
+              input: { $toString: "$amount" },
+              regex: search,
+              options: "i",
+            },
+          },
+        },
       ];
     }
     if (status) query.status = status;
@@ -218,23 +237,10 @@ exports.downloadDeliveryChallan = async (req, res) => {
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
 
-    let pdfBuffer;
-    switch (deliveryChallan.style) {
-      case "Classic":
-        pdfBuffer = await generatePdf(deliveryChallan, bankDetails, orgDetails);
-        break;
-      case "Modern":
-        pdfBuffer = await modernPdf(deliveryChallan, bankDetails, orgDetails);
-        break;
-      case "Minimal":
-        pdfBuffer = await minimalPdf(deliveryChallan, bankDetails, orgDetails);
-        break;
-      case "Elegant":
-        pdfBuffer = await ElegantPdf(deliveryChallan, bankDetails, orgDetails);
-        break;
-      default:
-        pdfBuffer = await generatePdf(deliveryChallan, bankDetails, orgDetails);
-    }
+    // The template comes from the document's own `style` when it has one,
+    // otherwise from the organization's document settings — resolved inside
+    // htmlDocumentPdf, which renders the same markup as the live preview.
+    const pdfBuffer = await htmlDocumentPdf(deliveryChallan, bankDetails, orgDetails, "deliveryChallan");
 
     res.set({
       "Content-Type": "application/pdf",
@@ -280,6 +286,8 @@ exports.updateDeliveryChallan = async (req, res) => {
       status,
       items,
       style,
+      notes,
+      terms,
       signature,
       signatureType,
       discount,
@@ -315,6 +323,8 @@ exports.updateDeliveryChallan = async (req, res) => {
         status,
         items,
         style,
+        notes,
+        terms,
         signature,
         signatureType,
         discount,
@@ -390,23 +400,10 @@ exports.sendDeliveryChallanEmail = async (req, res) => {
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
 
-    let pdfBuffer;
-    switch (deliveryChallan.style) {
-      case "Classic":
-        pdfBuffer = await generatePdf(deliveryChallan, bankDetails, orgDetails);
-        break;
-      case "Modern":
-        pdfBuffer = await modernPdf(deliveryChallan, bankDetails, orgDetails);
-        break;
-      case "Minimal":
-        pdfBuffer = await minimalPdf(deliveryChallan, bankDetails, orgDetails);
-        break;
-      case "Elegant":
-        pdfBuffer = await ElegantPdf(deliveryChallan, bankDetails, orgDetails);
-        break;
-      default:
-        pdfBuffer = await generatePdf(deliveryChallan, bankDetails, orgDetails);
-    }
+    // The template comes from the document's own `style` when it has one,
+    // otherwise from the organization's document settings — resolved inside
+    // htmlDocumentPdf, which renders the same markup as the live preview.
+    const pdfBuffer = await htmlDocumentPdf(deliveryChallan, bankDetails, orgDetails, "deliveryChallan");
 
     const transporter = nodemailer.createTransport({
       service: "gmail",
