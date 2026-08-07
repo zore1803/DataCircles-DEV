@@ -1,7 +1,8 @@
 // src/components/common/ExportModal.jsx
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Search, Download, CheckSquare, Square } from "lucide-react";
+import { X, Download, CheckSquare, Square } from "lucide-react";
 import toast from "react-hot-toast";
+import SearchIcon from "./SearchIcon";
 import API from "../../services/api"; // Make sure your API instance is imported
 
 export default function ExportModal({
@@ -143,13 +144,13 @@ export default function ExportModal({
           </div>
 
           <div className="relative mb-4 shrink-0">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]" />
             <input
               type="text"
               placeholder="Search columns..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+              className="w-full pl-11 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
             />
           </div>
 

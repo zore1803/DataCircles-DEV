@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { X, Search } from "lucide-react";
+import { X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import logo from "/DataCircles.png";
 
+import SearchIcon from "./common/SearchIcon";
 const SearchResults = ({ isOpen, onClose, searchQuery }) => {
   const [results, setResults] = useState({
     candidates: [],
@@ -146,7 +147,7 @@ const SearchResults = ({ isOpen, onClose, searchQuery }) => {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <Search className="w-6 h-6 text-gray-400" />
+            <SearchIcon className="w-6 h-6 text-gray-400" />
           </div>
           <p className="text-gray-500 text-sm">
             No {title.toLowerCase()} found for your search
@@ -224,7 +225,7 @@ const SearchResults = ({ isOpen, onClose, searchQuery }) => {
               <div className="space-y-8">
                 <div className="text-center py-16">
                   <div className="w-20 h-20 bg-gradient-to-br from-blue-50 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Search className="w-8 h-8 text-blue-600" />
+                    <SearchIcon className="w-8 h-8 text-blue-600" />
                   </div>
                   <h2 className="text-2xl font-bold text-gray-900 mb-3">
                     Start Typing To Search

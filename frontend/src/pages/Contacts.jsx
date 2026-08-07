@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
 import {
-  Search,
   Plus,
   Edit,
   ChevronUp,
@@ -82,6 +81,7 @@ import {
 import ContactQuickView from "../components/contact/ContactQuickView";
 import AppToaster from "../components/AppToaster";
 
+import SearchIcon from "../components/common/SearchIcon";
 // Custom hook to detect mobile screen
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(false);
@@ -2623,9 +2623,8 @@ function Contacts() {
                 <div
                   className={`relative h-10 flex items-center border border-[rgba(31,41,55,0.1)] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
                 >
-                  <Search
-                    strokeWidth={2.5}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+                  <SearchIcon
+                    className="absolute left-3.5 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
                     onClick={() => {
                       setIsSearchExpanded(true);
                       searchInputRef.current?.focus();
@@ -3103,7 +3102,9 @@ function Contacts() {
             // actually left (showLoadingSkeleton is gated on an empty list), so the
             // old data now stays fully legible and clickable while the next page
             // loads; the top progress bar reports the fetch instead.
-            <div className="relative bg-white border border-[#E1E4EA]">
+            // No border-t: the toolbar strip right above already has its own
+            // border-b, so a top border here would double up against it.
+            <div className="relative bg-white border-x border-b border-[#E1E4EA]">
               <table
                 className="w-full border-separate border-spacing-0 text-left"
                 style={{
@@ -3148,7 +3149,11 @@ function Contacts() {
                               const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                               const isRightSticky = rightPinnedKeys.includes(colId);
                               const isSticky = isLeftSticky || isRightSticky;
-                              const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                              // Only draw the heavier pin-boundary divider once a column is actually
+                              // pinned — defaulting it to the checkbox column drew it there
+                              // unconditionally, doubled up against that column's own plain
+                              // border-r (see Companies.jsx for the same fix).
+                              const isLeftBoundary = lastLeftPinnedKey === colId;
                               const isRightBoundary = colId === firstRightPinnedKey;
                               const isDraggable = colId !== "selection";
                               const isDragging = draggedColKey === colId;
@@ -3233,7 +3238,11 @@ function Contacts() {
                                 const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                                 const isRightSticky = rightPinnedKeys.includes(colId);
                                 const isSticky = isLeftSticky || isRightSticky;
-                                const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                                // Only draw the heavier pin-boundary divider once a column is actually
+                              // pinned — defaulting it to the checkbox column drew it there
+                              // unconditionally, doubled up against that column's own plain
+                              // border-r (see Companies.jsx for the same fix).
+                              const isLeftBoundary = lastLeftPinnedKey === colId;
                                 const isRightBoundary = colId === firstRightPinnedKey;
                                 const isColDragging = draggedColKey === colId;
 

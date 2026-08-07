@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   X,
-  Search,
   ChevronDown,
   ArrowRight,
   User,
@@ -11,6 +10,7 @@ import API from "../../services/api";
 import toast from "react-hot-toast";
 import ProfilePicture from "../contact/ProfilePicture";
 
+import SearchIcon from "../common/SearchIcon";
 const MergeContactModal = ({ primaryContact, isOpen, onClose, onSuccess }) => {
   const [availableContacts, setAvailableContacts] = useState([]);
   const [selectedSecondary, setSelectedSecondary] = useState(null);
@@ -137,7 +137,7 @@ const MergeContactModal = ({ primaryContact, isOpen, onClose, onSuccess }) => {
                   className="w-full px-3 py-2.5 border border-blue-300 bg-blue-50/30 rounded-md flex items-center gap-2 cursor-pointer"
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 >
-                  <Search className="w-4 h-4 text-gray-400" />
+                  <SearchIcon className="w-4 h-4 text-[#525866]" />
                   <input
                     type="text"
                     value={searchTerm}

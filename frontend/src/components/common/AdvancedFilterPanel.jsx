@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Plus, Trash2, Search, ChevronDown } from "lucide-react";
+import { X, Plus, Trash2, ChevronDown } from "lucide-react";
 import FilterIcon from "./FilterIcon";
 
+import SearchIcon from "./SearchIcon";
 const OPERATORS = [
   { value: "contains", label: "Contains" },
   { value: "not_contains", label: "Does not contain" },
@@ -51,7 +52,7 @@ const SearchableColumnSelect = ({ columns, value, onChange }) => {
       {isOpen && (
         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
           <div className="p-2 border-b border-gray-100 flex items-center gap-2 bg-gray-50">
-            <Search className="w-4 h-4 text-gray-400" />
+            <SearchIcon className="w-4 h-4 text-[#525866]" />
             <input
               type="text"
               autoFocus
@@ -181,13 +182,15 @@ export default function AdvancedFilterPanel({
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[9993]"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[9996]"
         onClick={onClose}
       />
 
+      {/* Inset rounded card (dc-panel-card) rather than a full-height slab
+          flush to the edges, matching the Template and Notes drawers.
+          `overflow-hidden` so the header and footer fills clip to the radius. */}
       <div
-        className="fixed right-0 dc-panel-w bg-white shadow-2xl z-[9995] flex flex-col animate-slide-in-right"
-        style={{ top: 0, bottom: 0 }}
+        className="fixed dc-panel-card dc-panel-w bg-white shadow-2xl z-[9997] flex flex-col overflow-hidden animate-slideInRight"
       >
         <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50/50">
           <div className="flex items-center gap-3">

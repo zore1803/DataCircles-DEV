@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
+import SearchIcon from "../common/SearchIcon";
 import {
   X,
   Calendar,
@@ -12,7 +13,6 @@ import {
   Phone,
   AlertTriangle,
   CheckCircle2,
-  Search,
   Plus,
   Trash2,
   User,
@@ -118,14 +118,14 @@ const EntitySelector = ({ value, onChange, entities, entityType }) => {
             {selectedEntity ? selectedEntity.name : `Select ${entityType}`}
           </span>
         </div>
-        <Search className="w-4 h-4 text-gray-400" />
+        <SearchIcon className="w-4 h-4 text-[#525866]" />
       </button>
 
       {isOpen && (
         <div className="absolute z-50 w-full mt-2 bg-white border border-gray-300 rounded-xl shadow-xl max-h-64 overflow-hidden">
           <div className="p-3 border-b border-gray-200">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
               <input
                 type="text"
                 placeholder={`Search ${entityType}s...`}
@@ -231,7 +231,7 @@ const MultiSelectDropdown = ({
         <div className="relative z-50 w-full mt-2 bg-white border border-gray-300 rounded-xl shadow-xl max-h-64 overflow-hidden">
           <div className="p-3 border-b border-gray-200">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
               <input
                 type="text"
                 placeholder="Search participants..."

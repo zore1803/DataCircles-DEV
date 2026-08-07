@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ResponsiveContainer, ComposedChart, XAxis, YAxis, Area, Line, CartesianGrid } from "recharts";
-import { TrendingUp, TrendingDown, Search, MoreVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2, Pin, PinOff, EyeOff, Download, X, CheckSquare } from "lucide-react";
+import { TrendingUp, TrendingDown, MoreVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2, Pin, PinOff, EyeOff, Download, X, CheckSquare } from "lucide-react";
 import FilterIcon from "../components/common/FilterIcon";
 import DataTable from "../components/common/DataTable";
 import InvoiceQuickView from "../components/invoice/InvoiceQuickView";
@@ -86,6 +86,7 @@ import PaymentInformation from "../components/dashboard/PaymentInformation";
 import MeetingsInformation from "../components/dashboard/MeetingsInformation";
 import logo from "/DataCircles.png";
 
+import SearchIcon from "../components/common/SearchIcon";
 const TotalIncomeIcon = ({ size = 24, style }) => (
   <svg width={size} height={size * (18 / 22)} viewBox="0 0 22 18" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
     <path d="M1.80775 15C1.30258 15 0.875 14.825 0.525 14.475C0.175 14.125 0 13.6974 0 13.1923V1.80775C0 1.30258 0.175 0.875 0.525 0.525C0.875 0.175 1.30258 0 1.80775 0H17.1923C17.6974 0 18.125 0.175 18.475 0.525C18.825 0.875 19 1.30258 19 1.80775V7.096H1.5V13.1923C1.5 13.2692 1.53208 13.3398 1.59625 13.4038C1.66025 13.4679 1.73075 13.5 1.80775 13.5H11.096V15H1.80775ZM1.5 3.904H17.5V1.80775C17.5 1.73075 17.4679 1.66025 17.4038 1.59625C17.3398 1.53208 17.2693 1.5 17.1923 1.5H1.80775C1.73075 1.5 1.66025 1.53208 1.59625 1.59625C1.53208 1.66025 1.5 1.73075 1.5 1.80775V3.904ZM16.75 17.25V14.25H13.75V12.75H16.75V9.75H18.25V12.75H21.25V14.25H18.25V17.25H16.75Z" fill={style?.color || "#0085FF"} />
@@ -1686,7 +1687,7 @@ function Dashboard() {
               className="box-border flex flex-row items-center flex-1"
               style={{ padding: "12px 14px", gap: 10, height: 44, border: "1px solid rgba(31, 41, 55, 0.1)", borderRadius: 95 }}
             >
-              <Search size={20} style={{ opacity: 0.5, color: "#1F2937", flexShrink: 0 }} />
+              <SearchIcon className="w-4 h-4 text-[#525866] flex-shrink-0" />
               <input
                 type="text"
                 value={invoiceSearchTerm}

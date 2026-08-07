@@ -7,7 +7,6 @@ import {
   XCircle,
   Clock,
   FileText,
-  Search,
   Filter,
   ChevronDown,
   ChevronUp,
@@ -29,6 +28,7 @@ import autoTable from "jspdf-autotable";
 import BillingTimeline from "./BillingTimeline";
 import { GST_RATE } from "../../utils/pricingSnapshot";
 
+import SearchIcon from "../common/SearchIcon";
 // `embedded`: rendered inside the Billing Center, which already shows its own
 // Timeline section — hide the tab switcher and force the Payments view so
 // the Timeline isn't shown twice on one page.
@@ -533,7 +533,7 @@ const BillingHistory = ({ embedded = false } = {}) => {
         <div className="flex flex-col md:flex-row gap-4">
           {/* Search */}
           <div className="flex-1 relative">
-            <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
             <input
               type="text"
               placeholder="Search by transaction ID, order ID, or description..."

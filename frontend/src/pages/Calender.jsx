@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Search,
   Filter,
   MoreHorizontal,
   MoreVertical,
@@ -27,6 +26,7 @@ import AppToaster from "../components/AppToaster";
 import Skeleton from "../components/common/Skeleton";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 
+import SearchIcon from "../components/common/SearchIcon";
 // --- Components ---
 
 const CustomMonthIcon = (props) => (
@@ -581,10 +581,8 @@ const AdminCalendar = () => {
               background: "#fff",
             }}
           >
-            <Search
-              size={16}
-              strokeWidth={2.5}
-              className="flex-shrink-0 cursor-pointer"
+            <SearchIcon
+              className="flex-shrink-0 cursor-pointer w-4 h-4 text-[#525866]"
               style={{ color: "#1F2937" }}
               onClick={() => {
                 setIsSearchExpanded(true);

@@ -3,8 +3,8 @@ import API from "../../services/api";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import StatusDropdown from "./StatusDropdown";
+import SearchIcon from "../common/SearchIcon";
 import {
-  Search,
   Plus,
   Edit3,
   Trash2,
@@ -551,7 +551,7 @@ const ContactFolder = () => {
                 </label>
                 <div className="relative" ref={dropdownRef}>
                   <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]" />
                     <input
                       ref={searchInputRef}
                       className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"

@@ -759,6 +759,7 @@ import {
   ChevronRight,
   Sparkles,
   Clock,
+  Timer,
   HelpCircle,
   LayoutDashboard,
 } from "lucide-react";
@@ -772,6 +773,7 @@ import QuickCallLogForm from "./contact/QuickCallLogForm";
 import API, { configureAxios } from "../services/api";
 import { useAuth0 } from "@auth0/auth0-react";
 
+import SearchIcon from "./common/SearchIcon";
 // Shimmer UI Component for Branding
 const BrandingShimmer = () => {
   return (
@@ -1017,7 +1019,7 @@ const Header = () => {
       const seconds = Math.floor((diff / 1000) % 60);
 
       if (days >= 1) {
-        setTrialLeftLabel(`Trial ends in ${days} day${days > 1 ? "s" : ""}`);
+        setTrialLeftLabel(`${days} Day${days > 1 ? "s" : ""} Left!`);
       } else {
         setTrialLeftLabel(
           `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
@@ -1048,7 +1050,7 @@ const Header = () => {
     const diff = new Date(currentPeriodEnd).getTime() - Date.now();
     if (diff <= 0) { setSubscriptionLabel(""); return; }
     const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-    setSubscriptionLabel(`${days} day${days !== 1 ? "s" : ""} left in plan`);
+    setSubscriptionLabel(`${days} Day${days !== 1 ? "s" : ""} Left!`);
   }, [currentPeriodEnd, isTrialActive, isPaymentConfirmed]);
 
   useEffect(() => {
@@ -1378,8 +1380,15 @@ const Header = () => {
           {/* Promo Buttons */}
           <div className="hidden md:flex items-center gap-4">
             {!isTrialActive && (
-              <button className="w-[145px] h-[39px] flex items-center justify-center bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                Book Free Demo
+              <button
+                className="box-border flex flex-row items-center justify-center gap-2 w-[160px] h-[42px] flex-shrink-0 rounded-full border border-[#0C4FCD] text-white font-inter text-[12px] leading-5 text-center whitespace-nowrap transition-opacity hover:opacity-90"
+                style={{
+                  background:
+                    "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%), #0C4FCD",
+                  boxShadow: "inset 0px 0px 0px 1.8px rgba(255, 255, 255, 0.25)",
+                }}
+              >
+                Book a Call
               </button>
             )}
 
@@ -1388,37 +1397,52 @@ const Header = () => {
               if (!label) return null;
               const isEnded = label.includes("ended");
               const isUrgent = !isEnded && (
-                (label.includes("day") && parseInt(label) <= 2) ||
+                (/day/i.test(label) && parseInt(label) <= 2) ||
                 (subscriptionLabel && parseInt(subscriptionLabel) <= 3)
               );
-              const color = isEnded ? "#ef4444" : isUrgent ? "#f59e0b" : "#3b82f6";
-              const bg = isEnded ? "#fef2f2" : isUrgent ? "#fffbeb" : "#eff6ff";
-              const buttonText = isPaymentConfirmed ? "Manage" : "Upgrade Now";
+              // The pill itself is neutral; urgency is carried by the label's
+              // colour so the design stays intact when time is running out.
+              const labelColor = isEnded
+                ? "#ef4444"
+                : isUrgent
+                  ? "#B54708"
+                  : "#525866";
+              // Always "Upgrade Plan" — the subscription screen it opens covers
+              // both upgrading and managing an existing plan.
+              const buttonText = "Upgrade Plan";
               return (
-                <div
-                  className="w-[257px] h-[39px] flex items-center gap-2 p-1 rounded-md pr-2 border"
-                  style={{ borderColor: color, backgroundColor: bg }}
-                >
-                  <div className="flex flex-col items-start leading-tight flex-1 pl-1">
-                    <span className="text-xs font-semibold" style={{ color }}>
+                // 240px is the design width, but the label is dynamic ("7 Days
+                // Left!" vs "26809 days left in plan"), so it's a minimum the
+                // pill grows past rather than a cap that clips the text.
+                <div className="box-border flex flex-row items-center justify-between gap-4 min-w-[240px] h-[42px] p-[10px] border border-[#E1E4EA] rounded-[96px]">
+                  <div className="flex flex-row items-center gap-1 min-w-0">
+                    <Timer className="w-5 h-5 flex-shrink-0 text-[#525866]" />
+                    <span
+                      className="flex items-center h-5 font-inter text-[14px] font-normal leading-[120%] tracking-[-0.5px] whitespace-nowrap"
+                      style={{ color: labelColor }}
+                    >
                       {label}
                     </span>
                   </div>
                   <button
                     onClick={() => navigate("/settings/subscription")}
-                    className="px-3 py-1 text-white text-xs font-medium rounded transition-colors flex items-center gap-1"
-                    style={{ backgroundColor: color }}
+                    className="box-border flex flex-row items-center justify-center gap-2 h-8 px-3 flex-shrink-0 rounded-full border border-[#0C4FCD] text-white font-inter text-[12px] leading-5 text-center whitespace-nowrap transition-opacity hover:opacity-90"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%), #0C4FCD",
+                      boxShadow:
+                        "inset 0px 0px 0px 1.8px rgba(255, 255, 255, 0.25)",
+                    }}
                   >
                     {buttonText}
-                    <span className="text-[10px]">↑</span>
                   </button>
                 </div>
               );
             })()}
           </div>
           {/* Search */}
-          <div className="relative hidden lg:block w-[326px] h-10">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" strokeWidth={1.5} />
+          <div className="relative hidden lg:block w-[326px] h-[42px]">
+            <SearchIcon className="absolute left-4 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
             <input
               type="text"
               placeholder="Search Companies, Deals, Contacts"
@@ -1562,7 +1586,7 @@ const Header = () => {
           <div className="flex items-center gap-2 min-w-0">
             {/* Search pill */}
             <div className="flex items-center gap-2 px-2.5 h-8 border border-[#E1E4EA] rounded-full flex-1 min-w-0 max-w-[172px]">
-              <Search className="w-4 h-4 text-[#525866] flex-shrink-0" strokeWidth={1.75} />
+              <SearchIcon className="text-[#525866] flex-shrink-0 w-5 h-5" />
               <input
                 type="text"
                 placeholder="Search..."

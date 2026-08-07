@@ -15,7 +15,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Search,
   Filter,
   Upload,
   Building2,
@@ -102,6 +101,7 @@ import {
 import CompanyQuickView from "../components/company/CompanyQuickView";
 import AppToaster from "../components/AppToaster";
 
+import SearchIcon from "../components/common/SearchIcon";
 // The app is rendered inside #root which carries a CSS `zoom` (0.75 on desktop).
 // getBoundingClientRect() returns UNSCALED layout coordinates, while portal overlays
 // mounted on document.body render in visual (un-zoomed) space and mouse clientX/Y are
@@ -1903,9 +1903,8 @@ function Companies() {
                     <div
                       className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
                     >
-                      <Search
-                        strokeWidth={2.5}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+                      <SearchIcon
+                        className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
                         onClick={() => {
                           setIsSearchExpanded(true);
                           searchInputRef.current?.focus();
@@ -1969,42 +1968,8 @@ function Companies() {
                         )}
                       </button>
                       {isMoreMenuOpen && (
-                        <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
-                          <div className="px-3 pb-2 mb-2 border-b border-gray-50">
-                            <p className="text-[10px] uppercase tracking-wider font-normal lg:font-bold text-gray-400 px-1">
-                              Filter by Industry
-                            </p>
-                          </div>
-                          <div className="max-h-[200px] overflow-y-auto px-1 custom-scrollbar mb-2">
-                            <button
-                              onClick={() => {
-                                setFilterIndustry("");
-                                setPagination((p) => ({ ...p, currentPage: 1 }));
-                              }}
-                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${!filterIndustry ? "bg-blue-50 text-blue-700 font-normal lg:font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
-                            >
-                              All Industries
-                              {!filterIndustry && (
-                                <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                              )}
-                            </button>
-                            {getUniqueIndustries().map((i) => (
-                              <button
-                                key={i}
-                                onClick={() => {
-                                  setFilterIndustry(i);
-                                  setPagination((p) => ({ ...p, currentPage: 1 }));
-                                }}
-                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between mt-0.5 ${filterIndustry === i ? "bg-blue-50 text-blue-700 font-normal lg:font-semibold" : "text-gray-600 hover:bg-gray-50"}`}
-                              >
-                                {i}
-                                {filterIndustry === i && (
-                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                          <div className="border-t border-gray-50 pt-1">
+                        <div className="absolute right-0 z-50 mt-2 w-44 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
+                          <div className="pt-1">
                             {/* Filters + Hotlist: mobile-only entries */}
                             <button
                               onClick={() => {
@@ -2105,7 +2070,9 @@ function Companies() {
           // actually left (showLoadingSkeleton is gated on an empty list), so the
           // old data now stays fully legible and clickable while the next page
           // loads; the top progress bar reports the fetch instead.
-          <div className="relative bg-white border border-[#E1E4EA]">
+          // No border-t: the toolbar strip right above already has its own
+          // border-b, so a top border here would double up against it.
+          <div className="relative bg-white border-x border-b border-[#E1E4EA]">
             <table
               className="w-full border-separate border-spacing-0 text-left"
               style={{
@@ -2150,7 +2117,13 @@ function Companies() {
                             const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                             const isRightSticky = rightPinnedKeys.includes(colId);
                             const isSticky = isLeftSticky || isRightSticky;
-                            const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                            // Only draw the heavier pin-boundary divider when a column has
+                            // actually been pinned by the user. Defaulting this to the
+                            // checkbox column drew it there unconditionally, stacked right
+                            // beside that column's own plain border-r — the doubled line
+                            // (and header's darker grey vs. the body's) that showed up
+                            // between the checkbox and Company Name columns.
+                            const isLeftBoundary = lastLeftPinnedKey === colId;
                             const isRightBoundary = colId === firstRightPinnedKey;
                             const isDraggable = colId !== "selection";
                             const isDragging = draggedColKey === colId;
@@ -2224,7 +2197,13 @@ function Companies() {
                               const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                               const isRightSticky = rightPinnedKeys.includes(colId);
                               const isSticky = isLeftSticky || isRightSticky;
-                              const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                              // Only draw the heavier pin-boundary divider when a column has
+                            // actually been pinned by the user. Defaulting this to the
+                            // checkbox column drew it there unconditionally, stacked right
+                            // beside that column's own plain border-r — the doubled line
+                            // (and header's darker grey vs. the body's) that showed up
+                            // between the checkbox and Company Name columns.
+                            const isLeftBoundary = lastLeftPinnedKey === colId;
                               const isRightBoundary = colId === firstRightPinnedKey;
                               const isColDragging = draggedColKey === colId;
 

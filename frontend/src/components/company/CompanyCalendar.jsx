@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Search,
   Users,
   CheckSquare,
   X,
@@ -15,6 +14,7 @@ import {
 } from "lucide-react";
 import AppToaster from "../AppToaster";
 
+import SearchIcon from "../common/SearchIcon";
 const CompactEventCard = ({ item, type, onClick }) => {
   const time = item.scheduledAt || item.dueDate;
   return (
@@ -530,7 +530,7 @@ const CompanyCalendar = ({ companyId }) => {
             }}
             className="lg:hidden flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 text-gray-400 hover:bg-gray-50 flex-shrink-0"
           >
-            <Search className="w-3.5 h-3.5" />
+            <SearchIcon className="w-4 h-4 text-[#525866]" />
           </button>
         )}
 
@@ -540,7 +540,7 @@ const CompanyCalendar = ({ companyId }) => {
           className={`absolute inset-y-0 right-11 z-20 flex items-center overflow-hidden rounded-full bg-white transition-[left] duration-300 ease-out lg:static lg:!left-auto lg:!right-auto lg:flex lg:flex-1 lg:overflow-visible lg:bg-transparent ${isSearchExpanded ? "left-0 opacity-100" : "left-[calc(100%-76px)] opacity-0 pointer-events-none lg:opacity-100"
             }`}
         >
-          <Search className="absolute left-2.5 lg:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5 lg:w-4 lg:h-4" />
+          <SearchIcon className="absolute left-2.5 lg:left-3 -translate-y-1/2 lg: top-1/2 w-4 h-4 text-[#525866]" />
           <input
             ref={searchInputRef}
             type="text"
@@ -551,7 +551,7 @@ const CompanyCalendar = ({ companyId }) => {
             onBlur={() => {
               if (!searchTerm) setIsSearchExpanded(false);
             }}
-            className="w-full h-8 lg:h-9 pl-8 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
+            className="w-full h-8 lg:h-9 pl-11 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
           />
         </div>
 

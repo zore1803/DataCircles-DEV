@@ -7,7 +7,6 @@ import toast from 'react-hot-toast';
 import { 
   StickyNote,
   Plus,
-  Search,
   Edit3,
   Trash2,
   Clock,
@@ -19,6 +18,7 @@ import {
 import AppToaster from "../AppToaster";
 
 
+import SearchIcon from "../common/SearchIcon";
 // Custom Quill modules and formats configuration
 const quillModules = {
   toolbar: [
@@ -409,13 +409,13 @@ const NoteSection = ({ contactId: propContactId, isQuickView }) => {
       </div>
 
       <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+        <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
         <input
           type="text"
           placeholder="Search notes..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-400"
+          className="w-full pl-11 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-400"
         />
       </div>
 

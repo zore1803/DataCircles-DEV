@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
   X,
-  Search,
   GripVertical,
   Eye,
   EyeOff,
@@ -26,6 +25,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import SearchIcon from "./common/SearchIcon";
 // Sortable Column Item Component
 const SortableColumnItem = ({ column, onToggleVisibility }) => {
   const {
@@ -259,7 +259,7 @@ const ColumnSettingsPanel = ({
         {/* Search Bar */}
         <div className="p-4 border-b border-gray-200">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
             <input
               type="text"
               placeholder="Search columns..."
@@ -344,7 +344,7 @@ const ColumnSettingsPanel = ({
 
           {filteredColumns.length === 0 && (
             <div className="text-center py-12">
-              <Search className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+              <SearchIcon className="w-12 h-12 mx-auto text-gray-300 mb-3" />
               <p className="text-gray-500 font-medium">No columns found</p>
               <p className="text-sm text-gray-400">
                 Try adjusting your search

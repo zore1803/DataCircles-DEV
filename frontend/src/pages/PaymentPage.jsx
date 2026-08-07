@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Search,
   IndianRupee,
   Edit2,
   Trash2,
@@ -32,6 +31,7 @@ import VideoTutorialButton from "../components/VideoTutorialButton";
 import PaymentPreview from "../components/vendor/venerPaymentPreview";
 import AppToaster from "../components/AppToaster";
 
+import SearchIcon from "../components/common/SearchIcon";
 const PaymentPage = () => {
   const [vendors, setVendors] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -555,7 +555,7 @@ const PaymentPage = () => {
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 shadow-sm">
           <div className="flex flex-col md:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
               <input
                 type="text"
                 placeholder="Search payments..."

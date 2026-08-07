@@ -1,13 +1,14 @@
 // pages/CouponManagement.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Tag, Search, Plus, X, Save, Trash2, ToggleLeft, ToggleRight,
+  Tag, Plus, X, Save, Trash2, ToggleLeft, ToggleRight,
   Percent, IndianRupee, Calendar, BarChart3, Shuffle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import API, { configureAxios } from "../services/api";
 import { couponAPI } from "../services/couponApi";
 
+import SearchIcon from "../components/common/SearchIcon";
 const PLAN_OPTIONS = ["starter", "growth", "business"];
 
 const EMPTY_DRAFT = {
@@ -276,12 +277,12 @@ const CouponManagement = () => {
       {/* Search + filters */}
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by code or name..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-11 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <div className="flex gap-1 bg-gray-100 rounded-lg p-1">

@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
 import {
-  Search,
   Plus,
   Trash2,
   X,
@@ -13,6 +12,7 @@ import QuickVendorForm from "../vendor/QuickVendorForm";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 
+import SearchIcon from "../common/SearchIcon";
 const API_BASE = `${import.meta.env.VITE_APP_API_URL}/api`;
 
 const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
@@ -110,7 +110,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
   return (
     <div className="relative w-full" ref={dropdownRef}>
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
         <input
           ref={inputRef}
           type="text"

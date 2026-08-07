@@ -3,7 +3,6 @@ import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
 import {
-  Search,
   Filter,
   Plus,
   Users,
@@ -36,6 +35,7 @@ import { exportToCSV } from "../../utils/exportToCSV";
 import { bulkDelete } from "../../utils/bulkOperations";
 import useFillToBottom from "../../hooks/useFillToBottom";
 
+import SearchIcon from "../common/SearchIcon";
 const MEETING_TYPE_LABELS = { "in-person": "In-person", "video-call": "Video Call", "phone-call": "Phone Call" };
 const MEETING_STATUS_LABELS = { scheduled: "Scheduled", completed: "Completed", cancelled: "Cancelled", "no-show": "No-show" };
 const MEETING_FILTER_COLUMNS = [
@@ -677,13 +677,13 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
       ) : (
       <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
         <div className="relative flex-1 h-full">
-          <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
+          <SearchIcon className="absolute left-3.5 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search meetings by title, deal, or participants..."
-            className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+            className="w-full h-full pl-11 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
             style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
           />
         </div>
