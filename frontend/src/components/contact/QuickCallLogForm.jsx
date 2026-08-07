@@ -314,7 +314,7 @@ const QuickCallLogForm = ({ contacts, onCallLogCreated, onRequestClose }) => {
               <select
                 value={form.callType}
                 onChange={(e) => handleFormChange("callType", e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm cursor-pointer"
+                className="w-full border border-gray-300 rounded-[25px] px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm cursor-pointer"
                 required
               >
                 {callTypeOptions.map((option) => (
@@ -332,7 +332,7 @@ const QuickCallLogForm = ({ contacts, onCallLogCreated, onRequestClose }) => {
               <select
                 value={form.status}
                 onChange={(e) => handleStatusChange(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm cursor-pointer"
+                className="w-full border border-gray-300 rounded-[25px] px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm cursor-pointer"
                 required
               >
                 {statusOptions.map((option) => (
@@ -355,7 +355,7 @@ const QuickCallLogForm = ({ contacts, onCallLogCreated, onRequestClose }) => {
                 type="number"
                 value={form.duration}
                 onChange={(e) => handleFormChange("duration", e.target.value)}
-                className={`w-full border rounded-lg px-3 py-2 text-sm ${
+                className={`w-full border rounded-[25px] px-3 py-2 text-sm ${
                   validationErrors.duration
                     ? "border-red-300 focus:ring-red-500 outline-none focus:ring-2"
                     : allowDuration

@@ -5,6 +5,12 @@ dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const express = require('express');
 const mongoose = require('mongoose');
+
+// Register the global change-notifier plugin BEFORE any model is compiled so it
+// applies to every schema. Writes an activity-feed Notification for each
+// create/update/delete performed within an authenticated request.
+mongoose.plugin(require('./utils/changeNotifier'));
+
 const cors = require('cors');
 const startReminderJob = require('./utils/reminderJob');
 require('./jobs/subscriptionLifecycleJobs');
@@ -49,6 +55,11 @@ app.use(cors(corsOptions));
 
 // Explicit OPTIONS handler for all routes
 app.options(/.*/, cors(corsOptions)); // Enable pre-flight for all routes
+
+// Establish a per-request context (AsyncLocalStorage) so the change-notifier
+// plugin can attribute DB writes to the current user. Must wrap all routes.
+const { requestContext } = require('./middlewares/requestContext');
+app.use(requestContext);
 
 
 const subscriptionRoutes = require("./routes/subscription");

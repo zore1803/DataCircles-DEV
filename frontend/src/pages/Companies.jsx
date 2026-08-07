@@ -42,6 +42,7 @@ import ImportClients from "../components/company/ImportClients";
 import Hotlist from "../components/company/Hotlist";
 import BulkActions from "../components/BulkActions";
 import CompanyForm from "../components/company/CompanyForm";
+import QuickCompanyForm from "../components/company/QuickCompanyForm";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
@@ -158,6 +159,7 @@ function Companies() {
   const [industries, setIndustries] = useState([]);
   const [industriesLoading, setIndustriesLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showHotlist, setShowHotlist] = useState(false);
   const [permission, setPermission] = useState("");
@@ -1721,7 +1723,7 @@ function Companies() {
 
       {/* Delete Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1770,19 +1772,18 @@ function Companies() {
         />
       )}
 
-      {state?.showAddForm && (
-        <CompanyForm
-          form={form}
-          setForm={setForm}
-          loading={loading}
-          setLoading={setLoading}
-          companyFieldNames={companyFieldNames}
-          additionalFields={additionalFields}
-          setAdditionalFields={setAdditionalFields}
-          fetchCompanies={fetchCompanies}
+      {/* Add New Company uses the same QuickCompanyForm as the navbar quick-add,
+          so there's a single "create company" form across the app. Editing an
+          existing company still uses CompanyForm (above). */}
+      {(showQuickAdd || state?.showAddForm) && (
+        <QuickCompanyForm
+          onCompanyCreated={() => {
+            fetchCompanies();
+            setShowQuickAdd(false);
+            if (state) state.showAddForm = false;
+          }}
           onRequestClose={() => {
-            resetForm();
-            setShowForm(false);
+            setShowQuickAdd(false);
             if (state) state.showAddForm = false;
           }}
         />
@@ -2034,15 +2035,12 @@ function Companies() {
                     </div>
 
                     <button
-                      onClick={() => {
-                        resetForm();
-                        setShowForm(true);
-                      }}
+                      onClick={() => setShowQuickAdd((v) => !v)}
                       className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
-                      title={showForm ? "Cancel" : "New Company"}
+                      title={showQuickAdd ? "Cancel" : "New Company"}
                     >
                       <Plus className="w-4 h-4 flex-shrink-0" />
-                      <span className="hidden lg:inline">{showForm ? "Cancel" : "New Company"}</span>
+                      <span className="hidden lg:inline">{showQuickAdd ? "Cancel" : "New Company"}</span>
                     </button>
                   </div>
                 </>
@@ -2282,7 +2280,7 @@ function Companies() {
 
       {/* Bulk Delete Confirmation Modal */}
       {showBulkDeleteModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">

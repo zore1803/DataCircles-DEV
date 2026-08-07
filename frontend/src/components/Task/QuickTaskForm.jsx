@@ -412,7 +412,7 @@ const QuickTaskForm = ({
                 Task Title *
               </label>
               <input
-                className={`w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:border-transparent shadow-sm ${
+                className={`w-full border rounded-[25px] px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:border-transparent shadow-sm ${
                   validationErrors.title 
                     ? 'border-red-300 focus:ring-red-500' 
                     : 'border-gray-300 focus:ring-blue-500'
@@ -433,7 +433,7 @@ const QuickTaskForm = ({
               </label>
               <input
                 type="date"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                className="w-full border border-gray-300 rounded-[25px] px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
                 value={form.dueDate}
                 onChange={(e) => handleFormChange("dueDate", e.target.value)}
               />
@@ -472,7 +472,7 @@ const QuickTaskForm = ({
                 Status
               </label>
               <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm cursor-pointer"
+                className="w-full border border-gray-300 rounded-[25px] px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm cursor-pointer"
                 value={form.status}
                 onChange={(e) => handleFormChange("status", e.target.value)}
               >
@@ -486,7 +486,7 @@ const QuickTaskForm = ({
                 Related To
               </label>
               <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm cursor-pointer"
+                className="w-full border border-gray-300 rounded-[25px] px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm cursor-pointer"
                 value={form.relationModel}
                 onChange={(e) =>
                   handleFormChange("relationModel", e.target.value)
@@ -562,7 +562,7 @@ const QuickTaskForm = ({
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
                 placeholder="Search users..."
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm mb-2"
+                className="w-full border border-gray-300 rounded-[25px] px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm mb-2"
               />
               <div className={`border rounded-lg p-3 max-h-40 overflow-y-auto bg-gray-50 shadow-sm ${
                 validationErrors.users ? 'border-red-300' : 'border-gray-300'

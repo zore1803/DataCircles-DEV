@@ -4,7 +4,12 @@ const {
   getMySettings,
   updateMySettings,
   getUserSettings,
-  updateUserSettings
+  updateUserSettings,
+  getFeed,
+  getUnreadCount,
+  markRead,
+  markAllRead,
+  clearAll
 } = require("../controllers/notificationController");
 
 const authMiddleware = require("../middlewares/auth");
@@ -13,6 +18,14 @@ const userSync = require("../middlewares/userSync");
 
 const requireAuth = [authMiddleware, userSync];
 const subscriptionGate = require('../middlewares/subscriptionGate');
+
+// Activity feed (auto-generated create/update/delete notifications).
+// Declared before the "/" settings routes so the specific paths match first.
+router.get("/feed", requireAuth, getFeed);
+router.get("/feed/unread-count", requireAuth, getUnreadCount);
+router.put("/feed/read-all", requireAuth, markAllRead);
+router.delete("/feed", requireAuth, clearAll);
+router.put("/feed/:id/read", requireAuth, markRead);
 
 // Current logged-in user (scoped to their organization)
 router.get("/", requireAuth, subscriptionGate, getMySettings);
