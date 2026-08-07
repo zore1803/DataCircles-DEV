@@ -3,6 +3,7 @@ import API from "../../services/api";
 import CustomDropdown from "../common/CustomDropdown";
 import toast from "react-hot-toast";
 import { INDIA_STATES, COUNTRIES } from "../../constants/addressOptions";
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, editCompany = null }) => {
   const isEditing = !!editCompany;
@@ -23,7 +24,6 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
     shippingAddresses: [{ ...emptyAddress, sameAsBilling: false }],
     website: "",
     gstin: "", // Added gstin field
-    documentSigned: false,
     profilePicture: null,
   });
   const [additionalFields, setAdditionalFields] = useState({});
@@ -34,6 +34,24 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [industries, setIndustries] = useState([]);
+  const profilePictureInputRef = useRef(null);
+  // Object URL for whatever file is currently picked, so both create and edit
+  // show the actual image instead of just its filename. Revoked whenever the
+  // selection changes or the form unmounts, since object URLs otherwise leak.
+  const [profilePicturePreview, setProfilePicturePreview] = useState(null);
+  useEffect(() => {
+    if (!form.profilePicture) {
+      setProfilePicturePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(form.profilePicture);
+    setProfilePicturePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [form.profilePicture]);
+  // Edit mode starts with the company's already-uploaded picture; a freshly
+  // picked file (above) takes over from it once one is chosen.
+  const profilePictureDisplayUrl =
+    profilePicturePreview || (isEditing ? editCompany?.profilePicture : null);
 
   useEffect(() => {
     setShouldRender(true);
@@ -44,6 +62,21 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
       setIsOpen(false);
     };
   }, []);
+
+  // Dims/blurs the sidebar and page footer while this panel is open — see
+  // useSearchOverlayOpen.js. Cleared on unmount too, not just when isOpen
+  // flips false, so an unmount that skips the closing animation can't leave
+  // the rest of the app permanently dimmed.
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } })
+    );
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } })
+      );
+    };
+  }, [isOpen]);
 
   // Pre-fill when editing an existing company so edit and create share one form.
   useEffect(() => {
@@ -58,7 +91,6 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
           : [{ ...emptyAddress, sameAsBilling: false }],
       website: editCompany.website || "",
       gstin: editCompany.gstin || "",
-      documentSigned: editCompany.documentSigned || false,
       profilePicture: null,
     });
     const pf = {};
@@ -299,7 +331,6 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
     payload.append("shippingAddresses", JSON.stringify(shippingPayload));
     payload.append("website", form.website);
     payload.append("gstin", form.gstin); // Added gstin to payload
-    payload.append("documentSigned", form.documentSigned ? "true" : "false");
 
     const processedAdditionalFields = fieldDefinitions
       .map((fieldDef) => {
@@ -531,8 +562,10 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
         </div>
       )}
 
+      {/* Plain opaque dim — no blur. Sidebar/page footer dim themselves
+          independently via DIM_CHROME_EVENT above; this is just the tint. */}
       <div
-        className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
         style={{ opacity: isOpen ? 1 : 0 }}
         onClick={handleClose}
       />
@@ -680,51 +713,77 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                 Website <span className="text-red-500">*</span>
               </label>
-              <input
-                type="url"
-                value={form.website}
-                onChange={(e) => handleFormChange("website", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
-                placeholder="www.company.com"
-                required
-              />
-            </div>
-
-            {/* Document Signed */}
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="documentSigned"
-                checked={!!form.documentSigned}
-                onChange={(e) => handleFormChange("documentSigned", e.target.checked)}
-                className="w-4 h-4 rounded border-[#E0E0E1] text-blue-600 focus:ring-blue-500"
-              />
-              <label htmlFor="documentSigned" className="text-[13px] font-semibold text-[#111216]">
-                Document Signed
-              </label>
+              {/* "https://" is a fixed prefix, not part of the typed value — only
+                  the domain is editable, so nobody has to type the scheme. An
+                  existing website (from editing a company) that already has a
+                  protocol keeps it stripped here for display and re-added on
+                  change; one saved without a protocol is treated the same way. */}
+              <div className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 flex items-center gap-0.5 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
+                <span className="text-[14px] text-[#A0A0A0] flex-shrink-0">
+                  https://
+                </span>
+                <input
+                  type="text"
+                  value={form.website.replace(/^https?:\/\//i, "")}
+                  onChange={(e) =>
+                    handleFormChange(
+                      "website",
+                      `https://${e.target.value.replace(/^https?:\/\//i, "")}`
+                    )
+                  }
+                  className="flex-1 min-w-0 h-full text-[14px] text-gray-900 focus:outline-none placeholder:text-[#A0A0A0] bg-transparent"
+                  placeholder="www.company.com"
+                  required
+                />
+              </div>
             </div>
 
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                 Select Profile Picture <span className="text-red-500">*</span>
               </label>
-              <div className="flex gap-3">
-                <div className="flex-1 relative">
+              <div className="flex items-center gap-3">
+                {/* The filename text field this replaced told you nothing
+                    useful — the image itself is the confirmation. No fixed
+                    box: the tile sizes to the image (capped so a huge photo
+                    can't blow out the modal) instead of squeezing a tall or
+                    wide image down into a small square. */}
+                <div className="relative flex-shrink-0 inline-block rounded-xl border border-[#E0E0E1] bg-[#F9F9FB] overflow-hidden">
                   <input
+                    ref={profilePictureInputRef}
                     type="file"
                     accept="image/*"
                     onChange={(e) => {
                       handleFormChange("profilePicture", e.target.files[0]);
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                    required
+                    // Only required when there's no picture yet — a browser
+                    // can't pre-populate a file input with the company's
+                    // already-uploaded image, so requiring it unconditionally
+                    // forced a re-upload on every edit even though one was
+                    // already on file (and showing right here as a preview).
+                    required={!profilePictureDisplayUrl}
                   />
-                  <div className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 flex items-center text-[14px] text-[#A0A0A0] bg-white">
-                    {form.profilePicture ? form.profilePicture.name : "Choose a File"}
-                  </div>
+                  {profilePictureDisplayUrl ? (
+                    <img
+                      src={profilePictureDisplayUrl}
+                      alt="Company"
+                      className="block max-h-32 max-w-[260px] w-auto h-auto object-contain"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 flex items-center justify-center text-[10px] text-[#A0A0A0] text-center px-1">
+                      No image
+                    </div>
+                  )}
                 </div>
+                {/* The tile above already opens the picker (it's the
+                    invisible input overlaying it) — this button was a dead
+                    click, doing nothing when pressed. Wired to trigger the
+                    same picker so it actually does what it looks like it
+                    should. */}
                 <button
                   type="button"
+                  onClick={() => profilePictureInputRef.current?.click()}
                   className="bg-[#F2F2F7] text-[#111216] px-8 rounded-[25px] h-11 text-[14px] font-medium hover:bg-gray-200 transition-colors"
                 >
                   Upload

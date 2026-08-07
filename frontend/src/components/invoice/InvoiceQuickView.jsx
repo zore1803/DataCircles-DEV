@@ -69,7 +69,7 @@ export default function InvoiceQuickView({ invoice, mode = "view", onClose, onUp
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/30 z-[9998]" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[9998]" onClick={onClose} />
 
       {/* dc-panel-card matches the rounded, inset card look used by the other
           QuickView panels. No open/close toggle here (this component is

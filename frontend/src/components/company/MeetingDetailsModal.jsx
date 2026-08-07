@@ -69,7 +69,7 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] transition-opacity duration-300"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300"
         style={{ opacity: isSliding ? 1 : 0 }}
         onClick={onClose}
       />

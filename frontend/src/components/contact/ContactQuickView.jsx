@@ -81,7 +81,7 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
     <>
       {/* Mobile backdrop */}
       <div
-        className="fixed inset-0 bg-black/30 lg:hidden z-[9998]"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm lg:hidden z-[9998]"
         onClick={onClose}
       />
 

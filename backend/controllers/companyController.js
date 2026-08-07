@@ -34,8 +34,6 @@ const getAllCompanies = async (req, res) => {
         { leadSource: { $regex: search, $options: "i" } },
         { "additionalFields.value": { $regex: search, $options: "i" } },
       ];
-      if ("accepted".includes(search.toLowerCase())) query.$or.push({ documentSigned: true });
-      if ("pending".includes(search.toLowerCase())) query.$or.push({ documentSigned: false });
     }
 
     const companies = await Company.find(query)
@@ -75,8 +73,6 @@ const getAllCompaniesPaginated = async (req, res) => {
         { leadSource: { $regex: search, $options: "i" } },
         { "additionalFields.value": { $regex: search, $options: "i" } },
       ];
-      if ("accepted".includes(search.toLowerCase())) query.$or.push({ documentSigned: true });
-      if ("pending".includes(search.toLowerCase())) query.$or.push({ documentSigned: false });
     }
 
     if (industry) {

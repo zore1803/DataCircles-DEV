@@ -33,6 +33,7 @@ import {
   Target,
 } from "lucide-react";
 import ContactForm from "../components/contact/ContactForm";
+import QuickContactForm from "../components/contact/QuickContactForm";
 import toast from "react-hot-toast";
 import useContactStore from "../store/useContactStore";
 import MergeContactModal from "../components/contact/MergeContactModal";
@@ -161,29 +162,7 @@ const ContactDetailsPage = () => {
   }, [id]);
 
   const handleEdit = () => {
-    setForm({
-      _id: contact._id,
-      name: contact.name || "",
-      email: contact.email || "",
-      phone: contact.phone || "",
-      lifecycleStage: contact.lifecycleStage || "Lead",
-      stageStatus: contact.stageStatus || "New",
-      company: contact.company?._id || "",
-      avatar: contact.avatar || "",
-      socialMedia: {
-        twitter: contact.socialMedia?.twitter || "",
-        linkedin: contact.socialMedia?.linkedin || "",
-        facebook: contact.socialMedia?.facebook || "",
-      },
-    });
-
-    const processedFields = {};
-    if (contact.additionalFields) {
-      contact.additionalFields.forEach((field) => {
-        processedFields[field.key] = field.value;
-      });
-    }
-    setAdditionalValues(processedFields);
+    // Edit via the shared QuickContactForm (same as create).
     setShowForm(true);
   };
 
@@ -467,18 +446,13 @@ const ContactDetailsPage = () => {
       </div>
 
       {showForm && (
-        <ContactForm
-          form={form}
-          setForm={setForm}
-          additionalValues={additionalValues}
-          setAdditionalValues={setAdditionalValues}
-          contactFieldList={contactFieldList}
+        <QuickContactForm
           companies={allCompanies}
-          loading={formLoading}
-          setLoading={setFormLoading}
-          setError={(message) => toast.error(message || "Failed to save contact")}
-          setSuccess={(message) => toast.success(message || "Contact saved successfully")}
-          fetchContacts={fetchContactDetails}
+          editContact={contact}
+          onContactUpdated={() => {
+            fetchContactDetails();
+            setShowForm(false);
+          }}
           onRequestClose={() => setShowForm(false)}
         />
       )}

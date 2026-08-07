@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import API from "../services/api";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import TaskForm from "../components/Task/TaskForm";
+import QuickTaskForm from "../components/Task/QuickTaskForm";
 import AdminMeetingForm from "../components/admin/AdminMeetingForm";
 import { useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -467,6 +468,7 @@ function Tasks() {
   // Tasks state
   const [tasks, setTasks] = useState([]);
   const [showTaskForm, setShowTaskForm] = useState(false);
+  const [editTask, setEditTask] = useState(null);
   const [taskForm, setTaskForm] = useState({
     title: "",
     description: "",
@@ -982,8 +984,8 @@ function Tasks() {
 
   // Task handlers
   const toggleTaskForm = () => {
-    if (showTaskForm) resetTaskForm();
-    setShowTaskForm(!showTaskForm);
+    setEditTask(null);
+    setShowTaskForm((v) => !v);
   };
 
   const resetTaskForm = () => {
@@ -1022,29 +1024,9 @@ function Tasks() {
   };
 
   const handleTaskEdit = (task) => {
-    setTaskForm({
-      _id: task._id || task.id,
-      title: task.title,
-      description: task.description,
-      dueDate: task.dueDate?.substring(0, 10),
-      status: task.status || "Pending",
-      relatedEntities:
-        Array.isArray(task.relatedEntities) && task.relatedEntities.length
-          ? task.relatedEntities.map((e) => ({
-            entityModel: e.entityModel,
-            entityId: e.entityId?._id || e.entityId?.id || e.entityId,
-          }))
-          : task.relatedTo && task.relationModel
-            ? [{ entityModel: task.relationModel, entityId: task.relatedTo }]
-            : [{ entityModel: "Company", entityId: "" }],
-
-      users: Array.isArray(task.users)
-        ? task.users.map((u) => u.id || u._id)
-        : [],
-    });
-
+    // Edit via the shared QuickTaskForm (same as create).
+    setEditTask(task);
     setShowTaskForm(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleTaskStatusChange = async (id, status) => {
@@ -3482,20 +3464,25 @@ function Tasks() {
         </div>
       )}
 
-      {/* Legacy Forms/Modals */}
+      {/* Single shared form for both create and edit task. */}
       {showTaskForm && (
-        <TaskForm
-          form={taskForm}
-          setForm={setTaskForm}
-          users={users}
+        <QuickTaskForm
           companies={companies}
           contacts={contacts}
-          deals={deals}
-          vendors={vendors}
-          loading={loading}
-          onSubmit={handleTaskSubmit}
-          onCancel={() => setShowTaskForm(false)}
-          fetchTasks={fetchTasks}
+          editTask={editTask}
+          onTaskCreated={() => {
+            fetchTasks();
+            setShowTaskForm(false);
+          }}
+          onTaskUpdated={() => {
+            fetchTasks();
+            setShowTaskForm(false);
+            setEditTask(null);
+          }}
+          onRequestClose={() => {
+            setShowTaskForm(false);
+            setEditTask(null);
+          }}
         />
       )}
 

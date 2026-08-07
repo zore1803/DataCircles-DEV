@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
 import { Twitter, Linkedin, Facebook, FolderOpen, ChevronDown } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 const CompanyForm = ({
   form,
   setForm,
@@ -17,7 +18,27 @@ const CompanyForm = ({
   onRequestClose,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  // Dims the sidebar/navbar/page-footer chrome while this panel is
+  // open -- see useSearchOverlayOpen.js.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(true);
+  const profilePictureInputRef = useRef(null);
+  // A freshly picked file previews via an object URL; before that (or in edit
+  // mode with nothing picked yet) the company's already-uploaded picture shows.
+  const [profilePicturePreview, setProfilePicturePreview] = useState(null);
+  useEffect(() => {
+    if (!form.profilePicture) {
+      setProfilePicturePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(form.profilePicture);
+    setProfilePicturePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [form.profilePicture]);
+  const profilePictureDisplayUrl = profilePicturePreview || form.profilePictureUrl;
   const [fieldDefinitions, setFieldDefinitions] = useState([]);
   const [industries, setIndustries] = useState([]);
   const [isFormDirty, setIsFormDirty] = useState(false);
@@ -336,7 +357,6 @@ const CompanyForm = ({
     payload.append("gstin", form.gstin || "");
     payload.append("address", form.address || "");
     payload.append("website", form.website || "");
-    payload.append("documentSigned", form.documentSigned ? "true" : "false");
     payload.append("leadSource", form.leadSource || "");
 
     // Add social media links - using bracket notation
@@ -480,7 +500,7 @@ const CompanyForm = ({
     <>
       {/* Responsive backdrop */}
       <div
-        className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
         style={{ opacity: isOpen ? 1 : 0 }}
         onClick={handleClose}
       />
@@ -631,20 +651,6 @@ const CompanyForm = ({
               />
             </div>
 
-            {/* Document Signed */}
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="documentSigned"
-                checked={!!form.documentSigned}
-                onChange={(e) => handleFormChange("documentSigned", e.target.checked)}
-                className="w-4 h-4 rounded border-[#E0E0E1] text-blue-600 focus:ring-blue-500"
-              />
-              <label htmlFor="documentSigned" className="text-[13px] font-semibold text-[#111216]">
-                Document Signed
-              </label>
-            </div>
-
             {/* Lead Source */}
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
@@ -699,18 +705,15 @@ const CompanyForm = ({
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                 Select Profile Picture
               </label>
-              {form.profilePictureUrl && (
-                <div className="mb-2">
-                  <img
-                    src={`${form.profilePictureUrl}`}
-                    alt="Profile"
-                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover"
-                  />
-                </div>
-              )}
-              <div className="flex gap-3">
-                <div className="flex-1 relative">
+              <div className="flex items-center gap-3">
+                {/* The filename text field this replaced told you nothing
+                    useful — the image itself is the confirmation. No fixed
+                    box: the tile sizes to the image (capped so a huge photo
+                    can't blow out the modal) instead of squeezing a tall or
+                    wide image down into a small square. */}
+                <div className="relative flex-shrink-0 inline-block rounded-xl border border-[#E0E0E1] bg-[#F9F9FB] overflow-hidden">
                   <input
+                    ref={profilePictureInputRef}
                     type="file"
                     accept="image/*"
                     onChange={(e) => {
@@ -718,14 +721,26 @@ const CompanyForm = ({
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer z-10"
                   />
-                  <div className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 flex items-center text-[14px] text-[#A0A0A0] bg-white">
-                    {form.profilePicture
-                      ? form.profilePicture.name
-                      : "Choose a File"}
-                  </div>
+                  {profilePictureDisplayUrl ? (
+                    <img
+                      src={profilePictureDisplayUrl}
+                      alt="Company"
+                      className="block max-h-32 max-w-[260px] w-auto h-auto object-contain"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 flex items-center justify-center text-[10px] text-[#A0A0A0] text-center px-1">
+                      No image
+                    </div>
+                  )}
                 </div>
+                {/* The tile above already opens the picker (it's the
+                    invisible input overlaying it) — this button was a dead
+                    click, doing nothing when pressed. Wired to trigger the
+                    same picker so it actually does what it looks like it
+                    should. */}
                 <button
                   type="button"
+                  onClick={() => profilePictureInputRef.current?.click()}
                   className="bg-[#F2F2F7] text-[#111216] px-8 rounded-xl h-12 text-[14px] font-medium hover:bg-gray-200 transition-colors"
                 >
                   Upload

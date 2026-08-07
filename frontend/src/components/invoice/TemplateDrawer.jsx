@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { X, Check, LayoutTemplate } from "lucide-react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 import {
   DOCUMENT_TEMPLATES,
   DEFAULT_TEMPLATE,
@@ -171,6 +172,13 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
     return () => document.removeEventListener("keydown", onKey);
   }, [isOpen, onClose]);
 
+  // Dims the sidebar/navbar/page-footer chrome while this panel is open --
+  // see useSearchOverlayOpen.js.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isOpen]);
+
   const selected = templates?.[type] || DEFAULT_TEMPLATE;
 
   const handleSelect = async (template) => {
@@ -201,7 +209,7 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
   return createPortal(
     <div className="fixed inset-0 z-[100004]">
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-black/20 backdrop-blur-sm"
         onClick={onClose}
       />
       {/* Same inset rounded-card geometry as the Companies/Contacts panels

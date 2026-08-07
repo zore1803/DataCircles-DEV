@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { X } from "lucide-react";
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const VendorFieldMappingModal = ({
   isOpen: propIsOpen,
@@ -12,6 +13,12 @@ const VendorFieldMappingModal = ({
   const [fieldMapping, setFieldMapping] = useState({});
   const [includeFirstRow, setIncludeFirstRow] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  // Dims the sidebar/navbar/page-footer chrome while this panel is
+  // open -- see useSearchOverlayOpen.js.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(false);
 
   // Standard CRM fields for vendors - memoize to prevent recreating
@@ -157,7 +164,7 @@ const VendorFieldMappingModal = ({
     <>
       {/* Background Overlay */}
       <div
-        className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
         style={{ opacity: isOpen ? 1 : 0 }}
         onClick={handleClose}
       />

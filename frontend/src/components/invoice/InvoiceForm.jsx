@@ -17,6 +17,7 @@ import SearchableDropdown from "../contact/SearchableDropdown";
 import toast from "react-hot-toast";
 
 import SearchIcon from "../common/SearchIcon";
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 // Function to convert number to words
 function numberToWords(num) {
   const ones = [
@@ -110,6 +111,12 @@ const ItemSearchSelect = ({
   setItems,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  // Dims the sidebar/navbar/page-footer chrome while this panel is
+  // open -- see useSearchOverlayOpen.js.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isOpen]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
@@ -1066,7 +1073,7 @@ const InvoiceForm = ({
       )}
 
       <div
-        className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
         style={{ opacity: isSliding ? 1 : 0 }}
         onClick={handleClose}
       />

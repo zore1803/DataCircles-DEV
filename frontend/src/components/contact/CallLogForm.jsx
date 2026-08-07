@@ -5,6 +5,7 @@ import SearchableDropdown from "./SearchableDropdown";
 import toast from 'react-hot-toast';
 import ReactQuill from 'react-quill-new';
 import AppToaster from "../AppToaster";
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const initialFormState = {
   callType: "Outbound",
@@ -129,6 +130,15 @@ const CallLogForm = ({
     }
   }, [isOpen, editLog, contactId]);
 
+  // Dims the sidebar/navbar/page-footer chrome while this panel is open --
+  // see useSearchOverlayOpen.js. Tied to isSliding (the actual visible
+  // open/close animation state), not isOpen, since shouldRender/isSliding are
+  // what the backdrop itself uses.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isSliding } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isSliding]);
+
   const handleFormChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
     
@@ -229,7 +239,7 @@ const CallLogForm = ({
     <>
       <AppToaster />
       <div
-        className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
         style={{ opacity: isSliding ? 1 : 0 }}
         onClick={onClose}
       />

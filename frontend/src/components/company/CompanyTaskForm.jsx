@@ -381,7 +381,7 @@ const CompanyTaskForm = ({
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] transition-all duration-300"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-all duration-300"
         style={{ opacity: isSliding ? 1 : 0 }}
         onClick={onClose}
       />
