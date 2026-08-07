@@ -9,13 +9,17 @@ import QuickContactForm from "../contact/QuickContactForm";
 import QuickDealForm from "../deal/QuickDealForm";
 import QuickVendorForm from "../vendor/QuickVendorForm";
 import ReactQuill from 'react-quill-new';
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const QuickTaskForm = ({
   companies,
   contacts,
   onTaskCreated,
+  onTaskUpdated,
   onRequestClose,
+  editTask = null,
 }) => {
+  const isEditing = !!editTask;
   const [form, setForm] = useState({
     title: "",
     dueDate: "",
@@ -30,6 +34,12 @@ const QuickTaskForm = ({
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  // Dims the sidebar/navbar/page-footer chrome while this panel is
+  // open -- see useSearchOverlayOpen.js.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(true);
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -59,6 +69,22 @@ const QuickTaskForm = ({
       setIsOpen(false);
     };
   }, [companies, contacts]);
+
+  // Pre-fill when editing so edit and create share one form.
+  useEffect(() => {
+    if (!editTask) return;
+    const rel = (editTask.relatedEntities && editTask.relatedEntities[0]) || {};
+    setForm({
+      title: editTask.title || "",
+      dueDate: editTask.dueDate ? new Date(editTask.dueDate).toISOString().slice(0, 10) : "",
+      description: editTask.description || "",
+      status: editTask.status || "Pending",
+      relationModel: rel.entityModel || "Company",
+      relatedTo: rel.entityId?._id || rel.entityId || "",
+      users: (editTask.users || []).map((u) => u._id || u),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editTask]);
 
   const fetchData = async () => {
     try {
@@ -270,10 +296,13 @@ const QuickTaskForm = ({
 
     try {
       setLoading(true);
-      const res = await API.post("/tasks", form);
-      toast.success("Task added successfully!");
-      if (onTaskCreated && res.data) {
-        onTaskCreated(res.data);
+      const res = isEditing
+        ? await API.put(`/tasks/${editTask._id}`, form)
+        : await API.post("/tasks", form);
+      toast.success(isEditing ? "Task updated successfully!" : "Task added successfully!");
+      const cb = isEditing ? onTaskUpdated || onTaskCreated : onTaskCreated;
+      if (cb && res.data) {
+        cb(res.data);
       }
       setIsFormDirty(false);
       closeForm();
@@ -382,7 +411,7 @@ const QuickTaskForm = ({
       )}
 
       <div
-        className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
         style={{ opacity: isOpen ? 1 : 0 }}
         onClick={handleClose}
       />
@@ -394,7 +423,7 @@ const QuickTaskForm = ({
         <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
           <div className="flex justify-between items-center p-4 border-b border-gray-100 flex-shrink-0 bg-white">
             <h3 className="text-base font-semibold text-gray-700">
-              Create New Task
+              {isEditing ? "Edit Task" : "Create New Task"}
             </h3>
             <button
               type="button"
@@ -609,7 +638,7 @@ const QuickTaskForm = ({
               type="submit"
               disabled={loading}
             >
-              {loading ? "Saving..." : "Create New Task"}
+              {loading ? "Saving..." : isEditing ? "Update Task" : "Create New Task"}
             </button>
           </div>
         </form>

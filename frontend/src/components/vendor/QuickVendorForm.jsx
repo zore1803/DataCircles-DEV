@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
 import { Upload, X } from "lucide-react";
 import toast from "react-hot-toast";
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, editVendor = null }) => {
   const isEditing = !!editVendor;
@@ -28,6 +29,12 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
   const [gstinData, setGstinData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  // Dims the sidebar/navbar/page-footer chrome while this panel is
+  // open -- see useSearchOverlayOpen.js.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(true);
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -530,7 +537,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
       )}
 
       <div
-        className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
         style={{ opacity: isOpen ? 1 : 0 }}
         onClick={handleClose}
       />

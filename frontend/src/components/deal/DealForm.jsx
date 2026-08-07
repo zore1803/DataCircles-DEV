@@ -4,6 +4,7 @@ import API from "../../services/api";
 import SearchableDropdown from "../contact/SearchableDropdown"; // Adjust path if needed
 import { FolderOpen, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const DealForm = ({
   form,
@@ -21,6 +22,12 @@ const DealForm = ({
   onRequestClose,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  // Dims the sidebar/navbar/page-footer chrome while this panel is
+  // open -- see useSearchOverlayOpen.js.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(true);
 
   // States for tracking changes and validation
@@ -324,7 +331,7 @@ const DealForm = ({
       )}
 
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300" style={{ opacity: isOpen ? 1 : 0 }} onClick={handleClose} />
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300" style={{ opacity: isOpen ? 1 : 0 }} onClick={handleClose} />
 
       {/* Sliding Side Panel */}
  <div className={`fixed dc-panel-card z-[10001] dc-panel-w bg-white shadow-2xl transform transition-transform duration-300 flex flex-col overflow-hidden font-inter ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}>

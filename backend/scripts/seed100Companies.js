@@ -99,7 +99,6 @@ async function seed100Companies() {
         address: `${100 + i} ${street}, ${city}`,
         website: `www.${domain}`,
         gstin: i % 4 === 0 ? `29ABCDE${1000 + i}F1Z${i % 10}` : "",
-        documentSigned: i % 3 === 0,
         leadSource: pick(LEAD_SOURCES, i),
         organization: user.organization,
         user: user._id,

@@ -742,7 +742,7 @@
 
 // export default Header;
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import dataCirclesLogo from "../assets/Datacircles logo.png";
 import {
@@ -775,6 +775,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 
 import SearchIcon from "./common/SearchIcon";
 import NotificationBell from "./NotificationBell";
+import { DIM_CHROME_EVENT } from "../hooks/useSearchOverlayOpen";
 // Shimmer UI Component for Branding
 const BrandingShimmer = () => {
   return (
@@ -849,6 +850,23 @@ const Header = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  // The search bar slides from its normal navbar slot to the centre and opens
+  // an attached results panel. searchOrigin captures where it started (via
+  // getBoundingClientRect on the real slot, so it's exact for any screen
+  // width) so the overlay can begin exactly on top of it and only then
+  // transition to centred — a real slide, not a teleport.
+  const searchSlotRef = useRef(null);
+  const mobileSearchSlotRef = useRef(null);
+  const [searchOrigin, setSearchOrigin] = useState(null);
+  const [searchCentered, setSearchCentered] = useState(false);
+  // Tells the sidebar and each page's fixed footer to dim/blur themselves —
+  // see useSearchOverlayOpen.js for why this is a DOM event rather than lifted
+  // state (they're siblings with no shared parent to lift it into).
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isSearchOpen } })
+    );
+  }, [isSearchOpen]);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [hoveredMeeting, setHoveredMeeting] = useState(false);
   const [showQuickCompanyForm, setShowQuickCompanyForm] = useState(false);
@@ -1120,20 +1138,42 @@ const Header = () => {
     }
   }, [searchQuery, isSuperAdminRoute, isSuperAdmin]);
 
-  const handleSearchFocus = () => setIsSearchOpen(true);
-  const handleSearchChange = (e) => {
-    setSearchQuery(e.target.value);
-    if (e.target.value.length > 0 && !isSearchOpen) setIsSearchOpen(true);
-    if (e.target.value.length === 0) {
-      setIsSearchOpen(false);
-      setDebouncedQuery("");
+  // Desktop and mobile each have their own search field in different spots
+  // in the layout (only one is ever actually visible at a given width), so
+  // the slide needs to originate from whichever one was actually clicked.
+  const openSearchOverlay = (fromRef) => {
+    const ref = fromRef || searchSlotRef;
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setSearchOrigin({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
     }
+    setSearchCentered(false);
+    setIsSearchOpen(true);
+  };
+  const handleSearchFocus = (fromRef) => openSearchOverlay(fromRef);
+  const handleSearchChange = (e, fromRef) => {
+    setSearchQuery(e.target.value);
+    if (!isSearchOpen) openSearchOverlay(fromRef);
+    // Backspacing to empty clears results but stays open on "Start typing to
+    // search" — it shouldn't slide back to the navbar on its own. Only an
+    // explicit close (X, backdrop click, Escape) does that.
+    if (e.target.value.length === 0) setDebouncedQuery("");
   };
   const handleSearchClose = () => {
     setIsSearchOpen(false);
+    setSearchCentered(false);
     setSearchQuery("");
     setDebouncedQuery("");
   };
+
+  // Trigger the slide a tick after mount, once the overlay has painted at its
+  // origin position — flipping searchCentered then lets the transition
+  // classes below animate left/width/top to the centred target.
+  useEffect(() => {
+    if (!isSearchOpen || !searchOrigin) return;
+    const id = requestAnimationFrame(() => setSearchCentered(true));
+    return () => cancelAnimationFrame(id);
+  }, [isSearchOpen, searchOrigin]);
 
   const handleGlobalAdd = () => setIsAddMenuOpen(!isAddMenuOpen);
   const handleAddMenuClose = () => {
@@ -1342,7 +1382,7 @@ const Header = () => {
   return (
     <>
       <header
-        className="hidden lg:flex fixed top-0 right-0 bg-white border-b border-gray-200 shadow-sm z-[9992] h-16 items-center justify-between px-4 lg:px-6 transition-all duration-300 ease-in-out"
+        className="hidden lg:flex fixed top-0 right-0 bg-white border-b border-gray-200 z-[9992] h-16 items-center justify-between px-4 lg:px-6 transition-all duration-300 ease-in-out"
         style={{ left: "var(--sidebar-width, 0px)" }}
       >
         {/* Left Section: Breadcrumb / Dashboard tabs */}
@@ -1488,18 +1528,84 @@ const Header = () => {
               );
             })()}
           </div>
-          {/* Search */}
-          <div className="relative hidden lg:block w-[326px] h-[42px]">
+          {/* Search — the slot below reserves the layout space (so nothing
+              else in the navbar jumps) but is only ever visible when the
+              overlay isn't open; the overlay is what's actually interactive
+              once search is active. */}
+          <div
+            ref={searchSlotRef}
+            className={`relative hidden lg:block w-[326px] h-[42px] transition-opacity duration-150 ${isSearchOpen ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+          >
             <SearchIcon className="absolute left-4 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
             <input
               type="text"
               placeholder="Search Companies, Deals, Contacts"
               value={searchQuery}
               onChange={handleSearchChange}
-              onFocus={handleSearchFocus}
+              onFocus={() => handleSearchFocus()}
               className="w-full h-full pl-11 pr-4 bg-white border border-gray-200 rounded-full text-sm text-gray-700 placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans"
             />
           </div>
+
+          {isSearchOpen && searchOrigin && (
+            <>
+              {/* Plain opaque dim — no blur. Sidebar/pagination dim themselves
+                  independently via DIM_CHROME_EVENT; this is just the tint,
+                  and also doubles as the click-outside-to-close target. */}
+              <div
+                className="fixed inset-0 z-[9998] bg-black/40"
+                onClick={handleSearchClose}
+              />
+              {/* Starts pinned exactly over the real search slot (searchOrigin,
+                  captured via getBoundingClientRect) and, once searchCentered
+                  flips a tick later, transitions left/width/top to the centred
+                  target — a real slide from where it was, not a jump-cut.
+                  z-index above the backdrop (9998) — and above the sidebar
+                  (9995) and the pagination bar (9992), which otherwise sat in
+                  front of the backdrop and stayed sharp/undimmed. */}
+              <div
+                className="fixed z-[9999] transition-all duration-300 ease-out"
+                style={
+                  searchCentered
+                    ? { top: 10, left: "50%", width: 760, transform: "translateX(-50%)" }
+                    : { top: searchOrigin.top, left: searchOrigin.left, width: searchOrigin.width, transform: "translateX(0)" }
+                }
+              >
+                <div className="relative">
+                  <SearchIcon className="absolute left-4 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866] z-10" />
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Search Companies, Deals, Contacts"
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    className="w-full h-[42px] pl-11 pr-4 bg-white border border-gray-200 rounded-full text-sm text-gray-700 placeholder:text-gray-500 outline-none ring-2 ring-blue-500 border-transparent font-sans shadow-lg"
+                  />
+                </div>
+
+                {/* Attached results panel, docked directly under the bar. Sized
+                    to its content (up to two-thirds of the viewport) rather
+                    than always claiming a fixed height — a couple of matches
+                    no longer leave a tall mostly-empty box underneath them.
+                    This element does the scrolling itself (overflow-y-auto
+                    with a real maxHeight) — SearchResults' own wrapper used to
+                    be `h-full`, but percentage heights don't resolve against a
+                    maxHeight-only ancestor, so it silently stopped scrolling
+                    and results past the fold were just clipped instead. */}
+                <div
+                  className={`mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-y-auto transition-opacity duration-200 ${searchCentered ? "opacity-100" : "opacity-0"}`}
+                  style={{ maxHeight: "66vh" }}
+                >
+                  <SearchResults
+                    variant="panel"
+                    isOpen={isSearchOpen}
+                    onClose={handleSearchClose}
+                    searchQuery={debouncedQuery}
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           <NotificationBell variant="desktop" />
 
@@ -1606,14 +1712,17 @@ const Header = () => {
           {/* Right cluster */}
           <div className="flex items-center gap-2 min-w-0">
             {/* Search pill */}
-            <div className="flex items-center gap-2 px-2.5 h-8 border border-[#E1E4EA] rounded-full flex-1 min-w-0 max-w-[172px]">
+            <div
+              ref={mobileSearchSlotRef}
+              className={`flex items-center gap-2 px-2.5 h-8 border border-[#E1E4EA] rounded-full flex-1 min-w-0 max-w-[172px] transition-opacity duration-150 ${isSearchOpen ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+            >
               <SearchIcon className="text-[#525866] flex-shrink-0 w-5 h-5" />
               <input
                 type="text"
                 placeholder="Search..."
                 value={searchQuery}
-                onChange={handleSearchChange}
-                onFocus={handleSearchFocus}
+                onChange={(e) => handleSearchChange(e, mobileSearchSlotRef)}
+                onFocus={() => handleSearchFocus(mobileSearchSlotRef)}
                 className="bg-transparent outline-none text-sm text-[#525866] placeholder:text-[#525866] w-full min-w-0"
               />
             </div>
@@ -1771,16 +1880,6 @@ const Header = () => {
         </>
       )}
 
-      <SearchResults
-        isOpen={
-          isSearchOpen &&
-          debouncedQuery.length > 0 &&
-          !isSuperAdmin &&
-          !isSuperAdminRoute
-        }
-        onClose={handleSearchClose}
-        searchQuery={debouncedQuery}
-      />
     </>
   );
 };

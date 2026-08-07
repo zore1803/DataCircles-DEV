@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 import {
   X, Calendar, Clock, Users, MapPin, FileText, Video, Phone,
   AlertTriangle, CheckCircle2, Search, Plus, Trash2, User,
@@ -194,6 +195,13 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
     }
   }, [open, meetingData, mode, calendarDate, fetchMeetingsForDate]);
 
+  // Dims the sidebar/navbar/page-footer chrome while this panel is open --
+  // see useSearchOverlayOpen.js.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isSliding } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isSliding]);
+
   const handleChange = (key, val) => {
     setForm((f) => ({ ...f, [key]: val }));
     
@@ -375,7 +383,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] transition-all duration-300"
+      className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-all duration-300"
       style={{ opacity: isSliding ? 1 : 0 }}
       onClick={onClose}
     >

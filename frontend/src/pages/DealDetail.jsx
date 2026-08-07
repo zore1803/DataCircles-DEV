@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import DealForm from "../components/deal/DealForm";
+import QuickDealForm from "../components/deal/QuickDealForm";
 import toast from "react-hot-toast";
 import {
   ArrowLeft,
@@ -246,22 +247,7 @@ function DealDetail() {
   useEffect(() => { fetchData(); }, [dealId]);
 
   const handleEdit = () => {
-    setForm({
-      _id: deal._id,
-      title: deal.title || "",
-      amount: deal.amount || "",
-      status: deal.status || "Open",
-      company: deal.company?._id || "",
-      contact: deal.contact?._id || "",
-    });
-
-    const processedFields = {};
-    if (deal.additionalFields) {
-      deal.additionalFields.forEach((field) => {
-        processedFields[field.key] = field.value;
-      });
-    }
-    setAdditionalFieldValues(processedFields);
+    // Edit via the shared QuickDealForm (same as create).
     setShowForm(true);
   };
 
@@ -372,17 +358,14 @@ function DealDetail() {
       <AppToaster />
       {/* 👉 ADD THIS BLOCK HERE */}
       {showForm && (
-        <DealForm
-          form={form}
-          setForm={setForm}
-          additionalFieldValues={additionalFieldValues}
-          setAdditionalFieldValues={setAdditionalFieldValues}
-          dealFields={dealFieldList}
+        <QuickDealForm
           companies={companies}
           contacts={contacts}
-          loading={formLoading}
-          setLoading={setFormLoading}
-          fetchDeals={fetchData} 
+          editDeal={deal}
+          onDealUpdated={() => {
+            fetchData();
+            setShowForm(false);
+          }}
           onRequestClose={() => setShowForm(false)}
         />
       )}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 import {
   X, Calendar, Clock, CheckCircle2, Save, Edit3, Trash2, Loader2,
   FileText, User, Users, AlertCircle, Plus, Building2, Truck
@@ -62,6 +63,12 @@ const UserChip = ({ user, onRemove, isRemovable = false }) => (
 
 const EntitySelector = ({ value, onChange, entities, entityType }) => {
   const [isOpen, setIsOpen] = useState(false);
+  // Dims the sidebar/navbar/page-footer chrome while this panel is
+  // open -- see useSearchOverlayOpen.js.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isOpen]);
   const [searchTerm, setSearchTerm] = useState("");
 
   const getIcon = () => {
@@ -407,7 +414,7 @@ const AdminTaskForm = ({
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] transition-all duration-300"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-all duration-300"
         style={{ opacity: isSliding ? 1 : 0 }}
         onClick={onClose}
       />

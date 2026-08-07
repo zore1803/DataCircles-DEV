@@ -9,6 +9,7 @@ import {
 import Papa from "papaparse";
 import API from "../../services/api";
 import ContactFieldMappingModal from "./ContactFieldMappingModal";
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 function ImportContacts({
   isOpen: propIsOpen,
@@ -26,6 +27,12 @@ function ImportContacts({
   const [success, setSuccess] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  // Dims the sidebar/navbar/page-footer chrome while this panel is
+  // open -- see useSearchOverlayOpen.js.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(false);
 
   // Handle modal opening/closing animation
@@ -408,7 +415,7 @@ Contact Person 3,contact3@example.com,+1-555-0003,Customer,HealthCare Solutions,
     <>
       {/* Background Overlay */}
       <div
-        className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
         style={{ opacity: isOpen ? 1 : 0 }}
         onClick={handleClose}
       />

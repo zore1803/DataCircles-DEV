@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 import {
   X, Calendar, Clock, Users, MapPin, FileText, Video, Phone,
   AlertTriangle, CheckCircle2, Trash2, Building, Lightbulb,
@@ -98,6 +99,13 @@ const VendorMeetingForm = ({ open, mode, meetingData, calendarDate, vendorId, on
   const [form, setForm] = useState(initialState);
   const [loading, setLoading] = useState(false);
   const [isSliding, setIsSliding] = useState(false);
+
+  // Dims the sidebar/navbar/page-footer chrome while this panel is
+  // open -- see useSearchOverlayOpen.js.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isSliding } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isSliding]);
   const [shouldRender, setShouldRender] = useState(false);
   const [existingMeetings, setExistingMeetings] = useState([]);
   const [timeConflict, setTimeConflict] = useState(null);
@@ -333,7 +341,7 @@ const VendorMeetingForm = ({ open, mode, meetingData, calendarDate, vendorId, on
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] transition-all duration-300"
+      className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-all duration-300"
       style={{ opacity: isSliding ? 1 : 0 }}
       onClick={onClose}
     >

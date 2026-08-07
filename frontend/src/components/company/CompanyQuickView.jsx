@@ -112,7 +112,7 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
     <>
       {/* Backdrop (mobile only) */}
       <div
-        className="fixed inset-0 bg-black/30 lg:hidden z-[9998]"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm lg:hidden z-[9998]"
         onClick={onClose}
       />
 

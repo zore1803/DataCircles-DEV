@@ -190,7 +190,7 @@ const Emails = ({ vendorId, vendorEmail }) => {
           {shouldRender && (
             <>
               <div
-                className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
+                className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
                 style={{ opacity: isSliding ? 1 : 0 }}
                 onClick={() => setShowCompose(false)}
               />

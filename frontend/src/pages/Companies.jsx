@@ -103,6 +103,7 @@ import CompanyQuickView from "../components/company/CompanyQuickView";
 import AppToaster from "../components/AppToaster";
 
 import SearchIcon from "../components/common/SearchIcon";
+import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 // The app is rendered inside #root which carries a CSS `zoom` (0.75 on desktop).
 // getBoundingClientRect() returns UNSCALED layout coordinates, while portal overlays
 // mounted on document.body render in visual (un-zoomed) space and mouse clientX/Y are
@@ -129,6 +130,7 @@ const getAncestorZoom = (el) => {
 };
 
 function Companies() {
+  const isSearchOverlayOpen = useSearchOverlayOpen();
   const [companies, setCompanies] = useState([]);
   const [form, setForm] = useState({
     name: "",
@@ -136,7 +138,6 @@ function Companies() {
     address: "",
     website: "",
     gstin: "",
-    documentSigned: false,
     leadSource: "",
     profilePicture: null,
     profilePictureUrl: "",
@@ -321,14 +322,6 @@ function Companies() {
         order: 4,
         sortable: true,
         icon: CompanyGSTINIcon,
-      },
-      {
-        key: "documentSigned",
-        label: "Document Signed",
-        visible: true,
-        order: 5,
-        sortable: true,
-        icon: CompanyDocumentSignedIcon,
       },
       {
         key: "leadSource",
@@ -902,16 +895,6 @@ function Companies() {
               ) : <span className="text-sm text-gray-400">—</span>;
             } else if (vc.key === "gstin") {
               baseContent = <div className="truncate text-sm text-gray-700 font-mono w-full" title={company.gstin}>{company.gstin ? <HighlightText text={company.gstin} query={searchTerm} /> : "—"}</div>;
-            } else if (vc.key === "documentSigned") {
-              baseContent = company.documentSigned ? (
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
-                  <HighlightText text="Accepted" query={searchTerm} />
-                </span>
-              ) : (
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-50 text-gray-500 border border-gray-200">
-                  <HighlightText text="Pending" query={searchTerm} />
-                </span>
-              );
             } else if (vc.key === "leadSource") {
               baseContent = <span className="truncate text-sm text-gray-700" title={company.leadSource}>{company.leadSource ? <HighlightText text={company.leadSource} query={searchTerm} /> : "—"}</span>;
             } else if (baseContent === undefined) {
@@ -1643,7 +1626,6 @@ function Companies() {
       address: "",
       website: "",
       gstin: "",
-      documentSigned: false,
       leadSource: "",
       profilePicture: null,
       profilePictureUrl: "",
@@ -1767,46 +1749,54 @@ function Companies() {
         >
           {showBulkStrip ? (
             <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
-              <div className="flex flex-nowrap lg:flex-wrap items-center gap-3 flex-shrink-0">
+              {/* One joined strip instead of six separate pills: no gap between
+                  buttons, square inner edges, rounding only on the two outer
+                  corners, and each border pulled left by 1px (-ml-px) onto its
+                  neighbor so touching borders don't double up into a thick
+                  seam. */}
+              <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
+                {/* All six buttons share one neutral treatment now — white fill,
+                    black border, black text — with only the icon carrying each
+                    action's colour as an accent. */}
                 <button
                   onClick={() => setShowExportModal(true)}
-                  className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-4 h-4 text-green-600" />
                   Export
                 </button>
                 <button
                   onClick={() => setShowBulkNoteModal(true)}
-                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <StickyNote className="w-4 h-4 text-emerald-600" />
                   Add Note
                 </button>
                 <button
                   onClick={() => setShowAddToHotlistModal(true)}
-                  className="h-10 px-4 bg-white border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <FolderPlus className="w-4 h-4" />
+                  <FolderPlus className="w-4 h-4 text-blue-600" />
                   Add to Hotlist
                 </button>
                 <button
                   onClick={() => setShowBulkActions(true)}
-                  className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Edit2 className="w-4 h-4" />
+                  <Edit2 className="w-4 h-4 text-blue-600" />
                   Bulk Update
                 </button>
                 <button
                   onClick={() => setShowBulkDeleteModal(true)}
                   disabled={bulkLoading}
-                  className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4 text-red-600" />
                   Delete
                 </button>
                 <button
                   onClick={exitSelectionMode}
-                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <X className="w-4 h-4" />
                   Cancel
@@ -1997,16 +1987,21 @@ function Companies() {
                       )}
                     </div>
 
+                    {/* Always reads "New Company" — closing the panel is the
+                        form's own job (its X / Cancel), not this button's. It
+                        used to flip to "Cancel" and toggle-close whenever the
+                        panel was already open, which changed label/behaviour
+                        out from under whoever was looking at it. */}
                     <button
                       onClick={() => {
                         setEditCompany(null);
-                        setShowQuickAdd((v) => !v);
+                        setShowQuickAdd(true);
                       }}
                       className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
-                      title={showQuickAdd && !editCompany ? "Cancel" : "New Company"}
+                      title="New Company"
                     >
                       <Plus className="w-4 h-4 flex-shrink-0" />
-                      <span className="hidden lg:inline">{showQuickAdd && !editCompany ? "Cancel" : "New Company"}</span>
+                      <span className="hidden lg:inline">New Company</span>
                     </button>
                   </div>
                 </>
@@ -2035,8 +2030,12 @@ function Companies() {
           // old data now stays fully legible and clickable while the next page
           // loads; the top progress bar reports the fetch instead.
           // No border-t: the toolbar strip right above already has its own
-          // border-b, so a top border here would double up against it.
-          <div className="relative bg-white border-x border-b border-[#E1E4EA]">
+          // border-b, so a top border here would double up against it. No
+          // border-b either when there's no data — the table shrinks to just
+          // the header + the "No companies found" row, so that border would
+          // sit right under it as a second stray line with an odd gap instead
+          // of closing off a real table body.
+          <div className={`relative bg-white border-x border-[#E1E4EA] ${showLoadingSkeleton || companies.length > 0 ? "border-b" : ""}`}>
             <table
               className="w-full border-separate border-spacing-0 text-left"
               style={{
@@ -2236,8 +2235,16 @@ function Companies() {
 
       {!showLoadingSkeleton && !showHotlist && (
         <div
-          className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
-          style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+          className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
+          style={{
+            left: "var(--sidebar-width, 0px)",
+            height: 64,
+            // Same reasoning as the sidebar in Navbar.jsx — dims itself rather
+            // than depending on the overlay's backdrop to cover it by z-index
+            // alone. Plain opacity, no blur.
+            opacity: isSearchOverlayOpen ? 0.5 : 1,
+            transition: "opacity 200ms ease-out",
+          }}
         >
           {PaginationControls()}
         </div>

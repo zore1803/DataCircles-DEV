@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useAuth0 } from "@auth0/auth0-react";
+import API from "../services/api";
 import logo from "/DataCircles.png";
 
 import SearchIcon from "./common/SearchIcon";
-const SearchResults = ({ isOpen, onClose, searchQuery }) => {
+const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
+  const isPanel = variant === "panel";
   const [results, setResults] = useState({
     candidates: [],
     contacts: [],
@@ -17,43 +18,15 @@ const SearchResults = ({ isOpen, onClose, searchQuery }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
-  const { getAccessTokenSilently } = useAuth0();
 
-  // Unified Search API call
+  // Unified Search API call. Goes through the shared `API` axios instance —
+  // the same one every other page uses — instead of a raw fetch() with a
+  // manually-fetched Auth0 token: that bypassed the app's actual auth scheme
+  // (session/phone tokens via API's interceptor), so the backend rejected
+  // every request and search silently always came back empty.
   const searchAPI = async (query) => {
-    const token = await getAccessTokenSilently({
-      authorizationParams: {
-        audience: import.meta.env.VITE_APP_AUTH0_AUDIENCE,
-        scope: "openid profile email",
-      },
-    });
-
-    // const response = await fetch(
-    //   `${import.meta.env.VITE_APP_API_URL}/api/search?q=${encodeURIComponent(query)}`,
-    //   {
-    //     headers: {
-    //       Authorization: `Bearer ${token}`,
-    //       "Content-Type": "application/json",
-    //     },
-    //   }
-    // );
-    const response = await fetch(
-      `${
-        import.meta.env.VITE_APP_API_URL
-      }/api/search?search=${encodeURIComponent(query)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error("Failed to search");
-    }
-
-    return response.json();
+    const res = await API.get("/search", { params: { search: query } });
+    return res.data;
   };
 
   useEffect(() => {
@@ -112,52 +85,122 @@ const SearchResults = ({ isOpen, onClose, searchQuery }) => {
     onClose();
   };
 
-  const renderSection = (title, items, type) => (
-    <div className="mb-10">
-      <div className="flex items-center mb-6">
-        <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-        {items.length > 0 && (
-          <span className="ml-3 px-3 py-1 text-sm font-medium bg-gray-100 text-gray-600 rounded-full">
-            {items.length}
-          </span>
-        )}
-      </div>
-      {items.length > 0 ? (
-        <div className="grid gap-3">
-          {items.map((item) => (
-            <div
-              key={item._id || item.id}
-              onClick={() => handleResultClick(type, item)}
-              className="group p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-semibold text-gray-900 group-hover:text-blue-700 transition-colors truncate">
-                    {item.name || item.title || item.companyName}
-                  </h4>
-                  {/* (rest of your item detail rendering unchanged) */}
-                </div>
-                <div className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <SearchIcon className="w-6 h-6 text-gray-400" />
+  // One flat, mixed list instead of four separate section blocks — each row
+  // carries its own type badge (bottom-right) rather than being grouped under
+  // a heading, so a company and a contact that both match can sit next to
+  // each other in relevance/insertion order.
+  const TYPE_LABELS = {
+    companies: "Company",
+    contacts: "Contact",
+    vendors: "Vendor",
+    deals: "Deal",
+  };
+
+  // Ranked so a match on the primary name/title comes before a match that
+  // only hit some other field (address, GSTIN, email, ...) — Array.sort is
+  // stable, so within each rank the original company/vendor/contact/deal
+  // order is untouched, it's just the two tiers that get separated out.
+  const isNameMatch = (item, query) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return false;
+    const nameField = item.name || item.title || item.companyName || "";
+    return nameField.toLowerCase().includes(q);
+  };
+
+  const flatResults = [
+    ...results.companies.map((item) => ({ item, type: "companies" })),
+    ...results.vendors.map((item) => ({ item, type: "vendors" })),
+    ...results.contacts.map((item) => ({ item, type: "contacts" })),
+    ...results.deals.map((item) => ({ item, type: "deals" })),
+  ].sort((a, b) => {
+    const aRank = isNameMatch(a.item, searchQuery) ? 0 : 1;
+    const bRank = isNameMatch(b.item, searchQuery) ? 0 : 1;
+    return aRank - bRank;
+  });
+
+  const renderResultsList = () =>
+    flatResults.length > 0 ? (
+      // Plain rows, not individual cards — a hairline divider between them
+      // instead of each match getting its own bordered/shadowed box floating
+      // in space. The type is a small label, not a pill/badge.
+      <div className="divide-y divide-gray-100">
+        {flatResults.map(({ item, type }) => (
+          <div
+            key={`${type}-${item._id || item.id}`}
+            onClick={() => handleResultClick(type, item)}
+            className="group flex items-end justify-between gap-4 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+          >
+            <h4 className="font-semibold text-gray-900 group-hover:text-blue-700 transition-colors truncate min-w-0">
+              {item.name || item.title || item.companyName}
+            </h4>
+            <span className="flex-shrink-0 text-xs font-medium text-gray-400 whitespace-nowrap">
+              {TYPE_LABELS[type]}
+            </span>
           </div>
-          <p className="text-gray-500 text-sm">
-            No {title.toLowerCase()} found for your search
-          </p>
+        ))}
+      </div>
+    ) : (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+          <SearchIcon className="w-6 h-6 text-gray-400" />
         </div>
-      )}
-    </div>
-  );
+        <p className="text-gray-500 text-sm">No results found for your search</p>
+      </div>
+    );
 
   if (!isOpen) return null;
+
+  // Panel variant docks under the navbar search bar (Header.jsx owns the
+  // backdrop, close-on-click-outside and positioning there) — so it's just
+  // the scrollable results filling whatever box it's given, no second
+  // fixed overlay or close button stacked on top of the outer one.
+  // The panel this docks into (Header.jsx) already scrolls — no second
+  // h-full/overflow wrapper here, since percentage heights don't resolve
+  // against a maxHeight-only ancestor and that silently broke scrolling.
+  if (isPanel) {
+    return (
+      <div onClick={(e) => e.stopPropagation()}>
+        {error && (
+          <div className="mx-5 mt-5 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-start gap-3">
+            <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+            </div>
+            <p className="text-sm font-medium">{error}</p>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <img
+              src={logo}
+              alt="Loading..."
+              className="animate-spin-smooth drop-shadow-lg"
+              style={{ width: 36, height: 36, animationDuration: "1.8s" }}
+            />
+            <p className="mt-3 text-sm text-gray-600 font-medium">
+              Searching across all records...
+            </p>
+          </div>
+        ) : searchQuery && searchQuery.trim().length > 0 ? (
+          // No horizontal padding here — rows run edge-to-edge in the box
+          // instead of sitting inset inside a padded card.
+          renderResultsList()
+        ) : (
+          <div className="text-center py-16">
+            <div className="w-14 h-14 bg-gradient-to-br from-blue-50 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <SearchIcon className="w-6 h-6 text-blue-600" />
+            </div>
+            <h2 className="text-base font-semibold text-gray-900 mb-1.5">
+              Start typing to search
+            </h2>
+            <p className="text-sm text-gray-500 max-w-xs mx-auto">
+              Search across companies, vendors, contacts, and deals.
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -216,29 +259,20 @@ const SearchResults = ({ isOpen, onClose, searchQuery }) => {
                     </span>
                   </p>
                 </div>
-                {renderSection("Companies", results.companies, "companies")}
-                {renderSection("Vendors", results.vendors, "vendors")}
-                {renderSection("Contacts", results.contacts, "contacts")}
-                {renderSection("Deals", results.deals, "deals")}
+                {renderResultsList()}
               </div>
             ) : (
-              <div className="space-y-8">
-                <div className="text-center py-16">
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-50 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <SearchIcon className="w-8 h-8 text-blue-600" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                    Start Typing To Search
-                  </h2>
-                  <p className="text-gray-600 max-w-md mx-auto">
-                    Search across companies, vendors, contacts, and deals by any
-                    field. Results will appear as you type.
-                  </p>
+              <div className="text-center py-16">
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-50 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <SearchIcon className="w-8 h-8 text-blue-600" />
                 </div>
-                {renderSection("Companies", [], "companies")}
-                {renderSection("Vendors", [], "vendors")}
-                {renderSection("Contacts", [], "contacts")}
-                {renderSection("Deals", [], "deals")}
+                <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                  Start Typing To Search
+                </h2>
+                <p className="text-gray-600 max-w-md mx-auto">
+                  Search across companies, vendors, contacts, and deals by any
+                  field. Results will appear as you type.
+                </p>
               </div>
             )}
           </div>

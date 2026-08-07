@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { NAV_RESET_EVENT } from "../hooks/useNavReset";
+import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 
 
 import {
@@ -124,6 +125,7 @@ const secondary = {
 };
 
 const Navbar = () => {
+  const isSearchOverlayOpen = useSearchOverlayOpen();
   const [profile, setProfile] = useState("");
   const [kanbanName, setKanbanName] = useState("");
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -199,9 +201,8 @@ const Navbar = () => {
   };
 
   const navigation = [
-    { name: "Overview", isHeader: true },
+    { name: "CRM", isHeader: true },
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
-    { name: "General", isHeader: true },
     { name: "Companies", href: "/companies", icon: CompaniesIcon },
     { name: "Contacts", href: "/contacts", icon: ContactsIcon },
     { name: "Deals", href: "/deals", icon: DealsIcon },
@@ -552,9 +553,16 @@ const Navbar = () => {
         className={`animate-slideInLeft fixed top-0 left-0 bottom-0 overflow-y-auto overflow-x-hidden border-r border-gray-200 z-[9995] flex flex-col transition-all duration-300 ease-in-out lg:w-auto ${isMobileOpen
           ? "w-72 translate-x-0"
           : "w-72 -translate-x-full lg:translate-x-0"
-          }`}
+          } ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
         style={{
           background: primary.white,
+          // Dims in step with the overlay's own backdrop instead of relying
+          // on that backdrop to visually cover this element — the two are
+          // unrelated fixed-position layers, and z-index alone wasn't
+          // reliably painting the backdrop above a sibling fixed element.
+          // Plain opacity, no blur — matches the backdrop's own plain tint.
+          opacity: isSearchOverlayOpen ? 0.5 : 1,
+          transition: "opacity 200ms ease-out",
           width:
             window.innerWidth >= 1024
               ? (isHovered ? "280px" : "64px")

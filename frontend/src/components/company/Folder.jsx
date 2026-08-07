@@ -786,7 +786,7 @@ const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = 
   return (
     <div className={`fixed inset-0 z-[10001] flex items-center justify-center p-4 transition-all duration-300 ${isSliding ? "opacity-100" : "opacity-0"}`}>
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm"
         onClick={onClose}
       />
       <div

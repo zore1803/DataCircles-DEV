@@ -9,6 +9,7 @@ import QuickVendorForm from "../vendor/QuickVendorForm";
 import { Plus, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import ReactQuill from 'react-quill-new';
+import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const TaskForm = ({
   form,
@@ -24,6 +25,12 @@ const TaskForm = ({
   fetchTasks,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  // Dims the sidebar/navbar/page-footer chrome while this panel is
+  // open -- see useSearchOverlayOpen.js.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
+    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
+  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(true);
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -409,7 +416,7 @@ const TaskForm = ({
       )}
 
       <div
-        className="fixed inset-0 bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
         style={{ opacity: isOpen ? 1 : 0 }}
         onClick={handleClose}
       />

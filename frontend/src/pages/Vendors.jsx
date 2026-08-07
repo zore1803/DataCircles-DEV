@@ -962,14 +962,14 @@ function Vendors() {
 
           <button
             onClick={() => {
-              resetForm();
-              setShowForm(!showForm);
+              setEditVendor(null);
+              setShowQuickAdd((v) => !v);
             }}
             className="h-11 px-4 flex items-center justify-center gap-1.5 bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors flex-shrink-0 ml-1"
           >
             <Plus size={18} className="text-white" />
             <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">
-              {showForm ? "Cancel" : "Add Vendor"}
+              {showQuickAdd && !editVendor ? "Cancel" : "Add Vendor"}
             </span>
           </button>
         </div>

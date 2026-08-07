@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import API from "../services/api";
 import toast from "react-hot-toast";
 import VendorForm from "../components/vendor/VendorForm";
+import QuickVendorForm from "../components/vendor/QuickVendorForm";
 import BasicDetails from "../components/vendor/BasicDetails";
 import PaymentsTable from "../components/vendor/PaymentsTable";
 import NoteSection from "../components/vendor/NoteSection";
@@ -97,44 +98,8 @@ const VendorDetailsPage = () => {
     fetchVendorDetails();
   }, [id]);
 
-  // handleEdit logic
-  // handleEdit logic
+  // Edit via the shared QuickVendorForm (same as create).
   const handleEdit = () => {
-    setForm({
-      _id: vendor._id,
-      name: vendor.name || "",
-      email: vendor.email || "",
-      phone: vendor.phone || "",
-      category: vendor.category || "Vendor",
-      company: vendor.company || "",
-      website: vendor.website || "",
-      address: vendor.address || {
-        line1: "",
-        line2: "",
-        city: "",
-        state: "",
-        pincode: "",
-        country: "",
-      },
-      avatar: vendor.avatar || vendor.logo || "",
-      socialMedia: {
-        twitter: vendor.socialMedia?.twitter || "",
-        linkedin: vendor.socialMedia?.linkedin || "",
-        facebook: vendor.socialMedia?.facebook || "",
-        whatsapp: vendor.socialMedia?.whatsapp || "",
-      },
-      gstin: vendor.gstin || "", // Make sure to include GSTIN if you have it
-    });
-
-    // 👉 NEW: Extract and format existing custom fields for the form
-    const processedFields = {};
-    if (vendor.additionalFields) {
-      vendor.additionalFields.forEach((field) => {
-        processedFields[field.key] = field.value;
-      });
-    }
-    setAdditionalFieldValues(processedFields);
-
     setShowForm(true);
   };
 
@@ -185,23 +150,12 @@ const VendorDetailsPage = () => {
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       {showForm && (
-        <VendorForm
-          form={form}
-          setForm={setForm}
-          // 👉 NEW: Pass the states for typing
-          additionalFieldValues={additionalFieldValues}
-          setAdditionalFieldValues={setAdditionalFieldValues}
-          // 👉 FIXED: Map your state to the exact prop name the form expects
-          vendorFields={vendorFieldList}
-          loading={formLoading}
-          setLoading={setFormLoading}
-          setError={(message) =>
-            toast.error(message || "Failed to save vendor")
-          }
-          setSuccess={(message) =>
-            toast.success(message || "Vendor saved successfully")
-          }
-          fetchVendors={fetchVendorDetails}
+        <QuickVendorForm
+          editVendor={vendor}
+          onVendorUpdated={() => {
+            fetchVendorDetails();
+            setShowForm(false);
+          }}
           onRequestClose={() => setShowForm(false)}
         />
       )}
