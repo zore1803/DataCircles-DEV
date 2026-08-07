@@ -22,7 +22,7 @@ const FilterDropdown = ({ label, options, selected, onToggle }) => {
   return (
     <div className="flex flex-col gap-1.5 w-full relative" ref={dropdownRef}>
       <label className="text-sm font-medium text-gray-700">{label}</label>
-      <div 
+      <div
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center justify-between w-full border border-gray-200 rounded-lg px-3 py-2 cursor-pointer bg-white hover:border-gray-300 transition-colors min-h-[42px]"
       >
@@ -33,9 +33,9 @@ const FilterDropdown = ({ label, options, selected, onToggle }) => {
             selected.map(val => (
               <span key={val} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-medium">
                 <span className="truncate max-w-[120px]">{val}</span>
-                <X 
-                  size={14} 
-                  className="cursor-pointer hover:text-blue-900 transition-colors rounded-full hover:bg-blue-100 p-px" 
+                <X
+                  size={14}
+                  className="cursor-pointer hover:text-blue-900 transition-colors rounded-full hover:bg-blue-100 p-px"
                   onClick={(e) => {
                     e.stopPropagation();
                     onToggle(val);
@@ -55,8 +55,8 @@ const FilterDropdown = ({ label, options, selected, onToggle }) => {
           ) : (
             options.map(opt => (
               <label key={opt} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   checked={selected.includes(opt)}
                   onChange={() => onToggle(opt)}
                   className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
@@ -139,19 +139,19 @@ export default function CompanyFilterPanel({
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-[10001] bg-transparent"
       onClick={onClose}
     >
-      <div 
+      <div
         className="absolute top-[220px] right-[24px] md:right-[60px] lg:right-[80px] bg-white rounded-xl shadow-[0px_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 w-full max-w-[320px] flex flex-col animate-in fade-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900 font-sf">Filters</h2>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
           >
             <X size={20} />
@@ -161,25 +161,25 @@ export default function CompanyFilterPanel({
         {/* Body */}
         <div className="px-6 py-5 flex flex-col gap-5">
           {columns.map(col => (
-             <FilterDropdown 
-                key={col.key}
-                label={col.label}
-                options={valuesByColumn[col.key] || []}
-                selected={draft[col.key] || []}
-                onToggle={(val) => toggleValue(col.key, val)}
-             />
+            <FilterDropdown
+              key={col.key}
+              label={col.label}
+              options={valuesByColumn[col.key] || []}
+              selected={draft[col.key] || []}
+              onToggle={(val) => toggleValue(col.key, val)}
+            />
           ))}
         </div>
 
         {/* Footer */}
         <div className="p-5 flex items-center gap-3">
-          <button 
+          <button
             onClick={handleClear}
             className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-200 transition-colors"
           >
             Reset
           </button>
-          <button 
+          <button
             onClick={handleApply}
             className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm"
           >

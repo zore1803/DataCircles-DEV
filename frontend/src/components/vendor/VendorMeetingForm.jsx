@@ -338,8 +338,9 @@ const VendorMeetingForm = ({ open, mode, meetingData, calendarDate, vendorId, on
       onClick={onClose}
     >
       <div
- className="fixed inset-y-0 right-0 dc-panel-w z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out overflow-hidden"
-        style={{ transform: isSliding ? 'translateX(0)' : 'translateX(100%)' }}
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl overflow-hidden transform transition-transform duration-300 ease-out flex flex-col ${
+          isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="h-full flex flex-col">
@@ -367,7 +368,7 @@ const VendorMeetingForm = ({ open, mode, meetingData, calendarDate, vendorId, on
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {isViewing ? (
               /* VIEW MODE */
               <div className="p-6 space-y-6">
@@ -428,25 +429,7 @@ const VendorMeetingForm = ({ open, mode, meetingData, calendarDate, vendorId, on
                   )}
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-3 pt-6 border-t border-gray-200">
-                  <button
-                    onClick={handleEdit}
-                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl font-semibold transition-colors"
-                  >
-                    <Pencil className="w-4 h-4" />
-                    Edit Meeting
-                  </button>
-                  {onDelete && (
-                    <button
-                      onClick={handleDelete}
-                      className="flex-1 flex items-center justify-center gap-2 px-6 py-3 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl font-semibold transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete Meeting
-                    </button>
-                  )}
-                </div>
+                {/* Action buttons moved to fixed footer */}
               </div>
             ) : (
               /* EDIT/CREATE MODE - Form */
@@ -602,37 +585,71 @@ const VendorMeetingForm = ({ open, mode, meetingData, calendarDate, vendorId, on
                     </div>
                   </div>
                 )}
+              </form>
+            )}
+          </div>
 
-                <div className="flex gap-3 pt-6 border-t border-gray-200">
+          {/* Fixed Footer */}
+          <div className="p-6 border-t border-gray-200 bg-white flex gap-3 flex-shrink-0 mt-auto">
+            {isViewing ? (
+              <>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditMode(true)}
+                  className="flex-1 px-6 py-3 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  Edit
+                </button>
+                {onDelete && (
                   <button
                     type="button"
-                    onClick={isEditing ? handleCancelEdit : onClose}
-                    className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
+                    onClick={handleDelete}
+                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl font-semibold transition-colors"
                   >
-                    Cancel
+                    <Trash2 className="w-4 h-4" />
+                    Delete
                   </button>
-                  <button
-                    type="submit"
-                    disabled={loading || timeConflict}
-                    className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                      loading || timeConflict
-                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                        : "bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-xl"
-                    }`}
-                  >
-                    {loading ? (
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : timeConflict ? (
-                      "Resolve Conflict First"
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        {isEditing ? "Update Meeting" : "Schedule Meeting"}
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
+                )}
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={isEditing ? handleCancelEdit : onClose}
+                  className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="vendor-meeting-form"
+                  disabled={loading || timeConflict}
+                  className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                    loading || timeConflict
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-xl"
+                  }`}
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : timeConflict ? (
+                    "Resolve Conflict First"
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      {isEditing ? "Update Meeting" : "Schedule Meeting"}
+                    </>
+                  )}
+                </button>
+              </>
             )}
           </div>
         </div>

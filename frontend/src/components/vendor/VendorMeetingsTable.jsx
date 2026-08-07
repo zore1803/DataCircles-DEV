@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import Skeleton from "../common/Skeleton";
 import { Plus, Calendar, Search, Trash2, Eye } from "lucide-react";
 import API from "../../services/api";
 import VendorMeetingForm from "./VendorMeetingForm";
@@ -11,6 +12,7 @@ import FilterIcon from "../common/FilterIcon";
 import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { useTopLoadingSignal } from "../common/TopLoadingBar";
 import toast from "react-hot-toast";
+import HighlightText from "../common/HighlightText";
 
 /* `options` seeds each dropdown with the schema's full enum (models/Meeting.js)
    so a value stays filterable even when no current row uses it. */
@@ -59,6 +61,45 @@ const VendorMeetingsTable = ({ vendorId }) => {
   const [columnSizing, setColumnSizing] = useState({});
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [columnOrder, setColumnOrder] = useState(() => [
+    "selection", "title", "description", "status", "meetingType", "priority", "scheduledAt", "duration", "location", "actions"
+  ]);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    setColumnOrder((prev) => {
+      const newOrder = [...prev];
+      const draggedIdx = newOrder.indexOf(draggedKey);
+      const targetIdx = newOrder.indexOf(targetKey);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedKey);
+      return newOrder;
+    });
+  };
+
+  const handlePinColumn = (colId, side) => {
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colId), { key: colId, side }]);
+  };
+
+  const handleUnpinColumn = (colId) => {
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colId));
+  };
+
+  const handleHideColumn = (colId) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      next.add(colId);
+      return next;
+    });
+  };
+
+  const handleSort = (key, direction) => {
+    setSortConfig({ key, direction });
+  };
+
   const refetchMeetings = useCallback(async () => {
     const response = await API.get("/meetings", { params: { vendorId } });
     setMeetings(response.data?.meetings || []);
@@ -78,9 +119,6 @@ const VendorMeetingsTable = ({ vendorId }) => {
         return;
       }
 
-      // Supporting data only — the meeting list already rendered above, so a
-      // failure here (e.g. a 403 on the permission-gated user list) must not
-      // blank out meetings that loaded fine.
       try {
         const usersResponse = await API.get("/auth/all-user");
         setUsers(usersResponse.data?.allUsers || []);
@@ -94,7 +132,6 @@ const VendorMeetingsTable = ({ vendorId }) => {
     if (vendorId) fetchData();
   }, [vendorId, refetchMeetings]);
 
-  /* ── Search + filter ── */
   const filteredMeetings = useMemo(() => {
     let rows = meetings;
 
@@ -119,20 +156,34 @@ const VendorMeetingsTable = ({ vendorId }) => {
     0,
   );
 
-  /* ── Pagination — same client-side "first ... current ... last" pattern
-     CompanyMeetingsTab uses. Filters/search reset back to page 1. */
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(5);
+  const [limit, setLimit] = useState(50);
   useEffect(() => {
     setPage(1);
-  }, [search, selectedFilters]);
-  const totalPages = Math.max(1, Math.ceil(filteredMeetings.length / limit));
+  }, [filteredMeetings, search, selectedFilters]);
+
+  const sortedMeetings = useMemo(() => {
+    if (!sortConfig.key) return filteredMeetings;
+    return [...filteredMeetings].sort((a, b) => {
+      let aVal = getMeetingFieldValue(a, sortConfig.key) ?? "";
+      let bVal = getMeetingFieldValue(b, sortConfig.key) ?? "";
+      if (sortConfig.key === "scheduledAt") {
+        aVal = a.scheduledAt ? new Date(a.scheduledAt).getTime() : 0;
+        bVal = b.scheduledAt ? new Date(b.scheduledAt).getTime() : 0;
+      }
+      const aCmp = typeof aVal === "number" ? aVal : String(aVal).toLowerCase();
+      const bCmp = typeof bVal === "number" ? bVal : String(bVal).toLowerCase();
+      if (aCmp < bCmp) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aCmp > bCmp) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredMeetings, sortConfig]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedMeetings.length / limit));
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
-  // Brief top-edge progress flash on page change — same visual language as
-  // Companies.jsx's server-paginated list, even though this data is already
-  // in memory (client-side slice) rather than a fresh network round trip.
+
   const [isPaging, setIsPaging] = useState(false);
   useTopLoadingSignal(isPaging);
   const goToPage = (n) => {
@@ -142,11 +193,10 @@ const VendorMeetingsTable = ({ vendorId }) => {
     setTimeout(() => setIsPaging(false), 220);
   };
   const paginatedMeetings = useMemo(
-    () => filteredMeetings.slice((page - 1) * limit, page * limit),
-    [filteredMeetings, page, limit],
+    () => sortedMeetings.slice((page - 1) * limit, page * limit),
+    [sortedMeetings, page, limit],
   );
 
-  /* ── Bulk selection ── */
   const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
     items: filteredMeetings,
   });
@@ -208,8 +258,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
     setSelectedMeeting(null);
   };
 
-  /* ── Columns ── */
-  const columns = useMemo(
+  const baseColumns = useMemo(
     () => [
       {
         id: "selection",
@@ -247,7 +296,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
         header: "Meeting",
         cell: ({ row }) => (
           <span className="font-medium text-gray-900 truncate block" title={row.original.title}>
-            {row.original.title}
+            {row.original.title ? <HighlightText text={row.original.title} query={search} /> : "—"}
           </span>
         ),
       },
@@ -257,7 +306,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
         header: "Description",
         cell: ({ row }) => (
           <span className="text-gray-600 truncate block" title={row.original.description}>
-            {row.original.description || "—"}
+            {row.original.description ? <HighlightText text={row.original.description} query={search} /> : "—"}
           </span>
         ),
       },
@@ -267,11 +316,10 @@ const VendorMeetingsTable = ({ vendorId }) => {
         header: "Status",
         cell: ({ row }) => (
           <span
-            className={`inline-flex px-2 py-1 text-xs font-medium rounded capitalize ${
-              STATUS_BADGE[row.original.status] || "bg-gray-100 text-gray-800"
-            }`}
+            className={`inline-flex px-2 py-1 text-xs font-medium rounded capitalize ${STATUS_BADGE[row.original.status] || "bg-gray-100 text-gray-800"
+              }`}
           >
-            {row.original.status}
+            {row.original.status ? <HighlightText text={row.original.status} query={search} /> : "—"}
           </span>
         ),
       },
@@ -281,7 +329,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
         header: "Type",
         cell: ({ row }) => (
           <span className="text-gray-700 capitalize">
-            {row.original.meetingType ? row.original.meetingType.replace("-", " ") : "—"}
+            {row.original.meetingType ? <HighlightText text={row.original.meetingType.replace("-", " ")} query={search} /> : "—"}
           </span>
         ),
       },
@@ -291,11 +339,10 @@ const VendorMeetingsTable = ({ vendorId }) => {
         header: "Priority",
         cell: ({ row }) => (
           <span
-            className={`inline-flex px-2 py-1 text-xs font-medium rounded capitalize ${
-              PRIORITY_BADGE[row.original.priority] || "bg-gray-100 text-gray-600"
-            }`}
+            className={`inline-flex px-2 py-1 text-xs font-medium rounded capitalize ${PRIORITY_BADGE[row.original.priority] || "bg-gray-100 text-gray-600"
+              }`}
           >
-            {row.original.priority || "—"}
+            {row.original.priority ? <HighlightText text={row.original.priority} query={search} /> : "—"}
           </span>
         ),
       },
@@ -329,7 +376,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
         header: "Location",
         cell: ({ row }) => (
           <span className="text-gray-700 truncate block" title={row.original.location}>
-            {row.original.location || "—"}
+            {row.original.location ? <HighlightText text={row.original.location} query={search} /> : "—"}
           </span>
         ),
       },
@@ -365,8 +412,47 @@ const VendorMeetingsTable = ({ vendorId }) => {
         ),
       },
     ],
-    [paginatedMeetings, selectedItems, selectAll, clearSelection, toggleItem],
+    [paginatedMeetings, selectedItems, selectAll, clearSelection, toggleItem, search],
   );
+
+  const finalColumns = useMemo(() => {
+    const visibleBase = baseColumns.filter(c => !hiddenColumns.has(c.id));
+    const selectionCol = visibleBase.find(c => c.id === "selection");
+    const actionsCol = visibleBase.find(c => c.id === "actions");
+    const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
+
+    const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
+    const rightPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'right').map(p => p.key));
+
+    const leftCols = otherCols.filter(c => leftPinnedKeys.has(c.id));
+    const rightCols = otherCols.filter(c => rightPinnedKeys.has(c.id));
+    const midCols = otherCols.filter(c => !leftPinnedKeys.has(c.id) && !rightPinnedKeys.has(c.id));
+
+    midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
+
+    return [
+      ...(selectionCol ? [selectionCol] : []),
+      ...leftCols,
+      ...midCols,
+      ...rightCols,
+      ...(actionsCol ? [actionsCol] : [])
+    ];
+  }, [baseColumns, columnOrder, hiddenColumns, pinnedColumns]);
+
+  const visibleColumnsForGhost = useMemo(() => finalColumns.map(c => ({ key: c.id, label: c.header })), [finalColumns]);
+  const getGhostPreview = (colId) => {
+    return paginatedMeetings.slice(0, 10).map((m) => {
+      let val = m[colId];
+      if (colId === 'scheduledAt') {
+        val = new Date(m.scheduledAt).toLocaleDateString([], {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+      }
+      return String(val ?? "").trim() || "—";
+    });
+  };
 
   if (error) {
     return (
@@ -378,7 +464,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
   }
 
   return (
-    <div className="h-full mt-2">
+    <div className="h-full mt-0">
       {/* Action Buttons (Portaled to Tab Header) removed */}
 
       {stripVisible ? (
@@ -392,7 +478,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
           isDeleting={isDeleting}
         />
       ) : (
-        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+        <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
             <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
             <input
@@ -434,12 +520,35 @@ const VendorMeetingsTable = ({ vendorId }) => {
       <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
         <DataTable
           data={paginatedMeetings}
-          columns={columns}
+          columns={finalColumns}
           columnSizing={columnSizing}
           onColumnSizingChange={setColumnSizing}
+          pinnedColumns={pinnedColumns}
+          onPinColumn={handlePinColumn}
+          onUnpinColumn={handleUnpinColumn}
+          onHideColumn={handleHideColumn}
+          onSort={handleSort}
+          onColumnReorder={handleColumnReorder}
+          visibleColumns={visibleColumnsForGhost}
+          getGhostPreview={getGhostPreview}
           variant="card"
+          maxHeight={290}
           loading={loading}
           rowClassName={(m) => (selectedItems.includes(m._id) ? "!bg-blue-50" : "")}
+          loadingContent={
+            <div className="space-y-0">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[#E1E4EA] last:border-b-0">
+                  <Skeleton width={16} height={16} />
+                  <Skeleton width={90} height={13} />
+                  <Skeleton width={70} height={13} />
+                  <Skeleton width={60} height={13} />
+                  <Skeleton width={80} height={13} />
+                  <Skeleton width={60} height={13} />
+                </div>
+              ))}
+            </div>
+          }
           emptyContent={
             <div className="flex flex-col items-center gap-2">
               <Calendar className="w-10 h-10 text-gray-400" />
@@ -454,7 +563,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
             </div>
           }
         />
-        
+
         <div className="border-t border-[#E1E4EA] px-5">
           <TablePaginationFooter
             currentPage={page}

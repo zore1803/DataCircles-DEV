@@ -160,7 +160,7 @@ function Vendors() {
     currentPage: 1,
     totalPages: 0,
     totalCount: 0,
-    limit: 5,
+    limit: 50,
     hasNextPage: false,
     hasPrevPage: false,
   });
@@ -599,8 +599,19 @@ function Vendors() {
     return () => clearTimeout(timer);
   }, [filterCompany]);
 
+  // Reset to page 1 when the search/filter changes. Skips the initial mount —
+  // otherwise it races the first fetch below. Returning `prev` unchanged when
+  // already on page 1 avoids handing back a new pagination object on every
+  // settled keystroke, which re-rendered the whole list for nothing.
+  const skipInitialPageReset = useRef(true);
   useEffect(() => {
-    setPagination((prev) => ({ ...prev, currentPage: 1 }));
+    if (skipInitialPageReset.current) {
+      skipInitialPageReset.current = false;
+      return;
+    }
+    setPagination((prev) =>
+      prev.currentPage === 1 ? prev : { ...prev, currentPage: 1 },
+    );
   }, [debouncedSearchTerm, debouncedFilterCompany]);
 
   useEffect(() => {
@@ -608,7 +619,15 @@ function Vendors() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.currentPage, pagination.limit, sortConfig]);
 
+  // Search/filter fetch. Skips the initial mount — the effect above already
+  // fires the first fetch, and running both sent two identical requests on
+  // every page load (the same guard Companies.jsx uses).
+  const skipInitialSearchFetch = useRef(true);
   useEffect(() => {
+    if (skipInitialSearchFetch.current) {
+      skipInitialSearchFetch.current = false;
+      return;
+    }
     if (pagination.currentPage === 1) {
       fetchVendors();
     }
@@ -631,7 +650,14 @@ function Vendors() {
     }
   };
 
+  // Holds the id of the most recent request. Erasing a search term fires one
+  // request per settled keystroke, and a slower earlier request could land
+  // after a newer one and repaint the list with stale rows — which read as the
+  // list "reloading again and again". Only the newest response is applied.
+  const vendorRequestIdRef = useRef(0);
+
   const fetchVendors = async () => {
+    const requestId = ++vendorRequestIdRef.current;
     try {
       setLoading(true);
 
@@ -651,6 +677,9 @@ function Vendors() {
 
       const res = await API.get(`/vendors/pagination?${params.toString()}`);
 
+      // A newer request has been issued since this one started — discard.
+      if (requestId !== vendorRequestIdRef.current) return;
+
       if (res.data.vendors && res.data.pagination) {
         setVendors(res.data.vendors);
         setPagination((prev) => ({
@@ -665,6 +694,7 @@ function Vendors() {
         setVendors(res.data || []);
       }
     } catch (err) {
+      if (requestId !== vendorRequestIdRef.current) return;
       if (err.response && err.response.status === 403) {
         toast.error(err.response.data.message || "Access denied");
       } else {
@@ -672,7 +702,11 @@ function Vendors() {
       }
       setVendors([]);
     } finally {
-      setLoading(false);
+      // Only the newest request owns the loading flag, so a stale response
+      // resolving late can't switch the spinner off mid-flight.
+      if (requestId === vendorRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 

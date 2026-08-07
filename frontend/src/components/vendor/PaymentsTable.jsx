@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import Skeleton from "../common/Skeleton";
 import API from "../../services/api";
 import { useParams } from "react-router-dom";
 import { autoTable } from "jspdf-autotable";
@@ -34,6 +35,7 @@ import { useTopLoadingSignal } from "../common/TopLoadingBar";
 import { Search } from "lucide-react";
 import toast from "react-hot-toast";
 import AppToaster from "../AppToaster";
+import HighlightText from "../common/HighlightText";
 
 /* `options` seeds each dropdown with the schema's full enum (models/Payment.js)
    so a value stays filterable even when no current row uses it. */
@@ -60,12 +62,54 @@ const PaymentsTable = ({ payments, vendor }) => {
   const [receiptPayment, setReceiptPayment] = useState(null);
   const [vendorFields, setVendorFields] = useState([]);
   const [additionalFieldValues, setAdditionalFieldValues] = useState({});
-  const [showKPIs, setShowKPIs] = useState(true);
+  // Hidden by default: the page-level Financial Summary strip above the tab bar
+  // already shows this vendor's money position, so these in-tab tiles would be
+  // a duplicate on first paint. The eye toggle in the toolbar reveals them.
+  const [showKPIs, setShowKPIs] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedFilters, setSelectedFilters] = useState({});
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [columnSizing, setColumnSizing] = useState({});
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [columnOrder, setColumnOrder] = useState(() => [
+    "selection", "reference_id", "paymentDate", "direction", "paymentType", "bank", "reference", "amount", "actions"
+  ]);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    setColumnOrder((prev) => {
+      const newOrder = [...prev];
+      const draggedIdx = newOrder.indexOf(draggedKey);
+      const targetIdx = newOrder.indexOf(targetKey);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedKey);
+      return newOrder;
+    });
+  };
+
+  const handlePinColumn = (colId, side) => {
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colId), { key: colId, side }]);
+  };
+
+  const handleUnpinColumn = (colId) => {
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colId));
+  };
+
+  const handleHideColumn = (colId) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      next.add(colId);
+      return next;
+    });
+  };
+
+  const handleSort = (key, direction) => {
+    setSortConfig({ key, direction });
+  };
 
   useEffect(() => {
     setLocalPayments(payments || []);
@@ -118,11 +162,31 @@ const PaymentsTable = ({ payments, vendor }) => {
   /* ── Pagination — same client-side "first ... current ... last" pattern
      CompanyInvoicesTab uses. Search/filters reset back to page 1. */
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(5);
+  const [limit, setLimit] = useState(50);
   useEffect(() => {
     setPage(1);
   }, [search, selectedFilters]);
-  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / limit));
+  const sortedPayments = useMemo(() => {
+    if (!sortConfig.key) return filteredPayments;
+    return [...filteredPayments].sort((a, b) => {
+      let aVal = getPaymentFieldValue(a, sortConfig.key) ?? "";
+      let bVal = getPaymentFieldValue(b, sortConfig.key) ?? "";
+      if (sortConfig.key === "paymentDate") {
+        aVal = new Date(a.paymentDate).getTime();
+        bVal = new Date(b.paymentDate).getTime();
+      } else if (sortConfig.key === "reference_id") {
+        aVal = a._id;
+        bVal = b._id;
+      }
+      const aCmp = typeof aVal === "number" ? aVal : String(aVal).toLowerCase();
+      const bCmp = typeof bVal === "number" ? bVal : String(bVal).toLowerCase();
+      if (aCmp < bCmp) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aCmp > bCmp) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredPayments, sortConfig]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedPayments.length / limit));
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
@@ -138,8 +202,8 @@ const PaymentsTable = ({ payments, vendor }) => {
     setTimeout(() => setIsPaging(false), 220);
   };
   const paginatedPayments = useMemo(
-    () => filteredPayments.slice((page - 1) * limit, page * limit),
-    [filteredPayments, page, limit],
+    () => sortedPayments.slice((page - 1) * limit, page * limit),
+    [sortedPayments, page, limit],
   );
 
   const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
@@ -308,7 +372,7 @@ const PaymentsTable = ({ payments, vendor }) => {
   /* ── Columns ──
      `bank` and `reference` are surfaced here for the first time; they were
      stored on the Payment but only ever visible inside the receipt preview. */
-  const columns = useMemo(
+  const baseColumns = useMemo(
     () => [
       {
         id: "selection",
@@ -346,7 +410,7 @@ const PaymentsTable = ({ payments, vendor }) => {
         cell: ({ row }) => (
           <span className="text-xs font-mono font-medium text-gray-900">
             {row.original.direction === "OUT" ? "OUT" : "IN"}-
-            {row.original._id.slice(-4).toUpperCase()}
+            <HighlightText text={row.original._id.slice(-4).toUpperCase()} query={search} />
           </span>
         ),
       },
@@ -394,7 +458,9 @@ const PaymentsTable = ({ payments, vendor }) => {
         size: 130,
         header: "Mode",
         cell: ({ row }) => (
-          <span className="text-sm text-gray-700">{row.original.paymentType || "—"}</span>
+          <span className="text-sm text-gray-700">
+            {row.original.paymentType ? <HighlightText text={row.original.paymentType} query={search} /> : "—"}
+          </span>
         ),
       },
       {
@@ -402,7 +468,9 @@ const PaymentsTable = ({ payments, vendor }) => {
         size: 120,
         header: "Bank",
         cell: ({ row }) => (
-          <span className="text-sm text-gray-700">{row.original.bank || "—"}</span>
+          <span className="text-sm text-gray-700">
+            {row.original.bank ? <HighlightText text={row.original.bank} query={search} /> : "—"}
+          </span>
         ),
       },
       {
@@ -410,8 +478,8 @@ const PaymentsTable = ({ payments, vendor }) => {
         size: 170,
         header: "Reference",
         cell: ({ row }) => (
-          <span className="text-sm text-gray-700 truncate block" title={row.original.reference}>
-            {row.original.reference || "—"}
+          <span className="font-medium text-gray-900 truncate block">
+            {row.original.reference ? <HighlightText text={row.original.reference} query={search} /> : "—"}
           </span>
         ),
       },
@@ -425,7 +493,7 @@ const PaymentsTable = ({ payments, vendor }) => {
               row.original.direction === "OUT" ? "text-red-600" : "text-green-600"
             }`}
           >
-            {row.original.direction === "OUT" ? "−" : "+"} ₹{row.original.amount.toFixed(2)}
+            {row.original.direction === "OUT" ? "−" : "+"} <HighlightText text={`₹${row.original.amount.toFixed(2)}`} query={search} />
           </span>
         ),
       },
@@ -473,8 +541,42 @@ const PaymentsTable = ({ payments, vendor }) => {
     [paginatedPayments, selectedItems, selectAll, clearSelection, toggleItem],
   );
 
+  const finalColumns = useMemo(() => {
+    const visibleBase = baseColumns.filter(c => !hiddenColumns.has(c.id));
+    const selectionCol = visibleBase.find(c => c.id === "selection");
+    const actionsCol = visibleBase.find(c => c.id === "actions");
+    const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
+
+    const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
+    const rightPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'right').map(p => p.key));
+    
+    const leftCols = otherCols.filter(c => leftPinnedKeys.has(c.id));
+    const rightCols = otherCols.filter(c => rightPinnedKeys.has(c.id));
+    const midCols = otherCols.filter(c => !leftPinnedKeys.has(c.id) && !rightPinnedKeys.has(c.id));
+    
+    midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
+    
+    return [
+      ...(selectionCol ? [selectionCol] : []),
+      ...leftCols,
+      ...midCols,
+      ...rightCols,
+      ...(actionsCol ? [actionsCol] : [])
+    ];
+  }, [baseColumns, columnOrder, hiddenColumns, pinnedColumns]);
+
+  const visibleColumnsForGhost = useMemo(() => finalColumns.map(c => ({ key: c.id, label: c.header })), [finalColumns]);
+  const getGhostPreview = (colId) => {
+    return paginatedPayments.slice(0, 10).map((p) => {
+      if (colId === "paymentDate") return new Date(p.paymentDate).toLocaleDateString();
+      if (colId === "amount") return `₹${p.amount.toFixed(2)}`;
+      if (colId === "reference_id") return p._id.slice(-4).toUpperCase();
+      return String(getPaymentFieldValue(p, colId) ?? "").trim() || "—";
+    });
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="h-full mt-0">
       <AppToaster />
 
       {/* Action Buttons (Portaled to Tab Header) removed */}
@@ -482,7 +584,7 @@ const PaymentsTable = ({ payments, vendor }) => {
       
       {/* Stats Cards */}
       {showKPIs && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="p-4 border border-gray-200 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="w-4 h-4 text-gray-600" />
@@ -515,7 +617,7 @@ const PaymentsTable = ({ payments, vendor }) => {
                 netBalance >= 0 ? "text-green-600" : "text-red-600"
               }`}
             >
-              <h6>₹{Math.abs(netBalance).toFixed(2)}</h6>
+              ₹{Math.abs(netBalance).toFixed(2)}
             </p>
             <p className="text-xs text-gray-600 mt-1">
               {netBalance >= 0 ? "You'll receive" : "You owe"}
@@ -548,7 +650,7 @@ const PaymentsTable = ({ payments, vendor }) => {
           isDeleting={isDeleting}
         />
       ) : (
-        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+        <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
             <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
             <input
@@ -617,12 +719,37 @@ const PaymentsTable = ({ payments, vendor }) => {
       <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
         <DataTable
           data={paginatedPayments}
-          columns={columns}
+          columns={finalColumns}
           loading={loading}
           columnSizing={columnSizing}
           onColumnSizingChange={setColumnSizing}
+          pinnedColumns={pinnedColumns}
+          onPinColumn={handlePinColumn}
+          onUnpinColumn={handleUnpinColumn}
+          onHideColumn={handleHideColumn}
+          onSort={handleSort}
+          onColumnReorder={handleColumnReorder}
+          visibleColumns={visibleColumnsForGhost}
+          getGhostPreview={getGhostPreview}
           variant="card"
+          maxHeight={290}
           rowClassName={(p) => (selectedItems.includes(p._id) ? "!bg-blue-50" : "")}
+          loadingContent={
+            <div className="space-y-0">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[#E1E4EA] last:border-b-0">
+                  <Skeleton width={16} height={16} />
+                  <Skeleton width={70} height={13} />
+                  <Skeleton width={80} height={13} />
+                  <Skeleton width={50} height={13} />
+                  <Skeleton width={60} height={13} />
+                  <Skeleton width={60} height={13} />
+                  <Skeleton width={100} height={13} />
+                  <Skeleton width={70} height={13} />
+                </div>
+              ))}
+            </div>
+          }
           emptyContent={
             <div className="flex flex-col items-center gap-3">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
