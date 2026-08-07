@@ -22,10 +22,20 @@ const socialMediaSchema = new mongoose.Schema({
   whatsapp: { type: String, default: '' }
 }, { _id: false });
 
+// Structured postal address, used for both billing and shipping.
+const postalAddressSchema = new mongoose.Schema({
+  addressLine1: { type: String, default: '' },
+  addressLine2: { type: String, default: '' },
+  pincode: { type: String, default: '' },
+  city: { type: String, default: '' },
+  state: { type: String, default: '' },
+  country: { type: String, default: '' },
+}, { _id: false });
+
 const companySchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    industry: { type: String, required: true },
+    industry: { type: String },
     gstin: {
       type: String,
     },
@@ -37,7 +47,11 @@ const companySchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-    address: String,
+    address: String, // legacy single-line address (kept for search/back-compat)
+    // Exactly one billing address; GST (CGST/SGST vs IGST) is derived from its state.
+    billingAddress: { type: postalAddressSchema, default: () => ({}) },
+    // One or more shipping addresses.
+    shippingAddresses: { type: [postalAddressSchema], default: [] },
     website: String,
     profilePicture: String,
     socialMedia: {

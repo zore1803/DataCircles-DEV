@@ -2,12 +2,25 @@ import React, { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
 import CustomDropdown from "../common/CustomDropdown";
 import toast from "react-hot-toast";
+import { INDIA_STATES, COUNTRIES } from "../../constants/addressOptions";
 
-const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
+const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, editCompany = null }) => {
+  const isEditing = !!editCompany;
+  const emptyAddress = {
+    addressLine1: "",
+    addressLine2: "",
+    pincode: "",
+    city: "",
+    state: "",
+    country: "",
+  };
   const [form, setForm] = useState({
     name: "",
     industry: "",
-    address: "",
+    // Exactly one billing address (GST is derived from its state).
+    billingAddress: { ...emptyAddress },
+    // One or more shipping addresses; each can mirror the billing address.
+    shippingAddresses: [{ ...emptyAddress, sameAsBilling: false }],
     website: "",
     gstin: "", // Added gstin field
     documentSigned: false,
@@ -31,6 +44,30 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
       setIsOpen(false);
     };
   }, []);
+
+  // Pre-fill when editing an existing company so edit and create share one form.
+  useEffect(() => {
+    if (!editCompany) return;
+    setForm({
+      name: editCompany.name || "",
+      industry: editCompany.industry || "",
+      billingAddress: { ...emptyAddress, ...(editCompany.billingAddress || {}) },
+      shippingAddresses:
+        editCompany.shippingAddresses && editCompany.shippingAddresses.length
+          ? editCompany.shippingAddresses.map((a) => ({ ...emptyAddress, ...a, sameAsBilling: false }))
+          : [{ ...emptyAddress, sameAsBilling: false }],
+      website: editCompany.website || "",
+      gstin: editCompany.gstin || "",
+      documentSigned: editCompany.documentSigned || false,
+      profilePicture: null,
+    });
+    const pf = {};
+    (editCompany.additionalFields || []).forEach((f) => {
+      pf[f.key] = f.value;
+    });
+    setAdditionalFields(pf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editCompany]);
 
   const fetchFieldDefinitions = async () => {
     try {
@@ -128,7 +165,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
             rows={3}
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#E0E0E1] rounded-xl px-4 py-3 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter resize-vertical"
+            className="w-full border border-[#E0E0E1] rounded-[25px] px-4 py-3 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter resize-vertical"
             required={fieldDef.required}
           />
         );
@@ -220,10 +257,46 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
       return;
     }
 
+    // Address fields are compulsory.
+    if (!isAddressComplete(form.billingAddress)) {
+      toast.error("Please complete the billing address");
+      return;
+    }
+    for (let i = 0; i < form.shippingAddresses.length; i++) {
+      if (!isAddressComplete(form.shippingAddresses[i])) {
+        toast.error(
+          form.shippingAddresses.length > 1
+            ? `Please complete shipping address ${i + 1}`
+            : "Please complete the shipping address"
+        );
+        return;
+      }
+    }
+
+    // One-line summary of the billing address, kept in the legacy `address`
+    // field so existing search/filters keep working.
+    const legacyAddress = [
+      form.billingAddress.addressLine1,
+      form.billingAddress.addressLine2,
+      form.billingAddress.city,
+      form.billingAddress.state,
+      form.billingAddress.pincode,
+      form.billingAddress.country,
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    // Strip the UI-only `sameAsBilling` flag before sending.
+    const shippingPayload = form.shippingAddresses.map(
+      ({ sameAsBilling, ...addr }) => addr
+    );
+
     const payload = new FormData();
     payload.append("name", form.name);
     payload.append("industry", form.industry);
-    payload.append("address", form.address);
+    payload.append("address", legacyAddress);
+    payload.append("billingAddress", JSON.stringify(form.billingAddress));
+    payload.append("shippingAddresses", JSON.stringify(shippingPayload));
     payload.append("website", form.website);
     payload.append("gstin", form.gstin); // Added gstin to payload
     payload.append("documentSigned", form.documentSigned ? "true" : "false");
@@ -251,12 +324,17 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
 
     try {
       setLoading(true);
-      const res = await API.post("/companies", payload, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      toast.success("Company added successfully!");
-      if (onCompanyCreated && res.data) {
-        onCompanyCreated(res.data);
+      const res = isEditing
+        ? await API.put(`/companies/${editCompany._id}`, payload, {
+            headers: { "Content-Type": "multipart/form-data" },
+          })
+        : await API.post("/companies", payload, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+      toast.success(isEditing ? "Company updated successfully!" : "Company added successfully!");
+      const cb = isEditing ? onCompanyUpdated || onCompanyCreated : onCompanyCreated;
+      if (cb && res.data) {
+        cb(res.data);
       }
       setIsFormDirty(false);
       closeForm();
@@ -291,6 +369,123 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
   const handleFormChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setIsFormDirty(true);
+  };
+
+  // Update one field of the single billing address. Any shipping address that
+  // is set to "same as billing" mirrors the change.
+  const handleBillingChange = (field, value) => {
+    setForm((prev) => {
+      const billingAddress = { ...prev.billingAddress, [field]: value };
+      const shippingAddresses = prev.shippingAddresses.map((s) =>
+        s.sameAsBilling ? { ...billingAddress, sameAsBilling: true } : s
+      );
+      return { ...prev, billingAddress, shippingAddresses };
+    });
+    setIsFormDirty(true);
+  };
+
+  // Update one field of the shipping address at `index`.
+  const handleShippingChange = (index, field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      shippingAddresses: prev.shippingAddresses.map((s, i) =>
+        i === index ? { ...s, [field]: value } : s
+      ),
+    }));
+    setIsFormDirty(true);
+  };
+
+  // Toggle "same as billing" for one shipping address; copy billing in when on.
+  const handleShippingSameAsBilling = (index, checked) => {
+    setForm((prev) => ({
+      ...prev,
+      shippingAddresses: prev.shippingAddresses.map((s, i) =>
+        i === index
+          ? checked
+            ? { ...prev.billingAddress, sameAsBilling: true }
+            : { ...s, sameAsBilling: false }
+          : s
+      ),
+    }));
+    setIsFormDirty(true);
+  };
+
+  const addShippingAddress = () => {
+    setForm((prev) => ({
+      ...prev,
+      shippingAddresses: [...prev.shippingAddresses, { ...emptyAddress, sameAsBilling: false }],
+    }));
+    setIsFormDirty(true);
+  };
+
+  const removeShippingAddress = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      shippingAddresses: prev.shippingAddresses.filter((_, i) => i !== index),
+    }));
+    setIsFormDirty(true);
+  };
+
+  // Address is compulsory: line1, city, state, pincode, country (line2 optional).
+  const isAddressComplete = (a) =>
+    !!(a.addressLine1?.trim() && a.city?.trim() && a.state?.trim() && a.pincode?.trim() && a.country?.trim());
+
+  // Shared 6-field address grid, reused by billing and each shipping address.
+  const renderAddressGrid = (address, onFieldChange, disabled) => {
+    const inputCls =
+      "w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] disabled:bg-gray-50 disabled:text-gray-400";
+    const ddCls = (val) =>
+      `w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-left flex items-center justify-between transition-all bg-white font-inter disabled:bg-gray-50 disabled:text-gray-400 ${val ? "text-gray-900" : "text-[#A0A0A0]"}`;
+    return (
+      <fieldset disabled={disabled} className={`space-y-3 ${disabled ? "opacity-70" : ""}`}>
+        <input
+          type="text"
+          value={address.addressLine1}
+          onChange={(e) => onFieldChange("addressLine1", e.target.value)}
+          className={inputCls}
+          placeholder="Address Line 1 *"
+        />
+        <input
+          type="text"
+          value={address.addressLine2}
+          onChange={(e) => onFieldChange("addressLine2", e.target.value)}
+          className={inputCls}
+          placeholder="Address Line 2"
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            type="text"
+            value={address.city}
+            onChange={(e) => onFieldChange("city", e.target.value)}
+            className={inputCls}
+            placeholder="City *"
+          />
+          <CustomDropdown
+            options={INDIA_STATES}
+            value={address.state}
+            onChange={(value) => onFieldChange("state", value)}
+            placeholder="State *"
+            searchable
+            buttonClassName={ddCls(address.state)}
+          />
+          <input
+            type="text"
+            value={address.pincode}
+            onChange={(e) => onFieldChange("pincode", e.target.value)}
+            className={inputCls}
+            placeholder="Pincode *"
+          />
+          <CustomDropdown
+            options={COUNTRIES}
+            value={address.country}
+            onChange={(value) => onFieldChange("country", value)}
+            placeholder="Country *"
+            searchable
+            buttonClassName={ddCls(address.country)}
+          />
+        </div>
+      </fieldset>
+    );
   };
 
   if (!shouldRender) return null;
@@ -354,7 +549,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
           {/* Sticky header — compact, matching the note editor card */}
           <div className="flex justify-between items-center flex-shrink-0 p-4 border-b border-gray-100">
             <h3 className="text-base font-semibold text-gray-700">
-              Create New Company
+              {isEditing ? "Edit Company" : "Create New Company"}
             </h3>
             <button
               type="button"
@@ -422,19 +617,64 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
               />
             </div>
 
+            {/* Billing Address (single — GST is calculated from its state) */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Address <span className="text-red-500">*</span>
+              <label className="block text-[14px] font-bold text-[#111216] mb-3">
+                Billing Address <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                value={form.address}
-                onChange={(e) => handleFormChange("address", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
-                placeholder="Enter Address Here"
-                required
-              />
+              {renderAddressGrid(
+                form.billingAddress,
+                (field, value) => handleBillingChange(field, value),
+                false
+              )}
             </div>
+
+            {/* Shipping Addresses (one or more) */}
+            {form.shippingAddresses.map((ship, index) => (
+              <div key={index}>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-[14px] font-bold text-[#111216]">
+                    Shipping Address{form.shippingAddresses.length > 1 ? ` ${index + 1}` : ""}{" "}
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!ship.sameAsBilling}
+                        onChange={(e) => handleShippingSameAsBilling(index, e.target.checked)}
+                        className="w-4 h-4 rounded border-[#E0E0E1] text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-[13px] font-medium text-[#525866]">
+                        Same as billing
+                      </span>
+                    </label>
+                    {form.shippingAddresses.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeShippingAddress(index)}
+                        className="text-[13px] font-medium text-[#DF120B] hover:underline"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {renderAddressGrid(
+                  ship,
+                  (field, value) => handleShippingChange(index, field, value),
+                  !!ship.sameAsBilling
+                )}
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={addShippingAddress}
+              className="self-start text-[13px] font-semibold text-[#0C4FCD] hover:underline"
+            >
+              + Add another shipping address
+            </button>
 
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
@@ -526,7 +766,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
               type="submit"
               disabled={loading}
             >
-              {loading ? "Saving..." : "Create Company"}
+              {loading ? "Saving..." : isEditing ? "Update Company" : "Create Company"}
             </button>
           </div>
         </form>

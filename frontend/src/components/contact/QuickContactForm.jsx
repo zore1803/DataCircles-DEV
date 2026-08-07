@@ -7,7 +7,8 @@ import QuickCompanyForm from "../company/QuickCompanyForm";
 import { Plus } from "lucide-react";
 import toast from "react-hot-toast";
 
-const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initialCompanyId = "" }) => {
+const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onRequestClose, initialCompanyId = "", editContact = null }) => {
+  const isEditing = !!editContact;
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -37,6 +38,23 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
       setIsOpen(false);
     };
   }, [companies]);
+
+  // Pre-fill when editing so edit and create share one form.
+  useEffect(() => {
+    if (!editContact) return;
+    setForm({
+      name: editContact.name || "",
+      email: editContact.email || "",
+      phone: editContact.phone || "",
+      company: editContact.company?._id || editContact.company || "",
+    });
+    const pf = {};
+    (editContact.additionalFields || []).forEach((f) => {
+      pf[f.key] = f.value;
+    });
+    setAdditionalFields(pf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editContact]);
 
   const fetchFieldDefinitions = async () => {
     try {
@@ -336,12 +354,17 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
 
     try {
       setLoading(true);
-      const res = await API.post("/contacts", payload, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      toast.success("Contact added successfully!");
-      if (onContactCreated && res.data) {
-        onContactCreated(res.data);
+      const res = isEditing
+        ? await API.put(`/contacts/${editContact._id}`, payload, {
+            headers: { "Content-Type": "multipart/form-data" },
+          })
+        : await API.post("/contacts", payload, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+      toast.success(isEditing ? "Contact updated successfully!" : "Contact added successfully!");
+      const cb = isEditing ? onContactUpdated || onContactCreated : onContactCreated;
+      if (cb && res.data) {
+        cb(res.data);
       }
       setIsFormDirty(false);
       closeForm();
@@ -438,18 +461,18 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
         `}
       >
         <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
-          <div className="flex justify-between items-center p-4 border-b border-gray-100 flex-shrink-0">
-            <h3 className="text-base font-semibold text-gray-700">
-              Create New Contact
-            </h3>
+          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0">
+            <h2 className="text-[24px] font-bold text-[#111216]">
+              {isEditing ? "Edit Contact" : "Create New Contact"}
+            </h2>
             <button
               type="button"
               onClick={handleClose}
-              className="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100"
+              className="text-gray-400 hover:text-gray-600 transition-colors"
               aria-label="Close"
             >
               <svg
-                className="w-5 h-5 text-gray-400"
+                className="w-6 h-6"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -598,20 +621,20 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
             )}
           </div>
 
-          <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0 bg-white">
+          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
-              className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors font-inter"
+              className="flex-1 border border-[#E0E0E1] text-[#111216] h-12 rounded-xl text-[14px] font-bold hover:bg-gray-50 transition-colors font-inter"
             >
               Cancel
             </button>
             <button
-              className="px-6 py-2.5 bg-[#0C4FCD] text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
+              className="flex-1 bg-[#0C4FCD] text-white h-12 rounded-xl text-[14px] font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
               type="submit"
               disabled={loading}
             >
-              {loading ? "Saving..." : "Create New Contact"}
+              {loading ? "Saving..." : isEditing ? "Update Contact" : "Create New Contact"}
             </button>
           </div>
         </form>

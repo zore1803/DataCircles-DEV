@@ -3,7 +3,8 @@ import API from "../../services/api";
 import { Upload, X } from "lucide-react";
 import toast from "react-hot-toast";
 
-const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
+const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, editVendor = null }) => {
+  const isEditing = !!editVendor;
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -52,6 +53,33 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
       }
     };
   }, []);
+
+  // Pre-fill when editing so edit and create share one form.
+  useEffect(() => {
+    if (!editVendor) return;
+    setForm({
+      name: editVendor.name || "",
+      email: editVendor.email || "",
+      phone: editVendor.phone || "",
+      company: editVendor.company || "",
+      gstin: editVendor.gstin || "",
+      address: {
+        line1: editVendor.address?.line1 || "",
+        line2: editVendor.address?.line2 || "",
+        city: editVendor.address?.city || "",
+        state: editVendor.address?.state || "",
+        pincode: editVendor.address?.pincode || "",
+        country: editVendor.address?.country || "India",
+      },
+    });
+    if (editVendor.profilePicture) setProfilePreview(editVendor.profilePicture);
+    const pf = {};
+    (editVendor.additionalFields || []).forEach((f) => {
+      pf[f.key] = f.value;
+    });
+    setAdditionalFields(pf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editVendor]);
 
   const fetchFieldDefinitions = async () => {
     try {
@@ -417,12 +445,17 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
 
     try {
       setLoading(true);
-      const res = await API.post("/vendors", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      toast.success("Vendor added successfully!");
-      if (onVendorCreated && res.data) {
-        onVendorCreated(res.data);
+      const res = isEditing
+        ? await API.put(`/vendors/${editVendor._id}`, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          })
+        : await API.post("/vendors", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+      toast.success(isEditing ? "Vendor updated successfully!" : "Vendor added successfully!");
+      const cb = isEditing ? onVendorUpdated || onVendorCreated : onVendorCreated;
+      if (cb && res.data) {
+        cb(res.data);
       }
       setIsFormDirty(false);
       closeForm();
@@ -503,25 +536,25 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
       />
 
       <div
- className={`fixed inset-y-0 right-0 z-[10002] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-full"
+ className={`fixed dc-panel-card dc-panel-w z-[10002] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
           }`}
       >
-        <form onSubmit={handleSubmit} className="p-8">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-[24px] font-bold text-[#111216]">
-              Create New Vendor
-            </h2>
+        <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
+          <div className="flex justify-between items-center p-4 border-b border-gray-100 flex-shrink-0">
+            <h3 className="text-base font-semibold text-gray-700">
+              {isEditing ? "Edit Vendor" : "Create New Vendor"}
+            </h3>
             <button
               type="button"
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors p-1 sm:p-0"
+              className="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100"
               aria-label="Close"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 text-gray-400" />
             </button>
           </div>
 
-          <div className="space-y-6">
+          <div className="flex-1 min-h-0 overflow-y-auto p-8 space-y-6">
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-3">
                 Profile Picture
@@ -821,20 +854,20 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
             )}
           </div>
 
-          <div className="mt-12 pt-6 border-t border-[#F2F2F7] flex gap-4">
+          <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 border border-[#E0E0E1] text-[#111216] h-12 rounded-xl text-[14px] font-bold hover:bg-gray-50 transition-colors font-inter"
+              className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors font-inter"
             >
               Cancel
             </button>
             <button
-              className="flex-1 bg-[#0C4FCD] text-white h-12 rounded-xl text-[14px] font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
+              className="px-6 py-2.5 bg-[#0C4FCD] text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
               type="submit"
               disabled={loading}
             >
-              {loading ? "Saving..." : "Create New Vendor"}
+              {loading ? "Saving..." : isEditing ? "Update Vendor" : "Create New Vendor"}
             </button>
           </div>
         </form>

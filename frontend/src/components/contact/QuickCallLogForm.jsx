@@ -256,25 +256,25 @@ const QuickCallLogForm = ({ contacts, onCallLogCreated, onRequestClose }) => {
         onClick={handleClose}
       />
       <div
- className={`fixed inset-y-0 right-0 z-[10002] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${
-          isOpen ? "translate-x-0" : "translate-x-full"
+ className={`fixed dc-panel-card dc-panel-w z-[10002] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out ${
+          isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
       >
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 md:p-6">
-          <div className="flex justify-between items-center mb-4 sm:mb-5 md:mb-6">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
+          <div className="flex justify-between items-center p-4 border-b border-gray-100 flex-shrink-0">
+            <h3 className="text-base font-semibold text-gray-700">
               Add New Call Log
-            </h2>
+            </h3>
             <button
               type="button"
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors p-1 sm:p-0 cursor-pointer"
+              className="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100 cursor-pointer"
               aria-label="Close"
             >
-              <X className="w-5 h-5 sm:w-6 sm:h-6" />
+              <X className="w-5 h-5 text-gray-400" />
             </button>
           </div>
-          <div className="space-y-3 sm:space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
             {/* Contact - Now with validation */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -419,16 +419,16 @@ const QuickCallLogForm = ({ contacts, onCallLogCreated, onRequestClose }) => {
               />
             </div>
           </div>
-          <div className="mt-4 sm:mt-5 md:mt-6 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+          <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
-              className="w-full sm:w-auto bg-gray-200 text-gray-800 px-4 sm:px-6 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors shadow-sm order-2 sm:order-1 cursor-pointer"
+              className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
-              className="w-full sm:w-auto bg-blue-600 text-white px-4 sm:px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm order-1 sm:order-2 cursor-pointer"
+              className="px-6 py-2.5 bg-[#0C4FCD] text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
               type="submit"
               disabled={loading}
             >
