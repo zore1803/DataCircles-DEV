@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
+import { getPinnedBoundaryShadow } from "../../utils/pinnedColumnShadow";
 import {
   Edit2,
   Trash2,
@@ -339,6 +340,13 @@ export default function DealsTable({
             lives only in the column menu (Sort Ascending/Descending below);
             `sortable` still gates whether those two menu items render at all. */}
         <div className="flex items-center gap-2 flex-1 overflow-hidden select-none">
+          {pinSide && (
+            <Pin
+              size={12}
+              className="text-blue-500 fill-blue-500 flex-shrink-0"
+              style={{ transform: "rotate(45deg)" }}
+            />
+          )}
           <span className="truncate" title={label}>{label}</span>
         </div>
         <button
@@ -877,6 +885,34 @@ export default function DealsTable({
   const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
   const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
 
+  // Cumulative left/right offsets for every sticky column, derived from each
+  // column's REAL rendered width — replaces the previous hardcoded
+  // `left: 60` / `right: 0` for every pinned column, which stacked all
+  // pinned columns on top of each other instead of side-by-side the moment
+  // more than one column was pinned per side. Same approach as
+  // Companies.jsx/Contacts.jsx/Tasks.jsx and the CompanyProfilePage tabs.
+  const allDealHeaders = table.getHeaderGroups()[0]?.headers || [];
+  const pinnedLeftOffsets = {};
+  let cumulativeLeftOffset = 0;
+  allDealHeaders.forEach((h) => {
+    const colId = h.column.id;
+    if (colId === "selection" || leftPinnedKeys.includes(colId)) {
+      pinnedLeftOffsets[colId] = cumulativeLeftOffset;
+      cumulativeLeftOffset += h.getSize();
+    }
+  });
+  const pinnedRightOffsets = {};
+  let cumulativeRightOffset = 0;
+  [...allDealHeaders].reverse().forEach((h) => {
+    const colId = h.column.id;
+    if (colId === "actions" || rightPinnedKeys.includes(colId)) {
+      pinnedRightOffsets[colId] = cumulativeRightOffset;
+      cumulativeRightOffset += h.getSize();
+    }
+  });
+  const dealLastLeftPinnedKey = leftPinnedKeys.length > 0 ? leftPinnedKeys[leftPinnedKeys.length - 1] : null;
+  const dealFirstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
+
   return (
     <div className="relative bg-white">
         <table
@@ -896,9 +932,12 @@ export default function DealsTable({
                   const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                   const isRightSticky = colId === "actions" || rightPinnedKeys.includes(colId);
                   const isSticky = isLeftSticky || isRightSticky;
+                  const isLeftBoundary = dealLastLeftPinnedKey ? colId === dealLastLeftPinnedKey : colId === "selection";
+                  const isRightBoundary = dealFirstRightPinnedKey ? colId === dealFirstRightPinnedKey : colId === "actions";
                   const isDraggable = colId !== "selection";
                   const isDragging = draggedColKey === colId;
                   const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+                  const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
 
                   return (
                     <th
@@ -911,18 +950,21 @@ export default function DealsTable({
                         maxWidth: header.getSize(),
                         height: "56px",
                         position: isSticky ? "sticky" : "relative",
-                        left: isLeftSticky ? (colId === "selection" ? 0 : 60) : "auto",
-                        right: isRightSticky ? 0 : "auto",
+                        left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                        right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                         zIndex: isSticky ? 20 : 1,
                         opacity: isDragging ? 0.35 : 1,
+                        boxShadow: boundaryShadow || undefined,
                       }}
                       className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
-                      <div className="truncate w-full">
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
+                      <div className="flex items-center gap-1.5 w-full min-w-0">
+                        <div className="truncate flex-1 min-w-0">
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
+                        </div>
                       </div>
 
                       {header.column.getCanResize() && (
@@ -996,6 +1038,9 @@ export default function DealsTable({
                       const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                       const isRightSticky = colId === "actions" || rightPinnedKeys.includes(colId);
                       const isSticky = isLeftSticky || isRightSticky;
+                      const isLeftBoundary = dealLastLeftPinnedKey ? colId === dealLastLeftPinnedKey : colId === "selection";
+                      const isRightBoundary = dealFirstRightPinnedKey ? colId === dealFirstRightPinnedKey : colId === "actions";
+                      const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
 
                       return (
                         <td
@@ -1006,9 +1051,10 @@ export default function DealsTable({
                             maxWidth: cell.column.getSize(),
                             height: "54px",
                             position: isSticky ? "sticky" : "static",
-                            left: isLeftSticky ? (colId === "selection" ? 0 : 60) : "auto",
-                            right: isRightSticky ? 0 : "auto",
+                            left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                            right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
+                            boxShadow: cellBoundaryShadow || undefined,
                           }}
                           className={`px-3 py-3 text-sm font-medium text-[#222530] align-middle bg-inherit border-r border-b border-[#E1E4EA] ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
                         >

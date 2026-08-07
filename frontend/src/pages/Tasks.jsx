@@ -8,6 +8,7 @@ import { useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
+import { getPinnedBoundaryShadow } from "../utils/pinnedColumnShadow";
 import {
   Search,
   ChevronUp,
@@ -1047,6 +1048,22 @@ function Tasks() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const handleTaskView = (task) => {
+    setSelectedTask(task);
+    setIsTaskModalOpen(true);
+  };
+
+  const handleViewToEdit = (task) => {
+    setIsTaskModalOpen(false);
+    handleTaskEdit(task);
+  };
+
+  const handleViewDelete = async (taskId) => {
+    handleDelete(taskId, "task");
+    setIsTaskModalOpen(false);
+    setSelectedTask(null);
+  };
+
   const handleTaskStatusChange = async (id, status) => {
     try {
       await API.put(`/tasks/${id}/status`, { status });
@@ -1681,6 +1698,13 @@ function Tasks() {
             Sorting lives only in the column menu (Sort Ascending/Descending
             below); `sortable` still gates whether those two items render. */}
         <div className="flex items-center gap-1.5 flex-1 overflow-hidden select-none">
+          {pinSide && (
+            <Pin
+              size={12}
+              className="text-blue-500 fill-blue-500 flex-shrink-0"
+              style={{ transform: "rotate(45deg)" }}
+            />
+          )}
           <span className="truncate" title={label}>{label}</span>
         </div>
         <button
@@ -1856,7 +1880,7 @@ function Tasks() {
                   e.stopPropagation();
                   setOpenRowActionsId(null);
                   setRowActionsPos(null);
-                  type === "task" ? handleTaskEdit(item) : handleMeetingEdit(item);
+                  type === "task" ? handleTaskView(item) : handleMeetingEdit(item);
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
@@ -2151,6 +2175,51 @@ function Tasks() {
     getRowId: (row) => row._id, // Ensures stable clicking/selection when sorting
   });
 
+  // Pinned-column stickiness for the Tasks table. Previously `isLeftSticky`
+  // only ever matched the "selection" checkbox column — pinning a real column
+  // via the header menu reordered it next to the checkbox but never actually
+  // made it sticky while scrolling, so the "pin" feature did nothing visible
+  // once you scrolled horizontally. Same cumulative-offset approach as
+  // Companies.jsx/Contacts.jsx, and the same inset-shadow boundary treatment
+  // as the CompanyProfilePage tabs, so pinning behaves identically everywhere.
+  const {
+    leftPinnedKeys: taskLeftPinnedKeys,
+    rightPinnedKeys: taskRightPinnedKeys,
+    pinnedLeftOffsets: taskPinnedLeftOffsets,
+    pinnedRightOffsets: taskPinnedRightOffsets,
+  } = useMemo(() => {
+    const allHeaders = taskTable.getHeaderGroups()[0]?.headers || [];
+    const leftKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+    const rightKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+
+    const leftOffsets = {};
+    let cumulativeLeft = 0;
+    allHeaders.forEach((h) => {
+      if (h.column.id === "selection" || leftKeys.includes(h.column.id)) {
+        leftOffsets[h.column.id] = cumulativeLeft;
+        cumulativeLeft += h.getSize();
+      }
+    });
+
+    const rightOffsets = {};
+    let cumulativeRight = 0;
+    [...allHeaders].reverse().forEach((h) => {
+      if (rightKeys.includes(h.column.id)) {
+        rightOffsets[h.column.id] = cumulativeRight;
+        cumulativeRight += h.getSize();
+      }
+    });
+
+    return {
+      leftPinnedKeys: leftKeys,
+      rightPinnedKeys: rightKeys,
+      pinnedLeftOffsets: leftOffsets,
+      pinnedRightOffsets: rightOffsets,
+    };
+  }, [pinnedColumns, taskTable.getHeaderGroups()[0]?.headers, taskColumnSizing]);
+  const taskLastLeftPinnedKey = taskLeftPinnedKeys.length > 0 ? taskLeftPinnedKeys[taskLeftPinnedKeys.length - 1] : null;
+  const taskFirstRightPinnedKey = taskRightPinnedKeys.length > 0 ? taskRightPinnedKeys[0] : null;
+
   /* ==================== TANSTACK TABLE: MEETINGS ==================== */
   const meetingColumnHelper = createColumnHelper();
   const meetingColumnsConfig = useMemo(
@@ -2346,6 +2415,45 @@ function Tasks() {
     enableColumnResizing: true,
     getRowId: (row) => row._id, // Ensures stable clicking/selection when sorting
   });
+
+  // Same fix as taskTable above, for the Meetings table.
+  const {
+    leftPinnedKeys: meetingLeftPinnedKeys,
+    rightPinnedKeys: meetingRightPinnedKeys,
+    pinnedLeftOffsets: meetingPinnedLeftOffsets,
+    pinnedRightOffsets: meetingPinnedRightOffsets,
+  } = useMemo(() => {
+    const allHeaders = meetingTable.getHeaderGroups()[0]?.headers || [];
+    const leftKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+    const rightKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+
+    const leftOffsets = {};
+    let cumulativeLeft = 0;
+    allHeaders.forEach((h) => {
+      if (h.column.id === "selection" || leftKeys.includes(h.column.id)) {
+        leftOffsets[h.column.id] = cumulativeLeft;
+        cumulativeLeft += h.getSize();
+      }
+    });
+
+    const rightOffsets = {};
+    let cumulativeRight = 0;
+    [...allHeaders].reverse().forEach((h) => {
+      if (rightKeys.includes(h.column.id)) {
+        rightOffsets[h.column.id] = cumulativeRight;
+        cumulativeRight += h.getSize();
+      }
+    });
+
+    return {
+      leftPinnedKeys: leftKeys,
+      rightPinnedKeys: rightKeys,
+      pinnedLeftOffsets: leftOffsets,
+      pinnedRightOffsets: rightOffsets,
+    };
+  }, [pinnedColumns, meetingTable.getHeaderGroups()[0]?.headers, meetingColumnSizing]);
+  const meetingLastLeftPinnedKey = meetingLeftPinnedKeys.length > 0 ? meetingLeftPinnedKeys[meetingLeftPinnedKeys.length - 1] : null;
+  const meetingFirstRightPinnedKey = meetingRightPinnedKeys.length > 0 ? meetingRightPinnedKeys[0] : null;
 
   // Pagination handlers
   const handlePageChange = (page) => {
@@ -2963,10 +3071,15 @@ function Tasks() {
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
                     const colId = header.column.id;
-                    const isLeftSticky = colId === "selection";
+                    const isLeftSticky = colId === "selection" || taskLeftPinnedKeys.includes(colId);
+                    const isRightSticky = taskRightPinnedKeys.includes(colId);
+                    const isSticky = isLeftSticky || isRightSticky;
+                    const isLeftBoundary = taskLastLeftPinnedKey ? colId === taskLastLeftPinnedKey : colId === "selection";
+                    const isRightBoundary = colId === taskFirstRightPinnedKey;
                     const isDraggable = colId !== "selection" && colId !== "actions";
                     const isDragging = draggedColKey === colId;
                     const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+                    const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
                     return (
                       <th
                         key={header.id}
@@ -2980,16 +3093,20 @@ function Tasks() {
                         ) : undefined}
                         style={{
                           width: header.getSize(),
-                          position: "sticky",
+                          position: isSticky ? "sticky" : "static",
                           top: 0,
-                          left: isLeftSticky ? 0 : "auto",
-                          zIndex: isLeftSticky ? 20 : 15,
+                          left: isLeftSticky ? taskPinnedLeftOffsets[colId] ?? 0 : "auto",
+                          right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
+                          zIndex: isLeftSticky ? 20 : isRightSticky ? 20 : 15,
                           opacity: isDragging ? 0.35 : 1,
+                          boxShadow: boundaryShadow || undefined,
                         }}
                         className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
-                        <div className="truncate w-full">
-                          {flexRender(header.column.columnDef.header, header.getContext())}
+                        <div className="flex items-center gap-1.5 w-full min-w-0">
+                          <div className="truncate flex-1 min-w-0">
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </div>
                         </div>
                         {header.column.getCanResize() && (
                           <div
@@ -3035,22 +3152,29 @@ function Tasks() {
                       // open, and skip clicks on interactive elements.
                       if (openRowActionsId) return;
                       if (e.target.closest("button") || e.target.closest("a") || e.target.closest("input")) return;
-                      handleTaskEdit(row.original);
+                      handleTaskView(row.original);
                     }}
                     className={`group cursor-pointer hover:bg-blue-50 transition-colors ${selectedTasks.includes(row.original._id) ? "bg-blue-50" : "bg-white"}`}
                   >
                     {row.getVisibleCells().map((cell) => {
                       const colId = cell.column.id;
-                      const isLeftSticky = colId === "selection";
+                      const isLeftSticky = colId === "selection" || taskLeftPinnedKeys.includes(colId);
+                      const isRightSticky = taskRightPinnedKeys.includes(colId);
+                      const isSticky = isLeftSticky || isRightSticky;
+                      const isLeftBoundary = taskLastLeftPinnedKey ? colId === taskLastLeftPinnedKey : colId === "selection";
+                      const isRightBoundary = colId === taskFirstRightPinnedKey;
+                      const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
                       return (
                         <td
                           key={cell.id}
                           style={{
                             width: cell.column.getSize(),
                             height: 54,
-                            position: isLeftSticky ? "sticky" : "static",
-                            left: isLeftSticky ? 0 : "auto",
-                            zIndex: isLeftSticky ? 10 : 1,
+                            position: isSticky ? "sticky" : "static",
+                            left: isLeftSticky ? taskPinnedLeftOffsets[colId] ?? 0 : "auto",
+                            right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
+                            zIndex: isSticky ? 10 : 1,
+                            boxShadow: cellBoundaryShadow || undefined,
                           }}
                           className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                         >
@@ -3101,10 +3225,15 @@ function Tasks() {
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
                     const colId = header.column.id;
-                    const isLeftSticky = colId === "selection";
+                    const isLeftSticky = colId === "selection" || meetingLeftPinnedKeys.includes(colId);
+                    const isRightSticky = meetingRightPinnedKeys.includes(colId);
+                    const isSticky = isLeftSticky || isRightSticky;
+                    const isLeftBoundary = meetingLastLeftPinnedKey ? colId === meetingLastLeftPinnedKey : colId === "selection";
+                    const isRightBoundary = colId === meetingFirstRightPinnedKey;
                     const isDraggable = colId !== "selection" && colId !== "actions";
                     const isDragging = draggedColKey === colId;
                     const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+                    const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
                     return (
                       <th
                         key={header.id}
@@ -3118,16 +3247,20 @@ function Tasks() {
                         ) : undefined}
                         style={{
                           width: header.getSize(),
-                          position: "sticky",
+                          position: isSticky ? "sticky" : "static",
                           top: 0,
-                          left: isLeftSticky ? 0 : "auto",
-                          zIndex: isLeftSticky ? 20 : 15,
+                          left: isLeftSticky ? meetingPinnedLeftOffsets[colId] ?? 0 : "auto",
+                          right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
+                          zIndex: isLeftSticky ? 20 : isRightSticky ? 20 : 15,
                           opacity: isDragging ? 0.35 : 1,
+                          boxShadow: boundaryShadow || undefined,
                         }}
                         className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
-                        <div className="truncate w-full">
-                          {flexRender(header.column.columnDef.header, header.getContext())}
+                        <div className="flex items-center gap-1.5 w-full min-w-0">
+                          <div className="truncate flex-1 min-w-0">
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </div>
                         </div>
                         {header.column.getCanResize() && (
                           <div
@@ -3173,16 +3306,23 @@ function Tasks() {
                   >
                     {row.getVisibleCells().map((cell) => {
                       const colId = cell.column.id;
-                      const isLeftSticky = colId === "selection";
+                      const isLeftSticky = colId === "selection" || meetingLeftPinnedKeys.includes(colId);
+                      const isRightSticky = meetingRightPinnedKeys.includes(colId);
+                      const isSticky = isLeftSticky || isRightSticky;
+                      const isLeftBoundary = meetingLastLeftPinnedKey ? colId === meetingLastLeftPinnedKey : colId === "selection";
+                      const isRightBoundary = colId === meetingFirstRightPinnedKey;
+                      const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
                       return (
                       <td
                         key={cell.id}
                         style={{
                           width: cell.column.getSize(),
                           height: 54,
-                          position: isLeftSticky ? "sticky" : "static",
-                          left: isLeftSticky ? 0 : "auto",
-                          zIndex: isLeftSticky ? 10 : 1,
+                          position: isSticky ? "sticky" : "static",
+                          left: isLeftSticky ? meetingPinnedLeftOffsets[colId] ?? 0 : "auto",
+                          right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
+                          zIndex: isSticky ? 10 : 1,
+                          boxShadow: cellBoundaryShadow || undefined,
                         }}
                         className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                       >
@@ -3532,6 +3672,19 @@ function Tasks() {
           onClose={() => setShowMeetingForm(false)}
         />
       )} */}
+
+      {/* Task Details (View) Drawer */}
+      <TaskDetailsModal
+        open={isTaskModalOpen}
+        taskData={selectedTask}
+        users={users}
+        onDelete={handleViewDelete}
+        onEdit={handleViewToEdit}
+        onClose={() => {
+          setIsTaskModalOpen(false);
+          setSelectedTask(null);
+        }}
+      />
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (

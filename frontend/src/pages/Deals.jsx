@@ -8,7 +8,8 @@ import { applyAdvancedFilters } from "../utils/advancedFilters";
 import {
   DndContext,
   DragOverlay,
-  closestCorners,
+  pointerWithin,
+  rectIntersection,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -876,6 +877,23 @@ function Deals() {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+
+  // Collision detection was `closestCorners`, which measures corner distance
+  // against every droppable (cards + column containers + quick-drop zones).
+  // Right at a column boundary two containers sit almost equidistant, so the
+  // winning target flip-flopped between pointer-move events — each flip fired
+  // handleDragOver, which calls setDeals and re-renders the whole board, so
+  // the flicker/freeze the user hit picking a card between two columns was
+  // really collision-detection oscillation, not an animation bug. pointerWithin
+  // only matches droppables the pointer is literally inside, so there's no
+  // ambiguous "closest" candidate to flip between; rectIntersection is kept as
+  // a fallback for the rare frame where the pointer is briefly outside every
+  // droppable (e.g. over a column's padding/gap).
+  const collisionDetectionStrategy = (args) => {
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) return pointerCollisions;
+    return rectIntersection(args);
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -2575,7 +2593,7 @@ function Deals() {
         {showKanban ? (
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={collisionDetectionStrategy}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}

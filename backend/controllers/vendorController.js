@@ -83,6 +83,12 @@ exports.getAllVendorsWithPagination = async (req, res) => {
     const sortObj = {};
     sortObj[sortBy] = sortOrder === 'desc' ? -1 : 1;
     
+    // Check if we just want all matching IDs (for 'Select All' functionality)
+    if (req.query.allIds === 'true') {
+      const allMatchingVendors = await Vendor.find(query).select('_id').lean();
+      return res.json({ ids: allMatchingVendors.map((v) => v._id) });
+    }
+    
     // Execute queries in parallel for better performance
     const [vendors, totalCount] = await Promise.all([
       Vendor.find(query)

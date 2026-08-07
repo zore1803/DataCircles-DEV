@@ -94,7 +94,21 @@ const MeetingTypeIcon = ({ type }) => {
   return icons[type] || icons["in-person"];
 };
 
-const VendorMeetingForm = ({ open, mode, meetingData, calendarDate, vendorId, onSave, onDelete, onClose }) => {
+const VendorMeetingForm = ({
+  open,
+  mode,
+  meetingData,
+  calendarDate,
+  vendorId,
+  onSave,
+  onDelete,
+  onClose,
+  // Set true when the caller already showed the read-only meeting and the
+  // user explicitly clicked Edit there (e.g. MeetingDetailsModal's Edit
+  // button) — skips straight to the editable form instead of re-showing a
+  // second read-only "Meeting Details" screen requiring another Edit click.
+  startInEditMode = false,
+}) => {
   const [form, setForm] = useState(initialState);
   const [loading, setLoading] = useState(false);
   const [isSliding, setIsSliding] = useState(false);
@@ -167,8 +181,8 @@ const VendorMeetingForm = ({ open, mode, meetingData, calendarDate, vendorId, on
           time: meetingData?.scheduledAt ? new Date(meetingData?.scheduledAt).toISOString().slice(11, 16) : "09:00",
         };
         setForm(initialFormData);
-        setIsEditMode(false);
-        
+        setIsEditMode(startInEditMode);
+
         if (initialFormData.date) {
           fetchMeetingsForDate(new Date(initialFormData.date));
         }
@@ -192,7 +206,7 @@ const VendorMeetingForm = ({ open, mode, meetingData, calendarDate, vendorId, on
       setTimeConflict(null);
       setIsEditMode(false);
     }
-  }, [open, meetingData, mode, calendarDate, fetchMeetingsForDate]);
+  }, [open, meetingData, mode, calendarDate, fetchMeetingsForDate, startInEditMode]);
 
   const handleChange = (key, val) => {
     setForm((f) => ({ ...f, [key]: val }));
@@ -433,7 +447,7 @@ const VendorMeetingForm = ({ open, mode, meetingData, calendarDate, vendorId, on
               </div>
             ) : (
               /* EDIT/CREATE MODE - Form */
-              <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <form id="vendor-meeting-form" onSubmit={handleSubmit} className="p-6 space-y-6">
                 <FormField label="Meeting Title" required error={errors.title} icon={FileText}>
                   <input
                     type="text"

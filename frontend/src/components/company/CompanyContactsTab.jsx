@@ -1,10 +1,13 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
+import { PINNED_LEFT_BOUNDARY_SHADOW, PINNED_RIGHT_BOUNDARY_SHADOW } from "../../utils/pinnedColumnShadow";
 import { Link } from "react-router-dom";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import QuickContactForm from "../contact/QuickContactForm";
+import ProfilePicture from "../contact/ProfilePicture";
+import { getBadgeColor } from "../../utils/contactConstants";
 import useFillToBottom from "../../hooks/useFillToBottom";
 import HighlightText from "../common/HighlightText";
 import FilterIcon from "../common/FilterIcon";
@@ -39,6 +42,7 @@ import {
   Pin,
   PinOff,
   EyeOff,
+  X,
 } from "lucide-react";
 
 const ContactNameIcon = ({ size = 20, ...props }) => (
@@ -229,6 +233,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
     return null;
   };
 
+
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
@@ -348,6 +353,58 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
     () => Object.values(colWidths).reduce((sum, w) => sum + w, 0),
     [colWidths],
   );
+
+  const stickyStyles = useMemo(() => {
+    const map = {};
+    let leftOffset = 44; // selection column width is 44px
+    for (const col of orderedColumns) {
+      if (leftPinned.has(col.id)) {
+        map[col.id] = {
+          position: "sticky",
+          left: leftOffset,
+          zIndex: 20,
+          backgroundColor: "#fff",
+        };
+        leftOffset += colWidths[col.id] || 200;
+      }
+    }
+    let rightOffset = 0;
+    for (const col of [...orderedColumns].reverse()) {
+      if (rightPinned.has(col.id)) {
+        map[col.id] = {
+          position: "sticky",
+          right: rightOffset,
+          zIndex: 20,
+          backgroundColor: "#fff",
+        };
+        rightOffset += colWidths[col.id] || 200;
+      }
+    }
+    return map;
+  }, [orderedColumns, leftPinned, rightPinned, colWidths]);
+
+  const getStickyStyle = (colId, isHeader = false, isSelected = false) => {
+    const isPinned = leftPinned.has(colId) || rightPinned.has(colId);
+    const style = stickyStyles[colId] || {};
+    
+    let borderShadows = "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA";
+    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
+    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
+    
+    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) {
+      borderShadows = `${PINNED_LEFT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
+    } else if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) {
+      borderShadows = `${PINNED_RIGHT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
+    }
+    
+    return {
+      ...style,
+      position: isPinned ? "sticky" : undefined,
+      zIndex: isPinned ? (isHeader ? 35 : 20) : undefined,
+      backgroundColor: isPinned ? (isHeader ? "#F5F7FA" : (isSelected ? "#EFF6FF" : "#fff")) : undefined,
+      boxShadow: borderShadows,
+    };
+  };
 
   const startResize = (e, colId) => {
     e.preventDefault();
@@ -513,9 +570,18 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by contact by name, email, or phone..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              className="w-full h-full pl-10 pr-10 border rounded-full text-sm focus:outline-none focus:border-blue-300"
               style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <button
             onClick={() => setShowFilterPanel(true)}
@@ -575,53 +641,87 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
         subtitle="Filter this list by column"
       />
 
-      <div
-        ref={fillContainerRef}
-        style={fillStyle}
-        className="relative bg-white border border-[#E1E4EA] rounded-lg overflow-x-auto overflow-y-auto"
-      >
-        <table
-          className="w-full border-separate border-spacing-0 text-left"
-          style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%" }}
+      {!isLoading && contacts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+          <Users size={28} className="mb-3 text-gray-400" />
+          <button
+            type="button"
+            onClick={() => setShowContactForm(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} />
+            Add new contact
+          </button>
+        </div>
+      ) : (
+        <div
+          ref={fillContainerRef}
+          style={fillStyle}
+          className="relative bg-white border border-[#E1E4EA] rounded-lg overflow-x-auto overflow-y-auto"
         >
-          <thead className="sticky top-0 z-30 bg-[#F5F7FA] border-b border-[#E1E4EA]">
-            <tr>
-              {/* Page-scoped select-all: ticks exactly the rows on the CURRENT page
-                  (10 per page -> 10, 50 -> 50). Distinct from the bulk strip's
-                  "Select All", which spans every record across all pages. */}
-              <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
-                <div className="flex justify-center items-center w-full">
-                  <input
-                    type="checkbox"
-                    checked={selectedItems.length > 0 && selectedItems.length === paginatedContacts.length}
-                    onChange={(e) => e.target.checked ? selectAll(paginatedContacts) : clearSelection()}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                  />
-                </div>
-              </th>
-              {orderedColumns.map((col, idx) => {
-                const isLast = idx === orderedColumns.length - 1;
-                const isDragging = draggedColKey === col.id;
-                const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
-                return (
-                  <th
-                    key={col.id}
-                    data-col-id={col.id}
-                    onMouseDown={(e) => startColumnDrag(e, col.id)}
-                    style={{ 
-                      width: colWidths[col.id], 
-                      height: 56, 
-                      position: "relative",
-                      opacity: isDragging ? 0.35 : 1
-                    }}
-                    className={`px-3 py-2.5 font-medium text-[#525866] text-xs border-b border-[#E1E4EA] cursor-grab active:cursor-grabbing ${isLast ? "" : "border-r"} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
-                  >
-                    <div className={`flex items-center justify-between w-full group ${isLoading ? "[&_button]:invisible" : ""}`}>
-                      {/* Header label swaps to a skeleton bar on the same flag as the
-                          body rows, so the whole table resolves in one step. Controls
-                          are hidden rather than unmounted to keep the layout stable. */}
-                      {isLoading ? <Skeleton width="65%" height={12} /> : <span className="truncate flex-1 min-w-0" title={col.label}>{col.label}</span>}
-                      <button
+          <table
+            className="w-full border-separate border-spacing-0 text-left"
+            style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%" }}
+          >
+            <thead className="sticky top-0 z-30 bg-[#F5F7FA] border-b border-[#E1E4EA]">
+              <tr>
+                {/* Page-scoped select-all: ticks exactly the rows on the CURRENT page
+                    (10 per page -> 10, 50 -> 50). Distinct from the bulk strip's
+                    "Select All", which spans every record across all pages. */}
+                <th
+                  style={{
+                    width: 44,
+                    height: 56,
+                    position: "sticky",
+                    left: 0,
+                    zIndex: 35,
+                    backgroundColor: "#F5F7FA",
+                    boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                  }}
+                  className="px-3 py-2.5"
+                >
+                  <div className="flex justify-center items-center w-full">
+                    <input
+                      type="checkbox"
+                      checked={selectedItems.length > 0 && selectedItems.length === paginatedContacts.length}
+                      onChange={(e) => e.target.checked ? selectAll(paginatedContacts) : clearSelection()}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                    />
+                  </div>
+                </th>
+                {orderedColumns.map((col) => {
+                  const isDragging = draggedColKey === col.id;
+                  const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
+                  return (
+                    <th
+                      key={col.id}
+                      data-col-id={col.id}
+                      onMouseDown={(e) => startColumnDrag(e, col.id)}
+                      style={{ 
+                        width: colWidths[col.id], 
+                        height: 56, 
+                        opacity: isDragging ? 0.35 : 1,
+                        ...getStickyStyle(col.id, true)
+                      }}
+                      className={`px-3 py-2.5 font-medium text-[#525866] text-xs cursor-grab active:cursor-grabbing ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                    >
+                      <div className={`flex items-center justify-between w-full group ${isLoading ? "[&_button]:invisible" : ""}`}>
+                        {/* Header label swaps to a skeleton bar on the same flag as the
+                            body rows, so the whole table resolves in one step. Controls
+                            are hidden rather than unmounted to keep the layout stable. */}
+                        {isLoading ? (
+                          <Skeleton width="65%" height={12} />
+                        ) : (
+                          <div className="flex items-center gap-1.5 min-w-0 truncate">
+                            {(leftPinned.has(col.id) || rightPinned.has(col.id)) && (
+                              <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0" style={{ transform: "rotate(45deg)" }} />
+                            )}
+                            <span className="truncate flex-1 min-w-0" title={col.label}>
+                              {col.label}
+                            </span>
+                          </div>
+                        )}
+                        <button
                         onClick={(e) => {
                           e.stopPropagation();
                           if (openColumnMenuKey === col.id) {
@@ -750,7 +850,18 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                 const isSelected = selectedItems.includes(contact._id);
                 return (
                   <tr key={contact._id} className={`hover:bg-gray-50 transition-colors group ${isSelected ? "!bg-blue-50" : ""}`}>
-                    <td style={{ height: 54, width: 44 }} className="px-3 border-r border-b border-[#E1E4EA]">
+                    <td
+                      style={{
+                        height: 54,
+                        width: 44,
+                        position: "sticky",
+                        left: 0,
+                        zIndex: 10,
+                        backgroundColor: isSelected ? "#EFF6FF" : "#fff",
+                        boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                      }}
+                      className="px-3"
+                    >
                       <div className="flex justify-center items-center w-full">
                         <input
                           type="checkbox"
@@ -760,89 +871,108 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                         />
                       </div>
                     </td>
-                    {orderedColumns.map((col, idx) => {
-                      const isLast = idx === orderedColumns.length - 1;
-                    const isDragging = draggedColKey === col.id;
-                    const borderClass = isLast ? "border-b border-[#E1E4EA]" : "border-r border-b border-[#E1E4EA]";
-                    const styleBase = { height: 54, opacity: isDragging ? 0.35 : 1 };
-                    
-                    if (col.id === "name") {
-                      return (
-                        <td key={col.id} style={styleBase} className={`px-3 text-left ${borderClass}`}>
-                          <Link
-                            to={`/contacts/${contact._id}`}
-                            className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
-                          >
-                            <HighlightText text={contact.name} query={searchTerm} />
-                          </Link>
-                        </td>
-                      );
-                    }
-                    if (col.id === "email") {
-                      return (
-                        <td
-                          key={col.id}
-                          style={styleBase}
-                          className={`px-3 text-[14px] leading-5 font-medium text-[#525866] truncate text-left ${borderClass}`}
-                        >
-                          <HighlightText text={contact.email} query={searchTerm} />
-                        </td>
-                      );
-                    }
-                    if (col.id === "phone") {
-                      return (
-                        <td
-                          key={col.id}
-                          style={styleBase}
-                          className={`px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left ${borderClass}`}
-                        >
-                          <HighlightText text={contact.phone} query={searchTerm} />
-                        </td>
-                      );
-                    }
-                    if (col.id === "role") {
-                      return (
-                        <td
-                          key={col.id}
-                          style={styleBase}
-                          className={`px-3 text-[14px] leading-5 font-medium text-[#525866] truncate text-left ${borderClass}`}
-                        >
-                          <HighlightText text={contact.role} query={searchTerm} />
-                        </td>
-                      );
-                    }
-                    if (col.id === "status") {
-                      return (
-                        <td key={col.id} style={styleBase} className={`px-3 ${borderClass}`}>
-                          <div className="relative flex items-center justify-start">
-                            <span className="text-[14px] leading-5 font-medium text-[#525866]">
-                              {contact.lifecycleStage || contact.status || "-"}
-                            </span>
-                            {/* Was a MoreVertical button with no onClick — a dead control.
-                                Replaced with a direct link to the same contact detail route
-                                the Name cell already uses (/contacts/:id), so a row can be
-                                opened from here without depending on which column is visible. */}
-                            <Link
-                              to={`/contacts/${contact._id}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                              title="Open contact details"
+                    {orderedColumns.map((col) => {
+                      const isDragging = draggedColKey === col.id;
+                      const cellStyle = {
+                        height: 54,
+                        opacity: isDragging ? 0.35 : 1,
+                        ...getStickyStyle(col.id, false, isSelected),
+                      };
+                      
+                      if (col.id === "name") {
+                        return (
+                          <td key={col.id} style={cellStyle} className="px-3 text-left">
+                            <div className="flex items-center space-x-3 truncate w-full">
+                              <div className="flex-shrink-0">
+                                <ProfilePicture contact={contact} />
+                              </div>
+                              <Link
+                                to={`/contacts/${contact._id}`}
+                                className="text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-all duration-150 ease-out"
+                                title={contact.name}
+                              >
+                                <HighlightText text={contact.name} query={searchTerm} />
+                              </Link>
+                            </div>
+                          </td>
+                        );
+                      }
+                      if (col.id === "email") {
+                        return (
+                          <td key={col.id} style={cellStyle} className="px-3 text-left truncate" title={contact.email}>
+                            <a
+                              href={`mailto:${contact.email}`}
+                              className="text-[14px] leading-5 font-medium text-blue-600 hover:underline transition-colors"
                             >
-                              <ExternalLink className="w-4 h-4" />
-                            </Link>
-                          </div>
-                        </td>
-                      );
-                    }
-                    return null;
-                  })}
-                </tr>
-              )
-            })
+                              <HighlightText text={contact.email} query={searchTerm} />
+                            </a>
+                          </td>
+                        );
+                      }
+                      if (col.id === "phone") {
+                        return (
+                          <td key={col.id} style={cellStyle} className="px-3 text-left whitespace-nowrap" title={contact.phone}>
+                            {contact.phone ? (
+                              <a
+                                href={`tel:${contact.phone}`}
+                                className="text-[14px] leading-5 font-medium text-blue-600 hover:underline transition-colors"
+                              >
+                                <HighlightText text={contact.phone} query={searchTerm} />
+                              </a>
+                            ) : (
+                              <span className="text-[14px] leading-5 font-medium text-gray-400">—</span>
+                            )}
+                          </td>
+                        );
+                      }
+                      if (col.id === "role") {
+                        return (
+                          <td
+                            key={col.id}
+                            style={cellStyle}
+                            className="px-3 text-[14px] leading-5 font-medium text-[#525866] truncate text-left"
+                          >
+                            <HighlightText text={contact.role} query={searchTerm} />
+                          </td>
+                        );
+                      }
+                      if (col.id === "status") {
+                        return (
+                          <td key={col.id} style={cellStyle} className="px-3">
+                            <div className="relative flex items-center justify-start">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getBadgeColor(
+                                  contact.stageStatus || contact.lifecycleStage
+                                )}`}
+                              >
+                                <HighlightText text={contact.stageStatus || contact.lifecycleStage || "New"} query={searchTerm} />
+                              </span>
+                              {/* Was a MoreVertical button with no onClick — a dead control.
+                                  Replaced with a direct link to the same contact detail route
+                                  the Name cell already uses (/contacts/:id), so a row can be
+                                  opened from here without depending on which column is visible. */}
+                              <Link
+                                to={`/contacts/${contact._id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                                title="Open contact details"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </Link>
+                            </div>
+                          </td>
+                        );
+                      }
+                      return null;
+                    })}
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
+      )}
 
       {totalCount > 0 && (
         <div

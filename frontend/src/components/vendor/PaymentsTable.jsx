@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Skeleton from "../common/Skeleton";
 import API from "../../services/api";
 import { useParams } from "react-router-dom";
@@ -32,6 +32,7 @@ import CompanyFilterPanel from "../company/CompanyFilterPanel";
 import FilterIcon from "../common/FilterIcon";
 import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { useTopLoadingSignal } from "../common/TopLoadingBar";
+import { exportToCSV } from "../../utils/exportToCSV";
 import { Search } from "lucide-react";
 import toast from "react-hot-toast";
 import AppToaster from "../AppToaster";
@@ -78,6 +79,8 @@ const PaymentsTable = ({ payments, vendor }) => {
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [pinnedColumns, setPinnedColumns] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  const filterButtonRef = useRef(null);
 
   const handleColumnReorder = (draggedKey, targetKey) => {
     setColumnOrder((prev) => {
@@ -210,6 +213,24 @@ const PaymentsTable = ({ payments, vendor }) => {
     items: filteredPayments,
   });
   const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedItems.length);
+
+  const handleExportSelected = () => {
+    const dataToExport = payments
+      .filter((p) => selectedItems.includes(p._id))
+      .map((p) => ({
+        "Date": new Date(p.paymentDate).toLocaleDateString(),
+        "Amount": p.amount,
+        "Direction": p.direction,
+        "Type": p.paymentType,
+        "Bank": p.bank || "",
+        "Reference": p.reference || "",
+        "Notes": p.notes || "",
+      }));
+    if (dataToExport.length === 0) return;
+    const headers = Object.keys(dataToExport[0]).join(",");
+    const rows = dataToExport.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    exportToCSV([headers, ...rows], `payments_export_${new Date().toISOString().split("T")[0]}.csv`);
+  };
 
   const handleBulkDelete = async () => {
     if (!selectedItems.length) return;
@@ -383,10 +404,12 @@ const PaymentsTable = ({ payments, vendor }) => {
             <input
               type="checkbox"
               checked={
-                paginatedPayments.length > 0 &&
-                paginatedPayments.every((p) => selectedItems.includes(p._id))
+                selectedItems.length > 0 &&
+                selectedItems.length === filteredPayments.length
               }
-              onChange={(e) => (e.target.checked ? selectAll(paginatedPayments) : clearSelection())}
+              onChange={(e) =>
+                e.target.checked ? selectAll(filteredPayments) : clearSelection()
+              }
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
             />
           </div>
@@ -438,11 +461,10 @@ const PaymentsTable = ({ payments, vendor }) => {
         header: "Status",
         cell: ({ row }) => (
           <span
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-              row.original.direction === "OUT"
-                ? "bg-blue-100 text-blue-800"
-                : "bg-blue-600 text-white"
-            }`}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${row.original.direction === "OUT"
+              ? "bg-blue-100 text-blue-800"
+              : "bg-blue-600 text-white"
+              }`}
           >
             {row.original.direction === "OUT" ? (
               <ArrowUpCircle className="w-3 h-3" />
@@ -489,9 +511,8 @@ const PaymentsTable = ({ payments, vendor }) => {
         header: "Amount",
         cell: ({ row }) => (
           <span
-            className={`text-sm font-bold ${
-              row.original.direction === "OUT" ? "text-red-600" : "text-green-600"
-            }`}
+            className={`text-sm font-bold ${row.original.direction === "OUT" ? "text-red-600" : "text-green-600"
+              }`}
           >
             {row.original.direction === "OUT" ? "−" : "+"} <HighlightText text={`₹${row.original.amount.toFixed(2)}`} query={search} />
           </span>
@@ -549,13 +570,13 @@ const PaymentsTable = ({ payments, vendor }) => {
 
     const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
     const rightPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'right').map(p => p.key));
-    
+
     const leftCols = otherCols.filter(c => leftPinnedKeys.has(c.id));
     const rightCols = otherCols.filter(c => rightPinnedKeys.has(c.id));
     const midCols = otherCols.filter(c => !leftPinnedKeys.has(c.id) && !rightPinnedKeys.has(c.id));
-    
+
     midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
-    
+
     return [
       ...(selectionCol ? [selectionCol] : []),
       ...leftCols,
@@ -581,7 +602,7 @@ const PaymentsTable = ({ payments, vendor }) => {
 
       {/* Action Buttons (Portaled to Tab Header) removed */}
 
-      
+
       {/* Stats Cards */}
       {showKPIs && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -613,9 +634,8 @@ const PaymentsTable = ({ payments, vendor }) => {
               <span className="text-xs font-medium text-gray-600">Balance</span>
             </div>
             <p
-              className={`text-xl font-bold ${
-                netBalance >= 0 ? "text-green-600" : "text-red-600"
-              }`}
+              className={`text-xl font-bold ${netBalance >= 0 ? "text-green-600" : "text-red-600"
+                }`}
             >
               ₹{Math.abs(netBalance).toFixed(2)}
             </p>
@@ -646,6 +666,8 @@ const PaymentsTable = ({ payments, vendor }) => {
           isClosing={stripClosing}
           onSelectAll={() => selectAll(filteredPayments)}
           onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onCancel={clearSelection}
           onDelete={handleBulkDelete}
           isDeleting={isDeleting}
         />
@@ -663,6 +685,7 @@ const PaymentsTable = ({ payments, vendor }) => {
             />
           </div>
           <button
+            ref={filterButtonRef}
             onClick={() => setShowFilterPanel(true)}
             className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
             style={{
@@ -774,7 +797,7 @@ const PaymentsTable = ({ payments, vendor }) => {
             </div>
           }
         />
-        
+
         <div className="border-t border-[#E1E4EA] px-5">
           <TablePaginationFooter
             currentPage={page}
@@ -798,6 +821,7 @@ const PaymentsTable = ({ payments, vendor }) => {
         getFieldValue={getPaymentFieldValue}
         selected={selectedFilters}
         onApply={setSelectedFilters}
+        triggerRef={filterButtonRef}
       />
 
       {/* Modals */}
@@ -823,7 +847,7 @@ const PaymentsTable = ({ payments, vendor }) => {
           setLoading={setLoading}
           setError={setError}
           setSuccess={setSuccess}
-          fetchVendors={() => {}}
+          fetchVendors={() => { }}
           onRequestClose={() => {
             setShowUpdateModal(false);
             setSelectedVendor(null);

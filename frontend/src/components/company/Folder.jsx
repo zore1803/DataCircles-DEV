@@ -28,6 +28,7 @@ import {
   Save,
   UserCog,
   MoreVertical,
+  Plus,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import AppToaster from "../AppToaster";
@@ -1703,12 +1704,8 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
 
         {/* Folders List / Grid */}
         {!isLoading && folderViewMode === "grid" && filteredFolders.length === 0 ? (
-          <button
-            onClick={() => {
-              setInlineEditingId("NEW");
-              setInlineEditingName("New Folder");
-            }}
-            className="flex flex-col items-center justify-center w-full text-gray-500 hover:text-blue-600 transition-colors bg-gray-50"
+          <div
+            className="flex flex-col items-center justify-center w-full text-gray-500 bg-gray-50"
             style={{
               boxSizing: "border-box",
               height: 420,
@@ -1716,9 +1713,19 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
               borderRadius: 8,
             }}
           >
-            <FolderIcon className="w-7 h-7 mb-2" />
-            <span className="text-sm font-medium">Create New Folder</span>
-          </button>
+            <FolderIcon className="w-7 h-7 mb-3 text-gray-400" />
+            <button
+              type="button"
+              onClick={() => {
+                setInlineEditingId("NEW");
+                setInlineEditingName("New Folder");
+              }}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus size={16} />
+              Create new folder
+            </button>
+          </div>
         ) : folderViewMode === "grid" ? (
           <div
             ref={fillContainerRef}
@@ -1846,15 +1853,8 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
             ))}
           </div>
         ) : !isLoading && filteredFolders.length === 0 ? (
-          <button
-            onClick={() =>
-              setModalState({
-                isOpen: true,
-                editingId: null,
-                initialName: "",
-              })
-            }
-            className="flex flex-col items-center justify-center w-full text-gray-500 hover:text-blue-600 transition-colors bg-gray-50"
+          <div
+            className="flex flex-col items-center justify-center w-full text-gray-500 bg-gray-50"
             style={{
               boxSizing: "border-box",
               height: 420,
@@ -1862,9 +1862,22 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
               borderRadius: 8,
             }}
           >
-            <FolderIcon className="w-7 h-7 mb-2" />
-            <span className="text-sm font-medium">Create New Folder</span>
-          </button>
+            <FolderIcon className="w-7 h-7 mb-3 text-gray-400" />
+            <button
+              type="button"
+              onClick={() =>
+                setModalState({
+                  isOpen: true,
+                  editingId: null,
+                  initialName: "",
+                })
+              }
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus size={16} />
+              Create new folder
+            </button>
+          </div>
         ) : (
           <div
             ref={fillContainerRef}

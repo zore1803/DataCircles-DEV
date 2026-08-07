@@ -97,6 +97,11 @@ const VendorTaskForm = ({
   onDelete,
   onClose,
   onUpdate,
+  // Set true when the caller already showed the read-only task and the user
+  // explicitly clicked Edit there (e.g. TaskDetailsModal's Edit button) — skips
+  // straight to the editable form instead of re-showing a second read-only
+  // "Task Details" screen the user would have to click Edit on AGAIN.
+  startInEditMode = false,
 }) => {
   const [form, setForm] = useState(initialState);
   const [loading, setLoading] = useState(false);
@@ -105,7 +110,7 @@ const VendorTaskForm = ({
   const [errors, setErrors] = useState({});
   const [showUserSelector, setShowUserSelector] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(mode === "create");
+  const [isEditMode, setIsEditMode] = useState(mode === "create" || startInEditMode);
 
   useEffect(() => {
     if (open) {
@@ -130,13 +135,13 @@ const VendorTaskForm = ({
         });
       }
       setErrors({});
-      setIsEditMode(mode === "create");
+      setIsEditMode(mode === "create" || startInEditMode);
     } else {
       setIsSliding(false);
       setTimeout(() => setShouldRender(false), 300);
       setShowUserSelector(false);
     }
-  }, [open, mode, taskData, calendarDate]);
+  }, [open, mode, taskData, calendarDate, startInEditMode]);
 
   const handleChange = (key, val) => {
     setForm((f) => ({ ...f, [key]: val }));

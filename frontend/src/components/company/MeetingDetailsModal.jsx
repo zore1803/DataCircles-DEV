@@ -55,6 +55,8 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
   if (!shouldRender || !meetingData) return null;
 
   const meetingId = `MEETING-${(meetingData._id || "").slice(-5).toUpperCase()}`;
+  // Editing a completed meeting doesn't make sense — it already happened.
+  const isCompleted = meetingData.status === "completed";
   const organizer = typeof meetingData.createdBy === "object" ? meetingData.createdBy : null;
   const internalTeam =
     users?.filter(
@@ -88,13 +90,15 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
             {meetingId}
           </span>
           <div className="flex flex-row items-center justify-end" style={{ gap: 4 }}>
-            <button
-              onClick={() => onEdit?.(meetingData)}
-              className="p-1 rounded-lg hover:bg-blue-50 transition-colors"
-              title="Edit"
-            >
-              <Edit3 className="w-5 h-5" style={{ color: "#0085FF" }} />
-            </button>
+            {!isCompleted && (
+              <button
+                onClick={() => onEdit?.(meetingData)}
+                className="p-1 rounded-lg hover:bg-blue-50 transition-colors"
+                title="Edit"
+              >
+                <Edit3 className="w-5 h-5" style={{ color: "#0085FF" }} />
+              </button>
+            )}
             <button
               onClick={handleDelete}
               disabled={isDeleting}
@@ -406,16 +410,18 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
                 </span>
               )}
             </div>
-            <button
-              onClick={() => onEdit?.(meetingData)}
-              className="flex items-center hover:opacity-80 transition-opacity"
-              style={{ gap: 6 }}
-            >
-              <Plus className="w-3.5 h-3.5" style={{ color: "#0085FF" }} />
-              <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#0085FF" }}>
-                Add Internal Participant
-              </span>
-            </button>
+            {!isCompleted && (
+              <button
+                onClick={() => onEdit?.(meetingData)}
+                className="flex items-center hover:opacity-80 transition-opacity"
+                style={{ gap: 6 }}
+              >
+                <Plus className="w-3.5 h-3.5" style={{ color: "#0085FF" }} />
+                <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#0085FF" }}>
+                  Add Internal Participant
+                </span>
+              </button>
+            )}
 
             <div style={{ width: "100%", borderBottom: "1px solid #E7E7E9" }} />
 
@@ -445,16 +451,18 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
                 No client contacts
               </span>
             )}
-            <button
-              onClick={() => onEdit?.(meetingData)}
-              className="flex items-center hover:opacity-80 transition-opacity"
-              style={{ gap: 6 }}
-            >
-              <Plus className="w-3.5 h-3.5" style={{ color: "#0085FF" }} />
-              <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#0085FF" }}>
-                Add Client Contact
-              </span>
-            </button>
+            {!isCompleted && (
+              <button
+                onClick={() => onEdit?.(meetingData)}
+                className="flex items-center hover:opacity-80 transition-opacity"
+                style={{ gap: 6 }}
+              >
+                <Plus className="w-3.5 h-3.5" style={{ color: "#0085FF" }} />
+                <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#0085FF" }}>
+                  Add Client Contact
+                </span>
+              </button>
+            )}
           </div>
 
           <div style={{ margin: "0 24px", borderBottom: "1px solid #D9D9D9" }} />
@@ -578,23 +586,25 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
               {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CalendarX className="w-5 h-5" />}
               Cancel Meeting
             </button>
-            <button
-              onClick={() => onEdit?.(meetingData)}
-              className="flex items-center justify-center gap-2 whitespace-nowrap"
-              style={{
-                padding: "12px 14px",
-                border: "1px solid rgba(0, 133, 255, 0.3)",
-                borderRadius: 80,
-                fontFamily: "Inter",
-                fontWeight: 500,
-                fontSize: 16,
-                lineHeight: "20px",
-                color: "#0085FF",
-              }}
-            >
-              <CalendarClock className="w-5 h-5" />
-              Reschedule
-            </button>
+            {!isCompleted && (
+              <button
+                onClick={() => onEdit?.(meetingData)}
+                className="flex items-center justify-center gap-2 whitespace-nowrap"
+                style={{
+                  padding: "12px 14px",
+                  border: "1px solid rgba(0, 133, 255, 0.3)",
+                  borderRadius: 80,
+                  fontFamily: "Inter",
+                  fontWeight: 500,
+                  fontSize: 16,
+                  lineHeight: "20px",
+                  color: "#0085FF",
+                }}
+              >
+                <CalendarClock className="w-5 h-5" />
+                Reschedule
+              </button>
+            )}
           </div>
         </div>
 
@@ -607,7 +617,8 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
         >
           <button
             onClick={() => (onComplete ? onComplete(meetingData) : toast("Mark as complete isn't available yet"))}
-            className="flex items-center justify-center gap-2"
+            disabled={isCompleted}
+            className="flex items-center justify-center gap-2 disabled:opacity-50"
             style={{
               padding: "12px 14px",
               backgroundColor: "rgba(0, 201, 80, 0.05)",
@@ -621,24 +632,26 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
             }}
           >
             <CircleCheckIcon className="w-5 h-5" style={{ color: "#34C759" }} />
-            Mark As Complete
+            {isCompleted ? "Completed" : "Mark As Complete"}
           </button>
-          <button
-            onClick={() => onEdit?.(meetingData)}
-            className="flex items-center justify-center"
-            style={{
-              padding: "12px 14px",
-              backgroundColor: "#0085FF",
-              borderRadius: 88,
-              fontFamily: "Inter",
-              fontWeight: 500,
-              fontSize: 16,
-              lineHeight: "20px",
-              color: "#FFFFFF",
-            }}
-          >
-            Save Changes
-          </button>
+          {!isCompleted && (
+            <button
+              onClick={() => onEdit?.(meetingData)}
+              className="flex items-center justify-center"
+              style={{
+                padding: "12px 14px",
+                backgroundColor: "#0085FF",
+                borderRadius: 88,
+                fontFamily: "Inter",
+                fontWeight: 500,
+                fontSize: 16,
+                lineHeight: "20px",
+                color: "#FFFFFF",
+              }}
+            >
+              Save Changes
+            </button>
+          )}
         </div>
       </div>
     </>
