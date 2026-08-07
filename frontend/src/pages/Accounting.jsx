@@ -9,7 +9,6 @@ import React, {
 import {
   MoreVertical,
   Plus,
-  Search,
   SlidersHorizontal,
   FileText,
   Printer,
@@ -65,6 +64,7 @@ import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import HighlightText from "../components/common/HighlightText";
 
+import SearchIcon from "../components/common/SearchIcon";
 const SectionHeader = ({ number, title }) => (
   <div className="flex items-center gap-2.5 w-full mb-1.5 mt-2 first:mt-0">
     <div className="flex items-center justify-center w-5 h-5 rounded-full bg-[#F0F6FF] text-[#0085FF] text-[10px] font-semibold flex-shrink-0">
@@ -3295,10 +3295,8 @@ const Accounting = () => {
               <div
                 className={`relative h-11 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-11"} max-w-full flex-shrink-0`}
               >
-                <Search
-                  size={18}
-                  strokeWidth={2}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#1F2937] w-[18px] h-[18px] cursor-pointer z-10 flex-shrink-0"
+                <SearchIcon
+                  className="absolute left-3.5 text-[#1F2937] w-[18px] h-[18px] cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
                   onClick={() => {
                     setIsSearchExpanded(true);
                     searchInputRef.current?.focus();

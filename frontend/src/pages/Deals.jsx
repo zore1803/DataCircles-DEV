@@ -43,7 +43,6 @@ import {
   Calendar,
   Building2,
   CheckSquare,
-  Search,
   Plus,
   Filter,
   Download,
@@ -2167,9 +2166,8 @@ function Deals() {
           <div
             className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
           >
-            <Search
-              strokeWidth={2.5}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+            <SearchIcon
+              className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
               onClick={() => {
                 setIsSearchExpanded(true);
                 searchInputRef.current?.focus();
@@ -2862,3 +2860,4 @@ export default Deals;
 import PageSkeleton from "../components/common/PageSkeleton";
 import Skeleton from "../components/common/Skeleton";
 import DealCardSkeleton from "../components/common/DealCardSkeleton";
+import SearchIcon from "../components/common/SearchIcon";

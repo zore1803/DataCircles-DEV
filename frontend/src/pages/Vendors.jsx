@@ -16,7 +16,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Search,
   Edit2,
   Trash2,
   Truck,
@@ -46,6 +45,7 @@ import logo from "/DataCircles.png";
 import AppToaster from "../components/AppToaster";
 import { getAncestorZoom } from "../utils/domUtils";
 
+import SearchIcon from "../components/common/SearchIcon";
 function useOutsideClick(ref, callback) {
   useEffect(() => {
     function handleClickOutside(event) {
@@ -883,10 +883,8 @@ function Vendors() {
         </div>
         <div className="flex flex-row items-center gap-2 h-[44px] flex-shrink-0">
           <div className="relative flex items-center h-11 w-[220px] sm:w-[300px] lg:w-[380px] rounded-full border border-[#E1E4EA] bg-white focus-within:border-[#0085FF] transition-colors">
-            <Search
-              size={18}
-              strokeWidth={2}
-              className="absolute left-3.5 text-[#1F2937] pointer-events-none"
+            <SearchIcon
+              className="absolute left-3.5 text-[#1F2937] pointer-events-none top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
             />
             <input
               type="text"

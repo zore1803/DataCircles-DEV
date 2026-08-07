@@ -19,7 +19,6 @@ import { exportToCSV } from "../../utils/exportToCSV";
 import { bulkDelete } from "../../utils/bulkOperations";
 import API from "../../services/api";
 import {
-  Search,
   Filter,
   Plus,
   ArrowUp,
@@ -36,6 +35,7 @@ import {
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 
+import SearchIcon from "../common/SearchIcon";
 const InvoiceNumberIcon = ({ size = 20, ...props }) => (
   <svg width={size} height={size} viewBox="24 18 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
     <path d="M29.4724 34.2819L30.3057 30.9486H27.1328L27.4453 29.6986H30.6182L31.4676 26.3011H28.2947L28.6072 25.0511H31.7801L32.6134 21.7178H33.8474L33.0141 25.0511H36.4597L37.293 21.7178H38.527L37.6936 25.0511H40.8666L40.5541 26.3011H37.3811L36.5318 29.6986H39.7047L39.3922 30.9486H36.2193L35.3859 34.2819H34.152L34.9853 30.9486H31.5397L30.7064 34.2819H29.4724ZM31.8522 29.6986H35.2978L36.1472 26.3011H32.7016L31.8522 29.6986Z" fill="#525252" />
@@ -642,9 +642,8 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
       ) : (
         <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
-            <Search
-              size={20}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50"
+            <SearchIcon
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
             />
             <input
               type="text"

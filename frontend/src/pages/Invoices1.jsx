@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from "react";
 import {
-  Search,
   FileText,
   X,
   ChevronUp,
@@ -1531,7 +1530,7 @@ const MergedInvoiceManager = () => {
           <div className="p-6 border-b border-gray-200">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
                 <input
                   type="text"
                   placeholder={`Search ${
@@ -1968,3 +1967,5 @@ const MergedInvoiceManager = () => {
 
 export default MergedInvoiceManager;
 import PageSkeleton from "../components/common/PageSkeleton";
+
+import SearchIcon from "../components/common/SearchIcon";

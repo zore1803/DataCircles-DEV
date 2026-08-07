@@ -1,7 +1,6 @@
 // components/common/TableFilters.jsx
 import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
-  Search,
   X,
   ChevronDown,
   SortAsc,
@@ -12,6 +11,7 @@ import jsPDF from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import FilterIcon from "./common/FilterIcon";
 
+import SearchIcon from "./common/SearchIcon";
 const TableFilters = ({
   data = [],
   columns = [],
@@ -259,7 +259,7 @@ const TableFilters = ({
           {showSearch && (
             <div className="flex-1 min-w-0">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
                 <input
                   type="text"
                   value={searchTerm}

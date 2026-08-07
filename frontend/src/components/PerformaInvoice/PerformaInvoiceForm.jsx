@@ -7,7 +7,6 @@ import {
   Calendar,
   FileText,
   X,
-  Search,
   Eye,
 } from "lucide-react";
 import API from "../../services/api";
@@ -16,6 +15,7 @@ import QuickDealForm from "../deal/QuickDealForm";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import toast from "react-hot-toast";
 
+import SearchIcon from "../common/SearchIcon";
 // Function to convert number to words
 function numberToWords(num) {
   const ones = [
@@ -174,7 +174,7 @@ const ItemSearchSelect = ({
   return (
     <div className="relative" ref={dropdownRef}>
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
         <input
           ref={inputRef}
           type="text"

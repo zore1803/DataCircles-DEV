@@ -18,8 +18,8 @@ import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { exportToCSV } from "../../utils/exportToCSV";
 import { bulkDelete } from "../../utils/bulkOperations";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
+import SearchIcon from "../common/SearchIcon";
 import {
-  Search,
   Filter,
   Plus,
   UserPlus,
@@ -504,9 +504,8 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
       ) : (
         <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
-            <Search
-              size={20}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50"
+            <SearchIcon
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
             />
             <input
               type="text"

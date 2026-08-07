@@ -11,12 +11,13 @@
 // edits only affect rewards created AFTER the change (Reward is immutable).
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Gift, Search, Save, Ban, Plus, Users, Tag, Clock, Building2, X,
+  Gift, Save, Ban, Plus, Users, Tag, Clock, Building2, X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { configureAxios } from "../services/api";
 import { referralAdminAPI } from "../services/referralAdminApi";
 
+import SearchIcon from "../components/common/SearchIcon";
 const REFERRAL_STATUS_BADGE = {
   pending: "bg-amber-100 text-amber-700",
   qualified: "bg-green-100 text-green-700",
@@ -179,12 +180,12 @@ const ReferralProgramAdmin = () => {
           </div>
         ) : (
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
             <input
               value={orgSearch}
               onChange={(e) => setOrgSearch(e.target.value)}
               placeholder="Search an organization to manage its referral program..."
-              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full pl-11 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
             {orgResults.length > 0 && (
               <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">

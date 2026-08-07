@@ -9,7 +9,6 @@ import {
   Trash2, 
   PhoneOutgoing, 
   PhoneIncoming,
-  Search,
   Plus,
   ChevronDown
 } from "lucide-react";
@@ -18,6 +17,7 @@ import CallLogDetailView from "./CallLogDetailView";
 import toast from 'react-hot-toast';
 import AppToaster from "../AppToaster";
 
+import SearchIcon from "../common/SearchIcon";
 const callTypeOptions = [
   { value: "Outbound", label: "Outbound", icon: PhoneOutgoing },
   { value: "Inbound", label: "Inbound", icon: PhoneIncoming },
@@ -177,13 +177,13 @@ const CallLogs = ({ contactId }) => {
       {/* Filters */}
       <div className="space-y-2 mb-4">
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+          <SearchIcon className="absolute left-2 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
           <input
             type="text"
             placeholder="Search..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-400"
+            className="w-full pl-11 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-400"
           />
         </div>
         

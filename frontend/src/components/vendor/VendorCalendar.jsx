@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Search,
   Users,
   CheckSquare,
   X,
@@ -15,6 +14,7 @@ import {
 } from "lucide-react";
 import AppToaster from "../AppToaster";
 
+import SearchIcon from "../common/SearchIcon";
 const CompactEventCard = ({ item, type, onClick }) => (
   <div
     className={`
@@ -421,13 +421,13 @@ const VendorCalendar = ({ vendorId }) => {
 
       {/* Search */}
       <div className="relative mb-4">
-        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
+        <SearchIcon className="absolute left-2 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
         <input
           type="text"
           placeholder="Search..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-7 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:border-gray-400"
+          className="w-full pl-11 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:border-gray-400"
         />
       </div>
 

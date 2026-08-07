@@ -16,7 +16,6 @@ import {
   Upload,
   Trash2,
   Download,
-  Search,
   Filter,
   X,
   Edit3,
@@ -38,6 +37,7 @@ import TableSkeletonRows from "../common/TableSkeletonRows";
 import Skeleton from "../common/Skeleton";
 import useFillToBottom from "../../hooks/useFillToBottom";
 
+import SearchIcon from "../common/SearchIcon";
 const FOLDER_ITEM_COUNT_RANGES = [
   { label: "Empty", test: (n) => n === 0 },
   { label: "1–5 Items", test: (n) => n >= 1 && n <= 5 },
@@ -1451,7 +1451,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                     borderRadius: 95,
                   }}
                 >
-                  <Search className="text-gray-900 opacity-50 w-4 h-4 flex-shrink-0" />
+                  <SearchIcon className="flex-shrink-0 w-4 h-4 text-[#525866]" />
                   <input
                     type="text"
                     placeholder="Search file by name..."
@@ -1619,13 +1619,13 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
         ) : (
         <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
-            <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-900 opacity-50 w-5 h-5" />
+            <SearchIcon className="absolute left-3.5 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
             <input
               type="text"
               placeholder="Search folder by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              className="w-full h-full pl-11 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
               style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
             />
           </div>

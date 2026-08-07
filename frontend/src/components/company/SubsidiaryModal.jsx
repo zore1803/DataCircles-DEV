@@ -2,8 +2,9 @@
 import React, { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
-import { X, Trash2, Building2, Search, ChevronDown } from "lucide-react";
+import { X, Trash2, Building2, ChevronDown } from "lucide-react";
 
+import SearchIcon from "../common/SearchIcon";
 const SubsidiaryModal = ({ companyId, isOpen, onClose, onSuccess }) => {
   const [subsidiaries, setSubsidiaries] = useState([]);
   const [availableCompanies, setAvailableCompanies] = useState([]);
@@ -158,7 +159,7 @@ const SubsidiaryModal = ({ companyId, isOpen, onClose, onSuccess }) => {
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl flex items-center gap-3 cursor-pointer focus-within:ring-2 focus-within:ring-blue-500/30"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               >
-                <Search className="w-4 h-4 text-gray-400" />
+                <SearchIcon className="w-4 h-4 text-[#525866]" />
                 <input
                   type="text"
                   value={searchTerm}

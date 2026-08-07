@@ -22,7 +22,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { getAncestorZoom } from "../../utils/domUtils";
 import {
-  Search,
   Filter,
   LayoutGrid,
   List as ListIcon,
@@ -65,6 +64,7 @@ import Skeleton from "../common/Skeleton";
 import useFillToBottom from "../../hooks/useFillToBottom";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
 
+import SearchIcon from "../common/SearchIcon";
 const AMOUNT_RANGES = [
   { label: "Under ₹10,000", test: (v) => v < 10000 },
   { label: "₹10,000 – ₹50,000", test: (v) => v >= 10000 && v < 50000 },
@@ -1089,9 +1089,8 @@ export default function CompanyDealsKanban({
       ) : (
         <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
-            <Search
-              size={20}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50"
+            <SearchIcon
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
             />
             <input
               type="text"

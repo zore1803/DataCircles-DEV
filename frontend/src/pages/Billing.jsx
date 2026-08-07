@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import {
-  Search,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
@@ -23,6 +22,7 @@ import * as XLSX from "xlsx";
 import API, { configureAxios } from "../services/api";
 import { useNavigate } from "react-router-dom";
 
+import SearchIcon from "../components/common/SearchIcon";
 const Shimmer = () => (
   <div className="animate-pulse space-y-6">
     <div className="h-8 bg-gray-200 rounded w-1/4"></div>
@@ -229,7 +229,7 @@ const SearchBar = ({ searchTerm, setSearchTerm, loading, searchInputRef }) => {
 
   return (
     <div className="flex-1 relative">
-      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+      <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
       <input
         ref={searchInputRef}
         type="text"

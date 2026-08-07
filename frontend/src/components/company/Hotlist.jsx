@@ -3,8 +3,8 @@ import API from "../../services/api";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import HighlightText from "../common/HighlightText";
+import SearchIcon from "../common/SearchIcon";
 import {
-  Search,
   Plus,
   Edit3,
   Trash2,
@@ -493,7 +493,7 @@ const Hotlist = () => {
                 onFocus={() => setIsDropdownOpen(true)}
                 aria-label="Search companies"
               />
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]" />
 
               {isDropdownOpen && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -535,7 +535,7 @@ const Hotlist = () => {
                     })
                   ) : (
                     <div className="px-4 py-6 text-center text-gray-500">
-                      <Search className="h-10 w-10 mx-auto text-gray-300 mb-3" />
+                      <SearchIcon className="h-10 w-10 mx-auto text-gray-300 mb-3" />
                       <p className="text-sm">
                         {searchTerm ? "No companies found" : "Start typing to search..."}
                       </p>
@@ -618,9 +618,9 @@ const Hotlist = () => {
             </div>
 
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
               <input
-                className="w-full h-10 pl-9 pr-4 border border-gray-200 rounded-full text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="w-full h-10 pl-11 pr-4 border border-gray-200 rounded-full text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 placeholder="Search this folder by name, industry, or location..."
                 value={companySearchTerm}
                 onChange={(e) => setCompanySearchTerm(e.target.value)}
@@ -686,7 +686,7 @@ const Hotlist = () => {
           </div>
         ) : visibleCompanies.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 text-center py-10 sm:py-14 px-6 text-gray-500">
-            <Search className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-300 mb-3" />
+            <SearchIcon className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-300 mb-3" />
             <p className="text-sm">No companies in this folder match "{companySearchTerm}".</p>
           </div>
         ) : folderViewMode === "card" ? (
@@ -758,9 +758,9 @@ const Hotlist = () => {
 
           <div className="flex items-center gap-3">
             <div className="relative w-[320px] max-w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
               <input
-                className="w-full h-10 pl-9 pr-4 border border-gray-200 rounded-full text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="w-full h-10 pl-11 pr-4 border border-gray-200 rounded-full text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 placeholder="Search by companies by name, industry, or location..."
                 value={folderSearchTerm}
                 onChange={(e) => setFolderSearchTerm(e.target.value)}

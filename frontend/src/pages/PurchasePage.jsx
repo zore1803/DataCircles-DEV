@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Search,
   ShoppingCart,
   Edit2,
   Trash2,
@@ -32,6 +31,7 @@ import { getVideoTutorial } from "../utils/videoTutorials";
 import VideoTutorialButton from "../components/VideoTutorialButton";
 import AppToaster from "../components/AppToaster";
 
+import SearchIcon from "../components/common/SearchIcon";
 const PurchasePage = () => {
   const [vendors, setVendors] = useState([]);
   const [purchases, setPurchases] = useState([]);
@@ -561,7 +561,7 @@ const PurchasePage = () => {
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 font-inter shadow-sm">
           <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
             <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
               <input
                 type="text"
                 placeholder="Search Purchases Order by Number or Vendor..."

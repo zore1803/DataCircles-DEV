@@ -9,7 +9,6 @@ import toast from "react-hot-toast";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import {
-  Search,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
@@ -56,6 +55,7 @@ import {
 import AppToaster from "../components/AppToaster";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 
+import SearchIcon from "../components/common/SearchIcon";
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Month/Week/Day switcher icons — mirrors the ones on the Calendar page.
@@ -2643,9 +2643,8 @@ function Tasks() {
             className={`relative h-10 flex items-center border rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
             style={{ borderColor: isSearchExpanded ? "#0085FF" : "rgba(31, 41, 55, 0.1)" }}
           >
-            <Search
-              strokeWidth={2.5}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-800 w-4 h-4 cursor-pointer z-10 flex-shrink-0"
+            <SearchIcon
+              className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
               onClick={() => {
                 setIsSearchExpanded(true);
                 searchInputRef.current?.focus();
@@ -2953,7 +2952,9 @@ function Tasks() {
           server-side, so it dimmed the whole table on every page change. Rows stay
           fully legible and clickable while the next page loads; the top progress
           bar reports the fetch instead. */}
-      <div className="relative bg-white border border-[#E1E4EA]">
+      {/* No border-t: the toolbar strip right above already has its own
+          border-b, so a top border here would double up against it. */}
+      <div className="relative bg-white border-x border-b border-[#E1E4EA]">
           <table
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${taskTable.getTotalSize()}px`, tableLayout: "fixed" }}
@@ -3091,7 +3092,9 @@ function Tasks() {
           server-side, so it dimmed the whole table on every page change. Rows stay
           fully legible and clickable while the next page loads; the top progress
           bar reports the fetch instead. */}
-      <div className="relative bg-white border border-[#E1E4EA]">
+      {/* No border-t: the toolbar strip right above already has its own
+          border-b, so a top border here would double up against it. */}
+      <div className="relative bg-white border-x border-b border-[#E1E4EA]">
           <table
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${meetingTable.getTotalSize()}px`, tableLayout: "fixed" }}
