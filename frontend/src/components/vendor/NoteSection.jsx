@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
+import Skeleton from "../common/Skeleton";
 import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
 import API from "../../services/api";
 import { useParams } from "react-router-dom";
 import toast from 'react-hot-toast';
+import HighlightText from "../common/HighlightText";
 import { 
   StickyNote,
   Plus,
@@ -28,6 +30,48 @@ import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { useTopLoadingSignal } from "../common/TopLoadingBar";
 
 const NOTE_FILTER_COLUMNS = [{ key: "author", label: "Author" }];
+
+const NoteGridSkeleton = () => {
+  return (
+    <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
+      <div
+          className="p-5"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(311px, 1fr))",
+            gap: 24,
+          }}
+        >
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="bg-white relative flex flex-col items-start overflow-hidden rounded-[12px] border border-gray-100"
+              style={{
+                width: "100%",
+                height: "240px",
+                boxShadow: "0px 0px 6px rgba(0, 0, 0, 0.02), 0px 2px 4px rgba(0, 0, 0, 0.08)",
+              }}
+            >
+              <div className="w-full h-[70px] bg-gray-100 animate-pulse flex-shrink-0" />
+              <div className="flex flex-col p-4 gap-3 w-full flex-1">
+                <div className="w-3/4 h-4 bg-gray-200 rounded animate-pulse mt-1" />
+                <div className="w-1/3 h-3 bg-gray-200 rounded animate-pulse" />
+                <div className="flex flex-col gap-2 mt-2">
+                  <div className="w-full h-2.5 bg-gray-100 rounded animate-pulse" />
+                  <div className="w-5/6 h-2.5 bg-gray-100 rounded animate-pulse" />
+                  <div className="w-4/6 h-2.5 bg-gray-100 rounded animate-pulse" />
+                </div>
+                <div className="mt-auto flex items-center gap-2 pt-2">
+                  <div className="w-6 h-6 rounded-full bg-gray-200 animate-pulse" />
+                  <div className="w-24 h-3 bg-gray-200 rounded animate-pulse" />
+                </div>
+              </div>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+};
 
 const GridViewIcon = ({ size = 20, ...props }) => (
   <svg width={size} height={size} viewBox="12 12 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -91,14 +135,14 @@ const NoteViewer = ({ isOpen, onClose, noteTitle, noteContent, vendorName, creat
       <div className="bg-white rounded-lg w-full max-w-2xl max-h-[85vh] overflow-hidden shadow-lg border border-gray-200">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">
-              {noteTitle || "Untitled Note"}
-            </h2>
-            <p className="text-xs text-gray-500 mt-1">
-              {vendorName} · {formatDate(createdAt)}
-            </p>
-          </div>
+          <div className="flex-1 px-4 py-3 flex flex-col gap-1.5 min-h-0">
+          <h4 className="text-[15px] font-semibold text-gray-900 leading-snug line-clamp-1 group-hover:text-[#0085FF] transition-colors">
+            {noteTitle ? <HighlightText text={noteTitle} query={searchTerm} /> : "Untitled Note"}
+          </h4>
+          <p className="text-[13px] text-gray-500 line-clamp-3 leading-relaxed flex-1">
+            {noteContent ? <HighlightText text={stripHtml(noteContent)} query={searchTerm} /> : ""}
+          </p>
+        </div>
           <button 
             onClick={onClose} 
             className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
@@ -119,10 +163,7 @@ const NoteViewer = ({ isOpen, onClose, noteTitle, noteContent, vendorName, creat
 };
 
 // Note Card Component
-/* Card UI mirrors company/NoteSection.jsx's NoteCard exactly — same gradient
-   header + document glyph, title/meta block, body preview, and author footer —
-   so the Vendor Notes grid matches the Company Profile Notes tab. */
-const NoteCard = ({ note, onEdit, onDelete, onView }) => {
+const NoteCard = ({ note, onEdit, onDelete, onView, searchTerm }) => {
   const formatFullDate = (dateString) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleDateString([], {
@@ -191,7 +232,7 @@ const NoteCard = ({ note, onEdit, onDelete, onView }) => {
                   color: "#0F141A",
                 }}
               >
-                {note.title || 'Untitled Note'}
+                {note.title ? <HighlightText text={note.title} query={searchTerm} /> : 'Untitled Note'}
               </h4>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                 <button
@@ -236,7 +277,7 @@ const NoteCard = ({ note, onEdit, onDelete, onView }) => {
               className={`w-full ${isExpanded ? "" : "line-clamp-3"}`}
               style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "160%", color: "#525866" }}
             >
-              {getPreviewText(note.note, isExpanded)}
+              <HighlightText text={getPreviewText(note.note, isExpanded)} query={searchTerm} />
             </p>
             {isLong && (
               <button
@@ -275,7 +316,7 @@ const NoteCard = ({ note, onEdit, onDelete, onView }) => {
             })()}
             <div className="flex items-center" style={{ gap: 6 }}>
               <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
-                {typeof note.user === "object" ? note.user?.name || "Unknown" : "Unknown"}
+                {typeof note.user === "object" ? (note.user?.name ? <HighlightText text={note.user?.name} query={searchTerm} /> : "Unknown") : "Unknown"}
               </span>
               <span
                 className="inline-flex items-center justify-center rounded-full"
@@ -416,6 +457,7 @@ const NoteSection = () => {
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [viewingNote, setViewingNote] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState("grid");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -432,6 +474,8 @@ const NoteSection = () => {
       setNotes(sortedNotes);
     } catch {
       toast.error('Failed to load notes');
+    } finally {
+      setInitialLoading(false);
     }
   }, [vendorId]);
 
@@ -525,6 +569,45 @@ const NoteSection = () => {
     setIsViewerOpen(false);
   };
 
+  const [columnOrder, setColumnOrder] = useState(() => [
+    "selection", "title", "note", "author", "createdAt", "updatedAt", "actions"
+  ]);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    setColumnOrder((prev) => {
+      const newOrder = [...prev];
+      const draggedIdx = newOrder.indexOf(draggedKey);
+      const targetIdx = newOrder.indexOf(targetKey);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedKey);
+      return newOrder;
+    });
+  };
+
+  const handlePinColumn = (colId, side) => {
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colId), { key: colId, side }]);
+  };
+
+  const handleUnpinColumn = (colId) => {
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colId));
+  };
+
+  const handleHideColumn = (colId) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      next.add(colId);
+      return next;
+    });
+  };
+
+  const handleSort = (key, direction) => {
+    setSortConfig({ key, direction });
+  };
+
   const filteredNotes = useMemo(() => {
     let rows = notes;
 
@@ -551,20 +634,34 @@ const NoteSection = () => {
     0,
   );
 
-  /* ── Pagination — same client-side "first ... current ... last" pattern
-     CompanyNotesTab uses. Search/filters reset back to page 1. */
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(5);
+  const [limit, setLimit] = useState(50);
   useEffect(() => {
     setPage(1);
   }, [searchTerm, selectedFilters]);
-  const totalPages = Math.max(1, Math.ceil(filteredNotes.length / limit));
+  
+  const sortedNotes = useMemo(() => {
+    if (!sortConfig.key) return filteredNotes;
+    return [...filteredNotes].sort((a, b) => {
+      let aVal = getNoteFieldValue(a, sortConfig.key) ?? "";
+      let bVal = getNoteFieldValue(b, sortConfig.key) ?? "";
+      if (sortConfig.key === "createdAt" || sortConfig.key === "updatedAt") {
+        aVal = a[sortConfig.key] ? new Date(a[sortConfig.key]).getTime() : 0;
+        bVal = b[sortConfig.key] ? new Date(b[sortConfig.key]).getTime() : 0;
+      }
+      const aCmp = typeof aVal === "number" ? aVal : String(aVal).toLowerCase();
+      const bCmp = typeof bVal === "number" ? bVal : String(bVal).toLowerCase();
+      if (aCmp < bCmp) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aCmp > bCmp) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredNotes, sortConfig]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedNotes.length / limit));
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
-  // Brief top-edge progress flash on page change — same visual language as
-  // Companies.jsx's server-paginated list, even though this data is already
-  // in memory (client-side slice) rather than a fresh network round trip.
+  
   const [isPaging, setIsPaging] = useState(false);
   useTopLoadingSignal(isPaging);
   const goToPage = (n) => {
@@ -574,8 +671,8 @@ const NoteSection = () => {
     setTimeout(() => setIsPaging(false), 220);
   };
   const paginatedNotes = useMemo(
-    () => filteredNotes.slice((page - 1) * limit, page * limit),
-    [filteredNotes, page, limit],
+    () => sortedNotes.slice((page - 1) * limit, page * limit),
+    [sortedNotes, page, limit],
   );
 
   const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
@@ -600,7 +697,7 @@ const NoteSection = () => {
     }
   };
 
-  const columns = useMemo(
+  const baseListColumns = useMemo(
     () => [
       {
         id: "selection",
@@ -640,7 +737,7 @@ const NoteSection = () => {
             className="text-gray-900 truncate block"
             title={row.original.title || "Untitled Note"}
           >
-            {row.original.title || "Untitled Note"}
+            <HighlightText text={row.original.title || "Untitled Note"} query={searchTerm} />
           </span>
         ),
       },
@@ -652,7 +749,7 @@ const NoteSection = () => {
           const text = stripHtml(row.original.note);
           return (
             <span className="text-gray-900 truncate block" title={text}>
-              {text || "—"}
+              {text ? <HighlightText text={text} query={searchTerm} /> : "—"}
             </span>
           );
         },
@@ -718,11 +815,50 @@ const NoteSection = () => {
     [paginatedNotes, selectedItems, selectAll, clearSelection, toggleItem],
   );
 
-  return (
-    <div className="h-full mt-2">
-      <AppToaster />
+  const finalListColumns = useMemo(() => {
+    const visibleBase = baseListColumns.filter(c => !hiddenColumns.has(c.id));
+    const selectionCol = visibleBase.find(c => c.id === "selection");
+    const actionsCol = visibleBase.find(c => c.id === "actions");
+    const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
 
-      {/* Action Buttons (Portaled to Tab Header) removed */}
+    const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
+    const rightPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'right').map(p => p.key));
+    
+    const leftCols = otherCols.filter(c => leftPinnedKeys.has(c.id));
+    const rightCols = otherCols.filter(c => rightPinnedKeys.has(c.id));
+    const midCols = otherCols.filter(c => !leftPinnedKeys.has(c.id) && !rightPinnedKeys.has(c.id));
+    
+    midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
+    
+    return [
+      ...(selectionCol ? [selectionCol] : []),
+      ...leftCols,
+      ...midCols,
+      ...rightCols,
+      ...(actionsCol ? [actionsCol] : [])
+    ];
+  }, [baseListColumns, columnOrder, hiddenColumns, pinnedColumns]);
+
+  const visibleColumnsForGhost = useMemo(() => finalListColumns.map(c => ({ key: c.id, label: c.header })), [finalListColumns]);
+  const getGhostPreview = (colId) => {
+    return paginatedNotes.slice(0, 10).map((n) => {
+      let val = n[colId];
+      if (colId === 'note') val = stripHtml(n.note);
+      if (colId === 'author') val = getNoteFieldValue(n, 'author');
+      if (colId === 'createdAt' || colId === 'updatedAt') {
+        val = formatNoteDate(n[colId]);
+      }
+      return String(val ?? "").trim() || "—";
+    });
+  };
+
+  if (initialLoading && !notes.length) {
+    // Rely on DataTable's loading prop for list view, and we'll handle grid view manually below
+  }
+
+  return (
+    <div className="h-full mt-0">
+      <AppToaster />
 
       {stripVisible ? (
         <BulkActionBar
@@ -735,7 +871,7 @@ const NoteSection = () => {
           isDeleting={isDeleting}
         />
       ) : (
-        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+        <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
             <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
             <input
@@ -803,8 +939,9 @@ const NoteSection = () => {
       )}
 
       {viewMode === "grid" ? (
-        <>
-          {paginatedNotes.length === 0 ? (
+        initialLoading ? (
+          <NoteGridSkeleton />
+        ) : paginatedNotes.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-gray-200">
             <StickyNote className="w-10 h-10 text-gray-400 mb-2" />
             <p className="text-sm text-gray-600">
@@ -820,34 +957,73 @@ const NoteSection = () => {
             )}
           </div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(311px, 1fr))",
-              gap: 24,
-            }}
-          >
-            {paginatedNotes.map((note) => (
-              <NoteCard
-                key={note._id}
-                note={note}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onView={handleView}
+          <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
+            <div
+              className="p-5"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(311px, 1fr))",
+                gap: 24,
+              }}
+            >
+              {paginatedNotes.map((note) => (
+                <NoteCard
+                  key={note._id}
+                  note={note}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onView={handleView}
+                  searchTerm={searchTerm}
+                />
+              ))}
+            </div>
+            <div className="border-t border-[#E1E4EA] px-5">
+              <TablePaginationFooter
+                currentPage={page}
+                totalPages={totalPages}
+                totalCount={filteredNotes.length}
+                limit={limit}
+                onPageChange={goToPage}
+                onLimitChange={(n) => {
+                  setLimit(n);
+                  setPage(1);
+                }}
               />
-            ))}
+            </div>
           </div>
-          )}
-        </>
+        )
       ) : (
         <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
           <DataTable
             data={paginatedNotes}
-            columns={columns}
+            columns={finalListColumns}
+            loading={loading}
             columnSizing={columnSizing}
             onColumnSizingChange={setColumnSizing}
+            pinnedColumns={pinnedColumns}
+            onPinColumn={handlePinColumn}
+            onUnpinColumn={handleUnpinColumn}
+            onHideColumn={handleHideColumn}
+            onSort={handleSort}
+            onColumnReorder={handleColumnReorder}
+            visibleColumns={visibleColumnsForGhost}
+            getGhostPreview={getGhostPreview}
             variant="card"
+            maxHeight={290}
             rowClassName={(n) => (selectedItems.includes(n._id) ? "!bg-blue-50" : "")}
+            loadingContent={
+              <div className="space-y-0">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[#E1E4EA] last:border-b-0">
+                    <Skeleton width={16} height={16} />
+                    <Skeleton width={120} height={13} />
+                    <Skeleton width={80} height={13} />
+                    <Skeleton width={60} height={13} />
+                    <Skeleton width={70} height={13} />
+                  </div>
+                ))}
+              </div>
+            }
             emptyContent={
               <div className="flex flex-col items-center gap-2">
                 <StickyNote className="w-10 h-10 text-gray-400" />
@@ -879,20 +1055,6 @@ const NoteSection = () => {
             />
           </div>
         </div>
-      )}
-
-      {viewMode === "grid" && (
-        <TablePaginationFooter
-          currentPage={page}
-          totalPages={totalPages}
-          totalCount={filteredNotes.length}
-          limit={limit}
-          onPageChange={goToPage}
-          onLimitChange={(n) => {
-            setLimit(n);
-            setPage(1);
-          }}
-        />
       )}
 
       <CompanyFilterPanel

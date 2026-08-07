@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import Skeleton from "../common/Skeleton";
 import { Plus, Calendar, Search, Trash2, Eye } from "lucide-react";
 import API from "../../services/api";
 import VendorTaskForm from "./VendorTaskForm";
@@ -11,6 +12,7 @@ import FilterIcon from "../common/FilterIcon";
 import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { useTopLoadingSignal } from "../common/TopLoadingBar";
 import toast from "react-hot-toast";
+import HighlightText from "../common/HighlightText";
 
 /* Columns offered in the filter panel. `options` seeds the dropdown with the
    schema's full enum so a value is still filterable when no row currently uses
@@ -69,6 +71,45 @@ const VendorTasksTable = ({ vendorId }) => {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [columnSizing, setColumnSizing] = useState({});
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  const [columnOrder, setColumnOrder] = useState(() => [
+    "selection", "title", "description", "assignedTo", "status", "priority", "dueDate", "actions"
+  ]);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    setColumnOrder((prev) => {
+      const newOrder = [...prev];
+      const draggedIdx = newOrder.indexOf(draggedKey);
+      const targetIdx = newOrder.indexOf(targetKey);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedKey);
+      return newOrder;
+    });
+  };
+
+  const handlePinColumn = (colId, side) => {
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colId), { key: colId, side }]);
+  };
+
+  const handleUnpinColumn = (colId) => {
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colId));
+  };
+
+  const handleHideColumn = (colId) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      next.add(colId);
+      return next;
+    });
+  };
+
+  const handleSort = (key, direction) => {
+    setSortConfig({ key, direction });
+  };
 
   const refetchTasks = useCallback(async () => {
     const response = await API.get(`/tasks/vendor/${vendorId}`);
@@ -100,9 +141,6 @@ const VendorTasksTable = ({ vendorId }) => {
         return;
       }
 
-      // Supporting data only — the task list already rendered above, so a
-      // failure here (e.g. a 403 on the permission-gated user list) must not
-      // blank out tasks that loaded fine.
       try {
         const usersResponse = await API.get("/auth/all-user");
         setUsers(usersResponse.data?.allUsers || []);
@@ -148,21 +186,34 @@ const VendorTasksTable = ({ vendorId }) => {
     0,
   );
 
-  /* ── Pagination — same client-side "first ... current ... last" pattern
-     CompanyTasksTab uses for its own list view. Filters/search reset back to
-     page 1 so a narrowed result set never opens on an out-of-range page. */
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(5);
+  const [limit, setLimit] = useState(50);
   useEffect(() => {
     setPage(1);
   }, [search, selectedFilters]);
-  const totalPages = Math.max(1, Math.ceil(filteredTasks.length / limit));
+
+  const sortedTasks = useMemo(() => {
+    if (!sortConfig.key) return filteredTasks;
+    return [...filteredTasks].sort((a, b) => {
+      let aVal = getTaskFieldValue(a, sortConfig.key) ?? "";
+      let bVal = getTaskFieldValue(b, sortConfig.key) ?? "";
+      if (sortConfig.key === "dueDate") {
+        aVal = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+        bVal = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      }
+      const aCmp = typeof aVal === "number" ? aVal : String(aVal).toLowerCase();
+      const bCmp = typeof bVal === "number" ? bVal : String(bVal).toLowerCase();
+      if (aCmp < bCmp) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aCmp > bCmp) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredTasks, sortConfig]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedTasks.length / limit));
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
-  // Brief top-edge progress flash on page change — same visual language as
-  // Companies.jsx's server-paginated list, even though this data is already
-  // in memory (client-side slice) rather than a fresh network round trip.
+  
   const [isPaging, setIsPaging] = useState(false);
   useTopLoadingSignal(isPaging);
   const goToPage = (n) => {
@@ -172,14 +223,10 @@ const VendorTasksTable = ({ vendorId }) => {
     setTimeout(() => setIsPaging(false), 220);
   };
   const paginatedTasks = useMemo(
-    () => filteredTasks.slice((page - 1) * limit, page * limit),
-    [filteredTasks, page, limit],
+    () => sortedTasks.slice((page - 1) * limit, page * limit),
+    [sortedTasks, page, limit],
   );
 
-  /* ── Bulk selection ──
-     Selection tracks the full filtered set (so the bulk strip's "Select All"
-     spans every page), but the header checkbox only ever ticks the rows
-     visible on the CURRENT page — same split CompanyTasksTab uses. */
   const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
     items: filteredTasks,
   });
@@ -243,8 +290,7 @@ const VendorTasksTable = ({ vendorId }) => {
 
   const getRelatedToName = () => vendorName || "N/A";
 
-  /* ── Columns ── */
-  const columns = useMemo(
+  const baseColumns = useMemo(
     () => [
       {
         id: "selection",
@@ -279,10 +325,10 @@ const VendorTasksTable = ({ vendorId }) => {
         id: "title",
         accessorKey: "title",
         size: 240,
-        header: "Task",
+        header: "Title",
         cell: ({ row }) => (
           <span className="font-medium text-gray-900 truncate block" title={row.original.title}>
-            {row.original.title}
+            <HighlightText text={row.original.title} query={search} />
           </span>
         ),
       },
@@ -294,7 +340,7 @@ const VendorTasksTable = ({ vendorId }) => {
           const text = stripHtml(row.original.description);
           return (
             <span className="text-gray-600 truncate block" title={text}>
-              {text || "—"}
+              {text ? <HighlightText text={text} query={search} /> : "—"}
             </span>
           );
         },
@@ -309,7 +355,11 @@ const VendorTasksTable = ({ vendorId }) => {
               STATUS_BADGE[row.original.status] || "bg-gray-100 text-gray-800"
             }`}
           >
-            {row.original.status === "Pending" ? "To Do" : row.original.status}
+            {row.original.status === "Pending" ? (
+              <HighlightText text="To Do" query={search} />
+            ) : (
+              <HighlightText text={row.original.status} query={search} />
+            )}
           </span>
         ),
       },
@@ -323,7 +373,7 @@ const VendorTasksTable = ({ vendorId }) => {
               PRIORITY_BADGE[row.original.priority] || "bg-gray-100 text-gray-600"
             }`}
           >
-            {row.original.priority || "—"}
+            {row.original.priority ? <HighlightText text={row.original.priority} query={search} /> : "—"}
           </span>
         ),
       },
@@ -341,7 +391,7 @@ const VendorTasksTable = ({ vendorId }) => {
           const names = getTaskFieldValue(row.original, "assignedTo");
           return (
             <span className="text-gray-700 truncate block" title={names}>
-              {names || "Unassigned"}
+              {names ? <HighlightText text={names} query={search} /> : "Unassigned"}
             </span>
           );
         },
@@ -381,6 +431,44 @@ const VendorTasksTable = ({ vendorId }) => {
     [paginatedTasks, selectedItems, selectAll, clearSelection, toggleItem],
   );
 
+  const finalColumns = useMemo(() => {
+    const visibleBase = baseColumns.filter(c => !hiddenColumns.has(c.id));
+    const selectionCol = visibleBase.find(c => c.id === "selection");
+    const actionsCol = visibleBase.find(c => c.id === "actions");
+    const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
+
+    const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
+    const rightPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'right').map(p => p.key));
+    
+    const leftCols = otherCols.filter(c => leftPinnedKeys.has(c.id));
+    const rightCols = otherCols.filter(c => rightPinnedKeys.has(c.id));
+    const midCols = otherCols.filter(c => !leftPinnedKeys.has(c.id) && !rightPinnedKeys.has(c.id));
+    
+    midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
+    
+    return [
+      ...(selectionCol ? [selectionCol] : []),
+      ...leftCols,
+      ...midCols,
+      ...rightCols,
+      ...(actionsCol ? [actionsCol] : [])
+    ];
+  }, [baseColumns, columnOrder, hiddenColumns, pinnedColumns]);
+
+  const visibleColumnsForGhost = useMemo(() => finalColumns.map(c => ({ key: c.id, label: c.header })), [finalColumns]);
+  const getGhostPreview = (colId) => {
+    return paginatedTasks.slice(0, 10).map((t) => {
+      let val = t[colId];
+      if (colId === 'assignedTo') {
+        val = getTaskFieldValue(t, "assignedTo");
+      }
+      if (colId === 'dueDate') {
+        val = formatDate(t.dueDate);
+      }
+      return String(val ?? "").trim() || "—";
+    });
+  };
+
   if (error) {
     return (
       <div className="text-center py-8">
@@ -390,10 +478,14 @@ const VendorTasksTable = ({ vendorId }) => {
     );
   }
 
-  return (
-    <div className="h-full mt-2">
-      {/* Action Buttons (Portaled to Tab Header) removed */}
+  if (loading && !tasks.length) {
+    // Only return early if we have literally nothing to show and it's the very first load
+    // The skeleton is handled by DataTable's loading prop now.
+  }
 
+  return (
+    <div className="h-full mt-0">
+      {/* Action Buttons are portaled from here into the Tab Header using ReactDOM.createPortal. */}
       {stripVisible ? (
         <BulkActionBar
           selectedCount={selectedItems.length}
@@ -405,7 +497,7 @@ const VendorTasksTable = ({ vendorId }) => {
           isDeleting={isDeleting}
         />
       ) : (
-        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+        <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
             <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
             <input
@@ -447,12 +539,35 @@ const VendorTasksTable = ({ vendorId }) => {
       <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
         <DataTable
           data={paginatedTasks}
-          columns={columns}
+          columns={finalColumns}
           columnSizing={columnSizing}
           onColumnSizingChange={setColumnSizing}
+          pinnedColumns={pinnedColumns}
+          onPinColumn={handlePinColumn}
+          onUnpinColumn={handleUnpinColumn}
+          onHideColumn={handleHideColumn}
+          onSort={handleSort}
+          onColumnReorder={handleColumnReorder}
+          visibleColumns={visibleColumnsForGhost}
+          getGhostPreview={getGhostPreview}
           variant="card"
+          maxHeight={290}
           loading={loading}
           rowClassName={(t) => (selectedItems.includes(t._id) ? "!bg-blue-50" : "")}
+          loadingContent={
+            <div className="space-y-0">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[#E1E4EA] last:border-b-0">
+                  <Skeleton width={16} height={16} />
+                  <Skeleton width={90} height={13} />
+                  <Skeleton width={70} height={13} />
+                  <Skeleton width={60} height={13} />
+                  <Skeleton width={80} height={13} />
+                  <Skeleton width={60} height={13} />
+                </div>
+              ))}
+            </div>
+          }
           emptyContent={
             <div className="flex flex-col items-center gap-2">
               <Calendar className="w-10 h-10 text-gray-400" />

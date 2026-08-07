@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from "react";
+import React, { useEffect, useState, useRef, useMemo, useLayoutEffect } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import API from "../services/api";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
@@ -6,6 +6,7 @@ import useMinDelay from "../hooks/useMinDelay";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import Skeleton from "../components/common/Skeleton";
 import StatTileSkeleton from "../components/common/StatTileSkeleton";
+import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import PaymentsTable from "../components/vendor/PaymentsTable";
 import NoteSection from "../components/vendor/NoteSection";
 import VendorTasksTable from "../components/vendor/VendorTasksTable";
@@ -25,6 +26,7 @@ import {
   Linkedin,
   Instagram,
   Eye,
+  EyeOff,
   Receipt,
   CheckSquare,
   Users,
@@ -40,69 +42,134 @@ import {
 import { FaWhatsapp } from "react-icons/fa";
 
 /* ─── Tab Configuration ─── */
-const tabs = ["Payments", "Notes", "Tasks", "Meetings", "Calendar", "Deals"];
-
-/* ─── Loading Messages ─── */
-const loadingMessages = [
-  "Fetching vendor details — your supply chain, simplified…",
-  "Getting vendor insights ready for review…",
-  "One sec — organizing all vendor interactions…",
-  "Almost done — preparing your vendor dashboard…",
-  "Gathering everything about this trusted partner…",
-  "Bringing vendor performance data into view…",
-  "Loading vendor profile — because partnerships matter.",
-];
-const randomMessage =
-  loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+const tabs = ["Payments", "Notes", "Tasks", "Meetings", "Calendar"];
 
 /* ─── Financial Summary Icons ─── */
 const TotalReceivedIcon = () => (
-  <div className="w-10 h-10 rounded-lg border border-gray-200 flex items-center justify-center text-blue-600 flex-shrink-0">
-    <PhoneCall size={18} />
+  <div className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-blue-600 flex-shrink-0">
+    <PhoneCall size={16} />
   </div>
 );
 const TotalPaidIcon = () => (
-  <div className="w-10 h-10 rounded-lg border border-gray-200 flex items-center justify-center text-blue-600 flex-shrink-0">
-    <Receipt size={18} />
+  <div className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-blue-600 flex-shrink-0">
+    <Receipt size={16} />
   </div>
 );
 const NetBalanceIcon = () => (
-  <div className="w-10 h-10 rounded-lg border border-gray-200 flex items-center justify-center text-blue-600 flex-shrink-0">
-    <CheckSquare size={18} />
+  <div className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-blue-600 flex-shrink-0">
+    <CheckSquare size={16} />
   </div>
 );
 
 /* ─── Reusable UI Components ─── */
-const RelationshipGauge = ({ score, label }) => {
-  const radius = 60;
+/* Shared placeholder for every tab's table body. Renders a real <table> so the
+   column widths/borders line up edge-to-edge with the tables it stands in for,
+   and reuses the common TableSkeletonRows rather than hand-rolling rows. */
+export const TabTableSkeleton = () => (
+  <div className="bg-white border border-[#E1E4EA] rounded-lg overflow-hidden">
+    <div className="flex items-center justify-between px-4 py-3 border-b border-[#E1E4EA]">
+      <Skeleton width={160} height={14} />
+      <div className="flex items-center gap-2">
+        <Skeleton width={110} height={32} />
+        <Skeleton width={110} height={32} />
+      </div>
+    </div>
+    <table className="w-full border-separate border-spacing-0 text-left">
+      <thead className="bg-[#F5F7FA]">
+        <tr>
+          <th style={{ width: 44 }} className="px-4 py-3 border-b border-r border-[#E1E4EA]">
+            <Skeleton width={16} height={16} />
+          </th>
+          {[190, 150, 150, 150, 130].map((w, i) => (
+            <th
+              key={i}
+              style={{ width: w }}
+              className="px-4 py-3 border-b border-r border-[#E1E4EA] last:border-r-0"
+            >
+              <Skeleton width="70%" height={12} />
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody className="bg-white">
+        <TableSkeletonRows
+          numRows={8}
+          columns={[190, 150, 150, 150, 130]}
+          hasCheckbox
+          checkboxWidth={44}
+        />
+      </tbody>
+    </table>
+    <div className="flex items-center justify-between px-4 py-3 border-t border-[#E1E4EA]">
+      <Skeleton width={180} height={13} />
+      <div className="flex items-center gap-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} width={32} height={32} shape="circle" />
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+const RelationshipGauge = ({ score, label, radius = 58, stroke = 13 }) => {
+  // Geometry is derived from the radius so the arc, the box and the stroke stay
+  // in proportion at any size. The gauge now owns its own full-height column
+  // in the header (see the SECTION 1 grid below), so it can afford to be
+  // larger than when it had to share a row with the action icons.
+  const width = radius * 2 + stroke;
+  const height = radius + stroke / 2;
+  const startX = stroke / 2;
+  const endX = width - stroke / 2;
   const arcLength = Math.PI * radius;
   const strokeDashoffset = arcLength * (1 - score / 100);
-  
+  const arcPath = `M ${startX},${height} A ${radius},${radius} 0 0,1 ${endX},${height}`;
+  // Font sizes scale with radius so a bigger gauge (full-height header column)
+  // reads proportionally larger instead of looking like a small gauge in a
+  // huge empty box.
+  const scale = radius / 58;
+
   return (
     <div className="flex flex-col items-center">
-      <span className="text-xs font-semibold text-gray-700 mb-2">Relationship Health</span>
-      <div className="relative w-[134px] h-[67px] flex justify-center items-end">
-        <svg className="absolute bottom-0 w-[134px] h-[67px] overflow-visible">
+      <span
+        className="font-semibold text-gray-700 mb-2"
+        style={{ fontSize: 13 * scale }}
+      >
+        Relationship Health
+      </span>
+      <div
+        className="relative flex justify-center items-end"
+        style={{ width, height }}
+      >
+        <svg
+          className="absolute bottom-0 overflow-visible"
+          style={{ width, height }}
+        >
           {/* Background Arc */}
-          <path
-            d="M 7,67 A 60,60 0 0,1 127,67"
-            fill="none"
-            stroke="#e0f2fe"
-            strokeWidth="14"
-          />
+          <path d={arcPath} fill="none" stroke="#e0f2fe" strokeWidth={stroke} strokeLinecap="round" />
           {/* Foreground Arc */}
           <path
-            d="M 7,67 A 60,60 0 0,1 127,67"
+            d={arcPath}
             fill="none"
-            stroke="#7dd3fc"
-            strokeWidth="14"
+            stroke="#38bdf8"
+            strokeWidth={stroke}
+            strokeLinecap="round"
             strokeDasharray={arcLength}
             strokeDashoffset={strokeDashoffset}
           />
         </svg>
-        <div className="flex flex-col items-center z-10 pb-1">
-          <span className="text-[20px] font-bold text-blue-600 leading-none">{score}%</span>
-          <span className="text-[10px] font-semibold text-gray-900 mt-1">{label}</span>
+        <div className="flex flex-col items-center z-10 pb-0.5">
+          <span
+            className="font-bold text-blue-600 leading-none"
+            style={{ fontSize: 24 * scale }}
+          >
+            {score}%
+          </span>
+          <span
+            className="font-semibold text-gray-900 mt-1"
+            style={{ fontSize: 11 * scale }}
+          >
+            {label}
+          </span>
         </div>
       </div>
     </div>
@@ -110,7 +177,7 @@ const RelationshipGauge = ({ score, label }) => {
 };
 
 const ActionIconButton = ({ icon: Icon, colorClass, onClick, title }) => (
-  <button 
+  <button
     onClick={onClick}
     title={title}
     className={`w-[34px] h-[34px] rounded-full border border-gray-100 flex items-center justify-center transition-colors hover:bg-gray-50 ${colorClass}`}
@@ -129,8 +196,12 @@ const VendorDetailsPageNew = () => {
   /* ── State ── */
   const [vendor, setVendor] = useState(null);
   const [payments, setPayments] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [meetings, setMeetings] = useState([]);
+  const [notes, setNotes] = useState([]);
   const [vendorFieldList, setVendorFieldList] = useState([]);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   // Tab management (synced to URL)
   const tabFromUrl = searchParams.get("tab");
@@ -166,6 +237,7 @@ const VendorDetailsPageNew = () => {
   // Actions menu
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const actionsMenuRef = useRef(null);
+  const [showKPI, setShowKPI] = useState(true);
 
   // Edit form
   const [showForm, setShowForm] = useState(false);
@@ -190,28 +262,65 @@ const VendorDetailsPageNew = () => {
   const showSkeleton = useMinDelay(!dataLoaded, 300);
   useTopLoadingSignal(showSkeleton);
 
-  /* ── Data Fetching ── */
+  /* ── Data Fetching ──
+     The timeline aggregates payments + tasks + meetings + notes, so all four
+     are fetched here. Payments/tasks/meetings/notes are fetched with
+     allSettled and each defaults to [] on failure (logged to console) — one
+     failing feed source degrades that category instead of blanking the whole
+     page. Only the core vendor fetch is fatal — if that fails, loadError is
+     set so the page can show a clear "couldn't load" state instead of
+     silently rendering with vendor=null. */
   const fetchVendorDetails = async () => {
+    setLoadError(null);
     try {
       const resVendor = await API.get(`/vendors/${id}`);
       setVendor(resVendor.data);
-
-      const resPayments = await API.get(`/vendors/${id}/payments`);
-      setPayments(resPayments.data);
-
-      try {
-        const resFields = await API.get("/vendor-fields/latest");
-        const fieldData = resFields.data?.fields || [];
-        setVendorFieldList(fieldData);
-      } catch (fieldErr) {
-        console.error("Failed to load vendor fields template:", fieldErr);
-      }
     } catch (err) {
-      console.error("Failed to load vendor profile:", err);
-      toast.error("Failed to load vendor details.");
-    } finally {
+      console.error("Failed to load vendor profile:", err.response?.status, err.response?.data || err.message);
+      setLoadError(err.response?.status === 404 ? "not_found" : "error");
       setDataLoaded(true);
+      return;
     }
+
+    const [paymentsRes, tasksRes, meetingsRes, notesRes] = await Promise.allSettled([
+      API.get(`/vendors/${id}/payments`),
+      API.get(`/tasks/vendor/${id}`),
+      API.get("/meetings", { params: { vendorId: id } }),
+      API.get(`/vendor-notes/vendor/${id}`),
+    ]);
+
+    if (paymentsRes.status === "fulfilled") {
+      setPayments(paymentsRes.value.data);
+    } else {
+      console.error("Failed to load vendor payments:", paymentsRes.reason?.response?.status, paymentsRes.reason?.message);
+      setPayments([]);
+    }
+    if (tasksRes.status === "rejected") {
+      console.error("Failed to load vendor tasks:", tasksRes.reason?.response?.status, tasksRes.reason?.message);
+    }
+    setTasks(tasksRes.status === "fulfilled" ? tasksRes.value.data || [] : []);
+    if (meetingsRes.status === "rejected") {
+      console.error("Failed to load vendor meetings:", meetingsRes.reason?.response?.status, meetingsRes.reason?.message);
+    }
+    setMeetings(
+      meetingsRes.status === "fulfilled"
+        ? meetingsRes.value.data?.meetings || meetingsRes.value.data || []
+        : []
+    );
+    if (notesRes.status === "rejected") {
+      console.error("Failed to load vendor notes:", notesRes.reason?.response?.status, notesRes.reason?.message);
+    }
+    setNotes(notesRes.status === "fulfilled" ? notesRes.value.data || [] : []);
+
+    try {
+      const resFields = await API.get("/vendor-fields/latest");
+      const fieldData = resFields.data?.fields || [];
+      setVendorFieldList(fieldData);
+    } catch (fieldErr) {
+      console.error("Failed to load vendor fields template:", fieldErr);
+    }
+
+    setDataLoaded(true);
   };
 
   useEffect(() => {
@@ -230,9 +339,6 @@ const VendorDetailsPageNew = () => {
   }, []);
 
   /* ── Helpers ── */
-  const hasSocialLink = (platform) =>
-    vendor?.socialMedia?.[platform] && vendor.socialMedia[platform].trim() !== "";
-
   const openSocialLink = (platform) => {
     const urlOrNumber = vendor?.socialMedia?.[platform];
     if (urlOrNumber && urlOrNumber.trim() !== "") {
@@ -291,10 +397,13 @@ const VendorDetailsPageNew = () => {
     setShowForm(true);
   };
 
-  /* ── Activity Feed (aggregated from payments/tasks/meetings) ── */
-  const activityFeedItems = (() => {
+  /* ── Activity Feed (aggregated from payments/tasks/meetings/notes) ──
+     Each source maps to its own date field: payments use paymentDate, tasks
+     dueDate, meetings scheduledAt, notes createdAt. */
+  const activityFeedItems = useMemo(() => {
     const items = [];
-    if (payments && Array.isArray(payments)) {
+
+    if (Array.isArray(payments)) {
       payments.forEach((p) => {
         items.push({
           type: "Payments",
@@ -306,13 +415,57 @@ const VendorDetailsPageNew = () => {
         });
       });
     }
+
+    if (Array.isArray(tasks)) {
+      tasks.forEach((t) => {
+        items.push({
+          type: "Tasks",
+          icon: CheckSquare,
+          iconClass: "bg-blue-50 text-blue-600",
+          title: t.title || "Task",
+          subtitle: t.status || t.description || null,
+          date: new Date(t.dueDate || t.selectedDate || t.createdAt),
+        });
+      });
+    }
+
+    if (Array.isArray(meetings)) {
+      meetings.forEach((m) => {
+        items.push({
+          type: "Meetings",
+          icon: Video,
+          iconClass: "bg-purple-50 text-purple-600",
+          title: m.title || "Meeting",
+          subtitle: m.status || m.meetingType || null,
+          date: new Date(m.scheduledAt || m.createdAt),
+        });
+      });
+    }
+
+    if (Array.isArray(notes)) {
+      notes.forEach((n) => {
+        items.push({
+          type: "Notes",
+          icon: FilePlus,
+          iconClass: "bg-orange-50 text-orange-600",
+          title: n.title || "Untitled Note",
+          subtitle: String(n.note || "").replace(/<[^>]*>/g, "").trim() || null,
+          date: new Date(n.createdAt),
+        });
+      });
+    }
+
     return items
       .filter((item) => !isNaN(item.date))
       .sort((a, b) => b.date - a.date)
-      .slice(0, 8);
-  })();
+      // Feed is capped for render cost, not for the viewport — the container
+      // shows ~4-5 and scrolls, so keep enough behind it to be worth scrolling.
+      .slice(0, 25);
+  }, [payments, tasks, meetings, notes]);
 
-  const activityFeedTabs = ["All", "Deals", "Tasks", "Meetings"];
+  // "Deals" dropped — vendor deals aren't a feature yet, so the filter can
+  // never match anything. Notes added since the feed now carries them.
+  const activityFeedTabs = ["All", "Payments", "Tasks", "Meetings", "Notes"];
   const filteredActivityFeed =
     activityFeedFilter === "All"
       ? activityFeedItems
@@ -339,6 +492,34 @@ const VendorDetailsPageNew = () => {
     return <PageSkeleton variant="profile" />;
   }
 
+  /* ── Vendor fetch failed (404 / network / server error) — show a clear
+     terminal state instead of silently rendering a half-empty page with
+     vendor=null. The actual status/body is logged to console by
+     fetchVendorDetails for diagnosis. ── */
+  if (!vendor && loadError) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3 text-center px-6">
+        <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
+          <FolderOpen className="w-8 h-8 text-gray-400" />
+        </div>
+        <h2 className="text-lg font-semibold text-gray-900">
+          {loadError === "not_found" ? "Vendor not found" : "Couldn't load this vendor"}
+        </h2>
+        <p className="text-sm text-gray-500 max-w-sm">
+          {loadError === "not_found"
+            ? "This vendor doesn't exist or may have been removed."
+            : "Something went wrong while loading this vendor. Check the console for details, or try again."}
+        </p>
+        <button
+          onClick={fetchVendorDetails}
+          className="mt-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   /* ═══════════════════ RENDER ═══════════════════ */
   return (
     <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-6">
@@ -360,99 +541,117 @@ const VendorDetailsPageNew = () => {
       )}
 
       {/* ═══════════════════════════════════════════════════════════
-          SECTION 1 — HEADER (White Background, 3 Columns)
+          SECTION 1 — HEADER CARD
+          Grid, not a stacked flex: the gauge column is a single grid
+          item spanning the full card height (grid rows stretch to the
+          tallest sibling by default), so it fills the whole right side
+          instead of sharing a row with the action icons. The left
+          column stacks info+icons on top and the KPI strip below it —
+          only that column gets the horizontal divider, so it never
+          cuts across the gauge. Padding kept tight so this card plus
+          the tab bar below never forces the page to scroll before the
+          table is visible.
          ═══════════════════════════════════════════════════════════ */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="mx-auto flex flex-col lg:flex-row items-stretch relative">
-          
-          {/* LEFT: Vendor Info Stack */}
-          <div className="flex items-start gap-4 lg:flex-1 py-6 pl-6 sm:pl-8 pr-4">
-            {vendor ? (
-              <ProfilePicture
-                contact={{ name: vendor.name, avatar: vendor.avatar || vendor.logo }}
-                size="w-[56px] h-[56px]"
-                textSize="text-xl"
-              />
-            ) : (
-              <div className="w-[56px] h-[56px] rounded-full bg-gray-200 animate-pulse flex-shrink-0" />
-            )}
-            
-            <div className="flex flex-col gap-1 mt-0.5">
-              {vendor ? (
-                <div className="flex items-center gap-3">
-                  <h1 className="text-[22px] font-bold text-gray-900 leading-none">
-                    {vendor.name}
-                  </h1>
-                  <span className="px-2 py-0.5 text-[10px] font-medium bg-green-50 text-green-700 rounded-full">
-                    Active
-                  </span>
-                </div>
-              ) : (
-                <Skeleton width={180} height={28} className="mb-1" />
-              )}
-              
-              {vendor ? (
-                <div className="flex flex-col gap-1 mt-1">
-                  {vendor.company && (
-                    <span className="text-[13px] text-blue-600 font-medium flex items-center gap-2">
-                      <Building2 size={14} /> {vendor.company}
-                    </span>
-                  )}
-                  {vendor.email && (
-                    <span className="text-[12px] text-gray-600 flex items-center gap-2">
-                      <Mail size={14} className="text-gray-400" /> 
-                      {vendor.email}
-                      <BadgeCheck size={14} className="text-green-500" />
-                    </span>
-                  )}
-                  {vendor.phone && (
-                    <span className="text-[12px] text-gray-600 flex items-center gap-2">
-                      <Phone size={14} className="text-gray-400" /> {vendor.phone}
-                    </span>
-                  )}
-                  {vendor.address && formatAddress(vendor.address) && (
-                    <span className="text-[12px] text-gray-600 flex items-center gap-2">
-                      <MapPin size={14} className="text-gray-400" />{" "}
-                      {formatAddress(vendor.address)}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2 mt-2">
-                  <Skeleton width={150} height={14} />
-                  <Skeleton width={200} height={14} />
-                  <Skeleton width={120} height={14} />
-                </div>
-              )}
-            </div>
-          </div>
+      <div className="px-6 sm:px-8 pt-1">
+      <div className="bg-white border border-[#DCEBFC] rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_260px]">
 
-          {/* RIGHT SIDE: Action Toolbar + Relationship Health Gauge */}
-          <div className="flex flex-col lg:flex-row items-center lg:items-start w-full lg:w-auto lg:flex-1 lg:justify-end">
-            
-            {/* Action Toolbar */}
-            <div className="flex items-start justify-center gap-2 sm:gap-3 py-6 px-4 lg:px-6 lg:ml-auto">
+        {/* LEFT COLUMN: info row (top) + KPI strip (bottom) */}
+        <div className="flex flex-col min-w-0">
+          {/* Info row */}
+          <div className="flex items-start justify-between gap-4 py-4 pl-5 sm:pl-6 pr-4">
+            <div className="flex items-start gap-4 min-w-0">
+              {/* Gated on showSkeleton, not just `vendor` — the vendor fetch
+                  resolves well before payments/tasks/meetings/notes do, so
+                  gating on `vendor` alone made the header pop in with real
+                  data while the KPI strip/table/timeline below it were still
+                  skeletons. Everything below now flips from skeleton to real
+                  content in the same render, like CompanyProfilePage.jsx. */}
+              {!showSkeleton && vendor ? (
+                <ProfilePicture
+                  contact={{ name: vendor.name, avatar: vendor.avatar || vendor.logo }}
+                  size="w-[56px] h-[56px]"
+                  textSize="text-xl"
+                />
+              ) : (
+                <div className="w-[56px] h-[56px] rounded-full bg-gray-200 animate-pulse flex-shrink-0" />
+              )}
+
+              <div className="flex flex-col gap-1 mt-0.5 min-w-0">
+                {!showSkeleton && vendor ? (
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-[22px] font-bold text-gray-900 leading-none">
+                      {vendor.name}
+                    </h1>
+                    <span className="px-2 py-0.5 text-[10px] font-medium bg-green-50 text-green-700 rounded-full">
+                      Active
+                    </span>
+                  </div>
+                ) : (
+                  <Skeleton width={180} height={28} className="mb-1" />
+                )}
+
+                {!showSkeleton && vendor ? (
+                  <div className="flex flex-col gap-1.5 mt-1">
+                    {/* Stacked contact block: one row per field (Company, Email, Phone, Address). */}
+                    {vendor.company && (
+                      <span className="text-[13px] text-blue-600 font-medium flex items-center gap-2">
+                        <Building2 size={14} /> {vendor.company}
+                      </span>
+                    )}
+                    {vendor.email && (
+                      <span className="text-[12px] text-gray-600 flex items-center gap-2">
+                        <Mail size={14} className="text-gray-400 flex-shrink-0" />
+                        {vendor.email}
+                        <BadgeCheck size={14} className="text-green-500 flex-shrink-0" />
+                      </span>
+                    )}
+                    {vendor.phone && (
+                      <span className="text-[12px] text-gray-600 flex items-center gap-2">
+                        <Phone size={14} className="text-gray-400 flex-shrink-0" />
+                        {vendor.phone}
+                      </span>
+                    )}
+                    {vendor.address && formatAddress(vendor.address) && (
+                      <span className="text-[12px] text-gray-600 flex items-center gap-2">
+                        <MapPin size={14} className="text-gray-400 flex-shrink-0" />{" "}
+                        {formatAddress(vendor.address)}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 mt-2">
+                    <Skeleton width={150} height={14} />
+                    <Skeleton width={200} height={14} />
+                    <Skeleton width={120} height={14} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Action Toolbar — moved up next to vendor info now that the
+                gauge owns the whole right column. */}
+            <div className="flex items-start justify-center gap-2 sm:gap-3 flex-shrink-0">
               <ActionIconButton icon={PhoneCall} colorClass="text-blue-500" title="Call" />
               <ActionIconButton icon={Mail} colorClass="text-blue-500" title="Email" />
               <ActionIconButton icon={Video} colorClass="text-purple-500" title="Video Meeting" />
               <ActionIconButton icon={FilePlus} colorClass="text-orange-500" title="New Note" />
               <ActionIconButton icon={BriefcaseBusiness} colorClass="text-orange-500" title="Deals" />
-              <ActionIconButton 
-                icon={Linkedin} 
-                colorClass="text-blue-600" 
-                title="LinkedIn" 
+              <ActionIconButton
+                icon={Linkedin}
+                colorClass="text-blue-600"
+                title="LinkedIn"
                 onClick={() => openSocialLink("linkedin")}
               />
-              
+
               <div className="relative" ref={actionsMenuRef}>
-                <ActionIconButton 
-                  icon={MoreVertical} 
-                  colorClass="text-gray-500" 
+                <ActionIconButton
+                  icon={MoreVertical}
+                  colorClass="text-gray-500"
                   title="More Actions"
                   onClick={() => setShowActionsMenu((prev) => !prev)}
                 />
                 {showActionsMenu && (
-                  <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-2">
+                  <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-2">
                     <button
                       onClick={() => {
                         handleEdit();
@@ -462,6 +661,20 @@ const VendorDetailsPageNew = () => {
                     >
                       <Edit2 size={16} className="text-gray-400" />
                       Edit Profile
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowKPI((prev) => !prev);
+                        setShowActionsMenu(false);
+                      }}
+                      className="flex items-center gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 text-left"
+                    >
+                      {showKPI ? (
+                        <EyeOff size={16} className="text-gray-400" />
+                      ) : (
+                        <Eye size={16} className="text-gray-400" />
+                      )}
+                      {showKPI ? "Hide Financial Summary" : "Show Financial Summary"}
                     </button>
                     <button
                       onClick={() => {
@@ -477,21 +690,93 @@ const VendorDetailsPageNew = () => {
                 )}
               </div>
             </div>
-
-            {/* Relationship Health Gauge */}
-            <div className="hidden sm:flex flex-col items-center justify-start border-l border-gray-200 py-6 pr-6 sm:pr-8 pl-6 lg:pl-10 lg:w-[260px]">
-              <RelationshipGauge score={82} label="Excellent" />
-            </div>
           </div>
+
+          {/* ═══════════════════════════════════════════════════════════
+              SECTION 2 — FINANCIAL SUMMARY KPI STRIP
+              Toggleable via the ⋮ menu's "Hide/Show Financial Summary".
+             ═══════════════════════════════════════════════════════════ */}
+          {showKPI && (
+            <div className="px-5 py-3.5 mt-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  {
+                    label: "Total Received",
+                    value: totalReceived,
+                    Icon: TotalReceivedIcon,
+                    badge: "High",
+                    badgeClass: "text-green-600 bg-green-50",
+                  },
+                  {
+                    label: "Total Paid",
+                    value: totalPaid,
+                    Icon: TotalPaidIcon,
+                    badge: "Medium",
+                    badgeClass: "text-orange-600 bg-orange-50",
+                  },
+                  {
+                    label: "Net Balance",
+                    value: netBalance,
+                    Icon: NetBalanceIcon,
+                    badge: netBalance >= 0 ? "Receivable" : "You Owe",
+                    badgeClass:
+                      netBalance >= 0
+                        ? "text-green-600 bg-green-50"
+                        : "text-red-600 bg-red-50",
+                  },
+                ].map((kpi) => (
+                  <div
+                    key={kpi.label}
+                    className="h-[56px] flex items-center gap-2.5 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
+                  >
+                    <kpi.Icon />
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-gray-500 truncate">{kpi.label}</p>
+                      {/* <div>, not <p>: Skeleton renders a <div>, which is invalid
+                          inside a <p> and triggers a DOM-nesting warning. */}
+                      <div className="text-sm font-semibold text-gray-900 truncate">
+                        {showSkeleton ? (
+                          <Skeleton width={80} height={14} />
+                        ) : (
+                          fmtMoney(kpi.value)
+                        )}
+                      </div>
+                    </div>
+                    <span
+                      className={`ml-auto flex-shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${kpi.badgeClass}`}
+                    >
+                      {kpi.badge}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT COLUMN: Relationship Health Gauge — spans the full card
+            height (a single grid item stretches to match the left
+            column's height by default) and gets its own tinted
+            background so it reads as the highlighted focal point. */}
+        <div className="hidden sm:flex flex-col items-center justify-center bg-gradient-to-b from-[#EAF4FF] to-[#F6FAFF] py-6 px-6">
+          {showSkeleton ? (
+            <div className="flex flex-col items-center gap-3">
+              <Skeleton width={130} height={13} />
+              <Skeleton width={152} height={76} shape="rect" className="rounded-t-full" />
+            </div>
+          ) : (
+            <RelationshipGauge score={82} label="Excellent" radius={76} stroke={16} />
+          )}
         </div>
       </div>
+      </div>
 
-      <div className="mx-auto px-6 sm:px-8 mt-6">
+      <div className="mx-auto px-6 sm:px-8 mt-3">
         {/* ═══════════════════════════════════════════════════════════
             SECTION 3 & 5 — TABS & CONTENT
            ═══════════════════════════════════════════════════════════ */}
         {/* TABS */}
-        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+        <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
           <div className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
@@ -502,7 +787,7 @@ const VendorDetailsPageNew = () => {
                 key={tab}
                 ref={(el) => (tabRefs.current[tab] = el)}
                 onClick={() => setActiveTab(tab)}
-                className={`relative z-10 flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`relative z-10 flex items-center justify-center h-9 px-3 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors ${
                   activeTab === tab
                     ? "text-[#0085FF]"
                     : "text-gray-600 hover:text-gray-900"
@@ -515,101 +800,51 @@ const VendorDetailsPageNew = () => {
           <div id="tab-actions-portal" className="flex items-center gap-2"></div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_319px] gap-6">
+        {/* Sidebar trimmed 272px -> 240px and the gap 6 -> 4, handing ~95px
+            back to the table column so its right-most columns (Amount /
+            Actions) fit without horizontal scrolling. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-3">
           
           {/* ── Left Column: Active Tab Content ── */}
           <div className="min-w-0 flex flex-col">
             
 
             <div className="min-h-[400px]">
-            {activeTab === "Payments" && (
-              showSkeleton ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <Skeleton shape="circle" width={32} height={32} />
-                      <div className="flex-1 space-y-1.5">
-                        <Skeleton width="60%" height={12} />
-                        <Skeleton width="30%" height={10} />
-                      </div>
-                      <Skeleton width={80} height={12} />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <PaymentsTable payments={payments} vendor={vendor} />
-              )
-            )}
-
-            {activeTab === "Notes" && <NoteSection />}
-
-            {activeTab === "Tasks" && (
-              showSkeleton ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-                      <Skeleton shape="rounded" width={18} height={18} />
-                      <div className="flex-1 space-y-1.5">
-                        <Skeleton width="50%" height={12} />
-                        <Skeleton width="25%" height={10} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <VendorTasksTable vendorId={id} />
-              )
-            )}
-
-            {activeTab === "Meetings" && (
-              showSkeleton ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-                      <Skeleton shape="circle" width={32} height={32} />
-                      <div className="flex-1 space-y-1.5">
-                        <Skeleton width="50%" height={12} />
-                        <Skeleton width="30%" height={10} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <VendorMeetingsTable vendorId={id} />
-              )
-            )}
-
-            {activeTab === "Calendar" && <VendorCalendar vendorId={id} />}
-
-            {activeTab === "Deals" && (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <BriefcaseBusiness size={40} className="text-gray-300 mb-3" />
-                <h3 className="text-sm font-semibold text-gray-700 mb-1">
-                  No Deals Linked
-                </h3>
-                <p className="text-xs text-gray-400 max-w-xs">
-                  Vendor deals feature coming soon. You'll be able to track deals
-                  associated with this vendor here.
-                </p>
-              </div>
+            {/* One shared, edge-to-edge table skeleton for every tab (built from
+                the common TableSkeletonRows) instead of a different hand-rolled
+                placeholder per tab, so all four resolve identically off the
+                single useMinDelay(300) flag. The tab bar itself is never
+                skeletoned — it's navigation, not data. */}
+            {showSkeleton ? (
+              <TabTableSkeleton />
+            ) : (
+              <>
+                {activeTab === "Payments" && (
+                  <PaymentsTable payments={payments} vendor={vendor} />
+                )}
+                {activeTab === "Notes" && <NoteSection />}
+                {activeTab === "Tasks" && <VendorTasksTable vendorId={id} />}
+                {activeTab === "Meetings" && <VendorMeetingsTable vendorId={id} />}
+                {activeTab === "Calendar" && <VendorCalendar vendorId={id} />}
+              </>
             )}
           </div>
         </div>
 
         {/* ── Right Column: Activity Timeline Sidebar ── */}
           <div className="hidden lg:block">
-            <div className="bg-white border border-gray-200 rounded-xl p-4 sticky top-6">
+            <div className="bg-white border border-gray-200 rounded-xl p-3 sticky top-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">
                 Activity Timeline
               </h3>
 
               {/* Filter Tabs */}
-              <div className="flex items-center gap-1.5 mb-4">
+              <div className="flex items-center gap-1 mb-4 flex-wrap">
                 {activityFeedTabs.map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActivityFeedFilter(tab)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
                       activityFeedFilter === tab
                         ? "bg-blue-600 text-white"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -621,9 +856,12 @@ const VendorDetailsPageNew = () => {
               </div>
 
               {/* Feed Items */}
-              <div 
-                className="space-y-4 overflow-y-auto [&::-webkit-scrollbar]:hidden" 
-                style={{ maxHeight: "340px", scrollbarWidth: "none", msOverflowStyle: "none" }}
+              {/* ~4-5 rows visible, the rest scrolls. Each feed row is roughly
+                  56px, so 250px lands just past the 4th and hints there is
+                  more below rather than cutting off flush. */}
+              <div
+                className="space-y-4 overflow-y-auto [&::-webkit-scrollbar]:hidden"
+                style={{ maxHeight: "250px", scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
                 {showSkeleton ? (
                   Array.from({ length: 5 }).map((_, i) => (
@@ -677,72 +915,6 @@ const VendorDetailsPageNew = () => {
           </div>
         </div>
 
-        {/* ═══════════════════════════════════════════════════════════
-            SECTION 6 — FINANCIAL SUMMARY BAR
-           ═══════════════════════════════════════════════════════════ */}
-        <div className="mt-6 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-gray-900">
-              Financial Summary
-            </h3>
-            <button
-              onClick={() => setActiveTab("Payments")}
-              className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
-            >
-              View Payments
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Total Received */}
-            <div className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-xl">
-              <TotalReceivedIcon />
-              <div className="min-w-0">
-                <p className="text-[11px] text-gray-500">Total Received</p>
-                <p className="text-sm font-semibold text-gray-900">
-                  {showSkeleton ? <Skeleton width={80} height={14} /> : fmtMoney(totalReceived)}
-                </p>
-              </div>
-              <span className="ml-auto text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                High
-              </span>
-            </div>
-
-            {/* Total Paid */}
-            <div className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-xl">
-              <TotalPaidIcon />
-              <div className="min-w-0">
-                <p className="text-[11px] text-gray-500">Total Paid</p>
-                <p className="text-sm font-semibold text-gray-900">
-                  {showSkeleton ? <Skeleton width={80} height={14} /> : fmtMoney(totalPaid)}
-                </p>
-              </div>
-              <span className="ml-auto text-xs font-medium text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
-                Medium
-              </span>
-            </div>
-
-            {/* Net Balance */}
-            <div className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-xl">
-              <NetBalanceIcon />
-              <div className="min-w-0">
-                <p className="text-[11px] text-gray-500">Net Balance</p>
-                <p className="text-sm font-semibold text-gray-900">
-                  {showSkeleton ? <Skeleton width={80} height={14} /> : fmtMoney(netBalance)}
-                </p>
-              </div>
-              <span
-                className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
-                  netBalance >= 0
-                    ? "text-green-600 bg-green-50"
-                    : "text-red-600 bg-red-50"
-                }`}
-              >
-                {netBalance >= 0 ? "Receivable" : "You Owe"}
-              </span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

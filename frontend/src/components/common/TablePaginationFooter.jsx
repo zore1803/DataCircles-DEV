@@ -17,7 +17,7 @@ export default function TablePaginationFooter({
   limit,
   onPageChange,
   onLimitChange,
-  limitOptions = [5, 10, 20, 50, 100],
+  limitOptions = [10, 20, 50, 100],
   className = "w-full bg-transparent py-3 flex items-center justify-between",
 }) {
   if (totalCount === 0) return null;

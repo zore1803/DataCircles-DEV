@@ -5,6 +5,14 @@ import SearchableDropdown from "../contact/SearchableDropdown";
 import QuickVendorForm from "./QuickVendorForm";
 import toast from "react-hot-toast";
 
+// Module-level so the fallback keeps the SAME reference across renders. As an
+// inline `vendors = []` default it was re-created on every render, and the
+// `[vendors]` effect below (which compares by reference) then fired on every
+// render — setLocalVendors → re-render → new [] → fire again, i.e. "Maximum
+// update depth exceeded". Only callers that omit the prop hit this, which is
+// why it surfaced from PaymentsTable and not from Vendors/PaymentPage.
+const EMPTY_VENDORS = [];
+
 const VendorPaymentForm = ({
   open,
   vendorId,
@@ -14,7 +22,7 @@ const VendorPaymentForm = ({
   paymentToEdit = null,
   onUpdateSuccess,
   onDeleteSuccess,
-  vendors = [],
+  vendors = EMPTY_VENDORS,
 }) => {
   const initialState = {
     vendorId: "",
@@ -160,7 +168,7 @@ const VendorPaymentForm = ({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <div className="space-y-6">
           {/* Vendor Selection - Only if not pre-selected */}
           {!vendorId && (
@@ -280,7 +288,7 @@ const VendorPaymentForm = ({
         </div>
 
         {/* Footer */}
-        <div className="p-8 pt-6 border-t border-[#F2F2F7] bg-white flex justify-end gap-3 flex-shrink-0">
+        <div className="p-8 pt-6 border-t border-[#F2F2F7] bg-white flex justify-end gap-3 flex-shrink-0 mt-auto">
           <button
             type="button"
             onClick={onClose}
