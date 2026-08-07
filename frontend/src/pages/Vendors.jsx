@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import BulkActions from "../components/BulkActions";
 import VendorForm from "../components/vendor/VendorForm";
+import QuickVendorForm from "../components/vendor/QuickVendorForm";
 import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
 import { useLocation } from "react-router-dom";
 import ImportVendors from "../components/vendor/ImportVendors";
@@ -112,6 +113,8 @@ function Vendors() {
   const [filterCompany, setFilterCompany] = useState("");
   const [debouncedFilterCompany, setDebouncedFilterCompany] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [editVendor, setEditVendor] = useState(null);
   const [selectedVendors, setSelectedVendors] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -751,40 +754,9 @@ function Vendors() {
   const handleEditVendor = async (vendor) => {
     try {
       const response = await API.get(`/vendors/${vendor._id}`);
-      const vendorData = response.data;
-
-      setForm({
-        _id: vendorData._id,
-        name: vendorData.name || "",
-        email: vendorData.email || "",
-        phone: vendorData.phone || "",
-        company: vendorData.company || "",
-        gstin: vendorData.gstin || "",
-        avatar: vendorData.avatar || "",
-        socialMedia: {
-          twitter: vendorData.socialMedia?.twitter || "",
-          linkedin: vendorData.socialMedia?.linkedin || "",
-          facebook: vendorData.socialMedia?.facebook || "",
-        },
-        address: vendorData.address || {
-          line1: "",
-          line2: "",
-          city: "",
-          state: "",
-          pincode: "",
-          country: "India",
-        },
-      });
-
-      const processedFields = {};
-      if (vendorData.additionalFields) {
-        vendorData.additionalFields.forEach((field) => {
-          processedFields[field.key] = field.value;
-        });
-      }
-      setAdditionalFieldValues(processedFields);
-
-      setShowForm(true);
+      // Edit via the shared QuickVendorForm (same as create).
+      setEditVendor(response.data);
+      setShowQuickAdd(true);
     } catch (error) {
       console.error("Error fetching vendor:", error);
       toast.error("Failed to load vendor data");
@@ -1003,49 +975,24 @@ function Vendors() {
         </div>
       </div>
 
-      {showForm && (
-        <VendorForm
-          form={form}
-          setForm={setForm}
-          additionalFieldValues={additionalFieldValues}
-          setAdditionalFieldValues={setAdditionalFieldValues}
-          vendorFields={vendorFields}
-          loading={loading}
-          setLoading={setLoading}
-          setError={(message) =>
-            toast.error(message || "Failed to save vendor")
-          }
-          setSuccess={(message) =>
-            toast.success(message || "Vendor saved successfully")
-          }
-          fetchVendors={fetchVendors}
-          onRequestClose={() => {
-            resetForm();
-            setShowForm(false);
+      {/* Single shared form for both create and edit vendor. */}
+      {(showQuickAdd || state?.showAddForm) && (
+        <QuickVendorForm
+          editVendor={editVendor}
+          onVendorCreated={() => {
+            fetchVendors();
+            setShowQuickAdd(false);
+            if (state) state.showAddForm = false;
           }}
-        />
-      )}
-
-      {state?.showAddForm && (
-        <VendorForm
-          form={form}
-          setForm={setForm}
-          additionalFieldValues={additionalFieldValues}
-          setAdditionalFieldValues={setAdditionalFieldValues}
-          vendorFields={vendorFields}
-          loading={loading}
-          setLoading={setLoading}
-          setError={(message) =>
-            toast.error(message || "Failed to save vendor")
-          }
-          setSuccess={(message) =>
-            toast.success(message || "Vendor saved successfully")
-          }
-          fetchVendors={fetchVendors}
+          onVendorUpdated={() => {
+            fetchVendors();
+            setShowQuickAdd(false);
+            setEditVendor(null);
+          }}
           onRequestClose={() => {
-            resetForm();
-            setShowForm(false);
-            state.showAddForm = false;
+            setShowQuickAdd(false);
+            setEditVendor(null);
+            if (state) state.showAddForm = false;
           }}
         />
       )}

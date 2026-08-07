@@ -25,6 +25,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { autoTable } from "jspdf-autotable";
 import DealsForm from "../components/deal/DealsForm";
+import QuickDealForm from "../components/deal/QuickDealForm";
 import ImportDeals from "../components/deal/ImportDeals";
 import BulkActions from "../components/BulkActions";
 import logo from "/DataCircles.png";
@@ -657,6 +658,8 @@ function Deals() {
   const [showKanban, setShowKanban] = useState(false);
   const [permission, setPermission] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [editDeal, setEditDeal] = useState(null);
   const [dealFields, setDealFields] = useState([]);
   const [additionalFieldValues, setAdditionalFieldValues] = useState({});
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -1206,24 +1209,9 @@ function Deals() {
   };
 
   const handleEditDeal = (deal) => {
-    setForm({
-      _id: deal._id,
-      title: deal.title || "",
-      amount: deal.amount || "",
-      status: deal.status || "Open",
-      company: deal.company?._id || "",
-      contact: deal.contact?._id || "",
-    });
-
-    const processedFields = {};
-    if (deal.additionalFields) {
-      deal.additionalFields.forEach((field) => {
-        processedFields[field.key] = field.value;
-      });
-    }
-
-    setAdditionalFieldValues(processedFields);
-    setShowForm(true);
+    // Edit via the shared QuickDealForm (same as create).
+    setEditDeal(deal);
+    setShowQuickAdd(true);
   };
 
   const handleDeleteDeal = (dealId) => {
@@ -2361,12 +2349,15 @@ function Deals() {
 
           {/* Add Deal Button — icon-only on mobile */}
           <button
-            onClick={toggleForm}
-            title={showForm ? "Cancel" : "New Deal"}
+            onClick={() => {
+              setEditDeal(null);
+              setShowQuickAdd((v) => !v);
+            }}
+            title={showQuickAdd && !editDeal ? "Cancel" : "New Deal"}
             className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
           >
             <Plus className="w-4 h-4 flex-shrink-0" />
-            <span className="hidden lg:inline">{showForm ? "Cancel" : "New Deal"}</span>
+            <span className="hidden lg:inline">{showQuickAdd && !editDeal ? "Cancel" : "New Deal"}</span>
           </button>
         </div>
         </>
@@ -2490,28 +2481,24 @@ function Deals() {
           }}
         />
 
-        {showForm && (
-          <DealsForm
-            form={form}
-            setForm={setForm}
-            additionalFieldValues={additionalFieldValues}
-            setAdditionalFieldValues={setAdditionalFieldValues}
-            dealFields={dealFields}
+        {/* Single shared form for both create and edit deal. */}
+        {showQuickAdd && (
+          <QuickDealForm
             companies={companies}
             contacts={contacts}
-            loading={loading}
-            setLoading={setLoading}
-            setError={(message) =>
-              toast.error(message || "Failed to save deal")
-            }
-            setSuccess={(message) =>
-              toast.success(message || "Deal saved successfully")
-            }
-            fetchDeals={fetchDeals}
-            fetchStatuses={fetchStatuses}
+            editDeal={editDeal}
+            onDealCreated={() => {
+              fetchDeals();
+              setShowQuickAdd(false);
+            }}
+            onDealUpdated={() => {
+              fetchDeals();
+              setShowQuickAdd(false);
+              setEditDeal(null);
+            }}
             onRequestClose={() => {
-              resetForm();
-              setShowForm(false);
+              setShowQuickAdd(false);
+              setEditDeal(null);
             }}
           />
         )}

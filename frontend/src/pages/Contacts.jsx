@@ -47,6 +47,7 @@ import ProfilePicture from "../components/contact/ProfilePicture";
 import BulkActions from "../components/BulkActions";
 import { Link, useNavigate } from "react-router-dom";
 import ContactForm from "../components/contact/ContactForm";
+import QuickContactForm from "../components/contact/QuickContactForm";
 import { useLocation } from "react-router-dom";
 import CallLogForm from "../components/contact/CallLogForm";
 import ImportContacts from "../components/contact/ImportContacts";
@@ -185,6 +186,8 @@ function Contacts() {
   const [pageInput, setPageInput] = useState("");
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [editContact, setEditContact] = useState(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const location = useLocation();
   const { state } = location;
@@ -2262,38 +2265,10 @@ function Contacts() {
 
   const handleEditContact = async (contact) => {
     try {
-      // Fetch the full contact data to ensure we have all fields
+      // Fetch the full contact data, then edit via the shared QuickContactForm.
       const response = await API.get(`/contacts/${contact._id}`);
-      const fullContactData = response.data;
-
-      console.log("Full contact data:", fullContactData); // Debug log
-      console.log("Social media data:", fullContactData.socialMedia); // Debug log
-
-      setForm({
-        _id: fullContactData._id,
-        name: fullContactData.name || "",
-        email: fullContactData.email || "",
-        phone: fullContactData.phone || "",
-        lifecycleStage: fullContactData.lifecycleStage || "Lead",
-        stageStatus: fullContactData.stageStatus || "New",
-        company: fullContactData.company?._id || "",
-        avatar: fullContactData.avatar || "",
-        socialMedia: {
-          twitter: fullContactData.socialMedia?.twitter || "",
-          linkedin: fullContactData.socialMedia?.linkedin || "",
-          facebook: fullContactData.socialMedia?.facebook || "",
-        },
-      });
-
-      // Process additional fields
-      const processedFields = {};
-      if (fullContactData.additionalFields) {
-        fullContactData.additionalFields.forEach((field) => {
-          processedFields[field.key] = field.value;
-        });
-      }
-      setAdditionalValues(processedFields);
-      setShowForm(true);
+      setEditContact(response.data);
+      setShowQuickAdd(true);
     } catch (error) {
       console.error("Error fetching contact details:", error);
       toast.error("Failed to load contact details");
@@ -2812,12 +2787,15 @@ function Contacts() {
               </button>
 
               <button
-                onClick={toggleForm}
-                title={showForm ? "Cancel" : "New Contact"}
+                onClick={() => {
+                  setEditContact(null);
+                  setShowQuickAdd((v) => !v);
+                }}
+                title={showQuickAdd && !editContact ? "Cancel" : "New Contact"}
                 className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
               >
                 <Plus className="w-4 h-4 flex-shrink-0" />
-                <span className="hidden lg:inline">{showForm ? "Cancel" : "New Contact"}</span>
+                <span className="hidden lg:inline">{showQuickAdd && !editContact ? "Cancel" : "New Contact"}</span>
               </button>
 
             </div>
@@ -2835,52 +2813,25 @@ function Contacts() {
         }}
       />
 
-      {/* Contact Form */}
-      {showForm && (
-        <ContactForm
-          form={form}
-          setForm={setForm}
-          additionalValues={additionalValues}
-          setAdditionalValues={setAdditionalValues}
-          contactFieldList={contactFieldList}
+      {/* Single shared form for both create and edit contact. */}
+      {(showQuickAdd || state?.showAddForm) && (
+        <QuickContactForm
           companies={companies}
-          loading={loading}
-          setLoading={setLoading}
-          setError={(message) =>
-            toast.error(message || "Failed to save contact")
-          }
-          setSuccess={(message) =>
-            toast.success(message || "Contact saved successfully")
-          }
-          fetchContacts={fetchData}
-          onRequestClose={() => {
-            resetForm();
-            setShowForm(false);
+          editContact={editContact}
+          onContactCreated={() => {
+            fetchData();
+            setShowQuickAdd(false);
+            if (state) state.showAddForm = false;
           }}
-        />
-      )}
-
-      {state?.showAddForm && (
-        <ContactForm
-          form={form}
-          setForm={setForm}
-          additionalValues={additionalValues}
-          setAdditionalValues={setAdditionalValues}
-          contactFieldList={contactFieldList}
-          companies={companies}
-          loading={loading}
-          setLoading={setLoading}
-          setError={(message) =>
-            toast.error(message || "Failed to save contact")
-          }
-          setSuccess={(message) =>
-            toast.success(message || "Contact saved successfully")
-          }
-          fetchContacts={fetchData}
+          onContactUpdated={() => {
+            fetchData();
+            setShowQuickAdd(false);
+            setEditContact(null);
+          }}
           onRequestClose={() => {
-            resetForm();
-            setShowForm(false);
-            state.showAddForm = false;
+            setShowQuickAdd(false);
+            setEditContact(null);
+            if (state) state.showAddForm = false;
           }}
         />
       )}

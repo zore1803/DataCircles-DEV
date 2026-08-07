@@ -50,6 +50,7 @@ import {
   Tooltip,
 } from "recharts";
 import CompanyForm from "../components/company/CompanyForm";
+import QuickCompanyForm from "../components/company/QuickCompanyForm";
 import SubsidiaryModal from "../components/company/SubsidiaryModal";
 import MergeCompanyModal from "../components/company/MergeCompanyModal";
 import StatTileSkeleton from "../components/common/StatTileSkeleton";
@@ -634,30 +635,7 @@ const CompanyProfilePage = () => {
   }, [invoicesLoaded]);
 
   const handleEdit = () => {
-    setForm({
-      _id: company._id,
-      name: company.name,
-      industry: company.industry,
-      gstin: company.gstin || "",
-      address: company.address || "",
-      website: company.website || "",
-      profilePicture: null,
-      profilePictureUrl: company.profilePicture || "",
-      socialMedia: {
-        twitter: company.socialMedia?.twitter || "",
-        linkedin: company.socialMedia?.linkedin || "",
-        facebook: company.socialMedia?.facebook || "",
-        whatsapp: company.socialMedia?.whatsapp || "",
-      },
-    });
-
-    const processedFields = {};
-    if (company.additionalFields) {
-      company.additionalFields.forEach((field) => {
-        processedFields[field.key] = field.value;
-      });
-    }
-    setAdditionalFields(processedFields);
+    // Edit via the shared QuickCompanyForm (same as create).
     setShowForm(true);
   };
 
@@ -684,18 +662,13 @@ const CompanyProfilePage = () => {
     <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-6 px-6">
       <style>{`.income-chart-scroll::-webkit-scrollbar { display: none; }`}</style>
       {showForm && (
-        <CompanyForm
-          form={form}
-          setForm={setForm}
-          loading={formLoading}
-          setLoading={setFormLoading}
-          companyFieldNames={companyFieldNames}
-          additionalFields={additionalFields}
-          setAdditionalFields={setAdditionalFields}
-          fetchCompanies={fetchCompanyDetails} // Refreshes the specific company after saving!
+        <QuickCompanyForm
+          editCompany={company}
+          onCompanyUpdated={() => {
+            fetchCompanyDetails();
+            setShowForm(false);
+          }}
           onRequestClose={() => setShowForm(false)}
-          setError={(msg) => toast.error(typeof msg === 'string' ? msg : "An error occurred")}
-          setSuccess={(msg) => toast.success(msg)}
         />
       )}
 

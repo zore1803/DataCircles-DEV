@@ -10,6 +10,21 @@ function normalizeSocialMedia(socialMedia) {
   };
 }
 
+// billingAddress (object) and shippingAddresses (array) arrive as JSON strings
+// from the multipart form (FormData can't carry nested structures). Parse them
+// so Mongoose can store them. Applied to both create and update.
+function normalizeAddresses(data) {
+  ["billingAddress", "shippingAddresses"].forEach((key) => {
+    if (typeof data[key] === "string") {
+      try {
+        data[key] = JSON.parse(data[key]);
+      } catch {
+        delete data[key];
+      }
+    }
+  });
+}
+
 /**
  * Purpose: Create a Company document from raw submitted data. Orchestration
  * only — preserves companyController.createCompany's exact original
@@ -44,6 +59,8 @@ async function createCompany(
   if (rawData.socialMedia) {
     companyData.socialMedia = normalizeSocialMedia(rawData.socialMedia);
   }
+
+  normalizeAddresses(companyData);
 
   if (rawData.additionalFields) {
     companyData.additionalFields = await processAdditionalFields(
@@ -98,6 +115,8 @@ async function updateCompany(
   if (rawData.socialMedia) {
     updateData.socialMedia = normalizeSocialMedia(rawData.socialMedia);
   }
+
+  normalizeAddresses(updateData);
 
   if (rawData.additionalFields) {
     updateData.additionalFields = await processAdditionalFields(

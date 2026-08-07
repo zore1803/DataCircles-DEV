@@ -160,6 +160,7 @@ function Companies() {
   const [industriesLoading, setIndustriesLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [editCompany, setEditCompany] = useState(null);
   const [showImport, setShowImport] = useState(false);
   const [showHotlist, setShowHotlist] = useState(false);
   const [permission, setPermission] = useState("");
@@ -1658,35 +1659,9 @@ function Companies() {
   };
 
   const handleEdit = (company) => {
-    console.log("Editing company:", company); // Debug log
-    console.log("Social media:", company.socialMedia); // Debug log
-
-    setForm({
-      _id: company._id,
-      name: company.name,
-      industry: company.industry,
-      gstin: company.gstin || "",
-      address: company.address || "",
-      website: company.website || "",
-      documentSigned: company.documentSigned || false,
-      leadSource: company.leadSource || "",
-      profilePicture: null,
-      profilePictureUrl: company.profilePicture || "",
-      socialMedia: {
-        twitter: company.socialMedia?.twitter || "",
-        linkedin: company.socialMedia?.linkedin || "",
-        facebook: company.socialMedia?.facebook || "",
-      },
-    });
-
-    const processedFields = {};
-    if (company.additionalFields) {
-      company.additionalFields.forEach((field) => {
-        processedFields[field.key] = field.value;
-      });
-    }
-    setAdditionalFields(processedFields);
-    setShowForm(true);
+    // Edit uses the same QuickCompanyForm as create (single shared form).
+    setEditCompany(company);
+    setShowQuickAdd(true);
   };
 
   return (
@@ -1755,35 +1730,23 @@ function Companies() {
         </div>
       )}
 
-      {showForm && (
-        <CompanyForm
-          form={form}
-          setForm={setForm}
-          loading={loading}
-          setLoading={setLoading}
-          companyFieldNames={companyFieldNames}
-          additionalFields={additionalFields}
-          setAdditionalFields={setAdditionalFields}
-          fetchCompanies={fetchCompanies}
-          onRequestClose={() => {
-            resetForm();
-            setShowForm(false);
-          }}
-        />
-      )}
-
-      {/* Add New Company uses the same QuickCompanyForm as the navbar quick-add,
-          so there's a single "create company" form across the app. Editing an
-          existing company still uses CompanyForm (above). */}
+      {/* Single shared form for both create and edit. */}
       {(showQuickAdd || state?.showAddForm) && (
         <QuickCompanyForm
+          editCompany={editCompany}
           onCompanyCreated={() => {
             fetchCompanies();
             setShowQuickAdd(false);
             if (state) state.showAddForm = false;
           }}
+          onCompanyUpdated={() => {
+            fetchCompanies();
+            setShowQuickAdd(false);
+            setEditCompany(null);
+          }}
           onRequestClose={() => {
             setShowQuickAdd(false);
+            setEditCompany(null);
             if (state) state.showAddForm = false;
           }}
         />
@@ -2035,12 +1998,15 @@ function Companies() {
                     </div>
 
                     <button
-                      onClick={() => setShowQuickAdd((v) => !v)}
+                      onClick={() => {
+                        setEditCompany(null);
+                        setShowQuickAdd((v) => !v);
+                      }}
                       className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
-                      title={showQuickAdd ? "Cancel" : "New Company"}
+                      title={showQuickAdd && !editCompany ? "Cancel" : "New Company"}
                     >
                       <Plus className="w-4 h-4 flex-shrink-0" />
-                      <span className="hidden lg:inline">{showQuickAdd ? "Cancel" : "New Company"}</span>
+                      <span className="hidden lg:inline">{showQuickAdd && !editCompany ? "Cancel" : "New Company"}</span>
                     </button>
                   </div>
                 </>

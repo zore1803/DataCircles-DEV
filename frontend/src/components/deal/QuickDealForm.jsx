@@ -11,9 +11,12 @@ const QuickDealForm = ({
   companies,
   contacts,
   onDealCreated,
+  onDealUpdated,
   onRequestClose,
   initialCompanyId = "",
+  editDeal = null,
 }) => {
+  const isEditing = !!editDeal;
   const [form, setForm] = useState({
     title: "",
     amount: "",
@@ -53,6 +56,24 @@ const QuickDealForm = ({
       setIsOpen(false);
     };
   }, [companies, contacts]);
+
+  // Pre-fill when editing so edit and create share one form.
+  useEffect(() => {
+    if (!editDeal) return;
+    setForm({
+      title: editDeal.title || "",
+      amount: editDeal.amount ?? "",
+      status: editDeal.status || "Open",
+      company: editDeal.company?._id || editDeal.company || "",
+      contact: editDeal.contact?._id || editDeal.contact || "",
+    });
+    const pf = {};
+    (editDeal.additionalFields || []).forEach((f) => {
+      pf[f.key] = f.value;
+    });
+    setAdditionalFieldValues(pf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editDeal]);
 
   const fetchStatuses = async () => {
     try {
@@ -345,10 +366,13 @@ const QuickDealForm = ({
 
     try {
       setLoading(true);
-      const res = await API.post("/deals", payload);
-      toast.success("Deal added successfully!");
-      if (onDealCreated && res.data) {
-        onDealCreated(res.data);
+      const res = isEditing
+        ? await API.put(`/deals/${editDeal._id}`, payload)
+        : await API.post("/deals", payload);
+      toast.success(isEditing ? "Deal updated successfully!" : "Deal added successfully!");
+      const cb = isEditing ? onDealUpdated || onDealCreated : onDealCreated;
+      if (cb && res.data) {
+        cb(res.data);
       }
       setIsFormDirty(false);
       closeForm();
@@ -445,7 +469,7 @@ const QuickDealForm = ({
         <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
           <div className="flex justify-between items-center p-4 border-b border-gray-100 flex-shrink-0 bg-white">
             <h3 className="text-base font-semibold text-gray-700">
-              Create New Deal
+              {isEditing ? "Edit Deal" : "Create New Deal"}
             </h3>
             <button
               type="button"
@@ -608,20 +632,20 @@ const QuickDealForm = ({
             )}
             </div>
           </div>
-          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
+          <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 border border-[#E0E0E1] text-[#111216] h-12 rounded-xl text-[14px] font-bold hover:bg-gray-50 transition-colors font-inter"
+              className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors font-inter"
             >
               Cancel
             </button>
             <button
-              className="flex-1 bg-[#0C4FCD] text-white h-12 rounded-xl text-[14px] font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
+              className="px-6 py-2.5 bg-[#0C4FCD] text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
               type="submit"
               disabled={loading}
             >
-              {loading ? "Saving..." : "Create New Deal"}
+              {loading ? "Saving..." : isEditing ? "Update Deal" : "Create New Deal"}
             </button>
           </div>
         </form>
