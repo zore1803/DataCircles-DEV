@@ -157,7 +157,7 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
     };
 
     const hasError = validationErrors[`additional_${fieldDef.name}`];
-    const inputClassName = `w-full border rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${hasError
+    const inputClassName = `w-full border rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${hasError
       ? 'border-red-300 ring-1 ring-red-500'
       : 'border-[#E0E0E1] focus:ring-blue-500'
       }`;
@@ -183,6 +183,7 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
             onChange={(newValue) => handleFieldChange(newValue)}
             placeholder={`Select ${fieldDef.name}`}
             required={fieldDef.required}
+            buttonClassName={`w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-left flex items-center justify-between transition-all bg-white font-inter ${value ? "text-gray-900 font-medium" : "text-[#A0A0A0]"}`}
           />
         );
 
@@ -437,18 +438,18 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
         `}
       >
         <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
-          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0">
-            <h2 className="text-[24px] font-bold text-[#111216]">
+          <div className="flex justify-between items-center p-4 border-b border-gray-100 flex-shrink-0">
+            <h3 className="text-base font-semibold text-gray-700">
               Create New Contact
-            </h2>
+            </h3>
             <button
               type="button"
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100"
               aria-label="Close"
             >
               <svg
-                className="w-6 h-6"
+                className="w-5 h-5 text-gray-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -474,7 +475,7 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
                 placeholder="Enter Full Name"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
-                className={`w-full border rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.name
+                className={`w-full border rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.name
                   ? 'border-red-300 ring-1 ring-red-500'
                   : 'border-[#E0E0E1] focus:ring-blue-500'
                   }`}
@@ -495,7 +496,7 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
                 placeholder="example@gmail.com"
                 value={form.email}
                 onChange={(e) => handleFormChange("email", e.target.value)}
-                className={`w-full border rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.email
+                className={`w-full border rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.email
                   ? 'border-red-300 ring-1 ring-red-500'
                   : 'border-[#E0E0E1] focus:ring-blue-500'
                   }`}
@@ -516,7 +517,7 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
                 placeholder="+91 123456789"
                 value={form.phone}
                 onChange={(e) => handleFormChange("phone", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
               />
             </div>
 
@@ -597,16 +598,16 @@ const QuickContactForm = ({ companies, onContactCreated, onRequestClose, initial
             )}
           </div>
 
-          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
+          <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 border border-[#E0E0E1] text-[#111216] h-12 rounded-xl text-[14px] font-bold hover:bg-gray-50 transition-colors font-inter"
+              className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors font-inter"
             >
               Cancel
             </button>
             <button
-              className="flex-1 bg-[#0C4FCD] text-white h-12 rounded-xl text-[14px] font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
+              className="px-6 py-2.5 bg-[#0C4FCD] text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
               type="submit"
               disabled={loading}
             >

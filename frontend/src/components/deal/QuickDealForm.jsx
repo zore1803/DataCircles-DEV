@@ -156,7 +156,7 @@ const QuickDealForm = ({
     };
 
     const hasError = validationErrors[fieldDef.name];
-    const inputClassName = `w-full border rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${hasError
+    const inputClassName = `w-full border rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${hasError
         ? 'border-red-300 ring-1 ring-red-500'
         : 'border-[#E0E0E1] focus:ring-blue-500'
       }`;
@@ -443,17 +443,17 @@ const QuickDealForm = ({
           }`}
       >
         <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
-          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0 bg-white">
-            <h2 className="text-[24px] font-bold text-[#111216]">
+          <div className="flex justify-between items-center p-4 border-b border-gray-100 flex-shrink-0 bg-white">
+            <h3 className="text-base font-semibold text-gray-700">
               Create New Deal
-            </h2>
+            </h3>
             <button
               type="button"
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors p-1 sm:p-0"
+              className="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100"
               aria-label="Close"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 text-gray-400" />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-8">
@@ -467,7 +467,7 @@ const QuickDealForm = ({
                 type="text"
                 value={form.title}
                 onChange={(e) => handleFormChange("title", e.target.value)}
-                className={`w-full border rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.title ? 'border-red-300 ring-1 ring-red-500' : 'border-[#E0E0E1] focus:ring-blue-500'
+                className={`w-full border rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.title ? 'border-red-300 ring-1 ring-red-500' : 'border-[#E0E0E1] focus:ring-blue-500'
                   }`}
                 placeholder="Enter Deal Title"
                 required
@@ -486,7 +486,7 @@ const QuickDealForm = ({
                 type="number"
                 value={form.amount}
                 onChange={(e) => handleFormChange("amount", e.target.value)}
-                className={`w-full border rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.amount ? 'border-red-300 ring-1 ring-red-500' : 'border-[#E0E0E1] focus:ring-blue-500'
+                className={`w-full border rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.amount ? 'border-red-300 ring-1 ring-red-500' : 'border-[#E0E0E1] focus:ring-blue-500'
                   }`}
                 min={"0"}
                 step="1"

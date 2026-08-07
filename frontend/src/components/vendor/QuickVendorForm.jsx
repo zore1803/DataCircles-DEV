@@ -235,7 +235,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
       setIsFormDirty(true);
     };
 
-    const inputClassName = "w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter";
+    const inputClassName = "w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter";
 
     switch (fieldDef.type) {
       case "number":
@@ -575,7 +575,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
                 type="text"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
                 placeholder="Enter Vendor Name"
                 required
               />
@@ -592,7 +592,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
                   onChange={(e) =>
                     handleFormChange("gstin", e.target.value.toUpperCase())
                   }
-                  className="flex-1 border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                  className="flex-1 border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
                   placeholder="GSTIN123456789"
                   maxLength="15"
                 />
@@ -678,7 +678,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
                 type="email"
                 value={form.email}
                 onChange={(e) => handleFormChange("email", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
                 placeholder="Enter Vendor Email"
               />
             </div>
@@ -691,7 +691,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
                 type="tel"
                 value={form.phone}
                 onChange={(e) => handleFormChange("phone", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
                 placeholder="Enter Phone Number"
               />
             </div>
@@ -704,7 +704,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
                 type="text"
                 value={form.company}
                 onChange={(e) => handleFormChange("company", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
                 placeholder="Enter Company Name"
               />
             </div>
@@ -719,7 +719,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
                 onChange={(e) =>
                   handleFormChange("address.line1", e.target.value)
                 }
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
                 placeholder="Enter Address line 1"
               />
             </div>
@@ -734,7 +734,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
                 onChange={(e) =>
                   handleFormChange("address.line2", e.target.value)
                 }
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
                 placeholder="Enter Address line 2"
               />
             </div>
@@ -749,7 +749,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
                 onChange={(e) =>
                   handleFormChange("address.city", e.target.value)
                 }
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
                 placeholder="Enter City"
               />
             </div>
@@ -764,7 +764,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
                 onChange={(e) =>
                   handleFormChange("address.state", e.target.value)
                 }
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
                 placeholder="Enter State"
               />
             </div>
@@ -779,7 +779,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
                 onChange={(e) =>
                   handleFormChange("address.pincode", e.target.value)
                 }
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
                 placeholder="Enter Pincode"
               />
             </div>
@@ -794,7 +794,7 @@ const QuickVendorForm = ({ onVendorCreated, onRequestClose }) => {
                 onChange={(e) =>
                   handleFormChange("address.country", e.target.value)
                 }
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
                 placeholder="Enter Country"
               />
             </div>

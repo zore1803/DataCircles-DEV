@@ -10,6 +10,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
     address: "",
     website: "",
     gstin: "", // Added gstin field
+    documentSigned: false,
     profilePicture: null,
   });
   const [additionalFields, setAdditionalFields] = useState({});
@@ -104,7 +105,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
             step="any"
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
+            className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
             required={fieldDef.required}
           />
         );
@@ -117,6 +118,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
             onChange={(newValue) => handleFieldChange(newValue)}
             placeholder={`Select ${fieldDef.name}`}
             required={fieldDef.required}
+            buttonClassName={`w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-left flex items-center justify-between transition-all bg-white font-inter ${value ? "text-gray-900 font-medium" : "text-[#A0A0A0]"}`}
           />
         );
 
@@ -137,7 +139,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
             type="date"
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
+            className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
             required={fieldDef.required}
           />
         );
@@ -148,7 +150,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
             type="url"
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter placeholder:text-[#A0A0A0]"
+            className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter placeholder:text-[#A0A0A0]"
             required={fieldDef.required}
             placeholder="https://example.com"
           />
@@ -202,7 +204,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
             type="text"
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
+            className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
             required={fieldDef.required}
           />
         );
@@ -212,8 +214,8 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
 
   const handleSubmit = async (e, isSaveAndExit = false) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.industry.trim()) {
-      toast.error("Company name and industry are required");
+    if (!form.name.trim()) {
+      toast.error("Company name is required");
       if (!isSaveAndExit) closeForm();
       return;
     }
@@ -224,6 +226,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
     payload.append("address", form.address);
     payload.append("website", form.website);
     payload.append("gstin", form.gstin); // Added gstin to payload
+    payload.append("documentSigned", form.documentSigned ? "true" : "false");
 
     const processedAdditionalFields = fieldDefinitions
       .map((fieldDef) => {
@@ -341,26 +344,26 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
 
       <div
         className={`
-          fixed inset-y-0 right-0 z-[10003] 
-          w-full sm:w-[500px] md:w-[600px]
-          max-w-full bg-white shadow-2xl overflow-y-auto 
+          fixed dc-panel-card dc-panel-w z-[10003]
+          bg-white shadow-2xl flex flex-col overflow-hidden
           transform transition-transform duration-300 ease-in-out font-inter
-          ${isOpen ? "translate-x-0" : "translate-x-full"}
+          ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
-        <form onSubmit={handleSubmit} className="p-8">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-[24px] font-bold text-[#111216]">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
+          {/* Sticky header — compact, matching the note editor card */}
+          <div className="flex justify-between items-center flex-shrink-0 p-4 border-b border-gray-100">
+            <h3 className="text-base font-semibold text-gray-700">
               Create New Company
-            </h2>
+            </h3>
             <button
               type="button"
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100"
               aria-label="Close"
             >
               <svg
-                className="w-6 h-6"
+                className="w-5 h-5 text-gray-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -375,7 +378,8 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
             </button>
           </div>
 
-          <div className="space-y-6">
+          {/* Scrollable body */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 space-y-6">
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                 Company Name <span className="text-red-500">*</span>
@@ -384,7 +388,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
                 type="text"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
                 required
                 placeholder="Enter Company Name"
               />
@@ -392,14 +396,15 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
 
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Industry <span className="text-red-500">*</span>
+                Industry
               </label>
               <CustomDropdown
                 options={industries}
                 value={form.industry}
                 onChange={(value) => handleFormChange("industry", value)}
                 placeholder="Select Industry"
-                required
+                searchable
+                buttonClassName={`w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-left flex items-center justify-between transition-all bg-white font-inter ${form.industry ? "text-gray-900 font-medium" : "text-[#A0A0A0]"}`}
               />
             </div>
 
@@ -411,7 +416,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
                 type="text"
                 value={form.gstin}
                 onChange={(e) => handleFormChange("gstin", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
                 placeholder="GSTIN-1234567890"
                 required
               />
@@ -425,7 +430,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
                 type="text"
                 value={form.address}
                 onChange={(e) => handleFormChange("address", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
                 placeholder="Enter Address Here"
                 required
               />
@@ -439,10 +444,24 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
                 type="url"
                 value={form.website}
                 onChange={(e) => handleFormChange("website", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
                 placeholder="www.company.com"
                 required
               />
+            </div>
+
+            {/* Document Signed */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="documentSigned"
+                checked={!!form.documentSigned}
+                onChange={(e) => handleFormChange("documentSigned", e.target.checked)}
+                className="w-4 h-4 rounded border-[#E0E0E1] text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="documentSigned" className="text-[13px] font-semibold text-[#111216]">
+                Document Signed
+              </label>
             </div>
 
             <div>
@@ -460,13 +479,13 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
                     className="absolute inset-0 opacity-0 cursor-pointer z-10"
                     required
                   />
-                  <div className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 flex items-center text-[14px] text-[#A0A0A0] bg-white">
+                  <div className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 flex items-center text-[14px] text-[#A0A0A0] bg-white">
                     {form.profilePicture ? form.profilePicture.name : "Choose a File"}
                   </div>
                 </div>
                 <button
                   type="button"
-                  className="bg-[#F2F2F7] text-[#111216] px-8 rounded-xl h-12 text-[14px] font-medium hover:bg-gray-200 transition-colors"
+                  className="bg-[#F2F2F7] text-[#111216] px-8 rounded-[25px] h-11 text-[14px] font-medium hover:bg-gray-200 transition-colors"
                 >
                   Upload
                 </button>
@@ -493,16 +512,17 @@ const QuickCompanyForm = ({ onCompanyCreated, onRequestClose }) => {
             )}
           </div>
 
-          <div className="mt-12 pt-6 border-t border-[#F2F2F7] flex gap-4">
+          {/* Sticky footer — compact, matching the note editor card */}
+          <div className="flex-shrink-0 p-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 border border-[#E0E0E1] text-[#111216] h-12 rounded-xl text-[14px] font-bold hover:bg-gray-50 transition-colors"
+              className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
-              className="flex-1 bg-[#0C4FCD] text-white h-12 rounded-xl text-[14px] font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-2.5 bg-[#0C4FCD] text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               type="submit"
               disabled={loading}
             >
