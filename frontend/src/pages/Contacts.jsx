@@ -4,6 +4,7 @@ import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { createPortal } from "react-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
+import { getPinnedBoundaryShadow } from "../utils/pinnedColumnShadow";
 import {
   Search,
   Plus,
@@ -962,8 +963,15 @@ function Contacts() {
 
             return (
               <div className="flex items-center justify-between w-full group">
-                <span className="truncate flex-1 min-w-0" title={vc.label}>
-                  {vc.label}
+                <span className="truncate flex-1 min-w-0 flex items-center gap-1.5" title={vc.label}>
+                  {pinSide && (
+                    <Pin
+                      size={12}
+                      className="text-blue-500 fill-blue-500 flex-shrink-0"
+                      style={{ transform: "rotate(45deg)" }}
+                    />
+                  )}
+                  <span className="truncate">{vc.label}</span>
                 </span>
 
                 <button
@@ -3154,6 +3162,12 @@ function Contacts() {
                               const isDragging = draggedColKey === colId;
                               const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
 
+                              // Subtle inset shadow at the pinned block's boundary edge —
+                              // same treatment as the CompanyProfilePage tabs — instead of a
+                              // flat 2px border, so scrolling under a pinned column reads as
+                              // a genuinely separated layer.
+                              const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
+
                               return (
                                 <th
                                   key={header.id}
@@ -3166,17 +3180,17 @@ function Contacts() {
                                     right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                     zIndex: isSticky ? 20 : 1,
                                     opacity: isDragging ? 0.35 : 1,
+                                    boxShadow: boundaryShadow || undefined,
                                   }}
-                                  className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
-                                    ? "border-r-2 border-r-gray-300"
-                                    : "last:border-r-0"
-                                    } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                                  className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} last:border-r-0 ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                                 >
-                                  <div className="w-full min-w-0">
-                                    {flexRender(
-                                      header.column.columnDef.header,
-                                      header.getContext(),
-                                    )}
+                                  <div className="flex items-center gap-1.5 w-full min-w-0">
+                                    <div className="min-w-0 flex-1 truncate">
+                                      {flexRender(
+                                        header.column.columnDef.header,
+                                        header.getContext(),
+                                      )}
+                                    </div>
                                   </div>
 
                                   {colId !== "selection" && header.column.getCanResize() && (
@@ -3237,6 +3251,8 @@ function Contacts() {
                                 const isRightBoundary = colId === firstRightPinnedKey;
                                 const isColDragging = draggedColKey === colId;
 
+                                const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
+
                                 return (
                                   <td
                                     key={cell.id}
@@ -3248,11 +3264,9 @@ function Contacts() {
                                       right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                       zIndex: isSticky ? 10 : 1,
                                       opacity: isColDragging ? 0.35 : 1,
+                                      boxShadow: cellBoundaryShadow || undefined,
                                     }}
-                                    className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
-                                      ? "border-r-2 border-r-gray-200"
-                                      : "last:border-r-0"
-                                      } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
+                                    className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                                   >
                                     {flexRender(
                                       cell.column.columnDef.cell,

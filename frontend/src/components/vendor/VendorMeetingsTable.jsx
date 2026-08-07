@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Skeleton from "../common/Skeleton";
 import { Plus, Calendar, Search, Trash2, Eye } from "lucide-react";
 import API from "../../services/api";
@@ -13,6 +13,9 @@ import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { useTopLoadingSignal } from "../common/TopLoadingBar";
 import toast from "react-hot-toast";
 import HighlightText from "../common/HighlightText";
+import { exportToCSV } from "../../utils/exportToCSV";
+
+const stripHtml = (html) => String(html || "").replace(/<[^>]*>/g, "").trim();
 
 /* `options` seeds each dropdown with the schema's full enum (models/Meeting.js)
    so a value stays filterable even when no current row uses it. */
@@ -51,6 +54,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showMeetingForm, setShowMeetingForm] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState(null);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [users, setUsers] = useState([]);
@@ -67,6 +71,8 @@ const VendorMeetingsTable = ({ vendorId }) => {
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [pinnedColumns, setPinnedColumns] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  const filterButtonRef = useRef(null);
 
   const handleColumnReorder = (draggedKey, targetKey) => {
     setColumnOrder((prev) => {
@@ -202,6 +208,22 @@ const VendorMeetingsTable = ({ vendorId }) => {
   });
   const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedItems.length);
 
+  const handleExportSelected = () => {
+    const dataToExport = meetings
+      .filter((m) => selectedItems.includes(m._id))
+      .map((m) => ({
+        "Title": m.title || "",
+        "Description": stripHtml(m.description || ""),
+        "Platform": m.platform || "",
+        "Duration (min)": m.duration || "",
+        "Scheduled At": m.scheduledAt ? new Date(m.scheduledAt).toLocaleString() : "",
+      }));
+    if (dataToExport.length === 0) return;
+    const headers = Object.keys(dataToExport[0]).join(",");
+    const rows = dataToExport.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    exportToCSV([headers, ...rows], `meetings_export_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
   const handleBulkDelete = async () => {
     if (!selectedItems.length) return;
     if (!window.confirm(`Delete ${selectedItems.length} meeting(s)? This cannot be undone.`)) return;
@@ -258,21 +280,32 @@ const VendorMeetingsTable = ({ vendorId }) => {
     setSelectedMeeting(null);
   };
 
+  // Wired to MeetingDetailsModal's Edit button (onEdit) — previously
+  // unpassed, so that button silently did nothing. Closes the read-only
+  // popup and opens VendorMeetingForm against the same meeting, in edit mode.
+  const handleEditMeeting = (meeting) => {
+    handleCloseMeetingModal();
+    setEditingMeeting(meeting);
+    setShowMeetingForm(true);
+  };
+
   const baseColumns = useMemo(
     () => [
       {
         id: "selection",
-        size: 44,
+        size: 64,
         enableResizing: false,
         header: () => (
           <div className="flex justify-center items-center w-full">
             <input
               type="checkbox"
               checked={
-                paginatedMeetings.length > 0 &&
-                paginatedMeetings.every((m) => selectedItems.includes(m._id))
+                selectedItems.length > 0 &&
+                selectedItems.length === filteredMeetings.length
               }
-              onChange={(e) => (e.target.checked ? selectAll(paginatedMeetings) : clearSelection())}
+              onChange={(e) =>
+                e.target.checked ? selectAll(filteredMeetings) : clearSelection()
+              }
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
             />
           </div>
@@ -474,6 +507,8 @@ const VendorMeetingsTable = ({ vendorId }) => {
           isClosing={stripClosing}
           onSelectAll={() => selectAll(filteredMeetings)}
           onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onCancel={clearSelection}
           onDelete={handleBulkDelete}
           isDeleting={isDeleting}
         />
@@ -491,6 +526,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
             />
           </div>
           <button
+            ref={filterButtonRef}
             onClick={() => setShowFilterPanel(true)}
             className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
             style={{
@@ -508,7 +544,10 @@ const VendorMeetingsTable = ({ vendorId }) => {
           </button>
           <button
             type="button"
-            onClick={() => setShowMeetingForm(true)}
+            onClick={() => {
+              setEditingMeeting(null);
+              setShowMeetingForm(true);
+            }}
             className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
             style={{ width: "44px", height: "44px", borderColor: "rgba(31, 41, 55, 0.1)" }}
           >
@@ -587,16 +626,29 @@ const VendorMeetingsTable = ({ vendorId }) => {
         getFieldValue={getMeetingFieldValue}
         selected={selectedFilters}
         onApply={setSelectedFilters}
+        triggerRef={filterButtonRef}
       />
 
       {showMeetingForm && (
         <VendorMeetingForm
           open={showMeetingForm}
-          mode="create"
+          mode={editingMeeting ? "view" : "create"}
+          meetingData={editingMeeting}
+          startInEditMode={!!editingMeeting}
           vendorId={vendorId}
           onSave={handleMeetingSave}
           onDelete={handleMeetingDelete}
-          onClose={() => setShowMeetingForm(false)}
+          onClose={async () => {
+            // VendorMeetingForm has no dedicated "update succeeded" callback —
+            // it calls onClose() after both create and edit saves, so the
+            // refetch that used to only happen on create (inside
+            // handleMeetingSave) needs to happen here too, or an edited
+            // meeting's changes wouldn't show up in the table until a manual
+            // refresh.
+            setShowMeetingForm(false);
+            setEditingMeeting(null);
+            await refetchMeetings();
+          }}
         />
       )}
 
@@ -606,6 +658,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
           meetingData={selectedMeeting}
           users={users}
           onDelete={handleMeetingDelete}
+          onEdit={handleEditMeeting}
           onClose={handleCloseMeetingModal}
         />
       )}

@@ -94,7 +94,9 @@ function Vendors() {
     socialMedia: {
       twitter: "",
       linkedin: "",
+      instagram: "",
       facebook: "",
+      whatsapp: "",
     },
     address: {
       line1: "",
@@ -710,12 +712,45 @@ function Vendors() {
     }
   };
 
+  // Header checkbox: toggles the CURRENT PAGE only — synchronous, no network
+  // call. Mirrors Companies.jsx's handleSelectAll exactly (pages/Companies.jsx),
+  // which compares against `companies.length` (the current page's array), not
+  // the total count across all pages. "Select every matching vendor across
+  // every page" is a deliberately separate action — see
+  // handleSelectAllAcrossPages below — so a stray click on the header
+  // checkbox can't silently select hundreds of off-screen rows.
   const handleSelectAll = () => {
     if (selectedVendors.length === vendors.length && vendors.length > 0) {
       setSelectedVendors([]);
     } else {
       setSelectedVendors(vendors.map((v) => v._id));
     }
+  };
+
+  // Bulk-strip "Select All" button: fetches every vendor id matching the
+  // current search/filter, ignoring pagination — mirrors
+  // Companies.jsx's handleSelectAllAcrossPages against
+  // GET /companies/pagination?allIds=true, backed here by the identical
+  // allIds branch in getAllVendorsWithPagination.
+  const handleSelectAllAcrossPages = async () => {
+    try {
+      const params = new URLSearchParams({ allIds: "true" });
+      if (debouncedSearchTerm.trim()) params.append("search", debouncedSearchTerm.trim());
+      if (debouncedFilterCompany) params.append("company", debouncedFilterCompany);
+
+      const res = await API.get(`/vendors/pagination?${params.toString()}`);
+      setSelectedVendors(res.data.ids || []);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to select all rows");
+    }
+  };
+
+  // Bulk-strip "Deselect All" button: trims the selection back down to just
+  // the current page, rather than clearing it entirely — mirrors
+  // Companies.jsx's handleDeselectAllExtra. Use "Cancel" (exitSelectionMode)
+  // to clear the selection completely and leave selection mode.
+  const handleDeselectAllExtra = () => {
+    setSelectedVendors(vendors.map((v) => v._id));
   };
 
   const handleSelectVendor = (vendorId) => {
@@ -843,10 +878,17 @@ function Vendors() {
         company: vendorData.company || "",
         gstin: vendorData.gstin || "",
         avatar: vendorData.avatar || "",
+        // All 5 fields, not a hand-picked subset — VendorForm renders inputs
+        // for all 5 (twitter/linkedin/instagram/facebook/whatsapp) and saves
+        // all 5 on every submit, so any field left out here gets silently
+        // wiped to "" the next time this vendor is saved from an unrelated
+        // edit (e.g. changing the phone number).
         socialMedia: {
           twitter: vendorData.socialMedia?.twitter || "",
           linkedin: vendorData.socialMedia?.linkedin || "",
+          instagram: vendorData.socialMedia?.instagram || "",
           facebook: vendorData.socialMedia?.facebook || "",
+          whatsapp: vendorData.socialMedia?.whatsapp || "",
         },
         address: vendorData.address || {
           line1: "",
@@ -1023,14 +1065,14 @@ function Vendors() {
                 {selectedVendors.length !== 1 ? "s" : ""} selected
               </span>
               <button
-                onClick={() => setSelectedVendors(vendors.map((v) => v._id))}
+                onClick={handleSelectAllAcrossPages}
                 className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <CheckSquare className="w-4 h-4" />
                 Select All
               </button>
               <button
-                onClick={exitSelectionMode}
+                onClick={handleDeselectAllExtra}
                 className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />

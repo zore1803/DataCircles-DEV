@@ -23,9 +23,11 @@ import {
 import AppToaster from "../AppToaster";
 import DataTable from "../common/DataTable";
 import BulkActionBar from "../common/BulkActionBar";
+import { exportToCSV } from "../../utils/exportToCSV";
 import TablePaginationFooter from "../common/TablePaginationFooter";
 import CompanyFilterPanel from "../company/CompanyFilterPanel";
 import FilterIcon from "../common/FilterIcon";
+import { useRef } from "react";
 import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { useTopLoadingSignal } from "../common/TopLoadingBar";
 
@@ -116,7 +118,13 @@ const quillFormats = [
 ];
 
 // Note Viewer Modal
-const NoteViewer = ({ isOpen, onClose, noteTitle, noteContent, vendorName, createdAt }) => {
+// `searchTerm` defaults to "" — pre-existing bug: this component referenced
+// an undefined `searchTerm` identifier (no such prop was ever passed in),
+// which threw ReferenceError on every render and crashed the "View Note"
+// popup outright. Fixed as a real prop with a safe default; no caller
+// currently passes a live search term, so this only stops the crash — it
+// doesn't add highlighting behavior.
+const NoteViewer = ({ isOpen, onClose, noteTitle, noteContent, vendorName, createdAt, searchTerm = "" }) => {
   if (!isOpen) return null;
 
   const formatDate = (dateString) => {
@@ -342,6 +350,10 @@ const NoteCard = ({ note, onEdit, onDelete, onView, searchTerm }) => {
 };
 
 // Note Editor Modal
+// Right-side sliding drawer — same dc-panel-card/dc-panel-w shell, icon-badge
+// header, and Cancel/Save footer as VendorTaskForm and VendorMeetingForm, so
+// the New/Edit Note dialog matches the rest of the vendor detail page instead
+// of being a plain centered modal.
 const NoteEditor = ({
   isOpen,
   onClose,
@@ -354,96 +366,126 @@ const NoteEditor = ({
   isEditing,
   vendorName
 }) => {
-  if (!isOpen) return null;
+  const [isSliding, setIsSliding] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      setTimeout(() => setIsSliding(true), 10);
+    } else {
+      setIsSliding(false);
+      setTimeout(() => setShouldRender(false), 300);
+    }
+  }, [isOpen]);
+
+  if (!shouldRender) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[85vh] overflow-hidden shadow-lg border border-gray-200">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">
-              {isEditing ? 'Edit Note' : 'New Note'}
-            </h2>
-            <p className="text-xs text-gray-600 mt-1">
-              {isEditing ? 'Update your note' : `Note for ${vendorName}`}
-            </p>
-          </div>
-          <button 
-            onClick={onClose} 
-            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-4 overflow-y-auto max-h-[calc(85vh-140px)]">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Title
-              </label>
-              <input
-                type="text"
-                value={noteTitle}
-                onChange={(e) => setNoteTitle(e.target.value)}
-                placeholder="Enter note title..."
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Note
-              </label>
-              <div className="border border-gray-300 rounded-lg overflow-hidden">
-                <ReactQuill
-                  value={noteContent}
-                  onChange={setNoteContent}
-                  modules={quillModules}
-                  formats={quillFormats}
-                  theme="snow"
-                  placeholder="Write your note..."
-                  style={{ minHeight: '180px' }}
-                />
+    <>
+      <div
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] transition-all duration-300"
+        style={{ opacity: isSliding ? 1 : 0 }}
+        onClick={onClose}
+      />
+      <div
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl overflow-hidden transform transition-transform duration-300 ease-out flex flex-col ${
+          isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
+        }`}
+      >
+        <div className="h-full flex flex-col">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gray-50">
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-100 p-2 rounded-xl">
+                <StickyNote className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  {isEditing ? 'Edit Note' : 'New Note'}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {isEditing ? 'Update your note' : `Note for ${vendorName}`}
+                </p>
               </div>
             </div>
+            <button
+              onClick={onClose}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
-            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="flex items-center gap-2 text-sm text-gray-700">
+          <div className="flex-1 overflow-y-auto p-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  value={noteTitle}
+                  onChange={(e) => setNoteTitle(e.target.value)}
+                  placeholder="Enter note title..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Note
+                </label>
+                <div className="border border-gray-300 rounded-xl overflow-hidden">
+                  <ReactQuill
+                    value={noteContent}
+                    onChange={setNoteContent}
+                    modules={quillModules}
+                    formats={quillFormats}
+                    theme="snow"
+                    placeholder="Write your note..."
+                    style={{ minHeight: '180px' }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 text-sm text-gray-700">
                 <User className="w-4 h-4" />
                 <span>Tagged: {vendorName}</span>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-200">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onSave}
-            disabled={loading || !noteContent.trim()}
-            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                {isEditing ? 'Update' : 'Save'}
-              </>
-            )}
-          </button>
+          <div className="p-6 border-t border-gray-200 bg-white flex gap-3 flex-shrink-0 mt-auto">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={loading || !noteContent.trim()}
+              className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                loading || !noteContent.trim()
+                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl"
+              }`}
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  {isEditing ? 'Update Note' : 'Save Note'}
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
@@ -466,6 +508,7 @@ const NoteSection = () => {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [columnSizing, setColumnSizing] = useState({});
   const [isDeleting, setIsDeleting] = useState(false);
+  const filterButtonRef = useRef(null);
 
   const fetchNotes = useCallback(async () => {
     try {
@@ -697,21 +740,37 @@ const NoteSection = () => {
     }
   };
 
+  const handleExportSelected = () => {
+    const dataToExport = notes
+      .filter((n) => selectedItems.includes(n._id))
+      .map((n) => ({
+        "Title": n.title || "",
+        "Note Content": stripHtml(n.note || ""),
+        "Author": getNoteFieldValue(n, "author") || "",
+        "Created At": n.createdAt ? new Date(n.createdAt).toLocaleString() : "",
+        "Updated At": n.updatedAt ? new Date(n.updatedAt).toLocaleString() : "",
+      }));
+    if (dataToExport.length === 0) return;
+    const headers = Object.keys(dataToExport[0]).join(",");
+    const rows = dataToExport.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    exportToCSV([headers, ...rows], `notes_export_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
   const baseListColumns = useMemo(
     () => [
       {
         id: "selection",
-        size: 44,
+        size: 64,
         enableResizing: false,
         header: () => (
           <div className="flex justify-center items-center w-full">
             <input
               type="checkbox"
               checked={
-                paginatedNotes.length > 0 &&
-                paginatedNotes.every((n) => selectedItems.includes(n._id))
+                selectedItems.length > 0 &&
+                selectedItems.length === filteredNotes.length
               }
-              onChange={(e) => (e.target.checked ? selectAll(paginatedNotes) : clearSelection())}
+              onChange={(e) => (e.target.checked ? selectAll(filteredNotes) : clearSelection())}
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
             />
           </div>
@@ -867,6 +926,8 @@ const NoteSection = () => {
           isClosing={stripClosing}
           onSelectAll={() => selectAll(filteredNotes)}
           onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onCancel={clearSelection}
           onDelete={handleBulkDelete}
           isDeleting={isDeleting}
         />
@@ -912,6 +973,7 @@ const NoteSection = () => {
             </button>
           </div>
           <button
+            ref={filterButtonRef}
             onClick={() => setShowFilterPanel(true)}
             className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
             style={{
@@ -1065,6 +1127,7 @@ const NoteSection = () => {
         getFieldValue={getNoteFieldValue}
         selected={selectedFilters}
         onApply={setSelectedFilters}
+        triggerRef={filterButtonRef}
       />
 
       <NoteEditor
@@ -1089,7 +1152,7 @@ const NoteSection = () => {
         createdAt={viewingNote?.createdAt}
       />
 
-      <style jsx global>{`
+      <style jsx="true" global="true">{`
   /* Quill Editor Styles */
   .ql-editor ol,
   .prose ol,

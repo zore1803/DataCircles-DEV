@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
+import { PINNED_LEFT_BOUNDARY_SHADOW, PINNED_RIGHT_BOUNDARY_SHADOW } from "../../utils/pinnedColumnShadow";
 import {
   Search,
   Filter,
@@ -14,6 +15,9 @@ import {
   ChevronDown,
   EyeOff,
   ListChecks,
+  List,
+  LayoutGrid,
+  X,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
@@ -21,6 +25,7 @@ import API from "../../services/api";
 import CompanyTaskForm from "./CompanyTaskForm";
 import HighlightText from "../common/HighlightText";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
+import TaskKanbanBoard from "../Task/TaskKanbanBoard";
 import FilterIcon from "../common/FilterIcon";
 import CompanyFilterPanel from "./CompanyFilterPanel";
 import TableSkeletonRows from "../common/TableSkeletonRows";
@@ -190,6 +195,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     return null;
   };
 
+
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
@@ -313,6 +319,58 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     () => Object.values(colWidths).reduce((sum, w) => sum + w, 0) + 88,
     [colWidths],
   );
+
+  const stickyStyles = useMemo(() => {
+    const map = {};
+    let leftOffset = 88; // selection (44px) + lead (44px) columns
+    for (const col of orderedColumns) {
+      if (leftPinned.has(col.id)) {
+        map[col.id] = {
+          position: "sticky",
+          left: leftOffset,
+          zIndex: 20,
+          backgroundColor: "#fff",
+        };
+        leftOffset += colWidths[col.id] || 200;
+      }
+    }
+    let rightOffset = 0;
+    for (const col of [...orderedColumns].reverse()) {
+      if (rightPinned.has(col.id)) {
+        map[col.id] = {
+          position: "sticky",
+          right: rightOffset,
+          zIndex: 20,
+          backgroundColor: "#fff",
+        };
+        rightOffset += colWidths[col.id] || 200;
+      }
+    }
+    return map;
+  }, [orderedColumns, leftPinned, rightPinned, colWidths]);
+
+  const getStickyStyle = (colId, isHeader = false, isSelected = false) => {
+    const isPinned = leftPinned.has(colId) || rightPinned.has(colId);
+    const style = stickyStyles[colId] || {};
+    
+    let borderShadows = "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA";
+    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
+    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
+    
+    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) {
+      borderShadows = `${PINNED_LEFT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
+    } else if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) {
+      borderShadows = `${PINNED_RIGHT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
+    }
+    
+    return {
+      ...style,
+      position: isPinned ? "sticky" : undefined,
+      zIndex: isPinned ? (isHeader ? 35 : 20) : undefined,
+      backgroundColor: isPinned ? (isHeader ? "#F5F7FA" : (isSelected ? "#EFF6FF" : "#fff")) : undefined,
+      boxShadow: borderShadows,
+    };
+  };
 
   // Kept so the existing header Pin button and double-click-to-pin keep working;
   // they now write to the same left/right pin state the column menu uses, rather
@@ -724,9 +782,18 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by tasks..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              className="w-full h-full pl-10 pr-10 border rounded-full text-sm focus:outline-none focus:border-blue-300"
               style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <button
             onClick={() => setShowFilterPanel(true)}
@@ -758,13 +825,17 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
 
       {/* Task list or empty state. */}
       {!isLoading && tasks.length === 0 ? (
-        <button
-          onClick={() => setShowTaskForm(true)}
-          className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
-        >
-          <ListChecks size={28} className="mb-2" />
-          <span className="text-sm font-medium">Add New Task</span>
-        </button>
+        <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+          <ListChecks size={28} className="mb-3 text-gray-400" />
+          <button
+            type="button"
+            onClick={() => setShowTaskForm(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} />
+            Add new task
+          </button>
+        </div>
       ) : (
       <div
         ref={fillContainerRef}
@@ -790,7 +861,18 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                   per-task done/not-done toggles, and there was no per-row
                   selection checkbox anywhere. Matches Tasks.jsx, which has a
                   dedicated `selection` column separate from its row content. */}
-              <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
+              <th
+                style={{
+                  width: 44,
+                  height: 56,
+                  position: "sticky",
+                  left: 0,
+                  zIndex: 35,
+                  backgroundColor: "#F5F7FA",
+                  boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                }}
+                className="px-3 py-2.5"
+              >
                 <div className="flex justify-center items-center w-full">
                   <input
                     type="checkbox"
@@ -801,8 +883,19 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                 </div>
               </th>
               {/* Spacer for the completion-circle column below (`__lead`). */}
-              <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]" />
-              {orderedColumns.map((col, idx) => {
+              <th
+                style={{
+                  width: 44,
+                  height: 56,
+                  position: "sticky",
+                  left: 44,
+                  zIndex: 35,
+                  backgroundColor: "#F5F7FA",
+                  boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                }}
+                className="px-3 py-2.5"
+              />
+              {orderedColumns.map((col) => {
                 const isDragging = draggedColKey === col.id;
                 const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
                 return (
@@ -813,9 +906,8 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                     style={{
                       width: colWidths[col.id],
                       height: 56,
-                      position: "relative",
                       opacity: isDragging ? 0.35 : 1,
-                      boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                      ...getStickyStyle(col.id, true)
                     }}
                     className={`py-2.5 font-medium text-[#525252] text-xs cursor-grab active:cursor-grabbing ${
                       col.id === "title" ? "pl-6 pr-3" : "px-3"
@@ -828,7 +920,18 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                           onDoubleClick={() => togglePinColumn(col.id)}
                         >
                           <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                            {isLoading ? <Skeleton width="65%" height={12} /> : <span className="truncate flex-1 min-w-0" title={col.label}>{col.label}</span>}
+                            {isLoading ? (
+                              <Skeleton width="65%" height={12} />
+                            ) : (
+                              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                {(leftPinned.has(col.id) || rightPinned.has(col.id)) && (
+                                  <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0" style={{ transform: "rotate(45deg)" }} />
+                                )}
+                                <span className="truncate flex-1 min-w-0" title={col.label}>
+                                  {col.label}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ) : null}
@@ -1163,8 +1266,28 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                   };
                   return (
                     <tr key={task._id} className={`transition-colors group cursor-pointer ${isSelected ? "bg-blue-50" : "hover:bg-gray-50"}`} onClick={() => handleTaskClick(task)}>
-                      {cells.__select}
-                      {cells.__lead}
+                      {React.cloneElement(cells.__select, {
+                        style: {
+                          ...cells.__select.props.style,
+                          position: "sticky",
+                          left: 0,
+                          zIndex: 10,
+                          backgroundColor: isSelected ? "#EFF6FF" : "#fff",
+                          boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                        },
+                        className: "px-3"
+                      })}
+                      {React.cloneElement(cells.__lead, {
+                        style: {
+                          ...cells.__lead.props.style,
+                          position: "sticky",
+                          left: 44,
+                          zIndex: 10,
+                          backgroundColor: isSelected ? "#EFF6FF" : "#fff",
+                          boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                        },
+                        className: "px-3"
+                      })}
                       {/* Body cells are indexed by column id and rendered through
                           orderedColumns, so hiding or pinning a column in the header
                           moves/removes the matching cell too. Each <td> is unchanged. */}
@@ -1172,10 +1295,23 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                         const isDragging = draggedColKey === col.id;
                         const cell = cells[col.id];
                         if (!cell) return null;
-                        if (isDragging) {
-                          return React.cloneElement(cell, { style: { ...cell.props.style, opacity: 0.35 } });
-                        }
-                        return cell;
+                        
+                        const stickyStyle = getStickyStyle(col.id, false, isSelected);
+                        const mergedStyle = {
+                          ...cell.props.style,
+                          opacity: isDragging ? 0.35 : undefined,
+                          ...stickyStyle,
+                        };
+                        
+                        const cleanClassName = (cell.props.className || "")
+                          .replace("border-r", "")
+                          .replace("border-b", "")
+                          .replace("border-[#E1E4EA]", "");
+                          
+                        return React.cloneElement(cell, {
+                          style: mergedStyle,
+                          className: cleanClassName,
+                        });
                       })}
                     </tr>
                   );

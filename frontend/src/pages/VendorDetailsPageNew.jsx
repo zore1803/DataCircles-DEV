@@ -252,7 +252,7 @@ const VendorDetailsPageNew = () => {
     website: "",
     address: { line1: "", line2: "", city: "", state: "", pincode: "", country: "" },
     avatar: "",
-    socialMedia: { twitter: "", linkedin: "", facebook: "", whatsapp: "" },
+    socialMedia: { twitter: "", linkedin: "", instagram: "", facebook: "", whatsapp: "" },
   });
 
   // Activity timeline filter
@@ -379,9 +379,13 @@ const VendorDetailsPageNew = () => {
         line1: "", line2: "", city: "", state: "", pincode: "", country: "",
       },
       avatar: vendor.avatar || vendor.logo || "",
+      // All 5 fields — see the matching comment in Vendors.jsx:handleEditVendor.
+      // This copy was missing `instagram`, which VendorForm still submits on
+      // every save, silently wiping any stored Instagram link on unrelated edits.
       socialMedia: {
         twitter: vendor.socialMedia?.twitter || "",
         linkedin: vendor.socialMedia?.linkedin || "",
+        instagram: vendor.socialMedia?.instagram || "",
         facebook: vendor.socialMedia?.facebook || "",
         whatsapp: vendor.socialMedia?.whatsapp || "",
       },
@@ -455,32 +459,40 @@ const VendorDetailsPageNew = () => {
       });
     }
 
+    // NOT capped here. Capping before the tab filter is what caused "All"/
+    // "Payments"/"Notes" to show nothing: if the 25 most recent items across
+    // ALL types happened to be tasks/meetings, older payments/notes were
+    // discarded before the tab filter ever ran, even though they existed.
+    // Filtering happens on this full list below; the cap is applied per-tab,
+    // after filtering.
     return items
       .filter((item) => !isNaN(item.date))
-      .sort((a, b) => b.date - a.date)
-      // Feed is capped for render cost, not for the viewport — the container
-      // shows ~4-5 and scrolls, so keep enough behind it to be worth scrolling.
-      .slice(0, 25);
+      .sort((a, b) => b.date - a.date);
   }, [payments, tasks, meetings, notes]);
 
   // "Deals" dropped — vendor deals aren't a feature yet, so the filter can
   // never match anything. Notes added since the feed now carries them.
   const activityFeedTabs = ["All", "Payments", "Tasks", "Meetings", "Notes"];
-  const filteredActivityFeed =
-    activityFeedFilter === "All"
-      ? activityFeedItems
-      : activityFeedItems.filter((item) => item.type === activityFeedFilter);
+  const filteredActivityFeed = useMemo(() => {
+    const matching =
+      activityFeedFilter === "All"
+        ? activityFeedItems
+        : activityFeedItems.filter((item) => item.type === activityFeedFilter);
+    // Sidebar container shows ~4-5 rows and scrolls for more (see maxHeight
+    // below), so keep enough behind the fold to be worth scrolling.
+    return matching.slice(0, 25);
+  }, [activityFeedItems, activityFeedFilter]);
 
   /* ── Financial Summary Calculations ── */
   const totalReceived = payments
     ? payments
-        .filter((p) => p.direction === "IN")
-        .reduce((sum, p) => sum + (p.amount || 0), 0)
+      .filter((p) => p.direction === "IN")
+      .reduce((sum, p) => sum + (p.amount || 0), 0)
     : 0;
   const totalPaid = payments
     ? payments
-        .filter((p) => p.direction === "OUT")
-        .reduce((sum, p) => sum + (p.amount || 0), 0)
+      .filter((p) => p.direction === "OUT")
+      .reduce((sum, p) => sum + (p.amount || 0), 0)
     : 0;
   const netBalance = vendor?.balance ?? totalReceived - totalPaid;
 
@@ -553,222 +565,234 @@ const VendorDetailsPageNew = () => {
           table is visible.
          ═══════════════════════════════════════════════════════════ */}
       <div className="px-6 sm:px-8 pt-1">
-      <div className="bg-white border border-[#DCEBFC] rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_260px]">
+        <div className="bg-white border border-[#DCEBFC] rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_260px]">
 
-        {/* LEFT COLUMN: info row (top) + KPI strip (bottom) */}
-        <div className="flex flex-col min-w-0">
-          {/* Info row */}
-          <div className="flex items-start justify-between gap-4 py-4 pl-5 sm:pl-6 pr-4">
-            <div className="flex items-start gap-4 min-w-0">
-              {/* Gated on showSkeleton, not just `vendor` — the vendor fetch
+          {/* LEFT COLUMN: info row (top) + KPI strip (bottom) */}
+          <div className="flex flex-col min-w-0">
+            {/* Info row */}
+            <div className="flex items-start justify-between gap-4 py-4 pl-5 sm:pl-6 pr-4">
+              <div className="flex items-start gap-4 min-w-0">
+                {/* Gated on showSkeleton, not just `vendor` — the vendor fetch
                   resolves well before payments/tasks/meetings/notes do, so
                   gating on `vendor` alone made the header pop in with real
                   data while the KPI strip/table/timeline below it were still
                   skeletons. Everything below now flips from skeleton to real
                   content in the same render, like CompanyProfilePage.jsx. */}
-              {!showSkeleton && vendor ? (
-                <ProfilePicture
-                  contact={{ name: vendor.name, avatar: vendor.avatar || vendor.logo }}
-                  size="w-[56px] h-[56px]"
-                  textSize="text-xl"
-                />
-              ) : (
-                <div className="w-[56px] h-[56px] rounded-full bg-gray-200 animate-pulse flex-shrink-0" />
-              )}
-
-              <div className="flex flex-col gap-1 mt-0.5 min-w-0">
                 {!showSkeleton && vendor ? (
-                  <div className="flex items-center gap-3">
-                    <h1 className="text-[22px] font-bold text-gray-900 leading-none">
-                      {vendor.name}
-                    </h1>
-                    <span className="px-2 py-0.5 text-[10px] font-medium bg-green-50 text-green-700 rounded-full">
-                      Active
-                    </span>
-                  </div>
+                  <ProfilePicture
+                    contact={{ name: vendor.name, avatar: vendor.avatar || vendor.logo }}
+                    size="w-[56px] h-[56px]"
+                    textSize="text-xl"
+                  />
                 ) : (
-                  <Skeleton width={180} height={28} className="mb-1" />
+                  <div className="w-[56px] h-[56px] rounded-full bg-gray-200 animate-pulse flex-shrink-0" />
                 )}
 
-                {!showSkeleton && vendor ? (
-                  <div className="flex flex-col gap-1.5 mt-1">
-                    {/* Stacked contact block: one row per field (Company, Email, Phone, Address). */}
-                    {vendor.company && (
-                      <span className="text-[13px] text-blue-600 font-medium flex items-center gap-2">
-                        <Building2 size={14} /> {vendor.company}
+                <div className="flex flex-col gap-1 mt-0.5 min-w-0">
+                  {!showSkeleton && vendor ? (
+                    <div className="flex items-center gap-3">
+                      <h1 className="text-[22px] font-bold text-gray-900 leading-none">
+                        {vendor.name}
+                      </h1>
+                      <span className="px-2 py-0.5 text-[10px] font-medium bg-green-50 text-green-700 rounded-full">
+                        Active
                       </span>
-                    )}
-                    {vendor.email && (
-                      <span className="text-[12px] text-gray-600 flex items-center gap-2">
-                        <Mail size={14} className="text-gray-400 flex-shrink-0" />
-                        {vendor.email}
-                        <BadgeCheck size={14} className="text-green-500 flex-shrink-0" />
-                      </span>
-                    )}
-                    {vendor.phone && (
-                      <span className="text-[12px] text-gray-600 flex items-center gap-2">
-                        <Phone size={14} className="text-gray-400 flex-shrink-0" />
-                        {vendor.phone}
-                      </span>
-                    )}
-                    {vendor.address && formatAddress(vendor.address) && (
-                      <span className="text-[12px] text-gray-600 flex items-center gap-2">
-                        <MapPin size={14} className="text-gray-400 flex-shrink-0" />{" "}
-                        {formatAddress(vendor.address)}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2 mt-2">
-                    <Skeleton width={150} height={14} />
-                    <Skeleton width={200} height={14} />
-                    <Skeleton width={120} height={14} />
-                  </div>
-                )}
-              </div>
-            </div>
+                    </div>
+                  ) : (
+                    <Skeleton width={180} height={28} className="mb-1" />
+                  )}
 
-            {/* Action Toolbar — moved up next to vendor info now that the
-                gauge owns the whole right column. */}
-            <div className="flex items-start justify-center gap-2 sm:gap-3 flex-shrink-0">
-              <ActionIconButton icon={PhoneCall} colorClass="text-blue-500" title="Call" />
-              <ActionIconButton icon={Mail} colorClass="text-blue-500" title="Email" />
-              <ActionIconButton icon={Video} colorClass="text-purple-500" title="Video Meeting" />
-              <ActionIconButton icon={FilePlus} colorClass="text-orange-500" title="New Note" />
-              <ActionIconButton icon={BriefcaseBusiness} colorClass="text-orange-500" title="Deals" />
-              <ActionIconButton
-                icon={Linkedin}
-                colorClass="text-blue-600"
-                title="LinkedIn"
-                onClick={() => openSocialLink("linkedin")}
-              />
-
-              <div className="relative" ref={actionsMenuRef}>
-                <ActionIconButton
-                  icon={MoreVertical}
-                  colorClass="text-gray-500"
-                  title="More Actions"
-                  onClick={() => setShowActionsMenu((prev) => !prev)}
-                />
-                {showActionsMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-2">
-                    <button
-                      onClick={() => {
-                        handleEdit();
-                        setShowActionsMenu(false);
-                      }}
-                      className="flex items-center gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 text-left"
-                    >
-                      <Edit2 size={16} className="text-gray-400" />
-                      Edit Profile
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowKPI((prev) => !prev);
-                        setShowActionsMenu(false);
-                      }}
-                      className="flex items-center gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 text-left"
-                    >
-                      {showKPI ? (
-                        <EyeOff size={16} className="text-gray-400" />
-                      ) : (
-                        <Eye size={16} className="text-gray-400" />
+                  {!showSkeleton && vendor ? (
+                    <div className="flex flex-col gap-1.5 mt-1">
+                      {/* Stacked contact block: one row per field (Company, Email, Phone, Address). */}
+                      {vendor.company && (
+                        <span className="text-[13px] text-blue-600 font-medium flex items-center gap-2">
+                          <Building2 size={14} /> {vendor.company}
+                        </span>
                       )}
-                      {showKPI ? "Hide Financial Summary" : "Show Financial Summary"}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveTab("Payments");
-                        setShowActionsMenu(false);
-                      }}
-                      className="flex items-center gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 text-left"
-                    >
-                      <Eye size={16} className="text-gray-400" />
-                      View Payments
-                    </button>
-                  </div>
-                )}
+                      {vendor.email && (
+                        <span className="text-[12px] text-gray-600 flex items-center gap-2">
+                          <Mail size={14} className="text-gray-400 flex-shrink-0" />
+                          {vendor.email}
+                          <BadgeCheck size={14} className="text-green-500 flex-shrink-0" />
+                        </span>
+                      )}
+                      {vendor.phone && (
+                        <span className="text-[12px] text-gray-600 flex items-center gap-2">
+                          <Phone size={14} className="text-gray-400 flex-shrink-0" />
+                          {vendor.phone}
+                        </span>
+                      )}
+                      {vendor.address && formatAddress(vendor.address) && (
+                        <span className="text-[12px] text-gray-600 flex items-center gap-2">
+                          <MapPin size={14} className="text-gray-400 flex-shrink-0" />{" "}
+                          {formatAddress(vendor.address)}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2 mt-2">
+                      <Skeleton width={150} height={14} />
+                      <Skeleton width={200} height={14} />
+                      <Skeleton width={120} height={14} />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Toolbar — moved up next to vendor info now that the
+                gauge owns the whole right column. */}
+              <div className="flex items-start justify-center gap-2 sm:gap-3 flex-shrink-0">
+                <ActionIconButton icon={PhoneCall} colorClass="text-blue-500" title="Call" />
+                <ActionIconButton icon={Mail} colorClass="text-blue-500" title="Email" />
+                <ActionIconButton icon={Video} colorClass="text-purple-500" title="Video Meeting" />
+                <ActionIconButton icon={FilePlus} colorClass="text-orange-500" title="New Note" />
+                <ActionIconButton icon={BriefcaseBusiness} colorClass="text-orange-500" title="Deals" />
+                <ActionIconButton
+                  icon={Linkedin}
+                  colorClass="text-blue-600"
+                  title="LinkedIn"
+                  onClick={() => openSocialLink("linkedin")}
+                />
+
+                <div className="relative" ref={actionsMenuRef}>
+                  <ActionIconButton
+                    icon={MoreVertical}
+                    colorClass="text-gray-500"
+                    title="More Actions"
+                    onClick={() => setShowActionsMenu((prev) => !prev)}
+                  />
+                  {showActionsMenu && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-2">
+                      <button
+                        onClick={() => {
+                          handleEdit();
+                          setShowActionsMenu(false);
+                        }}
+                        className="flex items-center gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 text-left"
+                      >
+                        <Edit2 size={16} className="text-gray-400" />
+                        Edit Profile
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowKPI((prev) => !prev);
+                          setShowActionsMenu(false);
+                        }}
+                        className="flex items-center gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 text-left"
+                      >
+                        {showKPI ? (
+                          <EyeOff size={16} className="text-gray-400" />
+                        ) : (
+                          <Eye size={16} className="text-gray-400" />
+                        )}
+                        {showKPI ? "Hide Financial Summary" : "Show Financial Summary"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setActiveTab("Payments");
+                          setShowActionsMenu(false);
+                        }}
+                        className="flex items-center gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 text-left"
+                      >
+                        <Eye size={16} className="text-gray-400" />
+                        View Payments
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* ═══════════════════════════════════════════════════════════
+            {/* ═══════════════════════════════════════════════════════════
               SECTION 2 — FINANCIAL SUMMARY KPI STRIP
               Toggleable via the ⋮ menu's "Hide/Show Financial Summary".
              ═══════════════════════════════════════════════════════════ */}
-          {showKPI && (
-            <div className="px-5 py-3.5 mt-auto">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  {
-                    label: "Total Received",
-                    value: totalReceived,
-                    Icon: TotalReceivedIcon,
-                    badge: "High",
-                    badgeClass: "text-green-600 bg-green-50",
-                  },
-                  {
-                    label: "Total Paid",
-                    value: totalPaid,
-                    Icon: TotalPaidIcon,
-                    badge: "Medium",
-                    badgeClass: "text-orange-600 bg-orange-50",
-                  },
-                  {
-                    label: "Net Balance",
-                    value: netBalance,
-                    Icon: NetBalanceIcon,
-                    badge: netBalance >= 0 ? "Receivable" : "You Owe",
-                    badgeClass:
-                      netBalance >= 0
-                        ? "text-green-600 bg-green-50"
-                        : "text-red-600 bg-red-50",
-                  },
-                ].map((kpi) => (
-                  <div
-                    key={kpi.label}
-                    className="h-[56px] flex items-center gap-2.5 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
-                  >
-                    <kpi.Icon />
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-gray-500 truncate">{kpi.label}</p>
-                      {/* <div>, not <p>: Skeleton renders a <div>, which is invalid
-                          inside a <p> and triggers a DOM-nesting warning. */}
-                      <div className="text-sm font-semibold text-gray-900 truncate">
-                        {showSkeleton ? (
+            {showKPI && (
+              <div className="px-5 py-3.5 mt-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    {
+                      label: "Total Received",
+                      value: totalReceived,
+                      Icon: TotalReceivedIcon,
+                      badge: "High",
+                      badgeClass: "text-green-600 bg-green-50",
+                    },
+                    {
+                      label: "Total Paid",
+                      value: totalPaid,
+                      Icon: TotalPaidIcon,
+                      badge: "Medium",
+                      badgeClass: "text-orange-600 bg-orange-50",
+                    },
+                    {
+                      label: "Net Balance",
+                      value: netBalance,
+                      Icon: NetBalanceIcon,
+                      badge: netBalance >= 0 ? "Receivable" : "You Owe",
+                      badgeClass:
+                        netBalance >= 0
+                          ? "text-green-600 bg-green-50"
+                          : "text-red-600 bg-red-50",
+                    },
+                  ].map((kpi) =>
+                    /* Whole card skeletons while loading — not just the value.
+                       Showing the real "High"/"Medium"/"Receivable" badges
+                       against a fake value is misleading (it implies a
+                       computed assessment before any data has loaded). */
+                    showSkeleton ? (
+                      <div
+                        key={kpi.label}
+                        className="h-[56px] flex items-center gap-2.5 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
+                      >
+                        <Skeleton shape="rect" width={32} height={32} className="rounded-lg flex-shrink-0" />
+                        <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+                          <Skeleton width="60%" height={10} />
                           <Skeleton width={80} height={14} />
-                        ) : (
-                          fmtMoney(kpi.value)
-                        )}
+                        </div>
+                        <Skeleton width={56} height={18} className="rounded-full flex-shrink-0" />
                       </div>
-                    </div>
-                    <span
-                      className={`ml-auto flex-shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${kpi.badgeClass}`}
-                    >
-                      {kpi.badge}
-                    </span>
-                  </div>
-                ))}
+                    ) : (
+                      <div
+                        key={kpi.label}
+                        className="h-[56px] flex items-center gap-2.5 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
+                      >
+                        <kpi.Icon />
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-gray-500 truncate">{kpi.label}</p>
+                          <p className="text-sm font-semibold text-gray-900 truncate">
+                            {fmtMoney(kpi.value)}
+                          </p>
+                        </div>
+                        <span
+                          className={`ml-auto flex-shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${kpi.badgeClass}`}
+                        >
+                          {kpi.badge}
+                        </span>
+                      </div>
+                    ),
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* RIGHT COLUMN: Relationship Health Gauge — spans the full card
+          {/* RIGHT COLUMN: Relationship Health Gauge — spans the full card
             height (a single grid item stretches to match the left
             column's height by default) and gets its own tinted
             background so it reads as the highlighted focal point. */}
-        <div className="hidden sm:flex flex-col items-center justify-center bg-gradient-to-b from-[#EAF4FF] to-[#F6FAFF] py-6 px-6">
-          {showSkeleton ? (
-            <div className="flex flex-col items-center gap-3">
-              <Skeleton width={130} height={13} />
-              <Skeleton width={152} height={76} shape="rect" className="rounded-t-full" />
-            </div>
-          ) : (
-            <RelationshipGauge score={82} label="Excellent" radius={76} stroke={16} />
-          )}
+          <div className="hidden sm:flex flex-col items-center justify-center bg-gradient-to-b from-[#EAF4FF] to-[#F6FAFF] py-6 px-6">
+            {showSkeleton ? (
+              <div className="flex flex-col items-center gap-3">
+                <Skeleton width={130} height={13} />
+                <Skeleton width={152} height={76} shape="rect" className="rounded-t-full" />
+              </div>
+            ) : (
+              <RelationshipGauge score={82} label="Excellent" radius={76} stroke={16} />
+            )}
+          </div>
         </div>
-      </div>
       </div>
 
       <div className="mx-auto px-6 sm:px-8 mt-3">
@@ -787,11 +811,10 @@ const VendorDetailsPageNew = () => {
                 key={tab}
                 ref={(el) => (tabRefs.current[tab] = el)}
                 onClick={() => setActiveTab(tab)}
-                className={`relative z-10 flex items-center justify-center h-9 px-3 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors ${
-                  activeTab === tab
+                className={`relative z-10 flex items-center justify-center h-9 px-3 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors ${activeTab === tab
                     ? "text-[#0085FF]"
                     : "text-gray-600 hover:text-gray-900"
-                }`}
+                  }`}
               >
                 {tab}
               </button>
@@ -804,56 +827,73 @@ const VendorDetailsPageNew = () => {
             back to the table column so its right-most columns (Amount /
             Actions) fit without horizontal scrolling. */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-3">
-          
+
           {/* ── Left Column: Active Tab Content ── */}
           <div className="min-w-0 flex flex-col">
-            
+
 
             <div className="min-h-[400px]">
-            {/* One shared, edge-to-edge table skeleton for every tab (built from
+              {/* One shared, edge-to-edge table skeleton for every tab (built from
                 the common TableSkeletonRows) instead of a different hand-rolled
                 placeholder per tab, so all four resolve identically off the
                 single useMinDelay(300) flag. The tab bar itself is never
                 skeletoned — it's navigation, not data. */}
-            {showSkeleton ? (
-              <TabTableSkeleton />
-            ) : (
-              <>
-                {activeTab === "Payments" && (
-                  <PaymentsTable payments={payments} vendor={vendor} />
-                )}
-                {activeTab === "Notes" && <NoteSection />}
-                {activeTab === "Tasks" && <VendorTasksTable vendorId={id} />}
-                {activeTab === "Meetings" && <VendorMeetingsTable vendorId={id} />}
-                {activeTab === "Calendar" && <VendorCalendar vendorId={id} />}
-              </>
-            )}
+              {showSkeleton ? (
+                <TabTableSkeleton />
+              ) : (
+                <>
+                  {activeTab === "Payments" && (
+                    <PaymentsTable payments={payments} vendor={vendor} />
+                  )}
+                  {activeTab === "Notes" && <NoteSection />}
+                  {activeTab === "Tasks" && <VendorTasksTable vendorId={id} />}
+                  {activeTab === "Meetings" && <VendorMeetingsTable vendorId={id} />}
+                  {activeTab === "Calendar" && <VendorCalendar vendorId={id} />}
+                </>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* ── Right Column: Activity Timeline Sidebar ── */}
+          {/* ── Right Column: Activity Timeline Sidebar ── */}
           <div className="hidden lg:block">
             <div className="bg-white border border-gray-200 rounded-xl p-3 sticky top-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                Activity Timeline
-              </h3>
+              {showSkeleton ? (
+                <Skeleton width={110} height={14} className="mb-5" />
+              ) : (
+                <h3 className="text-sm font-semibold text-gray-900 mb-5">
+                  Activity Timeline
+                </h3>
+              )}
 
-              {/* Filter Tabs */}
-              <div className="flex items-center gap-1 mb-4 flex-wrap">
-                {activityFeedTabs.map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActivityFeedFilter(tab)}
-                    className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
-                      activityFeedFilter === tab
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
+              {/* Filter Tabs — single line, horizontally scrollable (swipeable
+                  on touch) instead of wrapping to a second line, since 5 tabs
+                  don't fit the sidebar's width on one row. */}
+              {showSkeleton ? (
+                // overflow-hidden + widths sized to the 240px sidebar card
+                // (216px after its p-3 padding) so the placeholder pills
+                // never spill past the card's border like the real,
+                // horizontally-scrollable chip row is allowed to.
+                <div className="flex items-center gap-1 mb-4 overflow-hidden">
+                  {[28, 46, 36, 46, 36].map((w, i) => (
+                    <Skeleton key={i} width={w} height={20} className="rounded-full flex-shrink-0" />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 mb-4 overflow-x-auto whitespace-nowrap [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+                  {activityFeedTabs.map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActivityFeedFilter(tab)}
+                      className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${activityFeedFilter === tab
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        }`}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Feed Items */}
               {/* ~4-5 rows visible, the rest scrolls. Each feed row is roughly

@@ -13,6 +13,8 @@ import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { useTopLoadingSignal } from "../common/TopLoadingBar";
 import toast from "react-hot-toast";
 import HighlightText from "../common/HighlightText";
+import { useRef } from "react";
+import { exportToCSV } from "../../utils/exportToCSV";
 
 /* Columns offered in the filter panel. `options` seeds the dropdown with the
    schema's full enum so a value is still filterable when no row currently uses
@@ -61,6 +63,7 @@ const VendorTasksTable = ({ vendorId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
   const [users, setUsers] = useState([]);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -78,6 +81,8 @@ const VendorTasksTable = ({ vendorId }) => {
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [pinnedColumns, setPinnedColumns] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  const filterButtonRef = useRef(null);
 
   const handleColumnReorder = (draggedKey, targetKey) => {
     setColumnOrder((prev) => {
@@ -232,6 +237,23 @@ const VendorTasksTable = ({ vendorId }) => {
   });
   const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedItems.length);
 
+  const handleExportSelected = () => {
+    const dataToExport = tasks
+      .filter((t) => selectedItems.includes(t._id))
+      .map((t) => ({
+        "Title": t.title || "",
+        "Description": stripHtml(t.description || ""),
+        "Status": t.status || "",
+        "Priority": t.priority || "",
+        "Due Date": t.dueDate ? new Date(t.dueDate).toLocaleDateString() : "",
+        "Assigned To": getTaskFieldValue(t, "assignedTo"),
+      }));
+    if (dataToExport.length === 0) return;
+    const headers = Object.keys(dataToExport[0]).join(",");
+    const rows = dataToExport.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    exportToCSV([headers, ...rows], `tasks_export_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
   const handleBulkDelete = async () => {
     if (!selectedItems.length) return;
     if (!window.confirm(`Delete ${selectedItems.length} task(s)? This cannot be undone.`)) return;
@@ -288,23 +310,34 @@ const VendorTasksTable = ({ vendorId }) => {
     setSelectedTask(null);
   };
 
+  // Wired to TaskDetailsModal's Edit button (onEdit) — previously unpassed,
+  // so that button silently did nothing. Closes the read-only popup and
+  // opens VendorTaskForm against the same task, in edit mode.
+  const handleEditTask = (task) => {
+    handleCloseTaskModal();
+    setEditingTask(task);
+    setShowTaskForm(true);
+  };
+
   const getRelatedToName = () => vendorName || "N/A";
 
   const baseColumns = useMemo(
     () => [
       {
         id: "selection",
-        size: 44,
+        size: 64,
         enableResizing: false,
         header: () => (
           <div className="flex justify-center items-center w-full">
             <input
               type="checkbox"
               checked={
-                paginatedTasks.length > 0 &&
-                paginatedTasks.every((t) => selectedItems.includes(t._id))
+                selectedItems.length > 0 &&
+                selectedItems.length === filteredTasks.length
               }
-              onChange={(e) => (e.target.checked ? selectAll(paginatedTasks) : clearSelection())}
+              onChange={(e) =>
+                e.target.checked ? selectAll(filteredTasks) : clearSelection()
+              }
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
             />
           </div>
@@ -493,6 +526,8 @@ const VendorTasksTable = ({ vendorId }) => {
           isClosing={stripClosing}
           onSelectAll={() => selectAll(filteredTasks)}
           onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onCancel={clearSelection}
           onDelete={handleBulkDelete}
           isDeleting={isDeleting}
         />
@@ -510,6 +545,7 @@ const VendorTasksTable = ({ vendorId }) => {
             />
           </div>
           <button
+            ref={filterButtonRef}
             onClick={() => setShowFilterPanel(true)}
             className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
             style={{
@@ -527,7 +563,10 @@ const VendorTasksTable = ({ vendorId }) => {
           </button>
           <button
             type="button"
-            onClick={() => setShowTaskForm(true)}
+            onClick={() => {
+              setEditingTask(null);
+              setShowTaskForm(true);
+            }}
             className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
             style={{ width: "44px", height: "44px", borderColor: "rgba(31, 41, 55, 0.1)" }}
           >
@@ -606,17 +645,28 @@ const VendorTasksTable = ({ vendorId }) => {
         getFieldValue={getTaskFieldValue}
         selected={selectedFilters}
         onApply={setSelectedFilters}
+        triggerRef={filterButtonRef}
       />
 
       {showTaskForm && (
         <VendorTaskForm
           open={showTaskForm}
-          mode="create"
+          mode={editingTask ? "view" : "create"}
+          taskData={editingTask}
+          startInEditMode={!!editingTask}
           vendorId={vendorId}
           users={users}
           onSave={handleTaskSave}
+          onUpdate={async () => {
+            await refetchTasks();
+            setShowTaskForm(false);
+            setEditingTask(null);
+          }}
           onDelete={handleTaskDelete}
-          onClose={() => setShowTaskForm(false)}
+          onClose={() => {
+            setShowTaskForm(false);
+            setEditingTask(null);
+          }}
         />
       )}
 
@@ -626,6 +676,7 @@ const VendorTasksTable = ({ vendorId }) => {
           taskData={selectedTask}
           users={users}
           onDelete={handleTaskDelete}
+          onEdit={handleEditTask}
           onClose={handleCloseTaskModal}
           getRelatedToName={getRelatedToName}
         />

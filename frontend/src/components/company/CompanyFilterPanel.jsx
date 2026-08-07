@@ -79,6 +79,7 @@ export default function CompanyFilterPanel({
   getFieldValue,
   selected = {},
   onApply,
+  triggerRef,
 }) {
   const [draft, setDraft] = useState(selected);
 
@@ -109,6 +110,22 @@ export default function CompanyFilterPanel({
     });
     return map;
   }, [columns, data, getFieldValue]);
+
+  const [positionStyle, setPositionStyle] = useState({});
+
+  useEffect(() => {
+    if (isOpen && triggerRef?.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      // Position the panel below the button and aligned to its right edge
+      setPositionStyle({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      });
+    } else {
+      // Fallback position if no ref is provided (the original layout)
+      setPositionStyle({ top: 220, right: window.innerWidth >= 1024 ? 80 : window.innerWidth >= 768 ? 60 : 24 });
+    }
+  }, [isOpen, triggerRef]);
 
   if (!isOpen) return null;
 
@@ -144,7 +161,8 @@ export default function CompanyFilterPanel({
       onClick={onClose}
     >
       <div
-        className="absolute top-[220px] right-[24px] md:right-[60px] lg:right-[80px] bg-white rounded-xl shadow-[0px_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 w-full max-w-[320px] flex flex-col animate-in fade-in zoom-in-95 duration-200"
+        className="absolute bg-white rounded-xl shadow-[0px_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 w-full max-w-[320px] flex flex-col animate-in fade-in zoom-in-95 duration-200"
+        style={positionStyle}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
