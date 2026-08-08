@@ -46,7 +46,7 @@ exports.getSignatures = async (req, res) => {
 
 exports.saveSignature = async (req, res) => {
   try {
-    const { id, name, type, dataUrl, isDefault } = req.body;
+    const { id, name, type, dataUrl, isDefault, typedText, fontId, penColor } = req.body;
     if (!name || !type || !dataUrl) {
       return res.status(400).json({ error: 'Name, type, and signature image/data are required' });
     }
@@ -56,25 +56,52 @@ exports.saveSignature = async (req, res) => {
       docSettings = new DocumentSettings({ organization: req.user.organization, signatures: [] });
     }
 
-    const newSig = {
-      id: id || Date.now().toString(),
-      name,
-      type,
-      dataUrl,
-      isDefault: Boolean(isDefault) || docSettings.signatures.length === 0,
-      createdAt: new Date(),
-    };
+    const existingIndex = id ? docSettings.signatures.findIndex((s) => s.id === id) : -1;
+    let sigResult = null;
 
-    if (newSig.isDefault) {
-      docSettings.signatures.forEach((sig) => {
-        sig.isDefault = false;
-      });
+    if (existingIndex > -1) {
+      // Update existing signature
+      docSettings.signatures[existingIndex].name = name;
+      docSettings.signatures[existingIndex].type = type;
+      docSettings.signatures[existingIndex].dataUrl = dataUrl;
+      docSettings.signatures[existingIndex].typedText = typedText || '';
+      docSettings.signatures[existingIndex].fontId = fontId || '';
+      docSettings.signatures[existingIndex].penColor = penColor || '';
+
+      if (isDefault) {
+        docSettings.signatures.forEach((sig) => {
+          sig.isDefault = false;
+        });
+        docSettings.signatures[existingIndex].isDefault = true;
+      }
+      sigResult = docSettings.signatures[existingIndex];
+    } else {
+      // Add new signature
+      const newSig = {
+        id: id || Date.now().toString(),
+        name,
+        type,
+        dataUrl,
+        typedText: typedText || '',
+        fontId: fontId || '',
+        penColor: penColor || '',
+        isDefault: Boolean(isDefault) || docSettings.signatures.length === 0,
+        createdAt: new Date(),
+      };
+
+      if (newSig.isDefault) {
+        docSettings.signatures.forEach((sig) => {
+          sig.isDefault = false;
+        });
+      }
+
+      docSettings.signatures.push(newSig);
+      sigResult = newSig;
     }
 
-    docSettings.signatures.push(newSig);
     await docSettings.save();
 
-    res.status(201).json({ message: 'Signature saved successfully', signature: newSig, signatures: docSettings.signatures });
+    res.status(200).json({ message: 'Signature saved successfully', signature: sigResult, signatures: docSettings.signatures });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

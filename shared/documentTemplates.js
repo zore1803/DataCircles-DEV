@@ -811,7 +811,7 @@ export function buildDocumentHtml(doc, options = {}) {
     <div class="dc-sign">
       <div>For ${esc(org.companyName || "Your Company")}</div>
       <div>
-        ${org.signatureUrl ? `<img class="dc-sign-img" src="${esc(org.signatureUrl)}" />` : `<div style="height:40px;"></div>`}
+        ${(doc.signature || org.signatureUrl) ? `<img class="dc-sign-img" src="${esc(doc.signature || org.signatureUrl)}" />` : `<div style="height:40px;"></div>`}
         <div class="dc-sign-line">Authorized Signatory</div>
       </div>
     </div>
