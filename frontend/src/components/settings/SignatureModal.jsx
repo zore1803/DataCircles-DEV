@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import SignatureCanvas from "react-signature-canvas";
 import { X, Upload, Edit3, Type, Check, RefreshCw, Palette, Plus, Eraser, PenTool } from "lucide-react";
 import toast from "react-hot-toast";
@@ -40,6 +40,7 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
   const sigCanvasRef = useRef(null);
   const [isEraser, setIsEraser] = useState(false);
   const previousColorRef = useRef(DEFAULT_SIGNATURE_COLORS[0].hex);
+  const loadedInitialRef = useRef(false);
 
   // Upload state
   const [uploadedImage, setUploadedImage] = useState(null);
@@ -48,14 +49,18 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
   const [typedText, setTypedText] = useState("");
   const [selectedFont, setSelectedFont] = useState(FONT_FAMILIES[0]);
 
-  // Load initial data when editing or initializing the modal
+  // Reset form and initialize state on modal open
   useEffect(() => {
     if (isOpen) {
+      loadedInitialRef.current = false;
       if (initialData) {
         setSigName(initialData.name || "");
         setActiveTab(initialData.type || "upload");
         setIsDefault(Boolean(initialData.isDefault));
-        if (initialData.penColor) setPenColor(initialData.penColor);
+        if (initialData.penColor) {
+          setPenColor(initialData.penColor);
+          previousColorRef.current = initialData.penColor;
+        }
         if (initialData.type === "upload") {
           setUploadedImage(initialData.dataUrl || null);
         } else if (initialData.type === "type") {
@@ -63,14 +68,6 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
           if (initialData.fontId) {
             const fontObj = FONT_FAMILIES.find((f) => f.id === initialData.fontId);
             if (fontObj) setSelectedFont(fontObj);
-          }
-        } else if (initialData.type === "draw") {
-          if (sigCanvasRef.current) {
-            try {
-              sigCanvasRef.current.fromDataURL(initialData.dataUrl);
-            } catch (err) {
-              console.error("Failed to load saved signature onto canvas", err);
-            }
           }
         }
       } else {
@@ -82,67 +79,157 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
         setIsDefault(false);
         setIsEraser(false);
         setPenColor(DEFAULT_SIGNATURE_COLORS[0].hex);
+        previousColorRef.current = DEFAULT_SIGNATURE_COLORS[0].hex;
       }
     }
-  }, [isOpen, initialData, activeTab]);
+  }, [isOpen, initialData]);
+
+  // Resize canvas so internal resolution matches display size (prevents offset drawing)
+  const resizeCanvas = useCallback(() => {
+    if (!sigCanvasRef.current) return;
+    try {
+      const canvas = sigCanvasRef.current.getCanvas();
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const pad = sigCanvasRef.current.getSignaturePad();
+      const existingData = pad && !pad.isEmpty() ? pad.toData() : null;
+
+      canvas.width = rect.width * ratio;
+      canvas.height = rect.height * ratio;
+
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.scale(ratio, ratio);
+      }
+
+      if (pad) {
+        pad.clear();
+        if (existingData) {
+          pad.fromData(existingData);
+        }
+      }
+    } catch (err) {
+      console.error("Canvas resize error:", err);
+    }
+  }, []);
+
+  // Sync canvas size on mount or activeTab === "draw"
+  useEffect(() => {
+    if (isOpen && activeTab === "draw") {
+      const timer = setTimeout(() => {
+        resizeCanvas();
+      }, 60);
+      window.addEventListener("resize", resizeCanvas);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener("resize", resizeCanvas);
+      };
+    }
+  }, [isOpen, activeTab, resizeCanvas]);
+
+  // Load saved draw signature onto canvas if editing
+  useEffect(() => {
+    if (isOpen && activeTab === "draw" && initialData?.type === "draw" && initialData?.dataUrl && !loadedInitialRef.current) {
+      const timer = setTimeout(() => {
+        if (sigCanvasRef.current) {
+          try {
+            sigCanvasRef.current.fromDataURL(initialData.dataUrl);
+            loadedInitialRef.current = true;
+          } catch (err) {
+            console.error("Failed to load saved signature onto canvas", err);
+          }
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, activeTab, initialData]);
+
+  // Generate cursor data URI based on current tool mode and selected ink color
+  const getCustomCursor = useCallback(() => {
+    if (isEraser) {
+      // Eraser cursor icon with hotspot at bottom-left wiping tip (3, 17)
+      const eraserSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" fill="#f43f5e"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>`;
+      return `url("data:image/svg+xml,${encodeURIComponent(eraserSvg)}") 3 17, auto`;
+    }
+    // Plus "+" cursor in the selected pen color with white contrast outline
+    const plusSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><line x1="12" y1="3" x2="12" y2="21" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/><line x1="3" y1="12" x2="21" y2="12" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/><line x1="12" y1="4" x2="12" y2="20" stroke="${penColor}" stroke-width="2" stroke-linecap="round"/><line x1="4" y1="12" x2="20" y2="12" stroke="${penColor}" stroke-width="2" stroke-linecap="round"/></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(plusSvg)}") 12 12, crosshair`;
+  }, [isEraser, penColor]);
+
+  // Dynamically update canvas cursor on state changes
+  useEffect(() => {
+    if (activeTab === "draw" && sigCanvasRef.current) {
+      try {
+        const canvas = sigCanvasRef.current.getCanvas();
+        if (canvas) {
+          canvas.style.cursor = getCustomCursor();
+        }
+      } catch (err) {
+        console.error("Failed to update canvas cursor", err);
+      }
+    }
+  }, [activeTab, getCustomCursor]);
+
+  // Handle stroke begin - configures destination-out for eraser or source-over for pen
+  const handleBegin = () => {
+    try {
+      const pad = sigCanvasRef.current?.getSignaturePad();
+      if (!pad) return;
+      const ctx = pad._ctx || sigCanvasRef.current?.getCanvas()?.getContext("2d");
+      if (!ctx) return;
+
+      if (isEraser) {
+        ctx.globalCompositeOperation = "destination-out";
+      } else {
+        ctx.globalCompositeOperation = "source-over";
+        pad.penColor = penColor;
+      }
+    } catch (err) {
+      console.error("Error setting canvas mode on stroke begin", err);
+    }
+  };
 
   // Update pen color on canvas directly without wiping canvas
   const handleColorChange = (hex) => {
     setIsEraser(false);
     setPenColor(hex);
     previousColorRef.current = hex;
-    if (sigCanvasRef.current) {
-      try {
-        const pad = sigCanvasRef.current.getSignaturePad();
-        if (pad) {
-          pad.penColor = hex;
-          pad.minWidth = 0.5;
-          pad.maxWidth = 2.5;
-        }
-      } catch (err) {
-        console.error("Could not set penColor dynamically", err);
+    try {
+      const pad = sigCanvasRef.current?.getSignaturePad();
+      if (pad) {
+        const ctx = pad._ctx || sigCanvasRef.current?.getCanvas()?.getContext("2d");
+        if (ctx) ctx.globalCompositeOperation = "source-over";
+        pad.penColor = hex;
       }
+    } catch (err) {
+      console.error("Error updating pad color", err);
     }
   };
 
   // Toggle Eraser tool on drawing pad
   const toggleEraserMode = () => {
-    if (isEraser) {
-      // Switch back to Pen mode
-      setIsEraser(false);
-      const restoreColor = previousColorRef.current || "#0f172a";
-      setPenColor(restoreColor);
-      if (sigCanvasRef.current) {
-        try {
-          const pad = sigCanvasRef.current.getSignaturePad();
-          if (pad) {
-            pad.penColor = restoreColor;
-            pad.minWidth = 0.5;
-            pad.maxWidth = 2.5;
-          }
-        } catch (err) {
-          console.error(err);
-        }
+    try {
+      const pad = sigCanvasRef.current?.getSignaturePad();
+      if (!pad) return;
+      const ctx = pad._ctx || sigCanvasRef.current?.getCanvas()?.getContext("2d");
+
+      if (isEraser) {
+        // Switch back to Pen mode
+        setIsEraser(false);
+        const restoreColor = previousColorRef.current || DEFAULT_SIGNATURE_COLORS[0].hex;
+        if (ctx) ctx.globalCompositeOperation = "source-over";
+        pad.penColor = restoreColor;
+      } else {
+        // Switch to Eraser mode
+        setIsEraser(true);
+        if (ctx) ctx.globalCompositeOperation = "destination-out";
       }
-    } else {
-      // Switch to Eraser mode
-      setIsEraser(true);
-      if (penColor !== "#ffffff") {
-        previousColorRef.current = penColor;
-      }
-      setPenColor("#ffffff");
-      if (sigCanvasRef.current) {
-        try {
-          const pad = sigCanvasRef.current.getSignaturePad();
-          if (pad) {
-            pad.penColor = "#ffffff";
-            pad.minWidth = 8;
-            pad.maxWidth = 16;
-          }
-        } catch (err) {
-          console.error(err);
-        }
-      }
+    } catch (err) {
+      console.error("Error toggling eraser mode", err);
     }
   };
 
@@ -158,7 +245,6 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
       return;
     }
 
-    // Check if color already exists
     if (!colorList.some((c) => c.hex.toLowerCase() === formattedHex.toLowerCase())) {
       setColorList((prev) => [...prev, { name: formattedHex, hex: formattedHex }]);
     }
@@ -474,7 +560,7 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
                     }`}
                   >
                     {isEraser ? <Eraser className="h-3.5 w-3.5" /> : <PenTool className="h-3.5 w-3.5" />}
-                    {isEraser ? "Eraser Active" : "Eraser"}
+                    {isEraser ? "Draw" : "Eraser"}
                   </button>
 
                   <button
@@ -488,10 +574,12 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
 
                 <SignatureCanvas
                   ref={sigCanvasRef}
-                  canvasProps={{
-                    className: "w-full h-48 rounded-lg bg-white cursor-crosshair shadow-sm border border-slate-200",
-                  }}
                   penColor={penColor}
+                  onBegin={handleBegin}
+                  canvasProps={{
+                    className: "w-full h-48 rounded-lg bg-white border border-slate-200 touch-none",
+                    style: { cursor: getCustomCursor() },
+                  }}
                 />
                 <p className="mt-2 text-center text-xs text-gray-500 font-medium">
                   {isEraser ? "Eraser tool selected — drag over lines to erase" : "Draw your signature using mouse or touch"}
