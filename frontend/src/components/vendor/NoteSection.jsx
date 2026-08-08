@@ -919,16 +919,6 @@ const NoteSection = () => {
     <div className="h-full mt-0">
       <AppToaster />
 
-      <div className="relative mb-4">
-        <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
-        <input
-          type="text"
-          placeholder="Search notes..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-11 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-400"
-        />
-      ) : (
         <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
             <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
@@ -995,7 +985,6 @@ const NoteSection = () => {
             <Plus size={20} className="text-gray-700" />
           </button>
         </div>
-      )}
 
       {viewMode === "grid" ? (
         initialLoading ? (
