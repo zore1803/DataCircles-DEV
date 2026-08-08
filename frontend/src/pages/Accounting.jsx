@@ -63,7 +63,6 @@ import useMinDelay from "../hooks/useMinDelay";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
-import HighlightText from "../components/common/HighlightText";
 
 import SearchIcon from "../components/common/SearchIcon";
 const SectionHeader = ({ number, title }) => (
