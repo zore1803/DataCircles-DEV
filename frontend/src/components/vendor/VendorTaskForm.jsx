@@ -98,6 +98,11 @@ const VendorTaskForm = ({
   onDelete,
   onClose,
   onUpdate,
+  // Set true when the caller already showed the read-only task and the user
+  // explicitly clicked Edit there (e.g. TaskDetailsModal's Edit button) — skips
+  // straight to the editable form instead of re-showing a second read-only
+  // "Task Details" screen the user would have to click Edit on AGAIN.
+  startInEditMode = false,
 }) => {
   const [form, setForm] = useState(initialState);
   const [loading, setLoading] = useState(false);
@@ -113,7 +118,7 @@ const VendorTaskForm = ({
   const [errors, setErrors] = useState({});
   const [showUserSelector, setShowUserSelector] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(mode === "create");
+  const [isEditMode, setIsEditMode] = useState(mode === "create" || startInEditMode);
 
   useEffect(() => {
     if (open) {
@@ -138,13 +143,13 @@ const VendorTaskForm = ({
         });
       }
       setErrors({});
-      setIsEditMode(mode === "create");
+      setIsEditMode(mode === "create" || startInEditMode);
     } else {
       setIsSliding(false);
       setTimeout(() => setShouldRender(false), 300);
       setShowUserSelector(false);
     }
-  }, [open, mode, taskData, calendarDate]);
+  }, [open, mode, taskData, calendarDate, startInEditMode]);
 
   const handleChange = (key, val) => {
     setForm((f) => ({ ...f, [key]: val }));
@@ -274,8 +279,8 @@ const VendorTaskForm = ({
         onClick={onClose}
       />
       <div
- className={`fixed inset-y-0 right-0 dc-panel-w z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out ${
-          isSliding ? "translate-x-0" : "translate-x-full"
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl overflow-hidden transform transition-transform duration-300 ease-out flex flex-col ${
+          isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
       >
         <div className="h-full flex flex-col">
@@ -308,9 +313,9 @@ const VendorTaskForm = ({
               <X className="w-5 h-5" />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {isEditMode ? (
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form id="vendor-task-form" onSubmit={handleSubmit} className="space-y-6">
                 <FormField label="Task Title" required error={errors.title}>
                   <input
                     type="text"
@@ -466,36 +471,6 @@ const VendorTaskForm = ({
                     )}
                   </div>
                 </FormField>
-                <div className="flex gap-3 pt-6 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        {isEditMode && mode === "view"
-                          ? "Updating..."
-                          : "Saving..."}
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        {isEditMode && mode === "view"
-                          ? "Update Task"
-                          : "Create Task"}
-                      </>
-                    )}
-                  </button>
-                </div>
               </form>
             ) : (
               <div className="space-y-8">
@@ -587,40 +562,77 @@ const VendorTaskForm = ({
                     </div>
                   </div>
                 </div>
-                {onDelete && (
-                  <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
-                    <button
-                      onClick={() => setIsEditMode(true)}
-                      className="flex items-center gap-2 px-6 py-3 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl font-semibold transition-colors"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                      Edit Task
-                    </button>
-                    <button
-                      onClick={handleDelete}
-                      disabled={isDeleting}
-                      className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-colors border
-                        ${
-                          isDeleting
-                            ? "bg-red-100 text-red-400 border-red-100 cursor-not-allowed"
-                            : "text-red-700 bg-red-50 hover:bg-red-100 border-red-200"
-                        }`}
-                    >
-                      {isDeleting ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Deleting...
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 className="w-4 h-4" />
-                          Delete Task
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
               </div>
+            )}
+          </div>
+
+          <div className="p-6 border-t border-gray-200 bg-white flex gap-3 flex-shrink-0 mt-auto">
+            {!isEditMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditMode(true)}
+                  className="flex-1 px-6 py-3 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  Edit
+                </button>
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition-colors border ${
+                      isDeleting
+                        ? "bg-red-100 text-red-400 border-red-100 cursor-not-allowed"
+                        : "text-red-700 bg-red-50 hover:bg-red-100 border-red-200"
+                    }`}
+                  >
+                    {isDeleting ? (
+                      <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                    Delete
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="vendor-task-form"
+                  disabled={loading}
+                  className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                    loading
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl"
+                  }`}
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      {isEditMode && mode === "view" ? "Update Task" : "Save Task"}
+                    </>
+                  )}
+                </button>
+              </>
             )}
           </div>
         </div>

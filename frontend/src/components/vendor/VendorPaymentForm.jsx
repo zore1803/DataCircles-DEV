@@ -5,6 +5,14 @@ import SearchableDropdown from "../contact/SearchableDropdown";
 import QuickVendorForm from "./QuickVendorForm";
 import toast from "react-hot-toast";
 
+// Module-level so the fallback keeps the SAME reference across renders. As an
+// inline `vendors = []` default it was re-created on every render, and the
+// `[vendors]` effect below (which compares by reference) then fired on every
+// render — setLocalVendors → re-render → new [] → fire again, i.e. "Maximum
+// update depth exceeded". Only callers that omit the prop hit this, which is
+// why it surfaced from PaymentsTable and not from Vendors/PaymentPage.
+const EMPTY_VENDORS = [];
+
 const VendorPaymentForm = ({
   open,
   vendorId,
@@ -14,7 +22,7 @@ const VendorPaymentForm = ({
   paymentToEdit = null,
   onUpdateSuccess,
   onDeleteSuccess,
-  vendors = [],
+  vendors = EMPTY_VENDORS,
 }) => {
   const initialState = {
     vendorId: "",
@@ -22,6 +30,7 @@ const VendorPaymentForm = ({
     paymentDate: new Date().toISOString().split("T")[0],
     paymentType: "Card",
     bank: "",
+    reference: "",
     notes: "",
     direction: "",
   };
@@ -53,6 +62,7 @@ const VendorPaymentForm = ({
             : new Date().toISOString().split("T")[0],
           paymentType: paymentToEdit.paymentType || "Card",
           bank: paymentToEdit.bank || "",
+          reference: paymentToEdit.reference || "",
           notes: paymentToEdit.notes || "",
           direction: paymentToEdit.direction || direction || "",
         });
@@ -91,6 +101,7 @@ const VendorPaymentForm = ({
         paymentDate: form.paymentDate,
         paymentType: form.paymentType,
         bank: form.bank,
+        reference: form.reference,
         notes: form.notes,
         direction: form.direction,
       };
@@ -126,29 +137,39 @@ const VendorPaymentForm = ({
   if (!shouldRender && !open) return null;
 
   return (
-    <div
-      className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
-      onClick={onClose}
-    >
+    <>
+      {/* Backdrop */}
       <div
-        className={`bg-white w-full max-w-lg rounded-xl shadow-2xl flex flex-col transition-transform duration-300 ${open ? "scale-100" : "scale-95"}`}
-        onClick={(e) => e.stopPropagation()}
+        className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
+        onClick={onClose}
+      />
+
+      {/* Slide-out Panel */}
+      <div
+        className={`
+          fixed dc-panel-card z-[10001]
+          dc-panel-w bg-white shadow-2xl flex flex-col overflow-hidden
+          transform transition-transform duration-300 ease-in-out font-inter
+          ${open ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
+        `}
       >
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="text-xl font-bold text-gray-800">
-            {isEditMode ? "Edit Payment" : "Add Incoming Payment"}
-          </h3>
-          {/* Note: User wanted "Add Incoming Payment" specifically in the image, but logic handles both. 
-              The header likely dynamic based on direction, but sticking to the image request: "Add Incoming Payment" as example logic.
-              Actually, let's keep it dynamic or generic "Add Payment" if type not selected? 
-              Ref image says "Add Incoming Payment" inside the modal. The user prompt says "make this" referring to image 3.
-              Image 3 shows "Add Incoming Payment". I will keep logic to show specific text. 
-          */}
+        <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0 bg-white">
+          <h2 className="text-[24px] font-bold text-[#111216]">
+            {isEditMode ? "Edit Payment" : form.direction === "IN" ? "Add Incoming Payment" : form.direction === "OUT" ? "Add Outgoing Payment" : "Add Payment"}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <div className="space-y-6">
           {/* Vendor Selection - Only if not pre-selected */}
           {!vendorId && (
             <div>
@@ -240,6 +261,19 @@ const VendorPaymentForm = ({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
+              Reference
+            </label>
+            <input
+              type="text"
+              value={form.reference}
+              onChange={(e) => handleChange("reference", e.target.value)}
+              placeholder="UTR / Cheque no. / Txn ID"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Notes <span className="text-red-500">*</span>
             </label>
             <textarea
@@ -250,26 +284,28 @@ const VendorPaymentForm = ({
               rows={3}
             />
           </div>
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-between gap-4 bg-gray-50/50 rounded-b-xl">
+        <div className="p-8 pt-6 border-t border-[#F2F2F7] bg-white flex justify-end gap-3 flex-shrink-0 mt-auto">
           <button
+            type="button"
             onClick={onClose}
-            className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-white bg-white shadow-sm"
+            className="px-6 py-2 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="flex-1 px-4 py-2.5 bg-blue-600 rounded-lg text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-70 shadow-sm"
+            className="px-6 py-2 bg-[#2D31A6] text-white rounded-xl text-sm font-semibold hover:bg-opacity-90 disabled:opacity-50 transition-colors"
           >
-            {loading ? "Adding..." : "Add New Payment"}
+            {loading ? "Saving..." : isEditMode ? "Save Changes" : "Save"}
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
-import { Upload, Twitter, Linkedin, Facebook, FolderOpen, ChevronDown } from "lucide-react";
+import { Upload, Twitter, Linkedin, Instagram, Facebook, FolderOpen, ChevronDown, X, Pencil, Trash2 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import toast from "react-hot-toast";
 import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
@@ -13,8 +13,6 @@ const VendorForm = ({
   vendorFields = [], // Default to empty array to prevent mapping errors
   loading,
   setLoading,
-  setError,
-  setSuccess,
   fetchVendors,
   onRequestClose,
 }) => {
@@ -35,6 +33,8 @@ const VendorForm = ({
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // GSTIN API configuration
   const GSTIN_API_KEY = import.meta.env.VITE_APP_GSTIN_API_KEY || "";
@@ -81,6 +81,24 @@ const VendorForm = ({
   const handleSaveAndExit = async () => {
     setShowConfirmDialog(false);
     await handleSubmit({ preventDefault: () => { } });
+  };
+
+  const handleDeleteVendor = async () => {
+    if (!form._id) return;
+    setDeleting(true);
+    try {
+      await API.delete(`/vendors/${form._id}`);
+      toast.success("Vendor deleted successfully!");
+      await fetchVendors();
+      setShowDeleteConfirm(false);
+      setIsFormDirty(false);
+      closeForm();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Failed to delete vendor");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleFormChange = (newFormData) => {
@@ -250,6 +268,7 @@ const VendorForm = ({
       if (form.socialMedia) {
         formData.append("socialMedia[twitter]", form.socialMedia.twitter || "");
         formData.append("socialMedia[linkedin]", form.socialMedia.linkedin || "");
+        formData.append("socialMedia[instagram]", form.socialMedia.instagram || "");
         formData.append("socialMedia[facebook]", form.socialMedia.facebook || "");
         formData.append("socialMedia[whatsapp]", form.socialMedia.whatsapp || "");
       }
@@ -389,7 +408,7 @@ const VendorForm = ({
           </>
         );
 
-      case "date":
+      case "date": {
         const formattedDate = value && value.includes("T") ? value.split("T")[0] : value;
         return (
           <>
@@ -402,6 +421,7 @@ const VendorForm = ({
             {hasError && <p className="text-red-500 text-xs mt-1">{hasError}</p>}
           </>
         );
+      }
 
       case "url":
         return (
@@ -474,8 +494,6 @@ const VendorForm = ({
     }
   };
 
-  if (!shouldRender) return null;
-
   // --- CATEGORY & GROUPING LOGIC ---
   const [expandedSections, setExpandedSections] = useState({});
 
@@ -516,6 +534,8 @@ const VendorForm = ({
   });
   // ---------------------------------
 
+  if (!shouldRender) return null;
+
   return (
     <>
       {/* Unsaved Changes Dialog */}
@@ -552,6 +572,38 @@ const VendorForm = ({
         </div>
       )}
 
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-[10002] flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Delete Vendor
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to delete "{form.name}"? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteVendor}
+                disabled={deleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300"
@@ -559,32 +611,58 @@ const VendorForm = ({
         onClick={handleClose}
       />
 
-      {/* Sliding Side Panel */}
+      {/* Panel — reusing CompanyForm.jsx's exact card treatment (dc-panel-card
+          + dc-panel-w: floating, rounded, inset from top/bottom/right by
+          1.5rem) instead of inventing a new modal style. */}
       <div
- className={`fixed inset-y-0 right-0 z-[10001] dc-panel-w bg-white shadow-2xl transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"
-          }`}
+        className={`
+          fixed dc-panel-card z-[10001]
+          dc-panel-w bg-white shadow-2xl flex flex-col overflow-hidden
+          transform transition-transform duration-300 ease-in-out font-inter
+          ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
+        `}
       >
-        <form onSubmit={handleSubmit} className="flex flex-col h-full">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
           {/* Header */}
-          <div className="flex justify-between items-center p-6 border-b border-gray-100">
-            <h2 className="text-xl font-semibold text-gray-900">
+          <div className="flex justify-between items-center p-6 border-b border-[#F2F2F7] flex-shrink-0 bg-white">
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide">
               {form._id ? "Edit Vendor" : "Create New Vendor"}
             </h2>
-            <button
-              type="button"
-              onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Edit/Delete only apply to an existing vendor — nothing to
+                  edit or delete before it's been created. The pencil isn't
+                  a button: this form IS the edit surface already, so there's
+                  no separate "edit mode" for it to toggle into. */}
+              {form._id && (
+                <>
+                  <Pencil className="w-4 h-4 text-blue-500" />
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    title="Delete vendor"
+                    className="text-red-500 hover:text-red-600 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <span className="w-px h-4 bg-gray-200" />
+                </>
+              )}
+              <button
+                type="button"
+                onClick={handleClose}
+                className="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-8 space-y-6">
 
             {/* Profile Picture matched to ContactForm */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-[13px] font-semibold text-[#111216] mb-2">
                 Profile Picture
               </label>
               <div className="flex items-center gap-4">
@@ -617,7 +695,7 @@ const VendorForm = ({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="px-4 h-10 border border-[#E0E0E1] rounded-xl text-[14px] font-semibold text-[#111216] hover:bg-gray-50 transition-colors flex items-center gap-2"
                   >
                     <Upload className="w-4 h-4" />
                     Choose Photo
@@ -629,12 +707,19 @@ const VendorForm = ({
               </div>
             </div>
 
-            {/* Grid Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+            <h3 className="text-[13px] font-bold text-[#111216] uppercase tracking-wide border-t border-[#F2F2F7] pt-5">
+              Vendor Information
+            </h3>
+
+            {/* Fields — single column, matching the reference exactly. Phone
+                isn't in that reference screenshot but is still required by
+                validateForm()/the backend, so it's kept right after Vendor
+                Name rather than silently dropped. */}
+            <div className="space-y-5">
 
               {/* Vendor Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                   Vendor Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -644,43 +729,16 @@ const VendorForm = ({
                     handleFormChange({ ...form, name: e.target.value });
                     handleValidationClear("name");
                   }}
-                  className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${validationErrors.name ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+                  className={`w-full border rounded-full px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] ${validationErrors.name ? 'border-red-500' : 'border-[#E0E0E1]'
                     }`}
                   placeholder="Enter Vendor Name"
                 />
                 {validationErrors.name && <p className="text-red-500 text-xs mt-1">{validationErrors.name}</p>}
               </div>
 
-              {/* GSTIN */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  GSTIN
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={form.gstin || ""}
-                    onChange={(e) =>
-                      handleFormChange({ ...form, gstin: e.target.value.toUpperCase() })
-                    }
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    placeholder="Enter GST ID (15 digits)"
-                    maxLength={15}
-                  />
-                  <button
-                    type="button"
-                    onClick={fetchGSTINDetails}
-                    disabled={gstinLoading}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {gstinLoading ? "..." : "Fetch"}
-                  </button>
-                </div>
-              </div>
-
               {/* Phone */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div>
+                <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                   Phone <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -690,16 +748,43 @@ const VendorForm = ({
                     handleFormChange({ ...form, phone: e.target.value });
                     handleValidationClear("phone");
                   }}
-                  className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${validationErrors.phone ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+                  className={`w-full border rounded-full px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] ${validationErrors.phone ? 'border-red-500' : 'border-[#E0E0E1]'
                     }`}
                   placeholder="Enter Phone Number"
                 />
                 {validationErrors.phone && <p className="text-red-500 text-xs mt-1">{validationErrors.phone}</p>}
               </div>
 
+              {/* GSTIN */}
+              <div>
+                <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                  GSTIN
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={form.gstin || ""}
+                    onChange={(e) =>
+                      handleFormChange({ ...form, gstin: e.target.value.toUpperCase() })
+                    }
+                    className="flex-1 min-w-0 border border-[#E0E0E1] rounded-full px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                    placeholder="Enter GSTIN (15 Digits)"
+                    maxLength={15}
+                  />
+                  <button
+                    type="button"
+                    onClick={fetchGSTINDetails}
+                    disabled={gstinLoading}
+                    className="px-6 h-11 bg-[#0C4FCD] text-white text-[14px] font-bold rounded-full hover:bg-blue-700 disabled:opacity-50 transition-colors flex-shrink-0"
+                  >
+                    {gstinLoading ? "..." : "Fetch"}
+                  </button>
+                </div>
+              </div>
+
               {/* Email */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div>
+                <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                   Email <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -709,17 +794,17 @@ const VendorForm = ({
                     handleFormChange({ ...form, email: e.target.value });
                     handleValidationClear("email");
                   }}
-                  className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${validationErrors.email ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+                  className={`w-full border rounded-full px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] ${validationErrors.email ? 'border-red-500' : 'border-[#E0E0E1]'
                     }`}
-                  placeholder="Enter Email"
+                  placeholder="Enter Vendor Email"
                 />
                 {validationErrors.email && <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>}
               </div>
 
               {/* Company */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Company <span className="text-red-500">*</span>
+              <div>
+                <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                  Company Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -728,16 +813,16 @@ const VendorForm = ({
                     handleFormChange({ ...form, company: e.target.value });
                     handleValidationClear("company");
                   }}
-                  className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${validationErrors.company ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+                  className={`w-full border rounded-full px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] ${validationErrors.company ? 'border-red-500' : 'border-[#E0E0E1]'
                     }`}
-                  placeholder="Enter Company Name"
+                  placeholder="Enter Vendor Company Name"
                 />
                 {validationErrors.company && <p className="text-red-500 text-xs mt-1">{validationErrors.company}</p>}
               </div>
 
               {/* Address 1 */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div>
+                <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                   Address Line 1 <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -747,16 +832,16 @@ const VendorForm = ({
                     handleFormChange({ ...form, address: { ...form.address, line1: e.target.value } });
                     handleValidationClear("line1", true);
                   }}
-                  className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${validationErrors.address_line1 ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+                  className={`w-full border rounded-full px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] ${validationErrors.address_line1 ? 'border-red-500' : 'border-[#E0E0E1]'
                     }`}
-                  placeholder="Enter Address Line 1"
+                  placeholder="Enter Vendor Address Line 1"
                 />
                 {validationErrors.address_line1 && <p className="text-red-500 text-xs mt-1">{validationErrors.address_line1}</p>}
               </div>
 
               {/* Address 2 */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div>
+                <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                   Address Line 2
                 </label>
                 <input
@@ -765,95 +850,97 @@ const VendorForm = ({
                   onChange={(e) =>
                     handleFormChange({ ...form, address: { ...form.address, line2: e.target.value } })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  placeholder="Enter Address Line 2"
+                  className="w-full border border-[#E0E0E1] rounded-full px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                  placeholder="Enter Vendor Address Line 2"
                 />
               </div>
 
-              {/* City */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  City <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.address?.city || ""}
-                  onChange={(e) => {
-                    handleFormChange({ ...form, address: { ...form.address, city: e.target.value } });
-                    handleValidationClear("city", true);
-                  }}
-                  className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${validationErrors.address_city ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
-                    }`}
-                  placeholder="Enter City"
-                />
-                {validationErrors.address_city && <p className="text-red-500 text-xs mt-1">{validationErrors.address_city}</p>}
+              {/* City / State */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                    City <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.address?.city || ""}
+                    onChange={(e) => {
+                      handleFormChange({ ...form, address: { ...form.address, city: e.target.value } });
+                      handleValidationClear("city", true);
+                    }}
+                    className={`w-full border rounded-full px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] ${validationErrors.address_city ? 'border-red-500' : 'border-[#E0E0E1]'
+                      }`}
+                    placeholder="Enter Vendor City"
+                  />
+                  {validationErrors.address_city && <p className="text-red-500 text-xs mt-1">{validationErrors.address_city}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                    State <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.address?.state || ""}
+                    onChange={(e) => {
+                      handleFormChange({ ...form, address: { ...form.address, state: e.target.value } });
+                      handleValidationClear("state", true);
+                    }}
+                    className={`w-full border rounded-full px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] ${validationErrors.address_state ? 'border-red-500' : 'border-[#E0E0E1]'
+                      }`}
+                    placeholder="Enter Vendor State"
+                  />
+                  {validationErrors.address_state && <p className="text-red-500 text-xs mt-1">{validationErrors.address_state}</p>}
+                </div>
               </div>
 
-              {/* State */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  State <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.address?.state || ""}
-                  onChange={(e) => {
-                    handleFormChange({ ...form, address: { ...form.address, state: e.target.value } });
-                    handleValidationClear("state", true);
-                  }}
-                  className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${validationErrors.address_state ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
-                    }`}
-                  placeholder="Enter State"
-                />
-                {validationErrors.address_state && <p className="text-red-500 text-xs mt-1">{validationErrors.address_state}</p>}
-              </div>
+              {/* Pincode / Country */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                    Pincode <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.address?.pincode || ""}
+                    onChange={(e) => {
+                      handleFormChange({ ...form, address: { ...form.address, pincode: e.target.value } });
+                      handleValidationClear("pincode", true);
+                    }}
+                    className={`w-full border rounded-full px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] ${validationErrors.address_pincode ? 'border-red-500' : 'border-[#E0E0E1]'
+                      }`}
+                    placeholder="Enter Vendor Pincode"
+                  />
+                  {validationErrors.address_pincode && <p className="text-red-500 text-xs mt-1">{validationErrors.address_pincode}</p>}
+                </div>
 
-              {/* Pincode */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Pincode <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.address?.pincode || ""}
-                  onChange={(e) => {
-                    handleFormChange({ ...form, address: { ...form.address, pincode: e.target.value } });
-                    handleValidationClear("pincode", true);
-                  }}
-                  className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${validationErrors.address_pincode ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
-                    }`}
-                  placeholder="Enter Pin Code"
-                />
-                {validationErrors.address_pincode && <p className="text-red-500 text-xs mt-1">{validationErrors.address_pincode}</p>}
-              </div>
-
-              {/* Country */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Country <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.address?.country || "India"}
-                  onChange={(e) => {
-                    handleFormChange({ ...form, address: { ...form.address, country: e.target.value } });
-                    handleValidationClear("country", true);
-                  }}
-                  className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${validationErrors.address_country ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
-                    }`}
-                  placeholder="India"
-                />
-                {validationErrors.address_country && <p className="text-red-500 text-xs mt-1">{validationErrors.address_country}</p>}
+                <div>
+                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                    Country <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.address?.country || "India"}
+                    onChange={(e) => {
+                      handleFormChange({ ...form, address: { ...form.address, country: e.target.value } });
+                      handleValidationClear("country", true);
+                    }}
+                    className={`w-full border rounded-full px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] ${validationErrors.address_country ? 'border-red-500' : 'border-[#E0E0E1]'
+                      }`}
+                    placeholder="Enter Vendor Country"
+                  />
+                  {validationErrors.address_country && <p className="text-red-500 text-xs mt-1">{validationErrors.address_country}</p>}
+                </div>
               </div>
             </div>
 
             {/* Social Media Links Section */}
-            <div className="border-t pt-4">
-              <h3 className="text-sm font-medium text-gray-900 mb-3">Social Media Links</h3>
+            <div className="border-t border-[#F2F2F7] pt-5">
+              <h3 className="text-[13px] font-bold text-[#111216] uppercase tracking-wide mb-3">Social Media Links</h3>
               <div className="space-y-3">
                 {/* Twitter/X */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
                     <Twitter className="w-4 h-4 text-gray-600" />
                     X (Twitter)
                   </label>
@@ -861,14 +948,14 @@ const VendorForm = ({
                     type="url"
                     value={form.socialMedia?.twitter || ""}
                     onChange={(e) => handleSocialMediaChange("twitter", e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
                     placeholder="https://twitter.com/username"
                   />
                 </div>
 
                 {/* LinkedIn */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
                     <Linkedin className="w-4 h-4 text-gray-600" />
                     LinkedIn
                   </label>
@@ -876,14 +963,29 @@ const VendorForm = ({
                     type="url"
                     value={form.socialMedia?.linkedin || ""}
                     onChange={(e) => handleSocialMediaChange("linkedin", e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
                     placeholder="https://linkedin.com/in/username"
+                  />
+                </div>
+
+                {/* Instagram */}
+                <div>
+                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
+                    <Instagram className="w-4 h-4 text-gray-600" />
+                    Instagram
+                  </label>
+                  <input
+                    type="url"
+                    value={form.socialMedia?.instagram || ""}
+                    onChange={(e) => handleSocialMediaChange("instagram", e.target.value)}
+                    className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                    placeholder="https://instagram.com/username"
                   />
                 </div>
 
                 {/* Facebook */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
                     <Facebook className="w-4 h-4 text-gray-600" />
                     Facebook
                   </label>
@@ -891,14 +993,14 @@ const VendorForm = ({
                     type="url"
                     value={form.socialMedia?.facebook || ""}
                     onChange={(e) => handleSocialMediaChange("facebook", e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
                     placeholder="https://facebook.com/username"
                   />
                 </div>
 
                 {/* WhatsApp */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
                     <FaWhatsapp className="w-4 h-4 text-gray-600" />
                     WhatsApp Number
                   </label>
@@ -906,7 +1008,7 @@ const VendorForm = ({
                     type="text"
                     value={form.socialMedia?.whatsapp || ""}
                     onChange={(e) => handleSocialMediaChange("whatsapp", e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
                     placeholder="e.g., +1234567890"
                   />
                 </div>
@@ -938,10 +1040,14 @@ const VendorForm = ({
                       <div className="p-5 bg-white border-t border-gray-200 space-y-5">
                         {groupedFields[category].map((fieldDef) => (
                           <div key={fieldDef.name}>
+                            {/* No raw "(type)" annotation here — that's field-builder
+                                metadata for the admin configuring this field in Settings,
+                                not something an end user filling out the form needs to
+                                see. The input control itself already communicates the
+                                type (dropdown, checkboxes, etc). */}
                             <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                               {fieldDef.name}
                               {fieldDef.required && <span className="text-red-500 ml-1">*</span>}
-                              <span className="text-xs text-gray-500 ml-2 font-normal">({fieldDef.type})</span>
                             </label>
                             {renderFieldInput(fieldDef, additionalFieldValues[fieldDef.name])}
                           </div>
@@ -955,19 +1061,19 @@ const VendorForm = ({
 
           </div>
 
-          {/* Footer inside Form */}
-          <div className="px-6 py-4 border-t border-gray-100 flex justify-between gap-4 bg-gray-50/50 mt-auto">
+          {/* Footer — same as CompanyForm.jsx's action row */}
+          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 bg-white"
+              className="flex-1 border border-[#E0E0E1] text-[#111216] h-12 rounded-xl text-[14px] font-bold hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-4 py-2.5 bg-blue-600 rounded-lg text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="flex-1 bg-[#0C4FCD] text-white h-12 rounded-xl text-[14px] font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading
                 ? "Saving..."

@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { ChevronDown, ChevronUp, Pin, PinOff, EyeOff } from "lucide-react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -61,12 +62,30 @@ export default function DataTable({
   loading = false,
   loadingContent,
   emptyContent,
+  onPinColumn,
+  onUnpinColumn,
+  onHideColumn,
+  onSort,
 }) {
   const [draggedColKey, setDraggedColKey] = useState(null);
   const [dragOverColKey, setDragOverColKey] = useState(null);
   const [dragGhost, setDragGhost] = useState(null);
+  const [openColMenuKey, setOpenColMenuKey] = useState(null);
+  const [colMenuPos, setColMenuPos] = useState(null);
   const dragOverRef = useRef(null);
   const ghostElRef = useRef(null);
+  const columnMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(e.target)) {
+        setOpenColMenuKey(null);
+        setColMenuPos(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const table = useReactTable({
     data,
@@ -82,23 +101,7 @@ export default function DataTable({
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    if (e.detail === 1) {
-      e.stopPropagation();
-      if (openColMenuKey === colId) {
-        setOpenColMenuKey(null);
-        setColMenuPos(null);
-        return;
-      }
-      const th = e.currentTarget;
-      const rect = th.getBoundingClientRect();
-      let calculatedLeft = rect.right - 190;
-      if (th.cellIndex === th.parentNode.cells.length - 1) {
-        calculatedLeft -= 80;
-      }
-      setColMenuPos({ top: rect.bottom + 4, left: calculatedLeft });
-      setOpenColMenuKey(colId);
-      return;
-    }
+    if (e.detail === 1) return;
 
     if (!onColumnReorder) return;
 
@@ -253,9 +256,122 @@ export default function DataTable({
                           : "last:border-r-0"
                           } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
-                        <div className="w-full min-w-0">
-                          {flexRender(header.column.columnDef.header, header.getContext())}
+                        <div className={`flex items-center justify-between w-full min-w-0 ${loading ? "[&_button]:invisible" : ""}`}>
+                          <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden cursor-grab active:cursor-grabbing">
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </div>
+                          
+                          {colId !== selectionColId && (onPinColumn || onHideColumn || onSort) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (openColMenuKey === colId) {
+                                  setOpenColMenuKey(null);
+                                  setColMenuPos(null);
+                                  return;
+                                }
+                                const zMenu = getAncestorZoom(document.body);
+                                const MENU_W = 160;
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                let calculatedLeft = rect.right / zMenu - MENU_W;
+                                calculatedLeft = Math.min(calculatedLeft, window.innerWidth / zMenu - MENU_W - 8);
+                                calculatedLeft = Math.max(calculatedLeft, 8);
+                                setColMenuPos({ top: rect.bottom / zMenu + 4, left: calculatedLeft });
+                                setOpenColMenuKey(colId);
+                              }}
+                              className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0 ml-1"
+                              title="Column options"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
+
+                        {openColMenuKey === colId && colMenuPos && createPortal(
+                          <>
+                            <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setOpenColMenuKey(null); setColMenuPos(null); }} />
+                            <div
+                              ref={columnMenuRef}
+                              style={{ position: "fixed", top: colMenuPos.top, left: colMenuPos.left }}
+                              className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right text-left"
+                            >
+                              {onPinColumn && (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenColMenuKey(null);
+                                      setColMenuPos(null);
+                                      isLeftSticky ? onUnpinColumn?.(colId) : onPinColumn(colId, "left");
+                                    }}
+                                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${isLeftSticky ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                                  >
+                                    {isLeftSticky ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                                    Pin to Left
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenColMenuKey(null);
+                                      setColMenuPos(null);
+                                      isRightSticky ? onUnpinColumn?.(colId) : onPinColumn(colId, "right");
+                                    }}
+                                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${isRightSticky ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                                  >
+                                    {isRightSticky ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                                    Pin to Right
+                                  </button>
+                                </>
+                              )}
+                              {onSort && (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenColMenuKey(null);
+                                      setColMenuPos(null);
+                                      onSort(colId, "asc");
+                                    }}
+                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                  >
+                                    <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                    Sort Ascending
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenColMenuKey(null);
+                                      setColMenuPos(null);
+                                      onSort(colId, "desc");
+                                    }}
+                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                  >
+                                    <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                    Sort Descending
+                                  </button>
+                                </>
+                              )}
+                              {onHideColumn && (
+                                <>
+                                  {(onPinColumn || onSort) && <div className="h-px bg-[#E5E5EC] my-0.5 w-full mx-auto" />}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenColMenuKey(null);
+                                      setColMenuPos(null);
+                                      onHideColumn(colId);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                  >
+                                    <EyeOff className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                    Hide Column
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </>,
+                          document.body
+                        )}
 
                         {colId !== selectionColId && header.column.getCanResize() && (
                           <div

@@ -425,9 +425,13 @@ const DealForm = ({
                       <div className="p-5 bg-white border-t border-gray-200 space-y-5">
                         {groupedFields[category].map((fieldDef) => (
                           <div key={fieldDef.name}>
+                            {/* No raw "(type)" annotation here — that's field-builder
+                                metadata for the admin configuring this field in Settings,
+                                not something an end user filling out the form needs to
+                                see. The input control itself already communicates the
+                                type (dropdown, checkboxes, etc). */}
                             <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                               {fieldDef.name} {fieldDef.required && <span className="text-red-500 ml-1">*</span>}
-                              <span className="text-xs text-gray-500 ml-2 font-normal">({fieldDef.type})</span>
                             </label>
                             {renderFieldInput(fieldDef, additionalFieldValues[fieldDef.name])}
                           </div>

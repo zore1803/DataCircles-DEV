@@ -1,20 +1,125 @@
-import React, { useState, useEffect } from "react";
-import { ChevronDown, Plus, Calendar } from "lucide-react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import Skeleton from "../common/Skeleton";
+import { Plus, Calendar, Search, Trash2, Eye } from "lucide-react";
 import API from "../../services/api";
 import VendorTaskForm from "./VendorTaskForm";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
+import DataTable from "../common/DataTable";
+import BulkActionBar from "../common/BulkActionBar";
+import TablePaginationFooter from "../common/TablePaginationFooter";
+import CompanyFilterPanel from "../company/CompanyFilterPanel";
+import FilterIcon from "../common/FilterIcon";
+import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
+import { useTopLoadingSignal } from "../common/TopLoadingBar";
 import toast from "react-hot-toast";
+import HighlightText from "../common/HighlightText";
+import { useRef } from "react";
+import { exportToCSV } from "../../utils/exportToCSV";
+
+/* Columns offered in the filter panel. `options` seeds the dropdown with the
+   schema's full enum so a value is still filterable when no row currently uses
+   it (models/Task.js). */
+const TASK_FILTER_COLUMNS = [
+  { key: "status", label: "Status", options: ["Pending", "In Progress", "Completed"] },
+  { key: "priority", label: "Priority", options: ["low", "medium", "high"] },
+  { key: "assignedTo", label: "Assigned To" },
+];
+
+const getTaskFieldValue = (task, key) => {
+  switch (key) {
+    case "status":
+      return task.status;
+    case "priority":
+      return task.priority;
+    case "assignedTo":
+      return task.users?.map((u) => u?.name).filter(Boolean).join(", ");
+    default:
+      return task[key];
+  }
+};
+
+const STATUS_BADGE = {
+  Pending: "bg-gray-100 text-gray-700",
+  "In Progress": "bg-blue-50 text-blue-700",
+  Completed: "bg-green-50 text-green-700",
+  Cancelled: "bg-gray-200 text-gray-700",
+};
+
+const PRIORITY_BADGE = {
+  high: "bg-red-50 text-red-600",
+  medium: "bg-amber-50 text-amber-700",
+  low: "bg-gray-100 text-gray-600",
+};
+
+const stripHtml = (html) => String(html || "").replace(/<[^>]*>/g, "").trim();
+
+const formatDate = (iso) =>
+  iso
+    ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "—";
 
 const VendorTasksTable = ({ vendorId }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [statusFilter, setStatusFilter] = useState("");
   const [showTaskForm, setShowTaskForm] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
   const [users, setUsers] = useState([]);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [vendorName, setVendorName] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [selectedFilters, setSelectedFilters] = useState({});
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [columnSizing, setColumnSizing] = useState({});
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  const [columnOrder, setColumnOrder] = useState(() => [
+    "selection", "title", "description", "assignedTo", "status", "priority", "dueDate", "actions"
+  ]);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  const filterButtonRef = useRef(null);
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    setColumnOrder((prev) => {
+      const newOrder = [...prev];
+      const draggedIdx = newOrder.indexOf(draggedKey);
+      const targetIdx = newOrder.indexOf(targetKey);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedKey);
+      return newOrder;
+    });
+  };
+
+  const handlePinColumn = (colId, side) => {
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colId), { key: colId, side }]);
+  };
+
+  const handleUnpinColumn = (colId) => {
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colId));
+  };
+
+  const handleHideColumn = (colId) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      next.add(colId);
+      return next;
+    });
+  };
+
+  const handleSort = (key, direction) => {
+    setSortConfig({ key, direction });
+  };
+
+  const refetchTasks = useCallback(async () => {
+    const response = await API.get(`/tasks/vendor/${vendorId}`);
+    setTasks(response.data || []);
+  }, [vendorId]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -23,9 +128,7 @@ const VendorTasksTable = ({ vendorId }) => {
         setLoading(false);
         return;
       }
-
-      const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(vendorId);
-      if (!isValidObjectId) {
+      if (!/^[0-9a-fA-F]{24}$/.test(vendorId)) {
         setError("Invalid Vendor ID format");
         setLoading(false);
         return;
@@ -33,37 +136,145 @@ const VendorTasksTable = ({ vendorId }) => {
 
       try {
         setLoading(true);
-        // Fetch tasks for the specific vendor
-        const response = await API.get(`/tasks/vendor/${vendorId}`);
-        setTasks(response.data || []);
-        
-        // Fetch users for assignment
-        const usersResponse = await API.get("/auth/all-user");
-        setUsers(usersResponse.data.allUsers || []);
-        
-        // Fetch vendor details for name
-        const vendorResponse = await API.get(`/vendors/${vendorId}`);
-        setVendorName(vendorResponse.data.name || "");
-        
+        await refetchTasks();
         setError(null);
       } catch (err) {
         setError("Failed to load tasks");
-        console.error("Error fetching data:", err);
+        console.error("Error fetching tasks:", err);
         toast.error("Failed to load tasks.");
-      } finally {
         setLoading(false);
+        return;
       }
+
+      try {
+        const usersResponse = await API.get("/auth/all-user");
+        setUsers(usersResponse.data?.allUsers || []);
+      } catch (err) {
+        console.error("Error fetching users for task assignment:", err);
+      }
+
+      try {
+        const vendorResponse = await API.get(`/vendors/${vendorId}`);
+        setVendorName(vendorResponse.data?.name || "");
+      } catch (err) {
+        console.error("Error fetching vendor name:", err);
+      }
+
+      setLoading(false);
     };
 
     fetchData();
-  }, [vendorId]);
+  }, [vendorId, refetchTasks]);
+
+  /* ── Search + filter ── */
+  const filteredTasks = useMemo(() => {
+    let rows = tasks;
+
+    const term = search.trim().toLowerCase();
+    if (term) {
+      rows = rows.filter((t) =>
+        [t.title, stripHtml(t.description), t.status, t.priority, getTaskFieldValue(t, "assignedTo")]
+          .some((v) => String(v || "").toLowerCase().includes(term)),
+      );
+    }
+
+    Object.entries(selectedFilters).forEach(([key, values]) => {
+      if (!values?.length) return;
+      rows = rows.filter((t) => values.includes(String(getTaskFieldValue(t, key) ?? "")));
+    });
+
+    return rows;
+  }, [tasks, search, selectedFilters]);
+
+  const activeFilterCount = Object.values(selectedFilters).reduce(
+    (n, arr) => n + (arr?.length || 0),
+    0,
+  );
+
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  useEffect(() => {
+    setPage(1);
+  }, [search, selectedFilters]);
+
+  const sortedTasks = useMemo(() => {
+    if (!sortConfig.key) return filteredTasks;
+    return [...filteredTasks].sort((a, b) => {
+      let aVal = getTaskFieldValue(a, sortConfig.key) ?? "";
+      let bVal = getTaskFieldValue(b, sortConfig.key) ?? "";
+      if (sortConfig.key === "dueDate") {
+        aVal = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+        bVal = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      }
+      const aCmp = typeof aVal === "number" ? aVal : String(aVal).toLowerCase();
+      const bCmp = typeof bVal === "number" ? bVal : String(bVal).toLowerCase();
+      if (aCmp < bCmp) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aCmp > bCmp) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredTasks, sortConfig]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedTasks.length / limit));
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  
+  const [isPaging, setIsPaging] = useState(false);
+  useTopLoadingSignal(isPaging);
+  const goToPage = (n) => {
+    if (n === page) return;
+    setIsPaging(true);
+    setPage(n);
+    setTimeout(() => setIsPaging(false), 220);
+  };
+  const paginatedTasks = useMemo(
+    () => sortedTasks.slice((page - 1) * limit, page * limit),
+    [sortedTasks, page, limit],
+  );
+
+  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+    items: filteredTasks,
+  });
+  const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedItems.length);
+
+  const handleExportSelected = () => {
+    const dataToExport = tasks
+      .filter((t) => selectedItems.includes(t._id))
+      .map((t) => ({
+        "Title": t.title || "",
+        "Description": stripHtml(t.description || ""),
+        "Status": t.status || "",
+        "Priority": t.priority || "",
+        "Due Date": t.dueDate ? new Date(t.dueDate).toLocaleDateString() : "",
+        "Assigned To": getTaskFieldValue(t, "assignedTo"),
+      }));
+    if (dataToExport.length === 0) return;
+    const headers = Object.keys(dataToExport[0]).join(",");
+    const rows = dataToExport.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    exportToCSV([headers, ...rows], `tasks_export_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedItems.length) return;
+    if (!window.confirm(`Delete ${selectedItems.length} task(s)? This cannot be undone.`)) return;
+    setIsDeleting(true);
+    try {
+      await Promise.all(selectedItems.map((id) => API.delete(`/tasks/${id}`)));
+      await refetchTasks();
+      clearSelection();
+      toast.success("Tasks deleted!");
+    } catch (err) {
+      console.error("Bulk delete failed:", err);
+      toast.error(err.response?.data?.error || "Failed to delete some tasks.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleTaskSave = async (taskData) => {
     try {
       await API.post("/tasks", taskData);
-      // Refetch tasks
-      const response = await API.get(`/tasks/vendor/${vendorId}`);
-      setTasks(response.data || []);
+      await refetchTasks();
       toast.success("Task created!");
       setShowTaskForm(false);
     } catch (err) {
@@ -80,9 +291,7 @@ const VendorTasksTable = ({ vendorId }) => {
   const handleTaskDelete = async (taskId) => {
     try {
       await API.delete(`/tasks/${taskId}`);
-      // Refetch tasks
-      const response = await API.get(`/tasks/vendor/${vendorId}`);
-      setTasks(response.data || []);
+      await refetchTasks();
       toast.success("Task deleted!");
       handleCloseTaskModal();
     } catch (err) {
@@ -96,62 +305,202 @@ const VendorTasksTable = ({ vendorId }) => {
     }
   };
 
-  const handleTaskClick = (task) => {
-    setSelectedTask(task);
-    setIsTaskModalOpen(true);
-  };
-
   const handleCloseTaskModal = () => {
     setIsTaskModalOpen(false);
     setSelectedTask(null);
   };
 
-  const getRelatedToName = (task) => {
-    return vendorName || "N/A";
+  // Wired to TaskDetailsModal's Edit button (onEdit) — previously unpassed,
+  // so that button silently did nothing. Closes the read-only popup and
+  // opens VendorTaskForm against the same task, in edit mode.
+  const handleEditTask = (task) => {
+    handleCloseTaskModal();
+    setEditingTask(task);
+    setShowTaskForm(true);
   };
 
-  const formatDate = (isoDate) => {
-    const date = new Date(isoDate);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
+  const getRelatedToName = () => vendorName || "N/A";
+
+  const baseColumns = useMemo(
+    () => [
+      {
+        id: "selection",
+        size: 64,
+        enableResizing: false,
+        header: () => (
+          <div className="flex justify-center items-center w-full">
+            <input
+              type="checkbox"
+              checked={
+                selectedItems.length > 0 &&
+                selectedItems.length === filteredTasks.length
+              }
+              onChange={(e) =>
+                e.target.checked ? selectAll(filteredTasks) : clearSelection()
+              }
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-center items-center w-full">
+            <input
+              type="checkbox"
+              checked={selectedItems.includes(row.original._id)}
+              onChange={() => toggleItem(row.original._id)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
+      },
+      {
+        id: "title",
+        accessorKey: "title",
+        size: 240,
+        header: "Title",
+        cell: ({ row }) => (
+          <span className="font-medium text-gray-900 truncate block" title={row.original.title}>
+            <HighlightText text={row.original.title} query={search} />
+          </span>
+        ),
+      },
+      {
+        id: "description",
+        size: 260,
+        header: "Description",
+        cell: ({ row }) => {
+          const text = stripHtml(row.original.description);
+          return (
+            <span className="text-gray-600 truncate block" title={text}>
+              {text ? <HighlightText text={text} query={search} /> : "—"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "status",
+        size: 130,
+        header: "Status",
+        cell: ({ row }) => (
+          <span
+            className={`inline-flex px-2 py-1 text-xs font-medium rounded ${
+              STATUS_BADGE[row.original.status] || "bg-gray-100 text-gray-800"
+            }`}
+          >
+            {row.original.status === "Pending" ? (
+              <HighlightText text="To Do" query={search} />
+            ) : (
+              <HighlightText text={row.original.status} query={search} />
+            )}
+          </span>
+        ),
+      },
+      {
+        id: "priority",
+        size: 110,
+        header: "Priority",
+        cell: ({ row }) => (
+          <span
+            className={`inline-flex px-2 py-1 text-xs font-medium rounded capitalize ${
+              PRIORITY_BADGE[row.original.priority] || "bg-gray-100 text-gray-600"
+            }`}
+          >
+            {row.original.priority ? <HighlightText text={row.original.priority} query={search} /> : "—"}
+          </span>
+        ),
+      },
+      {
+        id: "dueDate",
+        size: 140,
+        header: "Due Date",
+        cell: ({ row }) => <span className="text-gray-700">{formatDate(row.original.dueDate)}</span>,
+      },
+      {
+        id: "assignedTo",
+        size: 170,
+        header: "Assigned To",
+        cell: ({ row }) => {
+          const names = getTaskFieldValue(row.original, "assignedTo");
+          return (
+            <span className="text-gray-700 truncate block" title={names}>
+              {names ? <HighlightText text={names} query={search} /> : "Unassigned"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        size: 100,
+        enableResizing: false,
+        header: "Actions",
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedTask(row.original);
+                setIsTaskModalOpen(true);
+              }}
+              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
+              title="View"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm("Delete this task?")) handleTaskDelete(row.original._id);
+              }}
+              className="p-1 text-gray-500 hover:text-red-600 transition-colors"
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [paginatedTasks, selectedItems, selectAll, clearSelection, toggleItem],
+  );
+
+  const finalColumns = useMemo(() => {
+    const visibleBase = baseColumns.filter(c => !hiddenColumns.has(c.id));
+    const selectionCol = visibleBase.find(c => c.id === "selection");
+    const actionsCol = visibleBase.find(c => c.id === "actions");
+    const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
+
+    const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
+    const rightPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'right').map(p => p.key));
+    
+    const leftCols = otherCols.filter(c => leftPinnedKeys.has(c.id));
+    const rightCols = otherCols.filter(c => rightPinnedKeys.has(c.id));
+    const midCols = otherCols.filter(c => !leftPinnedKeys.has(c.id) && !rightPinnedKeys.has(c.id));
+    
+    midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
+    
+    return [
+      ...(selectionCol ? [selectionCol] : []),
+      ...leftCols,
+      ...midCols,
+      ...rightCols,
+      ...(actionsCol ? [actionsCol] : [])
+    ];
+  }, [baseColumns, columnOrder, hiddenColumns, pinnedColumns]);
+
+  const visibleColumnsForGhost = useMemo(() => finalColumns.map(c => ({ key: c.id, label: c.header })), [finalColumns]);
+  const getGhostPreview = (colId) => {
+    return paginatedTasks.slice(0, 10).map((t) => {
+      let val = t[colId];
+      if (colId === 'assignedTo') {
+        val = getTaskFieldValue(t, "assignedTo");
+      }
+      if (colId === 'dueDate') {
+        val = formatDate(t.dueDate);
+      }
+      return String(val ?? "").trim() || "—";
     });
   };
-
-  const getStatusBadge = (status) => {
-    const statusStyles = {
-      Pending: "bg-gray-100 text-gray-700",
-      "To Do": "bg-gray-100 text-gray-700",
-      "In Progress": "bg-gray-200 text-gray-800",
-      Completed: "bg-gray-100 text-gray-900",
-      Cancelled: "bg-gray-200 text-gray-700",
-    };
-    return statusStyles[status] || "bg-gray-100 text-gray-800";
-  };
-
-  const filteredTasks = statusFilter
-    ? tasks.filter((task) => task.status === statusFilter)
-    : tasks;
-
-  if (loading) {
-    return (
-      <div className="animate-pulse">
-        <div className="flex items-center justify-between mb-4">
-          <div className="h-5 bg-gray-200 rounded w-24"></div>
-          <div className="flex space-x-2">
-            <div className="h-8 bg-gray-200 rounded w-20"></div>
-            <div className="h-8 bg-gray-200 rounded w-24"></div>
-          </div>
-        </div>
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 bg-gray-200 rounded-lg"></div>
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -162,134 +511,172 @@ const VendorTasksTable = ({ vendorId }) => {
     );
   }
 
+  if (loading && !tasks.length) {
+    // Only return early if we have literally nothing to show and it's the very first load
+    // The skeleton is handled by DataTable's loading prop now.
+  }
+
   return (
-    <div className="h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <Calendar className="w-4 h-4" />
-          <span>{filteredTasks.length} tasks</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="appearance-none bg-white border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:border-gray-400"
-            >
-              <option value="">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Completed">Completed</option>
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+    <div className="h-full mt-0">
+      {/* Action Buttons are portaled from here into the Tab Header using ReactDOM.createPortal. */}
+      {stripVisible ? (
+        <BulkActionBar
+          selectedCount={selectedItems.length}
+          entityName="task"
+          isClosing={stripClosing}
+          onSelectAll={() => selectAll(filteredTasks)}
+          onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onCancel={clearSelection}
+          onDelete={handleBulkDelete}
+          isDeleting={isDeleting}
+        />
+      ) : (
+        <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
+          <div className="relative flex-1 h-full">
+            <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tasks..."
+              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+            />
           </div>
           <button
-            onClick={() => setShowTaskForm(true)}
-            className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
+            ref={filterButtonRef}
+            onClick={() => setShowFilterPanel(true)}
+            className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+            style={{
+              height: "44px",
+              borderColor: activeFilterCount > 0 ? "#0085FF" : "#E1E4EA",
+            }}
           >
-            <Plus className="w-4 h-4" />
-            New Task
+            <FilterIcon size={16} />
+            Filter
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+                {activeFilterCount}
+              </span>
+            )}
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingTask(null);
+              setShowTaskForm(true);
+            }}
+            className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
+            style={{ width: "44px", height: "44px", borderColor: "rgba(31, 41, 55, 0.1)" }}
+          >
+            <Plus size={20} className="text-gray-700" />
+          </button>
+        </div>
+      )}
+
+      <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
+        <DataTable
+          data={paginatedTasks}
+          columns={finalColumns}
+          columnSizing={columnSizing}
+          onColumnSizingChange={setColumnSizing}
+          pinnedColumns={pinnedColumns}
+          onPinColumn={handlePinColumn}
+          onUnpinColumn={handleUnpinColumn}
+          onHideColumn={handleHideColumn}
+          onSort={handleSort}
+          onColumnReorder={handleColumnReorder}
+          visibleColumns={visibleColumnsForGhost}
+          getGhostPreview={getGhostPreview}
+          variant="card"
+          maxHeight={290}
+          loading={loading}
+          rowClassName={(t) => (selectedItems.includes(t._id) ? "!bg-blue-50" : "")}
+          loadingContent={
+            <div className="space-y-0">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[#E1E4EA] last:border-b-0">
+                  <Skeleton width={16} height={16} />
+                  <Skeleton width={90} height={13} />
+                  <Skeleton width={70} height={13} />
+                  <Skeleton width={60} height={13} />
+                  <Skeleton width={80} height={13} />
+                  <Skeleton width={60} height={13} />
+                </div>
+              ))}
+            </div>
+          }
+          emptyContent={
+            <div className="flex flex-col items-center gap-2">
+              <Calendar className="w-10 h-10 text-gray-400" />
+              <p className="text-sm text-gray-600">
+                {search || activeFilterCount ? "No tasks match your filters" : "No tasks yet"}
+              </p>
+              <p className="text-xs text-gray-500">
+                {search || activeFilterCount
+                  ? "Try clearing the search or filters"
+                  : "Tasks will appear here once created"}
+              </p>
+            </div>
+          }
+        />
+        
+        <div className="border-t border-[#E1E4EA] px-5">
+          <TablePaginationFooter
+            currentPage={page}
+            totalPages={totalPages}
+            totalCount={filteredTasks.length}
+            limit={limit}
+            onPageChange={goToPage}
+            onLimitChange={(n) => {
+              setLimit(n);
+              setPage(1);
+            }}
+          />
         </div>
       </div>
 
-      {/* Tasks List */}
-      {filteredTasks.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-          <Calendar className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-          <p className="text-sm text-gray-600 mb-1">
-            {statusFilter ? `No ${statusFilter.toLowerCase()} tasks` : "No tasks yet"}
-          </p>
-          <p className="text-xs text-gray-500">
-            {statusFilter ? "Try changing the filter" : "Tasks will appear here once created"}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredTasks.map((task) => (
-            <div
-              key={task._id}
-              onClick={() => handleTaskClick(task)}
-              className="bg-white rounded-lg border border-gray-200 p-3 hover:border-gray-300 transition-all cursor-pointer group"
-            >
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-gray-900 truncate">
-                    {task.title}
-                  </h4>
-                  {task.description && (
-                    <div 
-                      dangerouslySetInnerHTML={{ __html: task.description }}
-                      className="text-xs text-gray-600 mt-1 line-clamp-1"
-                    />
-                  )}
-                </div>
-                <span
-                  className={`inline-flex px-2 py-1 text-xs font-medium rounded capitalize whitespace-nowrap ${getStatusBadge(
-                    task.status
-                  )}`}
-                >
-                  {task.status === "Pending" ? "To Do" : task.status}
-                </span>
-              </div>
+      <CompanyFilterPanel
+        isOpen={showFilterPanel}
+        onClose={() => setShowFilterPanel(false)}
+        columns={TASK_FILTER_COLUMNS}
+        data={tasks}
+        getFieldValue={getTaskFieldValue}
+        selected={selectedFilters}
+        onApply={setSelectedFilters}
+        triggerRef={filterButtonRef}
+      />
 
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    <span>{task.dueDate ? formatDate(task.dueDate) : "No due date"}</span>
-                  </div>
-                </div>
-                {task.users?.length > 0 && (
-                  <span className="text-gray-600">
-                    {task.users.map((user) => user.name || "Unknown").join(", ")}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Summary Stats */}
-      {filteredTasks.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 mt-4">
-          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <div className="text-gray-600 text-xs font-medium mb-1">Pending</div>
-            <div className="text-gray-900 text-xl font-bold">
-              {tasks.filter((m) => m.status === "Pending" || m.status === "In Progress").length}
-            </div>
-          </div>
-          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <div className="text-gray-600 text-xs font-medium mb-1">Completed</div>
-            <div className="text-gray-900 text-xl font-bold">
-              {tasks.filter((m) => m.status === "Completed").length}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* VendorTaskForm */}
       {showTaskForm && (
         <VendorTaskForm
           open={showTaskForm}
-          mode="create"
+          mode={editingTask ? "view" : "create"}
+          taskData={editingTask}
+          startInEditMode={!!editingTask}
           vendorId={vendorId}
           users={users}
           onSave={handleTaskSave}
+          onUpdate={async () => {
+            await refetchTasks();
+            setShowTaskForm(false);
+            setEditingTask(null);
+          }}
           onDelete={handleTaskDelete}
-          onClose={() => setShowTaskForm(false)}
+          onClose={() => {
+            setShowTaskForm(false);
+            setEditingTask(null);
+          }}
         />
       )}
 
-      {/* Task Details Modal */}
       {selectedTask && (
         <TaskDetailsModal
           open={isTaskModalOpen}
           taskData={selectedTask}
           users={users}
           onDelete={handleTaskDelete}
+          onEdit={handleEditTask}
           onClose={handleCloseTaskModal}
           getRelatedToName={getRelatedToName}
         />

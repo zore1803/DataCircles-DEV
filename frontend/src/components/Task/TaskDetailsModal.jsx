@@ -117,13 +117,16 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
             {taskId}
           </span>
           <div className="flex flex-row items-center justify-end" style={{ gap: 4 }}>
-            <button
-              onClick={() => onEdit?.(taskData)}
-              className="p-1 rounded-lg hover:bg-blue-50 transition-colors"
-              title="Edit"
-            >
-              <Edit3 className="w-5 h-5" style={{ color: "#0085FF" }} />
-            </button>
+            {/* Editing a completed task doesn't make sense — it's already done. */}
+            {!isCompleted && (
+              <button
+                onClick={() => onEdit?.(taskData)}
+                className="p-1 rounded-lg hover:bg-blue-50 transition-colors"
+                title="Edit"
+              >
+                <Edit3 className="w-5 h-5" style={{ color: "#0085FF" }} />
+              </button>
+            )}
             <button
               onClick={handleDelete}
               disabled={isDeleting}
@@ -287,14 +290,16 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
             <p style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
               Description
             </p>
-            <button
-              onClick={() => onEdit?.(taskData)}
-              className="flex items-center justify-center hover:bg-blue-50 rounded-md transition-all flex-shrink-0"
-              style={{ width: 20, height: 20 }}
-              title="Edit description"
-            >
-              <Edit3 className="w-4 h-4" style={{ color: "#0085FF" }} />
-            </button>
+            {!isCompleted && (
+              <button
+                onClick={() => onEdit?.(taskData)}
+                className="flex items-center justify-center hover:bg-blue-50 rounded-md transition-all flex-shrink-0"
+                style={{ width: 20, height: 20 }}
+                title="Edit description"
+              >
+                <Edit3 className="w-4 h-4" style={{ color: "#0085FF" }} />
+              </button>
+            )}
           </div>
 
           {/* Description content */}
@@ -430,22 +435,24 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
             <CircleCheckIcon className="w-5 h-5" style={{ color: "#34C759" }} />
             {isCompleted ? "Completed" : "Mark As Complete"}
           </button>
-          <button
-            onClick={() => onEdit?.(taskData)}
-            className="flex items-center justify-center"
-            style={{
-              padding: "12px 14px",
-              backgroundColor: "#0085FF",
-              borderRadius: 88,
-              fontFamily: "Inter",
-              fontWeight: 500,
-              fontSize: 16,
-              lineHeight: "20px",
-              color: "#FFFFFF",
-            }}
-          >
-            Save Changes
-          </button>
+          {!isCompleted && (
+            <button
+              onClick={() => onEdit?.(taskData)}
+              className="flex items-center justify-center"
+              style={{
+                padding: "12px 14px",
+                backgroundColor: "#0085FF",
+                borderRadius: 88,
+                fontFamily: "Inter",
+                fontWeight: 500,
+                fontSize: 16,
+                lineHeight: "20px",
+                color: "#FFFFFF",
+              }}
+            >
+              Save Changes
+            </button>
+          )}
         </div>
       </div>
     </>
