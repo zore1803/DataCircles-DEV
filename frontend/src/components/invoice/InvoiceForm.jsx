@@ -9,6 +9,8 @@ import {
   X,
   Eye,
   ChevronDown,
+  PenLine,
+  CheckCircle2,
 } from "lucide-react";
 import API from "../../services/api";
 import ItemForm from "../item/ItemForm";
@@ -321,7 +323,12 @@ const InvoiceForm = ({
     status: "Draft",
     style: "",
     isTaxInvoice: false,
+    notes: "",
+    terms: "",
+    signature: "",
   });
+  const [savedSignatures, setSavedSignatures] = useState([]);
+  const [signaturesLoading, setSignaturesLoading] = useState(false);
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
   const [showItemForm, setShowItemForm] = useState(false);
@@ -864,6 +871,9 @@ const InvoiceForm = ({
         status: "Draft",
         style: "",
         isTaxInvoice: false,
+        notes: "",
+        terms: "",
+        signature: "",
       });
       await fetchData();
       onClose();
@@ -933,6 +943,9 @@ const InvoiceForm = ({
         status: editingInvoice.status || "Draft",
         style: editingInvoice.style || "",
         isTaxInvoice: editingInvoice.isTaxInvoice || false,
+        notes: editingInvoice.notes || "",
+        terms: editingInvoice.terms || "",
+        signature: editingInvoice.signature || "",
       };
       setForm(initialForm);
       setHasUnsavedChanges(false);
@@ -963,6 +976,9 @@ const InvoiceForm = ({
         status: "Draft",
         style: "",
         isTaxInvoice: false,
+        notes: "",
+        terms: "",
+        signature: "",
       };
       setForm(initialForm);
       setHasUnsavedChanges(false);
@@ -977,6 +993,30 @@ const InvoiceForm = ({
       fetchCompanies();
       fetchContacts();
       setLocalDeals(deals);
+
+      // Fetch saved signatures and auto-select default for new invoices
+      const fetchSignatures = async () => {
+        setSignaturesLoading(true);
+        try {
+          const res = await API.get("/document-settings/signatures");
+          const sigs = Array.isArray(res.data) ? res.data : [];
+          setSavedSignatures(sigs);
+
+          // Auto-apply default signature only when creating a new invoice
+          if (!editingInvoice) {
+            const defaultSig = sigs.find((s) => s.isDefault);
+            if (defaultSig) {
+              setForm((prev) => ({ ...prev, signature: defaultSig.dataUrl || "" }));
+            }
+          }
+        } catch (err) {
+          console.error("Failed to fetch signatures:", err);
+          setSavedSignatures([]);
+        } finally {
+          setSignaturesLoading(false);
+        }
+      };
+      fetchSignatures();
     } else {
       setIsSliding(false);
       setTimeout(() => setShouldRender(false), 300);
@@ -1564,6 +1604,101 @@ const InvoiceForm = ({
                   <option value="percentage">%</option>
                 </select>
               </div>
+            </div>
+
+            {/* Signature Section */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <PenLine className="w-5 h-5 text-slate-600" />
+                <label className="block font-semibold text-slate-700">Signature</label>
+              </div>
+
+              {signaturesLoading ? (
+                <div className="flex items-center gap-2 text-slate-500 text-sm p-3">
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8h8a8 8 0 01-8 8v-8H4z" />
+                  </svg>
+                  Loading signatures...
+                </div>
+              ) : savedSignatures.length === 0 ? (
+                <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  No saved signatures found. Add one in{" "}
+                  <span className="font-medium text-blue-600">Settings → Document Settings → Signatures</span>.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {/* No Signature option */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm((prev) => ({ ...prev, signature: "" }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 text-left ${
+                      !form.signature
+                        ? "border-blue-500 bg-blue-50/60"
+                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                    aria-label="No signature"
+                  >
+                    <div className="w-20 h-12 flex items-center justify-center bg-slate-100 rounded-lg border border-dashed border-slate-300 flex-shrink-0">
+                      <span className="text-slate-400 text-xs">None</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-700">No Signature</p>
+                      <p className="text-xs text-slate-400">Invoice will not include a signature</p>
+                    </div>
+                    {!form.signature && (
+                      <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                    )}
+                  </button>
+
+                  {/* Saved signature options */}
+                  {savedSignatures.map((sig) => (
+                    <button
+                      key={sig.id}
+                      type="button"
+                      onClick={() => {
+                        setForm((prev) => ({ ...prev, signature: sig.dataUrl || "" }));
+                        setHasUnsavedChanges(true);
+                      }}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 text-left ${
+                        form.signature === sig.dataUrl
+                          ? "border-blue-500 bg-blue-50/60"
+                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                      aria-label={`Select signature: ${sig.name}`}
+                    >
+                      <div className="w-20 h-12 flex items-center justify-center bg-white rounded-lg border border-slate-200 overflow-hidden flex-shrink-0">
+                        {sig.dataUrl ? (
+                          <img
+                            src={sig.dataUrl}
+                            alt={sig.name}
+                            className="max-w-full max-h-full object-contain"
+                          />
+                        ) : (
+                          <span className="text-slate-400 text-xs">No preview</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-slate-700 truncate">{sig.name}</p>
+                          {sig.isDefault && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 flex-shrink-0">Default</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 capitalize">
+                          {sig.type === "draw" ? "Drawn" : sig.type === "upload" ? "Uploaded" : "Typed"}
+                        </p>
+                      </div>
+                      {form.signature === sig.dataUrl && (
+                        <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2 p-4 bg-gradient-to-r from-slate-50 to-blue-50/30 rounded-lg border border-slate-200/50">
