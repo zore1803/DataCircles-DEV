@@ -74,6 +74,10 @@ const companySchema = new mongoose.Schema(
       },
     ],
     additionalFields: [additionalFieldSchema],
+    // Per-user "starred" flag — starring is a personal preference, not a
+    // shared attribute of the record, so it's a list of users rather than
+    // a single boolean.
+    starredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true },
 );

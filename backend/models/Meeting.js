@@ -279,6 +279,9 @@ const meetingSchema = new mongoose.Schema(
       ref: "Organization",
       required: true,
     },
+
+    // Users who have starred this meeting
+    starredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   {
     timestamps: true,

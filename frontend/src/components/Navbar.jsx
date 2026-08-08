@@ -564,8 +564,16 @@ const Navbar = () => {
           // black at 40% over any colour equals 0.6 * colour, i.e. the same as
           // brightness(0.6) — so the sidebar darkens identically to the page
           // instead of just fading toward the (white) body behind it.
+          //
+          // The sidebar's own className carries `transition-all duration-300`
+          // (for the hover expand/collapse width and the mobile slide-in),
+          // and "all" also catches filter — so without an override here the
+          // dim faded in over 300ms instead of snapping on with the backdrop.
+          // Re-declaring transition for just the properties that actually
+          // need animating excludes filter, which then has no transition at
+          // all and changes instantly.
           filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
-          transition: "filter 200ms ease-out",
+          transition: "width 300ms ease-in-out, transform 300ms ease-in-out",
           width:
             window.innerWidth >= 1024
               ? (isHovered ? "280px" : "64px")

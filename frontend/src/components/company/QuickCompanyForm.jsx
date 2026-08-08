@@ -3,7 +3,6 @@ import API from "../../services/api";
 import CustomDropdown from "../common/CustomDropdown";
 import toast from "react-hot-toast";
 import { INDIA_STATES, COUNTRIES } from "../../constants/addressOptions";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, editCompany = null }) => {
   const isEditing = !!editCompany;
@@ -62,21 +61,6 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
       setIsOpen(false);
     };
   }, []);
-
-  // Dims/blurs the sidebar and page footer while this panel is open — see
-  // useSearchOverlayOpen.js. Cleared on unmount too, not just when isOpen
-  // flips false, so an unmount that skips the closing animation can't leave
-  // the rest of the app permanently dimmed.
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } })
-    );
-    return () => {
-      window.dispatchEvent(
-        new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } })
-      );
-    };
-  }, [isOpen]);
 
   // Pre-fill when editing an existing company so edit and create share one form.
   useEffect(() => {
@@ -562,8 +546,6 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
         </div>
       )}
 
-      {/* Plain opaque dim — no blur. Sidebar/page footer dim themselves
-          independently via DIM_CHROME_EVENT above; this is just the tint. */}
       <div
         className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
         style={{ opacity: isOpen ? 1 : 0 }}
@@ -608,6 +590,59 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
 
           {/* Scrollable body */}
           <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 space-y-6">
+            <div>
+              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                Select Profile Picture <span className="text-red-500">*</span>
+              </label>
+              <div className="flex items-center gap-3">
+                {/* The filename text field this replaced told you nothing
+                    useful — the image itself is the confirmation. No fixed
+                    box: the tile sizes to the image (capped so a huge photo
+                    can't blow out the modal) instead of squeezing a tall or
+                    wide image down into a small square. */}
+                <div className="relative flex-shrink-0 inline-block rounded-xl border border-[#E0E0E1] bg-[#F9F9FB] overflow-hidden">
+                  <input
+                    ref={profilePictureInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      handleFormChange("profilePicture", e.target.files[0]);
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                    // Only required when there's no picture yet — a browser
+                    // can't pre-populate a file input with the company's
+                    // already-uploaded image, so requiring it unconditionally
+                    // forced a re-upload on every edit even though one was
+                    // already on file (and showing right here as a preview).
+                    required={!profilePictureDisplayUrl}
+                  />
+                  {profilePictureDisplayUrl ? (
+                    <img
+                      src={profilePictureDisplayUrl}
+                      alt="Company"
+                      className="block max-h-32 max-w-[260px] w-auto h-auto object-contain"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 flex items-center justify-center text-[10px] text-[#A0A0A0] text-center px-1">
+                      No image
+                    </div>
+                  )}
+                </div>
+                {/* The tile above already opens the picker (it's the
+                    invisible input overlaying it) — this button was a dead
+                    click, doing nothing when pressed. Wired to trigger the
+                    same picker so it actually does what it looks like it
+                    should. */}
+                <button
+                  type="button"
+                  onClick={() => profilePictureInputRef.current?.click()}
+                  className="bg-[#F2F2F7] text-[#111216] px-8 rounded-[25px] h-11 text-[14px] font-medium hover:bg-gray-200 transition-colors"
+                >
+                  Upload
+                </button>
+              </div>
+            </div>
+
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                 Company Name <span className="text-red-500">*</span>
@@ -709,6 +744,25 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
               + Add another shipping address
             </button>
 
+            {fieldDefinitions.length > 0 && (
+              <div className="pt-4 space-y-6">
+                <h3 className="text-[16px] font-bold text-[#111216]">
+                  Additional Information
+                </h3>
+                {fieldDefinitions.map((fieldDef) => (
+                  <div key={fieldDef.name}>
+                    <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                      {fieldDef.name} {fieldDef.required && <span className="text-red-500">*</span>}
+                    </label>
+                    {renderFieldInput(
+                      fieldDef,
+                      additionalFields[fieldDef.name]
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
                 Website <span className="text-red-500">*</span>
@@ -738,77 +792,6 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
               </div>
             </div>
 
-            <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Select Profile Picture <span className="text-red-500">*</span>
-              </label>
-              <div className="flex items-center gap-3">
-                {/* The filename text field this replaced told you nothing
-                    useful — the image itself is the confirmation. No fixed
-                    box: the tile sizes to the image (capped so a huge photo
-                    can't blow out the modal) instead of squeezing a tall or
-                    wide image down into a small square. */}
-                <div className="relative flex-shrink-0 inline-block rounded-xl border border-[#E0E0E1] bg-[#F9F9FB] overflow-hidden">
-                  <input
-                    ref={profilePictureInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      handleFormChange("profilePicture", e.target.files[0]);
-                    }}
-                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                    // Only required when there's no picture yet — a browser
-                    // can't pre-populate a file input with the company's
-                    // already-uploaded image, so requiring it unconditionally
-                    // forced a re-upload on every edit even though one was
-                    // already on file (and showing right here as a preview).
-                    required={!profilePictureDisplayUrl}
-                  />
-                  {profilePictureDisplayUrl ? (
-                    <img
-                      src={profilePictureDisplayUrl}
-                      alt="Company"
-                      className="block max-h-32 max-w-[260px] w-auto h-auto object-contain"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 flex items-center justify-center text-[10px] text-[#A0A0A0] text-center px-1">
-                      No image
-                    </div>
-                  )}
-                </div>
-                {/* The tile above already opens the picker (it's the
-                    invisible input overlaying it) — this button was a dead
-                    click, doing nothing when pressed. Wired to trigger the
-                    same picker so it actually does what it looks like it
-                    should. */}
-                <button
-                  type="button"
-                  onClick={() => profilePictureInputRef.current?.click()}
-                  className="bg-[#F2F2F7] text-[#111216] px-8 rounded-[25px] h-11 text-[14px] font-medium hover:bg-gray-200 transition-colors"
-                >
-                  Upload
-                </button>
-              </div>
-            </div>
-
-            {fieldDefinitions.length > 0 && (
-              <div className="pt-4 space-y-6">
-                <h3 className="text-[16px] font-bold text-[#111216]">
-                  Additional Information
-                </h3>
-                {fieldDefinitions.map((fieldDef) => (
-                  <div key={fieldDef.name}>
-                    <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                      {fieldDef.name} {fieldDef.required && <span className="text-red-500">*</span>}
-                    </label>
-                    {renderFieldInput(
-                      fieldDef,
-                      additionalFields[fieldDef.name]
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Sticky footer — compact, matching the note editor card */}

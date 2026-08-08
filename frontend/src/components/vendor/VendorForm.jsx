@@ -3,7 +3,6 @@ import API from "../../services/api";
 import { Upload, Twitter, Linkedin, Instagram, Facebook, FolderOpen, ChevronDown, X, Pencil, Trash2 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import toast from "react-hot-toast";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const VendorForm = ({
   form,
@@ -17,12 +16,6 @@ const VendorForm = ({
   onRequestClose,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  // Dims the sidebar/navbar/page-footer chrome while this panel is
-  // open -- see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(true);
   const [profilePreview, setProfilePreview] = useState(null);
   const [gstinLoading, setGstinLoading] = useState(false);

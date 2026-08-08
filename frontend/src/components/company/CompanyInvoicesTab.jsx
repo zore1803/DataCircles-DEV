@@ -77,26 +77,26 @@ const AmountColumnIcon = ({ size = 20, ...props }) => (
 
 const TotalInvoicedIcon = ({ size = 20, ...props }) => (
   <svg width={size} height={size} viewBox="0 0 17 19" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M0 18.769V0L1.38475 1.23075L2.80775 0L4.23075 1.23075L5.65375 0L7.077 1.23075L8.5 0L9.923 1.23075L11.3462 0L12.7693 1.23075L14.1923 0L15.6152 1.23075L17 0V18.769L15.6152 17.5383L14.1923 18.769L12.7693 17.5383L11.3462 18.769L9.923 17.5383L8.5 18.769L7.077 17.5383L5.65375 18.769L4.23075 17.5383L2.80775 18.769L1.38475 17.5383L0 18.769ZM2.75 13.8268H14.25V12.3268H2.75V13.8268ZM2.75 10.1345H14.25V8.6345H2.75V10.1345ZM2.75 6.44225H14.25V4.94225H2.75V6.44225ZM1.5 16.4845H15.5V2.2845H1.5V16.4845Z" fill="#0085FF" />
+    <path d="M0 18.769V0L1.38475 1.23075L2.80775 0L4.23075 1.23075L5.65375 0L7.077 1.23075L8.5 0L9.923 1.23075L11.3462 0L12.7693 1.23075L14.1923 0L15.6152 1.23075L17 0V18.769L15.6152 17.5383L14.1923 18.769L12.7693 17.5383L11.3462 18.769L9.923 17.5383L8.5 18.769L7.077 17.5383L5.65375 18.769L4.23075 17.5383L2.80775 18.769L1.38475 17.5383L0 18.769ZM2.75 13.8268H14.25V12.3268H2.75V13.8268ZM2.75 10.1345H14.25V8.6345H2.75V10.1345ZM2.75 6.44225H14.25V4.94225H2.75V6.44225ZM1.5 16.4845H15.5V2.2845H1.5V16.4845Z" fill="currentColor" />
   </svg>
 );
 
 const AmountCollectedIcon = ({ size = 20, ...props }) => (
   <svg width={size} height={size} viewBox="0 0 21 23" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M2.98075 15.4423V7.94225H4.48075V15.4423H2.98075ZM8.48075 15.4423V7.94225H9.98075V15.4423H8.48075ZM0 5.94225V4.51925L9.23075 0L18.4615 4.51925V5.94225H0ZM3.5615 4.44225H14.9L9.23075 1.69225L3.5615 4.44225ZM0 18.9423V17.4423H11.5787C11.5992 17.7089 11.6282 17.9631 11.6655 18.2048C11.7027 18.4464 11.7552 18.6923 11.823 18.9423H0ZM13.9808 12.202V7.94225H15.4808V11.452L13.9808 12.202ZM17.2307 22.0575C16.1641 21.7935 15.282 21.1823 14.5845 20.224C13.8872 19.2657 13.5385 18.2013 13.5385 17.0308V14.673L17.2307 12.827L20.923 14.673V17.0308C20.923 18.2013 20.5743 19.2657 19.877 20.224C19.1795 21.1823 18.2974 21.7935 17.2307 22.0575ZM16.5058 19.2307L19.7595 15.9923L18.9212 15.1538L16.5058 17.5385L15.5307 16.5635L14.6923 17.4172L16.5058 19.2307Z" fill="#0085FF" />
+    <path d="M2.98075 15.4423V7.94225H4.48075V15.4423H2.98075ZM8.48075 15.4423V7.94225H9.98075V15.4423H8.48075ZM0 5.94225V4.51925L9.23075 0L18.4615 4.51925V5.94225H0ZM3.5615 4.44225H14.9L9.23075 1.69225L3.5615 4.44225ZM0 18.9423V17.4423H11.5787C11.5992 17.7089 11.6282 17.9631 11.6655 18.2048C11.7027 18.4464 11.7552 18.6923 11.823 18.9423H0ZM13.9808 12.202V7.94225H15.4808V11.452L13.9808 12.202ZM17.2307 22.0575C16.1641 21.7935 15.282 21.1823 14.5845 20.224C13.8872 19.2657 13.5385 18.2013 13.5385 17.0308V14.673L17.2307 12.827L20.923 14.673V17.0308C20.923 18.2013 20.5743 19.2657 19.877 20.224C19.1795 21.1823 18.2974 21.7935 17.2307 22.0575ZM16.5058 19.2307L19.7595 15.9923L18.9212 15.1538L16.5058 17.5385L15.5307 16.5635L14.6923 17.4172L16.5058 19.2307Z" fill="currentColor" />
   </svg>
 );
 
 
 const OutstandingAmountIcon = ({ size = 20, ...props }) => (
   <svg width={size} height={size} viewBox="0 0 17 19" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M9.073 15.0153C9.2295 14.8589 9.30775 14.6679 9.30775 14.4423C9.30775 14.2166 9.2295 14.0256 9.073 13.8693C8.91667 13.7129 8.72567 13.6348 8.5 13.6348C8.27433 13.6348 8.08333 13.7129 7.927 13.8693C7.7705 14.0256 7.69225 14.2166 7.69225 14.4423C7.69225 14.6679 7.7705 14.8589 7.927 15.0153C8.08333 15.1718 8.27433 15.25 8.5 15.25C8.72567 15.25 8.91667 15.1718 9.073 15.0153ZM7.75 11.7692H9.25V5.73075H7.75V11.7692ZM1.80775 19C1.30908 19 0.883083 18.8234 0.52975 18.4703C0.176583 18.1169 0 17.6909 0 17.1923V3.80775C0 3.30908 0.176583 2.88308 0.52975 2.52975C0.883083 2.17658 1.30908 2 1.80775 2H6.25775C6.32058 1.44483 6.56292 0.972749 6.98475 0.583749C7.40642 0.194583 7.9115 0 8.5 0C9.09483 0 9.60317 0.194583 10.025 0.583749C10.4468 0.972749 10.6859 1.44483 10.7423 2H15.1923C15.6909 2 16.1169 2.17658 16.4703 2.52975C16.8234 2.88308 17 3.30908 17 3.80775V17.1923C17 17.6909 16.8234 18.1169 16.4703 18.4703C16.1169 18.8234 15.6909 19 15.1923 19H1.80775ZM1.80775 17.5H15.1923C15.2692 17.5 15.3398 17.4679 15.4038 17.4038C15.4679 17.3398 15.5 17.2693 15.5 17.1923V3.80775C15.5 3.73075 15.4679 3.66025 15.4038 3.59625C15.3398 3.53208 15.2692 3.5 15.1923 3.5H1.80775C1.73075 3.5 1.66025 3.53208 1.59625 3.59625C1.53208 3.66025 1.5 3.73075 1.5 3.80775V17.1923C1.5 17.2693 1.53208 17.3398 1.59625 17.4038C1.66025 17.4679 1.73075 17.5 1.80775 17.5ZM9.0375 2.63375C9.17917 2.49208 9.25 2.31292 9.25 2.09625C9.25 1.87958 9.17917 1.70042 9.0375 1.55875C8.89583 1.41708 8.71667 1.34625 8.5 1.34625C8.28333 1.34625 8.10417 1.41708 7.9625 1.55875C7.82083 1.70042 7.75 1.87958 7.75 2.09625C7.75 2.31292 7.82083 2.49208 7.9625 2.63375C8.10417 2.77542 8.28333 2.84625 8.5 2.84625C8.71667 2.84625 8.89583 2.77542 9.0375 2.63375Z" fill="#0085FF" />
+    <path d="M9.073 15.0153C9.2295 14.8589 9.30775 14.6679 9.30775 14.4423C9.30775 14.2166 9.2295 14.0256 9.073 13.8693C8.91667 13.7129 8.72567 13.6348 8.5 13.6348C8.27433 13.6348 8.08333 13.7129 7.927 13.8693C7.7705 14.0256 7.69225 14.2166 7.69225 14.4423C7.69225 14.6679 7.7705 14.8589 7.927 15.0153C8.08333 15.1718 8.27433 15.25 8.5 15.25C8.72567 15.25 8.91667 15.1718 9.073 15.0153ZM7.75 11.7692H9.25V5.73075H7.75V11.7692ZM1.80775 19C1.30908 19 0.883083 18.8234 0.52975 18.4703C0.176583 18.1169 0 17.6909 0 17.1923V3.80775C0 3.30908 0.176583 2.88308 0.52975 2.52975C0.883083 2.17658 1.30908 2 1.80775 2H6.25775C6.32058 1.44483 6.56292 0.972749 6.98475 0.583749C7.40642 0.194583 7.9115 0 8.5 0C9.09483 0 9.60317 0.194583 10.025 0.583749C10.4468 0.972749 10.6859 1.44483 10.7423 2H15.1923C15.6909 2 16.1169 2.17658 16.4703 2.52975C16.8234 2.88308 17 3.30908 17 3.80775V17.1923C17 17.6909 16.8234 18.1169 16.4703 18.4703C16.1169 18.8234 15.6909 19 15.1923 19H1.80775ZM1.80775 17.5H15.1923C15.2692 17.5 15.3398 17.4679 15.4038 17.4038C15.4679 17.3398 15.5 17.2693 15.5 17.1923V3.80775C15.5 3.73075 15.4679 3.66025 15.4038 3.59625C15.3398 3.53208 15.2692 3.5 15.1923 3.5H1.80775C1.73075 3.5 1.66025 3.53208 1.59625 3.59625C1.53208 3.66025 1.5 3.73075 1.5 3.80775V17.1923C1.5 17.2693 1.53208 17.3398 1.59625 17.4038C1.66025 17.4679 1.73075 17.5 1.80775 17.5ZM9.0375 2.63375C9.17917 2.49208 9.25 2.31292 9.25 2.09625C9.25 1.87958 9.17917 1.70042 9.0375 1.55875C8.89583 1.41708 8.71667 1.34625 8.5 1.34625C8.28333 1.34625 8.10417 1.41708 7.9625 1.55875C7.82083 1.70042 7.75 1.87958 7.75 2.09625C7.75 2.31292 7.82083 2.49208 7.9625 2.63375C8.10417 2.77542 8.28333 2.84625 8.5 2.84625C8.71667 2.84625 8.89583 2.77542 9.0375 2.63375Z" fill="currentColor" />
   </svg>
 );
 
 const OverdueInvoicesIcon = ({ size = 20, ...props }) => (
   <svg width={size} height={size} viewBox="0 0 22 17" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M4.09625 16.0578V14.5577H5.62875L7.55575 8.09825C7.66992 7.70325 7.8885 7.38942 8.2115 7.15675C8.53467 6.92408 8.89367 6.80775 9.2885 6.80775H12.2115C12.6063 6.80775 12.9653 6.92408 13.2885 7.15675C13.6115 7.38942 13.8301 7.70325 13.9443 8.09825L15.8712 14.5577H17.4038V16.0578H4.09625ZM7.2095 14.5577H14.2905L12.5 8.529C12.4808 8.45833 12.444 8.40383 12.3895 8.3655C12.335 8.327 12.2725 8.30775 12.202 8.30775H9.298C9.2275 8.30775 9.165 8.327 9.1105 8.3655C9.056 8.40383 9.01917 8.45833 9 8.529L7.2095 14.5577ZM10 4.5V0H11.5V4.5H10ZM15.7 6.86925L14.6307 5.8L17.825 2.63075L18.8693 3.675L15.7 6.86925ZM17 11.5V10H21.5V11.5H17ZM5.8 6.86925L2.63075 3.675L3.675 2.63075L6.86925 5.8L5.8 6.86925ZM0 11.5V10H4.5V11.5H0Z" fill="#CD3636" />
+    <path d="M4.09625 16.0578V14.5577H5.62875L7.55575 8.09825C7.66992 7.70325 7.8885 7.38942 8.2115 7.15675C8.53467 6.92408 8.89367 6.80775 9.2885 6.80775H12.2115C12.6063 6.80775 12.9653 6.92408 13.2885 7.15675C13.6115 7.38942 13.8301 7.70325 13.9443 8.09825L15.8712 14.5577H17.4038V16.0578H4.09625ZM7.2095 14.5577H14.2905L12.5 8.529C12.4808 8.45833 12.444 8.40383 12.3895 8.3655C12.335 8.327 12.2725 8.30775 12.202 8.30775H9.298C9.2275 8.30775 9.165 8.327 9.1105 8.3655C9.056 8.40383 9.01917 8.45833 9 8.529L7.2095 14.5577ZM10 4.5V0H11.5V4.5H10ZM15.7 6.86925L14.6307 5.8L17.825 2.63075L18.8693 3.675L15.7 6.86925ZM17 11.5V10H21.5V11.5H17ZM5.8 6.86925L2.63075 3.675L3.675 2.63075L6.86925 5.8L5.8 6.86925ZM0 11.5V10H4.5V11.5H0Z" fill="currentColor" />
   </svg>
 );
 
@@ -126,8 +126,16 @@ const INVOICE_FILTER_COLUMNS = [
   { key: "dueDate", label: "Due Date", options: DATE_RANGES.map((r) => r.label) },
 ];
 
-export default function CompanyInvoicesTab({ invoices, summary, loading, showStats = true, deals = [], refreshInvoices }) {
-  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+export default function CompanyInvoicesTab({ invoices, summary, loading, showStats = true, deals = [], refreshInvoices, autoOpenCreate = false, onAutoOpenCreateConsumed }) {
+  const [manualInvoiceFormOpen, setManualInvoiceFormOpen] = useState(false);
+  // Derived rather than copied into local state on a one-shot effect — a
+  // copy raced the initial data load (whichever re-rendered first won) and
+  // could get clobbered before ever becoming visible.
+  const showInvoiceForm = manualInvoiceFormOpen || autoOpenCreate;
+  const closeInvoiceForm = () => {
+    setManualInvoiceFormOpen(false);
+    if (autoOpenCreate) onAutoOpenCreateConsumed?.();
+  };
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({});
@@ -646,10 +654,13 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
               kpiTiles.map((tile) => (
                 <div
                   key={tile.label}
-                  className="h-[72px] flex items-end gap-3 px-3 py-3 bg-white border border-gray-200 rounded-xl box-border"
+                  className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
                 >
-                  <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <tile.icon size={20} />
+                  <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                    <tile.icon size={16} />
+                  </div>
+                  <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
+                    <tile.icon size={18} />
                   </div>
                   <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
                     <div className="min-w-0">
@@ -737,7 +748,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
           </button>
           <button
             type="button"
-            onClick={() => setShowInvoiceForm(true)}
+            onClick={() => setManualInvoiceFormOpen(true)}
             className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
             style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
             title="Add Invoice"
@@ -747,6 +758,19 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
         </div>
       )}
 
+      {!loading && totalCountFiltered === 0 ? (
+        <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+          <FileText size={28} className="mb-3 text-blue-500" />
+          <button
+            type="button"
+            onClick={() => setManualInvoiceFormOpen(true)}
+            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+          >
+            <Plus size={16} />
+            Add new
+          </button>
+        </div>
+      ) : (
       <div
         ref={fillContainerRef}
         style={fillStyle}
@@ -933,14 +957,14 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
               <tr>
                 <td colSpan={orderedColumns.length + 1} className="p-3 border-b border-[#E1E4EA]">
                   <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-                    <FileText size={28} className="mb-3 text-gray-400" />
+                    <FileText size={28} className="mb-3 text-blue-500" />
                     <button
                       type="button"
-                      onClick={() => setShowInvoiceForm(true)}
-                      className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                      onClick={() => setManualInvoiceFormOpen(true)}
+                      className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
                     >
                       <Plus size={16} />
-                      Add new invoice
+                      Add new
                     </button>
                   </div>
                 </td>
@@ -1082,6 +1106,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
           </tbody>
         </table>
       </div>
+      )}
 
       {totalCountFiltered > 0 && (
         <div
@@ -1152,7 +1177,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
         <InvoiceForm
           deals={deals}
           isOpen={showInvoiceForm}
-          onClose={() => setShowInvoiceForm(false)}
+          onClose={closeInvoiceForm}
           fetchData={() => refreshInvoices?.()}
           editingInvoice={null}
           onPreview={() => {

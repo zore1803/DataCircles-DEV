@@ -23,7 +23,8 @@ const taskSchema = new mongoose.Schema({
   
   users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true }
+  organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true },
+  starredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Task', taskSchema);

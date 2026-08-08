@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { X, Plus, ChevronDown, Check, Pencil, Trash2, ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 /*
  * Right-hand drawer for the saved Notes / Terms blocks that print in a
@@ -138,13 +137,6 @@ const NotesTermsDrawer = ({
       document.removeEventListener("mousedown", onClick);
     };
   }, [isOpen, onClose, typeOpen, editing]);
-
-  // Dims the sidebar/navbar/page-footer chrome while this panel is open --
-  // see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isOpen]);
 
   const handleSave = async () => {
     if (!editing.body?.trim()) return toast.error(`${tab.label} text can't be empty.`);

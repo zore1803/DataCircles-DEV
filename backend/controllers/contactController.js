@@ -240,20 +240,69 @@ const getAllContactsPaginated = async (req, res) => {
       return res.json({ ids: allContacts.map((c) => c._id) });
     }
 
-    // Execute queries in parallel for better performance
-    const [contacts, totalCount] = await Promise.all([
-      Contact.find(query)
-        .populate("company")
-        .populate("user", "name")
-        .populate("createdBy", "name")
-        .populate("lastUpdatedBy", "name")
-        .skip(skip)
-        .limit(limit)
-        .sort(sortObj)
-        .lean()
-        .select("-__v"),
-      Contact.countDocuments(query),
+    // Execute aggregation pipeline so starred contacts (per-user) always
+    // sort to the top of page 1, regardless of which page they'd otherwise
+    // land on.
+    const userId = req.user._id;
+    const [{ data: contacts, totalCountArr }] = await Contact.aggregate([
+      { $match: query },
+      {
+        $addFields: {
+          isStarred: { $in: [userId, { $ifNull: ["$starredBy", []] }] },
+        },
+      },
+      { $sort: { isStarred: -1, ...sortObj } },
+      {
+        $facet: {
+          data: [
+            { $skip: skip },
+            { $limit: limit },
+            {
+              $lookup: {
+                from: "companies",
+                localField: "company",
+                foreignField: "_id",
+                as: "company",
+              },
+            },
+            { $unwind: { path: "$company", preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: "users",
+                localField: "user",
+                foreignField: "_id",
+                as: "user",
+                pipeline: [{ $project: { name: 1 } }],
+              },
+            },
+            { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: "users",
+                localField: "createdBy",
+                foreignField: "_id",
+                as: "createdBy",
+                pipeline: [{ $project: { name: 1 } }],
+              },
+            },
+            { $unwind: { path: "$createdBy", preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: "users",
+                localField: "lastUpdatedBy",
+                foreignField: "_id",
+                as: "lastUpdatedBy",
+                pipeline: [{ $project: { name: 1 } }],
+              },
+            },
+            { $unwind: { path: "$lastUpdatedBy", preserveNullAndEmptyArrays: true } },
+            { $project: { __v: 0, starredBy: 0 } },
+          ],
+          totalCountArr: [{ $count: "count" }],
+        },
+      },
     ]);
+    const totalCount = totalCountArr[0]?.count || 0;
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(totalCount / limit);
@@ -598,6 +647,30 @@ const mergeContacts = async (req, res) => {
 };
 
 
+const toggleStarContact = async (req, res) => {
+  try {
+    const contact = await Contact.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+    if (!contact) return res.status(404).json({ error: "Contact not found" });
+
+    const userId = req.user._id.toString();
+    const alreadyStarred = contact.starredBy.some((id) => id.toString() === userId);
+
+    if (alreadyStarred) {
+      contact.starredBy = contact.starredBy.filter((id) => id.toString() !== userId);
+    } else {
+      contact.starredBy.push(req.user._id);
+    }
+    await contact.save();
+
+    res.json({ starred: !alreadyStarred });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to toggle star", message: error.message });
+  }
+};
+
 module.exports = {
   createContact,
   getAllContacts,
@@ -611,4 +684,5 @@ module.exports = {
   getLifecycleStageStats,
   exportSelectedContacts,
   mergeContacts,
+  toggleStarContact,
 };

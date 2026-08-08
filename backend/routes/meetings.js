@@ -135,4 +135,14 @@ router.post(
 //   meetingController.generateMeetingLink,
 // );
 
+// POST /meetings/:id/star - Toggle star on a meeting
+router.post(
+  "/:id/star",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("meetings", "write"),
+  checkPermission("meetings", "read-write"),
+  meetingController.toggleStarMeeting
+);
+
 module.exports = router;

@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { FiSearch, FiFilter, FiDownload, FiX } from "react-icons/fi";
-import { Plus, Edit2, Trash2 } from "lucide-react";
+import { Plus, Edit2, Trash2, Star } from "lucide-react";
 import jsPDF from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import API from "../services/api";
@@ -77,6 +77,17 @@ const AllMeetings = () => {
     }
   };
 
+  const toggleStar = async (e, meetingId) => {
+    e.stopPropagation();
+    try {
+      await API.post(`/meetings/${meetingId}/star`);
+      await fetchAllData();
+      setCurrentPage(1);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update star");
+    }
+  };
+
   const getMeetingStatusBadge = (status) => {
     const statusClasses = {
       scheduled: "bg-blue-100 text-blue-700",
@@ -135,10 +146,17 @@ const AllMeetings = () => {
     userMap,
   ]);
 
+  // Starred meetings always sort to the top
+  const sortedMeetings = useMemo(() => {
+    return [...filteredMeetings].sort(
+      (a, b) => (b.isStarred ? 1 : 0) - (a.isStarred ? 1 : 0)
+    );
+  }, [filteredMeetings]);
+
   // Pagination logic
-  const totalPages = Math.ceil(filteredMeetings.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedMeetings.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedMeetings = filteredMeetings.slice(
+  const paginatedMeetings = sortedMeetings.slice(
     startIndex,
     startIndex + itemsPerPage
   );
@@ -517,7 +535,12 @@ const AllMeetings = () => {
                     onClick={(e) => handleMeetingClick(meeting, e)}
                   >
                     <td className="px-6 py-4 font-medium text-slate-900">
-                      {meeting.title}
+                      <div className="flex items-center gap-1.5">
+                        {meeting.isStarred && (
+                          <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400 shrink-0" />
+                        )}
+                        {meeting.title}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-slate-600 max-w-xs">
                       <div className="truncate">
@@ -563,6 +586,19 @@ const AllMeetings = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => toggleStar(e, meeting._id)}
+                          className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                          title={meeting.isStarred ? "Unstar Meeting" : "Star Meeting"}
+                        >
+                          <Star
+                            className={`w-4 h-4 ${
+                              meeting.isStarred
+                                ? "text-yellow-400 fill-yellow-400"
+                                : "text-slate-500"
+                            }`}
+                          />
+                        </button>
                         <button
                           onClick={(e) => handleDelete(meeting._id, e)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"

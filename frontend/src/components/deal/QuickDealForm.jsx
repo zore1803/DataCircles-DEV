@@ -6,7 +6,6 @@ import QuickCompanyForm from "../company/QuickCompanyForm";
 import QuickContactForm from "../contact/QuickContactForm";
 import { Plus, X } from "lucide-react";
 import toast from "react-hot-toast";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const QuickDealForm = ({
   companies,
@@ -34,12 +33,6 @@ const QuickDealForm = ({
   const [localContacts, setLocalContacts] = useState(contacts);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  // Dims the sidebar/navbar/page-footer chrome while this panel is
-  // open -- see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(true);
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);

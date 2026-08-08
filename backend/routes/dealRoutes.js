@@ -242,6 +242,15 @@ router.post(
 );
 
 router.post(
+  "/:id/star",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("deals", "read"),
+  checkPermission("deals", "readonly"),
+  dealController.toggleStarDeal
+);
+
+router.post(
   "/export-selected",
   requireAuth,
   subscriptionGate,

@@ -472,6 +472,23 @@ h6 {
   animation: shakeCycle 2.2s ease-in-out infinite;
 }
 
+/* Subtle continuous wiggle for the card following the cursor during a
+   kanban drag — small enough not to fight the drag transform, just enough
+   to read as "picked up" rather than static. */
+@keyframes dc-drag-wiggle {
+  0%, 100% {
+    transform: rotate(-1.5deg);
+  }
+
+  50% {
+    transform: rotate(1.5deg);
+  }
+}
+
+.dc-drag-wiggle {
+  animation: dc-drag-wiggle 0.28s ease-in-out infinite;
+}
+
 @keyframes shakeCycle {
 
   /* 0–80% = shaking (≈2 seconds) */

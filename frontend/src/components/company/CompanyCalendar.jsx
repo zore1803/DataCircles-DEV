@@ -200,7 +200,6 @@ const CompanyCalendar = ({ companyId }) => {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddDate, setQuickAddDate] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const searchInputRef = useRef(null);
   const [activityPopup, setActivityPopup] = useState({
     isOpen: false,
@@ -499,8 +498,6 @@ const CompanyCalendar = ({ companyId }) => {
           </button>
         </div>
 
-        <div className="flex-1 min-w-0 lg:hidden" />
-
         <div className="relative flex items-center bg-gray-100 rounded-full p-0.5 lg:p-1 flex-shrink-0 overflow-hidden">
           <span
             className="absolute top-0.5 lg:top-1 bottom-0.5 lg:bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
@@ -521,25 +518,14 @@ const CompanyCalendar = ({ companyId }) => {
           ))}
         </div>
 
-        {/* Mobile: icon-only button when collapsed */}
-        {!isSearchExpanded && (
-          <button
-            onClick={() => {
-              setIsSearchExpanded(true);
-              setTimeout(() => searchInputRef.current?.focus(), 0);
-            }}
-            className="lg:hidden flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 text-gray-400 hover:bg-gray-50 flex-shrink-0"
-          >
-            <SearchIcon className="w-4 h-4 text-[#525866]" />
-          </button>
-        )}
-
-        {/* Mobile: expanded input slides in from the right, overlaying the date nav + switcher
-            (matches the Companies-strip search behavior). Desktop: always shown inline, always full width. */}
-        <div
-          className={`absolute inset-y-0 right-11 z-20 flex items-center overflow-hidden rounded-full bg-white transition-[left] duration-300 ease-out lg:static lg:!left-auto lg:!right-auto lg:flex lg:flex-1 lg:overflow-visible lg:bg-transparent ${isSearchExpanded ? "left-0 opacity-100" : "left-[calc(100%-76px)] opacity-0 pointer-events-none lg:opacity-100"
-            }`}
+        <button
+          onClick={() => setCurrentDate(new Date())}
+          className="px-2.5 lg:px-3 py-1 lg:py-1.5 border border-gray-200 rounded-full text-[11px] lg:text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors flex-shrink-0"
         >
+          Today
+        </button>
+
+        <div className="relative flex items-center flex-1 min-w-0 rounded-full bg-white">
           <SearchIcon className="absolute left-2.5 lg:left-3 -translate-y-1/2 lg: top-1/2 w-4 h-4 text-[#525866]" />
           <input
             ref={searchInputRef}
@@ -547,10 +533,6 @@ const CompanyCalendar = ({ companyId }) => {
             placeholder="Search Events"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            onFocus={() => setIsSearchExpanded(true)}
-            onBlur={() => {
-              if (!searchTerm) setIsSearchExpanded(false);
-            }}
             className="w-full h-8 lg:h-9 pl-11 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
           />
         </div>

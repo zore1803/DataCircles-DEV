@@ -721,8 +721,11 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                 key={tile.label}
                 className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
               >
-                <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <tile.icon size={20} />
+                <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                  <tile.icon size={18} strokeWidth={1.5} />
+                </div>
+                <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
+                  <tile.icon size={20} strokeWidth={1.5} />
                 </div>
                 <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
                   <div className="min-w-0">
@@ -826,14 +829,14 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
       {/* Task list or empty state. */}
       {!isLoading && tasks.length === 0 ? (
         <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <ListChecks size={28} className="mb-3 text-gray-400" />
+          <ListChecks size={28} className="mb-3 text-blue-500" />
           <button
             type="button"
             onClick={() => setShowTaskForm(true)}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
           >
             <Plus size={16} />
-            Add new task
+            Add new
           </button>
         </div>
       ) : (

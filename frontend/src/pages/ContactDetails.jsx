@@ -131,6 +131,13 @@ const ContactDetailsPage = () => {
   };
 
   useEffect(() => {
+    // Reset so switching contacts (e.g. via the prev/next arrows) shows the
+    // loading skeleton again instead of leaving the previous contact's data
+    // on screen until the new fetch resolves.
+    setContact(null);
+    setCompany(null);
+    setDeals([]);
+
     const fetchData = async () => {
       await fetchContactDetails();
       try {
@@ -252,6 +259,30 @@ const ContactDetailsPage = () => {
           >
             {contact.name}
           </span>
+          {currentContactIds.length > 0 && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button
+                type="button"
+                onClick={goToPrev}
+                disabled={!hasPrev}
+                title="Previous contact"
+                aria-label="Previous contact"
+                className="w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={goToNext}
+                disabled={!hasNext}
+                title="Next contact"
+                aria-label="Next contact"
+                className="w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
