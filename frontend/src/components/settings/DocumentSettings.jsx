@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
-import { Save, FileText, PenSquare, Eye, Plus, Trash2, CheckCircle, ShieldCheck } from "lucide-react";
+import { Save, FileText, PenSquare, Eye, Plus, Trash2, CheckCircle, ShieldCheck, Edit3 } from "lucide-react";
 import SignatureModal from "./SignatureModal";
 
 const documentTypeMeta = [
@@ -27,6 +27,7 @@ function DocumentSettings() {
   });
   const [signatures, setSignatures] = useState([]);
   const [isSigModalOpen, setIsSigModalOpen] = useState(false);
+  const [editingSignature, setEditingSignature] = useState(null);
   const [newValues, setNewValues] = useState({
     invoice: { prefix: "", suffix: "" },
     quote: { prefix: "", suffix: "" },
@@ -41,15 +42,18 @@ function DocumentSettings() {
   const fetchSignatures = async () => {
     try {
       const res = await API.get("/document-settings/signatures");
-      setSignatures(res.data || []);
+      const list = Array.isArray(res.data) ? res.data : (res.data?.signatures || []);
+      setSignatures(list);
     } catch (err) {
       console.error("Failed to load signatures", err);
+      setSignatures([]);
     }
   };
 
   useEffect(() => {
     const loadSettings = async () => {
       try {
+        setLoading(true);
         const res = await API.get("/document-settings");
         const incoming = res.data?.documentTypeSettings || {};
         const normalizeSection = (key, fallback) => ({
@@ -106,11 +110,25 @@ function DocumentSettings() {
     }
   };
 
+  const handleOpenAddModal = () => {
+    setEditingSignature(null);
+    setIsSigModalOpen(true);
+  };
+
+  const handleOpenEditModal = (sig) => {
+    setEditingSignature(sig);
+    setIsSigModalOpen(true);
+  };
+
   const handleSaveSignature = async (sigData) => {
     try {
       const res = await API.post("/document-settings/signatures", sigData);
-      setSignatures(res.data.signatures || []);
-      toast.success("Signature added successfully");
+      const list = Array.isArray(res.data?.signatures) ? res.data.signatures : (Array.isArray(res.data) ? res.data : []);
+      setSignatures(list);
+      toast.success(editingSignature ? "Signature updated successfully" : "Signature added successfully");
+      setIsSigModalOpen(false);
+      setEditingSignature(null);
+      await fetchSignatures();
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.error || "Failed to save signature");
@@ -120,8 +138,10 @@ function DocumentSettings() {
   const handleDeleteSignature = async (id) => {
     try {
       const res = await API.delete(`/document-settings/signatures/${id}`);
-      setSignatures(res.data.signatures || []);
+      const list = Array.isArray(res.data?.signatures) ? res.data.signatures : (Array.isArray(res.data) ? res.data : []);
+      setSignatures(list);
       toast.success("Signature deleted");
+      await fetchSignatures();
     } catch (err) {
       console.error(err);
       toast.error("Failed to delete signature");
@@ -131,8 +151,10 @@ function DocumentSettings() {
   const handleSetDefaultSignature = async (id) => {
     try {
       const res = await API.patch(`/document-settings/signatures/${id}/default`);
-      setSignatures(res.data.signatures || []);
+      const list = Array.isArray(res.data?.signatures) ? res.data.signatures : (Array.isArray(res.data) ? res.data : []);
+      setSignatures(list);
       toast.success("Default signature updated");
+      await fetchSignatures();
     } catch (err) {
       console.error(err);
       toast.error("Failed to update default signature");
@@ -167,8 +189,9 @@ function DocumentSettings() {
 
   if (loading) {
     return (
-      <div className="p-6 bg-white rounded-2xl border border-gray-200 shadow-sm text-sm text-gray-500">
-        Loading document settings...
+      <div className="p-8 bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col items-center justify-center min-h-[300px]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-sky-500 border-t-transparent mb-3"></div>
+        <p className="text-sm font-medium text-gray-600">Loading document settings...</p>
       </div>
     );
   }
@@ -183,6 +206,8 @@ function DocumentSettings() {
     ...(previewSuffix ? [previewSuffix] : []),
   ];
   const previewNumber = previewSegments.length ? previewSegments.join(" - ") : `INV-${form.nextInvoiceNumber || 1}`;
+
+  const sigList = Array.isArray(signatures) ? signatures : [];
 
   return (
     <div className="space-y-8">
@@ -306,9 +331,6 @@ function DocumentSettings() {
               })()}
             </div>
 
-            {/* Footer boilerplate. The document editor's "Add Notes" / "Add
-                Terms" buttons drop these into a document on request; nothing is
-                applied automatically, so existing documents are untouched. */}
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
               <div>
                 <h4 className="text-sm font-semibold text-gray-800">Default Notes &amp; Terms</h4>
@@ -405,7 +427,7 @@ function DocumentSettings() {
           </div>
           <button
             type="button"
-            onClick={() => setIsSigModalOpen(true)}
+            onClick={handleOpenAddModal}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-purple-700 transition"
           >
             <Plus className="w-4 h-4" />
@@ -413,7 +435,7 @@ function DocumentSettings() {
           </button>
         </div>
 
-        {signatures.length === 0 ? (
+        {sigList.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 py-10 text-center">
             <div className="p-3 rounded-full bg-purple-50 text-purple-600 mb-3">
               <ShieldCheck className="w-6 h-6" />
@@ -424,7 +446,7 @@ function DocumentSettings() {
             </p>
             <button
               type="button"
-              onClick={() => setIsSigModalOpen(true)}
+              onClick={handleOpenAddModal}
               className="mt-4 text-xs font-bold text-purple-600 hover:text-purple-700 hover:underline"
             >
               + Add First Signature
@@ -432,9 +454,9 @@ function DocumentSettings() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {signatures.map((sig) => (
+            {sigList.map((sig) => (
               <div
-                key={sig.id}
+                key={sig.id || sig._id || Math.random()}
                 className={`relative flex flex-col justify-between rounded-2xl border-2 p-4 transition-all ${
                   sig.isDefault ? "border-purple-500 bg-purple-50/20 shadow-md" : "border-gray-200 bg-white hover:border-gray-300"
                 }`}
@@ -468,14 +490,24 @@ function DocumentSettings() {
                     <span className="text-xs text-gray-400">Current Default</span>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteSignature(sig.id)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition"
-                    title="Delete signature"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditModal(sig)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:bg-sky-50 hover:text-sky-600 transition"
+                      title="Edit signature"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSignature(sig.id)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                      title="Delete signature"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -484,7 +516,11 @@ function DocumentSettings() {
 
         <SignatureModal
           isOpen={isSigModalOpen}
-          onClose={() => setIsSigModalOpen(false)}
+          initialData={editingSignature}
+          onClose={() => {
+            setIsSigModalOpen(false);
+            setEditingSignature(null);
+          }}
           onSave={handleSaveSignature}
         />
       </div>
@@ -493,4 +529,3 @@ function DocumentSettings() {
 }
 
 export default DocumentSettings;
-
