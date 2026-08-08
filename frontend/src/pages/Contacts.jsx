@@ -5,7 +5,6 @@ import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { createPortal } from "react-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
-import { getPinnedBoundaryShadow } from "../utils/pinnedColumnShadow";
 import {
   Plus,
   Edit,
@@ -976,6 +975,7 @@ function Contacts() {
             return (
               <div className="flex items-center justify-between w-full group">
                 <span className="truncate flex-1 min-w-0 flex items-center gap-1.5" title={vc.label}>
+                  <span className="truncate">{vc.label}</span>
                   {pinSide && (
                     <Pin
                       size={12}
@@ -983,7 +983,6 @@ function Contacts() {
                       style={{ transform: "rotate(45deg)" }}
                     />
                   )}
-                  <span className="truncate">{vc.label}</span>
                 </span>
 
                 <button
@@ -3093,7 +3092,7 @@ function Contacts() {
             // loads; the top progress bar reports the fetch instead.
             // No border-t: the toolbar strip right above already has its own
             // border-b, so a top border here would double up against it.
-            <div className="relative bg-white border-x border-b border-[#E1E4EA]">
+            <div className="relative bg-white border-r border-b border-[#E1E4EA]">
               <table
                 className="w-full border-separate border-spacing-0 text-left"
                 style={{
@@ -3125,9 +3124,6 @@ function Contacts() {
                     }
                   });
 
-                  const lastLeftPinnedKey = leftPinnedKeys.length > 0 ? leftPinnedKeys[leftPinnedKeys.length - 1] : null;
-                  const firstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
-
                   return (
                     <>
                       <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
@@ -3138,21 +3134,9 @@ function Contacts() {
                               const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                               const isRightSticky = rightPinnedKeys.includes(colId);
                               const isSticky = isLeftSticky || isRightSticky;
-                              // Only draw the heavier pin-boundary divider once a column is actually
-                              // pinned — defaulting it to the checkbox column drew it there
-                              // unconditionally, doubled up against that column's own plain
-                              // border-r (see Companies.jsx for the same fix).
-                              const isLeftBoundary = lastLeftPinnedKey === colId;
-                              const isRightBoundary = colId === firstRightPinnedKey;
                               const isDraggable = colId !== "selection";
                               const isDragging = draggedColKey === colId;
                               const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
-
-                              // Subtle inset shadow at the pinned block's boundary edge —
-                              // same treatment as the CompanyProfilePage tabs — instead of a
-                              // flat 2px border, so scrolling under a pinned column reads as
-                              // a genuinely separated layer.
-                              const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
 
                               return (
                                 <th
@@ -3166,9 +3150,8 @@ function Contacts() {
                                     right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                     zIndex: isSticky ? 20 : 1,
                                     opacity: isDragging ? 0.35 : 1,
-                                    boxShadow: boundaryShadow || undefined,
                                   }}
-                                  className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} last:border-r-0 ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                                  className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] last:border-r-0 transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                                 >
                                   <div className="flex items-center gap-1.5 w-full min-w-0">
                                     <div className="min-w-0 flex-1 truncate">
@@ -3233,15 +3216,7 @@ function Contacts() {
                                 const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                                 const isRightSticky = rightPinnedKeys.includes(colId);
                                 const isSticky = isLeftSticky || isRightSticky;
-                                // Only draw the heavier pin-boundary divider once a column is actually
-                              // pinned — defaulting it to the checkbox column drew it there
-                              // unconditionally, doubled up against that column's own plain
-                              // border-r (see Companies.jsx for the same fix).
-                              const isLeftBoundary = lastLeftPinnedKey === colId;
-                                const isRightBoundary = colId === firstRightPinnedKey;
                                 const isColDragging = draggedColKey === colId;
-
-                                const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
 
                                 return (
                                   <td
@@ -3254,7 +3229,6 @@ function Contacts() {
                                       right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                       zIndex: isSticky ? 10 : 1,
                                       opacity: isColDragging ? 0.35 : 1,
-                                      boxShadow: cellBoundaryShadow || undefined,
                                     }}
                                     className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                                   >
