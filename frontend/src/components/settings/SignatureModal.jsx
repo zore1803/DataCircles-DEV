@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import SignatureCanvas from "react-signature-canvas";
-import { X, Upload, Edit3, Type, Check, RefreshCw, Palette } from "lucide-react";
+import { X, Upload, Edit3, Type, Check, RefreshCw, Palette, Plus, Eraser, PenTool } from "lucide-react";
 import toast from "react-hot-toast";
 
 const FONT_FAMILIES = [
@@ -15,7 +15,7 @@ const FONT_FAMILIES = [
   { id: "meie", name: "Meie Script", fontName: "Meie Script", className: "font-signature-meie" },
 ];
 
-const SIGNATURE_COLORS = [
+const DEFAULT_SIGNATURE_COLORS = [
   { name: "Black", hex: "#0f172a" },
   { name: "Navy Blue", hex: "#1e3a8a" },
   { name: "Royal Blue", hex: "#2563eb" },
@@ -24,36 +24,146 @@ const SIGNATURE_COLORS = [
   { name: "Purple", hex: "#6b21a8" },
 ];
 
-export default function SignatureModal({ isOpen, onClose, onSave }) {
+export default function SignatureModal({ isOpen, onClose, onSave, initialData }) {
   const [activeTab, setActiveTab] = useState("upload"); // "upload" | "draw" | "type"
   const [sigName, setSigName] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [penColor, setPenColor] = useState(SIGNATURE_COLORS[0].hex);
+  const [penColor, setPenColor] = useState(DEFAULT_SIGNATURE_COLORS[0].hex);
+  const [colorList, setColorList] = useState(DEFAULT_SIGNATURE_COLORS);
 
-  // Upload state
-  const [uploadedImage, setUploadedImage] = useState(null);
+  // Custom color picker state
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [customHexInput, setCustomHexInput] = useState("#2563eb");
 
   // Draw state
   const sigCanvasRef = useRef(null);
+  const [isEraser, setIsEraser] = useState(false);
+  const previousColorRef = useRef(DEFAULT_SIGNATURE_COLORS[0].hex);
+
+  // Upload state
+  const [uploadedImage, setUploadedImage] = useState(null);
 
   // Type state
   const [typedText, setTypedText] = useState("");
   const [selectedFont, setSelectedFont] = useState(FONT_FAMILIES[0]);
 
+  // Load initial data when editing or initializing the modal
+  useEffect(() => {
+    if (isOpen) {
+      if (initialData) {
+        setSigName(initialData.name || "");
+        setActiveTab(initialData.type || "upload");
+        setIsDefault(Boolean(initialData.isDefault));
+        if (initialData.penColor) setPenColor(initialData.penColor);
+        if (initialData.type === "upload") {
+          setUploadedImage(initialData.dataUrl || null);
+        } else if (initialData.type === "type") {
+          setTypedText(initialData.typedText || "");
+          if (initialData.fontId) {
+            const fontObj = FONT_FAMILIES.find((f) => f.id === initialData.fontId);
+            if (fontObj) setSelectedFont(fontObj);
+          }
+        } else if (initialData.type === "draw") {
+          if (sigCanvasRef.current) {
+            try {
+              sigCanvasRef.current.fromDataURL(initialData.dataUrl);
+            } catch (err) {
+              console.error("Failed to load saved signature onto canvas", err);
+            }
+          }
+        }
+      } else {
+        // Reset form for new signature
+        setSigName("");
+        setActiveTab("upload");
+        setUploadedImage(null);
+        setTypedText("");
+        setIsDefault(false);
+        setIsEraser(false);
+        setPenColor(DEFAULT_SIGNATURE_COLORS[0].hex);
+      }
+    }
+  }, [isOpen, initialData, activeTab]);
+
   // Update pen color on canvas directly without wiping canvas
   const handleColorChange = (hex) => {
+    setIsEraser(false);
     setPenColor(hex);
+    previousColorRef.current = hex;
     if (sigCanvasRef.current) {
       try {
         const pad = sigCanvasRef.current.getSignaturePad();
         if (pad) {
           pad.penColor = hex;
+          pad.minWidth = 0.5;
+          pad.maxWidth = 2.5;
         }
       } catch (err) {
         console.error("Could not set penColor dynamically", err);
       }
     }
+  };
+
+  // Toggle Eraser tool on drawing pad
+  const toggleEraserMode = () => {
+    if (isEraser) {
+      // Switch back to Pen mode
+      setIsEraser(false);
+      const restoreColor = previousColorRef.current || "#0f172a";
+      setPenColor(restoreColor);
+      if (sigCanvasRef.current) {
+        try {
+          const pad = sigCanvasRef.current.getSignaturePad();
+          if (pad) {
+            pad.penColor = restoreColor;
+            pad.minWidth = 0.5;
+            pad.maxWidth = 2.5;
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    } else {
+      // Switch to Eraser mode
+      setIsEraser(true);
+      if (penColor !== "#ffffff") {
+        previousColorRef.current = penColor;
+      }
+      setPenColor("#ffffff");
+      if (sigCanvasRef.current) {
+        try {
+          const pad = sigCanvasRef.current.getSignaturePad();
+          if (pad) {
+            pad.penColor = "#ffffff";
+            pad.minWidth = 8;
+            pad.maxWidth = 16;
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    }
+  };
+
+  // Add custom color from board / hex input
+  const handleAddCustomColor = (hex) => {
+    let formattedHex = hex.trim();
+    if (!formattedHex.startsWith("#")) {
+      formattedHex = `#${formattedHex}`;
+    }
+    const hexRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+    if (!hexRegex.test(formattedHex)) {
+      toast.error("Please enter a valid hex color code (e.g. #2563EB)");
+      return;
+    }
+
+    // Check if color already exists
+    if (!colorList.some((c) => c.hex.toLowerCase() === formattedHex.toLowerCase())) {
+      setColorList((prev) => [...prev, { name: formattedHex, hex: formattedHex }]);
+    }
+    handleColorChange(formattedHex);
+    setShowColorPicker(false);
   };
 
   if (!isOpen) return null;
@@ -156,17 +266,16 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
     try {
       setLoading(true);
       await onSave({
+        id: initialData?.id,
         name: sigName.trim(),
         type: activeTab,
         dataUrl,
+        typedText: activeTab === "type" ? typedText.trim() : "",
+        fontId: activeTab === "type" ? selectedFont.id : "",
+        penColor,
         isDefault,
       });
       onClose();
-      // Reset form
-      setSigName("");
-      setUploadedImage(null);
-      setTypedText("");
-      setIsDefault(false);
     } catch (err) {
       console.error("Save signature error:", err);
       toast.error(err.response?.data?.error || err.message || "Failed to save signature");
@@ -177,12 +286,14 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl transition-all max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl transition-all max-h-[92vh] overflow-y-auto">
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-4">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">Add Digital Signature</h3>
-            <p className="text-xs text-gray-500">Choose a method to add your authorized signature</p>
+            <h3 className="text-xl font-bold text-gray-900">
+              {initialData ? "Edit Digital Signature" : "Add Digital Signature"}
+            </h3>
+            <p className="text-xs text-gray-500">Choose a method to add or edit your authorized signature</p>
           </div>
           <button
             type="button"
@@ -231,31 +342,91 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
 
         {/* Color Palette (for Draw and Type tabs) */}
         {(activeTab === "draw" || activeTab === "type") && (
-          <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200 px-4 py-2.5">
+          <div className="relative mt-4 flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200 px-4 py-2.5">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
               <Palette className="h-4 w-4 text-slate-500" />
               <span>Ink Color:</span>
             </div>
-            <div className="flex items-center gap-2.5">
-              {SIGNATURE_COLORS.map((color) => (
+            <div className="flex items-center gap-2 flex-wrap">
+              {colorList.map((color) => (
                 <button
                   key={color.hex}
                   type="button"
                   title={color.name}
                   onClick={() => handleColorChange(color.hex)}
                   className={`h-7 w-7 rounded-full transition-transform border border-black/10 flex items-center justify-center ${
-                    penColor === color.hex ? "ring-2 ring-sky-500 ring-offset-2 scale-110 shadow-sm" : "hover:scale-105 opacity-90 hover:opacity-100"
+                    !isEraser && penColor === color.hex ? "ring-2 ring-sky-500 ring-offset-2 scale-110 shadow-sm" : "hover:scale-105 opacity-90 hover:opacity-100"
                   }`}
                   style={{ backgroundColor: color.hex }}
                 >
-                  {penColor === color.hex && <Check className="h-3.5 w-3.5 text-white drop-shadow-sm" />}
+                  {!isEraser && penColor === color.hex && <Check className="h-3.5 w-3.5 text-white drop-shadow-sm" />}
                 </button>
               ))}
+
+              {/* Add Custom Color Button */}
+              <button
+                type="button"
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                className="h-7 w-7 rounded-full border border-dashed border-gray-400 bg-white flex items-center justify-center text-gray-600 hover:border-sky-500 hover:text-sky-600 transition"
+                title="Add Custom Color"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
             </div>
+
+            {/* Custom Color Picker Popover Board */}
+            {showColorPicker && (
+              <div className="absolute right-4 top-12 z-20 w-64 rounded-2xl bg-white p-4 shadow-xl border border-gray-200 animate-in fade-in zoom-in-95">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-3">
+                  <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                    <Palette className="h-3.5 w-3.5 text-sky-600" /> Choose Custom Color
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowColorPicker(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-600 mb-1">Color Palette Board</label>
+                    <input
+                      type="color"
+                      value={customHexInput.startsWith("#") ? customHexInput : `#${customHexInput}`}
+                      onChange={(e) => setCustomHexInput(e.target.value)}
+                      className="h-10 w-full cursor-pointer rounded-xl border border-gray-200 bg-transparent p-1 shadow-inner"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-600 mb-1">Hex Code</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customHexInput}
+                        onChange={(e) => setCustomHexInput(e.target.value)}
+                        placeholder="#2563EB"
+                        className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-mono outline-none focus:border-sky-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddCustomColor(customHexInput)}
+                        className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700 shadow-sm"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Form Wrap around entire tab body and action buttons so enter key & submit work smoothly */}
+        {/* Form Wrap around entire tab body and action buttons */}
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div className="min-h-[260px]">
             {/* TAB 1: UPLOAD */}
@@ -291,6 +462,30 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
             {/* TAB 2: DRAW */}
             {activeTab === "draw" && (
               <div className="relative rounded-xl border border-gray-300 bg-slate-50 p-2 shadow-inner">
+                {/* Drawing Controls Bar (Pen, Eraser, Clear Pad) */}
+                <div className="absolute right-4 top-4 flex items-center gap-2 z-10">
+                  <button
+                    type="button"
+                    onClick={toggleEraserMode}
+                    className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold shadow-sm transition border ${
+                      isEraser
+                        ? "bg-amber-500 text-white border-amber-600 ring-2 ring-amber-300"
+                        : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"
+                    }`}
+                  >
+                    {isEraser ? <Eraser className="h-3.5 w-3.5" /> : <PenTool className="h-3.5 w-3.5" />}
+                    {isEraser ? "Eraser Active" : "Eraser"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleClearDraw}
+                    className="rounded-lg bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-700 shadow hover:bg-gray-100 border border-gray-200 transition"
+                  >
+                    Clear Pad
+                  </button>
+                </div>
+
                 <SignatureCanvas
                   ref={sigCanvasRef}
                   canvasProps={{
@@ -298,14 +493,9 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
                   }}
                   penColor={penColor}
                 />
-                <button
-                  type="button"
-                  onClick={handleClearDraw}
-                  className="absolute right-4 top-4 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-700 shadow hover:bg-gray-100 border border-gray-200 transition z-10"
-                >
-                  Clear Pad
-                </button>
-                <p className="mt-2 text-center text-xs text-gray-500 font-medium">Draw your signature using mouse or touch</p>
+                <p className="mt-2 text-center text-xs text-gray-500 font-medium">
+                  {isEraser ? "Eraser tool selected — drag over lines to erase" : "Draw your signature using mouse or touch"}
+                </p>
               </div>
             )}
 
@@ -411,7 +601,7 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
                 disabled={loading}
                 className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow-md hover:bg-sky-700 disabled:opacity-60"
               >
-                {loading ? "Saving..." : "Save Signature"}
+                {loading ? (initialData ? "Updating..." : "Saving...") : (initialData ? "Update Signature" : "Save Signature")}
               </button>
             </div>
           </div>
