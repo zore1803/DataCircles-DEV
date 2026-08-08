@@ -3,7 +3,8 @@ import {
   CheckSquare,
   Download,
   Edit2,
-  Square,
+  ListChecks,
+  StickyNote,
   Trash2,
   X,
 } from 'lucide-react';
@@ -29,72 +30,62 @@ const BulkActionBar = ({
   onSelectAll,
   onDeselectAll,
   onExport,
+  onAddNote,
+  onAddTask,
   onDelete,
   onUpdateStatus,
   onCancel,
   isDeleting = false,
   isClosing = false,
 }) => {
-  const buttonBase =
-    'px-4 py-2 text-sm font-medium rounded-lg focus:outline-none transition-colors flex items-center gap-2';
+  // Left side is ONE joined segmented control (matching pages/Companies.jsx):
+  // white fill, gray border, black label, the icon carrying each action's
+  // accent colour. Only rounds the two outer corners and pulls each button 1px
+  // onto its neighbour (-ml-px) so touching borders don't double into a seam.
+  // Every action is optional — a button renders only when its handler exists —
+  // so the first/last rounding is computed from what actually renders.
+  const leftButtons = [
+    onExport && { key: 'export', label: 'Export', Icon: Download, iconClass: 'text-green-600', onClick: onExport },
+    onAddNote && { key: 'note', label: 'Add Note', Icon: StickyNote, iconClass: 'text-emerald-600', onClick: onAddNote },
+    onAddTask && { key: 'task', label: 'Add Task', Icon: ListChecks, iconClass: 'text-indigo-600', onClick: onAddTask },
+    onUpdateStatus && { key: 'update', label: 'Bulk Update', Icon: Edit2, iconClass: 'text-blue-600', onClick: onUpdateStatus },
+    onDelete && { key: 'delete', label: 'Delete', Icon: Trash2, iconClass: 'text-red-600', onClick: onDelete, disabled: isDeleting },
+    onCancel && { key: 'cancel', label: 'Cancel', Icon: X, iconClass: 'text-gray-500', onClick: onCancel },
+  ].filter(Boolean);
 
   return (
     <div
       className={`${
         isClosing ? 'animate-slideOutRight' : 'animate-slideInLeft'
-      } flex flex-wrap items-center justify-between gap-6 bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4`}
+      } flex flex-nowrap lg:flex-wrap items-center justify-between gap-4 lg:gap-6 bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4 overflow-x-auto lg:overflow-visible`}
       style={{ minHeight: 44 }}
     >
-      <div className="flex flex-wrap items-center gap-3 py-2">
-        {onExport && (
+      <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0 py-2">
+        {leftButtons.map((btn, i) => (
           <button
-            onClick={onExport}
-            className={`${buttonBase} bg-white border border-green-600 text-green-700 hover:bg-green-50`}
+            key={btn.key}
+            onClick={btn.onClick}
+            disabled={btn.disabled}
+            className={`h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50 ${
+              i === 0 ? 'rounded-l-lg' : '-ml-px'
+            } ${i === leftButtons.length - 1 ? 'rounded-r-lg' : ''}`}
           >
-            <Download className="w-4 h-4" />
-            Export
+            <btn.Icon className={`w-4 h-4 ${btn.iconClass}`} />
+            {btn.label}
           </button>
-        )}
-        {onUpdateStatus && (
-          <button
-            onClick={onUpdateStatus}
-            className={`${buttonBase} bg-blue-600 text-white hover:bg-blue-700`}
-          >
-            <Edit2 className="w-4 h-4" />
-            Bulk Update
-          </button>
-        )}
-        {onDelete && (
-          <button
-            onClick={onDelete}
-            disabled={isDeleting}
-            className={`${buttonBase} bg-red-600 text-white hover:bg-red-700 disabled:opacity-50`}
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete
-          </button>
-        )}
-        {onCancel && (
-          <button
-            onClick={onCancel}
-            className={`${buttonBase} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50`}
-          >
-            <X className="w-4 h-4" />
-            Cancel
-          </button>
-        )}
+        ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 py-2">
-        <CheckSquare className="w-5 h-5 text-blue-600" />
-        <span className="text-blue-800 font-semibold text-sm font-inter">
+      <div className="flex items-center gap-3 flex-shrink-0 py-2">
+        <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+        <span className="text-blue-800 font-semibold text-sm font-inter whitespace-nowrap">
           {selectedCount} {entityName}
           {selectedCount !== 1 ? 's' : ''} selected
         </span>
         {onSelectAll && (
           <button
             onClick={onSelectAll}
-            className={`${buttonBase} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50`}
+            className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
           >
             <CheckSquare className="w-4 h-4" />
             Select All
@@ -103,9 +94,9 @@ const BulkActionBar = ({
         {onDeselectAll && (
           <button
             onClick={onDeselectAll}
-            className={`${buttonBase} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50`}
+            className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
           >
-            <Square className="w-4 h-4" />
+            <X className="w-4 h-4" />
             Deselect All
           </button>
         )}

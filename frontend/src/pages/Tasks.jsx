@@ -10,7 +10,7 @@ import { useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
-import { getPinnedBoundaryShadow } from "../utils/pinnedColumnShadow";
+import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import {
   ChevronUp,
   ChevronDown,
@@ -3072,12 +3072,10 @@ function Tasks() {
                     const isLeftSticky = colId === "selection" || taskLeftPinnedKeys.includes(colId);
                     const isRightSticky = taskRightPinnedKeys.includes(colId);
                     const isSticky = isLeftSticky || isRightSticky;
-                    const isLeftBoundary = taskLastLeftPinnedKey ? colId === taskLastLeftPinnedKey : colId === "selection";
-                    const isRightBoundary = colId === taskFirstRightPinnedKey;
+                    const boundaryShadowSide = colId === taskLastLeftPinnedKey ? "left" : colId === taskFirstRightPinnedKey ? "right" : null;
                     const isDraggable = colId !== "selection" && colId !== "actions";
                     const isDragging = draggedColKey === colId;
                     const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
-                    const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
                     return (
                       <th
                         key={header.id}
@@ -3096,16 +3094,20 @@ function Tasks() {
                           left: isLeftSticky ? taskPinnedLeftOffsets[colId] ?? 0 : "auto",
                           right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isLeftSticky ? 20 : isRightSticky ? 20 : 15,
-                          opacity: isDragging ? 0.35 : 1,
-                          boxShadow: boundaryShadow || undefined,
                         }}
-                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        /* No `overflow-hidden` on the boundary cell — it would clip
+                           the shadow overlay that deliberately hangs outside it.
+                           The inner `truncate` already handles long labels. */
+                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${boundaryShadowSide ? "" : "overflow-hidden"} ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
-                        <div className="flex items-center gap-1.5 w-full min-w-0">
+                        <div className="flex items-center gap-1.5 w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                           <div className="truncate flex-1 min-w-0">
                             {flexRender(header.column.columnDef.header, header.getContext())}
                           </div>
                         </div>
+                        {boundaryShadowSide && (
+                          <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSide)} />
+                        )}
                         {header.column.getCanResize() && (
                           <div
                             data-resize-handle="true"
@@ -3159,9 +3161,7 @@ function Tasks() {
                       const isLeftSticky = colId === "selection" || taskLeftPinnedKeys.includes(colId);
                       const isRightSticky = taskRightPinnedKeys.includes(colId);
                       const isSticky = isLeftSticky || isRightSticky;
-                      const isLeftBoundary = taskLastLeftPinnedKey ? colId === taskLastLeftPinnedKey : colId === "selection";
-                      const isRightBoundary = colId === taskFirstRightPinnedKey;
-                      const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
+                      const cellBoundaryShadowSide = colId === taskLastLeftPinnedKey ? "left" : colId === taskFirstRightPinnedKey ? "right" : null;
                       return (
                         <td
                           key={cell.id}
@@ -3172,11 +3172,13 @@ function Tasks() {
                             left: isLeftSticky ? taskPinnedLeftOffsets[colId] ?? 0 : "auto",
                             right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
-                            boxShadow: cellBoundaryShadow || undefined,
                           }}
                           className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          {cellBoundaryShadowSide && (
+                            <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
+                          )}
                         </td>
                       );
                     })}
@@ -3232,12 +3234,10 @@ function Tasks() {
                     const isLeftSticky = colId === "selection" || meetingLeftPinnedKeys.includes(colId);
                     const isRightSticky = meetingRightPinnedKeys.includes(colId);
                     const isSticky = isLeftSticky || isRightSticky;
-                    const isLeftBoundary = meetingLastLeftPinnedKey ? colId === meetingLastLeftPinnedKey : colId === "selection";
-                    const isRightBoundary = colId === meetingFirstRightPinnedKey;
+                    const boundaryShadowSide = colId === meetingLastLeftPinnedKey ? "left" : colId === meetingFirstRightPinnedKey ? "right" : null;
                     const isDraggable = colId !== "selection" && colId !== "actions";
                     const isDragging = draggedColKey === colId;
                     const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
-                    const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
                     return (
                       <th
                         key={header.id}
@@ -3256,16 +3256,20 @@ function Tasks() {
                           left: isLeftSticky ? meetingPinnedLeftOffsets[colId] ?? 0 : "auto",
                           right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isLeftSticky ? 20 : isRightSticky ? 20 : 15,
-                          opacity: isDragging ? 0.35 : 1,
-                          boxShadow: boundaryShadow || undefined,
                         }}
-                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        /* No `overflow-hidden` on the boundary cell — it would clip
+                           the shadow overlay that deliberately hangs outside it.
+                           The inner `truncate` already handles long labels. */
+                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${boundaryShadowSide ? "" : "overflow-hidden"} ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
-                        <div className="flex items-center gap-1.5 w-full min-w-0">
+                        <div className="flex items-center gap-1.5 w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                           <div className="truncate flex-1 min-w-0">
                             {flexRender(header.column.columnDef.header, header.getContext())}
                           </div>
                         </div>
+                        {boundaryShadowSide && (
+                          <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSide)} />
+                        )}
                         {header.column.getCanResize() && (
                           <div
                             data-resize-handle="true"
@@ -3313,9 +3317,7 @@ function Tasks() {
                       const isLeftSticky = colId === "selection" || meetingLeftPinnedKeys.includes(colId);
                       const isRightSticky = meetingRightPinnedKeys.includes(colId);
                       const isSticky = isLeftSticky || isRightSticky;
-                      const isLeftBoundary = meetingLastLeftPinnedKey ? colId === meetingLastLeftPinnedKey : colId === "selection";
-                      const isRightBoundary = colId === meetingFirstRightPinnedKey;
-                      const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
+                      const cellBoundaryShadowSide = colId === meetingLastLeftPinnedKey ? "left" : colId === meetingFirstRightPinnedKey ? "right" : null;
                       return (
                       <td
                         key={cell.id}
@@ -3326,11 +3328,13 @@ function Tasks() {
                           left: isLeftSticky ? meetingPinnedLeftOffsets[colId] ?? 0 : "auto",
                           right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isSticky ? 10 : 1,
-                          boxShadow: cellBoundaryShadow || undefined,
                         }}
                         className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {cellBoundaryShadowSide && (
+                          <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
+                        )}
                       </td>
                       );
                     })}

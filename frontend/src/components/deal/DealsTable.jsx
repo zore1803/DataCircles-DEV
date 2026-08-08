@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
+import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   Edit2,
   Trash2,
@@ -908,6 +909,14 @@ export default function DealsTable({
       cumulativeRightOffset += h.getSize();
     }
   });
+  // Boundary = the pinned column nearest the scrollable area, in DISPLAY order.
+  // The user-pinned keys only (not "selection"/"actions", which are always
+  // stuck to the edges and shouldn't imply a pinned block on their own).
+  const allDealColIds = allDealHeaders.map((h) => h.column.id);
+  const leftPinnedInOrder = allDealColIds.filter((id) => leftPinnedKeys.includes(id));
+  const rightPinnedInOrder = allDealColIds.filter((id) => rightPinnedKeys.includes(id));
+  const lastLeftPinnedKey = leftPinnedInOrder.length > 0 ? leftPinnedInOrder[leftPinnedInOrder.length - 1] : null;
+  const firstRightPinnedKey = rightPinnedInOrder.length > 0 ? rightPinnedInOrder[0] : null;
   return (
     <div className="relative bg-white">
         <table
@@ -927,6 +936,7 @@ export default function DealsTable({
                   const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                   const isRightSticky = colId === "actions" || rightPinnedKeys.includes(colId);
                   const isSticky = isLeftSticky || isRightSticky;
+                  const boundaryShadowSide = colId === lastLeftPinnedKey ? "left" : colId === firstRightPinnedKey ? "right" : null;
                   const isDraggable = colId !== "selection";
                   const isDragging = draggedColKey === colId;
                   const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
@@ -945,11 +955,12 @@ export default function DealsTable({
                         left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                         right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                         zIndex: isSticky ? 20 : 1,
-                        opacity: isDragging ? 0.35 : 1,
                       }}
                       className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
-                      <div className="flex items-center gap-1.5 w-full min-w-0">
+                      {/* Opacity on this wrapper, not the <th>, so dragging never
+                          dims the pinned border or its boundary shadow. */}
+                      <div className="flex items-center gap-1.5 w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                         <div className="truncate flex-1 min-w-0">
                           {flexRender(
                             header.column.columnDef.header,
@@ -957,6 +968,9 @@ export default function DealsTable({
                           )}
                         </div>
                       </div>
+                      {boundaryShadowSide && (
+                        <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSide)} />
+                      )}
 
                       {header.column.getCanResize() && (
                         <div
@@ -1029,6 +1043,7 @@ export default function DealsTable({
                       const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                       const isRightSticky = colId === "actions" || rightPinnedKeys.includes(colId);
                       const isSticky = isLeftSticky || isRightSticky;
+                      const cellBoundaryShadowSide = colId === lastLeftPinnedKey ? "left" : colId === firstRightPinnedKey ? "right" : null;
                       return (
                         <td
                           key={cell.id}
@@ -1047,6 +1062,9 @@ export default function DealsTable({
                           {flexRender(
                             cell.column.columnDef.cell,
                             cell.getContext(),
+                          )}
+                          {cellBoundaryShadowSide && (
+                            <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
                           )}
                         </td>
                       );

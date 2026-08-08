@@ -39,6 +39,7 @@ import {
   Settings,
   ChevronsLeftRight,
   Search,
+  PenLine,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
@@ -742,6 +743,7 @@ const CreateInvoicePanel = ({
     out.items = pad(n++);
     out.notes = pad(n++);
     out.terms = pad(n++);
+    out.signature = pad(n++);
     out.summary = pad(n++);
     return out;
   })();
@@ -780,6 +782,7 @@ const CreateInvoicePanel = ({
           discount: initialDoc.discount || { type: "fixed", value: 0 },
           notes: initialDoc.notes || "",
           terms: initialDoc.terms || "",
+          signature: initialDoc.signature || "",
           status: initialDoc.status || "Draft",
         }
       : {
@@ -799,6 +802,7 @@ const CreateInvoicePanel = ({
           discount: { type: "fixed", value: 0 },
           notes: "",
           terms: "",
+          signature: "",
           status: "Draft",
         }
   );
@@ -822,6 +826,10 @@ const CreateInvoicePanel = ({
   });
   // Rendering template comes from DocumentTemplateSettings — a separate model.
   const [orgTemplate, setOrgTemplate] = useState("Classic");
+  // Signatures saved under Settings → Document Settings. New documents adopt
+  // the org's default; existing ones keep whatever was chosen when created.
+  const [savedSignatures, setSavedSignatures] = useState([]);
+  const [signaturesLoading, setSignaturesLoading] = useState(false);
 
   // Draggable split between the form (left) and the preview (right).
   const splitRef = useRef(null);
@@ -930,10 +938,11 @@ const CreateInvoicePanel = ({
     if (showTemplates) return;
     (async () => {
       try {
-        const [b, bank, settings] = await Promise.allSettled([
+        const [b, bank, settings, docSettingsRes] = await Promise.allSettled([
           API.get("/branding"),
           API.get("/bank-details"),
           API.get("/document-templates"),
+          API.get("/document-settings"),
         ]);
         if (b.status === "fulfilled") setOrgDetails(b.value.data || null);
         if (bank.status === "fulfilled")
@@ -941,6 +950,19 @@ const CreateInvoicePanel = ({
         if (settings.status === "fulfilled") {
           const chosen = settings.value.data?.templates?.[type];
           if (chosen) setOrgTemplate(chosen);
+        }
+        // Keep numbering in sync with edits made in the drawer's Numbering tab.
+        if (docSettingsRes.status === "fulfilled") {
+          const d = docSettingsRes.value.data || {};
+          setDocSettings((prev) => ({
+            ...prev,
+            invoicePrefix: d.invoicePrefix || "INV-",
+            invoiceSuffix: d.invoiceSuffix || "",
+            invoicePrefixes: d.invoicePrefixes || ["INV-"],
+            invoiceSuffixes: d.invoiceSuffixes || [],
+            nextInvoiceNumber: d.nextInvoiceNumber || 1,
+            documentTypeSettings: d.documentTypeSettings || prev.documentTypeSettings,
+          }));
         }
       } catch (err) {
         console.error("Fetch branding/bank error:", err);
@@ -1022,6 +1044,41 @@ const CreateInvoicePanel = ({
     };
 
     loadDocSettings();
+  }, []);
+
+  // Load the org's saved signatures and fall back to the one marked default
+  // whenever the document doesn't already carry a signature of its own — so
+  // every invoice gets the default unless someone picked a specific one. A
+  // document that stored its own custom signature keeps it untouched.
+  useEffect(() => {
+    const loadSignatures = async () => {
+      setSignaturesLoading(true);
+      try {
+        const res = await API.get("/document-settings/signatures");
+        const sigs = Array.isArray(res.data) ? res.data : [];
+        setSavedSignatures(sigs);
+        const defaultSig = sigs.find((s) => s.isDefault);
+        if (defaultSig) {
+          // Fall back to the default whenever the document isn't already
+          // pointing at one of the saved signatures — so a blank, stale, or
+          // never-set signature resolves to the default rather than nothing.
+          // A document that stored a still-valid custom signature keeps it.
+          setForm((prev) => {
+            const hasSavedMatch = sigs.some((s) => s.dataUrl === prev.signature);
+            return hasSavedMatch
+              ? prev
+              : { ...prev, signature: defaultSig.dataUrl || "" };
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load signatures", error);
+        setSavedSignatures([]);
+      } finally {
+        setSignaturesLoading(false);
+      }
+    };
+
+    loadSignatures();
   }, []);
 
   const setField = (key, value) => setForm((p) => ({ ...p, [key]: value }));
@@ -1114,6 +1171,7 @@ const CreateInvoicePanel = ({
         discount: form.discount,
         notes: form.notes,
         terms: form.terms,
+        signature: form.signature,
         amount: finalTotal,
         items: form.items.map((it) => ({
           itemId: it._id,
@@ -1856,6 +1914,58 @@ const CreateInvoicePanel = ({
                 placeholder={"1. Goods once sold cannot be taken back or exchanged.\n2. Subject to local jurisdiction."}
                 className="w-full px-3 py-2 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
               />
+            </div>
+          </div>
+
+          {/* Signature — chosen from the signatures saved under Settings →
+              Document Settings. New documents pre-select the org's default; the
+              dropdown lets you swap it for another saved signature or clear it
+              for this document only. */}
+          <SectionHeader number={sectionNo.signature} title="Signature" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
+            <div className="flex flex-col gap-1">
+              <FieldLabel>Signature</FieldLabel>
+              <div className="relative flex items-center h-10 rounded-[25px] border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
+                <select
+                  value={form.signature}
+                  onChange={(e) => setField("signature", e.target.value)}
+                  disabled={signaturesLoading}
+                  className="flex-1 min-w-0 h-full pl-3 pr-8 text-[13px] bg-transparent appearance-none focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <option value="">No signature</option>
+                  {savedSignatures.map((sig) => (
+                    <option key={sig.id} value={sig.dataUrl}>
+                      {sig.name}
+                      {sig.isDefault ? " (Default)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              </div>
+              <p className="text-xs text-[#99A0AE]">
+                {signaturesLoading
+                  ? "Loading signatures…"
+                  : savedSignatures.length === 0
+                    ? "No saved signatures yet — add them in Settings → Document Settings → Signatures."
+                    : "The default is applied to every document unless you pick another here."}
+              </p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <FieldLabel>Preview</FieldLabel>
+              <div className="h-[72px] flex items-center justify-center rounded-lg border border-dashed border-[#E1E4EA] bg-[#FAFBFC]">
+                {form.signature ? (
+                  <img
+                    src={form.signature}
+                    alt="Selected signature"
+                    className="max-h-16 max-w-full object-contain"
+                  />
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-[#99A0AE]">
+                    <PenLine className="w-3.5 h-3.5" />
+                    No signature selected
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 

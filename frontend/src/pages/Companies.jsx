@@ -88,7 +88,7 @@ const CompanyDocumentSignedIcon = (props) => (
 
 const CompanyLeadSourceIcon = CompanyDocumentSignedIcon;
 import { getVideoTutorial } from "../utils/videoTutorials";
-import { getPinnedBoundaryShadow } from "../utils/pinnedColumnShadow";
+import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import useCompanyStore from "../store/useCompanyStore";
 import AddToCompanyHotlistModal from "../components/company/AddToCompanyHotlistModal";
@@ -2099,6 +2099,18 @@ function Companies() {
                 const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
                 const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
                 const allHeaders = table.getHeaderGroups()[0]?.headers || [];
+                // The boundary shadow belongs on the RIGHTMOST pinned column as it
+                // actually appears on screen — not whichever was pinned last
+                // chronologically (pinnedColumns is in pin-action order, which can
+                // differ from display order once more than one column is pinned).
+                const leftPinnedInOrder = allHeaders
+                  .map((h) => h.column.id)
+                  .filter((id) => leftPinnedKeys.includes(id));
+                const rightPinnedInOrder = allHeaders
+                  .map((h) => h.column.id)
+                  .filter((id) => rightPinnedKeys.includes(id));
+                const lastLeftPinnedKey = leftPinnedInOrder.length > 0 ? leftPinnedInOrder[leftPinnedInOrder.length - 1] : null;
+                const firstRightPinnedKey = rightPinnedInOrder.length > 0 ? rightPinnedInOrder[0] : null;
 
                   const pinnedLeftOffsets = {};
                   let cumulativeLeft = 0;
@@ -2129,6 +2141,9 @@ function Companies() {
                             const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                             const isRightSticky = rightPinnedKeys.includes(colId);
                             const isSticky = isLeftSticky || isRightSticky;
+                            const isLeftBoundary = colId === lastLeftPinnedKey;
+                            const isRightBoundary = colId === firstRightPinnedKey;
+                            const boundaryShadowSide = isLeftBoundary ? "left" : isRightBoundary ? "right" : null;
                             const isDraggable = colId !== "selection";
                             const isDragging = draggedColKey === colId;
                             const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
@@ -2144,16 +2159,21 @@ function Companies() {
                                   left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                   right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                   zIndex: isSticky ? 20 : 1,
-                                  opacity: isDragging ? 0.35 : 1,
                                 }}
                                 className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] last:border-r-0 transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                               >
-                                <div className="w-full min-w-0">
+                                {/* Opacity lives on this wrapper, not the <th>, so dragging a
+                                    column never dims its sticky positioning, borders or the
+                                    pinned-boundary shadow — only its own label fades. */}
+                                <div className="w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                                   {flexRender(
                                     header.column.columnDef.header,
                                     header.getContext(),
                                   )}
                                 </div>
+                                {boundaryShadowSide && (
+                                  <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSide)} />
+                                )}
 
                                 {colId !== "selection" && header.column.getCanResize() && (
                                   <div
@@ -2198,6 +2218,9 @@ function Companies() {
                                 const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                                 const isRightSticky = rightPinnedKeys.includes(colId);
                                 const isSticky = isLeftSticky || isRightSticky;
+                                const isLeftBoundary = colId === lastLeftPinnedKey;
+                                const isRightBoundary = colId === firstRightPinnedKey;
+                                const cellBoundaryShadowSide = isLeftBoundary ? "left" : isRightBoundary ? "right" : null;
                                 const isColDragging = draggedColKey === colId;
 
                                 return (
@@ -2209,13 +2232,17 @@ function Companies() {
                                       left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                       right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                       zIndex: isSticky ? 10 : 1,
-                                      opacity: isColDragging ? 0.35 : 1,
                                     }}
                                     className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                                   >
-                                    {flexRender(
-                                      cell.column.columnDef.cell,
-                                      cell.getContext(),
+                                    <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
+                                      {flexRender(
+                                        cell.column.columnDef.cell,
+                                        cell.getContext(),
+                                      )}
+                                    </div>
+                                    {cellBoundaryShadowSide && (
+                                      <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
                                     )}
                                   </td>
                                 );
