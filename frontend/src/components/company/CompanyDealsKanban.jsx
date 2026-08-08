@@ -175,20 +175,25 @@ const DEAL_CARD_CLASS =
   "box-border flex flex-col items-start bg-white border rounded-[10px] mb-3 hover:shadow-sm transition-shadow overflow-hidden";
 
 // Inner markup only — no drag wiring, no navigation. Rendered by both shells below.
-const DealCardContent = ({ deal }) => {
+// `selectSlot` is an optional node dropped in front of the title (the selection
+// checkbox on the in-list card); the drag overlay passes nothing so it stays clean.
+const DealCardContent = ({ deal, selectSlot = null }) => {
   const tagLabel = deal.company?.name || deal.company?.industry || deal.contact?.name;
   const avatarNames = [deal.contact?.name, deal.user?.name].filter(Boolean);
 
   return (
     <>
       <div className="flex flex-col items-start gap-2 w-full">
-        <div className="flex items-center justify-between w-full">
-          <span
-            className="truncate"
-            style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "14px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
-          >
-            {deal.title || "Deal Name"}
-          </span>
+        <div className="flex items-center justify-between w-full gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {selectSlot}
+            <span
+              className="truncate"
+              style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "14px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
+            >
+              {deal.title || "Deal Name"}
+            </span>
+          </div>
           <MoreHorizontal className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
         </div>
         <span
@@ -227,38 +232,68 @@ const DealCardContent = ({ deal }) => {
 // the sensor's 8px activation constraint means a click never starts a drag, and a
 // drag never fires the link. `transition` (which useDraggable did not provide) is
 // what lets neighbouring cards glide aside instead of snapping.
-const DealCard = ({ deal }) => {
+const DealCard = ({ deal, selected = false, onToggleSelect }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: deal._id, animateLayoutChanges });
 
   const style = {
     ...DEAL_CARD_BOX,
+    position: "relative",
     transform: CSS.Transform.toString(transform),
     transition,
     // The original stays in place, faded, while the overlay follows the cursor.
     opacity: isDragging ? 0.5 : 1,
+    // Selected cards read as picked at a glance, matching the list view's row tint.
+    ...(selected ? { borderColor: "#0085FF", background: "#F5FAFF" } : null),
   };
 
+  // The checkbox re-enables pointer events for itself only (the content layer
+  // above the link is pointer-events-none). Stopping pointerdown keeps the drag
+  // sensor from grabbing the card when you tick it. Because the checkbox is NOT
+  // a descendant of the <Link> anymore, its native toggle + onChange fire
+  // normally — no preventDefault fighting the selection, which is what caused
+  // the "checked but not selected / selected but not checked" desync.
+  const selectSlot = onToggleSelect ? (
+    <span
+      className="pointer-events-auto flex items-center flex-shrink-0"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => onToggleSelect(deal._id)}
+        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+        aria-label={`Select ${deal.title || "deal"}`}
+      />
+    </span>
+  ) : null;
+
+  // The card is a positioned shell. A full-bleed <Link> underneath is the
+  // click-to-open target (kept as an anchor so middle-click / open-in-new-tab
+  // still work); the visible content sits above it but is pointer-events-none,
+  // so a plain click falls through to the link while the checkbox stays live.
   return (
-    <Link
-      to={`/deals/${deal._id}`}
+    <div
       ref={setNodeRef}
       style={style}
       {...listeners}
       {...attributes}
-      // Links are natively draggable in every browser — that fires the
-      // browser's own HTML5 drag-and-drop (its own ghost image, its own
-      // status-bar URL hint) at the same time as dnd-kit's pointer-based
-      // synthetic drag. Two independent drag systems running at once is
-      // exactly what produced the overlapping/ghosted card visuals that
-      // persisted even after the card was dropped. Killing the native one
-      // leaves dnd-kit as the only thing driving the drag.
-      draggable={false}
-      onDragStart={(e) => e.preventDefault()}
       className={`${DEAL_CARD_CLASS} cursor-grab active:cursor-grabbing`}
     >
-      <DealCardContent deal={deal} />
-    </Link>
+      <Link
+        to={`/deals/${deal._id}`}
+        // Links are natively draggable in every browser — that fires the
+        // browser's own HTML5 drag-and-drop alongside dnd-kit's pointer-based
+        // synthetic drag. Killing the native one leaves dnd-kit in sole control.
+        draggable={false}
+        onDragStart={(e) => e.preventDefault()}
+        className="absolute inset-0 z-0"
+        aria-label={`Open ${deal.title || "deal"}`}
+      />
+      <div className="relative z-10 w-full flex flex-col items-start gap-4 pointer-events-none">
+        <DealCardContent deal={deal} selectSlot={selectSlot} />
+      </div>
+    </div>
   );
 };
 
@@ -278,9 +313,18 @@ const DealCardOverlay = ({ deal }) => (
 // company-profile Deals tab and the standalone /deals board look identical:
 // same 340px shell, #F5F7FA header, pill counter, per-status tinted summary card
 // and week-over-week trend badge.
-const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddClick, loading = false }) => {
+const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddClick, loading = false, selectedDeals = [], onToggleSelect, onToggleColumnSelect }) => {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
+
+  // Header select-all state for this column: fully ticked when every card here
+  // is selected, indeterminate (native dash) when only some are.
+  const allSelected = dealIds.length > 0 && dealIds.every((id) => selectedDeals.includes(id));
+  const someSelected = dealIds.some((id) => selectedDeals.includes(id));
+  const headerCbRef = useRef(null);
+  useEffect(() => {
+    if (headerCbRef.current) headerCbRef.current.indeterminate = someSelected && !allSelected;
+  }, [someSelected, allSelected]);
 
   // Deliberately computed from `amountDeals` (the column's real, committed
   // membership) rather than `deals` (which includes the live drag-over
@@ -320,6 +364,17 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
         style={{ height: "46px", padding: "0 18px", background: "#F5F7FA" }}
       >
         <div className="flex items-center gap-1.5">
+          {onToggleColumnSelect && !loading && dealIds.length > 0 && (
+            <input
+              ref={headerCbRef}
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => onToggleColumnSelect(dealIds)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+              title={`Select all in ${status}`}
+              aria-label={`Select all deals in ${status}`}
+            />
+          )}
           <span
             className="truncate"
             style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}
@@ -407,7 +462,12 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
         <div className="min-h-[80px]">
           <SortableContext id={status} items={dealIds} strategy={verticalListSortingStrategy}>
             {deals.map((deal) => (
-              <DealCard key={deal._id} deal={deal} />
+              <DealCard
+                key={deal._id}
+                deal={deal}
+                selected={selectedDeals.includes(deal._id)}
+                onToggleSelect={onToggleSelect}
+              />
             ))}
           </SortableContext>
           {/* Slack below the last card so dropping at the end of a long column
@@ -726,7 +786,10 @@ export default function CompanyDealsKanban({
   const [showBulkStrip, setShowBulkStrip] = useState(false);
   const [bulkStripClosing, setBulkStripClosing] = useState(false);
   useEffect(() => {
-    const active = viewMode === "list" && selectedDeals.length > 0;
+    // Selection drives the bulk strip in BOTH views now — the kanban cards carry
+    // checkboxes too, so a board selection opens the same Update Status / Delete
+    // / Export strip the list view uses.
+    const active = selectedDeals.length > 0;
     if (active) {
       setBulkStripClosing(false);
       setShowBulkStrip(true);
@@ -743,6 +806,12 @@ export default function CompanyDealsKanban({
   const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
   const [bulkStatus, setBulkStatus] = useState("Open");
   const [bulkLoading, setBulkLoading] = useState(false);
+  // One shared modal for "add note" / "add task" to every selected deal —
+  // `bulkAddMode` is null (closed), "note", or "task".
+  const [bulkAddMode, setBulkAddMode] = useState(null);
+  const [bulkNoteText, setBulkNoteText] = useState("");
+  const [bulkTaskTitle, setBulkTaskTitle] = useState("");
+  const [bulkTaskDesc, setBulkTaskDesc] = useState("");
 
   const handleSelectAllDeals = () => {
     setSelectedDeals((prev) =>
@@ -751,6 +820,17 @@ export default function CompanyDealsKanban({
   };
   const handleSelectDeal = (id) => {
     setSelectedDeals((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  // Column header select-all: if every card in the column is already selected,
+  // clicking clears just those; otherwise it adds them all to the selection.
+  const handleToggleColumnSelect = (ids) => {
+    setSelectedDeals((prev) => {
+      const allSelected = ids.length > 0 && ids.every((id) => prev.includes(id));
+      return allSelected
+        ? prev.filter((id) => !ids.includes(id))
+        : [...new Set([...prev, ...ids])];
+    });
   };
 
   const handleBulkDeleteDeals = async () => {
@@ -785,6 +865,63 @@ export default function CompanyDealsKanban({
     } catch (err) {
       console.error("Bulk deal status update failed:", err);
       toast.error(err.response?.data?.message || "Bulk update failed");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  // Notes are company-scoped in this system, so "add a note to these deals"
+  // means adding it to each selected deal's company. Distinct company ids keep
+  // us from writing the same note twice when several deals share a company.
+  const handleBulkAddNote = async () => {
+    const text = bulkNoteText.trim();
+    if (!text) return toast.error("Note cannot be empty.");
+    const companyIds = [
+      ...new Set(
+        selectedDeals
+          .map((id) => deals.find((d) => d._id === id)?.company?._id)
+          .filter(Boolean),
+      ),
+    ];
+    if (companyIds.length === 0)
+      return toast.error("Selected deals have no company to attach a note to.");
+    setBulkLoading(true);
+    try {
+      await API.post("/notes/bulk", { note: text, companyIds });
+      toast.success(`Note added to ${companyIds.length} compan${companyIds.length !== 1 ? "ies" : "y"}`);
+      setBulkAddMode(null);
+      setBulkNoteText("");
+      setSelectedDeals([]);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to add note");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  // No bulk-task endpoint exists, so create one task per selected deal, each
+  // linked back to its deal via relatedEntities (entityModel "Deal").
+  const handleBulkAddTask = async () => {
+    const title = bulkTaskTitle.trim();
+    if (!title) return toast.error("Task title cannot be empty.");
+    setBulkLoading(true);
+    try {
+      await Promise.all(
+        selectedDeals.map((id) =>
+          API.post("/tasks", {
+            title,
+            description: bulkTaskDesc.trim(),
+            relatedEntities: [{ entityId: id, entityModel: "Deal" }],
+          }),
+        ),
+      );
+      toast.success(`Task added to ${selectedDeals.length} deal${selectedDeals.length !== 1 ? "s" : ""}`);
+      setBulkAddMode(null);
+      setBulkTaskTitle("");
+      setBulkTaskDesc("");
+      setSelectedDeals([]);
+    } catch (err) {
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to add task");
     } finally {
       setBulkLoading(false);
     }
@@ -1181,8 +1318,13 @@ export default function CompanyDealsKanban({
           isClosing={bulkStripClosing}
           selectedCount={selectedDeals.length}
           entityName="deal"
+          onAddNote={() => setBulkAddMode("note")}
+          onAddTask={() => setBulkAddMode("task")}
           onSelectAll={handleSelectAllAcrossPages}
-          onDeselectAll={handleDeselectAllExtra}
+          // The board shows every deal at once (no pagination), so "Deselect
+          // All" there clears the whole selection. In list view it keeps the
+          // two-tier behaviour: step back down to just the current page's rows.
+          onDeselectAll={viewMode === "board" ? () => setSelectedDeals([]) : handleDeselectAllExtra}
           onExport={handleExportSelectedDeals}
           onUpdateStatus={() => setShowBulkStatusModal(true)}
           onDelete={() => setShowBulkDeleteModal(true)}
@@ -1315,6 +1457,9 @@ export default function CompanyDealsKanban({
                   amountDeals={stableDealsByStatus[status] || []}
                   colorTheme={status === "Won" ? "green" : status === "Lost" ? "red" : "blue"}
                   onAddClick={() => setManualDealFormOpen(true)}
+                  selectedDeals={selectedDeals}
+                  onToggleSelect={handleSelectDeal}
+                  onToggleColumnSelect={handleToggleColumnSelect}
                 />
               ))}
             </div>
@@ -1897,6 +2042,72 @@ export default function CompanyDealsKanban({
                   className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
                 >
                   {bulkLoading ? "Updating..." : "Update"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Add Note / Add Task — one modal, driven by bulkAddMode. */}
+      {bulkAddMode && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden">
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-1 font-sf">
+                {bulkAddMode === "note" ? "Add Note" : "Add Task"}
+              </h3>
+              <p className="text-sm text-gray-500 font-inter mb-4">
+                {bulkAddMode === "note"
+                  ? `Adds this note to the compan${
+                      new Set(selectedDeals.map((id) => deals.find((d) => d._id === id)?.company?._id).filter(Boolean)).size !== 1 ? "ies" : "y"
+                    } of ${selectedDeals.length} selected deal${selectedDeals.length !== 1 ? "s" : ""}.`
+                  : `Creates this task on ${selectedDeals.length} selected deal${selectedDeals.length !== 1 ? "s" : ""}.`}
+              </p>
+
+              {bulkAddMode === "note" ? (
+                <textarea
+                  rows={4}
+                  value={bulkNoteText}
+                  onChange={(e) => setBulkNoteText(e.target.value)}
+                  placeholder="Write a note…"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y mb-6"
+                  autoFocus
+                />
+              ) : (
+                <div className="space-y-3 mb-6">
+                  <input
+                    type="text"
+                    value={bulkTaskTitle}
+                    onChange={(e) => setBulkTaskTitle(e.target.value)}
+                    placeholder="Task title"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                  />
+                  <textarea
+                    rows={3}
+                    value={bulkTaskDesc}
+                    onChange={(e) => setBulkTaskDesc(e.target.value)}
+                    placeholder="Description (optional)"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setBulkAddMode(null)}
+                  disabled={bulkLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={bulkAddMode === "note" ? handleBulkAddNote : handleBulkAddTask}
+                  disabled={bulkLoading}
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkLoading ? "Saving..." : bulkAddMode === "note" ? "Add Note" : "Add Task"}
                 </button>
               </div>
             </div>
