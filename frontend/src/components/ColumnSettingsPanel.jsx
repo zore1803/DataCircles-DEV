@@ -26,7 +26,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import SearchIcon from "./common/SearchIcon";
-import { DIM_CHROME_EVENT } from "../hooks/useSearchOverlayOpen";
 // Sortable Column Item Component
 const SortableColumnItem = ({ column, onToggleVisibility }) => {
   const {
@@ -149,13 +148,6 @@ const ColumnSettingsPanel = ({
     }
   }, [isOpen, columns]);
 
-  // Dims the sidebar/navbar/page-footer chrome while this panel is open --
-  // see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isOpen]);
-
   const handleDragStart = (event) => {
     setActiveId(event.active.id);
   };
@@ -239,7 +231,7 @@ const ColumnSettingsPanel = ({
       />
 
       {/* Slide-in Panel */}
-      <div className="fixed inset-y-0 right-0 dc-panel-w bg-white shadow-2xl z-[9999] flex flex-col animate-slideInRight">
+      <div className="fixed dc-panel-card dc-panel-w bg-white shadow-2xl z-[9999] flex flex-col overflow-hidden animate-slideInRight">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">

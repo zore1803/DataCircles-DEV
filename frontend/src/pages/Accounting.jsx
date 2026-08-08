@@ -38,6 +38,7 @@ import {
   Minimize2,
   Settings,
   ChevronsLeftRight,
+  Search,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
@@ -63,6 +64,7 @@ import useMinDelay from "../hooks/useMinDelay";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
+import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 
 import SearchIcon from "../components/common/SearchIcon";
 const SectionHeader = ({ number, title }) => (
@@ -2150,6 +2152,7 @@ const CreateInvoicePanel = ({
 };
 
 const Accounting = () => {
+  const isSearchOverlayOpen = useSearchOverlayOpen();
   const [activeTab, setActiveTab] = useState("tax");
   const tabRefs = useRef({});
   const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
@@ -3385,8 +3388,23 @@ const Accounting = () => {
                   }}
                   placeholder={`Search by ${activeTab === "tax" ? "invoice" : "document"
                     } ID, deal, or date...`}
-                  className={`w-full h-full bg-transparent rounded-full pl-11 pr-4 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                  className={`w-full h-full bg-transparent rounded-full pl-11 pr-9 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
                 />
+                {/* Clears the typed text only — mousedown+preventDefault stops
+                    the input's onBlur from firing before the click lands. */}
+                {isSearchExpanded && searchTerms[activeTab] && (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() =>
+                      setSearchTerms((prev) => ({ ...prev, [activeTab]: "" }))
+                    }
+                    aria-label="Clear search"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 rounded-full text-gray-900 hover:bg-gray-100 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  </button>
+                )}
               </div>
 
               {/* Filter Button — status filter */}
@@ -3851,8 +3869,12 @@ const Accounting = () => {
             (same treatment as Companies.jsx). */}
         {!showForm && !showCreatePanel && (
           <div
-            className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center justify-between px-4 lg:px-6"
-            style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+            className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center justify-between px-4 lg:px-6 ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
+            style={{
+              left: "var(--sidebar-width, 0px)",
+              height: 64,
+              filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
+            }}
           >
             {showLoadingSkeleton ? (
               <div className="flex items-center gap-2">

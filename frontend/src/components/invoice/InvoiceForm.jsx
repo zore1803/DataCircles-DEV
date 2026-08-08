@@ -5,10 +5,10 @@ import {
   Plus,
   IndianRupeeIcon,
   Trash2,
-  Calendar,
   FileText,
   X,
   Eye,
+  ChevronDown,
 } from "lucide-react";
 import API from "../../services/api";
 import ItemForm from "../item/ItemForm";
@@ -17,7 +17,6 @@ import SearchableDropdown from "../contact/SearchableDropdown";
 import toast from "react-hot-toast";
 
 import SearchIcon from "../common/SearchIcon";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 // Function to convert number to words
 function numberToWords(num) {
   const ones = [
@@ -111,12 +110,6 @@ const ItemSearchSelect = ({
   setItems,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  // Dims the sidebar/navbar/page-footer chrome while this panel is
-  // open -- see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isOpen]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
@@ -194,7 +187,7 @@ const ItemSearchSelect = ({
           value={selectedItem ? selectedItem.displayName : searchTerm}
           onChange={handleSearchChange}
           onFocus={handleInputFocus}
-          className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 bg-white"
+          className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-[25px] focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 bg-white"
           aria-label="Search items or variants"
         />
       </div>
@@ -1079,7 +1072,7 @@ const InvoiceForm = ({
       />
       <div
         ref={formRef}
-        className={`fixed dc-panel-card z-[10000] w-full md:w-[600px] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out ${
+        className={`fixed dc-panel-card dc-panel-w z-[10000] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out ${
           isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
       >
@@ -1149,22 +1142,25 @@ const InvoiceForm = ({
                   Invoice Style
                 </label>
                 <div className="flex items-center gap-2">
-                  <select
-                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                    value={form.style}
-                    onChange={(e) => {
-                      setForm((prev) => ({ ...prev, style: e.target.value }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    aria-label="Select invoice style"
-                  >
-                    <option value="">Select style...</option>
-                    {styles.map((s, idx) => (
-                      <option key={idx} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative w-full">
+                    <select
+                      className="w-full appearance-none border border-slate-300 rounded-[25px] p-2.5 pr-9 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                      value={form.style}
+                      onChange={(e) => {
+                        setForm((prev) => ({ ...prev, style: e.target.value }));
+                        setHasUnsavedChanges(true);
+                      }}
+                      aria-label="Select invoice style"
+                    >
+                      <option value="">Select style...</option>
+                      {styles.map((s, idx) => (
+                        <option key={idx} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  </div>
                   {form.style && (
                     <button
                       type="button"
@@ -1183,10 +1179,9 @@ const InvoiceForm = ({
                   Invoice Date *
                 </label>
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="date"
-                    className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                    className="w-full pl-4 pr-4 py-2.5 border border-slate-300 rounded-[25px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                     required
                     value={form.date}
                     onChange={(e) => {
@@ -1203,10 +1198,9 @@ const InvoiceForm = ({
                   Due Date
                 </label>
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="date"
-                    className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                    className="w-full pl-4 pr-4 py-2.5 border border-slate-300 rounded-[25px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                     value={form.dueDate}
                     onChange={(e) => {
                       setForm((prev) => ({ ...prev, dueDate: e.target.value }));
@@ -1225,7 +1219,7 @@ const InvoiceForm = ({
                   <input
                     type="text"
                     placeholder="Enter Receiver GSTIN (e.g., 22AAAAA0000A1Z5)"
-                    className="w-full pl-4 pr-4 py-2.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                    className="w-full pl-4 pr-4 py-2.5 border border-slate-300 rounded-[25px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                     value={form.receiverGSTIN}
                     onChange={(e) => {
                       setForm((prev) => ({
@@ -1271,7 +1265,7 @@ const InvoiceForm = ({
                     Transaction Type
                   </label>
                   <select
-                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                    className="w-full border border-slate-300 rounded-[25px] p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                     value={form.transactionType}
                     onChange={(e) =>
                       handleTaxChange("transactionType", e.target.value)
@@ -1297,7 +1291,7 @@ const InvoiceForm = ({
                         parseFloat(e.target.value) || 0
                       )
                     }
-                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                    className="w-full border border-slate-300 rounded-[25px] p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                     placeholder="18"
                   />
                 </div>
@@ -1350,7 +1344,7 @@ const InvoiceForm = ({
                             );
                             setHasUnsavedChanges(true);
                           }}
-                          className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                          className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                           aria-label="Item description"
                         />
                       </div>
@@ -1371,7 +1365,7 @@ const InvoiceForm = ({
                             handleItemChange(index, "rate", e.target.value);
                             setHasUnsavedChanges(true);
                           }}
-                          className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                          className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                           required
                           aria-label="Item rate"
                         />
@@ -1389,7 +1383,7 @@ const InvoiceForm = ({
                             handleItemChange(index, "quantity", e.target.value);
                             setHasUnsavedChanges(true);
                           }}
-                          className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                          className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                           required
                           aria-label="Item quantity"
                         />
@@ -1408,7 +1402,7 @@ const InvoiceForm = ({
                                 handleItemChange(index, "hsn", e.target.value);
                                 setHasUnsavedChanges(true);
                               }}
-                              className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                              className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                               required
                               aria-label="HSN/SAC code"
                             />
@@ -1434,7 +1428,7 @@ const InvoiceForm = ({
                                   );
                                   setHasUnsavedChanges(true);
                                 }}
-                                className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                                className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                                 aria-label="Item discount"
                               />
                               <select
@@ -1447,7 +1441,7 @@ const InvoiceForm = ({
                                   );
                                   setHasUnsavedChanges(true);
                                 }}
-                                className="border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                                className="border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                                 aria-label="Discount type"
                               >
                                 <option value="amount">₹</option>
@@ -1479,7 +1473,7 @@ const InvoiceForm = ({
                                 );
                                 setHasUnsavedChanges(true);
                               }}
-                              className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                              className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                               aria-label="Item discount"
                             />
                             <select
@@ -1492,7 +1486,7 @@ const InvoiceForm = ({
                                 );
                                 setHasUnsavedChanges(true);
                               }}
-                              className="border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                              className="border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                               aria-label="Discount type"
                             >
                               <option value="amount">₹</option>
@@ -1554,7 +1548,7 @@ const InvoiceForm = ({
                     handleDiscountChange("value", e.target.value);
                     setHasUnsavedChanges(true);
                   }}
-                  className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                  className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                   aria-label="Invoice discount"
                 />
                 <select
@@ -1563,7 +1557,7 @@ const InvoiceForm = ({
                     handleDiscountChange("type", e.target.value);
                     setHasUnsavedChanges(true);
                   }}
-                  className="border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                  className="border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                   aria-label="Invoice discount type"
                 >
                   <option value="fixed">₹</option>

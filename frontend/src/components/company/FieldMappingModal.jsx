@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { X } from "lucide-react";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const FieldMappingModal = ({
   isOpen: propIsOpen,
@@ -14,12 +13,6 @@ const FieldMappingModal = ({
   const [includeFirstRow, setIncludeFirstRow] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState("Standard Template");
   const [isOpen, setIsOpen] = useState(false);
-  // Dims the sidebar/navbar/page-footer chrome while this panel is
-  // open -- see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(false);
 
   // Standard CRM fields - memoize to prevent recreating on every render

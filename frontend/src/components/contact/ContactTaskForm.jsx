@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
-import { 
+import {
   X,
   Calendar,
   Clock,
@@ -96,12 +95,6 @@ const ContactTaskForm = ({
   const [loading, setLoading] = useState(false);
   const [isSliding, setIsSliding] = useState(false);
 
-  // Dims the sidebar/navbar/page-footer chrome while this panel is
-  // open -- see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isSliding } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isSliding]);
   const [shouldRender, setShouldRender] = useState(false);
   const [errors, setErrors] = useState({});
   const [showUserSelector, setShowUserSelector] = useState(false);

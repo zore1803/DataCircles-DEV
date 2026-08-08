@@ -62,6 +62,15 @@ router.get(
   contactController.getContactByCompanyId
 );
 
+// POST /api/contacts/:id/star (toggle starred for the current user)
+router.post(
+  "/:id/star",
+  requireAuth,
+  subscriptionGate,
+  checkPermission("contacts", "readonly"),
+  contactController.toggleStarContact,
+);
+
 // DELETE /api/contacts/:id (Delete - requires write permission)
 router.delete(
   "/:id",

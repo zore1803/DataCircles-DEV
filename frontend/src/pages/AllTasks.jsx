@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { FiSearch, FiFilter, FiDownload, FiX } from "react-icons/fi";
-import { Plus, Edit2, Trash2, Pin } from "lucide-react";
+import { Plus, Edit2, Trash2, Pin, Star } from "lucide-react";
 import jsPDF from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import API from "../services/api";
@@ -146,10 +146,27 @@ const AllTasks = () => {
     });
   }, [tasks, searchTerm, statusFilter, userFilter, dateFilter, userMap]);
 
+  // Starred tasks always sort first so they land on page 1
+  const sortedTasks = useMemo(() => {
+    return [...filteredTasks].sort((a, b) => (b.isStarred ? 1 : 0) - (a.isStarred ? 1 : 0));
+  }, [filteredTasks]);
+
   // Pagination logic
-  const totalPages = Math.ceil(filteredTasks.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedTasks.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedTasks = filteredTasks.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedTasks = sortedTasks.slice(startIndex, startIndex + itemsPerPage);
+
+  const toggleStar = async (e, taskId) => {
+    e.stopPropagation();
+    try {
+      await API.post(`/tasks/${taskId}/star`);
+      await fetchAllData();
+      setCurrentPage(1);
+    } catch (err) {
+      console.error("Error toggling star:", err);
+      toast.error(err.response?.data?.error || "Failed to update star");
+    }
+  };
 
   // Export to PDF function
   const exportToPDF = () => {
@@ -611,7 +628,12 @@ const AllTasks = () => {
                         </td>
 
                         <td className="px-6 py-4 font-medium text-slate-900">
-                          {task.title}
+                          <div className="flex items-center gap-1.5">
+                            {task.isStarred && (
+                              <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400 shrink-0" />
+                            )}
+                            <span>{task.title}</span>
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-slate-600 max-w-xs">
                           <div className="truncate line-clamp-1" dangerouslySetInnerHTML={{ __html: task.description || 'No description' }}>
@@ -633,6 +655,13 @@ const AllTasks = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => toggleStar(e, task._id)}
+                              className="p-2 text-yellow-500 hover:bg-yellow-50 rounded-lg transition-colors"
+                              title={task.isStarred ? "Unstar Task" : "Star Task"}
+                            >
+                              <Star className={`w-4 h-4 ${task.isStarred ? "fill-yellow-400 text-yellow-400" : ""}`} />
+                            </button>
                             <button
                               onClick={(e) => handleEdit(task, e)}
                               className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"

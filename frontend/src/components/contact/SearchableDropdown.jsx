@@ -56,7 +56,7 @@ const SearchableDropdown = ({
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <div
-        className={`w-full border rounded-xl px-4 h-12 transition-all cursor-pointer bg-white flex items-center justify-between font-inter ${getBorderColor()}`}
+        className={`w-full border rounded-[25px] px-4 h-12 transition-all cursor-pointer bg-white flex items-center justify-between font-inter ${getBorderColor()}`}
         onClick={() => setIsOpen(!isOpen)}
       >
         <span className={`text-[14px] truncate ${selectedOption ? "text-gray-900 font-medium" : "text-[#A0A0A0]"}`}>

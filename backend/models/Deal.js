@@ -40,6 +40,7 @@ const dealSchema = new mongoose.Schema(
     lastUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // UPDATED BY (Mutable)
     organization: { type: mongoose.Schema.Types.ObjectId, ref: "Organization" },
     additionalFields: [additionalFieldSchema],
+    starredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true },
 );

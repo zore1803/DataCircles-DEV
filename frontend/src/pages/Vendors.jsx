@@ -6,6 +6,7 @@ import React, {
   useMemo,
 } from "react";
 import { createPortal } from "react-dom";
+import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import API from "../services/api";
 import { Link } from "react-router-dom";
 import {
@@ -83,6 +84,7 @@ const ACTIONS_COLUMN_DEF = {
 const MIN_COL_WIDTH = 60;
 
 function Vendors() {
+  const isSearchOverlayOpen = useSearchOverlayOpen();
   const [vendors, setVendors] = useState([]);
   const [form, setForm] = useState({
     name: "",
@@ -157,6 +159,32 @@ function Vendors() {
   const dropdownRef = useRef(null);
   const location = useLocation();
   const { state } = location;
+
+  // "View all" from the global search panel hands its query off via
+  // `?search=` rather than trying to replicate the search itself — this
+  // drops it straight into the table's own search box on arrival (open, not
+  // just filled in), so the list is already filtered instead of showing
+  // everything.
+  //
+  // Sets debouncedSearchTerm directly too, skipping the usual typing debounce
+  // — a deep link shouldn't sit for 300ms+ showing the wrong list. Captured
+  // once, synchronously: the mount-time fetch effect further down needs to
+  // know *before its first run* that a search is coming, so it can skip its
+  // own empty-search request — otherwise that request (fetching the whole
+  // table, so inherently slower) can resolve after the correctly-filtered
+  // one and clobber it on screen.
+  const initialSearchFromUrl = useRef(
+    new URLSearchParams(location.search).get("search")
+  ).current;
+  useEffect(() => {
+    if (initialSearchFromUrl) {
+      setSearchTerm(initialSearchFromUrl);
+      setDebouncedSearchTerm(initialSearchFromUrl);
+      setIsSearchExpanded(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [showImport, setShowImport] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [vendorToDelete, setVendorToDelete] = useState(null);
@@ -619,7 +647,15 @@ function Vendors() {
     );
   }, [debouncedSearchTerm, debouncedFilterCompany]);
 
+  // Skipped on the very first mount when a `?search=` deep link is pending —
+  // that leaves the search-term effect above as the only initial fetch,
+  // instead of racing an empty-search fetch against it.
+  const skipMountFetchForUrlSearch = useRef(!!initialSearchFromUrl);
   useEffect(() => {
+    if (skipMountFetchForUrlSearch.current) {
+      skipMountFetchForUrlSearch.current = false;
+      return;
+    }
     fetchVendors();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.currentPage, pagination.limit, sortConfig]);
@@ -1092,10 +1128,23 @@ function Vendors() {
                 if (!searchTerm) setIsSearchExpanded(false);
               }}
               placeholder="Search by vendor name, ID, company, or email..."
-              className={`w-full h-full bg-transparent rounded-full pl-11 pr-4 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none transition-opacity duration-200 cursor-pointer ${
+              className={`w-full h-full bg-transparent rounded-full pl-11 pr-9 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none transition-opacity duration-200 cursor-pointer ${
                 isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"
               }`}
             />
+            {/* Clears the typed text only — mousedown+preventDefault stops the
+                input's onBlur from firing before the click lands. */}
+            {isSearchExpanded && searchTerm && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setSearchTerm("")}
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 rounded-full text-gray-900 hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </button>
+            )}
           </div>
 
           <div className="relative flex-shrink-0">
@@ -1480,8 +1529,12 @@ function Vendors() {
       {/* Pagination — its own fixed strip pinned to the bottom */}
       {(showLoadingSkeleton || pagination.totalCount > 0) && (
         <div
-          className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
-          style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+          className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
+          style={{
+            left: "var(--sidebar-width, 0px)",
+            height: 64,
+            filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
+          }}
         >
           {showLoadingSkeleton ? (
             <div className="w-full px-4 py-3 flex items-center justify-between sm:px-6">

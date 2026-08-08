@@ -181,25 +181,52 @@ function Companies() {
   const columnMenuRef = useRef(null);
   const tableScrollRef = useRef(null);
   const [quickHotlistCompanyId, setQuickHotlistCompanyId] = useState(null);
-  const [starredCompanies, setStarredCompanies] = useState(() => {
-    const saved = localStorage.getItem("starred_companies");
-    return saved ? JSON.parse(saved) : [];
-  });
 
-  useEffect(() => {
-    localStorage.setItem("starred_companies", JSON.stringify(starredCompanies));
-  }, [starredCompanies]);
-
-  const toggleStar = (e, companyId) => {
+  // Starring is per-user and persisted server-side (not localStorage) so the
+  // paginated API can sort starred companies to the top of page 1 regardless
+  // of which page they were starred from.
+  const toggleStar = async (e, companyId) => {
     e.stopPropagation();
-    setStarredCompanies((prev) =>
-      prev.includes(companyId)
-        ? prev.filter((id) => id !== companyId)
-        : [...prev, companyId]
-    );
+    try {
+      await API.post(`/companies/${companyId}/star`);
+      // Starred items move to the top of page 1 server-side, so jump there
+      // and refetch rather than trying to reorder the current page locally.
+      if (pagination.currentPage === 1) {
+        fetchCompanies();
+      } else {
+        setPagination((prev) => ({ ...prev, currentPage: 1 }));
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update star");
+    }
   };
   const location = useLocation();
   const { state } = location;
+
+  // "View all" from the global search panel hands its query off via
+  // `?search=` rather than trying to replicate the search itself — this
+  // drops it straight into the table's own search box on arrival (open, not
+  // just filled in), so the list is already filtered instead of showing
+  // everything.
+  //
+  // Captured once, synchronously, rather than read inside the effect below:
+  // the mount-time fetch effect (a few hundred lines down) needs to know
+  // *before its first run* whether a search is coming, so it can skip firing
+  // its own empty-search request. Without that guard, two fetches land
+  // almost together — one for "" (every company) and one for the real query
+  // — and there's nothing to stop the empty one's response, since it's
+  // fetching the whole table and is inherently slower, from arriving second
+  // and clobbering the correctly-filtered result on screen.
+  const initialSearchFromUrl = useRef(
+    new URLSearchParams(location.search).get("search")
+  ).current;
+  useEffect(() => {
+    if (initialSearchFromUrl) {
+      setSearchTerm(initialSearchFromUrl);
+      setIsSearchExpanded(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [showBulkNoteModal, setShowBulkNoteModal] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
@@ -222,7 +249,6 @@ function Companies() {
   const [selectedCompanies, setSelectedCompanies] = useState([]);
   // O(1) membership checks instead of .includes() array scans repeated per row.
   const selectedCompaniesSet = useMemo(() => new Set(selectedCompanies), [selectedCompanies]);
-  const starredCompaniesSet = useMemo(() => new Set(starredCompanies), [starredCompanies]);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -500,8 +526,9 @@ function Companies() {
 
   const columnHelper = createColumnHelper();
 
-  // Sort companies so that starred ones always appear at the top
-  const sortedCompanies = companies || [];
+  // Starred-first ordering now happens server-side (see fetchCompanies /
+  // toggleStar), so `companies` already arrives in the right order.
+  const sortedCompanies = companies;
 
   const renderRowActionsMenu = (company) => {
     const isOpen = openRowActionsId === company._id;
@@ -565,6 +592,7 @@ function Companies() {
             >
               <Link
                 to={`/companies/${company._id}`}
+                state={{ companyIds: sortedCompanies.map((c) => c._id) }}
                 onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
@@ -614,8 +642,8 @@ function Companies() {
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Star className={`w-3.5 h-3.5 ${starredCompaniesSet.has(company._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
-                {starredCompaniesSet.has(company._id) ? "Unstar Company" : "Star Company"}
+                <Star className={`w-3.5 h-3.5 ${company.isStarred ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
+                {company.isStarred ? "Unstar Company" : "Star Company"}
               </button>
               <div className="w-full border-t border-[#F1F1F5] my-0.5" />
               <button
@@ -843,12 +871,13 @@ function Companies() {
                   <div className="flex items-center min-w-0 flex-1 pr-4">
                     <Link
                       to={`/companies/${company._id}`}
+                      state={{ companyIds: sortedCompanies.map((c) => c._id) }}
                       className="text-[#0085FF] font-semibold hover:underline truncate transition-all duration-150 ease-out group-hover:text-[#004CFF] min-w-0"
                       title={company.name}
                     >
                       <HighlightText text={company.name} query={searchTerm} />
                     </Link>
-                    {starredCompaniesSet.has(company._id) && (
+                    {company.isStarred && (
                       <Star className="flex-shrink-0 w-3.5 h-3.5 ml-1.5 text-yellow-400 fill-yellow-400" />
                     )}
                   </div>
@@ -937,7 +966,6 @@ function Companies() {
     sortConfig,
     pinnedColumns,
     openRowActionsId,
-    starredCompaniesSet,
     openColumnMenuKey,
     columnMenuPos,
     searchTerm,
@@ -1048,8 +1076,16 @@ function Companies() {
     return () => clearTimeout(timer);
   }, [searchTerm, filterIndustry]);
 
-  // Fetch data when dependencies change
+  // Fetch data when dependencies change. Skipped on the very first mount when
+  // a `?search=` deep link is pending — that leaves the search-term effect
+  // below as the only initial fetch, instead of racing an empty-search fetch
+  // against it (see initialSearchFromUrl above for why that race matters).
+  const skipMountFetchForUrlSearch = useRef(!!initialSearchFromUrl);
   useEffect(() => {
+    if (skipMountFetchForUrlSearch.current) {
+      skipMountFetchForUrlSearch.current = false;
+      return;
+    }
     fetchCompanies();
   }, [pagination.currentPage, pagination.limit, sortConfig]);
 
@@ -1881,9 +1917,25 @@ function Companies() {
                         onBlur={() => {
                           if (!searchTerm) setIsSearchExpanded(false);
                         }}
-                        className={`w-full h-full pl-9 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                        className={`w-full h-full pl-9 pr-9 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
                         placeholder="Search companies by name, industry, or location..."
                       />
+                      {/* Clears the typed text only — box stays open, same as
+                          backspacing it out by hand. Only shown once there's
+                          something to clear. mousedown+preventDefault stops
+                          the input's onBlur (which would collapse the box)
+                          from firing before the click lands. */}
+                      {isSearchExpanded && searchTerm && (
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => setSearchTerm("")}
+                          aria-label="Clear search"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 rounded-full text-gray-900 hover:bg-gray-100 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -1911,7 +1963,11 @@ function Companies() {
                         : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
                         }`}
                     >
-                      <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      {/* Was 13x13 — smaller than every other toolbar icon
+                          here (search/filter/more/plus are all 16px), which
+                          made Hotlist's icon read as visibly undersized next
+                          to them. */}
+                      <svg width="16" height="16" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#1F2937" />
                       </svg>
                       <span className="font-medium">Hotlist</span>
@@ -2249,7 +2305,6 @@ function Companies() {
             // (black 40% over a colour == 0.6 * colour), so this bar darkens in
             // lockstep with the page instead of just fading over the body.
             filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
-            transition: "filter 200ms ease-out",
           }}
         >
           {PaginationControls()}

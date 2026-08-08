@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { X, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 import logo from "/DataCircles.png";
@@ -18,6 +18,20 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+
+  // Panel variant: results sit inside per-category dropdown rows (Companies,
+  // Contacts, Deals, Vendors) rather than one flat list — collapsed by
+  // default, so a category with matches is opened deliberately rather than
+  // the panel dumping every result on screen at once. Invoices isn't here
+  // because the /search endpoint (globalSearchController.js) doesn't query
+  // invoices yet — adding it needs a backend change, not just a UI row.
+  const [openCategories, setOpenCategories] = useState(() => new Set());
+  const toggleCategory = (key) =>
+    setOpenCategories((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
 
   // Unified Search API call. Goes through the shared `API` axios instance —
   // the same one every other page uses — instead of a raw fetch() with a
@@ -107,6 +121,117 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
     return nameField.toLowerCase().includes(q);
   };
 
+  // Category rows for the panel variant, in the fixed order they're listed
+  // whether or not each one currently has matches.
+  const CATEGORIES = [
+    { key: "companies", label: "Companies" },
+    { key: "contacts", label: "Contacts" },
+    { key: "deals", label: "Deals" },
+    { key: "vendors", label: "Vendors" },
+  ];
+
+  const itemLabel = (item) => item.name || item.title || item.companyName;
+
+  // Base list route per category, for "View all" — it hands off to the real
+  // module list rather than trying to replicate pagination/filtering here.
+  const CATEGORY_ROUTES = {
+    companies: "/companies",
+    contacts: "/contacts",
+    deals: "/deals",
+    vendors: "/vendors",
+  };
+
+  const RESULTS_LIMIT = 5;
+
+  // Most recently updated (falling back to created) first, so the five shown
+  // are whichever records actually changed most recently — not just whatever
+  // order the DB query happened to return them in.
+  const recencyOf = (item) =>
+    new Date(item.updatedAt || item.createdAt || 0).getTime();
+  const sortByRecency = (items) =>
+    [...items].sort((a, b) => recencyOf(b) - recencyOf(a));
+
+  const renderCategoryAccordion = () => {
+    const hasQuery = searchQuery && searchQuery.trim().length > 0;
+    return (
+      <div className="divide-y divide-gray-100">
+        {CATEGORIES.map(({ key, label }) => {
+          const items = results[key] || [];
+          const visibleItems = sortByRecency(items).slice(0, RESULTS_LIMIT);
+          const hasMore = items.length > RESULTS_LIMIT;
+          const isOpen = openCategories.has(key);
+          return (
+            <div key={key}>
+              <button
+                type="button"
+                onClick={() => toggleCategory(key)}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+              >
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="font-semibold text-gray-900">{label}</span>
+                  {hasQuery && (
+                    <span className="flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-white border border-gray-200 text-xs font-bold text-gray-500 flex-shrink-0">
+                      {items.length}
+                    </span>
+                  )}
+                </span>
+                <span className="flex items-center gap-3 flex-shrink-0">
+                  {hasQuery && hasMore && (
+                    <span
+                      role="link"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Hands the same query off as a URL param — each list
+                        // page reads `?search=` on mount and drops it straight
+                        // into its own search box, so "View all" lands on a
+                        // list already filtered to this search, not the full
+                        // unfiltered table.
+                        navigate(`${CATEGORY_ROUTES[key]}?search=${encodeURIComponent(searchQuery)}`);
+                        onClose();
+                      }}
+                      className="text-sm font-medium text-blue-600 hover:underline"
+                    >
+                      View all
+                    </span>
+                  )}
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                  />
+                </span>
+              </button>
+
+              {isOpen && (
+                <div className="pb-2">
+                  {!hasQuery ? (
+                    <p className="px-4 pb-2 text-sm text-gray-400">
+                      Start typing to search {label.toLowerCase()}.
+                    </p>
+                  ) : visibleItems.length === 0 ? (
+                    <p className="px-4 pb-2 text-sm text-gray-400">
+                      No {label.toLowerCase()} matched "{searchQuery}".
+                    </p>
+                  ) : (
+                    visibleItems.map((item) => (
+                      <div
+                        key={item._id || item.id}
+                        onClick={() => handleResultClick(key, item)}
+                        className="flex items-center justify-between gap-4 px-4 py-2 hover:bg-gray-50 transition-colors cursor-pointer"
+                      >
+                        <span className="text-sm font-medium text-gray-800 truncate">
+                          {itemLabel(item)}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const flatResults = [
     ...results.companies.map((item) => ({ item, type: "companies" })),
     ...results.vendors.map((item) => ({ item, type: "vendors" })),
@@ -181,22 +306,12 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
               Searching across all records...
             </p>
           </div>
-        ) : searchQuery && searchQuery.trim().length > 0 ? (
-          // No horizontal padding here — rows run edge-to-edge in the box
-          // instead of sitting inset inside a padded card.
-          renderResultsList()
         ) : (
-          <div className="text-center py-16">
-            <div className="w-14 h-14 bg-gradient-to-br from-blue-50 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <SearchIcon className="w-6 h-6 text-blue-600" />
-            </div>
-            <h2 className="text-base font-semibold text-gray-900 mb-1.5">
-              Start typing to search
-            </h2>
-            <p className="text-sm text-gray-500 max-w-xs mx-auto">
-              Search across companies, vendors, contacts, and deals.
-            </p>
-          </div>
+          // Companies / Contacts / Deals / Vendors as standing dropdown rows,
+          // always present — matches (once you search) land inside their own
+          // category and stay collapsed until that row is opened, rather than
+          // the panel dumping every hit into one flat list up front.
+          renderCategoryAccordion()
         )}
       </div>
     );

@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import API from "../../services/api";
 import { Twitter, Linkedin, Facebook, FolderOpen, ChevronDown } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 const CompanyForm = ({
   form,
   setForm,
@@ -18,12 +17,6 @@ const CompanyForm = ({
   onRequestClose,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  // Dims the sidebar/navbar/page-footer chrome while this panel is
-  // open -- see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(true);
   const profilePictureInputRef = useRef(null);
   // A freshly picked file previews via an object URL; before that (or in edit

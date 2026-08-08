@@ -9,7 +9,6 @@ import {
 import Papa from "papaparse";
 import API from "../../services/api";
 import ContactFieldMappingModal from "./ContactFieldMappingModal";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 function ImportContacts({
   isOpen: propIsOpen,
@@ -26,26 +25,11 @@ function ImportContacts({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [dragActive, setDragActive] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
-  // Dims the sidebar/navbar/page-footer chrome while this panel is
-  // open -- see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isOpen]);
-  const [shouldRender, setShouldRender] = useState(false);
 
-  // Handle modal opening/closing animation
+  // Reset form state each time the panel is opened.
   useEffect(() => {
     if (propIsOpen) {
-      setShouldRender(true);
-      setTimeout(() => setIsOpen(true), 10);
-    } else {
-      setIsOpen(false);
-      setTimeout(() => {
-        setShouldRender(false);
-        resetImport();
-      }, 300);
+      resetImport();
     }
   }, [propIsOpen]);
 
@@ -57,10 +41,7 @@ function ImportContacts({
   }, []);
 
   const handleClose = () => {
-    setIsOpen(false);
-    setTimeout(() => {
-      onClose();
-    }, 300);
+    onClose();
   };
 
   const resetImport = () => {
@@ -409,24 +390,18 @@ Contact Person 3,contact3@example.com,+1-555-0003,Customer,HealthCare Solutions,
     document.body.removeChild(link);
   };
 
-  if (!shouldRender) return null;
+  if (!propIsOpen) return null;
 
   return (
     <>
       {/* Background Overlay */}
       <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
-        style={{ opacity: isOpen ? 1 : 0 }}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] animate-fadeIn"
         onClick={handleClose}
       />
 
-      {/* Sliding Panel */}
-      <div
- className={`fixed inset-y-0 right-0 z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${
-          isOpen ? "translate-x-0" : "translate-x-full"
-        }`}
-      >
-        <div className="p-6">
+      <div className="fixed dc-panel-card dc-panel-w bg-white shadow-2xl z-[10001] flex flex-col overflow-hidden animate-slideInRight">
+        <div className="p-6 overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-gray-900">

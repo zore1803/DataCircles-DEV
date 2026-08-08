@@ -61,6 +61,16 @@ router.get(
   taskController.getAllTasksPaginated
 );
 
+// Toggle star on a task
+router.post(
+  "/:id/star",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("tasks", "write"),
+  checkPermission("tasks", "read-write"),
+  taskController.toggleStarTask
+);
+
 // Update task
 router.put(
   "/:id",

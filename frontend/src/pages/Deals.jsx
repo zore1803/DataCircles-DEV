@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
+import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import API from "../services/api";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { formatNumberToIndian } from "../utils/numberFormatter";
@@ -586,6 +587,7 @@ const DealsLostIcon = (props) => (
 // --- MAIN COMPONENT ---
 
 function Deals() {
+  const isSearchOverlayOpen = useSearchOverlayOpen();
   const [deals, setDeals] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -668,6 +670,20 @@ function Deals() {
   const navigate = useNavigate();
   const location = useLocation();
   const { state } = location;
+
+  // "View all" from the global search panel hands its query off via
+  // `?search=` rather than trying to replicate the search itself — this
+  // drops it straight into the table's own search box on arrival, so the
+  // list is already filtered instead of showing everything.
+  useEffect(() => {
+    const q = new URLSearchParams(location.search).get("search");
+    if (q) {
+      setFilters((prev) => ({ ...prev, searchTerm: q }));
+      setIsSearchExpanded(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
   const [showImport, setShowImport] = useState(false);
   const [staleDays, setStaleDays] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
@@ -753,22 +769,15 @@ function Deals() {
   const visibleColumns = useMemo(() => getVisibleColumns(), [columns]);
   // ----------------------------------------------------
 
-  const [starredDeals, setStarredDeals] = useState(() => {
-    const saved = localStorage.getItem("starred_deals");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  useEffect(() => {
-    localStorage.setItem("starred_deals", JSON.stringify(starredDeals));
-  }, [starredDeals]);
-
-  const toggleStar = (e, dealId) => {
+  const toggleStar = async (e, dealId) => {
     e.stopPropagation();
-    setStarredDeals((prev) =>
-      prev.includes(dealId)
-        ? prev.filter((id) => id !== dealId)
-        : [...prev, dealId]
-    );
+    try {
+      await API.post(`/deals/${dealId}/star`);
+      await fetchDeals();
+      setDealsCurrentPage(1);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update star");
+    }
   };
 
   // Columns specifically mapped for the Export Modal
@@ -933,9 +942,9 @@ function Deals() {
 
     return [...deals].sort((a, b) => {
       // 1. Primary Sort: Starred Deals always float to the top
-      // (Assumes starredDeals state is in scope from step 1)
-      const isAStarred = starredDeals.includes(a._id);
-      const isBStarred = starredDeals.includes(b._id);
+      // (isStarred flag comes from the API on each deal object)
+      const isAStarred = !!a.isStarred;
+      const isBStarred = !!b.isStarred;
 
       if (isAStarred && !isBStarred) return -1;
       if (!isAStarred && isBStarred) return 1;
@@ -2190,9 +2199,23 @@ function Deals() {
               onBlur={() => {
                 if (!filters.searchTerm) setIsSearchExpanded(false);
               }}
-              className={`w-full h-full pl-9 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+              className={`w-full h-full pl-9 pr-9 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
               placeholder="Search deals by title, company, or status..."
             />
+            {/* Clears the typed text only — box stays open. mousedown+
+                preventDefault stops the input's onBlur (which would collapse
+                the box) from firing before the click lands. */}
+            {isSearchExpanded && filters.searchTerm && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setFilters({ ...filters, searchTerm: "" })}
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 rounded-full text-gray-900 hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -2645,7 +2668,6 @@ function Deals() {
                   sortConfig={sortConfig}
                   handleSort={handleSort}
                   setQuickViewDealId={setQuickViewDealId}
-                  starredDeals={starredDeals}
                   toggleStar={toggleStar}
                   loading={loading}
                   skeletonRows={dealsPerPage}
@@ -2656,8 +2678,12 @@ function Deals() {
 
             {sortedTableDeals.length > 0 && (
               <div
-                className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center justify-between px-4 sm:px-6"
-                style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+                className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center justify-between px-4 sm:px-6 ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
+                style={{
+                  left: "var(--sidebar-width, 0px)",
+                  height: 64,
+                  filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
+                }}
               >
                 <div className="flex-1 flex justify-between sm:hidden">
                   <button

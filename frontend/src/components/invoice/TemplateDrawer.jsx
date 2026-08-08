@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { X, Check, LayoutTemplate } from "lucide-react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 import {
   DOCUMENT_TEMPLATES,
   DEFAULT_TEMPLATE,
@@ -171,13 +170,6 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [isOpen, onClose]);
-
-  // Dims the sidebar/navbar/page-footer chrome while this panel is open --
-  // see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isOpen]);
 
   const selected = templates?.[type] || DEFAULT_TEMPLATE;
 

@@ -99,7 +99,6 @@ export default function DealsTable({
   loading = false,
   skeletonRows = 12,
   setQuickViewDealId,
-  starredDeals = [],
   toggleStar,
   searchTerm = "",
   scrollContainerRef,
@@ -521,6 +520,7 @@ export default function DealsTable({
             <div className="flex items-center justify-between w-full group relative">
               <Link
                 to={`/deals/${deal._id}`}
+                state={{ dealIds: sortedTableDeals.map((d) => d._id) }}
                 onClick={(e) => e.stopPropagation()}
                 className="text-sm font-medium text-blue-600 hover:underline transition-all duration-150 ease-out truncate flex-1 pr-4"
                 title={getValue()}
@@ -848,7 +848,6 @@ export default function DealsTable({
     pinnedColumns,
     hiddenColumns,
     columnOrder,
-    starredDeals,
     searchTerm,
     openColMenuKey,
     colMenuPos,

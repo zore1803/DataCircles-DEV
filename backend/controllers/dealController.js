@@ -95,11 +95,45 @@ const getAllDeals = async (req, res) => {
       .populate("contact")
       .populate("user", "name")
       .populate("createdBy", "name")
-      .populate("lastUpdatedBy", "name");
-    
-    res.json(deals);
+      .populate("lastUpdatedBy", "name")
+      .lean();
+
+    const userId = req.user._id.toString();
+    const dealsWithStar = deals.map((d) => {
+      const { starredBy, ...rest } = d;
+      return {
+        ...rest,
+        isStarred: (starredBy || []).some((id) => id.toString() === userId),
+      };
+    });
+
+    res.json(dealsWithStar);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+const toggleStarDeal = async (req, res) => {
+  try {
+    const deal = await Deal.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+
+    const userId = req.user._id.toString();
+    const alreadyStarred = deal.starredBy.some((id) => id.toString() === userId);
+
+    if (alreadyStarred) {
+      deal.starredBy = deal.starredBy.filter((id) => id.toString() !== userId);
+    } else {
+      deal.starredBy.push(req.user._id);
+    }
+    await deal.save();
+
+    res.json({ starred: !alreadyStarred });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to toggle star", message: error.message });
   }
 };
 
@@ -592,4 +626,5 @@ module.exports = {
   updateDealStatus,
   getDashboardDeals,
   exportSelectedDeals,
+  toggleStarDeal,
 };

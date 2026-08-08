@@ -1391,10 +1391,44 @@ exports.getAllMeetings = async (req, res) => {
         { path: "createdBy", select: "name email" },
       ])
       .sort({ createdAt: -1 });
-    res.json(meetings);
+
+    const userId = req.user._id.toString();
+    const meetingsWithStar = meetings.map((meeting) => {
+      const obj = meeting.toObject();
+      return {
+        ...obj,
+        isStarred: (obj.starredBy || []).some((id) => id.toString() === userId),
+      };
+    });
+
+    res.json(meetingsWithStar);
   } catch (error) {
     console.error("Error fetching meetings:", error);
     res.status(500).json({ error: "Failed to fetch meetings" });
+  }
+};
+
+exports.toggleStarMeeting = async (req, res) => {
+  try {
+    const meeting = await Meeting.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+    if (!meeting) return res.status(404).json({ error: "Meeting not found" });
+
+    const userId = req.user._id.toString();
+    const alreadyStarred = meeting.starredBy.some((id) => id.toString() === userId);
+
+    if (alreadyStarred) {
+      meeting.starredBy = meeting.starredBy.filter((id) => id.toString() !== userId);
+    } else {
+      meeting.starredBy.push(req.user._id);
+    }
+    await meeting.save();
+
+    res.json({ starred: !alreadyStarred });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to toggle star", message: error.message });
   }
 };
 
