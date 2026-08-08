@@ -560,9 +560,12 @@ const Navbar = () => {
           // on that backdrop to visually cover this element — the two are
           // unrelated fixed-position layers, and z-index alone wasn't
           // reliably painting the backdrop above a sibling fixed element.
-          // Plain opacity, no blur — matches the backdrop's own plain tint.
-          opacity: isSearchOverlayOpen ? 0.5 : 1,
-          transition: "opacity 200ms ease-out",
+          // Matches the backdrop's exact tint: the overlay is bg-black/40, and
+          // black at 40% over any colour equals 0.6 * colour, i.e. the same as
+          // brightness(0.6) — so the sidebar darkens identically to the page
+          // instead of just fading toward the (white) body behind it.
+          filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
+          transition: "filter 200ms ease-out",
           width:
             window.innerWidth >= 1024
               ? (isHovered ? "280px" : "64px")

@@ -2144,93 +2144,6 @@ function Companies() {
                     </thead>
 
                     <tbody className="bg-white">
-                      {showLoadingSkeleton ? (
-                        <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox />
-                      ) : companies.length === 0 ? (
-                        <tr>
-                          <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
-                            <p className="font-medium">No companies found</p>
-                          </td>
-                        </tr>
-                      ) : (
-                        table.getRowModel().rows.map((row) => (
-                          <tr
-                            key={row.id}
-                            className={`bg-white hover:bg-blue-50 transition-colors ${selectedCompaniesSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
-                            onMouseDown={() => handleMouseDown(row.original._id)}
-                            onMouseUp={handleMouseUp}
-                            onMouseLeave={handleMouseUp}
-                            onTouchStart={() => handleTouchStart(row.original._id)}
-                            onTouchEnd={handleTouchEnd}
-                          >
-                            {row.getVisibleCells().map((cell) => {
-                              const colId = cell.column.id;
-                              const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
-                              const isRightSticky = rightPinnedKeys.includes(colId);
-                              const isSticky = isLeftSticky || isRightSticky;
-                              // Only draw the heavier pin-boundary divider when a column has
-                            // actually been pinned by the user. Defaulting this to the
-                            // checkbox column drew it there unconditionally, stacked right
-                            // beside that column's own plain border-r — the doubled line
-                            // (and header's darker grey vs. the body's) that showed up
-                            // between the checkbox and Company Name columns.
-                            const isLeftBoundary = lastLeftPinnedKey === colId;
-                              const isRightBoundary = colId === firstRightPinnedKey;
-                              const isDraggable = colId !== "selection";
-                              const isDragging = draggedColKey === colId;
-                              const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
-
-                              // Subtle inset shadow at the pinned block's boundary edge —
-                              // same treatment as the CompanyProfilePage tabs
-                              // (components/company/CompanyContactsTab.jsx etc.) — instead
-                              // of a flat 2px border, so scrolling under a pinned column
-                              // reads as a genuinely separated layer.
-                              const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
-
-                              return (
-                                <th
-                                  key={header.id}
-                                  data-col-id={colId}
-                                  onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
-                                  style={{
-                                    width: header.getSize(),
-                                    position: isSticky ? "sticky" : "relative",
-                                    left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
-                                    right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
-                                    zIndex: isSticky ? 20 : 1,
-                                    opacity: isDragging ? 0.35 : 1,
-                                    boxShadow: boundaryShadow || undefined,
-                                  }}
-                                  className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} last:border-r-0 ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
-                                >
-                                  <div className="flex items-center gap-1.5 w-full min-w-0">
-                                    <div className="min-w-0 flex-1 truncate">
-                                      {flexRender(
-                                        header.column.columnDef.header,
-                                        header.getContext(),
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {colId !== "selection" && header.column.getCanResize() && (
-                                    <div
-                                      data-resize-handle="true"
-                                      onMouseDown={(e) => {
-                                        e.stopPropagation();
-                                        header.getResizeHandler()(e);
-                                      }}
-                                      onTouchStart={header.getResizeHandler()}
-                                      className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
-                                    />
-                                  )}
-                                </th>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </thead>
-
-                      <tbody className="bg-white">
                         {showLoadingSkeleton ? (
                           <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox />
                         ) : companies.length === 0 ? (
@@ -2255,7 +2168,9 @@ function Companies() {
                                 const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                                 const isRightSticky = rightPinnedKeys.includes(colId);
                                 const isSticky = isLeftSticky || isRightSticky;
-                                const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                                // Only draw the heavier pin-boundary divider once a column is
+                                // actually pinned (see the matching header calc above).
+                                const isLeftBoundary = lastLeftPinnedKey === colId;
                                 const isRightBoundary = colId === firstRightPinnedKey;
                                 const isColDragging = draggedColKey === colId;
 
@@ -2294,44 +2209,6 @@ function Companies() {
           )}
         </div>
 
-        {dragGhost && createPortal(
-          <div
-            ref={ghostElRef}
-            style={{
-              position: "fixed",
-              top: -9999,
-              left: -9999,
-              width: dragGhost.width,
-              zIndex: 10000,
-              pointerEvents: "none",
-            }}
-            className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
-          >
-            <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
-              <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
-            </div>
-            {dragGhost.previewRows.map((rowVal, i) => (
-              <div
-                key={i}
-                className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0"
-              >
-                <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
-              </div>
-            ))}
-          </div>,
-          document.body,
-        )}
-
-        {!showLoadingSkeleton && !showHotlist && (
-          <div
-            className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
-            style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
-          >
-            {PaginationControls()}
-          </div>
-        )}
-      </div>
-
       {dragGhost && createPortal(
         <div
           ref={ghostElRef}
@@ -2368,9 +2245,11 @@ function Companies() {
             height: 64,
             // Same reasoning as the sidebar in Navbar.jsx — dims itself rather
             // than depending on the overlay's backdrop to cover it by z-index
-            // alone. Plain opacity, no blur.
-            opacity: isSearchOverlayOpen ? 0.5 : 1,
-            transition: "opacity 200ms ease-out",
+            // alone. brightness(0.6) matches the bg-black/40 backdrop exactly
+            // (black 40% over a colour == 0.6 * colour), so this bar darkens in
+            // lockstep with the page instead of just fading over the body.
+            filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
+            transition: "filter 200ms ease-out",
           }}
         >
           {PaginationControls()}
