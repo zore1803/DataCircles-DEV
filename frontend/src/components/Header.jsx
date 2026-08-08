@@ -859,14 +859,6 @@ const Header = () => {
   const mobileSearchSlotRef = useRef(null);
   const [searchOrigin, setSearchOrigin] = useState(null);
   const [searchCentered, setSearchCentered] = useState(false);
-  // Tells the sidebar and each page's fixed footer to dim/blur themselves —
-  // see useSearchOverlayOpen.js for why this is a DOM event rather than lifted
-  // state (they're siblings with no shared parent to lift it into).
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isSearchOpen } })
-    );
-  }, [isSearchOpen]);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [hoveredMeeting, setHoveredMeeting] = useState(false);
   const [showQuickCompanyForm, setShowQuickCompanyForm] = useState(false);
@@ -1141,6 +1133,17 @@ const Header = () => {
   // Desktop and mobile each have their own search field in different spots
   // in the layout (only one is ever actually visible at a given width), so
   // the slide needs to originate from whichever one was actually clicked.
+  // Dispatched right here, synchronously with the state change that opens/
+  // closes the overlay, rather than from a useEffect keyed on isSearchOpen.
+  // An effect only runs after Header's own render commits, and the sidebar's
+  // useSearchOverlayOpen() hook then needs a further render to react to the
+  // event — two extra cycles the backdrop (which paints in this same render)
+  // doesn't wait for, so the sidebar/footer dim visibly lagged behind it.
+  // Firing from the handler collapses that gap to effectively nothing.
+  const dispatchDimChrome = (open) => {
+    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open } }));
+  };
+
   const openSearchOverlay = (fromRef) => {
     const ref = fromRef || searchSlotRef;
     if (ref.current) {
@@ -1149,6 +1152,7 @@ const Header = () => {
     }
     setSearchCentered(false);
     setIsSearchOpen(true);
+    dispatchDimChrome(true);
   };
   const handleSearchFocus = (fromRef) => openSearchOverlay(fromRef);
   const handleSearchChange = (e, fromRef) => {
@@ -1164,6 +1168,7 @@ const Header = () => {
     setSearchCentered(false);
     setSearchQuery("");
     setDebouncedQuery("");
+    dispatchDimChrome(false);
   };
 
   // Trigger the slide a tick after mount, once the overlay has painted at its
@@ -1579,8 +1584,22 @@ const Header = () => {
                     placeholder="Search Companies, Deals, Contacts"
                     value={searchQuery}
                     onChange={handleSearchChange}
-                    className="w-full h-[42px] pl-11 pr-4 bg-white border border-gray-200 rounded-full text-sm text-gray-700 placeholder:text-gray-500 outline-none ring-2 ring-blue-500 border-transparent font-sans shadow-lg"
+                    className="w-full h-[42px] pl-11 pr-11 bg-white border border-gray-200 rounded-full text-sm text-gray-700 placeholder:text-gray-500 outline-none ring-2 ring-blue-500 border-transparent font-sans shadow-lg"
                   />
+                  {/* Clears the typed text only — the overlay itself stays
+                      open (back to the collapsed "start typing" category
+                      rows), same as backspacing it out by hand. Closing the
+                      whole panel is still backdrop-click / Escape. */}
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      aria-label="Clear search"
+                      className="absolute right-3.5 -translate-y-1/2 top-1/2 z-10 flex items-center justify-center w-5 h-5 rounded-full text-gray-900 hover:bg-gray-100 transition-colors"
+                    >
+                      <X className="w-4 h-4" strokeWidth={2.5} />
+                    </button>
+                  )}
                 </div>
 
                 {/* Attached results panel, docked directly under the bar. Sized
@@ -1592,8 +1611,12 @@ const Header = () => {
                     be `h-full`, but percentage heights don't resolve against a
                     maxHeight-only ancestor, so it silently stopped scrolling
                     and results past the fold were just clipped instead. */}
+                {/* Solid the instant it's mounted — no opacity fade. It used to
+                    fade in with the bar's slide, but that meant it spent its
+                    first ~200ms as a half-transparent grey wash with the page
+                    content showing through, not a crisp white panel. */}
                 <div
-                  className={`mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-y-auto transition-opacity duration-200 ${searchCentered ? "opacity-100" : "opacity-0"}`}
+                  className="mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-y-auto"
                   style={{ maxHeight: "66vh" }}
                 >
                   <SearchResults

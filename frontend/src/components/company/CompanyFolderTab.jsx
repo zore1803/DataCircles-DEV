@@ -5,7 +5,7 @@ import StatTileSkeleton from "../common/StatTileSkeleton";
 
 const STORAGE_ALLOCATION_GB = 5;
 
-export default function CompanyFolderTab({ showStats = true, isLoading = false }) {
+export default function CompanyFolderTab({ showStats = true, isLoading = false, autoOpenCreate = false, onAutoOpenCreateConsumed }) {
   const [folders, setFolders] = useState([]);
 
   const allFiles = folders.flatMap((f) => f.files || []);
@@ -92,8 +92,11 @@ export default function CompanyFolderTab({ showStats = true, isLoading = false }
                 key={tile.label}
                 className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
               >
-                <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <tile.icon size={20} />
+                <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                  <tile.icon size={18} strokeWidth={1.5} />
+                </div>
+                <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
+                  <tile.icon size={20} strokeWidth={1.5} />
                 </div>
                 <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
                   <div className="min-w-0">
@@ -117,7 +120,13 @@ export default function CompanyFolderTab({ showStats = true, isLoading = false }
       )}
 
       {/* Existing folder UI (its own search/grid/upload) */}
-      <Folder onFoldersChange={setFolders} isLoading={isLoading} showStats={showStats} />
+      <Folder
+        onFoldersChange={setFolders}
+        isLoading={isLoading}
+        showStats={showStats}
+        autoOpenCreate={autoOpenCreate}
+        onAutoOpenCreateConsumed={onAutoOpenCreateConsumed}
+      />
     </div>
   );
 }

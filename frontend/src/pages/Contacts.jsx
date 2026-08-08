@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef, useLayoutEffect } from "react";
+import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { createPortal } from "react-dom";
@@ -151,6 +152,7 @@ const HighlightText = ({ text, query }) => {
 };
 
 function Contacts() {
+  const isSearchOverlayOpen = useSearchOverlayOpen();
   const [contacts, setContacts] = useState([]);
   const [form, setForm] = useState({
     name: "",
@@ -194,6 +196,29 @@ function Contacts() {
   const { state } = location;
   const user = JSON.parse(localStorage.getItem("user"));
   const navigate = useNavigate();
+
+  // "View all" from the global search panel hands its query off via
+  // `?search=` rather than trying to replicate the search itself — this
+  // drops it straight into the table's own search box on arrival (open, not
+  // just filled in), so the list is already filtered instead of showing
+  // everything.
+  //
+  // Captured once, synchronously: the mount-time fetch effect further down
+  // needs to know *before its first run* that a search is coming, so it can
+  // skip its own empty-search request. Without that, two fetches land almost
+  // together — "" (every contact) and the real query — and the empty one,
+  // fetching the whole table, is inherently slower and can arrive second,
+  // clobbering the correctly-filtered result already on screen.
+  const initialSearchFromUrl = useRef(
+    new URLSearchParams(location.search).get("search")
+  ).current;
+  useEffect(() => {
+    if (initialSearchFromUrl) {
+      setSearchTerm(initialSearchFromUrl);
+      setIsSearchExpanded(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [showImport, setShowImport] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
@@ -440,22 +465,18 @@ function Contacts() {
     saveColumns(newColumns);
   };
 
-  const [starredContacts, setStarredContacts] = useState(() => {
-    const saved = localStorage.getItem("starred_contacts");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  useEffect(() => {
-    localStorage.setItem("starred_contacts", JSON.stringify(starredContacts));
-  }, [starredContacts]);
-
-  const toggleStar = (e, contactId) => {
+  const toggleStar = async (e, contactId) => {
     e.stopPropagation();
-    setStarredContacts((prev) =>
-      prev.includes(contactId)
-        ? prev.filter((id) => id !== contactId)
-        : [...prev, contactId]
-    );
+    try {
+      await API.post(`/contacts/${contactId}/star`);
+      if (pagination.currentPage === 1) {
+        fetchData();
+      } else {
+        setPagination((prev) => ({ ...prev, currentPage: 1 }));
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update star");
+    }
   };
 
   const {
@@ -749,24 +770,12 @@ function Contacts() {
 
   const columnHelper = createColumnHelper();
 
-  // --- ADD THIS: Sort contacts so starred ones appear at top ---
-  const sortedContacts = useMemo(() => {
-    if (!contacts || contacts.length === 0) return [];
-
-    const dataCopy = [...contacts];
-    return dataCopy.sort((a, b) => {
-      const isAStarred = starredContacts.includes(a._id);
-      const isBStarred = starredContacts.includes(b._id);
-
-      if (isAStarred && !isBStarred) return -1;
-      if (!isAStarred && isBStarred) return 1;
-      return 0;
-    });
-  }, [contacts, starredContacts]);
+  // The server now returns contacts already sorted starred-first (via the
+  // /contacts/pagination aggregation), so no client-side re-sort is needed.
+  const sortedContacts = contacts;
 
   // O(1) membership checks instead of .includes() array scans repeated per row.
   const selectedContactsSet = useMemo(() => new Set(selectedContacts), [selectedContacts]);
-  const starredContactsSet = useMemo(() => new Set(starredContacts), [starredContacts]);
 
   const renderRowActionsMenu = (contact) => {
     const isOpen = openRowActionsId === contact._id;
@@ -868,8 +877,8 @@ function Contacts() {
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Star className={`w-3.5 h-3.5 ${starredContactsSet.has(contact._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
-                {starredContactsSet.has(contact._id) ? "Unstar Contact" : "Star Contact"}
+                <Star className={`w-3.5 h-3.5 ${contact.isStarred ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
+                {contact.isStarred ? "Unstar Contact" : "Star Contact"}
               </button>
               <div className="w-full border-t border-[#F1F1F5] my-0.5" />
               <button
@@ -1110,7 +1119,7 @@ function Contacts() {
                   >
                     <HighlightText text={contact.name} query={searchTerm} />
                   </Link>
-                  {starredContactsSet.has(contact._id) && (
+                  {contact.isStarred && (
                     <Star className="flex-shrink-0 w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
                   )}
                 </div>
@@ -1197,7 +1206,6 @@ function Contacts() {
     permission,
     openDropdownId,
     pinnedColumns,
-    starredContactsSet,
     openColumnMenuKey,
     columnMenuPos,
     openRowActionsId,
@@ -1731,8 +1739,16 @@ function Contacts() {
     return () => clearTimeout(timer);
   }, [searchTerm, activeTab, statusFilter]);
 
-  // Fetch data when dependencies change
+  // Fetch data when dependencies change. Skipped on the very first mount when
+  // a `?search=` deep link is pending — that leaves the search-term effect
+  // below as the only initial fetch, instead of racing an empty-search fetch
+  // against it (see initialSearchFromUrl above for why that race matters).
+  const skipMountFetchForUrlSearch = useRef(!!initialSearchFromUrl);
   useEffect(() => {
+    if (skipMountFetchForUrlSearch.current) {
+      skipMountFetchForUrlSearch.current = false;
+      return;
+    }
     fetchData();
   }, [pagination.currentPage, pagination.limit, sortConfig]);
 
@@ -2607,7 +2623,7 @@ function Contacts() {
                   className={`relative h-10 flex items-center border border-[rgba(31,41,55,0.1)] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
                 >
                   <SearchIcon
-                    className="absolute left-3.5 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
+                    className={`absolute cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866] ${isSearchExpanded ? "left-3.5" : "left-1/2 -translate-x-1/2"}`}
                     onClick={() => {
                       setIsSearchExpanded(true);
                       searchInputRef.current?.focus();
@@ -2622,9 +2638,23 @@ function Contacts() {
                     onBlur={() => {
                       if (!searchTerm) setIsSearchExpanded(false);
                     }}
-                    className={`w-full h-full pl-10 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                    className={`w-full h-full pl-10 pr-9 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
                     placeholder="Search by contact by name, company, or status..."
                   />
+                  {/* Clears the typed text only — box stays open. mousedown+
+                      preventDefault stops the input's onBlur (which would
+                      collapse the box) from firing before the click lands. */}
+                  {isSearchExpanded && searchTerm && (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setSearchTerm("")}
+                      aria-label="Clear search"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 rounded-full text-gray-900 hover:bg-gray-100 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -3277,8 +3307,12 @@ function Contacts() {
 
         {!showKanban && activeTab !== "Hotlist" && !showLoadingSkeleton && (
           <div
-            className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
-            style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+            className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
+            style={{
+              left: "var(--sidebar-width, 0px)",
+              height: 64,
+              filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
+            }}
           >
             {PaginationControls()}
           </div>

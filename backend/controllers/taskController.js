@@ -237,9 +237,43 @@ const getAllTask = async (req, res) => {
       .populate("users", "name email role profileUrl userData.mainData.profilePic")
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 });
-    res.json(tasks);
+
+    const userId = req.user._id.toString();
+    const tasksWithStar = tasks.map((t) => {
+      const obj = t.toObject();
+      return {
+        ...obj,
+        isStarred: (t.starredBy || []).some((id) => id.toString() === userId),
+      };
+    });
+
+    res.json(tasksWithStar);
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+const toggleStarTask = async (req, res) => {
+  try {
+    const task = await Task.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+    if (!task) return res.status(404).json({ error: "Task not found" });
+
+    const userId = req.user._id.toString();
+    const alreadyStarred = task.starredBy.some((id) => id.toString() === userId);
+
+    if (alreadyStarred) {
+      task.starredBy = task.starredBy.filter((id) => id.toString() !== userId);
+    } else {
+      task.starredBy.push(req.user._id);
+    }
+    await task.save();
+
+    res.json({ starred: !alreadyStarred });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to toggle star", message: error.message });
   }
 };
 
@@ -789,4 +823,5 @@ module.exports = {
   getTasksByCompany,
   getTasksByDeal,
   getDashboardTasks,
+  toggleStarTask,
 };

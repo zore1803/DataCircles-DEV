@@ -4,7 +4,6 @@ import API from "../../services/api";
 import SearchableDropdown from "../contact/SearchableDropdown"; // Adjust path if needed
 import { FolderOpen, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const DealForm = ({
   form,
@@ -22,12 +21,6 @@ const DealForm = ({
   onRequestClose,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  // Dims the sidebar/navbar/page-footer chrome while this panel is
-  // open -- see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(true);
 
   // States for tracking changes and validation

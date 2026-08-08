@@ -6,7 +6,6 @@ import { Upload, Plus, Twitter, Linkedin, Facebook } from "lucide-react";
 import QuickCompanyForm from "../company/QuickCompanyForm";
 import toast from "react-hot-toast";
 import { FaWhatsapp } from "react-icons/fa";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 const ContactForm = ({
   form,
   setForm,
@@ -22,12 +21,6 @@ const ContactForm = ({
   onRequestClose,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  // Dims the sidebar/navbar/page-footer chrome while this panel is
-  // open -- see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(true);
   const [profilePicture, setProfilePicture] = useState(null);
   const [profilePreview, setProfilePreview] = useState(form.avatar || null);

@@ -25,20 +25,11 @@ function ImportDeals({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [dragActive, setDragActive] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
-  const [shouldRender, setShouldRender] = useState(false);
 
-  // Handle modal opening/closing animation
+  // Reset form state each time the panel is opened.
   useEffect(() => {
     if (propIsOpen) {
-      setShouldRender(true);
-      setTimeout(() => setIsOpen(true), 10);
-    } else {
-      setIsOpen(false);
-      setTimeout(() => {
-        setShouldRender(false);
-        resetImport();
-      }, 300);
+      resetImport();
     }
   }, [propIsOpen]);
 
@@ -50,10 +41,7 @@ function ImportDeals({
   }, []);
 
   const handleClose = () => {
-    setIsOpen(false);
-    setTimeout(() => {
-      onClose();
-    }, 300);
+    onClose();
   };
 
   const resetImport = () => {
@@ -344,23 +332,18 @@ function ImportDeals({
     document.body.removeChild(link);
   };
 
-  if (!shouldRender) return null;
+  if (!propIsOpen) return null;
 
   return (
     <>
       {/* Background Overlay */}
       <div
-        className="fixed top-0 left-0 w-screen h-screen bg-black/20 z-[10000] transition-opacity duration-300 ease-in-out"
-        style={{ opacity: isOpen ? 1 : 0 }}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] animate-fadeIn"
         onClick={handleClose}
       />
 
-      {/* Sliding Panel */}
-      <div
- className={`fixed top-0 right-0 h-screen z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${isOpen ? "translate-x-0" : "translate-x-full"
-          }`}
-      >
-        <div className="p-6">
+      <div className="fixed dc-panel-card dc-panel-w bg-white shadow-2xl z-[10001] flex flex-col overflow-hidden animate-slideInRight">
+        <div className="p-6 overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-gray-900">

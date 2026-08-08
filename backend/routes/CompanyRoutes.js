@@ -64,6 +64,15 @@ router.get(
   companyController.getCompanyById,
 );
 
+// POST /api/companies/:id/star (toggle starred for the current user)
+router.post(
+  "/:id/star",
+  requireAuth,
+  subscriptionGate,
+  checkPermission("Companies", "readonly"),
+  companyController.toggleStarCompany,
+);
+
 // DELETE /api/companies/:id
 router.delete(
   "/:id",

@@ -6,7 +6,6 @@ import CustomDropdown from "../common/CustomDropdown";
 import QuickCompanyForm from "../company/QuickCompanyForm";
 import { Plus } from "lucide-react";
 import toast from "react-hot-toast";
-import { DIM_CHROME_EVENT } from "../../hooks/useSearchOverlayOpen";
 
 const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onRequestClose, initialCompanyId = "", editContact = null }) => {
   const isEditing = !!editContact;
@@ -21,12 +20,6 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
   const [profilePicture, setProfilePicture] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  // Dims the sidebar/navbar/page-footer chrome while this panel is
-  // open -- see useSearchOverlayOpen.js.
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: isOpen } }));
-    return () => window.dispatchEvent(new CustomEvent(DIM_CHROME_EVENT, { detail: { open: false } }));
-  }, [isOpen]);
   const [shouldRender, setShouldRender] = useState(true);
   const [showQuickCompanyForm, setShowQuickCompanyForm] = useState(false);
   const [localCompanies, setLocalCompanies] = useState(companies);
@@ -460,8 +453,7 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
 
       <div
         className={`
-          fixed dc-panel-card z-[10002] 
-          w-full sm:w-[500px] md:w-[600px]
+          fixed dc-panel-card dc-panel-w z-[10002]
           max-w-full bg-white shadow-2xl flex flex-col overflow-hidden
           transform transition-transform duration-300 ease-in-out font-inter
           ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}

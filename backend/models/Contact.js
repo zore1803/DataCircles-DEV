@@ -83,6 +83,7 @@ const contactSchema = new mongoose.Schema(
       required: true,
     },
     additionalFields: [additionalFieldSchema],
+    starredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true },
 );
