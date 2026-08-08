@@ -1015,9 +1015,11 @@ export const NoteEditor = ({
 
 
 // Main NoteSection component
-const NoteSection = ({ companyId: propCompanyId, isQuickView }) => {
+const NoteSection = ({ companyId: propCompanyId, dealId, isQuickView }) => {
   const { id: paramCompanyId } = useParams();
-  const companyId = propCompanyId || paramCompanyId;
+  // On a deal page this is passed explicitly; the useParams fallback is the
+  // company route's :id, which must NOT be used when we're scoped to a deal.
+  const companyId = propCompanyId || (dealId ? undefined : paramCompanyId);
   const [notes, setNotes] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [noteTitle, setNoteTitle] = useState("");
@@ -1034,8 +1036,14 @@ const NoteSection = ({ companyId: propCompanyId, isQuickView }) => {
   const [showAllNotes, setShowAllNotes] = useState(false);
 
   const fetchNotes = useCallback(async () => {
+    // Scope to the deal when given one, otherwise to the company.
+    if (!dealId && !companyId) {
+      setNotes([]);
+      return;
+    }
     try {
-      const res = await API.get(`/notes/company/${companyId}`);
+      const url = dealId ? `/notes/deal/${dealId}` : `/notes/company/${companyId}`;
+      const res = await API.get(url);
       const sortedNotes = res.data.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
       );
@@ -1043,7 +1051,7 @@ const NoteSection = ({ companyId: propCompanyId, isQuickView }) => {
     } catch (err) {
       toast.error("Failed to load notes");
     }
-  }, [companyId]);
+  }, [companyId, dealId]);
 
   const fetchContacts = useCallback(async () => {
     try {
@@ -1084,6 +1092,8 @@ const NoteSection = ({ companyId: propCompanyId, isQuickView }) => {
           title: noteTitle,
           note: noteContent,
           company: companyId,
+          // Scope the note to the deal when this section is mounted on one.
+          ...(dealId ? { deal: dealId } : {}),
           taggedContacts: taggedContacts.map((c) => c.value),
           noteType,
           visibility,

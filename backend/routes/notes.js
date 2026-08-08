@@ -16,6 +16,7 @@ router.post('/',
 
 router.post("/bulk", requireAuth, subscriptionGate, noteController.createBulkNotes);
 router.post("/bulk-contact-notes", requireAuth, subscriptionGate, noteController.createBulkContactNotes);
+router.post("/bulk-deal-notes", requireAuth, subscriptionGate, noteController.createBulkDealNotes);
 
 // GET all notes for organization
 router.get('/',
@@ -36,6 +37,13 @@ router.get('/contact/:contactId',
   requireAuth,
   subscriptionGate,
   noteController.getNotesByContact
+);
+
+// GET all notes for a deal (specific route before generic /:id)
+router.get('/deal/:dealId',
+  requireAuth,
+  subscriptionGate,
+  noteController.getNotesByDeal
 );
 
 // GET single note

@@ -870,25 +870,15 @@ export default function CompanyDealsKanban({
     }
   };
 
-  // Notes are company-scoped in this system, so "add a note to these deals"
-  // means adding it to each selected deal's company. Distinct company ids keep
-  // us from writing the same note twice when several deals share a company.
+  // One note per selected deal, scoped to that deal (the backend also records
+  // each deal's company so company-level note views still show it).
   const handleBulkAddNote = async () => {
     const text = bulkNoteText.trim();
     if (!text) return toast.error("Note cannot be empty.");
-    const companyIds = [
-      ...new Set(
-        selectedDeals
-          .map((id) => deals.find((d) => d._id === id)?.company?._id)
-          .filter(Boolean),
-      ),
-    ];
-    if (companyIds.length === 0)
-      return toast.error("Selected deals have no company to attach a note to.");
     setBulkLoading(true);
     try {
-      await API.post("/notes/bulk", { note: text, companyIds });
-      toast.success(`Note added to ${companyIds.length} compan${companyIds.length !== 1 ? "ies" : "y"}`);
+      await API.post("/notes/bulk-deal-notes", { note: text, dealIds: selectedDeals });
+      toast.success(`Note added to ${selectedDeals.length} deal${selectedDeals.length !== 1 ? "s" : ""}`);
       setBulkAddMode(null);
       setBulkNoteText("");
       setSelectedDeals([]);
@@ -2059,9 +2049,7 @@ export default function CompanyDealsKanban({
               </h3>
               <p className="text-sm text-gray-500 font-inter mb-4">
                 {bulkAddMode === "note"
-                  ? `Adds this note to the compan${
-                      new Set(selectedDeals.map((id) => deals.find((d) => d._id === id)?.company?._id).filter(Boolean)).size !== 1 ? "ies" : "y"
-                    } of ${selectedDeals.length} selected deal${selectedDeals.length !== 1 ? "s" : ""}.`
+                  ? `Adds this note to ${selectedDeals.length} selected deal${selectedDeals.length !== 1 ? "s" : ""}.`
                   : `Creates this task on ${selectedDeals.length} selected deal${selectedDeals.length !== 1 ? "s" : ""}.`}
               </p>
 
