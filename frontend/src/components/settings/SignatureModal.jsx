@@ -41,7 +41,7 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
   const [typedText, setTypedText] = useState("");
   const [selectedFont, setSelectedFont] = useState(FONT_FAMILIES[0]);
 
-  // Update pen color on canvas if pad exists
+  // Update pen color on canvas directly without wiping canvas
   const handleColorChange = (hex) => {
     setPenColor(hex);
     if (sigCanvasRef.current) {
@@ -106,7 +106,7 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!sigName.trim()) {
-      toast.error("Please enter a name/label for this signature");
+      toast.error("Please enter a label / owner name for this signature");
       return;
     }
 
@@ -119,10 +119,27 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
       dataUrl = uploadedImage;
     } else if (activeTab === "draw") {
       if (!sigCanvasRef.current || sigCanvasRef.current.isEmpty()) {
-        toast.error("Please draw a signature first");
+        toast.error("Please draw a signature first on the pad");
         return;
       }
-      dataUrl = sigCanvasRef.current.getTrimmedCanvas().toDataURL("image/png");
+      try {
+        const canvasObj = sigCanvasRef.current;
+        if (typeof canvasObj.getTrimmedCanvas === "function") {
+          const trimmed = canvasObj.getTrimmedCanvas();
+          dataUrl = trimmed.toDataURL("image/png");
+        } else if (typeof canvasObj.getCanvas === "function") {
+          dataUrl = canvasObj.getCanvas().toDataURL("image/png");
+        } else {
+          dataUrl = canvasObj.toDataURL("image/png");
+        }
+      } catch (err) {
+        console.warn("Trimmed canvas export failed, using standard canvas export:", err);
+        try {
+          dataUrl = sigCanvasRef.current.getCanvas().toDataURL("image/png");
+        } catch (err2) {
+          dataUrl = sigCanvasRef.current.toDataURL("image/png");
+        }
+      }
     } else if (activeTab === "type") {
       if (!typedText.trim()) {
         toast.error("Please enter text to generate signature");
@@ -131,7 +148,10 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
       dataUrl = generateTypedDataUrl();
     }
 
-    if (!dataUrl) return;
+    if (!dataUrl) {
+      toast.error("Failed to process signature image. Please try again.");
+      return;
+    }
 
     try {
       setLoading(true);
@@ -148,7 +168,8 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
       setTypedText("");
       setIsDefault(false);
     } catch (err) {
-      console.error(err);
+      console.error("Save signature error:", err);
+      toast.error(err.response?.data?.error || err.message || "Failed to save signature");
     } finally {
       setLoading(false);
     }
@@ -164,6 +185,7 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
             <p className="text-xs text-gray-500">Choose a method to add your authorized signature</p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           >
@@ -233,163 +255,165 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
           </div>
         )}
 
-        {/* Tab Content */}
-        <div className="mt-4 min-h-[260px]">
-          {/* TAB 1: UPLOAD */}
-          {activeTab === "upload" && (
-            <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 p-8 transition hover:border-sky-400 bg-slate-50/50">
-              {uploadedImage ? (
-                <div className="flex flex-col items-center gap-3">
-                  <div className="max-h-36 max-w-full overflow-hidden rounded-lg bg-white p-3 shadow-inner border border-gray-200">
-                    <img src={uploadedImage} alt="Uploaded signature" className="h-28 object-contain" />
+        {/* Form Wrap around entire tab body and action buttons so enter key & submit work smoothly */}
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div className="min-h-[260px]">
+            {/* TAB 1: UPLOAD */}
+            {activeTab === "upload" && (
+              <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 p-8 transition hover:border-sky-400 bg-slate-50/50">
+                {uploadedImage ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="max-h-36 max-w-full overflow-hidden rounded-lg bg-white p-3 shadow-inner border border-gray-200">
+                      <img src={uploadedImage} alt="Uploaded signature" className="h-28 object-contain" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setUploadedImage(null)}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:underline"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Change Image
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setUploadedImage(null)}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:underline"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Change Image
-                  </button>
-                </div>
-              ) : (
-                <label className="flex cursor-pointer flex-col items-center text-center">
-                  <div className="rounded-full bg-sky-50 p-3 text-sky-600 shadow-sm">
-                    <Upload className="h-6 w-6" />
-                  </div>
-                  <span className="mt-2 text-sm font-semibold text-gray-700">Click to upload signature</span>
-                  <span className="mt-1 text-xs text-gray-400">PNG, JPG, or SVG (Max 2MB)</span>
-                  <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                </label>
-              )}
-            </div>
-          )}
-
-          {/* TAB 2: DRAW */}
-          {activeTab === "draw" && (
-            <div className="relative rounded-xl border border-gray-300 bg-slate-50 p-2 shadow-inner">
-              <SignatureCanvas
-                ref={sigCanvasRef}
-                canvasProps={{
-                  className: "w-full h-48 rounded-lg bg-white cursor-crosshair shadow-sm border border-slate-200",
-                }}
-                penColor={penColor}
-              />
-              <button
-                type="button"
-                onClick={handleClearDraw}
-                className="absolute right-4 top-4 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-700 shadow hover:bg-gray-100 border border-gray-200 transition"
-              >
-                Clear Pad
-              </button>
-              <p className="mt-2 text-center text-xs text-gray-500 font-medium">Draw your signature using mouse or touch</p>
-            </div>
-          )}
-
-          {/* TAB 3: TYPE */}
-          {activeTab === "type" && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700">Enter Your Name or Initials</label>
-                <input
-                  type="text"
-                  value={typedText}
-                  onChange={(e) => setTypedText(e.target.value)}
-                  placeholder="e.g. John Doe"
-                  className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 shadow-sm"
-                />
+                ) : (
+                  <label className="flex cursor-pointer flex-col items-center text-center">
+                    <div className="rounded-full bg-sky-50 p-3 text-sky-600 shadow-sm">
+                      <Upload className="h-6 w-6" />
+                    </div>
+                    <span className="mt-2 text-sm font-semibold text-gray-700">Click to upload signature</span>
+                    <span className="mt-1 text-xs text-gray-400">PNG, JPG, or SVG (Max 2MB)</span>
+                    <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                  </label>
+                )}
               </div>
+            )}
 
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-gray-700">Select Signature Style Card</label>
-                  <span className="text-[11px] text-gray-400">Scroll to view all 9 cursive styles</span>
+            {/* TAB 2: DRAW */}
+            {activeTab === "draw" && (
+              <div className="relative rounded-xl border border-gray-300 bg-slate-50 p-2 shadow-inner">
+                <SignatureCanvas
+                  ref={sigCanvasRef}
+                  canvasProps={{
+                    className: "w-full h-48 rounded-lg bg-white cursor-crosshair shadow-sm border border-slate-200",
+                  }}
+                  penColor={penColor}
+                />
+                <button
+                  type="button"
+                  onClick={handleClearDraw}
+                  className="absolute right-4 top-4 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-700 shadow hover:bg-gray-100 border border-gray-200 transition z-10"
+                >
+                  Clear Pad
+                </button>
+                <p className="mt-2 text-center text-xs text-gray-500 font-medium">Draw your signature using mouse or touch</p>
+              </div>
+            )}
+
+            {/* TAB 3: TYPE */}
+            {activeTab === "type" && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700">Enter Your Name or Initials</label>
+                  <input
+                    type="text"
+                    value={typedText}
+                    onChange={(e) => setTypedText(e.target.value)}
+                    placeholder="e.g. John Doe"
+                    className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 shadow-sm"
+                  />
                 </div>
 
-                <div className="bg-slate-100/70 border border-slate-200 rounded-xl p-2.5 max-h-64 overflow-y-auto">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {FONT_FAMILIES.map((font) => (
-                      <button
-                        key={font.id}
-                        type="button"
-                        onClick={() => setSelectedFont(font)}
-                        className={`group relative flex flex-col justify-between rounded-xl border-2 p-3.5 text-left transition-all bg-white min-h-[90px] shadow-sm ${
-                          selectedFont.id === font.id
-                            ? "border-sky-500 ring-2 ring-sky-500/20 bg-sky-50/30"
-                            : "border-gray-200 hover:border-sky-300 hover:shadow"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full border-b border-gray-100 pb-1.5 mb-1.5">
-                          <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                            {font.name}
-                          </span>
-                          {selectedFont.id === font.id && (
-                            <span className="rounded-full bg-sky-600 p-0.5 text-white">
-                              <Check className="h-3 w-3" />
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-gray-700">Select Signature Style Card</label>
+                    <span className="text-[11px] text-gray-400">Scroll to view all 9 cursive styles</span>
+                  </div>
+
+                  <div className="bg-slate-100/70 border border-slate-200 rounded-xl p-2.5 max-h-64 overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {FONT_FAMILIES.map((font) => (
+                        <button
+                          key={font.id}
+                          type="button"
+                          onClick={() => setSelectedFont(font)}
+                          className={`group relative flex flex-col justify-between rounded-xl border-2 p-3.5 text-left transition-all bg-white min-h-[90px] shadow-sm ${
+                            selectedFont.id === font.id
+                              ? "border-sky-500 ring-2 ring-sky-500/20 bg-sky-50/30"
+                              : "border-gray-200 hover:border-sky-300 hover:shadow"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full border-b border-gray-100 pb-1.5 mb-1.5">
+                            <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                              {font.name}
                             </span>
-                          )}
-                        </div>
+                            {selectedFont.id === font.id && (
+                              <span className="rounded-full bg-sky-600 p-0.5 text-white">
+                                <Check className="h-3 w-3" />
+                              </span>
+                            )}
+                          </div>
 
-                        <div className="flex items-center justify-center py-1 overflow-hidden min-h-[44px]">
-                          <span
-                            className={`${font.className} text-2xl sm:text-3xl text-center truncate max-w-full`}
-                            style={{ color: penColor }}
-                          >
-                            {typedText || font.name}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
+                          <div className="flex items-center justify-center py-1 overflow-hidden min-h-[44px]">
+                            <span
+                              className={`${font.className} text-2xl sm:text-3xl text-center truncate max-w-full`}
+                              style={{ color: penColor }}
+                            >
+                              {typedText || font.name}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Common Form Fields */}
-        <form onSubmit={handleSubmit} className="mt-5 border-t border-gray-100 pt-4 space-y-4">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <label className="block text-xs font-semibold text-gray-700">Signature Label / Owner Name *</label>
-              <input
-                type="text"
-                value={sigName}
-                onChange={(e) => setSigName(e.target.value)}
-                placeholder="e.g. Authorized Signatory / CEO"
-                className="mt-1 w-full rounded-xl border border-gray-300 px-3.5 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                required
-              />
-            </div>
-
-            <div className="flex items-end pb-2">
-              <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={isDefault}
-                  onChange={(e) => setIsDefault(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
-                />
-                Set as Default
-              </label>
-            </div>
+            )}
           </div>
 
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow-md hover:bg-sky-700 disabled:opacity-60"
-            >
-              {loading ? "Saving..." : "Save Signature"}
-            </button>
+          {/* Common Form Fields */}
+          <div className="border-t border-gray-100 pt-4 space-y-4">
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-gray-700">Signature Label / Owner Name *</label>
+                <input
+                  type="text"
+                  value={sigName}
+                  onChange={(e) => setSigName(e.target.value)}
+                  placeholder="e.g. Authorized Signatory / CEO"
+                  className="mt-1 w-full rounded-xl border border-gray-300 px-3.5 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  required
+                />
+              </div>
+
+              <div className="flex items-end pb-2">
+                <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={isDefault}
+                    onChange={(e) => setIsDefault(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                  />
+                  Set as Default
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow-md hover:bg-sky-700 disabled:opacity-60"
+              >
+                {loading ? "Saving..." : "Save Signature"}
+              </button>
+            </div>
           </div>
         </form>
       </div>
