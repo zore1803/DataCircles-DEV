@@ -86,6 +86,16 @@ const documentSettingsSchema = new mongoose.Schema(
       type: Object,
       default: {},
     },
+    signatures: [
+      {
+        id: { type: String, required: true },
+        name: { type: String, required: true, trim: true },
+        type: { type: String, enum: ['upload', 'draw', 'type'], required: true },
+        dataUrl: { type: String, required: true },
+        isDefault: { type: Boolean, default: false },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );
