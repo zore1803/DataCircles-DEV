@@ -8,7 +8,6 @@ import { Link } from "react-router-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
 import HighlightText from "../components/common/HighlightText";
-import { getPinnedBoundaryShadow } from "../utils/pinnedColumnShadow";
 import {
   Plus,
   X,
@@ -89,6 +88,7 @@ const CompanyDocumentSignedIcon = (props) => (
 
 const CompanyLeadSourceIcon = CompanyDocumentSignedIcon;
 import { getVideoTutorial } from "../utils/videoTutorials";
+import { getPinnedBoundaryShadow } from "../utils/pinnedColumnShadow";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import useCompanyStore from "../store/useCompanyStore";
 import AddToCompanyHotlistModal from "../components/company/AddToCompanyHotlistModal";
@@ -554,9 +554,9 @@ function Companies() {
             const zMenu = getAncestorZoom(document.body);
             const MENU_W = 160;
             const MARGIN = 8;
-            // 6 items (View Company, Edit, Move to a Folder, Add to Hotlist,
-            // Star/Unstar, Delete) + one divider + container padding.
-            const MENU_H = 216;
+            // 5 items (View Company, Edit, Add to Hotlist, Star/Unstar,
+            // Delete) + one divider + container padding.
+            const MENU_H = 184;
 
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -610,18 +610,6 @@ function Companies() {
               >
                 <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 Edit
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenRowActionsId(null);
-                  setRowActionsPos(null);
-                  setQuickHotlistCompanyId(company._id);
-                }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-              >
-                <FolderPlus className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                Move to a Folder
               </button>
               <button
                 onClick={(e) => {
@@ -732,6 +720,7 @@ function Companies() {
             return (
               <div className="flex items-center justify-between w-full group">
                 <span className="truncate flex-1 min-w-0 flex items-center gap-1.5" title={vc.label}>
+                  <span className="truncate">{vc.label}</span>
                   {pinSide && (
                     <Pin
                       size={12}
@@ -739,7 +728,6 @@ function Companies() {
                       style={{ transform: "rotate(45deg)" }}
                     />
                   )}
-                  <span className="truncate">{vc.label}</span>
                 </span>
 
                 <button
@@ -2099,7 +2087,7 @@ function Companies() {
           // the header + the "No companies found" row, so that border would
           // sit right under it as a second stray line with an odd gap instead
           // of closing off a real table body.
-          <div className={`relative bg-white border-x border-[#E1E4EA] ${showLoadingSkeleton || companies.length > 0 ? "border-b" : ""}`}>
+          <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || companies.length > 0 ? "border-b" : ""}`}>
             <table
               className="w-full border-separate border-spacing-0 text-left"
               style={{
@@ -2131,9 +2119,6 @@ function Companies() {
                     }
                   });
 
-                  const lastLeftPinnedKey = leftPinnedKeys.length > 0 ? leftPinnedKeys[leftPinnedKeys.length - 1] : null;
-                  const firstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
-
                 return (
                   <>
                     <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
@@ -2144,14 +2129,6 @@ function Companies() {
                             const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                             const isRightSticky = rightPinnedKeys.includes(colId);
                             const isSticky = isLeftSticky || isRightSticky;
-                            // Only draw the heavier pin-boundary divider when a column has
-                            // actually been pinned by the user. Defaulting this to the
-                            // checkbox column drew it there unconditionally, stacked right
-                            // beside that column's own plain border-r — the doubled line
-                            // (and header's darker grey vs. the body's) that showed up
-                            // between the checkbox and Company Name columns.
-                            const isLeftBoundary = lastLeftPinnedKey === colId;
-                            const isRightBoundary = colId === firstRightPinnedKey;
                             const isDraggable = colId !== "selection";
                             const isDragging = draggedColKey === colId;
                             const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
@@ -2169,10 +2146,7 @@ function Companies() {
                                   zIndex: isSticky ? 20 : 1,
                                   opacity: isDragging ? 0.35 : 1,
                                 }}
-                                className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
-                                  ? "border-r-2 border-r-gray-300"
-                                  : "last:border-r-0"
-                                  } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                                className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] last:border-r-0 transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                               >
                                 <div className="w-full min-w-0">
                                   {flexRender(
@@ -2224,13 +2198,7 @@ function Companies() {
                                 const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                                 const isRightSticky = rightPinnedKeys.includes(colId);
                                 const isSticky = isLeftSticky || isRightSticky;
-                                // Only draw the heavier pin-boundary divider once a column is
-                                // actually pinned (see the matching header calc above).
-                                const isLeftBoundary = lastLeftPinnedKey === colId;
-                                const isRightBoundary = colId === firstRightPinnedKey;
                                 const isColDragging = draggedColKey === colId;
-
-                                const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
 
                                 return (
                                   <td
@@ -2242,7 +2210,6 @@ function Companies() {
                                       right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                       zIndex: isSticky ? 10 : 1,
                                       opacity: isColDragging ? 0.35 : 1,
-                                      boxShadow: cellBoundaryShadow || undefined,
                                     }}
                                     className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                                   >

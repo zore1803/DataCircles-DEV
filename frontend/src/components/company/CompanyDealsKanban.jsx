@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import {
   DndContext,
   DragOverlay,
-  closestCorners,
+  closestCenter,
   useDroppable,
   useSensor,
   useSensors,
@@ -19,7 +19,15 @@ import {
   SortableContext,
   verticalListSortingStrategy,
   sortableKeyboardCoordinates,
+  defaultAnimateLayoutChanges,
 } from "@dnd-kit/sortable";
+
+// dnd-kit's default heuristic skips the reflow animation for sibling cards
+// during certain drag sequences (isSorting && !wasDragging), which is why a
+// neighbouring card would just sit there instead of sliding into the gap
+// left by the dragged one. Forcing wasDragging:true always animates it.
+const animateLayoutChanges = (args) =>
+  defaultAnimateLayoutChanges({ ...args, wasDragging: true });
 import { CSS } from "@dnd-kit/utilities";
 import { getAncestorZoom } from "../../utils/domUtils";
 import {
@@ -221,7 +229,7 @@ const DealCardContent = ({ deal }) => {
 // what lets neighbouring cards glide aside instead of snapping.
 const DealCard = ({ deal }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: deal._id });
+    useSortable({ id: deal._id, animateLayoutChanges });
 
   const style = {
     ...DEAL_CARD_BOX,
@@ -238,6 +246,15 @@ const DealCard = ({ deal }) => {
       style={style}
       {...listeners}
       {...attributes}
+      // Links are natively draggable in every browser — that fires the
+      // browser's own HTML5 drag-and-drop (its own ghost image, its own
+      // status-bar URL hint) at the same time as dnd-kit's pointer-based
+      // synthetic drag. Two independent drag systems running at once is
+      // exactly what produced the overlapping/ghosted card visuals that
+      // persisted even after the card was dropped. Killing the native one
+      // leaves dnd-kit as the only thing driving the drag.
+      draggable={false}
+      onDragStart={(e) => e.preventDefault()}
       className={`${DEAL_CARD_CLASS} cursor-grab active:cursor-grabbing`}
     >
       <DealCardContent deal={deal} />
@@ -251,7 +268,7 @@ const DealCard = ({ deal }) => {
 const DealCardOverlay = ({ deal }) => (
   <div
     style={{ ...DEAL_CARD_BOX, cursor: "grabbing" }}
-    className={`${DEAL_CARD_CLASS} shadow-lg pointer-events-none dc-drag-wiggle`}
+    className={`${DEAL_CARD_CLASS} shadow-lg pointer-events-none`}
   >
     <DealCardContent deal={deal} />
   </div>
@@ -1282,7 +1299,7 @@ export default function CompanyDealsKanban({
         ) : (
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={closestCenter}
             measuring={DND_MEASURING}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}

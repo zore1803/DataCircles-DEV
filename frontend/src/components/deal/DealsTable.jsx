@@ -2,7 +2,6 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
-import { getPinnedBoundaryShadow } from "../../utils/pinnedColumnShadow";
 import {
   Edit2,
   Trash2,
@@ -339,6 +338,7 @@ export default function DealsTable({
             lives only in the column menu (Sort Ascending/Descending below);
             `sortable` still gates whether those two menu items render at all. */}
         <div className="flex items-center gap-2 flex-1 overflow-hidden select-none">
+          <span className="truncate" title={label}>{label}</span>
           {pinSide && (
             <Pin
               size={12}
@@ -346,7 +346,6 @@ export default function DealsTable({
               style={{ transform: "rotate(45deg)" }}
             />
           )}
-          <span className="truncate" title={label}>{label}</span>
         </div>
         <button
           onClick={(e) => {
@@ -909,9 +908,6 @@ export default function DealsTable({
       cumulativeRightOffset += h.getSize();
     }
   });
-  const dealLastLeftPinnedKey = leftPinnedKeys.length > 0 ? leftPinnedKeys[leftPinnedKeys.length - 1] : null;
-  const dealFirstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
-
   return (
     <div className="relative bg-white">
         <table
@@ -931,12 +927,9 @@ export default function DealsTable({
                   const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                   const isRightSticky = colId === "actions" || rightPinnedKeys.includes(colId);
                   const isSticky = isLeftSticky || isRightSticky;
-                  const isLeftBoundary = dealLastLeftPinnedKey ? colId === dealLastLeftPinnedKey : colId === "selection";
-                  const isRightBoundary = dealFirstRightPinnedKey ? colId === dealFirstRightPinnedKey : colId === "actions";
                   const isDraggable = colId !== "selection";
                   const isDragging = draggedColKey === colId;
                   const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
-                  const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
 
                   return (
                     <th
@@ -953,7 +946,6 @@ export default function DealsTable({
                         right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                         zIndex: isSticky ? 20 : 1,
                         opacity: isDragging ? 0.35 : 1,
-                        boxShadow: boundaryShadow || undefined,
                       }}
                       className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
@@ -1037,10 +1029,6 @@ export default function DealsTable({
                       const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                       const isRightSticky = colId === "actions" || rightPinnedKeys.includes(colId);
                       const isSticky = isLeftSticky || isRightSticky;
-                      const isLeftBoundary = dealLastLeftPinnedKey ? colId === dealLastLeftPinnedKey : colId === "selection";
-                      const isRightBoundary = dealFirstRightPinnedKey ? colId === dealFirstRightPinnedKey : colId === "actions";
-                      const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
-
                       return (
                         <td
                           key={cell.id}
@@ -1053,7 +1041,6 @@ export default function DealsTable({
                             left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                             right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
-                            boxShadow: cellBoundaryShadow || undefined,
                           }}
                           className={`px-3 py-3 text-sm font-medium text-[#222530] align-middle bg-inherit border-r border-b border-[#E1E4EA] ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
                         >
