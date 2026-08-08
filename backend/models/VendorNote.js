@@ -2,6 +2,10 @@
 const mongoose = require('mongoose');
 
 const vendorNoteSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    trim: true,
+  },
   note: {
     type: String,
     required: true,

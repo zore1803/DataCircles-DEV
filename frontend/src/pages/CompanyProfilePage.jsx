@@ -1217,7 +1217,7 @@ const CompanyProfilePage = () => {
               <div className="space-y-4">
                 {/* Activity Timeline */}
                 <div className="h-[267px] flex flex-col bg-white border border-gray-200 rounded-lg p-5">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex-shrink-0">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-5 flex-shrink-0">
                     {showOverviewSkeleton ? <Skeleton width={110} height={14} /> : "Activity Timeline"}
                   </h3>
                   <div className="flex items-center gap-1 mb-4 flex-wrap flex-shrink-0">

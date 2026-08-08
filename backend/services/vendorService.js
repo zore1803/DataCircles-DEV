@@ -18,6 +18,7 @@ function normalizeSocialMedia(socialMedia) {
   return {
     twitter: socialMedia.twitter || "",
     linkedin: socialMedia.linkedin || "",
+    instagram: socialMedia.instagram || "",
     facebook: socialMedia.facebook || "",
     whatsapp: socialMedia.whatsapp || "",
   };

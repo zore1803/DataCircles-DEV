@@ -3,9 +3,10 @@ const VendorNote = require('../models/VendorNote');
 // CREATE Vendor Note
 exports.createVendorNote = async (req, res) => {
   try {
-    const { note, vendor } = req.body;
-    const newVendorNote = await VendorNote.create({ 
-      note, 
+    const { title, note, vendor } = req.body;
+    const newVendorNote = await VendorNote.create({
+      title,
+      note,
       vendor,
       user: req.user._id,
       organization: req.user.organization
@@ -45,7 +46,12 @@ exports.getAllVendorNotes = async (req, res) => {
     let query = { organization: req.user.organization };
     
     if (search) {
-      query.note = { $regex: search, $options: 'i' };
+      // Search across both the title and the body, so notes are findable by
+      // either now that titles exist.
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { note: { $regex: search, $options: 'i' } },
+      ];
     }
     
     if (vendor) {
@@ -87,14 +93,20 @@ exports.getVendorNoteById = async (req, res) => {
 // UPDATE note content
 exports.updateVendorNote = async (req, res) => {
   try {
-    const { note } = req.body;
-    
+    const { title, note } = req.body;
+
+    // Only overwrite the fields the caller actually sent, so a body-only
+    // edit can't blank out an existing title.
+    const updates = {};
+    if (title !== undefined) updates.title = title;
+    if (note !== undefined) updates.note = note;
+
     const updated = await VendorNote.findOneAndUpdate(
-      { 
+      {
         _id: req.params.id,
-        organization: req.user.organization 
+        organization: req.user.organization
       },
-      { note },
+      updates,
       { new: true }
     )
       .populate('vendor', 'name company email phone')

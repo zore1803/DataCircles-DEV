@@ -34,7 +34,7 @@ import Profile from "./pages/Profile";
 import Invoices1 from "./pages/Invoices1";
 import ContactDetailsPage from "./pages/ContactDetails";
 import Insights from "./pages/Insights";
-import VendorDetailsPage from "./pages/VendorDetailsPage";
+import VendorDetailsPageNew from "./pages/VendorDetailsPageNew";
 import VendorsHub from "./pages/VendorsHub";
 import AllTasks from "./pages/AllTasks";
 import AllMeetings from "./pages/AllMeetings";
@@ -614,11 +614,22 @@ function App() {
                 </PrivateRoute>
               }
             />
+            {/* Vendor detail now uses VendorDetailsPageNew — every existing
+                link to /vendors/:id lands on the new page. /vendors-new/:id
+                is kept as an alias so previously-shared URLs still work. */}
             <Route
               path="/vendors/:id"
               element={
                 <PrivateRoute>
-                  <VendorDetailsPage />
+                  <VendorDetailsPageNew />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/vendors-new/:id"
+              element={
+                <PrivateRoute>
+                  <VendorDetailsPageNew />
                 </PrivateRoute>
               }
             />

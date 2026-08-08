@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import Skeleton from "../common/Skeleton";
 import API from "../../services/api";
 import { useParams } from "react-router-dom";
 import { autoTable } from "jspdf-autotable";
@@ -12,6 +13,7 @@ import {
   Download,
   X,
   Filter,
+  EyeOff,
   RefreshCw,
   User,
   CreditCard,
@@ -23,8 +25,28 @@ import {
 import VendorForm from "../vendor/VendorForm";
 import VendorPaymentForm from "../vendor/VendorPaymentForm";
 import PaymentPreview from "../vendor/venerPaymentPreview";
+import DataTable from "../common/DataTable";
+import BulkActionBar from "../common/BulkActionBar";
+import TablePaginationFooter from "../common/TablePaginationFooter";
+import CompanyFilterPanel from "../company/CompanyFilterPanel";
+import FilterIcon from "../common/FilterIcon";
+import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
+import { useTopLoadingSignal } from "../common/TopLoadingBar";
+import { exportToCSV } from "../../utils/exportToCSV";
+import { Search } from "lucide-react";
 import toast from "react-hot-toast";
 import AppToaster from "../AppToaster";
+import HighlightText from "../common/HighlightText";
+
+/* `options` seeds each dropdown with the schema's full enum (models/Payment.js)
+   so a value stays filterable even when no current row uses it. */
+const PAYMENT_FILTER_COLUMNS = [
+  { key: "direction", label: "Direction", options: ["IN", "OUT"] },
+  { key: "paymentType", label: "Mode", options: ["Card", "Cash", "Cheque", "EMI", "Net Banking", "UPI"] },
+  { key: "bank", label: "Bank" },
+];
+
+const getPaymentFieldValue = (payment, key) => payment[key];
 
 const PaymentsTable = ({ payments, vendor }) => {
   const { id } = useParams();
@@ -32,10 +54,8 @@ const PaymentsTable = ({ payments, vendor }) => {
   const [showForm, setShowForm] = useState(false);
   const [formDirection, setFormDirection] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [_error, setError] = useState("");
+  const [_success, setSuccess] = useState("");
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState(null);
@@ -43,7 +63,56 @@ const PaymentsTable = ({ payments, vendor }) => {
   const [receiptPayment, setReceiptPayment] = useState(null);
   const [vendorFields, setVendorFields] = useState([]);
   const [additionalFieldValues, setAdditionalFieldValues] = useState({});
-  const [showFilters, setShowFilters] = useState(false);
+  // Hidden by default: the page-level Financial Summary strip above the tab bar
+  // already shows this vendor's money position, so these in-tab tiles would be
+  // a duplicate on first paint. The eye toggle in the toolbar reveals them.
+  const [showKPIs, setShowKPIs] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selectedFilters, setSelectedFilters] = useState({});
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [columnSizing, setColumnSizing] = useState({});
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [columnOrder, setColumnOrder] = useState(() => [
+    "selection", "reference_id", "paymentDate", "direction", "paymentType", "bank", "reference", "amount", "actions"
+  ]);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  const filterButtonRef = useRef(null);
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    setColumnOrder((prev) => {
+      const newOrder = [...prev];
+      const draggedIdx = newOrder.indexOf(draggedKey);
+      const targetIdx = newOrder.indexOf(targetKey);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedKey);
+      return newOrder;
+    });
+  };
+
+  const handlePinColumn = (colId, side) => {
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colId), { key: colId, side }]);
+  };
+
+  const handleUnpinColumn = (colId) => {
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colId));
+  };
+
+  const handleHideColumn = (colId) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      next.add(colId);
+      return next;
+    });
+  };
+
+  const handleSort = (key, direction) => {
+    setSortConfig({ key, direction });
+  };
 
   useEffect(() => {
     setLocalPayments(payments || []);
@@ -69,12 +138,116 @@ const PaymentsTable = ({ payments, vendor }) => {
     setShowReceiptModal(true);
   };
 
-  const filteredPayments = localPayments.filter((payment) => {
-    const paymentDate = new Date(payment.paymentDate);
-    const start = startDate ? new Date(startDate) : null;
-    const end = endDate ? new Date(endDate) : null;
-    return (!start || paymentDate >= start) && (!end || paymentDate <= end);
+  const filteredPayments = useMemo(() => {
+    let rows = localPayments;
+
+    const term = search.trim().toLowerCase();
+    if (term) {
+      rows = rows.filter((p) =>
+        [p.direction, p.paymentType, p.bank, p.reference, p.notes, String(p.amount), p._id]
+          .some((v) => String(v || "").toLowerCase().includes(term)),
+      );
+    }
+
+    Object.entries(selectedFilters).forEach(([key, values]) => {
+      if (!values?.length) return;
+      rows = rows.filter((p) => values.includes(String(getPaymentFieldValue(p, key) ?? "")));
+    });
+
+    return rows;
+  }, [localPayments, search, selectedFilters]);
+
+  const activeFilterCount = Object.values(selectedFilters).reduce(
+    (n, arr) => n + (arr?.length || 0),
+    0,
+  );
+
+  /* ── Pagination — same client-side "first ... current ... last" pattern
+     CompanyInvoicesTab uses. Search/filters reset back to page 1. */
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  useEffect(() => {
+    setPage(1);
+  }, [search, selectedFilters]);
+  const sortedPayments = useMemo(() => {
+    if (!sortConfig.key) return filteredPayments;
+    return [...filteredPayments].sort((a, b) => {
+      let aVal = getPaymentFieldValue(a, sortConfig.key) ?? "";
+      let bVal = getPaymentFieldValue(b, sortConfig.key) ?? "";
+      if (sortConfig.key === "paymentDate") {
+        aVal = new Date(a.paymentDate).getTime();
+        bVal = new Date(b.paymentDate).getTime();
+      } else if (sortConfig.key === "reference_id") {
+        aVal = a._id;
+        bVal = b._id;
+      }
+      const aCmp = typeof aVal === "number" ? aVal : String(aVal).toLowerCase();
+      const bCmp = typeof bVal === "number" ? bVal : String(bVal).toLowerCase();
+      if (aCmp < bCmp) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aCmp > bCmp) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredPayments, sortConfig]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedPayments.length / limit));
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  // Brief top-edge progress flash on page change — same visual language as
+  // Companies.jsx's server-paginated list, even though this data is already
+  // in memory (client-side slice) rather than a fresh network round trip.
+  const [isPaging, setIsPaging] = useState(false);
+  useTopLoadingSignal(isPaging);
+  const goToPage = (n) => {
+    if (n === page) return;
+    setIsPaging(true);
+    setPage(n);
+    setTimeout(() => setIsPaging(false), 220);
+  };
+  const paginatedPayments = useMemo(
+    () => sortedPayments.slice((page - 1) * limit, page * limit),
+    [sortedPayments, page, limit],
+  );
+
+  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+    items: filteredPayments,
   });
+  const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedItems.length);
+
+  const handleExportSelected = () => {
+    const dataToExport = payments
+      .filter((p) => selectedItems.includes(p._id))
+      .map((p) => ({
+        "Date": new Date(p.paymentDate).toLocaleDateString(),
+        "Amount": p.amount,
+        "Direction": p.direction,
+        "Type": p.paymentType,
+        "Bank": p.bank || "",
+        "Reference": p.reference || "",
+        "Notes": p.notes || "",
+      }));
+    if (dataToExport.length === 0) return;
+    const headers = Object.keys(dataToExport[0]).join(",");
+    const rows = dataToExport.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    exportToCSV([headers, ...rows], `payments_export_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedItems.length) return;
+    if (!window.confirm(`Delete ${selectedItems.length} payment(s)? This cannot be undone.`)) return;
+    setIsDeleting(true);
+    try {
+      await Promise.all(selectedItems.map((pid) => API.delete(`/vendors/${id}/payments/${pid}`)));
+      setLocalPayments((prev) => prev.filter((p) => !selectedItems.includes(p._id)));
+      clearSelection();
+      toast.success("Payments deleted!");
+    } catch (err) {
+      console.error("Bulk delete failed:", err);
+      toast.error(err.response?.data?.error || "Failed to delete some payments.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleAddPayment = async (payload) => {
     try {
@@ -162,13 +335,6 @@ const PaymentsTable = ({ payments, vendor }) => {
     setShowUpdateModal(true);
   };
 
-  const handleUpdateSuccess = () => {
-    setShowUpdateModal(false);
-    setSelectedVendor(null);
-    toast.success("Vendor updated!");
-    setError("");
-  };
-
   const handleEditPayment = (payment) => {
     setSelectedPayment(payment);
     setFormDirection(payment.direction);
@@ -210,11 +376,6 @@ const PaymentsTable = ({ payments, vendor }) => {
     }
   };
 
-  const clearFilters = () => {
-    setStartDate("");
-    setEndDate("");
-  };
-
   // Calculate statistics
   const stats = {
     totalPaymentsIn: filteredPayments.filter((p) => p.direction === "IN").length,
@@ -229,273 +390,439 @@ const PaymentsTable = ({ payments, vendor }) => {
 
   const netBalance = stats.totalAmountIn - stats.totalAmountOut;
 
+  /* ── Columns ──
+     `bank` and `reference` are surfaced here for the first time; they were
+     stored on the Payment but only ever visible inside the receipt preview. */
+  const baseColumns = useMemo(
+    () => [
+      {
+        id: "selection",
+        size: 44,
+        enableResizing: false,
+        header: () => (
+          <div className="flex justify-center items-center w-full">
+            <input
+              type="checkbox"
+              checked={
+                selectedItems.length > 0 &&
+                selectedItems.length === filteredPayments.length
+              }
+              onChange={(e) =>
+                e.target.checked ? selectAll(filteredPayments) : clearSelection()
+              }
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-center items-center w-full">
+            <input
+              type="checkbox"
+              checked={selectedItems.includes(row.original._id)}
+              onChange={() => toggleItem(row.original._id)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
+      },
+      {
+        id: "reference_id",
+        size: 110,
+        header: "ID",
+        cell: ({ row }) => (
+          <span className="text-xs font-mono font-medium text-gray-900">
+            {row.original.direction === "OUT" ? "OUT" : "IN"}-
+            <HighlightText text={row.original._id.slice(-4).toUpperCase()} query={search} />
+          </span>
+        ),
+      },
+      {
+        id: "paymentDate",
+        size: 150,
+        header: "Date / Time",
+        cell: ({ row }) => (
+          <div className="flex flex-col leading-tight">
+            <span className="text-sm font-medium text-gray-900">
+              {new Date(row.original.paymentDate).toLocaleDateString()}
+            </span>
+            <span className="text-xs text-gray-500">
+              {new Date(row.original.paymentDate).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+        ),
+      },
+      {
+        id: "direction",
+        size: 110,
+        header: "Status",
+        cell: ({ row }) => (
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${row.original.direction === "OUT"
+              ? "bg-blue-100 text-blue-800"
+              : "bg-blue-600 text-white"
+              }`}
+          >
+            {row.original.direction === "OUT" ? (
+              <ArrowUpCircle className="w-3 h-3" />
+            ) : (
+              <ArrowDownCircle className="w-3 h-3" />
+            )}
+            {row.original.direction === "OUT" ? "Out" : "In"}
+          </span>
+        ),
+      },
+      {
+        id: "paymentType",
+        size: 130,
+        header: "Mode",
+        cell: ({ row }) => (
+          <span className="text-sm text-gray-700">
+            {row.original.paymentType ? <HighlightText text={row.original.paymentType} query={search} /> : "—"}
+          </span>
+        ),
+      },
+      {
+        id: "bank",
+        size: 120,
+        header: "Bank",
+        cell: ({ row }) => (
+          <span className="text-sm text-gray-700">
+            {row.original.bank ? <HighlightText text={row.original.bank} query={search} /> : "—"}
+          </span>
+        ),
+      },
+      {
+        id: "reference",
+        size: 170,
+        header: "Reference",
+        cell: ({ row }) => (
+          <span className="font-medium text-gray-900 truncate block">
+            {row.original.reference ? <HighlightText text={row.original.reference} query={search} /> : "—"}
+          </span>
+        ),
+      },
+      {
+        id: "amount",
+        size: 140,
+        header: "Amount",
+        cell: ({ row }) => (
+          <span
+            className={`text-sm font-bold ${row.original.direction === "OUT" ? "text-red-600" : "text-green-600"
+              }`}
+          >
+            {row.original.direction === "OUT" ? "−" : "+"} <HighlightText text={`₹${row.original.amount.toFixed(2)}`} query={search} />
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        size: 120,
+        enableResizing: false,
+        header: "Actions",
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEditPayment(row.original);
+              }}
+              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
+              title="Edit"
+            >
+              <Edit className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleQuickDeletePayment(row.original);
+              }}
+              className="p-1 text-gray-500 hover:text-red-600 transition-colors"
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleViewReceipt(row.original);
+              }}
+              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
+              title="View receipt"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [paginatedPayments, selectedItems, selectAll, clearSelection, toggleItem],
+  );
+
+  const finalColumns = useMemo(() => {
+    const visibleBase = baseColumns.filter(c => !hiddenColumns.has(c.id));
+    const selectionCol = visibleBase.find(c => c.id === "selection");
+    const actionsCol = visibleBase.find(c => c.id === "actions");
+    const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
+
+    const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
+    const rightPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'right').map(p => p.key));
+
+    const leftCols = otherCols.filter(c => leftPinnedKeys.has(c.id));
+    const rightCols = otherCols.filter(c => rightPinnedKeys.has(c.id));
+    const midCols = otherCols.filter(c => !leftPinnedKeys.has(c.id) && !rightPinnedKeys.has(c.id));
+
+    midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
+
+    return [
+      ...(selectionCol ? [selectionCol] : []),
+      ...leftCols,
+      ...midCols,
+      ...rightCols,
+      ...(actionsCol ? [actionsCol] : [])
+    ];
+  }, [baseColumns, columnOrder, hiddenColumns, pinnedColumns]);
+
+  const visibleColumnsForGhost = useMemo(() => finalColumns.map(c => ({ key: c.id, label: c.header })), [finalColumns]);
+  const getGhostPreview = (colId) => {
+    return paginatedPayments.slice(0, 10).map((p) => {
+      if (colId === "paymentDate") return new Date(p.paymentDate).toLocaleDateString();
+      if (colId === "amount") return `₹${p.amount.toFixed(2)}`;
+      if (colId === "reference_id") return p._id.slice(-4).toUpperCase();
+      return String(getPaymentFieldValue(p, colId) ?? "").trim() || "—";
+    });
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="h-full mt-0">
       <AppToaster />
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <User className="w-5 h-5 text-gray-600" />
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{vendor.name}</h1>
-            <p className="text-sm text-gray-600">Vendor Account</p>
+      {/* Action Buttons (Portaled to Tab Header) removed */}
+
+
+      {/* Stats Cards */}
+      {showKPIs && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="p-4 border border-gray-200 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="w-4 h-4 text-gray-600" />
+              <span className="text-xs font-medium text-gray-600">Total Given</span>
+            </div>
+            <p className="text-xl font-bold text-gray-900">
+              ₹{stats.totalAmountOut.toFixed(2)}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">Paid to vendor</p>
+          </div>
+
+          <div className="p-4 border border-gray-200 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingDown className="w-4 h-4 text-gray-600" />
+              <span className="text-xs font-medium text-gray-600">Total Got</span>
+            </div>
+            <p className="text-xl font-bold text-gray-900">
+              ₹{stats.totalAmountIn.toFixed(2)}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">Received from vendor</p>
+          </div>
+
+          <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertCircle className="w-4 h-4 text-gray-600" />
+              <span className="text-xs font-medium text-gray-600">Balance</span>
+            </div>
+            <p
+              className={`text-xl font-bold ${netBalance >= 0 ? "text-green-600" : "text-red-600"
+                }`}
+            >
+              ₹{Math.abs(netBalance).toFixed(2)}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              {netBalance >= 0 ? "You'll receive" : "You owe"}
+            </p>
+          </div>
+
+          <div className="p-4 border border-gray-200 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="w-4 h-4 text-gray-600" />
+              <span className="text-xs font-medium text-gray-600">Total</span>
+            </div>
+            <p className="text-xl font-bold text-gray-900">
+              {filteredPayments.length}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">All transactions</p>
           </div>
         </div>
+      )}
 
-        <div className="flex gap-2">
+      {/* Payments table — same chrome as the CompanyProfilePage tabs: bordered
+          shell, sticky #F5F7FA header, per-row selection and a bulk strip. */}
+      {stripVisible ? (
+        <BulkActionBar
+          selectedCount={selectedItems.length}
+          entityName="payment"
+          isClosing={stripClosing}
+          onSelectAll={() => selectAll(filteredPayments)}
+          onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onCancel={clearSelection}
+          onDelete={handleBulkDelete}
+          isDeleting={isDeleting}
+        />
+      ) : (
+        <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
+          <div className="relative flex-1 h-full">
+            <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search payments..."
+              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+            />
+          </div>
+          <button
+            ref={filterButtonRef}
+            onClick={() => setShowFilterPanel(true)}
+            className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+            style={{
+              height: "44px",
+              borderColor: activeFilterCount > 0 ? "#0085FF" : "#E1E4EA",
+            }}
+          >
+            <FilterIcon size={16} />
+            Filter
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
           <button
             onClick={() => handleOpenForm("IN")}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-800 transition-colors"
+            className="flex items-center justify-center gap-2 h-[44px] px-4 bg-blue-600 text-white text-sm font-medium rounded-full hover:bg-blue-800 transition-colors flex-shrink-0 shadow-sm"
           >
-            <ArrowDownCircle className="w-4 h-4" />
+            <ArrowDownCircle size={18} />
             <span>Got</span>
           </button>
           <button
             onClick={() => handleOpenForm("OUT")}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-700 text-white text-sm font-medium rounded-lg hover:bg-blue-900 transition-colors"
+            className="flex items-center justify-center gap-2 h-[44px] px-4 bg-blue-700 text-white text-sm font-medium rounded-full hover:bg-blue-900 transition-colors flex-shrink-0 shadow-sm"
           >
-            <ArrowUpCircle className="w-4 h-4" />
+            <ArrowUpCircle size={18} />
             <span>Gave</span>
           </button>
           <button
             onClick={handleViewPDF}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-center h-[44px] w-[44px] border border-[#E1E4EA] text-gray-700 rounded-full hover:bg-gray-50 transition-colors flex-shrink-0"
+            title="Download PDF"
           >
-            <Download className="w-4 h-4" />
+            <Download size={18} />
           </button>
           <button
             onClick={handleEditClick}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-center h-[44px] w-[44px] border border-[#E1E4EA] text-gray-700 rounded-full hover:bg-gray-50 transition-colors flex-shrink-0"
+            title="Edit Vendor"
           >
-            <Edit className="w-4 h-4" />
+            <Edit size={18} />
+          </button>
+          <button
+            onClick={() => setShowKPIs(!showKPIs)}
+            className="flex items-center justify-center h-[44px] w-[44px] border border-[#E1E4EA] text-gray-700 rounded-full hover:bg-gray-50 transition-colors flex-shrink-0"
+            title={showKPIs ? "Hide KPIs" : "Show KPIs"}
+          >
+            {showKPIs ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-4 border border-gray-200 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="w-4 h-4 text-gray-600" />
-            <span className="text-xs font-medium text-gray-600">Total In</span>
-          </div>
-          <p className="text-xl font-bold text-gray-900">
-            <h6>₹{stats.totalAmountIn.toFixed(2)}</h6>
-          </p>
-          <p className="text-xs text-gray-600 mt-1">
-            {stats.totalPaymentsIn} payments
-          </p>
-        </div>
-
-        <div className="p-4 border border-gray-200 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingDown className="w-4 h-4 text-gray-600" />
-            <span className="text-xs font-medium text-gray-600">Total Out</span>
-          </div>
-          <p className="text-xl font-bold text-gray-900">
-            <h6>₹{stats.totalAmountOut.toFixed(2)}</h6>
-          </p>
-          <p className="text-xs text-gray-600 mt-1">
-            {stats.totalPaymentsOut} payments
-          </p>
-        </div>
-
-        <div className="p-4 border border-gray-200 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <CreditCard className="w-4 h-4 text-gray-600" />
-            <span className="text-xs font-medium text-gray-600">Net Balance</span>
-          </div>
-          <p className={`text-xl font-bold ${netBalance >= 0 ? "text-gray-900" : "text-gray-700"}`}>
-            <h6>₹{Math.abs(netBalance).toFixed(2)}</h6>
-          </p>
-          <p className="text-xs text-gray-600 mt-1">
-            {netBalance >= 0 ? "You'll receive" : "You owe"}
-          </p>
-        </div>
-
-        <div className="p-4 border border-gray-200 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <Clock className="w-4 h-4 text-gray-600" />
-            <span className="text-xs font-medium text-gray-600">Total</span>
-          </div>
-          <p className="text-xl font-bold text-gray-900">
-            {filteredPayments.length}
-          </p>
-          <p className="text-xs text-gray-600 mt-1">All transactions</p>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="border border-gray-200 rounded-lg">
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className="w-full flex items-center justify-between p-4"
-        >
-          <div className="flex items-center gap-2 text-gray-700 font-medium">
-            <Filter className="w-4 h-4" />
-            <span>Filters</span>
-            {(startDate || endDate) && (
-              <span className="text-xs text-gray-500">(Active)</span>
-            )}
-          </div>
-          <X className={`w-4 h-4 text-gray-400 transition-transform ${showFilters ? '' : 'rotate-45'}`} />
-        </button>
-
-        {showFilters && (
-          <div className="p-4 border-t border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-sm"
-                />
-              </div>
-
-              <div className="flex items-end">
-                <button
-                  onClick={clearFilters}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Clear
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Payments Table */}
-      {filteredPayments?.length === 0 ? (
-        <div className="border border-gray-200 rounded-lg p-12 text-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-              <CreditCard className="w-8 h-8 text-gray-400" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">
-                No Payments Found
-              </h3>
-              <p className="text-sm text-gray-600">
-                Add your first payment to get started.
-              </p>
-            </div>
-            <button
-              onClick={() => handleOpenForm("IN")}
-              className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              Add Payment
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <table className="min-w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-900">ID</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-900">Date / Time</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-900">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-900">Mode</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-900">Amount</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-900">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
-              {filteredPayments.map((payment) => (
-                <tr key={payment._id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-xs font-mono font-medium text-gray-900">
-                    {payment.direction === "OUT" ? "OUT" : "IN"}-
-                    {payment._id.slice(-4).toUpperCase()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-900">
-                        {new Date(payment.paymentDate).toLocaleDateString()}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(payment.paymentDate).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-                        payment.direction === "OUT"
-                          ? "bg-blue-200 text-gray-700"
-                          : "bg-blue-600 text-white"
-                      }`}
-                    >
-                      {payment.direction === "OUT" ? (
-                        <ArrowUpCircle className="w-3 h-3" />
-                      ) : (
-                        <ArrowDownCircle className="w-3 h-3" />
-                      )}
-                      {payment.direction === "OUT" ? "Out" : "In"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-sm text-gray-700">
-                      {payment.paymentType || "UPI"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <h6 className="text-sm font-bold text-gray-900">
-                      ₹{payment.amount.toFixed(2)}
-                    </h6>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleEditPayment(payment)}
-                        className="p-1 text-gray-600 hover:text-gray-900 transition-colors"
-                        title="Edit"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleQuickDeletePayment(payment)}
-                        className="p-1 text-gray-600 hover:text-gray-900 transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleViewReceipt(payment)}
-                        className="p-1 text-gray-600 hover:text-gray-900 transition-colors"
-                        title="View"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       )}
+
+      <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
+        <DataTable
+          data={paginatedPayments}
+          columns={finalColumns}
+          loading={loading}
+          columnSizing={columnSizing}
+          onColumnSizingChange={setColumnSizing}
+          pinnedColumns={pinnedColumns}
+          onPinColumn={handlePinColumn}
+          onUnpinColumn={handleUnpinColumn}
+          onHideColumn={handleHideColumn}
+          onSort={handleSort}
+          onColumnReorder={handleColumnReorder}
+          visibleColumns={visibleColumnsForGhost}
+          getGhostPreview={getGhostPreview}
+          variant="card"
+          maxHeight={290}
+          rowClassName={(p) => (selectedItems.includes(p._id) ? "!bg-blue-50" : "")}
+          loadingContent={
+            <div className="space-y-0">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[#E1E4EA] last:border-b-0">
+                  <Skeleton width={16} height={16} />
+                  <Skeleton width={70} height={13} />
+                  <Skeleton width={80} height={13} />
+                  <Skeleton width={50} height={13} />
+                  <Skeleton width={60} height={13} />
+                  <Skeleton width={60} height={13} />
+                  <Skeleton width={100} height={13} />
+                  <Skeleton width={70} height={13} />
+                </div>
+              ))}
+            </div>
+          }
+          emptyContent={
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                <CreditCard className="w-8 h-8 text-gray-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900 mb-1">No Payments Found</h3>
+                <p className="text-sm text-gray-600">
+                  {search || activeFilterCount
+                    ? "Try clearing the search or filters."
+                    : "Add your first payment to get started."}
+                </p>
+              </div>
+              {!search && !activeFilterCount && (
+                <button
+                  onClick={() => handleOpenForm("IN")}
+                  className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                >
+                  Add Payment
+                </button>
+              )}
+            </div>
+          }
+        />
+
+        <div className="border-t border-[#E1E4EA] px-5">
+          <TablePaginationFooter
+            currentPage={page}
+            totalPages={totalPages}
+            totalCount={filteredPayments.length}
+            limit={limit}
+            onPageChange={goToPage}
+            onLimitChange={(n) => {
+              setLimit(n);
+              setPage(1);
+            }}
+          />
+        </div>
+      </div>
+
+      <CompanyFilterPanel
+        isOpen={showFilterPanel}
+        onClose={() => setShowFilterPanel(false)}
+        columns={PAYMENT_FILTER_COLUMNS}
+        data={localPayments}
+        getFieldValue={getPaymentFieldValue}
+        selected={selectedFilters}
+        onApply={setSelectedFilters}
+        triggerRef={filterButtonRef}
+      />
 
       {/* Modals */}
       <VendorPaymentForm
@@ -520,7 +847,7 @@ const PaymentsTable = ({ payments, vendor }) => {
           setLoading={setLoading}
           setError={setError}
           setSuccess={setSuccess}
-          fetchVendors={() => {}}
+          fetchVendors={() => { }}
           onRequestClose={() => {
             setShowUpdateModal(false);
             setSelectedVendor(null);

@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
 import HighlightText from "../components/common/HighlightText";
+import { getPinnedBoundaryShadow } from "../utils/pinnedColumnShadow";
 import {
   Plus,
   X,
@@ -562,73 +563,73 @@ function Companies() {
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
               className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
             >
-            <Link
-              to={`/companies/${company._id}`}
-              onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-            >
-              <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
-              View Company
-            </Link>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenRowActionsId(null);
-                setRowActionsPos(null);
-                handleEdit(company);
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-            >
-              <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
-              Edit
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenRowActionsId(null);
-                setRowActionsPos(null);
-                setQuickHotlistCompanyId(company._id);
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-            >
-              <FolderPlus className="w-3.5 h-3.5 text-[#1C1B1F]" />
-              Move to a Folder
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenRowActionsId(null);
-                setRowActionsPos(null);
-                setQuickHotlistCompanyId(company._id);
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-            >
-              <FileText className="w-3.5 h-3.5 text-[#1C1B1F]" />
-              Add to Hotlist
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleStar(e, company._id);
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-            >
-              <Star className={`w-3.5 h-3.5 ${starredCompaniesSet.has(company._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
-              {starredCompaniesSet.has(company._id) ? "Unstar Company" : "Star Company"}
-            </button>
-            <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenRowActionsId(null);
-                setRowActionsPos(null);
-                handleDelete(company._id);
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
-              Delete
-            </button>
+              <Link
+                to={`/companies/${company._id}`}
+                onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                View Company
+              </Link>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                  handleEdit(company);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                Edit
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                  setQuickHotlistCompanyId(company._id);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <FolderPlus className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                Move to a Folder
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                  setQuickHotlistCompanyId(company._id);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <FileText className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                Add to Hotlist
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleStar(e, company._id);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <Star className={`w-3.5 h-3.5 ${starredCompaniesSet.has(company._id) ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
+                {starredCompaniesSet.has(company._id) ? "Unstar Company" : "Star Company"}
+              </button>
+              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                  handleDelete(company._id);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
+                Delete
+              </button>
             </div>
           </>,
           document.body,
@@ -702,8 +703,15 @@ function Companies() {
 
             return (
               <div className="flex items-center justify-between w-full group">
-                <span className="truncate flex-1 min-w-0" title={vc.label}>
-                  {vc.label}
+                <span className="truncate flex-1 min-w-0 flex items-center gap-1.5" title={vc.label}>
+                  {pinSide && (
+                    <Pin
+                      size={12}
+                      className="text-blue-500 fill-blue-500 flex-shrink-0"
+                      style={{ transform: "rotate(45deg)" }}
+                    />
+                  )}
+                  <span className="truncate">{vc.label}</span>
                 </span>
 
                 <button
@@ -2048,27 +2056,27 @@ function Companies() {
                 const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
                 const allHeaders = table.getHeaderGroups()[0]?.headers || [];
 
-                const pinnedLeftOffsets = {};
-                let cumulativeLeft = 0;
-                allHeaders.forEach((h) => {
-                  const isLeftStickyCol = h.column.id === "selection" || leftPinnedKeys.includes(h.column.id);
-                  if (isLeftStickyCol) {
-                    pinnedLeftOffsets[h.column.id] = cumulativeLeft;
-                    cumulativeLeft += h.getSize();
-                  }
-                });
+                  const pinnedLeftOffsets = {};
+                  let cumulativeLeft = 0;
+                  allHeaders.forEach((h) => {
+                    const isLeftStickyCol = h.column.id === "selection" || leftPinnedKeys.includes(h.column.id);
+                    if (isLeftStickyCol) {
+                      pinnedLeftOffsets[h.column.id] = cumulativeLeft;
+                      cumulativeLeft += h.getSize();
+                    }
+                  });
 
-                const pinnedRightOffsets = {};
-                let cumulativeRight = 0;
-                [...allHeaders].reverse().forEach((h) => {
-                  if (rightPinnedKeys.includes(h.column.id)) {
-                    pinnedRightOffsets[h.column.id] = cumulativeRight;
-                    cumulativeRight += h.getSize();
-                  }
-                });
+                  const pinnedRightOffsets = {};
+                  let cumulativeRight = 0;
+                  [...allHeaders].reverse().forEach((h) => {
+                    if (rightPinnedKeys.includes(h.column.id)) {
+                      pinnedRightOffsets[h.column.id] = cumulativeRight;
+                      cumulativeRight += h.getSize();
+                    }
+                  });
 
-                const lastLeftPinnedKey = leftPinnedKeys.length > 0 ? leftPinnedKeys[leftPinnedKeys.length - 1] : null;
-                const firstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
+                  const lastLeftPinnedKey = leftPinnedKeys.length > 0 ? leftPinnedKeys[leftPinnedKeys.length - 1] : null;
+                  const firstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
 
                 return (
                   <>
@@ -2168,39 +2176,158 @@ function Companies() {
                             // between the checkbox and Company Name columns.
                             const isLeftBoundary = lastLeftPinnedKey === colId;
                               const isRightBoundary = colId === firstRightPinnedKey;
-                              const isColDragging = draggedColKey === colId;
+                              const isDraggable = colId !== "selection";
+                              const isDragging = draggedColKey === colId;
+                              const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+
+                              // Subtle inset shadow at the pinned block's boundary edge —
+                              // same treatment as the CompanyProfilePage tabs
+                              // (components/company/CompanyContactsTab.jsx etc.) — instead
+                              // of a flat 2px border, so scrolling under a pinned column
+                              // reads as a genuinely separated layer.
+                              const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
 
                               return (
-                                <td
-                                  key={cell.id}
+                                <th
+                                  key={header.id}
+                                  data-col-id={colId}
+                                  onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
                                   style={{
-                                    width: cell.column.getSize(),
-                                    position: isSticky ? "sticky" : "static",
+                                    width: header.getSize(),
+                                    position: isSticky ? "sticky" : "relative",
                                     left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                     right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
-                                    zIndex: isSticky ? 10 : 1,
-                                    opacity: isColDragging ? 0.35 : 1,
+                                    zIndex: isSticky ? 20 : 1,
+                                    opacity: isDragging ? 0.35 : 1,
+                                    boxShadow: boundaryShadow || undefined,
                                   }}
-                                  className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
-                                    ? "border-r-2 border-r-gray-200"
-                                    : "last:border-r-0"
-                                    } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
+                                  className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} last:border-r-0 ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                                 >
-                                  {flexRender(
-                                    cell.column.columnDef.cell,
-                                    cell.getContext(),
+                                  <div className="flex items-center gap-1.5 w-full min-w-0">
+                                    <div className="min-w-0 flex-1 truncate">
+                                      {flexRender(
+                                        header.column.columnDef.header,
+                                        header.getContext(),
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {colId !== "selection" && header.column.getCanResize() && (
+                                    <div
+                                      data-resize-handle="true"
+                                      onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        header.getResizeHandler()(e);
+                                      }}
+                                      onTouchStart={header.getResizeHandler()}
+                                      className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
+                                    />
                                   )}
-                                </td>
+                                </th>
                               );
                             })}
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </>
-                );
-              })()}
-            </table>
+                        ))}
+                      </thead>
+
+                      <tbody className="bg-white">
+                        {showLoadingSkeleton ? (
+                          <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox />
+                        ) : companies.length === 0 ? (
+                          <tr>
+                            <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
+                              <p className="font-medium">No companies found</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          table.getRowModel().rows.map((row) => (
+                            <tr
+                              key={row.id}
+                              className={`bg-white hover:bg-blue-50 transition-colors ${selectedCompaniesSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                              onMouseDown={() => handleMouseDown(row.original._id)}
+                              onMouseUp={handleMouseUp}
+                              onMouseLeave={handleMouseUp}
+                              onTouchStart={() => handleTouchStart(row.original._id)}
+                              onTouchEnd={handleTouchEnd}
+                            >
+                              {row.getVisibleCells().map((cell) => {
+                                const colId = cell.column.id;
+                                const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                                const isRightSticky = rightPinnedKeys.includes(colId);
+                                const isSticky = isLeftSticky || isRightSticky;
+                                const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === "selection";
+                                const isRightBoundary = colId === firstRightPinnedKey;
+                                const isColDragging = draggedColKey === colId;
+
+                                const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
+
+                                return (
+                                  <td
+                                    key={cell.id}
+                                    style={{
+                                      width: cell.column.getSize(),
+                                      position: isSticky ? "sticky" : "static",
+                                      left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                      right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                      zIndex: isSticky ? 10 : 1,
+                                      opacity: isColDragging ? 0.35 : 1,
+                                      boxShadow: cellBoundaryShadow || undefined,
+                                    }}
+                                    className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                                  >
+                                    {flexRender(
+                                      cell.column.columnDef.cell,
+                                      cell.getContext(),
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </>
+                  );
+                })()}
+              </table>
+            </div>
+          )}
+        </div>
+
+        {dragGhost && createPortal(
+          <div
+            ref={ghostElRef}
+            style={{
+              position: "fixed",
+              top: -9999,
+              left: -9999,
+              width: dragGhost.width,
+              zIndex: 10000,
+              pointerEvents: "none",
+            }}
+            className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+          >
+            <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+              <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+            </div>
+            {dragGhost.previewRows.map((rowVal, i) => (
+              <div
+                key={i}
+                className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0"
+              >
+                <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+              </div>
+            ))}
+          </div>,
+          document.body,
+        )}
+
+        {!showLoadingSkeleton && !showHotlist && (
+          <div
+            className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
+            style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+          >
+            {PaginationControls()}
           </div>
         )}
       </div>

@@ -20,16 +20,9 @@ import {
   Trash2,
   Truck,
   Upload,
-  Building2,
   CheckSquare,
-  MapPin,
   History,
-  IndianRupee,
-  User,
-  SlidersHorizontal,
-  Settings,
-  Mail,
-  Phone,
+  Download,
   FileText,
   Pin,
   PinOff,
@@ -42,9 +35,16 @@ import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
 import { useLocation } from "react-router-dom";
 import ImportVendors from "../components/vendor/ImportVendors";
 import toast from "react-hot-toast";
-import logo from "/DataCircles.png";
 import AppToaster from "../components/AppToaster";
+import HighlightText from "../components/common/HighlightText";
+import TablePaginationFooter from "../components/common/TablePaginationFooter";
 import { getAncestorZoom } from "../utils/domUtils";
+import useMinDelay from "../hooks/useMinDelay";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
+import Skeleton from "../components/common/Skeleton";
+import TableSkeletonRows from "../components/common/TableSkeletonRows";
+import FilterIcon from "../components/common/FilterIcon";
+import ExportModal from "../components/common/ExportModal";
 
 import SearchIcon from "../components/common/SearchIcon";
 function useOutsideClick(ref, callback) {
@@ -64,17 +64,18 @@ function useOutsideClick(ref, callback) {
 // Fixed columns every vendor has. Custom fields (from vendorFields) are
 // appended after these, and "actions" always comes last.
 const BASE_COLUMN_DEFS = [
-  { id: "name", label: "Name", icon: User, required: true, width: 200 },
-  { id: "email", label: "Email", icon: Mail, width: 220 },
-  { id: "phone", label: "Phone", icon: Phone, width: 160 },
-  { id: "company", label: "Company", icon: Building2, width: 180 },
-  { id: "address", label: "Address", icon: MapPin, width: 260 },
-  { id: "balance", label: "Closing Balance", icon: IndianRupee, width: 160 },
+  { id: "name", label: "Name", required: true, width: 200 },
+  { id: "email", label: "Email", width: 220 },
+  { id: "phone", label: "Phone", width: 160 },
+  { id: "company", label: "Company", width: 180 },
+  { id: "address", label: "Address", width: 260 },
+  // Wider than the others so "CLOSING BALANCE" renders in full rather than
+  // truncating to "CLOSING BAL...".
+  { id: "balance", label: "Closing Balance", width: 190 },
 ];
 const ACTIONS_COLUMN_DEF = {
   id: "actions",
   label: "Actions",
-  icon: MoreVertical,
   required: true,
   sortable: false,
   width: 120,
@@ -94,7 +95,9 @@ function Vendors() {
     socialMedia: {
       twitter: "",
       linkedin: "",
+      instagram: "",
       facebook: "",
+      whatsapp: "",
     },
     address: {
       line1: "",
@@ -117,6 +120,29 @@ function Vendors() {
   const [editVendor, setEditVendor] = useState(null);
   const [selectedVendors, setSelectedVendors] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // Delays the bulk-strip's unmount so it can play a slide-out-right exit
+  // animation on deselect (mirroring the slide-in entrance) — same mechanism
+  // Companies.jsx uses so the toolbar and the bulk strip feel identical.
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    if (selectedVendors.length > 0) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVendors.length]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     vendorId: "",
@@ -139,7 +165,7 @@ function Vendors() {
     currentPage: 1,
     totalPages: 0,
     totalCount: 0,
-    limit: 10,
+    limit: 50,
     hasNextPage: false,
     hasPrevPage: false,
   });
@@ -153,6 +179,12 @@ function Vendors() {
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
+  // Search expand/collapse animation — same mechanics as Companies.jsx: the
+  // title/subtitle shrink away and the search pill grows via a width
+  // transition, instead of the field just appearing/disappearing.
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
+
   // Column order / visibility / pinning / widths — in-memory only, same
   // scheme as Accounting.jsx (no persistence, matched on purpose for parity).
   const customColumnDefs = useMemo(
@@ -160,7 +192,6 @@ function Vendors() {
       (vendorFields || []).map((field) => ({
         id: field.name || field,
         label: field.name || field,
-        icon: Settings,
       })),
     [vendorFields]
   );
@@ -173,6 +204,26 @@ function Vendors() {
     allColumnDefs.forEach((c) => (map[c.id] = c));
     return map;
   }, [allColumnDefs]);
+
+  // Column list handed to the shared ExportModal. Same shape Companies.jsx
+  // passes: { key, label, isCustomField }. "actions" is a UI-only column, so
+  // it is dropped — everything else, including vendor custom fields, is
+  // offered as an exportable column.
+  const baseColumnIds = useMemo(
+    () => new Set(BASE_COLUMN_DEFS.map((c) => c.id)),
+    []
+  );
+  const exportColumns = useMemo(
+    () =>
+      allColumnDefs
+        .filter((c) => c.id !== "actions")
+        .map((c) => ({
+          key: c.id,
+          label: c.label,
+          isCustomField: !baseColumnIds.has(c.id),
+        })),
+    [allColumnDefs, baseColumnIds]
+  );
 
   const [columnOrder, setColumnOrder] = useState(() =>
     [...BASE_COLUMN_DEFS, ACTIONS_COLUMN_DEF].map((c) => c.id)
@@ -436,20 +487,6 @@ function Vendors() {
     window.addEventListener("mouseup", onUp);
   };
 
-  // Pagination — exact "first ... current ... last" editable pattern from
-  // Companies.jsx.
-  const [editingPage, setEditingPage] = useState(false);
-  const [pageInput, setPageInput] = useState("");
-  const pageItems = useMemo(() => {
-    const { currentPage, totalPages } = pagination;
-    const items = [1];
-    if (currentPage > 2) items.push("left-dots");
-    if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
-    if (currentPage < totalPages - 1) items.push("right-dots");
-    if (totalPages > 1) items.push(totalPages);
-    return items;
-  }, [pagination]);
-
   // Get field value from vendor
   const getFieldValue = (vendor, columnKey) => {
     if (columnKey === "address") {
@@ -484,9 +521,9 @@ function Vendors() {
         return (
           <Link
             to={`/vendors/${vendor._id}`}
-            className="text-blue-600 font-bold text-sm hover:text-blue-700 transition-colors truncate block"
+            className="text-blue-600 font-bold text-sm underline hover:text-blue-700 transition-colors truncate block"
           >
-            {vendor.name}
+            <HighlightText text={vendor.name} query={searchTerm} />
           </Link>
         );
       case "email":
@@ -495,7 +532,7 @@ function Vendors() {
             href={`mailto:${vendor.email}`}
             className="text-sm text-gray-700 hover:text-blue-600 transition-colors truncate block"
           >
-            {vendor.email}
+            <HighlightText text={vendor.email} query={searchTerm} />
           </a>
         ) : (
           <span className="text-sm text-gray-400">—</span>
@@ -506,7 +543,7 @@ function Vendors() {
             href={`tel:${vendor.phone}`}
             className="text-sm text-gray-700 hover:text-blue-600 transition-colors truncate block"
           >
-            {vendor.phone}
+            <HighlightText text={vendor.phone} query={searchTerm} />
           </a>
         ) : (
           <span className="text-sm text-gray-400">—</span>
@@ -514,13 +551,20 @@ function Vendors() {
       case "company":
         return (
           <span className="text-sm text-gray-700 capitalize font-medium truncate block">
-            {vendor.company || "—"}
+            {vendor.company ? (
+              <HighlightText text={vendor.company} query={searchTerm} />
+            ) : (
+              "—"
+            )}
           </span>
         );
       case "address":
         return (
           <span className="text-sm text-gray-700 truncate block">
-            {truncateText(getFieldValue(vendor, "address"), 40)}
+            <HighlightText
+              text={truncateText(getFieldValue(vendor, "address"), 40)}
+              query={searchTerm}
+            />
           </span>
         );
       case "balance":
@@ -532,7 +576,10 @@ function Vendors() {
       default:
         return (
           <span className="text-sm text-gray-700 truncate block">
-            {truncateText(String(getFieldValue(vendor, colId)), 30)}
+            <HighlightText
+              text={truncateText(String(getFieldValue(vendor, colId)), 30)}
+              query={searchTerm}
+            />
           </span>
         );
     }
@@ -557,8 +604,19 @@ function Vendors() {
     return () => clearTimeout(timer);
   }, [filterCompany]);
 
+  // Reset to page 1 when the search/filter changes. Skips the initial mount —
+  // otherwise it races the first fetch below. Returning `prev` unchanged when
+  // already on page 1 avoids handing back a new pagination object on every
+  // settled keystroke, which re-rendered the whole list for nothing.
+  const skipInitialPageReset = useRef(true);
   useEffect(() => {
-    setPagination((prev) => ({ ...prev, currentPage: 1 }));
+    if (skipInitialPageReset.current) {
+      skipInitialPageReset.current = false;
+      return;
+    }
+    setPagination((prev) =>
+      prev.currentPage === 1 ? prev : { ...prev, currentPage: 1 },
+    );
   }, [debouncedSearchTerm, debouncedFilterCompany]);
 
   useEffect(() => {
@@ -566,7 +624,15 @@ function Vendors() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.currentPage, pagination.limit, sortConfig]);
 
+  // Search/filter fetch. Skips the initial mount — the effect above already
+  // fires the first fetch, and running both sent two identical requests on
+  // every page load (the same guard Companies.jsx uses).
+  const skipInitialSearchFetch = useRef(true);
   useEffect(() => {
+    if (skipInitialSearchFetch.current) {
+      skipInitialSearchFetch.current = false;
+      return;
+    }
     if (pagination.currentPage === 1) {
       fetchVendors();
     }
@@ -589,7 +655,14 @@ function Vendors() {
     }
   };
 
+  // Holds the id of the most recent request. Erasing a search term fires one
+  // request per settled keystroke, and a slower earlier request could land
+  // after a newer one and repaint the list with stale rows — which read as the
+  // list "reloading again and again". Only the newest response is applied.
+  const vendorRequestIdRef = useRef(0);
+
   const fetchVendors = async () => {
+    const requestId = ++vendorRequestIdRef.current;
     try {
       setLoading(true);
 
@@ -609,6 +682,9 @@ function Vendors() {
 
       const res = await API.get(`/vendors/pagination?${params.toString()}`);
 
+      // A newer request has been issued since this one started — discard.
+      if (requestId !== vendorRequestIdRef.current) return;
+
       if (res.data.vendors && res.data.pagination) {
         setVendors(res.data.vendors);
         setPagination((prev) => ({
@@ -623,6 +699,7 @@ function Vendors() {
         setVendors(res.data || []);
       }
     } catch (err) {
+      if (requestId !== vendorRequestIdRef.current) return;
       if (err.response && err.response.status === 403) {
         toast.error(err.response.data.message || "Access denied");
       } else {
@@ -630,16 +707,53 @@ function Vendors() {
       }
       setVendors([]);
     } finally {
-      setLoading(false);
+      // Only the newest request owns the loading flag, so a stale response
+      // resolving late can't switch the spinner off mid-flight.
+      if (requestId === vendorRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
+  // Header checkbox: toggles the CURRENT PAGE only — synchronous, no network
+  // call. Mirrors Companies.jsx's handleSelectAll exactly (pages/Companies.jsx),
+  // which compares against `companies.length` (the current page's array), not
+  // the total count across all pages. "Select every matching vendor across
+  // every page" is a deliberately separate action — see
+  // handleSelectAllAcrossPages below — so a stray click on the header
+  // checkbox can't silently select hundreds of off-screen rows.
   const handleSelectAll = () => {
     if (selectedVendors.length === vendors.length && vendors.length > 0) {
       setSelectedVendors([]);
     } else {
       setSelectedVendors(vendors.map((v) => v._id));
     }
+  };
+
+  // Bulk-strip "Select All" button: fetches every vendor id matching the
+  // current search/filter, ignoring pagination — mirrors
+  // Companies.jsx's handleSelectAllAcrossPages against
+  // GET /companies/pagination?allIds=true, backed here by the identical
+  // allIds branch in getAllVendorsWithPagination.
+  const handleSelectAllAcrossPages = async () => {
+    try {
+      const params = new URLSearchParams({ allIds: "true" });
+      if (debouncedSearchTerm.trim()) params.append("search", debouncedSearchTerm.trim());
+      if (debouncedFilterCompany) params.append("company", debouncedFilterCompany);
+
+      const res = await API.get(`/vendors/pagination?${params.toString()}`);
+      setSelectedVendors(res.data.ids || []);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to select all rows");
+    }
+  };
+
+  // Bulk-strip "Deselect All" button: trims the selection back down to just
+  // the current page, rather than clearing it entirely — mirrors
+  // Companies.jsx's handleDeselectAllExtra. Use "Cancel" (exitSelectionMode)
+  // to clear the selection completely and leave selection mode.
+  const handleDeselectAllExtra = () => {
+    setSelectedVendors(vendors.map((v) => v._id));
   };
 
   const handleSelectVendor = (vendorId) => {
@@ -651,6 +765,7 @@ function Vendors() {
   };
 
   const handleBulkDeleteVendors = async (itemIds) => {
+    setBulkDeleting(true);
     try {
       await Promise.all(itemIds.map((id) => API.delete(`/vendors/${id}`)));
       await fetchVendors();
@@ -659,6 +774,8 @@ function Vendors() {
       toast.success(`Successfully deleted ${itemIds.length} vendors`);
     } catch (err) {
       toast.error(err.response?.data?.error || "Bulk delete failed");
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -844,26 +961,140 @@ function Vendors() {
     setSelectedVendors([]);
   };
 
+  // One flag drives every skeleton on the page — header, table body, and
+  // pagination all appear and resolve together, same as Companies.jsx.
+  // useMinDelay holds it for 300ms so a fast fetch doesn't flash the
+  // placeholders.
+  const showLoadingSkeleton = useMinDelay(loading && vendors.length === 0, 300);
+  // `loading` toggles around every fetchVendors() call, including page/limit
+  // changes — same source Companies.jsx feeds its top-edge bar from, so
+  // paging here now gets the identical progress flash Companies.jsx shows.
+  useTopLoadingSignal(loading);
+
   return (
-    <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-sm flex flex-col overflow-hidden relative z-0 w-full">
+    <>
       <AppToaster />
 
-      <div className="box-border flex flex-row justify-between items-center px-6 py-3 gap-4 w-full h-[72px] bg-white border-b border-[#E1E4EA] flex-shrink-0">
-        <div className="flex flex-col justify-center">
-          <h1 className="text-[20px] font-semibold text-[#1F2937] leading-[28px] tracking-[-0.02em]">Vendors</h1>
-          <p className="text-[14px] text-[#525866] leading-[20px] font-normal">Manage your vendors.</p>
-        </div>
+      {/* Fixed toolbar — same positioning Companies.jsx uses (pinned right
+          below the app header, not part of the scrolling page), and the
+          same trick for bulk mode: instead of a banner pushed below the
+          toolbar, the bulk-action strip slides in and takes over this exact
+          bar, so nothing shifts and it feels identical to Companies.jsx. */}
+      <div
+        className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${
+          showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"
+        }`}
+        style={{ left: "var(--sidebar-width, 0px)", zIndex: 40 }}
+      >
+        {showBulkStrip ? (
+          <div
+            className={`${
+              bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"
+            } flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}
+          >
+            <div className="flex flex-nowrap items-center gap-3 flex-shrink-0">
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </button>
+              <button
+                onClick={() => setShowBulkActions(true)}
+                className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <Edit2 className="w-4 h-4" />
+                Bulk Update
+              </button>
+              <button
+                onClick={() => setShowBulkDeleteModal(true)}
+                disabled={bulkDeleting}
+                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+              <button
+                onClick={exitSelectionMode}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            </div>
+            <div className="flex flex-nowrap items-center gap-3 flex-shrink-0">
+              <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
+                {selectedVendors.length} vendor
+                {selectedVendors.length !== 1 ? "s" : ""} selected
+              </span>
+              <button
+                onClick={handleSelectAllAcrossPages}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Select All
+              </button>
+              <button
+                onClick={handleDeselectAllExtra}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <X className="w-4 h-4" />
+                Deselect All
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 lg:gap-4 w-full h-full">
+            <div
+              className={`flex-shrink-0 flex flex-col justify-center gap-1.5 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${
+                isSearchExpanded ? "w-0 opacity-0" : "w-[190px] opacity-100"
+              }`}
+            >
+              {showLoadingSkeleton ? (
+                <>
+                  <Skeleton width={80} height={18} className="mb-1" />
+                  <Skeleton width={130} height={12} />
+                </>
+              ) : (
+                <>
+                  <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Vendors</h1>
+                  <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
+                    Manage your vendors.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="flex-1" />
+
+        {showLoadingSkeleton ? (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Skeleton width={44} height={44} shape="circle" />
+            <Skeleton width={44} height={44} shape="circle" />
+            <Skeleton width={44} height={44} shape="circle" />
+            <Skeleton width={130} height={44} shape="circle" />
+          </div>
+        ) : (
         <div className="flex flex-row items-center gap-2 h-[44px] flex-shrink-0">
           <div className="relative flex items-center h-11 w-[220px] sm:w-[300px] lg:w-[380px] rounded-full border border-[#E1E4EA] bg-white focus-within:border-[#0085FF] transition-colors">
             <SearchIcon
               className="absolute left-3.5 text-[#1F2937] pointer-events-none top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
             />
             <input
+              ref={searchInputRef}
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              onFocus={() => setIsSearchExpanded(true)}
+              onBlur={() => {
+                if (!searchTerm) setIsSearchExpanded(false);
+              }}
               placeholder="Search by vendor name, ID, company, or email..."
-              className="w-full h-full bg-transparent rounded-full pl-11 pr-4 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none"
+              className={`w-full h-full bg-transparent rounded-full pl-11 pr-4 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none transition-opacity duration-200 cursor-pointer ${
+                isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"
+              }`}
             />
           </div>
 
@@ -880,9 +1111,8 @@ function Vendors() {
                   : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
               }`}
             >
-              <SlidersHorizontal
-                size={18}
-                strokeWidth={2}
+              <FilterIcon
+                size={16}
                 className={filterCompany ? "text-[#0085FF]" : "text-[#1F2937]"}
               />
             </button>
@@ -973,6 +1203,9 @@ function Vendors() {
             </span>
           </button>
         </div>
+        )}
+            </div>
+        )}
       </div>
 
       {/* Single shared form for both create and edit vendor. */}
@@ -997,64 +1230,48 @@ function Vendors() {
         />
       )}
 
-      {selectedVendors.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <CheckSquare className="w-5 h-5 text-blue-600" />
-            <span className="text-blue-800 font-semibold font-inter">
-              {selectedVendors.length} vendor
-              {selectedVendors.length !== 1 ? "s" : ""} selected
-            </span>
-          </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowBulkActions(true)}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <Edit2 className="w-4 h-4" />
-              Bulk Update
-            </button>
-            <button
-              onClick={exitSelectionMode}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       {showImport && (
-        <div className="mb-4">
-          <ImportVendors
-            isOpen={true}
-            onClose={() => setShowImport(false)}
-            vendorFieldNames={vendorFields}
-            onImportSuccess={fetchVendors}
-          />
-        </div>
+        <ImportVendors
+          isOpen={true}
+          onClose={() => setShowImport(false)}
+          vendorFieldNames={vendorFields}
+          onImportSuccess={fetchVendors}
+        />
       )}
 
-      {/* Hidden columns are recoverable — same affordance as Accounting.jsx. */}
-      {hiddenCols.length > 0 && (
-        <div className="flex justify-end mb-2">
-          <button
-            onClick={() => setHiddenCols([])}
-            className="h-8 px-3 flex items-center gap-1.5 rounded-full bg-white border border-[#E1E4EA] text-xs font-medium text-[#525866] hover:bg-gray-50 transition-colors"
-          >
-            Show {hiddenCols.length} hidden column
-            {hiddenCols.length > 1 ? "s" : ""}
-          </button>
-        </div>
-      )}
+      {/* Fixed table area — same offsets Companies.jsx uses: starts right
+          below the 64px toolbar (which itself starts below the 54/64px app
+          header), and stops 64px short of the bottom to leave room for the
+          fixed pagination bar. */}
+      <div
+        className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
+        style={{
+          position: "fixed",
+          left: "var(--sidebar-width, 0px)",
+          right: 0,
+          bottom: pagination.totalCount > 0 ? 64 : 0,
+        }}
+      >
+        {/* Hidden columns are recoverable — same affordance as Accounting.jsx. */}
+        {hiddenCols.length > 0 && (
+          <div className="flex justify-end p-2 sticky left-0">
+            <button
+              onClick={() => setHiddenCols([])}
+              className="h-8 px-3 flex items-center gap-1.5 rounded-full bg-white border border-[#E1E4EA] shadow-sm text-xs font-medium text-[#525866] hover:bg-gray-50 transition-colors"
+            >
+              Show {hiddenCols.length} hidden column
+              {hiddenCols.length > 1 ? "s" : ""}
+            </button>
+          </div>
+        )}
 
-      <div className="overflow-x-auto min-h-[400px]">
+        <div className="bg-white border border-[#E1E4EA]">
           <table
             className="border-separate border-spacing-0 text-left"
             style={{ minWidth: "100%", width: tableWidth, tableLayout: "fixed" }}
           >
-            <thead className="bg-[#F5F7FA] select-none">
+            <thead className="bg-[#F5F7FA] sticky top-0 z-20 select-none">
               <tr>
                 <th
                   data-col-id="selection"
@@ -1075,7 +1292,6 @@ function Vendors() {
                 </th>
 
                 {orderedColumns.map((col) => {
-                  const Icon = col.icon;
                   const isSortable = col.sortable !== false;
                   const isDragging = draggedColKey === col.id;
                   const isDragOver =
@@ -1103,22 +1319,11 @@ function Vendors() {
                       } active:cursor-grabbing`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        {Icon && (
-                          <Icon className="w-4 h-4 text-[#525866] flex-shrink-0" />
-                        )}
                         <span className="truncate flex-1">{col.label}</span>
                         {pinnedCols[col.id] && (
                           <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
                         )}
-                        {isSortable && sortConfig.key === col.id && (
-                          <span className="flex-shrink-0 text-[#0085FF]">
-                            {sortConfig.direction === "asc" ? (
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            ) : (
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            )}
-                          </span>
-                        )}
+
                         {col.id !== "actions" && (
                           <button
                             onClick={(e) => openColumnMenu(e, col.id)}
@@ -1142,31 +1347,15 @@ function Vendors() {
               </tr>
             </thead>
             <tbody className="bg-white">
-              {loading && vendors.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={orderedColumns.length + 1}
-                    className="px-6 py-12 text-center"
-                  >
-                    <div className="flex flex-col items-center justify-center">
-                      <img
-                        src={logo}
-                        alt="Loading..."
-                        className="animate-spin-smooth drop-shadow-lg"
-                        style={{
-                          width: "48px",
-                          height: "48px",
-                          animationDuration: "1.8s",
-                          filter: "invert(100%)",
-                        }}
-                      />
-                      <p className="mt-3 text-gray-600 font-medium">
-                        Loading Vendors...
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              ) : vendors.length === 0 ? (
+              {showLoadingSkeleton && (
+                <TableSkeletonRows
+                  numRows={pagination.limit}
+                  columns={orderedColumns.map((c) => colWidths[c.id])}
+                  hasCheckbox
+                  checkboxWidth={colWidths.selection}
+                />
+              )}
+              {!showLoadingSkeleton && vendors.length === 0 && (
                 <tr>
                   <td
                     colSpan={orderedColumns.length + 1}
@@ -1177,7 +1366,8 @@ function Vendors() {
                     <p className="text-sm">Try adjusting your search or filters</p>
                   </td>
                 </tr>
-              ) : (
+              )}
+              {!showLoadingSkeleton &&
                 vendors.map((vendor) => (
                   <tr
                     key={vendor._id}
@@ -1281,152 +1471,40 @@ function Vendors() {
                       )
                     )}
                   </tr>
-                ))
-              )}
+                ))}
             </tbody>
           </table>
         </div>
+      </div>
 
-        {/* Pagination — same "first ... current ... last" editable pattern
-            and per-page selector as Companies.jsx. */}
-        {!loading && pagination.totalCount > 0 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-[#E1E4EA] sm:px-6">
-            <div className="flex-1 flex justify-between sm:hidden">
-              <button
-                onClick={() => handlePageChange(pagination.currentPage - 1)}
-                disabled={!pagination.hasPrevPage}
-                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => handlePageChange(pagination.currentPage + 1)}
-                disabled={!pagination.hasNextPage}
-                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
-
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div className="flex items-center space-x-2">
-                <p className="text-sm text-gray-700 font-inter">
-                  Showing{" "}
-                  <span className="font-semibold">
-                    {(pagination.currentPage - 1) * pagination.limit + 1}
-                  </span>{" "}
-                  to{" "}
-                  <span className="font-semibold">
-                    {Math.min(
-                      pagination.currentPage * pagination.limit,
-                      pagination.totalCount
-                    )}
-                  </span>{" "}
-                  of <span className="font-semibold">{pagination.totalCount}</span>{" "}
-                  results
-                </p>
-                <select
-                  value={pagination.limit}
-                  onChange={(e) => handleLimitChange(parseInt(e.target.value))}
-                  className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
-                >
-                  <option value={10}>10 per page</option>
-                  <option value={20}>20 per page</option>
-                  <option value={50}>50 per page</option>
-                  <option value={100}>100 per page</option>
-                  <option value={150}>150 per page</option>
-                </select>
-              </div>
-
+      {/* Pagination — its own fixed strip pinned to the bottom */}
+      {(showLoadingSkeleton || pagination.totalCount > 0) && (
+        <div
+          className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
+          style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+        >
+          {showLoadingSkeleton ? (
+            <div className="w-full px-4 py-3 flex items-center justify-between sm:px-6">
+              <Skeleton width={190} height={14} />
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handlePageChange(pagination.currentPage - 1)}
-                  disabled={!pagination.hasPrevPage}
-                  className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-
-                {pagination.totalPages > 0 &&
-                  (() => {
-                    const { currentPage, totalPages } = pagination;
-                    const commitPage = () => {
-                      const n = parseInt(pageInput, 10);
-                      if (!Number.isNaN(n)) {
-                        handlePageChange(Math.min(Math.max(n, 1), totalPages));
-                      }
-                      setEditingPage(false);
-                    };
-
-                    return pageItems.map((item, index) => {
-                      if (item === "left-dots" || item === "right-dots") {
-                        return (
-                          <span
-                            key={`${item}-${index}`}
-                            className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none"
-                          >
-                            ....
-                          </span>
-                        );
-                      }
-                      const isCurrent = item === currentPage;
-                      if (isCurrent && editingPage) {
-                        return (
-                          <input
-                            key="page-edit"
-                            autoFocus
-                            type="number"
-                            min={1}
-                            max={totalPages}
-                            value={pageInput}
-                            onChange={(e) => setPageInput(e.target.value)}
-                            onBlur={commitPage}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") commitPage();
-                              if (e.key === "Escape") setEditingPage(false);
-                            }}
-                            className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          />
-                        );
-                      }
-                      return (
-                        <button
-                          key={`page-${item}`}
-                          onClick={() => handlePageChange(item)}
-                          onDoubleClick={() => {
-                            if (isCurrent) {
-                              setPageInput(String(currentPage));
-                              setEditingPage(true);
-                            }
-                          }}
-                          title={
-                            isCurrent
-                              ? "Double-click to type a page number"
-                              : undefined
-                          }
-                          className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
-                            isCurrent
-                              ? "bg-blue-600 text-white"
-                              : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                          }`}
-                        >
-                          {item}
-                        </button>
-                      );
-                    });
-                  })()}
-
-                <button
-                  onClick={() => handlePageChange(pagination.currentPage + 1)}
-                  disabled={!pagination.hasNextPage}
-                  className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} width={32} height={32} shape="circle" />
+                ))}
               </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <TablePaginationFooter
+              currentPage={pagination.currentPage}
+              totalPages={pagination.totalPages}
+              totalCount={pagination.totalCount}
+              limit={pagination.limit}
+              onPageChange={handlePageChange}
+              onLimitChange={handleLimitChange}
+              className="w-full px-4 py-3 flex items-center justify-between sm:px-6"
+            />
+          )}
+        </div>
+      )}
 
       {/* Shared column popup — one menu, used by every column. */}
       {openColumnMenuKey &&
@@ -1621,6 +1699,54 @@ function Vendors() {
         </div>
       )}
 
+      {/* Bulk delete confirmation — same structure as Companies.jsx's. */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
+                Confirm Bulk Delete
+              </h3>
+              <p className="text-sm text-gray-500 font-inter mb-6">
+                Are you sure you want to delete{" "}
+                <strong>{selectedVendors.length}</strong> vendor
+                {selectedVendors.length !== 1 ? "s" : ""}? This action cannot
+                be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkDeleting}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    await handleBulkDeleteVendors(selectedVendors);
+                    setShowBulkDeleteModal(false);
+                  }}
+                  disabled={bulkDeleting}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm flex items-center justify-center gap-2 min-w-[120px]"
+                >
+                  {bulkDeleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Delete All"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <VendorPaymentForm
         open={showPaymentModal}
         vendorId={paymentForm.vendorId}
@@ -1641,7 +1767,16 @@ function Vendors() {
         fieldConfig={vendorFieldConfig}
         module="vendors"
       />
-    </div>
+
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        columns={exportColumns}
+        selectedIds={selectedVendors}
+        exportUrl="/vendors/export-selected"
+        fileName="Exported_Vendors.csv"
+      />
+    </>
   );
 }
 

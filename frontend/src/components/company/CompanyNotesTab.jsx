@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
+import { PINNED_LEFT_BOUNDARY_SHADOW, PINNED_RIGHT_BOUNDARY_SHADOW } from "../../utils/pinnedColumnShadow";
 import { useParams } from "react-router-dom";
 import {
   Filter,
@@ -22,6 +23,7 @@ import {
   ChevronUp,
   ChevronDown,
   EyeOff,
+  X,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
@@ -182,6 +184,7 @@ export default function CompanyNotesTab({ showStats = true }) {
     return null;
   };
 
+
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
@@ -306,6 +309,58 @@ export default function CompanyNotesTab({ showStats = true }) {
     () => Object.values(colWidths).reduce((sum, w) => sum + w, 0),
     [colWidths],
   );
+
+  const stickyStyles = useMemo(() => {
+    const map = {};
+    let leftOffset = 44; // selection column width is 44px
+    for (const col of orderedColumns) {
+      if (leftPinned.has(col.id)) {
+        map[col.id] = {
+          position: "sticky",
+          left: leftOffset,
+          zIndex: 20,
+          backgroundColor: "#fff",
+        };
+        leftOffset += colWidths[col.id] || 200;
+      }
+    }
+    let rightOffset = 0;
+    for (const col of [...orderedColumns].reverse()) {
+      if (rightPinned.has(col.id)) {
+        map[col.id] = {
+          position: "sticky",
+          right: rightOffset,
+          zIndex: 20,
+          backgroundColor: "#fff",
+        };
+        rightOffset += colWidths[col.id] || 200;
+      }
+    }
+    return map;
+  }, [orderedColumns, leftPinned, rightPinned, colWidths]);
+
+  const getStickyStyle = (colId, isHeader = false, isSelected = false) => {
+    const isPinned = leftPinned.has(colId) || rightPinned.has(colId);
+    const style = stickyStyles[colId] || {};
+    
+    let borderShadows = "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA";
+    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
+    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
+    
+    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) {
+      borderShadows = `${PINNED_LEFT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
+    } else if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) {
+      borderShadows = `${PINNED_RIGHT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
+    }
+    
+    return {
+      ...style,
+      position: isPinned ? "sticky" : undefined,
+      zIndex: isPinned ? (isHeader ? 35 : 20) : undefined,
+      backgroundColor: isPinned ? (isHeader ? "#F5F7FA" : (isSelected ? "#EFF6FF" : "#fff")) : undefined,
+      boxShadow: borderShadows,
+    };
+  };
 
   const togglePinColumn = (colId) => {
     if (getColumnPinSide(colId)) unpinColumn(colId);
@@ -737,6 +792,15 @@ export default function CompanyNotesTab({ showStats = true }) {
             className="w-full h-full pl-11 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
             style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
         <div className="relative flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0 overflow-hidden" style={{ height: "44px" }}>
           <span
@@ -832,14 +896,18 @@ export default function CompanyNotesTab({ showStats = true }) {
             </table>
           </div>
         )
-      ) : filteredNotes.length === 0 ? (
-        <button
-          onClick={() => setIsEditorOpen(true)}
-          className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
-        >
-          <StickyNote size={28} className="mb-2" />
-          <span className="text-sm font-medium">Add New Note</span>
-        </button>
+      ) : notes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+          <StickyNote size={28} className="mb-3 text-gray-400" />
+          <button
+            type="button"
+            onClick={() => setIsEditorOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} />
+            Add new note
+          </button>
+        </div>
       ) : viewMode === "grid" ? (
         <div
           style={{
@@ -880,7 +948,18 @@ export default function CompanyNotesTab({ showStats = true }) {
                 {/* Page-scoped select-all: ticks exactly the rows on the CURRENT page
                     (10 per page -> 10, 50 -> 50). Distinct from the bulk strip's
                     "Select All", which spans every record across all pages. */}
-                <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
+                <th
+                  style={{
+                    width: 44,
+                    height: 56,
+                    position: "sticky",
+                    left: 0,
+                    zIndex: 35,
+                    backgroundColor: "#F5F7FA",
+                    boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                  }}
+                  className="px-3 py-2.5"
+                >
                   <div className="flex justify-center items-center w-full">
                     <input
                       type="checkbox"
@@ -890,7 +969,7 @@ export default function CompanyNotesTab({ showStats = true }) {
                     />
                   </div>
                 </th>
-                {orderedColumns.map((col, idx) => {
+                {orderedColumns.map((col) => {
                   const isDragging = draggedColKey === col.id;
                   const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
                   return (
@@ -901,9 +980,8 @@ export default function CompanyNotesTab({ showStats = true }) {
                       style={{ 
                         width: colWidths[col.id], 
                         height: 56, 
-                        position: "relative",
                         opacity: isDragging ? 0.35 : 1,
-                        boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                        ...getStickyStyle(col.id, true)
                       }}
                       className={`px-3 py-2.5 font-medium text-[#525252] text-xs cursor-grab active:cursor-grabbing ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
@@ -915,9 +993,14 @@ export default function CompanyNotesTab({ showStats = true }) {
                           >
                             <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
                               {showNotesSkeleton ? <Skeleton width="65%" height={12} /> : (
-                                <>
-                                  <span className="truncate">{col.label}</span>
-                                </>
+                                <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                  {(leftPinned.has(col.id) || rightPinned.has(col.id)) && (
+                                    <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0" style={{ transform: "rotate(45deg)" }} />
+                                  )}
+                                  <span className="truncate flex-1 min-w-0" title={col.label}>
+                                    {col.label}
+                                  </span>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1142,7 +1225,19 @@ export default function CompanyNotesTab({ showStats = true }) {
                   };
                   return (
                     <tr key={note._id} className={`hover:bg-gray-50 transition-colors group ${isSelected ? "!bg-blue-50" : ""}`}>
-                      <td style={{ height: 64, width: 44 }} onClick={e => e.stopPropagation()} className="px-3 border-r border-b border-[#E1E4EA]">
+                      <td
+                        style={{
+                          height: 64,
+                          width: 44,
+                          position: "sticky",
+                          left: 0,
+                          zIndex: 10,
+                          backgroundColor: isSelected ? "#EFF6FF" : "#fff",
+                          boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+                        }}
+                        onClick={e => e.stopPropagation()}
+                        className="px-3"
+                      >
                         <div className="flex justify-center items-center w-full">
                           <input
                             type="checkbox"
@@ -1158,10 +1253,23 @@ export default function CompanyNotesTab({ showStats = true }) {
                         const isDragging = draggedColKey === col.id;
                         const cell = cells[col.id];
                         if (!cell) return null;
-                        if (isDragging) {
-                          return React.cloneElement(cell, { style: { ...cell.props.style, opacity: 0.35 } });
-                        }
-                        return cell;
+                        
+                        const stickyStyle = getStickyStyle(col.id, false, isSelected);
+                        const mergedStyle = {
+                          ...cell.props.style,
+                          opacity: isDragging ? 0.35 : undefined,
+                          ...stickyStyle,
+                        };
+                        
+                        const cleanClassName = (cell.props.className || "")
+                          .replace("border-r", "")
+                          .replace("border-b", "")
+                          .replace("border-[#E1E4EA]", "");
+                          
+                        return React.cloneElement(cell, {
+                          style: mergedStyle,
+                          className: cleanClassName,
+                        });
                       })}
                     </tr>
                   );

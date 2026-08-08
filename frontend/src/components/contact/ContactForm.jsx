@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
 import SearchableDropdown from "./SearchableDropdown";
-import { Upload, Plus, Twitter, Linkedin, Facebook, FolderOpen, ChevronDown } from "lucide-react";
+import { Upload, Plus, Twitter, Linkedin, Facebook } from "lucide-react";
 import QuickCompanyForm from "../company/QuickCompanyForm";
 import toast from "react-hot-toast";
 import { FaWhatsapp } from "react-icons/fa";
@@ -445,44 +445,6 @@ const ContactForm = ({
     setShowQuickCompanyForm(false);
   };
 
-  // --- CATEGORY & GROUPING LOGIC ---
-  const [expandedSections, setExpandedSections] = useState({});
-
-  const toggleSection = (category) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [category]: !prev[category],
-    }));
-  };
-
-  useEffect(() => {
-    if (fieldDefinitions.length > 0) {
-      const defaultExpanded = {};
-      fieldDefinitions.forEach((fieldDef) => {
-        const cat = (fieldDef.category && typeof fieldDef.category === 'string')
-          ? fieldDef.category
-          : "Uncategorized";
-        defaultExpanded[cat] = true; // Opens all by default
-      });
-      setExpandedSections(defaultExpanded);
-    }
-  }, [fieldDefinitions]);
-
-  const groupedFields = fieldDefinitions.reduce((acc, fieldDef) => {
-    const cat = (fieldDef.category && typeof fieldDef.category === 'string')
-      ? fieldDef.category
-      : "Uncategorized";
-
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(fieldDef);
-    return acc;
-  }, {});
-
-  const sortedCategories = Object.keys(groupedFields).sort((a, b) => {
-    if (a === "Uncategorized") return 1;
-    if (b === "Uncategorized") return -1;
-    return a.localeCompare(b);
-  });
 
 
   return createPortal(
@@ -691,43 +653,28 @@ const ContactForm = ({
               </div>
             </div>
 
-            {/* Dynamic Collapsible Additional Fields */}
-            {sortedCategories.length > 0 && (
-              <div className="pt-4 space-y-4">
-                <h3 className="text-[16px] font-bold text-[#111216]">Additional Information</h3>
-                {sortedCategories.map((category) => (
-                  <div key={category} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                    <button
-                      type="button"
-                      onClick={() => toggleSection(category)}
-                      className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none"
-                    >
-                      <div className="flex items-center gap-2">
-                        <FolderOpen className="w-4 h-4 text-indigo-600" />
-                        <span className="font-bold text-gray-800 text-sm uppercase tracking-wide">{category}</span>
-                        <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-medium ml-2">
-                          {groupedFields[category].length}
-                        </span>
-                      </div>
-                      <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${expandedSections[category] ? "rotate-180" : ""}`} />
-                    </button>
-
-                    {expandedSections[category] && (
-                      <div className="p-5 bg-white border-t border-gray-200 space-y-5">
-                        {groupedFields[category].map((fieldDef) => (
-                          <div key={fieldDef.name}>
-                            <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                              {fieldDef.name}
-                              {fieldDef.required && <span className="text-red-500 ml-1">*</span>}
-                              <span className="text-xs text-gray-500 ml-2 font-normal">({fieldDef.type})</span>
-                            </label>
-                            {renderFieldInput(fieldDef, additionalValues[fieldDef.name])}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+            {/* Additional Fields — flat list, matching QuickContactForm.jsx's
+                treatment exactly (the "Add Contact" flow used from a
+                company/vendor page). No category accordion, no folder icon,
+                no per-field "(type)" annotation — those all read as
+                field-builder/admin UI, not something someone filling out a
+                contact form needs to see. */}
+            {fieldDefinitions.length > 0 && (
+              <div className="pt-4 space-y-6">
+                <h3 className="text-[16px] font-bold text-[#111216]">
+                  Additional Information
+                </h3>
+                <div className="space-y-3 sm:space-y-4">
+                  {fieldDefinitions.map((fieldDef) => (
+                    <div key={fieldDef.name}>
+                      <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                        {fieldDef.name}{" "}
+                        {fieldDef.required && <span className="text-red-500">*</span>}
+                      </label>
+                      {renderFieldInput(fieldDef, additionalValues[fieldDef.name])}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

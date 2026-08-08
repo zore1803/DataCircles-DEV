@@ -12,7 +12,7 @@ import VendorMeetingsTable from "../components/vendor/VendorMeetingsTable";
 import VendorTasksTable from "../components/vendor/VendorTasksTable";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import logo from "/DataCircles.png";
-import { Mail, Phone, MapPin, Globe, Maximize2, Minimize2, Twitter, Linkedin, Facebook, Edit2 } from "lucide-react";
+import { Mail, Phone, MapPin, Globe, Maximize2, Minimize2, Twitter, Linkedin, Instagram, Facebook, Edit2 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 const tabsLeft = ["Details", "Payments"];
 const tabsRight = ["Notes", "Tasks", "Meetings", "Calendar"];
@@ -64,6 +64,7 @@ const VendorDetailsPage = () => {
     socialMedia: {
       twitter: "",
       linkedin: "",
+      instagram: "",
       facebook: "",
       whatsapp: "",
     },
@@ -278,6 +279,19 @@ const VendorDetailsPage = () => {
                   title="LinkedIn"
                 >
                   <Linkedin size={16} />
+                </button>
+
+                {/* Instagram */}
+                <button
+                  disabled={!hasSocialLink('instagram')}
+                  className={`
+                    p-1.5 rounded-full border bg-white transition-colors
+                    ${hasSocialLink('instagram') ? "text-pink-600 hover:bg-gray-50 cursor-pointer" : "text-gray-300 cursor-not-allowed"}
+                  `}
+                  onClick={() => openSocialLink('instagram')}
+                  title="Instagram"
+                >
+                  <Instagram size={16} />
                 </button>
 
                 {/* Facebook */}
