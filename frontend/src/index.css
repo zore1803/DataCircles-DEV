@@ -1,5 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Caveat:wght@400..700&family=Dancing+Script:wght@400..700&family=Great+Vibes&family=Marck+Script&family=Meie+Script&family=Pacifico&family=Sacramento&family=Satisfy&display=swap');
+
+/* Signature Cursive Font Utilities */
+.font-signature-dancing { font-family: 'Dancing Script', cursive, sans-serif !important; }
+.font-signature-greatvibes { font-family: 'Great Vibes', cursive, sans-serif !important; }
+.font-signature-pacifico { font-family: 'Pacifico', cursive, sans-serif !important; }
+.font-signature-sacramento { font-family: 'Sacramento', cursive, sans-serif !important; }
+.font-signature-satisfy { font-family: 'Satisfy', cursive, sans-serif !important; }
+.font-signature-alex { font-family: 'Alex Brush', cursive, sans-serif !important; }
+.font-signature-caveat { font-family: 'Caveat', cursive, sans-serif !important; }
+.font-signature-marck { font-family: 'Marck Script', cursive, sans-serif !important; }
+.font-signature-meie { font-family: 'Meie Script', cursive, sans-serif !important; }
 
 /* Keep your existing CSS exactly as-is */
 @import "tailwindcss";

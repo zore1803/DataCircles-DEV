@@ -1,14 +1,27 @@
 import React, { useState, useRef, useEffect } from "react";
 import SignatureCanvas from "react-signature-canvas";
-import { X, Upload, Edit3, Type, Check, RefreshCw } from "lucide-react";
+import { X, Upload, Edit3, Type, Check, RefreshCw, Palette } from "lucide-react";
 import toast from "react-hot-toast";
 
 const FONT_FAMILIES = [
-  { name: "Dancing Script", family: "'Dancing Script', cursive", url: "https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" },
-  { name: "Great Vibes", family: "'Great Vibes', cursive", url: "https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" },
-  { name: "Pacifico", family: "'Pacifico', cursive", url: "https://fonts.googleapis.com/css2?family=Pacifico&display=swap" },
-  { name: "Sacramento", family: "'Sacramento', cursive", url: "https://fonts.googleapis.com/css2?family=Sacramento&display=swap" },
-  { name: "Satisfy", family: "'Satisfy', cursive", url: "https://fonts.googleapis.com/css2?family=Satisfy&display=swap" },
+  { id: "dancing", name: "Dancing Script", fontName: "Dancing Script", className: "font-signature-dancing" },
+  { id: "greatvibes", name: "Great Vibes", fontName: "Great Vibes", className: "font-signature-greatvibes" },
+  { id: "pacifico", name: "Pacifico", fontName: "Pacifico", className: "font-signature-pacifico" },
+  { id: "sacramento", name: "Sacramento", fontName: "Sacramento", className: "font-signature-sacramento" },
+  { id: "satisfy", name: "Satisfy", fontName: "Satisfy", className: "font-signature-satisfy" },
+  { id: "alex", name: "Alex Brush", fontName: "Alex Brush", className: "font-signature-alex" },
+  { id: "caveat", name: "Caveat", fontName: "Caveat", className: "font-signature-caveat" },
+  { id: "marck", name: "Marck Script", fontName: "Marck Script", className: "font-signature-marck" },
+  { id: "meie", name: "Meie Script", fontName: "Meie Script", className: "font-signature-meie" },
+];
+
+const SIGNATURE_COLORS = [
+  { name: "Black", hex: "#0f172a" },
+  { name: "Navy Blue", hex: "#1e3a8a" },
+  { name: "Royal Blue", hex: "#2563eb" },
+  { name: "Dark Red", hex: "#991b1b" },
+  { name: "Forest Green", hex: "#166534" },
+  { name: "Purple", hex: "#6b21a8" },
 ];
 
 export default function SignatureModal({ isOpen, onClose, onSave }) {
@@ -16,6 +29,7 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
   const [sigName, setSigName] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [penColor, setPenColor] = useState(SIGNATURE_COLORS[0].hex);
 
   // Upload state
   const [uploadedImage, setUploadedImage] = useState(null);
@@ -27,17 +41,20 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
   const [typedText, setTypedText] = useState("");
   const [selectedFont, setSelectedFont] = useState(FONT_FAMILIES[0]);
 
-  // Dynamically load google fonts for signature previews
-  useEffect(() => {
-    FONT_FAMILIES.forEach((font) => {
-      if (!document.querySelector(`link[href="${font.url}"]`)) {
-        const link = document.createElement("link");
-        link.href = font.url;
-        link.rel = "stylesheet";
-        document.head.appendChild(link);
+  // Update pen color on canvas if pad exists
+  const handleColorChange = (hex) => {
+    setPenColor(hex);
+    if (sigCanvasRef.current) {
+      try {
+        const pad = sigCanvasRef.current.getSignaturePad();
+        if (pad) {
+          pad.penColor = hex;
+        }
+      } catch (err) {
+        console.error("Could not set penColor dynamically", err);
       }
-    });
-  }, []);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -77,8 +94,8 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
     const ctx = canvas.getContext("2d");
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.font = `60px ${selectedFont.family}`;
-    ctx.fillStyle = "#1e293b";
+    ctx.font = `60px "${selectedFont.fontName}", cursive, sans-serif`;
+    ctx.fillStyle = penColor || "#0f172a";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(typedText, canvas.width / 2, canvas.height / 2);
@@ -139,7 +156,7 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl transition-all">
+      <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl transition-all max-h-[90vh] overflow-y-auto">
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-4">
           <div>
@@ -190,14 +207,40 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
           </button>
         </div>
 
+        {/* Color Palette (for Draw and Type tabs) */}
+        {(activeTab === "draw" || activeTab === "type") && (
+          <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200 px-4 py-2.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+              <Palette className="h-4 w-4 text-slate-500" />
+              <span>Ink Color:</span>
+            </div>
+            <div className="flex items-center gap-2.5">
+              {SIGNATURE_COLORS.map((color) => (
+                <button
+                  key={color.hex}
+                  type="button"
+                  title={color.name}
+                  onClick={() => handleColorChange(color.hex)}
+                  className={`h-7 w-7 rounded-full transition-transform border border-black/10 flex items-center justify-center ${
+                    penColor === color.hex ? "ring-2 ring-sky-500 ring-offset-2 scale-110 shadow-sm" : "hover:scale-105 opacity-90 hover:opacity-100"
+                  }`}
+                  style={{ backgroundColor: color.hex }}
+                >
+                  {penColor === color.hex && <Check className="h-3.5 w-3.5 text-white drop-shadow-sm" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Tab Content */}
-        <div className="mt-5 min-h-[220px]">
+        <div className="mt-4 min-h-[260px]">
           {/* TAB 1: UPLOAD */}
           {activeTab === "upload" && (
-            <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 p-6 transition hover:border-sky-400">
+            <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 p-8 transition hover:border-sky-400 bg-slate-50/50">
               {uploadedImage ? (
                 <div className="flex flex-col items-center gap-3">
-                  <div className="max-h-36 max-w-full overflow-hidden rounded-lg bg-gray-50 p-2 shadow-inner">
+                  <div className="max-h-36 max-w-full overflow-hidden rounded-lg bg-white p-3 shadow-inner border border-gray-200">
                     <img src={uploadedImage} alt="Uploaded signature" className="h-28 object-contain" />
                   </div>
                   <button
@@ -211,7 +254,7 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
                 </div>
               ) : (
                 <label className="flex cursor-pointer flex-col items-center text-center">
-                  <div className="rounded-full bg-sky-50 p-3 text-sky-600">
+                  <div className="rounded-full bg-sky-50 p-3 text-sky-600 shadow-sm">
                     <Upload className="h-6 w-6" />
                   </div>
                   <span className="mt-2 text-sm font-semibold text-gray-700">Click to upload signature</span>
@@ -224,22 +267,22 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
 
           {/* TAB 2: DRAW */}
           {activeTab === "draw" && (
-            <div className="relative rounded-xl border border-gray-300 bg-slate-50 p-2">
+            <div className="relative rounded-xl border border-gray-300 bg-slate-50 p-2 shadow-inner">
               <SignatureCanvas
                 ref={sigCanvasRef}
                 canvasProps={{
-                  className: "w-full h-40 rounded-lg bg-white cursor-crosshair shadow-inner",
+                  className: "w-full h-48 rounded-lg bg-white cursor-crosshair shadow-sm border border-slate-200",
                 }}
-                penColor="#0f172a"
+                penColor={penColor}
               />
               <button
                 type="button"
                 onClick={handleClearDraw}
-                className="absolute right-4 top-4 rounded-md bg-white/80 px-2.5 py-1 text-xs font-semibold text-gray-600 shadow-sm hover:bg-gray-100"
+                className="absolute right-4 top-4 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-700 shadow hover:bg-gray-100 border border-gray-200 transition"
               >
                 Clear Pad
               </button>
-              <p className="mt-1 text-center text-xs text-gray-400">Draw your signature using mouse or touch</p>
+              <p className="mt-2 text-center text-xs text-gray-500 font-medium">Draw your signature using mouse or touch</p>
             </div>
           )}
 
@@ -253,37 +296,51 @@ export default function SignatureModal({ isOpen, onClose, onSave }) {
                   value={typedText}
                   onChange={(e) => setTypedText(e.target.value)}
                   placeholder="e.g. John Doe"
-                  className="mt-1 w-full rounded-xl border border-gray-300 px-3.5 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 shadow-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700">Select Signature Style</label>
-                <div className="mt-2 grid grid-cols-1 gap-2 max-h-36 overflow-y-auto pr-1">
-                  {FONT_FAMILIES.map((font) => (
-                    <button
-                      key={font.name}
-                      type="button"
-                      onClick={() => setSelectedFont(font)}
-                      className={`flex items-center justify-between rounded-xl border p-3 text-left transition ${
-                        selectedFont.name === font.name
-                          ? "border-sky-500 bg-sky-50/50 ring-1 ring-sky-500"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      <span
-                        style={{ fontFamily: font.family }}
-                        className="text-2xl text-slate-800"
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-gray-700">Select Signature Style Card</label>
+                  <span className="text-[11px] text-gray-400">Scroll to view all 9 cursive styles</span>
+                </div>
+
+                <div className="bg-slate-100/70 border border-slate-200 rounded-xl p-2.5 max-h-64 overflow-y-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {FONT_FAMILIES.map((font) => (
+                      <button
+                        key={font.id}
+                        type="button"
+                        onClick={() => setSelectedFont(font)}
+                        className={`group relative flex flex-col justify-between rounded-xl border-2 p-3.5 text-left transition-all bg-white min-h-[90px] shadow-sm ${
+                          selectedFont.id === font.id
+                            ? "border-sky-500 ring-2 ring-sky-500/20 bg-sky-50/30"
+                            : "border-gray-200 hover:border-sky-300 hover:shadow"
+                        }`}
                       >
-                        {typedText || font.name}
-                      </span>
-                      {selectedFont.name === font.name && (
-                        <span className="rounded-full bg-sky-600 p-1 text-white">
-                          <Check className="h-3 w-3" />
-                        </span>
-                      )}
-                    </button>
-                  ))}
+                        <div className="flex items-center justify-between w-full border-b border-gray-100 pb-1.5 mb-1.5">
+                          <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                            {font.name}
+                          </span>
+                          {selectedFont.id === font.id && (
+                            <span className="rounded-full bg-sky-600 p-0.5 text-white">
+                              <Check className="h-3 w-3" />
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-center py-1 overflow-hidden min-h-[44px]">
+                          <span
+                            className={`${font.className} text-2xl sm:text-3xl text-center truncate max-w-full`}
+                            style={{ color: penColor }}
+                          >
+                            {typedText || font.name}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
