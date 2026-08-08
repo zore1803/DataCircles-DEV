@@ -1036,7 +1036,7 @@ const AddLinkModal = ({ isOpen, onClose, onSubmit }) => {
 // old calc()-based height offset. useFillToBottom measures the container's real
 // position instead, so a KPI-row toggle is handled automatically. CompanyFolderTab
 // still passes it harmlessly.
-const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }) => {
+const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, autoOpenCreate = false, onAutoOpenCreateConsumed }) => {
   const { id: paramCompanyId } = useParams();
   const {
     containerRef: fillContainerRef,
@@ -1072,6 +1072,14 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
   useEffect(() => {
     fetchFolders();
   }, [companyId, refresh]);
+
+  useEffect(() => {
+    if (autoOpenCreate) {
+      setInlineEditingId("NEW");
+      setInlineEditingName("New Folder");
+      onAutoOpenCreateConsumed?.();
+    }
+  }, [autoOpenCreate, onAutoOpenCreateConsumed]);
 
   const fetchFolders = async () => {
     try {
@@ -1704,26 +1712,18 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
 
         {/* Folders List / Grid */}
         {!isLoading && folderViewMode === "grid" && filteredFolders.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center w-full text-gray-500 bg-gray-50"
-            style={{
-              boxSizing: "border-box",
-              height: 420,
-              border: "1px solid #E1E4EA",
-              borderRadius: 8,
-            }}
-          >
-            <FolderIcon className="w-7 h-7 mb-3 text-gray-400" />
+          <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+            <FolderIcon className="w-7 h-7 mb-3 text-blue-500" />
             <button
               type="button"
               onClick={() => {
                 setInlineEditingId("NEW");
                 setInlineEditingName("New Folder");
               }}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
             >
               <Plus size={16} />
-              Create new folder
+              Add new
             </button>
           </div>
         ) : folderViewMode === "grid" ? (
@@ -1853,16 +1853,8 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
             ))}
           </div>
         ) : !isLoading && filteredFolders.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center w-full text-gray-500 bg-gray-50"
-            style={{
-              boxSizing: "border-box",
-              height: 420,
-              border: "1px solid #E1E4EA",
-              borderRadius: 8,
-            }}
-          >
-            <FolderIcon className="w-7 h-7 mb-3 text-gray-400" />
+          <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+            <FolderIcon className="w-7 h-7 mb-3 text-blue-500" />
             <button
               type="button"
               onClick={() =>
@@ -1872,10 +1864,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false }
                   initialName: "",
                 })
               }
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
             >
               <Plus size={16} />
-              Create new folder
+              Add new
             </button>
           </div>
         ) : (

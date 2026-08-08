@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import AppToaster from "../AppToaster";
+import ConfirmDialog from "../common/ConfirmDialog";
 
 
 const DealFieldSettings = () => {
@@ -44,6 +45,8 @@ const DealFieldSettings = () => {
   });
   const [fieldDocId, setFieldDocId] = useState(null);
   const [newDropdownOption, setNewDropdownOption] = useState("");
+  const [pendingDeleteIndex, setPendingDeleteIndex] = useState(null);
+  const [pendingDeleteCategory, setPendingDeleteCategory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [availableCategories, setAvailableCategories] = useState([]);
   const [newStandaloneCategory, setNewStandaloneCategory] = useState("");
@@ -182,8 +185,14 @@ const DealFieldSettings = () => {
   };
 
   // 👉 NEW: Delete category
-  const handleDeleteCategory = async (categoryName) => {
-    if (!window.confirm(`Are you sure you want to delete the "${categoryName}" category?\n\nAny fields inside this category will be moved to "Uncategorized".`)) return;
+  const handleDeleteCategory = (categoryName) => {
+    setPendingDeleteCategory(categoryName);
+  };
+
+  const confirmDeleteCategory = async () => {
+    const categoryName = pendingDeleteCategory;
+    setPendingDeleteCategory(null);
+    if (!categoryName) return;
 
     try {
       const res = await API.delete(`/deal-fields/categories/${encodeURIComponent(categoryName)}`);
@@ -324,13 +333,13 @@ const DealFieldSettings = () => {
 
 
   const handleDelete = (index) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to delete "${fields[index].name}" field?`
-      )
-    ) {
-      return;
-    }
+    setPendingDeleteIndex(index);
+  };
+
+  const confirmDeleteField = () => {
+    const index = pendingDeleteIndex;
+    setPendingDeleteIndex(null);
+    if (index === null) return;
     const updated = fields.filter((_, i) => i !== index);
     saveFields(updated);
     toast.success("Field deleted successfully");
@@ -552,6 +561,25 @@ const DealFieldSettings = () => {
     <div className="space-y-6">
       <AppToaster />
 
+      <ConfirmDialog
+        isOpen={pendingDeleteIndex !== null}
+        title="Delete field"
+        message={
+          pendingDeleteIndex !== null
+            ? `Are you sure you want to delete "${fields[pendingDeleteIndex]?.name}" field?`
+            : ""
+        }
+        onConfirm={confirmDeleteField}
+        onCancel={() => setPendingDeleteIndex(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={!!pendingDeleteCategory}
+        title="Delete category"
+        message={`Are you sure you want to delete the "${pendingDeleteCategory}" category?\n\nAny fields inside this category will be moved to "Uncategorized".`}
+        onConfirm={confirmDeleteCategory}
+        onCancel={() => setPendingDeleteCategory(null)}
+      />
 
       {/* Built-in Mandatory Fields */}
       <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-4 sm:p-6">

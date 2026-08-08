@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
+import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import { createPortal } from "react-dom";
 import API from "../services/api";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
@@ -435,6 +436,7 @@ const getAncestorZoom = (el) => {
 };
 
 function Tasks() {
+  const isSearchOverlayOpen = useSearchOverlayOpen();
   // Tab state
   const [activeTab, setActiveTab] = useState("tasks"); // "tasks" or "meetings"
   const [showKanban, setShowKanban] = useState(false);
@@ -2749,7 +2751,7 @@ function Tasks() {
               onBlur={() => {
                 if (!searchTerm) setIsSearchExpanded(false);
               }}
-              className={`w-full h-full pl-9 pr-4 bg-transparent text-sm focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+              className={`w-full h-full pl-9 pr-9 bg-transparent text-sm focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
               style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "20px", color: "#1F2937" }}
               placeholder={
                 activeTab === "tasks"
@@ -2757,6 +2759,19 @@ function Tasks() {
                   : "Search Meetings by Title..."
               }
             />
+            {/* Clears the typed text only — mousedown+preventDefault stops the
+                input's onBlur from firing before the click lands. */}
+            {isSearchExpanded && searchTerm && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setSearchTerm("")}
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 rounded-full text-gray-900 hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -3174,8 +3189,12 @@ function Tasks() {
       </div>
       {!showTaskLoadingSkeleton && (
         <div
-          className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
-          style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+          className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
+          style={{
+            left: "var(--sidebar-width, 0px)",
+            height: 64,
+            filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
+          }}
         >
           <PaginationControls />
         </div>
@@ -3324,8 +3343,12 @@ function Tasks() {
       </div>
       {!showMeetingLoadingSkeleton && (
         <div
-          className="fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center"
-          style={{ left: "var(--sidebar-width, 0px)", height: 64 }}
+          className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
+          style={{
+            left: "var(--sidebar-width, 0px)",
+            height: 64,
+            filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
+          }}
         >
           <PaginationControls />
         </div>

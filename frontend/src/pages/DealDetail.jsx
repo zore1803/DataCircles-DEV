@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import API from "../services/api";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import DealForm from "../components/deal/DealForm";
@@ -25,6 +25,8 @@ import {
   X,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Maximize2,
   Minimize2,
   Edit2
@@ -164,6 +166,22 @@ const InvoiceRow = ({ invoice, index, onDownload, onView }) => (
 function DealDetail() {
   const { dealId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // The list of deal ids the user was browsing (whatever search/filter was
+  // active on the Deals list) when they clicked into this deal — lets the
+  // prev/next arrows step through that same set instead of every deal.
+  const dealIds = location.state?.dealIds || null;
+  const dealIdsIndex = dealIds ? dealIds.indexOf(dealId) : -1;
+  const prevDealId = dealIdsIndex > 0 ? dealIds[dealIdsIndex - 1] : null;
+  const nextDealId =
+    dealIdsIndex !== -1 && dealIdsIndex < dealIds?.length - 1
+      ? dealIds[dealIdsIndex + 1]
+      : null;
+  const goToDeal = (id) => {
+    if (!id) return;
+    navigate(`/deals/${id}`, { state: { dealIds } });
+  };
 
   const [deal, setDeal] = useState(null);
   const [invoices, setInvoices] = useState([]);
@@ -384,7 +402,33 @@ function DealDetail() {
             {/* Header Block */}
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">{deal.title}</h1>
+                <div className="flex items-center gap-2 mb-2">
+                  <h1 className="text-3xl font-bold text-gray-900">{deal.title}</h1>
+                  {dealIds && (
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => goToDeal(prevDealId)}
+                        disabled={!prevDealId}
+                        title="Previous deal"
+                        aria-label="Previous deal"
+                        className="w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => goToDeal(nextDealId)}
+                        disabled={!nextDealId}
+                        title="Next deal"
+                        aria-label="Next deal"
+                        className="w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center gap-3">
                   <p className="text-lg font-semibold text-gray-600">₹{formatNumberToIndian(deal.amount || 0)}</p>
                   <StatusBadge status={deal.status} />

@@ -164,18 +164,61 @@ const getAllCompaniesPaginated = async (req, res) => {
       return res.json({ ids: allCompanies.map((c) => c._id) });
     }
 
-    const [companies, totalCount] = await Promise.all([
-      Company.find(query)
-        .skip(skip)
-        .limit(limit)
-        .sort(sortObj)
-        .populate("user", "name")
-        .populate("createdBy", "name")
-        .populate("lastUpdatedBy", "name")
-        .lean()
-        .select("-__v"),
-      Company.countDocuments(query),
+    // Starred-first: starring is per-user (starredBy), so the "is this
+    // starred" flag is computed relative to the requesting user, then sorted
+    // ahead of everything else — this is why plain .find().sort() can't do
+    // it and the query has to go through the aggregation pipeline instead.
+    const userId = req.user._id;
+    const [{ data: companies, totalCountArr }] = await Company.aggregate([
+      { $match: query },
+      {
+        $addFields: {
+          isStarred: { $in: [userId, { $ifNull: ["$starredBy", []] }] },
+        },
+      },
+      { $sort: { isStarred: -1, ...sortObj } },
+      {
+        $facet: {
+          data: [
+            { $skip: skip },
+            { $limit: limit },
+            {
+              $lookup: {
+                from: "users",
+                localField: "user",
+                foreignField: "_id",
+                as: "user",
+                pipeline: [{ $project: { name: 1 } }],
+              },
+            },
+            { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: "users",
+                localField: "createdBy",
+                foreignField: "_id",
+                as: "createdBy",
+                pipeline: [{ $project: { name: 1 } }],
+              },
+            },
+            { $unwind: { path: "$createdBy", preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: "users",
+                localField: "lastUpdatedBy",
+                foreignField: "_id",
+                as: "lastUpdatedBy",
+                pipeline: [{ $project: { name: 1 } }],
+              },
+            },
+            { $unwind: { path: "$lastUpdatedBy", preserveNullAndEmptyArrays: true } },
+            { $project: { __v: 0, starredBy: 0 } },
+          ],
+          totalCountArr: [{ $count: "count" }],
+        },
+      },
     ]);
+    const totalCount = totalCountArr[0]?.count || 0;
 
     const totalPages = Math.ceil(totalCount / limit);
     const hasNextPage = page < totalPages;
@@ -586,6 +629,30 @@ const getParentCompany = async (req, res) => {
 };
 
 
+const toggleStarCompany = async (req, res) => {
+  try {
+    const company = await Company.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+    if (!company) return res.status(404).json({ error: "Company not found" });
+
+    const userId = req.user._id.toString();
+    const alreadyStarred = company.starredBy.some((id) => id.toString() === userId);
+
+    if (alreadyStarred) {
+      company.starredBy = company.starredBy.filter((id) => id.toString() !== userId);
+    } else {
+      company.starredBy.push(req.user._id);
+    }
+    await company.save();
+
+    res.json({ starred: !alreadyStarred });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to toggle star", message: error.message });
+  }
+};
+
 module.exports = {
   createCompany,
   getAllCompanies,
@@ -600,4 +667,5 @@ module.exports = {
   removeSubsidiary,
   getSubsidiaries,
   getParentCompany,
+  toggleStarCompany,
 };

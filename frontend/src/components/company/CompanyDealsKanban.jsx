@@ -12,6 +12,7 @@ import {
   useSensors,
   PointerSensor,
   KeyboardSensor,
+  MeasuringStrategy,
 } from "@dnd-kit/core";
 import {
   useSortable,
@@ -100,6 +101,15 @@ const getDealFieldValue = (deal, key) => {
 };
 
 const TERMINAL_STATUSES = ["won", "lost"];
+
+// dnd-kit's default measures every droppable's rect continuously while a
+// drag is in progress (MeasuringStrategy.Always), which means every card
+// and every column body gets a fresh getBoundingClientRect() on essentially
+// every pointer move — the more cards on the board, the more that costs,
+// and it's the main source of the drag feeling laggy here. Measuring once
+// up front is enough: column layout doesn't reflow during a drag (only
+// membership does, which dnd-kit already tracks via its own sortable state).
+const DND_MEASURING = { droppable: { strategy: MeasuringStrategy.BeforeDragging } };
 
 // The app scales its desktop layout via a dynamic CSS `zoom` on <html> (App.jsx).
 // getBoundingClientRect() returns UNSCALED layout coordinates while portal overlays on
@@ -241,7 +251,7 @@ const DealCard = ({ deal }) => {
 const DealCardOverlay = ({ deal }) => (
   <div
     style={{ ...DEAL_CARD_BOX, cursor: "grabbing" }}
-    className={`${DEAL_CARD_CLASS} shadow-lg pointer-events-none`}
+    className={`${DEAL_CARD_CLASS} shadow-lg pointer-events-none dc-drag-wiggle`}
   >
     <DealCardContent deal={deal} />
   </div>
@@ -251,11 +261,16 @@ const DealCardOverlay = ({ deal }) => (
 // company-profile Deals tab and the standalone /deals board look identical:
 // same 340px shell, #F5F7FA header, pill counter, per-status tinted summary card
 // and week-over-week trend badge.
-const KanbanColumn = ({ status, deals, colorTheme = "blue", onAddClick, loading = false }) => {
+const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddClick, loading = false }) => {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
 
-  const totalAmount = deals.reduce((sum, deal) => sum + (parseInt(deal.amount) || 0), 0);
+  // Deliberately computed from `amountDeals` (the column's real, committed
+  // membership) rather than `deals` (which includes the live drag-over
+  // preview) — otherwise this total/trend would recalculate the instant a
+  // dragged card is hovered over the column, before the move is dropped.
+  const settledDeals = amountDeals || deals;
+  const totalAmount = settledDeals.reduce((sum, deal) => sum + (parseInt(deal.amount) || 0), 0);
   const formattedTotal = formatNumberToIndian(totalAmount);
 
   const trendPct = useMemo(() => {
@@ -268,11 +283,11 @@ const KanbanColumn = ({ status, deals, colorTheme = "blue", onAddClick, loading 
       return t >= start && t < end;
     };
     const sumAmount = (list) => list.reduce((sum, d) => sum + (parseInt(d.amount) || 0), 0);
-    const thisWeek = sumAmount(deals.filter((d) => inRange(d, thisWeekStart, now)));
-    const lastWeek = sumAmount(deals.filter((d) => inRange(d, lastWeekStart, thisWeekStart)));
+    const thisWeek = sumAmount(settledDeals.filter((d) => inRange(d, thisWeekStart, now)));
+    const lastWeek = sumAmount(settledDeals.filter((d) => inRange(d, lastWeekStart, thisWeekStart)));
     if (lastWeek === 0) return thisWeek === 0 ? 0 : 100;
     return Math.max(-999, Math.min(999, Math.round(((thisWeek - lastWeek) / lastWeek) * 100)));
-  }, [deals]);
+  }, [settledDeals]);
 
   const tintColor =
     colorTheme === "green" ? "0, 201, 80" : colorTheme === "red" ? "232, 34, 34" : "179, 204, 255";
@@ -397,6 +412,8 @@ export default function CompanyDealsKanban({
   viewMode: controlledViewMode,
   setViewMode: setControlledViewMode,
   isLoading = false,
+  autoOpenCreate = false,
+  onAutoOpenCreateConsumed,
 }) {
   // 8px of travel before a drag begins. This is what keeps a plain click on a card
   // navigating to the deal instead of being swallowed as a drag — do not lower it.
@@ -409,8 +426,29 @@ export default function CompanyDealsKanban({
   // the DragOverlay, and it preserves the ORIGINAL status — which onDragOver
   // overwrites in `deals` as soon as the pointer crosses into another column.
   const [activeDeal, setActiveDeal] = useState(null);
+  // Which column the dragged card is currently hovered over. Kept as local
+  // state instead of writing the new status into `deals` on every column
+  // crossing (as before) — `deals` is owned by the parent page, so every
+  // crossing was forcing a full re-render of the parent and this entire
+  // tab (KPI tiles, table view, every card in every column), which is what
+  // made dragging feel laggy. The real `deals` array is only updated once,
+  // at drop.
+  const [dragOverStatus, setDragOverStatus] = useState(null);
+  // Cached at drag start instead of walking the ancestor chain with
+  // getComputedStyle on every render the DragOverlay causes while the
+  // pointer moves (dnd-kit re-renders it continuously during a drag) — the
+  // zoom factor doesn't change mid-drag, so there's no need to re-read it.
+  const dragZoomRef = useRef(1);
 
-  const [showDealForm, setShowDealForm] = useState(false);
+  const [manualDealFormOpen, setManualDealFormOpen] = useState(false);
+  // Derived rather than copied into local state on a one-shot effect — a
+  // copy raced the initial data load (whichever re-rendered first won) and
+  // could get clobbered before ever becoming visible.
+  const showDealForm = manualDealFormOpen || autoOpenCreate;
+  const closeDealForm = () => {
+    setManualDealFormOpen(false);
+    if (autoOpenCreate) onAutoOpenCreateConsumed?.();
+  };
   const [statuses, setStatuses] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
@@ -897,6 +935,25 @@ export default function CompanyDealsKanban({
   const dealsByStatus = useMemo(() => {
     const map = {};
     statuses.forEach((s) => {
+      map[s] = filteredDeals.filter((d) => {
+        const status = (d.status || "Open");
+        // While dragging, show the active card in whichever column it's
+        // hovering over rather than its (still unchanged) real status.
+        if (activeDeal && d._id.toString() === activeDeal._id.toString() && dragOverStatus) {
+          return dragOverStatus === s;
+        }
+        return status === s;
+      });
+    });
+    return map;
+  }, [statuses, filteredDeals, activeDeal, dragOverStatus]);
+
+  // Column membership WITHOUT the mid-drag override — this is what each
+  // column's total-amount/trend banner reads, so it only changes once a
+  // move is actually dropped, not the instant a card is dragged over it.
+  const stableDealsByStatus = useMemo(() => {
+    const map = {};
+    statuses.forEach((s) => {
       map[s] = filteredDeals.filter((d) => (d.status || "Open") === s);
     });
     return map;
@@ -906,16 +963,37 @@ export default function CompanyDealsKanban({
     TERMINAL_STATUSES.includes((status || "").toLowerCase()) &&
     (status || "").toLowerCase() === name;
 
-  const openDeals = deals.filter(
-    (d) => !TERMINAL_STATUSES.includes((d.status || "Open").toLowerCase()),
+  // Memoized so a mid-drag `setDeals` (handleDragOver, on every column
+  // crossing) doesn't force these aggregates to re-filter/re-reduce the full
+  // deals array on every one of those renders — that recompute was riding
+  // along with the drag gesture and contributing to the visible lag.
+  const openDeals = useMemo(
+    () =>
+      deals.filter(
+        (d) => !TERMINAL_STATUSES.includes((d.status || "Open").toLowerCase()),
+      ),
+    [deals],
   );
-  const wonDeals = deals.filter((d) => (d.status || "").toLowerCase() === "won");
-  const lostDeals = deals.filter((d) => (d.status || "").toLowerCase() === "lost");
-  const pipelineValue = openDeals.reduce((sum, d) => sum + (d.amount || 0), 0);
-  const avgDealSize = deals.length
-    ? deals.reduce((sum, d) => sum + (d.amount || 0), 0) / deals.length
-    : 0;
-  const avgClosingDays = (() => {
+  const wonDeals = useMemo(
+    () => deals.filter((d) => (d.status || "").toLowerCase() === "won"),
+    [deals],
+  );
+  const lostDeals = useMemo(
+    () => deals.filter((d) => (d.status || "").toLowerCase() === "lost"),
+    [deals],
+  );
+  const pipelineValue = useMemo(
+    () => openDeals.reduce((sum, d) => sum + (d.amount || 0), 0),
+    [openDeals],
+  );
+  const avgDealSize = useMemo(
+    () =>
+      deals.length
+        ? deals.reduce((sum, d) => sum + (d.amount || 0), 0) / deals.length
+        : 0,
+    [deals],
+  );
+  const avgClosingDays = useMemo(() => {
     const closed = deals.filter(
       (d) => (d.status || "").toLowerCase() === "won" && d.createdAt && d.updatedAt,
     );
@@ -926,28 +1004,31 @@ export default function CompanyDealsKanban({
       return sum + Math.max(days, 0);
     }, 0);
     return Math.round(totalDays / closed.length);
-  })();
+  }, [deals]);
 
-  const kpiTiles = [
-    { label: "Open Deals", value: openDeals.length, icon: Gem },
-    {
-      label: "Pipeline Value",
-      value: `₹${pipelineValue.toLocaleString("en-IN")}`,
-      icon: Clock,
-    },
-    { label: "Won Deals", value: wonDeals.length, icon: Handshake },
-    { label: "Lost Deals", value: lostDeals.length, icon: Sparkles },
-    {
-      label: "Avg. Deal Size",
-      value: `₹${Math.round(avgDealSize).toLocaleString("en-IN")}`,
-      icon: ListChecks,
-    },
-    {
-      label: "Avg. Closing Time",
-      value: `${avgClosingDays}d`,
-      icon: CalendarClock,
-    },
-  ];
+  const kpiTiles = useMemo(
+    () => [
+      { label: "Open Deals", value: openDeals.length, icon: Gem },
+      {
+        label: "Pipeline Value",
+        value: `₹${pipelineValue.toLocaleString("en-IN")}`,
+        icon: Clock,
+      },
+      { label: "Won Deals", value: wonDeals.length, icon: Handshake },
+      { label: "Lost Deals", value: lostDeals.length, icon: Sparkles },
+      {
+        label: "Avg. Deal Size",
+        value: `₹${Math.round(avgDealSize).toLocaleString("en-IN")}`,
+        icon: ListChecks,
+      },
+      {
+        label: "Avg. Closing Time",
+        value: `${avgClosingDays}d`,
+        icon: CalendarClock,
+      },
+    ],
+    [openDeals, wonDeals, lostDeals, pipelineValue, avgDealSize, avgClosingDays],
+  );
 
   // `over.id` is a column id when hovering the column body, but another deal's id
   // when hovering a card — sortable items are droppables too. Both handlers below
@@ -962,17 +1043,21 @@ export default function CompanyDealsKanban({
 
   const handleDragStart = ({ active }) => {
     const deal = deals.find((d) => d._id.toString() === active.id.toString());
-    // Shallow COPY, not a reference. Today every setDeals call replaces objects via
-    // map+spread so a reference would survive intact, but the snapshot is the only
-    // record of the pre-drag status (used for persistence and rollback) — copying
-    // makes that guarantee independent of how state happens to be updated.
+    // Shallow COPY, not a reference — the snapshot is the only record of the
+    // pre-drag status (used for persistence and rollback), independent of
+    // whatever `deals` looks like by drop time.
     setActiveDeal(deal ? { ...deal } : null);
+    setDragOverStatus(null);
+    dragZoomRef.current = getAncestorZoom(document.getElementById("root"));
   };
 
-  // Optimistically move the deal into the hovered column mid-drag. The column
-  // counts, totals and trend badges are all derived from `deals`, so this is what
-  // makes them update live; it also lets the destination column open a real gap,
-  // because the card genuinely joins that column's SortableContext.
+  // Optimistically move the deal into the hovered column mid-drag. This used
+  // to write the new status into `deals` (owned by the parent page) on every
+  // crossing, which forced a full re-render of the parent and this entire
+  // tab per crossing — that's what made dragging feel laggy. Tracking it as
+  // local `dragOverStatus` instead keeps that re-render scoped to this
+  // component, and `dealsByStatus` reads it to show the card in the hovered
+  // column without touching the real data until drop.
   const handleDragOver = ({ active, over }) => {
     if (!over) return;
     const activeId = active.id.toString();
@@ -982,31 +1067,28 @@ export default function CompanyDealsKanban({
     if (!dragged) return;
 
     const overStatus = resolveDropStatus(over.id);
-    // Same column: dnd-kit handles the reordering animation itself, nothing to do.
-    if (!overStatus || (dragged.status || "Open") === overStatus) return;
-
-    setDeals((prev) =>
-      prev.map((d) => (d._id.toString() === activeId ? { ...d, status: overStatus } : d)),
-    );
+    if (!overStatus) return;
+    // Back over the origin column: clear the override so it renders normally.
+    setDragOverStatus(overStatus === (dragged.status || "Open") ? null : overStatus);
   };
 
-  const handleDragCancel = () => setActiveDeal(null);
+  const handleDragCancel = () => {
+    setActiveDeal(null);
+    setDragOverStatus(null);
+  };
 
   const handleDragEnd = async (event) => {
     const { active, over } = event;
     const dragged = activeDeal;
     setActiveDeal(null);
+    setDragOverStatus(null);
     if (!over || !dragged) return;
 
     const dealId = active.id.toString();
     const newStatus = resolveDropStatus(over.id);
-    // Read the original status from the drag-start snapshot, NOT from `deals` —
-    // handleDragOver has already rewritten it there.
     const oldStatus = dragged.status || "Open";
     if (!newStatus || newStatus === oldStatus) return;
 
-    // handleDragOver has usually applied this already, but not if the drop landed
-    // without an intervening over event — keep it idempotent.
     setDeals((prev) =>
       prev.map((d) => (d._id.toString() === dealId ? { ...d, status: newStatus } : d)),
     );
@@ -1033,7 +1115,7 @@ export default function CompanyDealsKanban({
     } catch (err) {
       toast.error("Failed to refresh deals list.");
     }
-    setShowDealForm(false);
+    closeDealForm();
   };
 
   return (
@@ -1049,8 +1131,11 @@ export default function CompanyDealsKanban({
                   key={tile.label}
                   className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
                 >
-                  <div className="w-10 h-10 text-blue-600 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <tile.icon size={20} />
+                  <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                    <tile.icon size={18} strokeWidth={1.5} />
+                  </div>
+                  <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
+                    <tile.icon size={20} strokeWidth={1.5} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
@@ -1139,7 +1224,7 @@ export default function CompanyDealsKanban({
           </div>
           <button
             type="button"
-            onClick={() => setShowDealForm(true)}
+            onClick={() => setManualDealFormOpen(true)}
             className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
             style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
             title="Add Deal"
@@ -1155,7 +1240,7 @@ export default function CompanyDealsKanban({
           contacts={contacts}
           initialCompanyId={companyId}
           onDealCreated={handleDealCreated}
-          onRequestClose={() => setShowDealForm(false)}
+          onRequestClose={closeDealForm}
         />
       )}
 
@@ -1198,6 +1283,7 @@ export default function CompanyDealsKanban({
           <DndContext
             sensors={sensors}
             collisionDetection={closestCorners}
+            measuring={DND_MEASURING}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
@@ -1209,8 +1295,9 @@ export default function CompanyDealsKanban({
                   key={status}
                   status={status}
                   deals={dealsByStatus[status] || []}
+                  amountDeals={stableDealsByStatus[status] || []}
                   colorTheme={status === "Won" ? "green" : status === "Lost" ? "red" : "blue"}
-                  onAddClick={() => setShowDealForm(true)}
+                  onAddClick={() => setManualDealFormOpen(true)}
                 />
               ))}
             </div>
@@ -1232,7 +1319,7 @@ export default function CompanyDealsKanban({
             {createPortal(
               <DragOverlay dropAnimation={null}>
                 {activeDeal ? (
-                  <div style={{ zoom: getAncestorZoom(document.getElementById("root")) }}>
+                  <div style={{ zoom: dragZoomRef.current }}>
                     <DealCardOverlay deal={activeDeal} />
                   </div>
                 ) : null}
@@ -1241,6 +1328,18 @@ export default function CompanyDealsKanban({
             )}
           </DndContext>
         )
+      ) : totalCount === 0 ? (
+        <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+          <Handshake size={28} className="mb-3 text-blue-500" />
+          <button
+            type="button"
+            onClick={() => setManualDealFormOpen(true)}
+            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+          >
+            <Plus size={16} />
+            Add new
+          </button>
+        </div>
       ) : (
         <>
           <div
