@@ -3729,8 +3729,8 @@ const Accounting = () => {
                           {pinnedCols[col.id] && (
                             <Pin
                               size={12}
-                              className="text-blue-500 fill-blue-500 flex-shrink-0"
-                              style={{ transform: "rotate(45deg)" }}
+                              className="text-blue-500 fill-blue-500 flex-shrink-0 ml-1"
+                            style={{ transform: "rotate(45deg)" }}
                             />
                           )}
                         </span>
