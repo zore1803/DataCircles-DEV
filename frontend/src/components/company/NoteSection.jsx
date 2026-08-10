@@ -1,10 +1,12 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
 import Select from "react-select";
 import API from "../../services/api";
 import { useParams } from "react-router-dom";
 import toast from 'react-hot-toast';
+import { getAncestorZoom } from "../../utils/domUtils";
 import {
   StickyNote,
   Plus,
@@ -14,6 +16,7 @@ import {
   X,
   Clock,
   Eye,
+  Copy,
   Calendar,
   MoreVertical,
   Type,
@@ -606,7 +609,10 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
 
 
 // NoteCard component
-export const NoteCard = ({ note, onEdit, onDelete, onView }) => {
+export const NoteCard = ({ note, onEdit, onDelete, onView, onDuplicate }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null);
+  const menuBtnRef = useRef(null);
   const formatFullDate = (dateString) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleDateString([], {
@@ -691,29 +697,6 @@ export const NoteCard = ({ note, onEdit, onDelete, onView }) => {
               >
                 {note.title || 'Untitled Note'}
               </h4>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                <button
-                  onClick={() => onView(note)}
-                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                  title="View"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onEdit(note)}
-                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                  title="Edit"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onDelete(note._id)}
-                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                  title="Delete"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
             </div>
 
             <div className="flex items-center" style={{ gap: 12 }}>
@@ -791,7 +774,82 @@ export const NoteCard = ({ note, onEdit, onDelete, onView }) => {
               </span>
             </div>
           </div>
-          <MoreVertical style={{ width: 20, height: 20, color: "#1C1B1F" }} />
+          <div className="relative flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              ref={menuBtnRef}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (menuOpen) {
+                  setMenuOpen(false);
+                  setMenuPos(null);
+                  return;
+                }
+                const zMenu = getAncestorZoom(document.body);
+                const MENU_W = 160;
+                const MENU_H = onDuplicate ? 148 : 110;
+                const MARGIN = 8;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const viewportH = window.innerHeight / zMenu;
+                const viewportW = window.innerWidth / zMenu;
+                let calcTop = rect.bottom / zMenu + 4;
+                calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+                let calcLeft = rect.right / zMenu - MENU_W;
+                calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                calcLeft = Math.max(calcLeft, MARGIN);
+                setMenuPos({ top: calcTop, left: calcLeft });
+                setMenuOpen(true);
+              }}
+              className="p-1 rounded hover:bg-gray-100 transition-colors"
+              title="More options"
+            >
+              <MoreVertical style={{ width: 20, height: 20, color: "#1C1B1F" }} />
+            </button>
+
+            {menuOpen && menuPos && createPortal(
+              <>
+                <div className="fixed inset-0 z-[9998]" onClick={() => { setMenuOpen(false); setMenuPos(null); }} />
+                <div
+                  style={{ position: "fixed", top: menuPos.top, left: menuPos.left }}
+                  className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    onClick={() => { setMenuOpen(false); setMenuPos(null); onView(note); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    View Note
+                  </button>
+                  <button
+                    onClick={() => { setMenuOpen(false); setMenuPos(null); onEdit(note); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Edit Note
+                  </button>
+                  {onDuplicate && (
+                    <button
+                      onClick={() => { setMenuOpen(false); setMenuPos(null); onDuplicate(note); }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                      Duplicate Note
+                    </button>
+                  )}
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <button
+                    onClick={() => { setMenuOpen(false); setMenuPos(null); onDelete(note._id); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Note
+                  </button>
+                </div>
+              </>,
+              document.body
+            )}
+          </div>
         </div>
       </div>
     </div>

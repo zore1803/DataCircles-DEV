@@ -539,6 +539,27 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
     }
   };
 
+  const handleDuplicate = async (note) => {
+    try {
+      await API.post("/notes", {
+        title: note.title ? `${note.title} (Copy)` : "",
+        note: note.note,
+        company: id,
+        taggedContacts: (note.taggedContacts || []).map((c) => c._id || c),
+        noteType: note.noteType || "General Note",
+        visibility: note.visibility || "Team",
+      });
+      toast.success("Note duplicated");
+      fetchNotes();
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Failed to duplicate note");
+      }
+    }
+  };
+
   const handleDeleteNoteConfirmed = async () => {
     if (!noteToDelete) return;
     setDeletingNote(true);
@@ -981,6 +1002,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
               onEdit={handleEdit}
               onDelete={handleDelete}
               onView={handleView}
+              onDuplicate={handleDuplicate}
             />
           ))}
         </div>
