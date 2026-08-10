@@ -49,8 +49,8 @@ import AppToaster from "../AppToaster";
 import SearchIcon from "../common/SearchIcon";
 // Custom Quill modules and formats configuration
 const QuillToolbar = () => (
-  <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white border-b border-gray-300">
-    <div className="flex gap-0.5 pr-1.5 border-r border-gray-100">
+  <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white">
+    <div className="flex gap-0.5 pr-1.5">
       <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="1">
         <Heading1 className="w-4 h-4" />
       </button>
@@ -65,7 +65,7 @@ const QuillToolbar = () => (
       </button>
     </div>
 
-    <div className="flex gap-0.5 px-1.5 border-r border-gray-100">
+    <div className="flex gap-0.5 px-1.5">
       <button className="ql-bold w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Bold className="w-4 h-4" />
       </button>
@@ -80,7 +80,7 @@ const QuillToolbar = () => (
       </button>
     </div>
 
-    <div className="flex gap-0.5 px-1.5 border-r border-gray-100">
+    <div className="flex gap-0.5 px-1.5">
       <button className="ql-list w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="ordered">
         <ListOrdered className="w-4 h-4" />
       </button>
@@ -95,7 +95,7 @@ const QuillToolbar = () => (
       </button>
     </div>
 
-    <div className="flex gap-0.5 px-1.5 border-r border-gray-100">
+    <div className="flex gap-0.5 px-1.5">
       <button className="ql-align w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="">
         <AlignLeft className="w-4 h-4" />
       </button>
@@ -1014,7 +1014,7 @@ export const NoteEditor = ({
             </div>
 
             {/* Editor Area */}
-            <div className="border border-gray-300 rounded-2xl overflow-hidden shadow-sm">
+            <div>
               <QuillToolbar />
               <ReactQuill
                 value={noteContent}
@@ -1330,13 +1330,18 @@ const NoteSection = ({ companyId: propCompanyId, dealId, isQuickView }) => {
 
       <style jsx global>{`
         /* Premium Note Editor Styles */
-        .ql-toolbar.ql-snow {
+        .quill,
+        .ql-toolbar.ql-snow,
+        .ql-container.ql-snow,
+        .ql-editor {
           border: none !important;
-          padding: 0 !important;
+        }
+
+        .ql-toolbar.ql-snow {
+          padding: 0.5rem !important;
         }
 
         .ql-container.ql-snow {
-          border: none !important;
           font-family: inherit !important;
         }
 
