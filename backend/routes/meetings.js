@@ -61,7 +61,7 @@ router.post(
 
 // POST /meetings/generate-video-link - On-demand video link for the "Generate
 // Link" button. Tries a real Zoom meeting first (if Zoom is configured on
-// the backend); the client falls back to a client-side Jitsi link if this
+// the backend); the client shows an error toast if this
 // call fails or Zoom isn't set up yet.
 router.post(
   "/generate-video-link",

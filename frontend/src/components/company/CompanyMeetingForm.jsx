@@ -570,15 +570,15 @@ const CompanyMeetingForm = ({
       >
         <div className="h-full flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gray-50">
-            <h3 className="text-lg font-bold text-gray-900">
+          <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50">
+            <h3 className="text-base font-bold text-gray-900">
               Add New Meeting
             </h3>
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
@@ -586,13 +586,13 @@ const CompanyMeetingForm = ({
           <div className="flex-1 overflow-y-auto">
             <form onSubmit={handleSubmit} className="flex flex-col h-full">
               {/* Content */}
-              <div className="p-6 space-y-8">
-                <div className="space-y-4">
+              <div className="p-5 space-y-6">
+                <div className="space-y-3">
                   <input
                     type="text"
                     value={form.title}
                     onChange={(e) => handleChange("title", e.target.value)}
-                    className={`w-full text-3xl font-bold border-none bg-transparent placeholder-gray-300 focus:outline-none focus:ring-0 ${errors.title ? 'text-red-600' : 'text-gray-900'
+                    className={`w-full text-2xl font-bold border-none bg-transparent placeholder-gray-300 focus:outline-none focus:ring-0 ${errors.title ? 'text-red-600' : 'text-gray-900'
                       }`}
                     placeholder="Meeting Title"
                     disabled={!isEditMode && mode === "view"}
@@ -600,21 +600,21 @@ const CompanyMeetingForm = ({
                   {errors.title && <p className="text-xs text-red-500 font-medium">*{errors.title}</p>}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700">Description</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-700">Description</label>
                   <textarea
                     value={form.description}
                     onChange={(e) => handleChange("description", e.target.value)}
-                    rows={6}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none resize-none text-sm text-gray-600"
+                    rows={5}
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none resize-none text-xs text-gray-600"
                     placeholder="Description the task objectives, requirements and important details"
                     disabled={!isEditMode && mode === "view"}
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-semibold text-gray-700">Location</label>
+                    <label className="text-xs font-semibold text-gray-700">Location</label>
                     <div className="flex items-center gap-3">
                     {(isEditMode || mode === "create") && googleStatus?.configured && !googleStatus?.connected && (
                       <button
@@ -648,11 +648,11 @@ const CompanyMeetingForm = ({
                         onClick={async () => {
                           setGeneratingLink(true);
                           try {
-                            // Real Zoom or Google Meet link when the backend
-                            // has one configured (tries Zoom first, then this
-                            // org's connected Google account) — same link
-                            // works for staff and the external client, no
-                            // login required on either side.
+                            // Real Zoom or Google Meet link — tries Zoom
+                            // first (if configured), then this org's
+                            // connected Google account. Same link works for
+                            // staff and the external client, no login
+                            // required on either side.
                             const res = await API.post("/meetings/generate-video-link", {
                               title: form.title,
                               scheduledAt: form.date ? getScheduledAt() : undefined,
@@ -660,15 +660,13 @@ const CompanyMeetingForm = ({
                             });
                             if (res.data?.provider && res.data?.joinUrl) {
                               handleChange("location", res.data.joinUrl);
+                            } else if (googleStatus?.configured && !googleStatus?.connected) {
+                              toast.error("Connect your Google account first (link above) to generate a Meet link");
                             } else {
-                              throw new Error("no-provider-available");
+                              toast.error("No video-call provider is configured yet");
                             }
                           } catch {
-                            // Zoom isn't configured yet (or the call failed) —
-                            // fall back to a Jitsi link, which needs no
-                            // account or API key on either side either.
-                            const roomId = `dc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-                            handleChange("location", `https://meet.jit.si/${roomId}`);
+                            toast.error("Failed to generate a video-call link");
                           } finally {
                             setGeneratingLink(false);
                           }
@@ -686,7 +684,7 @@ const CompanyMeetingForm = ({
                     type="text"
                     value={form.location}
                     onChange={(e) => handleChange("location", e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none text-sm text-gray-600"
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none text-xs text-gray-600"
                     placeholder="Meeting Room Address or video call link"
                     disabled={!isEditMode && mode === "view"}
                   />
@@ -694,36 +692,36 @@ const CompanyMeetingForm = ({
               </div>
 
               {/* Meta */}
-              <div className="px-6 pb-6 space-y-6 bg-white border-t border-gray-100 pt-6">
+              <div className="px-5 pb-5 space-y-5 bg-white border-t border-gray-100 pt-5">
                 {/* Meta Rows */}
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {/* Entity Type */}
                   <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <User className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <User className="w-3.5 h-3.5" />
                       <span>Entity Type</span>
                     </div>
-                    <div className="flex items-center gap-2 text-gray-900 text-sm font-medium">
-                      <Building className="w-4 h-4 text-gray-400" />
+                    <div className="flex items-center gap-2 text-gray-900 text-xs font-medium">
+                      <Building className="w-3.5 h-3.5 text-gray-400" />
                       <span className="capitalize">{company?.industry || "Company"}</span>
                     </div>
                   </div>
 
                   {/* Company Name */}
                   <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Building className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Building className="w-3.5 h-3.5" />
                       <span>Company</span>
                     </div>
-                    <div className="flex items-center gap-2 text-gray-900 text-sm font-medium">
+                    <div className="flex items-center gap-2 text-gray-900 text-xs font-medium">
                       <span className="truncate max-w-[150px]">{company?.name || "Company Name"}</span>
                     </div>
                   </div>
 
                   {/* Date */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Calendar className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Calendar className="w-3.5 h-3.5" />
                       <span>Date</span>
                     </div>
                     <input
@@ -731,14 +729,14 @@ const CompanyMeetingForm = ({
                       value={form.date || calendarDate || ""}
                       onChange={(e) => handleChange("date", e.target.value)}
                       disabled={!isEditMode && mode === "view"}
-                      className="text-sm font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
+                      className="text-xs font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
                     />
                   </div>
 
                   {/* Time */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Clock className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Clock className="w-3.5 h-3.5" />
                       <span>Time</span>
                     </div>
                     <input
@@ -746,14 +744,14 @@ const CompanyMeetingForm = ({
                       value={form.time}
                       onChange={(e) => handleChange("time", e.target.value)}
                       disabled={!isEditMode && mode === "view"}
-                      className="text-sm font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
+                      className="text-xs font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
                     />
                   </div>
 
                   {/* Duration */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Timer className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Timer className="w-3.5 h-3.5" />
                       <span>Duration</span>
                     </div>
                     <SingleSelectDropdown
@@ -766,9 +764,9 @@ const CompanyMeetingForm = ({
 
                   {/* Meeting Type */}
                   <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
                       <div className="flex items-center gap-2">
-                        <Video className="w-4 h-4" />
+                        <Video className="w-3.5 h-3.5" />
                         <span>Meeting Type</span>
                       </div>
                     </div>
@@ -782,8 +780,8 @@ const CompanyMeetingForm = ({
 
                   {/* Priority */}
                   <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Flag className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Flag className="w-3.5 h-3.5" />
                       <span>Priority</span>
                     </div>
                     <SingleSelectDropdown
@@ -796,8 +794,8 @@ const CompanyMeetingForm = ({
 
                   {/* Participants */}
                   <div className="space-y-3 pt-2">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Users className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Users className="w-3.5 h-3.5" />
                       <span>Participants</span>
                     </div>
                     <MultiSelectDropdown
@@ -825,13 +823,13 @@ const CompanyMeetingForm = ({
           </div>
 
           {/* Footer Actions */}
-          <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
+          <div className="p-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
             <div>
               {mode === "view" && onDelete && (
                 <button
                   type="button"
                   onClick={handleDelete}
-                  className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-100 bg-white"
+                  className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-100 bg-white"
                   title="Delete Meeting"
                 >
                   <Trash2 className="w-5 h-5" />
@@ -843,14 +841,14 @@ const CompanyMeetingForm = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-6 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+                className="px-5 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Cancel
               </button>
               {(!isEditMode && mode === "view") ? (
                 <button
                   onClick={() => setIsEditMode(true)}
-                  className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-200 transition-all flex items-center gap-2"
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-200 transition-all flex items-center gap-2"
                 >
                   <Pencil className="w-4 h-4" />
                   Edit Meeting
@@ -859,7 +857,7 @@ const CompanyMeetingForm = ({
                 <button
                   onClick={handleSubmit}
                   disabled={loading || timeConflict}
-                  className={`px-8 py-2.5 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2 ${loading || timeConflict
+                  className={`px-6 py-2 rounded-xl text-xs font-bold shadow-lg transition-all flex items-center gap-2 ${loading || timeConflict
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200'
                     }`}
