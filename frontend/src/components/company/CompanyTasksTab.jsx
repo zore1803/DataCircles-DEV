@@ -464,6 +464,21 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     }
   };
 
+  const handleTaskComplete = async (task) => {
+    try {
+      await API.put(`/tasks/${task._id}`, { status: "Completed" });
+      await refetchTasks();
+      setSelectedTask((prev) => (prev && prev._id === task._id ? { ...prev, status: "Completed" } : prev));
+      toast.success("Task marked as complete!");
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Failed to update task.");
+      }
+    }
+  };
+
   const handleTaskDelete = async (taskId) => {
     try {
       await API.delete(`/tasks/${taskId}`);
@@ -1503,6 +1518,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
         users={users}
         onDelete={handleTaskDelete}
         onEdit={handleEditTask}
+        onComplete={handleTaskComplete}
         onClose={() => setIsDetailsOpen(false)}
       />
 
