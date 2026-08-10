@@ -918,12 +918,13 @@ export const NoteEditor = ({
   };
 
   return (
-    <div className={`fixed inset-0 z-[10001] flex items-center justify-center p-4 transition-all duration-300 ${isSliding ? "opacity-100" : "opacity-0"}`}>
+    <>
       <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-all duration-300"
+        style={{ opacity: isSliding ? 1 : 0 }}
         onClick={onClose}
       />
-      <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden relative z-10 flex flex-col transform transition-all duration-300 ${isSliding ? "scale-100 translate-y-0" : "scale-95 translate-y-4"}`}>
+      <div className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl overflow-hidden flex flex-col transform transition-transform duration-300 ease-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h3 className="text-base font-semibold text-gray-700">
@@ -1067,7 +1068,7 @@ export const NoteEditor = ({
           </div>
         </form>
       </div>
-    </div>
+    </>
   );
 };
 
