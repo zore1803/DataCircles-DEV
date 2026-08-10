@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from
 import API from "../../services/api";
 import CompanyMeetingForm from "./CompanyMeetingForm";
 import CompanyTaskForm from "./CompanyTaskForm";
+import MeetingDetailsModal from "./MeetingDetailsModal";
+import TaskDetailsModal from "../Task/TaskDetailsModal";
 import toast from "react-hot-toast";
 import {
   ChevronLeft,
@@ -195,6 +197,8 @@ const CompanyCalendar = ({ companyId }) => {
   const [calendarDate, setCalendarDate] = useState(null);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [isMeetingDetailsOpen, setIsMeetingDetailsOpen] = useState(false);
+  const [isTaskDetailsOpen, setIsTaskDetailsOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [taskUsers, setTaskUsers] = useState([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -398,19 +402,53 @@ const CompanyCalendar = ({ companyId }) => {
   };
 
   const handleMeetingClick = (meeting) => {
-    setModalType("meeting");
-    setModalMode("view");
     setSelectedMeeting(meeting);
-    setModalOpen(true);
+    setIsMeetingDetailsOpen(true);
     setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
   };
 
   const handleTaskClick = (task) => {
+    setSelectedTask(task);
+    setIsTaskDetailsOpen(true);
+    setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
+  };
+
+  const handleEditMeetingFromDetails = (meeting) => {
+    setIsMeetingDetailsOpen(false);
+    setModalType("meeting");
+    setModalMode("view");
+    setSelectedMeeting(meeting);
+    setModalOpen(true);
+  };
+
+  const handleEditTaskFromDetails = (task) => {
+    setIsTaskDetailsOpen(false);
     setModalType("task");
     setModalMode("view");
     setSelectedTask(task);
     setModalOpen(true);
-    setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
+  };
+
+  const handleMeetingComplete = async (meeting) => {
+    try {
+      await API.put(`/meetings/${meeting._id}`, { status: "completed" });
+      await fetchData();
+      setSelectedMeeting((prev) => (prev && prev._id === meeting._id ? { ...prev, status: "completed" } : prev));
+      toast.success("Meeting marked as complete!");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update meeting.");
+    }
+  };
+
+  const handleTaskComplete = async (task) => {
+    try {
+      await API.put(`/tasks/${task._id}`, { status: "Completed" });
+      await fetchData();
+      setSelectedTask((prev) => (prev && prev._id === task._id ? { ...prev, status: "Completed" } : prev));
+      toast.success("Task marked as complete!");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update task.");
+    }
   };
 
   const handleSave = async (form, type) => {
@@ -444,6 +482,8 @@ const CompanyCalendar = ({ companyId }) => {
       await API.delete(`/${type}s/${id}`);
       toast.success(`${type} deleted`, { id: loadingToast });
       setModalOpen(false);
+      setIsMeetingDetailsOpen(false);
+      setIsTaskDetailsOpen(false);
       fetchData();
     } catch (error) {
       toast.error(`Failed to delete ${type}`, { id: loadingToast });
@@ -457,8 +497,13 @@ const CompanyCalendar = ({ companyId }) => {
   };
 
   const closeModal = () => {
+    const wasEditing = modalMode === "view";
     setModalOpen(false);
     resetForm();
+    // The edit form (mode="view") does its own PUT internally and just
+    // calls onClose when done — refetch here so the calendar reflects the
+    // change, same as create does via handleSave.
+    if (wasEditing) fetchData();
   };
 
   const filteredEvents = (dayMeetings, dayTasks) => {
@@ -819,6 +864,7 @@ const CompanyCalendar = ({ companyId }) => {
         <CompanyMeetingForm
           open={modalOpen}
           mode={modalMode}
+          startInEditMode={modalMode === "view"}
           meetingData={modalMode === "view" ? selectedMeeting : undefined}
           calendarDate={calendarDate}
           companyId={companyId}
@@ -837,6 +883,7 @@ const CompanyCalendar = ({ companyId }) => {
         <CompanyTaskForm
           open={modalOpen}
           mode={modalMode}
+          startInEditMode={modalMode === "view"}
           taskData={modalMode === "view" ? selectedTask : undefined}
           companyId={companyId}
           calendarDate={calendarDate}
@@ -849,6 +896,26 @@ const CompanyCalendar = ({ companyId }) => {
           onUpdate={onUpdate}
         />
       )}
+
+      <MeetingDetailsModal
+        open={isMeetingDetailsOpen}
+        meetingData={selectedMeeting}
+        users={users}
+        onDelete={(id) => handleDelete(id, "meeting")}
+        onEdit={handleEditMeetingFromDetails}
+        onComplete={handleMeetingComplete}
+        onClose={() => setIsMeetingDetailsOpen(false)}
+      />
+
+      <TaskDetailsModal
+        open={isTaskDetailsOpen}
+        taskData={selectedTask}
+        users={taskUsers}
+        onDelete={(id) => handleDelete(id, "task")}
+        onEdit={handleEditTaskFromDetails}
+        onComplete={handleTaskComplete}
+        onClose={() => setIsTaskDetailsOpen(false)}
+      />
     </div>
   );
 };
