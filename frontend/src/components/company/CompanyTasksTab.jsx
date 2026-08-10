@@ -1124,6 +1124,98 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                 const primaryAssignee = assignees[0];
                 const avatarUrl = primaryAssignee?.profileUrl || primaryAssignee?.userData?.mainData?.profilePic;
                 const isActionsOpen = openRowActionsId === task._id;
+                const taskActionsMenu = (
+                  <div className="relative flex items-center justify-center flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isActionsOpen) {
+                          setOpenRowActionsId(null);
+                          setRowActionsPos(null);
+                          return;
+                        }
+                        // rect is VISUAL px; the menu is portaled into
+                        // document.body, which paints inside the app's
+                        // dynamic <html> zoom, so rect-derived values are
+                        // divided by that zoom, the menu is centered on
+                        // the row rather than hanging off an edge, and
+                        // both axes are clamped to the viewport — same
+                        // approach as the Deals table's row-actions menu.
+                        const zMenu = getAncestorZoom(document.body);
+                        const MENU_W = 160;
+                        const MENU_H = 110; // View Task + Edit Task + divider + Delete Task
+                        const MARGIN = 8;
+
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const viewportH = window.innerHeight / zMenu;
+                        const viewportW = window.innerWidth / zMenu;
+
+                        const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                        let calcTop = rowCenter - MENU_H / 2;
+                        calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+                        let calcLeft = rect.right / zMenu - MENU_W;
+                        calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                        calcLeft = Math.max(calcLeft, MARGIN);
+
+                        setRowActionsPos({ top: calcTop, left: calcLeft });
+                        setOpenRowActionsId(task._id);
+                      }}
+                      className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
+                      title="More options"
+                    >
+                      <MoreVertIcon className="w-5 h-5" />
+                    </button>
+
+                    {isActionsOpen && rowActionsPos && createPortal(
+                      <>
+                        <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+                        <div
+                          ref={rowActionsRef}
+                          style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+                          className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            onClick={() => {
+                              setOpenRowActionsId(null);
+                              setRowActionsPos(null);
+                              handleTaskClick(task);
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                            View Task
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpenRowActionsId(null);
+                              setRowActionsPos(null);
+                              handleEditTask(task);
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                            Edit Task
+                          </button>
+                          <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                          <button
+                            onClick={() => {
+                              setOpenRowActionsId(null);
+                              setRowActionsPos(null);
+                              setTaskToDelete(task);
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete Task
+                          </button>
+                        </div>
+                      </>,
+                      document.body
+                    )}
+                  </div>
+                );
                   const cells = {
                     // Per-row selection checkbox — this is what was missing.
                     // `isSelected`/`toggleItem` already existed in this file but
@@ -1282,96 +1374,6 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                             <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866" }} className="flex-shrink-0">
                               {progress}%
                             </span>
-                            <div className="relative flex items-center justify-center flex-shrink-0">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isActionsOpen) {
-                                    setOpenRowActionsId(null);
-                                    setRowActionsPos(null);
-                                    return;
-                                  }
-                                  // rect is VISUAL px; the menu is portaled into
-                                  // document.body, which paints inside the app's
-                                  // dynamic <html> zoom, so rect-derived values are
-                                  // divided by that zoom, the menu is centered on
-                                  // the row rather than hanging off an edge, and
-                                  // both axes are clamped to the viewport — same
-                                  // approach as the Deals table's row-actions menu.
-                                  const zMenu = getAncestorZoom(document.body);
-                                  const MENU_W = 160;
-                                  const MENU_H = 110; // View Task + Edit Task + divider + Delete Task
-                                  const MARGIN = 8;
-
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  const viewportH = window.innerHeight / zMenu;
-                                  const viewportW = window.innerWidth / zMenu;
-
-                                  const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
-                                  let calcTop = rowCenter - MENU_H / 2;
-                                  calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
-
-                                  let calcLeft = rect.right / zMenu - MENU_W;
-                                  calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
-                                  calcLeft = Math.max(calcLeft, MARGIN);
-
-                                  setRowActionsPos({ top: calcTop, left: calcLeft });
-                                  setOpenRowActionsId(task._id);
-                                }}
-                                className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
-                                title="More options"
-                              >
-                                <MoreVertIcon className="w-5 h-5" />
-                              </button>
-
-                              {isActionsOpen && rowActionsPos && createPortal(
-                                <>
-                                  <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
-                                  <div
-                                    ref={rowActionsRef}
-                                    style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-                                    className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <button
-                                      onClick={() => {
-                                        setOpenRowActionsId(null);
-                                        setRowActionsPos(null);
-                                        handleTaskClick(task);
-                                      }}
-                                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                                    >
-                                      <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                                      View Task
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setOpenRowActionsId(null);
-                                        setRowActionsPos(null);
-                                        handleEditTask(task);
-                                      }}
-                                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                                      Edit Task
-                                    </button>
-                                    <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-                                    <button
-                                      onClick={() => {
-                                        setOpenRowActionsId(null);
-                                        setRowActionsPos(null);
-                                        setTaskToDelete(task);
-                                      }}
-                                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                      Delete Task
-                                    </button>
-                                  </div>
-                                </>,
-                                document.body
-                              )}
-                            </div>
                           </div>
                         </td>
                     ),
@@ -1392,11 +1394,11 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                       {/* Body cells are indexed by column id and rendered through
                           orderedColumns, so hiding or pinning a column in the header
                           moves/removes the matching cell too. Each <td> is unchanged. */}
-                      {orderedColumns.map((col) => {
+                      {orderedColumns.map((col, colIdx) => {
                         const isDragging = draggedColKey === col.id;
                         const cell = cells[col.id];
                         if (!cell) return null;
-                        
+
                         const stickyStyle = getStickyStyle(col.id, false, isSelected);
                         const mergedStyle = {
                           ...cell.props.style,
@@ -1410,11 +1412,19 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                           .replace("border-[#E1E4EA]", "");
 
                         const boundarySide = getBoundaryShadowSide(col.id);
+                        const isLastCol = colIdx === orderedColumns.length - 1;
                         return React.cloneElement(
                           cell,
                           { style: mergedStyle, className: cleanClassName },
                           <>
-                            {cell.props.children}
+                            {isLastCol ? (
+                              <div className="flex items-center justify-between w-full gap-2">
+                                {cell.props.children}
+                                {taskActionsMenu}
+                              </div>
+                            ) : (
+                              cell.props.children
+                            )}
                             {boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />}
                           </>
                         );

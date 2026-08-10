@@ -1244,20 +1244,25 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
                     ),
                     createdBy: (
                         <td key="createdBy" style={{ height: 64 }} className="px-3 border-b border-[#E1E4EA]">
-                          <div className="relative flex items-center justify-start gap-1">
+                          <div className="flex items-center justify-start gap-1">
                             <Paperclip className="w-3.5 h-3.5 text-gray-400" />
                             <span className="text-xs text-gray-500">{note.attachments?.length || 0}</span>
-                            <button
-                              onClick={() => handleView(note)}
-                              className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                              title="More options"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
                           </div>
                         </td>
                     ),
                   };
+                  const noteActionsButton = (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleView(note);
+                      }}
+                      className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                      title="More options"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                  );
                   return (
                     <tr key={note._id} className={`hover:bg-gray-50 transition-colors group ${isSelected ? "!bg-blue-50" : ""}`}>
                       <td
@@ -1284,11 +1289,11 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
                       </td>
                       {/* Cells indexed by column id and rendered through orderedColumns,
                           so hide/pin in the header moves its data cell too. */}
-                      {orderedColumns.map((col) => {
+                      {orderedColumns.map((col, colIdx) => {
                         const isDragging = draggedColKey === col.id;
                         const cell = cells[col.id];
                         if (!cell) return null;
-                        
+
                         const stickyStyle = getStickyStyle(col.id, false, isSelected);
                         const mergedStyle = {
                           ...cell.props.style,
@@ -1302,11 +1307,19 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
                           .replace("border-[#E1E4EA]", "");
 
                         const boundarySide = getBoundaryShadowSide(col.id);
+                        const isLastCol = colIdx === orderedColumns.length - 1;
                         return React.cloneElement(
                           cell,
                           { style: mergedStyle, className: cleanClassName },
                           <>
-                            {cell.props.children}
+                            {isLastCol ? (
+                              <div className="flex items-center justify-between w-full gap-2">
+                                {cell.props.children}
+                                {noteActionsButton}
+                              </div>
+                            ) : (
+                              cell.props.children
+                            )}
                             {boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />}
                           </>
                         );

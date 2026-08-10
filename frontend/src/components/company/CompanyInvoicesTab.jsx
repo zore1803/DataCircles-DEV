@@ -1036,16 +1036,32 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                       };
                       const boundarySide = getBoundaryShadowSide(col.id);
                       const boundaryOverlay = boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />;
+                      const isLastCol = col.id === orderedColumns[orderedColumns.length - 1]?.id;
+                      const downloadButton = (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(invoice._id);
+                          }}
+                          className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                          title="Download"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      );
 
                       if (col.id === "invoiceNumber") {
                         return (
                           <td key={col.id} style={cellStyle} className="px-3 text-left">
-                            <Link
-                              to={`/invoices?tab=tax`}
-                              className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
-                            >
-                              <HighlightText text={invoice.invoiceNumber || invoice._id} query={searchTerm} />
-                            </Link>
+                            <div className="flex items-center justify-between gap-2">
+                              <Link
+                                to={`/invoices?tab=tax`}
+                                className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block min-w-0"
+                              >
+                                <HighlightText text={invoice.invoiceNumber || invoice._id} query={searchTerm} />
+                              </Link>
+                              {isLastCol && downloadButton}
+                            </div>
                             {boundaryOverlay}
                           </td>
                         );
@@ -1057,9 +1073,12 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                             style={cellStyle}
                             className="px-3 text-[14px] leading-5 font-medium text-[#525866] text-left"
                           >
-                            <span className="truncate block">
-                              <HighlightText text={invoice.deal?.title || "-"} query={searchTerm} />
-                            </span>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate block min-w-0">
+                                <HighlightText text={invoice.deal?.title || "-"} query={searchTerm} />
+                              </span>
+                              {isLastCol && downloadButton}
+                            </div>
                             {boundaryOverlay}
                           </td>
                         );
@@ -1071,7 +1090,10 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                             style={cellStyle}
                             className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
                           >
-                            {issueDate}
+                            <div className="flex items-center justify-between gap-2">
+                              {issueDate}
+                              {isLastCol && downloadButton}
+                            </div>
                             {boundaryOverlay}
                           </td>
                         );
@@ -1083,7 +1105,10 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                             style={cellStyle}
                             className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
                           >
-                            {dueDate}
+                            <div className="flex items-center justify-between gap-2">
+                              {dueDate}
+                              {isLastCol && downloadButton}
+                            </div>
                             {boundaryOverlay}
                           </td>
                         );
@@ -1091,13 +1116,14 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                       if (col.id === "status") {
                         return (
                           <td key={col.id} style={cellStyle} className="px-3">
-                            <div className="flex items-center justify-start">
+                            <div className="flex items-center justify-between gap-2">
                               <span
                                 style={{ padding: "5px 12px", borderRadius: 53, ...statusPillStyle(invoice.status) }}
                                 className="inline-flex items-center justify-center text-xs font-medium whitespace-nowrap"
                               >
                                 <HighlightText text={invoice.status || "Pending"} query={searchTerm} />
                               </span>
+                              {isLastCol && downloadButton}
                             </div>
                             {boundaryOverlay}
                           </td>
@@ -1106,20 +1132,11 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                       if (col.id === "amount") {
                         return (
                           <td key={col.id} style={cellStyle} className="px-3">
-                            <div className="relative flex items-center justify-start">
+                            <div className="flex items-center justify-between gap-2">
                               <span className="text-[14px] leading-5 font-semibold text-[#222530] whitespace-nowrap">
                                 ₹{(invoice.amount || 0).toLocaleString("en-IN")}
                               </span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDownload(invoice._id);
-                                }}
-                                className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                                title="Download"
-                              >
-                                <Download className="w-4 h-4" />
-                              </button>
+                              {isLastCol && downloadButton}
                             </div>
                             {boundaryOverlay}
                           </td>
