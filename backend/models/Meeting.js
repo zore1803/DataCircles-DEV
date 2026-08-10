@@ -232,7 +232,8 @@ const meetingSchema = new mongoose.Schema(
       },
     },
 
-    // For company meetings, track participants
+    // For company meetings, track participants — client-side contacts
+    // attending, distinct from internalParticipants below (your own staff).
     participants: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -240,6 +241,16 @@ const meetingSchema = new mongoose.Schema(
         required: function () {
           return this.linkedTo === "company";
         },
+      },
+    ],
+
+    // Your own staff attending, separate from the client contacts above —
+    // the Meeting Details "Internal Team" vs "Client Contacts" split relies
+    // on these being two different reference collections (User vs Contact).
+    internalParticipants: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
       },
     ],
 

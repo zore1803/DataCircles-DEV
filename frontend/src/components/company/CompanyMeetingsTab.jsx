@@ -417,6 +417,22 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     if (companyId) fetchUsers();
   }, [companyId]);
 
+  // Org staff — distinct from `users` above (which, despite the name, is
+  // actually this company's client-side contacts). Meetings need both:
+  // internal team picks from staffUsers, Client Contacts picks from users.
+  const [staffUsers, setStaffUsers] = useState([]);
+  useEffect(() => {
+    const fetchStaffUsers = async () => {
+      try {
+        const res = await API.get("/auth/all-user");
+        setStaffUsers(res.data?.allUsers || []);
+      } catch (err) {
+        console.error("Failed to load staff users:", err);
+      }
+    };
+    fetchStaffUsers();
+  }, []);
+
   const refetchMeetings = async () => {
     try {
       const res = await API.get("/meetings", { params: { companyId } });
@@ -2059,6 +2075,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           meetingData={editingMeeting}
           companyId={companyId}
           users={users}
+          staffUsers={staffUsers}
           onSave={handleMeetingSave}
           onDelete={handleMeetingDelete}
           onClose={closeMeetingForm}
@@ -2069,6 +2086,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
         open={isDetailsOpen}
         meetingData={selectedMeeting}
         users={users}
+        staffUsers={staffUsers}
         onDelete={handleMeetingDelete}
         onEdit={handleEditMeeting}
         onComplete={handleMeetingComplete}

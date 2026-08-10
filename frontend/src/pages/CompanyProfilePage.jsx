@@ -190,16 +190,28 @@ const CompanyProfilePage = () => {
 
   // Sliding pill indicator for the section-switcher tab bar
   const tabRefs = useRef({});
+  const tabTrackRef = useRef(null);
   const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
   useLayoutEffect(() => {
-    const el = tabRefs.current[activeTab];
-    if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
-    const onResize = () => {
-      const cur = tabRefs.current[activeTab];
-      if (cur) setTabIndicator({ left: cur.offsetLeft, width: cur.offsetWidth });
+    const measure = () => {
+      const el = tabRefs.current[activeTab];
+      if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
     };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    measure();
+    // A refresh that deep-links straight into a non-default tab (e.g.
+    // ?tab=Meetings) mounts this row while the header above is still
+    // showing loading skeletons. Skeleton-to-real-content swaps change tab
+    // button widths without activeTab changing, so a ResizeObserver on the
+    // whole track re-measures whenever ANY tab's size shifts — not just on
+    // tab switches — keeping the pill glued to the right button instead of
+    // stranding it wherever it first measured.
+    const ro = new ResizeObserver(measure);
+    if (tabTrackRef.current) ro.observe(tabTrackRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
   }, [activeTab]);
 
   const [invoices, setInvoices] = useState([]);
@@ -995,7 +1007,7 @@ const CompanyProfilePage = () => {
 
         {/* Tab Row: pill tab selector */}
         <div className="flex items-center justify-between mb-4 gap-3">
-          <div className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
+          <div ref={tabTrackRef} className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
               style={{ left: tabIndicator.left, width: tabIndicator.width }}

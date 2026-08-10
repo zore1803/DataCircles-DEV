@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
@@ -34,6 +34,7 @@ const initialState = {
   location: "",
   description: "",
   participants: [],
+  internalParticipants: [],
 };
 
 const ParticipantChip = ({ user, onRemove, isRemovable = false }) => (
@@ -64,8 +65,11 @@ const PriorityChip = ({ priority }) => {
   );
 };
 
-const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
-  const [isOpen, setIsOpen] = useState(false);
+// isOpen/onOpenChange are controlled by the parent form (a single shared
+// "which dropdown is open" key) rather than each instance owning its own
+// state — otherwise opening Meeting Type doesn't close Priority, and their
+// option lists render stacked on top of each other.
+const SingleSelectDropdown = ({ options, value, onChange, disabled, isOpen, onOpenChange }) => {
   const selectedOption = options.find(opt => opt.value === value) || options[0];
 
   return (
@@ -73,7 +77,7 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => onOpenChange(!isOpen)}
         className={`w-full flex items-center justify-end gap-2 px-3 py-1.5 rounded-full text-xs font-semibold focus:outline-none transition-all ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'
           } ${selectedOption.className}`}
       >
@@ -85,26 +89,29 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => {
-                onChange(option.value);
-                setIsOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-gray-50 ${value === option.value ? 'bg-blue-50/50 text-blue-600' : 'text-gray-600'
-                }`}
-            >
-              <div className={`p-1.5 rounded-lg ${option.className}`}>
-                {option.icon && <option.icon className="w-3.5 h-3.5" />}
-              </div>
-              <span className="font-medium">{option.label}</span>
-              {value === option.value && <CheckCircle2 className="w-4 h-4 ml-auto text-blue-600" />}
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => onOpenChange(false)} />
+          <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
+            {options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  onChange(option.value);
+                  onOpenChange(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-gray-50 ${value === option.value ? 'bg-blue-50/50 text-blue-600' : 'text-gray-600'
+                  }`}
+              >
+                <div className={`p-1.5 rounded-lg ${option.className}`}>
+                  {option.icon && <option.icon className="w-3.5 h-3.5" />}
+                </div>
+                <span className="font-medium">{option.label}</span>
+                {value === option.value && <CheckCircle2 className="w-4 h-4 ml-auto text-blue-600" />}
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
@@ -113,6 +120,19 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
 const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placeholder = "Select participants" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const wrapperRef = useRef(null);
+
+  const openDropdown = () => {
+    setIsOpen(true);
+    // The list opens BELOW the button, so when the button itself is near
+    // the bottom of the scrollable panel, the list renders mostly/fully
+    // off-screen and needs a manual scroll to see any options. Scroll the
+    // trigger toward the top of the panel instead, right as the list
+    // opens, so the options are visible immediately.
+    requestAnimationFrame(() => {
+      wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -142,10 +162,10 @@ const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placehol
           ))}
         </div>
       )}
-      <div className="relative">
+      <div ref={wrapperRef} className="relative">
         <button
           type="button"
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => (isOpen ? setIsOpen(false) : openDropdown())}
           className="w-full flex items-center justify-between px-4 py-3 bg-white border border-gray-300 rounded-xl text-left hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <div className="flex items-center gap-2">
@@ -277,12 +297,16 @@ const CompanyMeetingForm = ({
   calendarDate,
   companyId,
   users,
+  staffUsers = [],
   onSave,
   onDelete,
   onClose,
   startInEditMode
 }) => {
   const [form, setForm] = useState(initialState);
+  // Which of the Duration/Meeting Type/Priority dropdowns is open, if any —
+  // shared so opening one closes the others instead of them stacking.
+  const [openDropdown, setOpenDropdown] = useState(null);
   const [loading, setLoading] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [googleStatus, setGoogleStatus] = useState(null); // { configured, connected, connectedEmail }
@@ -400,6 +424,7 @@ const CompanyMeetingForm = ({
           date: meetingData?.scheduledAt ? new Date(meetingData?.scheduledAt).toISOString().slice(0, 10) : "",
           time: meetingData?.scheduledAt ? new Date(meetingData?.scheduledAt).toISOString().slice(11, 16) : "09:00",
           participants: meetingData.participants?.map(p => p._id || p) || [],
+          internalParticipants: meetingData.internalParticipants?.map(p => p._id || p) || [],
         };
         setForm(initialFormData);
 
@@ -719,18 +744,21 @@ const CompanyMeetingForm = ({
                   </div>
 
                   {/* Date */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs">
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>Date</span>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-gray-600 text-xs">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>Date</span>
+                      </div>
+                      <input
+                        type="date"
+                        value={form.date || calendarDate || ""}
+                        onChange={(e) => handleChange("date", e.target.value)}
+                        disabled={!isEditMode && mode === "view"}
+                        className={`text-xs font-medium border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer ${errors.date ? 'text-red-600' : 'text-gray-900'}`}
+                      />
                     </div>
-                    <input
-                      type="date"
-                      value={form.date || calendarDate || ""}
-                      onChange={(e) => handleChange("date", e.target.value)}
-                      disabled={!isEditMode && mode === "view"}
-                      className="text-xs font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
-                    />
+                    {errors.date && <p className="text-[10px] text-red-500 font-medium text-right mt-1">{errors.date}</p>}
                   </div>
 
                   {/* Time */}
@@ -759,6 +787,8 @@ const CompanyMeetingForm = ({
                       value={form.duration}
                       onChange={(val) => handleChange("duration", val)}
                       disabled={!isEditMode && mode === "view"}
+                      isOpen={openDropdown === "duration"}
+                      onOpenChange={(open) => setOpenDropdown(open ? "duration" : null)}
                     />
                   </div>
 
@@ -775,6 +805,8 @@ const CompanyMeetingForm = ({
                       value={form.meetingType}
                       onChange={(val) => handleChange("meetingType", val)}
                       disabled={!isEditMode && mode === "view"}
+                      isOpen={openDropdown === "meetingType"}
+                      onOpenChange={(open) => setOpenDropdown(open ? "meetingType" : null)}
                     />
                   </div>
 
@@ -789,20 +821,39 @@ const CompanyMeetingForm = ({
                       value={form.priority}
                       onChange={(val) => handleChange("priority", val)}
                       disabled={!isEditMode && mode === "view"}
+                      isOpen={openDropdown === "priority"}
+                      onOpenChange={(open) => setOpenDropdown(open ? "priority" : null)}
                     />
                   </div>
 
-                  {/* Participants */}
+                  {/* Internal Team — your own staff attending, kept as a
+                      separate list from Client Contacts below so Meeting
+                      Details can actually tell the two apart instead of
+                      lumping everyone under one bucket. */}
                   <div className="space-y-3 pt-2">
                     <div className="flex items-center gap-2 text-gray-600 text-xs">
                       <Users className="w-3.5 h-3.5" />
-                      <span>Participants</span>
+                      <span>Internal Team</span>
+                    </div>
+                    <MultiSelectDropdown
+                      users={staffUsers}
+                      selectedUsers={form.internalParticipants}
+                      onSelectionChange={(internalParticipants) => handleChange("internalParticipants", internalParticipants)}
+                      placeholder="Add internal team members"
+                    />
+                  </div>
+
+                  {/* Client Contacts */}
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Client Contacts</span>
                     </div>
                     <MultiSelectDropdown
                       users={users}
                       selectedUsers={form.participants}
                       onSelectionChange={(participants) => handleChange("participants", participants)}
-                      placeholder="Add meeting participants"
+                      placeholder="Add client contacts"
                     />
                     {errors.participants && <p className="text-[10px] text-red-500 font-medium">{errors.participants}</p>}
                   </div>

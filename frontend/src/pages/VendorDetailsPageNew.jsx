@@ -222,16 +222,25 @@ const VendorDetailsPageNew = () => {
 
   // Sliding pill indicator
   const tabRefs = useRef({});
+  const tabTrackRef = useRef(null);
   const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
   useLayoutEffect(() => {
-    const el = tabRefs.current[activeTab];
-    if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
-    const onResize = () => {
-      const cur = tabRefs.current[activeTab];
-      if (cur) setTabIndicator({ left: cur.offsetLeft, width: cur.offsetWidth });
+    const measure = () => {
+      const el = tabRefs.current[activeTab];
+      if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
     };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    measure();
+    // Same fix as CompanyProfilePage: a refresh landing directly on a
+    // non-default tab mounts this row while the header is still showing
+    // loading skeletons, so a ResizeObserver on the whole track re-measures
+    // whenever any tab's width shifts, not just when activeTab changes.
+    const ro = new ResizeObserver(measure);
+    if (tabTrackRef.current) ro.observe(tabTrackRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
   }, [activeTab]);
 
   // Actions menu
@@ -803,7 +812,7 @@ const VendorDetailsPageNew = () => {
         <div className="border-b border-gray-200 mb-4 -mx-6"></div>
 
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-          <div className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
+          <div ref={tabTrackRef} className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
               style={{ left: tabIndicator.left, width: tabIndicator.width }}

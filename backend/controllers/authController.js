@@ -1553,6 +1553,7 @@ exports.login = async (req, res, next) => {
 // ---------------------------------------------------------------------------
 const {
   isGoogleConfigured,
+  isGoogleConnectedByDefault,
   getAuthUrl,
   connectAccount,
 } = require("../services/googleMeetService");
@@ -1613,6 +1614,12 @@ exports.googleCallback = async (req, res) => {
 // account is already connected for this organization, and which one.
 exports.googleStatus = async (req, res) => {
   try {
+    // A static GOOGLE_OAUTH_REFRESH_TOKEN in .env makes every meeting use
+    // that account immediately — no per-org DB record, no consent click.
+    if (isGoogleConnectedByDefault()) {
+      return res.json({ configured: true, connected: true, connectedEmail: null });
+    }
+
     const integration = await GoogleIntegration.findOne({ organization: req.user.organization });
     res.json({
       configured: isGoogleConfigured(),
