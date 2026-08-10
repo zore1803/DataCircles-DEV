@@ -11,8 +11,11 @@ const s3 = new S3Client({
   }
 });
 
+const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100MB, matches the "Max 100MB per file" label in the upload UI
+
 const uploadMiddlewareS3 = (bucketName = process.env.AWS_BUCKET_NAME, orgField = 'organizationId') => {
   return multer({
+    limits: { fileSize: MAX_FILE_SIZE_BYTES },
     storage: multerS3({
       s3,
       bucket: bucketName,
