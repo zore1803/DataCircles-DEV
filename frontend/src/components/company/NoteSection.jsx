@@ -907,12 +907,17 @@ export const NoteEditor = ({
     }),
     valueContainer: (base) => ({
       ...base,
-      padding: '0'
+      padding: '0',
+      flexWrap: 'nowrap'
     }),
     input: (base) => ({
       ...base,
       margin: '0',
       padding: '0'
+    }),
+    placeholder: (base) => ({
+      ...base,
+      whiteSpace: 'nowrap'
     })
   };
 
@@ -953,7 +958,7 @@ export const NoteEditor = ({
             {/* Action Row */}
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-xl text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-all flex-1 min-w-0">
                   <Users className="w-4 h-4 flex-shrink-0" />
                   <Select
                     isMulti
@@ -962,7 +967,7 @@ export const NoteEditor = ({
                     onChange={setTaggedContacts}
                     placeholder="Select Contact"
                     styles={customSelectStyles}
-                    className="flex-1 min-w-0"
+                    className="flex-1 min-w-0 whitespace-nowrap"
                     components={{
                       MultiValue: () => null, // Don't show chips here
                       IndicatorSeparator: () => null,
@@ -976,7 +981,7 @@ export const NoteEditor = ({
                   <select
                     value={noteType}
                     onChange={(e) => setNoteType(e.target.value)}
-                    className="bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
+                    className="bg-transparent text-xs font-semibold text-gray-700 focus:outline-none"
                   >
                     <option value="General Note">General Note</option>
                     <option value="Meeting Note">Meeting Note</option>
@@ -990,7 +995,7 @@ export const NoteEditor = ({
                   <select
                     value={visibility}
                     onChange={(e) => setVisibility(e.target.value)}
-                    className="bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
+                    className="bg-transparent text-xs font-semibold text-gray-700 focus:outline-none"
                   >
                     <option value="Team">Team</option>
                     <option value="Private">Private</option>
