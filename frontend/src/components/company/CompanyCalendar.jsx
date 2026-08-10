@@ -663,8 +663,17 @@ const CompanyCalendar = ({ companyId }) => {
             const { meetings: filteredMeetings, tasks: filteredTasks } =
               filteredEvents(dayMeetings, dayTasks);
 
-            const totalItems = filteredMeetings.length + filteredTasks.length;
-            const maxDisplay = 1;
+            // Combine into one ordered list (meetings first) and cap at
+            // however many chips actually fit inside the cell's fixed
+            // height, rather than the old hardcoded 1 — the rest collapse
+            // into a "+N" chip instead of overflowing the box.
+            const allDayItems = [
+              ...filteredMeetings.map((m) => ({ item: m, type: "meeting" })),
+              ...filteredTasks.map((t) => ({ item: t, type: "task" })),
+            ];
+            const totalItems = allDayItems.length;
+            const maxDisplay = 4;
+            const visibleItems = allDayItems.slice(0, maxDisplay);
             const hasMore = totalItems > maxDisplay;
             const hasHighPriority = filteredMeetings.some(
               (m) => m.priority === "high",
@@ -711,24 +720,14 @@ const CompanyCalendar = ({ companyId }) => {
                 </div>
 
                 <div className="space-y-0.5">
-                  {filteredMeetings.slice(0, 1).map((meeting) => (
+                  {visibleItems.map(({ item, type }) => (
                     <CompactEventCard
-                      key={meeting._id}
-                      item={meeting}
-                      type="meeting"
-                      onClick={handleMeetingClick}
+                      key={item._id}
+                      item={item}
+                      type={type}
+                      onClick={type === "meeting" ? handleMeetingClick : handleTaskClick}
                     />
                   ))}
-                  {filteredTasks
-                    .slice(0, maxDisplay - filteredMeetings.slice(0, 1).length)
-                    .map((task) => (
-                      <CompactEventCard
-                        key={task._id}
-                        item={task}
-                        type="task"
-                        onClick={handleTaskClick}
-                      />
-                    ))}
                   {hasMore && (
                     <div
                       className="text-[9px] text-gray-500 px-1 py-0.5 bg-gray-100 rounded cursor-pointer hover:bg-gray-200"
