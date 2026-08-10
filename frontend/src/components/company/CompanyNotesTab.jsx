@@ -14,7 +14,6 @@ import {
   Calendar,
   Clock,
   Eye,
-  Paperclip,
   MoreVertical,
   Pin,
   PinOff,
@@ -26,6 +25,7 @@ import {
   X,
   Edit3,
   Trash2,
+  Copy,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
@@ -153,7 +153,6 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
     { id: "company", label: "Tags", width: 205, pinnable: true },
     { id: "date", label: "Last Updated", width: 117, pinnable: true },
     { id: "year", label: "Visibility To", width: 93, pinnable: true },
-    { id: "createdBy", label: "Attachments", width: 179, pinnable: true },
   ], []);
 
   const [columnOrder, setColumnOrder] = useState(() => BASE_COLUMNS.map(c => c.id));
@@ -337,7 +336,6 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
     company: 205,
     date: 117,
     year: 93,
-    createdBy: 179,
   });
   const [resizingCol, setResizingCol] = useState(null);
   const resizingRef = useRef(null);
@@ -611,8 +609,6 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
         return note.createdAt ? new Date(note.createdAt).getTime() : 0;
       case "year":
         return note.visibility || "Team";
-      case "createdBy":
-        return note.attachments?.length || 0;
       default:
         return note[key];
     }
@@ -1290,14 +1286,6 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
                           <span className="text-xs text-gray-500">Team</span>
                         </td>
                     ),
-                    createdBy: (
-                        <td key="createdBy" style={{ height: 64 }} className="px-3 border-b border-[#E1E4EA]">
-                          <div className="flex items-center justify-start gap-1">
-                            <Paperclip className="w-3.5 h-3.5 text-gray-400" />
-                            <span className="text-xs text-gray-500">{note.attachments?.length || 0}</span>
-                          </div>
-                        </td>
-                    ),
                   };
                   const isActionsOpen = openRowActionsId === note._id;
                   const noteActionsButton = (
@@ -1320,7 +1308,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
                           // menus.
                           const zMenu = getAncestorZoom(document.body);
                           const MENU_W = 160;
-                          const MENU_H = 110; // View Note + Edit Note + divider + Delete Note
+                          const MENU_H = 148; // View Note + Edit Note + Duplicate Note + divider + Delete Note
                           const MARGIN = 8;
 
                           const rect = e.currentTarget.getBoundingClientRect();
@@ -1374,6 +1362,17 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
                             >
                               <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
                               Edit Note
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenRowActionsId(null);
+                                setRowActionsPos(null);
+                                handleDuplicate(note);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            >
+                              <Copy className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                              Duplicate Note
                             </button>
                             <div className="w-full border-t border-[#F1F1F5] my-0.5" />
                             <button
