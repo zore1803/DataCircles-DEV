@@ -144,6 +144,7 @@ const NoteStyles = () => (
 
     .ql-toolbar.ql-snow {
       padding: 0.5rem !important;
+      border-bottom: 1px solid #d1d5db !important;
     }
 
     .ql-container.ql-snow {
@@ -248,7 +249,27 @@ const NoteStyles = () => (
 // Custom Quill modules and formats configuration
 const quillModules = {
   toolbar: {
-    container: "#toolbar"
+    container: "#toolbar",
+    handlers: {
+      // Quill's default link handler silently no-ops when nothing is
+      // selected — prompt for a URL either way, inserting it as the link
+      // text when there's no selection to format.
+      link(value) {
+        if (!value) {
+          this.quill.format('link', false);
+          return;
+        }
+        const url = window.prompt('Enter a URL:');
+        if (!url) return;
+        const range = this.quill.getSelection(true);
+        if (range.length === 0) {
+          this.quill.insertText(range.index, url, 'link', url, 'user');
+          this.quill.setSelection(range.index + url.length, 0, 'user');
+        } else {
+          this.quill.format('link', url);
+        }
+      }
+    }
   },
   clipboard: {
     matchVisual: false,
