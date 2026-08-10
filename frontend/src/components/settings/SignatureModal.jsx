@@ -24,6 +24,16 @@ const DEFAULT_SIGNATURE_COLORS = [
   { name: "Purple", hex: "#6b21a8" },
 ];
 
+const DEFAULT_STROKE_WIDTH = 3;
+const MIN_STROKE_WIDTH = 1;
+const MAX_STROKE_WIDTH = 15;
+
+const canvasHasContent = (canvas) => {
+  const ctx = canvas.getContext("2d");
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  return imageData.data.some((_, i) => i % 4 === 3 && imageData.data[i] > 0);
+};
+
 export default function SignatureModal({ isOpen, onClose, onSave, initialData }) {
   const [activeTab, setActiveTab] = useState("upload"); // "upload" | "draw" | "type"
   const [sigName, setSigName] = useState("");
@@ -39,8 +49,12 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
   // Draw state
   const sigCanvasRef = useRef(null);
   const [isEraser, setIsEraser] = useState(false);
+  const [strokeWidth, setStrokeWidth] = useState(DEFAULT_STROKE_WIDTH);
   const previousColorRef = useRef(DEFAULT_SIGNATURE_COLORS[0].hex);
   const loadedInitialRef = useRef(false);
+  const loadedFromBitmapRef = useRef(false);
+  const strokeWidthRef = useRef(DEFAULT_STROKE_WIDTH);
+  const isEraserRef = useRef(false);
 
   // Upload state
   const [uploadedImage, setUploadedImage] = useState(null);
@@ -53,6 +67,7 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
   useEffect(() => {
     if (isOpen) {
       loadedInitialRef.current = false;
+      loadedFromBitmapRef.current = false;
       if (initialData) {
         setSigName(initialData.name || "");
         setActiveTab(initialData.type || "upload");
@@ -80,9 +95,86 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
         setIsEraser(false);
         setPenColor(DEFAULT_SIGNATURE_COLORS[0].hex);
         previousColorRef.current = DEFAULT_SIGNATURE_COLORS[0].hex;
+        setStrokeWidth(DEFAULT_STROKE_WIDTH);
       }
     }
   }, [isOpen, initialData]);
+
+  useEffect(() => {
+    strokeWidthRef.current = strokeWidth;
+  }, [strokeWidth]);
+
+  useEffect(() => {
+    isEraserRef.current = isEraser;
+  }, [isEraser]);
+
+  const flattenCanvasState = useCallback(() => {
+    try {
+      const pad = sigCanvasRef.current?.getSignaturePad();
+      const canvas = sigCanvasRef.current?.getCanvas();
+      if (!pad || !canvas) return;
+
+      pad._data = [];
+      loadedFromBitmapRef.current = true;
+      pad._isEmpty = !canvasHasContent(canvas);
+    } catch (err) {
+      console.error("Error flattening canvas state", err);
+    }
+  }, []);
+
+  const applyStrokeWidth = useCallback((width) => {
+    try {
+      const pad = sigCanvasRef.current?.getSignaturePad();
+      if (pad) {
+        pad.minWidth = width;
+        pad.maxWidth = width;
+      }
+    } catch (err) {
+      console.error("Error applying stroke width", err);
+    }
+  }, []);
+
+  const recolorExistingStrokes = useCallback((newHex) => {
+    try {
+      const pad = sigCanvasRef.current?.getSignaturePad();
+      const canvas = sigCanvasRef.current?.getCanvas();
+      if (!pad || !canvas || !canvasHasContent(canvas)) return;
+
+      const ctx = pad._ctx || canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Work in device-pixel space; the pad context is scaled by devicePixelRatio
+      const offscreen = document.createElement("canvas");
+      offscreen.width = canvas.width;
+      offscreen.height = canvas.height;
+      const offCtx = offscreen.getContext("2d");
+      offCtx.drawImage(canvas, 0, 0);
+      offCtx.globalCompositeOperation = "source-in";
+      offCtx.fillStyle = newHex;
+      offCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(offscreen, 0, 0);
+      ctx.restore();
+
+      // signature_pad v2 stores per-point colors in nested arrays
+      if (Array.isArray(pad._data) && pad._data.length > 0 && !loadedFromBitmapRef.current) {
+        pad._data.forEach((pointGroup) => {
+          if (Array.isArray(pointGroup)) {
+            pointGroup.forEach((point) => {
+              if (point && typeof point === "object") {
+                point.color = newHex;
+              }
+            });
+          }
+        });
+      }
+    } catch (err) {
+      console.error("Error recoloring signature", err);
+    }
+  }, []);
 
   // Resize canvas so internal resolution matches display size (prevents offset drawing)
   const resizeCanvas = useCallback(() => {
@@ -96,7 +188,8 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
 
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       const pad = sigCanvasRef.current.getSignaturePad();
-      const existingData = pad && !pad.isEmpty() ? pad.toData() : null;
+      const hasContent = canvasHasContent(canvas) || (pad && !pad.isEmpty());
+      const bitmapSnapshot = hasContent ? canvas.toDataURL("image/png") : null;
 
       canvas.width = rect.width * ratio;
       canvas.height = rect.height * ratio;
@@ -108,9 +201,18 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
 
       if (pad) {
         pad.clear();
-        if (existingData) {
-          pad.fromData(existingData);
+        if (bitmapSnapshot) {
+          const img = new Image();
+          img.onload = () => {
+            ctx.drawImage(img, 0, 0, rect.width, rect.height);
+            pad._isEmpty = false;
+            pad._data = [];
+            loadedFromBitmapRef.current = true;
+          };
+          img.src = bitmapSnapshot;
         }
+        pad.minWidth = strokeWidthRef.current;
+        pad.maxWidth = strokeWidthRef.current;
       }
     } catch (err) {
       console.error("Canvas resize error:", err);
@@ -139,6 +241,7 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
           try {
             sigCanvasRef.current.fromDataURL(initialData.dataUrl);
             loadedInitialRef.current = true;
+            loadedFromBitmapRef.current = true;
           } catch (err) {
             console.error("Failed to load saved signature onto canvas", err);
           }
@@ -148,17 +251,21 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
     }
   }, [isOpen, activeTab, initialData]);
 
-  // Generate cursor data URI based on current tool mode and selected ink color
-  const getCustomCursor = useCallback(() => {
-    if (isEraser) {
-      // Eraser cursor icon with hotspot at bottom-left wiping tip (3, 17)
-      const eraserSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" fill="#f43f5e"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>`;
-      return `url("data:image/svg+xml,${encodeURIComponent(eraserSvg)}") 3 17, auto`;
+  useEffect(() => {
+    if (isOpen && activeTab === "draw") {
+      applyStrokeWidth(strokeWidth);
     }
-    // Plus "+" cursor in the selected pen color with white contrast outline
-    const plusSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><line x1="12" y1="3" x2="12" y2="21" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/><line x1="3" y1="12" x2="21" y2="12" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/><line x1="12" y1="4" x2="12" y2="20" stroke="${penColor}" stroke-width="2" stroke-linecap="round"/><line x1="4" y1="12" x2="20" y2="12" stroke="${penColor}" stroke-width="2" stroke-linecap="round"/></svg>`;
-    return `url("data:image/svg+xml,${encodeURIComponent(plusSvg)}") 12 12, crosshair`;
-  }, [isEraser, penColor]);
+  }, [isOpen, activeTab, strokeWidth, applyStrokeWidth]);
+
+  const getCustomCursor = useCallback(() => {
+    const diameter = Math.max(strokeWidth, 2);
+    const padding = 2;
+    const size = diameter + padding * 2;
+    const center = size / 2;
+    const radius = diameter / 2;
+    const circleSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${center}" cy="${center}" r="${radius}" fill="rgba(156,163,175,0.25)" stroke="#9ca3af" stroke-width="1"/></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(circleSvg)}") ${center} ${center}, crosshair`;
+  }, [strokeWidth]);
 
   // Dynamically update canvas cursor on state changes
   useEffect(() => {
@@ -182,7 +289,10 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
       const ctx = pad._ctx || sigCanvasRef.current?.getCanvas()?.getContext("2d");
       if (!ctx) return;
 
-      if (isEraser) {
+      pad.minWidth = strokeWidthRef.current;
+      pad.maxWidth = strokeWidthRef.current;
+
+      if (isEraserRef.current) {
         ctx.globalCompositeOperation = "destination-out";
       } else {
         ctx.globalCompositeOperation = "source-over";
@@ -190,6 +300,21 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
       }
     } catch (err) {
       console.error("Error setting canvas mode on stroke begin", err);
+    }
+  };
+
+  const handleEnd = () => {
+    try {
+      const pad = sigCanvasRef.current?.getSignaturePad();
+      if (!pad) return;
+      const ctx = pad._ctx || sigCanvasRef.current?.getCanvas()?.getContext("2d");
+      if (ctx) ctx.globalCompositeOperation = "source-over";
+
+      if (isEraserRef.current) {
+        flattenCanvasState();
+      }
+    } catch (err) {
+      console.error("Error resetting canvas mode on stroke end", err);
     }
   };
 
@@ -205,9 +330,17 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
         if (ctx) ctx.globalCompositeOperation = "source-over";
         pad.penColor = hex;
       }
+      if (activeTab === "draw") {
+        recolorExistingStrokes(hex);
+      }
     } catch (err) {
       console.error("Error updating pad color", err);
     }
+  };
+
+  const handleStrokeWidthChange = (width) => {
+    setStrokeWidth(width);
+    applyStrokeWidth(width);
   };
 
   // Toggle Eraser tool on drawing pad
@@ -278,6 +411,7 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
   const handleClearDraw = () => {
     if (sigCanvasRef.current) {
       sigCanvasRef.current.clear();
+      loadedFromBitmapRef.current = false;
     }
   };
 
@@ -548,8 +682,27 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
             {/* TAB 2: DRAW */}
             {activeTab === "draw" && (
               <div className="relative rounded-xl border border-gray-300 bg-slate-50 p-2 shadow-inner">
+                <div className="mb-2 flex items-center gap-3 rounded-lg bg-white/80 border border-slate-200 px-3 py-2">
+                  <span className="shrink-0 text-xs font-semibold text-slate-700">Width:</span>
+                  <input
+                    type="range"
+                    min={MIN_STROKE_WIDTH}
+                    max={MAX_STROKE_WIDTH}
+                    step={0.5}
+                    value={strokeWidth}
+                    onChange={(e) => handleStrokeWidthChange(Number(e.target.value))}
+                    className="h-1.5 flex-1 cursor-pointer accent-sky-600"
+                  />
+                  <span className="shrink-0 w-10 text-right text-xs font-medium text-slate-500">{strokeWidth}px</span>
+                  <div
+                    className="shrink-0 rounded-full border border-gray-400 bg-gray-300/30"
+                    style={{ width: strokeWidth, height: strokeWidth }}
+                    aria-hidden="true"
+                  />
+                </div>
+
                 {/* Drawing Controls Bar (Pen, Eraser, Clear Pad) */}
-                <div className="absolute right-4 top-4 flex items-center gap-2 z-10">
+                <div className="absolute right-4 top-14 flex items-center gap-2 z-10">
                   <button
                     type="button"
                     onClick={toggleEraserMode}
@@ -575,7 +728,10 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
                 <SignatureCanvas
                   ref={sigCanvasRef}
                   penColor={penColor}
+                  minWidth={strokeWidth}
+                  maxWidth={strokeWidth}
                   onBegin={handleBegin}
+                  onEnd={handleEnd}
                   canvasProps={{
                     className: "w-full h-48 rounded-lg bg-white border border-slate-200 touch-none",
                     style: { cursor: getCustomCursor() },
