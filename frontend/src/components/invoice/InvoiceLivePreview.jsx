@@ -43,7 +43,7 @@ const InvoiceLivePreview = ({
     // Same encoder settings the PDF uses, so the preview shows the identical
     // QR the customer will scan off the printed page.
     let upiQrSvg = "";
-    const uri = buildUpiUri(doc, { type, orgDetails });
+    const uri = buildUpiUri(doc, { type, orgDetails, upiId: bankDetails?.upi });
     if (uri) {
       try {
         const qr = qrcode(0, "M");
@@ -63,6 +63,7 @@ const InvoiceLivePreview = ({
       dealName,
       documentNumber: invoiceNumber,
       upiQrSvg,
+      upiId: bankDetails?.upi,
     });
   }, [
     form,

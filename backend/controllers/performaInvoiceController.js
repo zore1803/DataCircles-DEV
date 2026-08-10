@@ -1,5 +1,5 @@
 const PerformaInvoice = require("../models/ProformaInvoice");
-const BankDetails = require("../models/BankDetails");
+const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const mongoose = require("mongoose");
 const Branding = require("../models/Branding");
@@ -270,9 +270,7 @@ const downloadPerformaInvoice = async (req, res) => {
     if (!performaInvoice) {
       return res.status(404).json({ error: "proformaInvoice not found" });
     }
-    const bankDetails = await BankDetails.findOne({
-      organization: req.user.organization,
-    }).sort({ updatedAt: -1 });
+    const bankDetails = await getDefaultBankDetails(req.user.organization);
     const OrgDetails = await Branding.findOne({
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });

@@ -1,15 +1,37 @@
 const BankDetails = require("../models/BankDetails");
+const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 
-// Create bank details
+const clearOtherDefaults = async (organizationId, exceptId = null) => {
+  const query = { organization: organizationId, isDefault: true };
+  if (exceptId) query._id = { $ne: exceptId };
+  await BankDetails.updateMany(query, { $set: { isDefault: false } });
+};
+
+const sanitizeBankPayload = (body = {}) => {
+  const payload = { ...body };
+  delete payload._id;
+  delete payload.organization;
+  delete payload.user;
+  delete payload.createdAt;
+  delete payload.updatedAt;
+  delete payload.__v;
+  if (payload.ifscCode) payload.ifscCode = String(payload.ifscCode).trim().toUpperCase();
+  return payload;
+};
+
 exports.createBankDetails = async (req, res) => {
   try {
-    const bankDetailsData = {
-      ...req.body,
-      organization: req.user.organization, // Add organization from authenticated user
-      user: req.user._id, // Track which user created it
-    };
+    const payload = sanitizeBankPayload(req.body);
 
-    const newBank = new BankDetails(bankDetailsData);
+    if (payload.isDefault) {
+      await clearOtherDefaults(req.user.organization);
+    }
+
+    const newBank = new BankDetails({
+      ...payload,
+      organization: req.user.organization,
+      user: req.user._id,
+    });
     const saved = await newBank.save();
     res.status(201).json(saved);
   } catch (err) {
@@ -17,24 +39,19 @@ exports.createBankDetails = async (req, res) => {
   }
 };
 
-// Read latest bank details for the organization
 exports.getLatestBankDetails = async (req, res) => {
   try {
-    const banks = await BankDetails.findOne({
-      organization: req.user.organization, // Filter by organization
-    }).sort({ updatedAt: -1 });
-
-    res.json(banks);
+    const bank = await getDefaultBankDetails(req.user.organization);
+    res.json(bank);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// Get all bank details for the organization (if you need this)
 exports.getAllBankDetails = async (req, res) => {
   try {
     const { search } = req.query;
-    let query = { organization: req.user.organization }; // Filter by organization
+    let query = { organization: req.user.organization };
 
     if (search) {
       query.$or = [
@@ -42,22 +59,22 @@ exports.getAllBankDetails = async (req, res) => {
         { accountHolder: { $regex: search, $options: "i" } },
         { branch: { $regex: search, $options: "i" } },
         { ifscCode: { $regex: search, $options: "i" } },
+        { upi: { $regex: search, $options: "i" } },
       ];
     }
 
-    const banks = await BankDetails.find(query).sort({ updatedAt: -1 });
+    const banks = await BankDetails.find(query).sort({ isDefault: -1, updatedAt: -1 });
     res.json(banks);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// Read one bank details by ID
 exports.getBankDetailsById = async (req, res) => {
   try {
     const bank = await BankDetails.findOne({
       _id: req.params.id,
-      organization: req.user.organization, // Filter by organization
+      organization: req.user.organization,
     });
 
     if (!bank) {
@@ -70,29 +87,35 @@ exports.getBankDetailsById = async (req, res) => {
   }
 };
 
-// Update or Create bank details
 exports.updateBankDetails = async (req, res) => {
   try {
-    // If no ID is provided -> create new bank details
-    if (req.params.id == "undefined") {
-      const bankDetailsData = {
-        ...req.body,
-        organization: req.user.organization, // Add organization from authenticated user
-        user: req.user._id, // Track which user created it
-      };
+    if (req.params.id === "undefined") {
+      const payload = sanitizeBankPayload(req.body);
+      if (payload.isDefault) {
+        await clearOtherDefaults(req.user.organization);
+      }
 
-      const newBank = new BankDetails(bankDetailsData);
+      const newBank = new BankDetails({
+        ...payload,
+        organization: req.user.organization,
+        user: req.user._id,
+      });
       const saved = await newBank.save();
       return res.status(201).json(saved);
     }
 
-    // If ID is provided -> update existing bank details
+    const payload = sanitizeBankPayload(req.body);
+
+    if (payload.isDefault) {
+      await clearOtherDefaults(req.user.organization, req.params.id);
+    }
+
     const updated = await BankDetails.findOneAndUpdate(
       {
         _id: req.params.id,
-        organization: req.user.organization, // Filter by organization
+        organization: req.user.organization,
       },
-      req.body,
+      payload,
       { new: true, runValidators: true }
     );
 
@@ -106,17 +129,47 @@ exports.updateBankDetails = async (req, res) => {
   }
 };
 
+exports.setDefaultBankDetails = async (req, res) => {
+  try {
+    const bank = await BankDetails.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
 
-// Delete bank details
+    if (!bank) {
+      return res.status(404).json({ error: "Bank details not found" });
+    }
+
+    await clearOtherDefaults(req.user.organization, bank._id);
+    bank.isDefault = true;
+    await bank.save();
+
+    res.json(bank);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
 exports.deleteBankDetails = async (req, res) => {
   try {
     const deleted = await BankDetails.findOneAndDelete({
       _id: req.params.id,
-      organization: req.user.organization, // Filter by organization
+      organization: req.user.organization,
     });
 
     if (!deleted) {
       return res.status(404).json({ error: "Bank details not found" });
+    }
+
+    if (deleted.isDefault) {
+      const nextDefault = await BankDetails.findOne({
+        organization: req.user.organization,
+      }).sort({ updatedAt: -1 });
+
+      if (nextDefault) {
+        nextDefault.isDefault = true;
+        await nextDefault.save();
+      }
     }
 
     res.json({ message: "Bank details deleted successfully" });
