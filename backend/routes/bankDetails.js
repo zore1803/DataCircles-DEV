@@ -25,6 +25,8 @@ router.get("/:id", requireAuth, subscriptionGate, bankDetailsController.getBankD
 // Update or Create bank details
 router.put("/:id", requireAuth, subscriptionGate, bankDetailsController.updateBankDetails);
 
+// Set default bank account
+router.patch("/:id/default", requireAuth, subscriptionGate, bankDetailsController.setDefaultBankDetails);
 
 // Delete bank details
 router.delete("/:id", requireAuth, subscriptionGate, bankDetailsController.deleteBankDetails);

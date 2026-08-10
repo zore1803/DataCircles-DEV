@@ -180,8 +180,8 @@ const Settings = () => {
     {
       id: "bank",
       icon: <CreditCard className="w-5 h-5" />,
-      label: "Bank Details",
-      description: "Manage banking and payment information",
+      label: "Banks",
+      description: "Add and manage bank accounts for payments, UPI QR codes, and invoices",
       color: "text-purple-600",
       bgColor: "bg-purple-50",
       borderColor: "border-purple-200",

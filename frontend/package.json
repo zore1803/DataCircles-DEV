@@ -19,6 +19,7 @@
     "@tailwindcss/vite": "^4.1.11",
     "@tanstack/react-table": "^8.21.3",
     "axios": "^1.10.0",
+    "banks-in-india": "^0.4.0",
     "canvas-confetti": "^1.9.3",
     "chart.js": "^4.5.1",
     "framer": "^2.4.1",
