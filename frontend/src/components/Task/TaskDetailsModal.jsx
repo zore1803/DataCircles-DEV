@@ -1,5 +1,5 @@
 import React from "react";
-import { X, Trash2, Loader2, Edit3, Video, Landmark } from "lucide-react";
+import { X, Trash2, Loader2, Edit3 } from "lucide-react";
 import toast from "react-hot-toast";
 
 const DealIcon = (props) => (
@@ -357,48 +357,6 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
                     </span>
                     <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#0085FF" }} className="truncate block w-full">
                       {linkedDeal?.name || linkedDeal?.title || "—"}
-                    </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, lineHeight: "120%", color: "#6B7280" }} className="truncate block w-full">
-                      —
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 2: Meeting / Invoice */}
-              <div className="flex flex-row justify-between items-center w-full" style={{ gap: 16 }}>
-                <div className="flex flex-row items-center flex-1 min-w-0" style={{ gap: 12 }}>
-                  <div
-                    className="rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ width: 32, height: 32, backgroundColor: "rgba(0, 133, 255, 0.1)" }}
-                  >
-                    <Video className="w-5 h-5" style={{ color: "#0085FF" }} />
-                  </div>
-                  <div className="flex flex-col items-start min-w-0 w-full" style={{ gap: 4 }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
-                      Meeting
-                    </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#0085FF" }} className="truncate block w-full">
-                      —
-                    </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, lineHeight: "120%", color: "#6B7280" }} className="truncate block w-full">
-                      —
-                    </span>
-                  </div>
-                </div>
-                <div className="flex flex-row items-center flex-1 min-w-0" style={{ gap: 12 }}>
-                  <div
-                    className="rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ width: 32, height: 32, backgroundColor: "rgba(97, 85, 245, 0.1)" }}
-                  >
-                    <Landmark className="w-5 h-5" style={{ color: "#6155F5" }} />
-                  </div>
-                  <div className="flex flex-col items-start min-w-0 w-full" style={{ gap: 4 }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
-                      Invoice
-                    </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#0085FF" }} className="truncate block w-full">
-                      —
                     </span>
                     <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, lineHeight: "120%", color: "#6B7280" }} className="truncate block w-full">
                       —
