@@ -1,5 +1,5 @@
 const DeliveryChallan = require("../models/deliveryChallan");
-const BankDetails = require("../models/BankDetails");
+const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const Branding = require("../models/Branding");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const nodemailer = require("nodemailer");
@@ -230,9 +230,7 @@ exports.downloadDeliveryChallan = async (req, res) => {
       return res.status(404).json({ error: "Delivery Challan not found" });
     }
 
-    const bankDetails = await BankDetails.findOne({
-      organization: req.user.organization,
-    }).sort({ updatedAt: -1 });
+    const bankDetails = await getDefaultBankDetails(req.user.organization);
     const orgDetails = await Branding.findOne({
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
@@ -393,9 +391,7 @@ exports.sendDeliveryChallanEmail = async (req, res) => {
       return res.status(404).json({ error: "Delivery Challan not found" });
     }
 
-    const bankDetails = await BankDetails.findOne({
-      organization: req.user.organization,
-    }).sort({ updatedAt: -1 });
+    const bankDetails = await getDefaultBankDetails(req.user.organization);
     const orgDetails = await Branding.findOne({
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });

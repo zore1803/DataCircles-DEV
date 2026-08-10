@@ -1240,6 +1240,7 @@ exports.completeRegistration = async (req, res) => {
       accountNumber: "1234567890",
       ifscCode: "HDFC0001234",
       branch: "Mumbai",
+      isDefault: true,
       organization: organization,
       user: user._id, // null for org default
     });
