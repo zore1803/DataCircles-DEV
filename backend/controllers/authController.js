@@ -1544,3 +1544,83 @@ exports.login = async (req, res, next) => {
     next(error);
   }
 };
+
+// ---------------------------------------------------------------------------
+// Google Meet integration — one-time OAuth consent that connects a shared
+// Google account for the organization. See services/googleMeetService.js
+// for the full explanation of the shared-account model and why the refresh
+// token lives server-side rather than per-user.
+// ---------------------------------------------------------------------------
+const {
+  isGoogleConfigured,
+  getAuthUrl,
+  connectAccount,
+} = require("../services/googleMeetService");
+const GoogleIntegration = require("../models/GoogleIntegration");
+
+// GET /api/auth/google/connect — called via fetch (so it can carry the
+// Authorization header) from the settings UI. Returns an authUrl the
+// frontend then navigates the browser to; it does NOT redirect itself,
+// because a real browser navigation here would drop the auth header this
+// route needs to identify which organization is connecting.
+exports.googleConnect = async (req, res) => {
+  try {
+    if (!isGoogleConfigured()) {
+      return res.status(400).json({
+        error: "Google integration isn't configured on this server yet (missing GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI).",
+      });
+    }
+    // Short-lived signed state carries the org/user identity through the
+    // Google redirect round-trip, since the callback below has no
+    // Authorization header to read them from otherwise.
+    const state = jwt.sign(
+      { organizationId: req.user.organization, userId: req.user._id || req.user.id },
+      process.env.JWT_SECRET,
+      { expiresIn: "10m" },
+    );
+    res.json({ authUrl: getAuthUrl(state) });
+  } catch (error) {
+    console.error("Error starting Google connect flow:", error);
+    res.status(500).json({ error: "Failed to start Google connect flow" });
+  }
+};
+
+// GET /api/auth/google/callback — Google lands the browser here after
+// consent. No requireAuth: this is a plain top-level navigation from
+// Google's servers, not an authenticated API call from our own frontend.
+exports.googleCallback = async (req, res) => {
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+  try {
+    const { code, state, error: googleError } = req.query;
+    if (googleError) {
+      return res.redirect(`${frontendUrl}/settings?googleMeet=denied`);
+    }
+    if (!code || !state) {
+      return res.redirect(`${frontendUrl}/settings?googleMeet=error`);
+    }
+
+    const { organizationId, userId } = jwt.verify(state, process.env.JWT_SECRET);
+    const { email } = await connectAccount({ code, organizationId, userId });
+
+    res.redirect(`${frontendUrl}/settings?googleMeet=connected&email=${encodeURIComponent(email)}`);
+  } catch (error) {
+    console.error("Error completing Google connect flow:", error.message);
+    res.redirect(`${frontendUrl}/settings?googleMeet=error`);
+  }
+};
+
+// GET /api/auth/google/status — lets the settings UI show whether a Google
+// account is already connected for this organization, and which one.
+exports.googleStatus = async (req, res) => {
+  try {
+    const integration = await GoogleIntegration.findOne({ organization: req.user.organization });
+    res.json({
+      configured: isGoogleConfigured(),
+      connected: !!integration,
+      connectedEmail: integration?.connectedEmail || null,
+    });
+  } catch (error) {
+    console.error("Error fetching Google integration status:", error);
+    res.status(500).json({ error: "Failed to fetch Google integration status" });
+  }
+};

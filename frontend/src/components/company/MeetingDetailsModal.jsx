@@ -1,5 +1,5 @@
 import React from "react";
-import { X, Trash2, Loader2, Edit3, Users, Plus, Video, CalendarX, CalendarClock } from "lucide-react";
+import { X, Trash2, Loader2, Edit3, Users, Plus, Video } from "lucide-react";
 import toast from "react-hot-toast";
 
 const CircleCheckIcon = (props) => (
@@ -125,7 +125,7 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
           {/* Title strip */}
           <div className="flex flex-col items-start" style={{ padding: 24, gap: 14 }}>
             <div className="flex flex-col items-start w-full" style={{ gap: 6 }}>
-              <div className="flex flex-row items-center w-full" style={{ gap: 40 }}>
+              <div className="flex flex-row items-center w-full" style={{ gap: 16 }}>
                 <h1
                   style={{
                     fontFamily: "Inter",
@@ -135,84 +135,67 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
                     letterSpacing: "-0.5px",
                     color: "#0E121B",
                   }}
-                  className="truncate"
+                  className="truncate flex-1 min-w-0"
                 >
                   {meetingData.title || "Untitled Meeting"}
                 </h1>
-                <div className="flex items-center flex-shrink-0" style={{ gap: 8 }}>
-                  <span
-                    className="inline-flex items-center justify-center"
-                    style={{
-                      padding: "4px 8px",
-                      borderRadius: 35,
-                      backgroundColor: "rgba(0, 133, 255, 0.1)",
-                      fontFamily: "Inter",
-                      fontWeight: 500,
-                      fontSize: 12,
-                      lineHeight: "120%",
-                      color: "#0085FF",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {meetingData.scheduledAt && new Date(meetingData.scheduledAt) < new Date() ? "Completed" : "Upcoming"}
-                  </span>
-                  <span
-                    className="inline-flex items-center justify-center capitalize"
-                    style={{
-                      padding: "4px 8px",
-                      borderRadius: 35,
-                      backgroundColor: "#EEE7FD",
-                      fontFamily: "Inter",
-                      fontWeight: 500,
-                      fontSize: 12,
-                      lineHeight: "120%",
-                      color: "#CB30E0",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {meetingData.meetingType?.replace("-", " ") || "General"}
-                  </span>
-                </div>
                 <button
-                  onClick={() => toast("Join meeting isn't available yet")}
+                  onClick={() => {
+                    const link = meetingData.location;
+                    if (link && /^https?:\/\//i.test(link)) {
+                      window.open(link, "_blank", "noopener,noreferrer");
+                    } else {
+                      toast("No meeting link set — add one from the Location field");
+                    }
+                  }}
                   className="flex items-center justify-center gap-2 flex-shrink-0 whitespace-nowrap"
                   style={{
-                    marginLeft: "auto",
-                    padding: "12px 14px",
+                    padding: "8px 14px",
                     border: "1px solid rgba(39, 112, 121, 0.3)",
                     borderRadius: 80,
                     fontFamily: "Inter",
                     fontWeight: 500,
-                    fontSize: 16,
-                    lineHeight: "20px",
+                    fontSize: 14,
+                    lineHeight: "18px",
                     color: "#1F2937",
                   }}
                 >
-                  <Video className="w-5 h-5" style={{ color: "#1C1B1F" }} />
+                  <Video className="w-4 h-4" style={{ color: "#1C1B1F" }} />
                   Join Meeting
                 </button>
               </div>
-              <div className="flex flex-row items-center w-full" style={{ gap: 6 }}>
-                {meetingData.company?.logo ? (
-                  <img
-                    src={meetingData.company.logo}
-                    alt={meetingData.company?.name}
-                    className="rounded-full object-cover flex-shrink-0"
-                    style={{ width: 16, height: 16 }}
-                  />
-                ) : (
-                  <div
-                    className="rounded-full bg-gray-200 flex items-center justify-center text-[8px] font-semibold text-gray-600 flex-shrink-0"
-                    style={{ width: 16, height: 16 }}
-                  >
-                    {meetingData.company?.name?.charAt(0)?.toUpperCase() || "?"}
-                  </div>
-                )}
+              <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
                 <span
-                  className="truncate"
-                  style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}
+                  className="inline-flex items-center justify-center"
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: 35,
+                    backgroundColor: "rgba(0, 133, 255, 0.1)",
+                    fontFamily: "Inter",
+                    fontWeight: 500,
+                    fontSize: 12,
+                    lineHeight: "120%",
+                    color: "#0085FF",
+                    whiteSpace: "nowrap",
+                  }}
                 >
-                  {meetingData.company?.name || "Company Name"}
+                  {meetingData.scheduledAt && new Date(meetingData.scheduledAt) < new Date() ? "Completed" : "Upcoming"}
+                </span>
+                <span
+                  className="inline-flex items-center justify-center capitalize"
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: 35,
+                    backgroundColor: "#EEE7FD",
+                    fontFamily: "Inter",
+                    fontWeight: 500,
+                    fontSize: 12,
+                    lineHeight: "120%",
+                    color: "#CB30E0",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {meetingData.meetingType?.replace("-", " ") || "General"}
                 </span>
               </div>
             </div>
@@ -562,76 +545,32 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
             </div>
           </div>
 
-          {/* Meeting actions row */}
-          <div style={{ margin: "0 24px", borderTop: "1px solid #D9D9D9" }} />
-          <div
-            className="flex flex-row justify-center items-center w-full"
-            style={{ padding: "23px 24px", gap: 12 }}
-          >
-            <button
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="flex items-center justify-center gap-2 disabled:opacity-50 whitespace-nowrap"
-              style={{
-                padding: "12px 14px",
-                border: "1px solid rgba(205, 54, 54, 0.3)",
-                borderRadius: 80,
-                fontFamily: "Inter",
-                fontWeight: 500,
-                fontSize: 16,
-                lineHeight: "20px",
-                color: "#CD3636",
-              }}
-            >
-              {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CalendarX className="w-5 h-5" />}
-              Cancel Meeting
-            </button>
-            {!isCompleted && (
-              <button
-                onClick={() => onEdit?.(meetingData)}
-                className="flex items-center justify-center gap-2 whitespace-nowrap"
-                style={{
-                  padding: "12px 14px",
-                  border: "1px solid rgba(0, 133, 255, 0.3)",
-                  borderRadius: 80,
-                  fontFamily: "Inter",
-                  fontWeight: 500,
-                  fontSize: 16,
-                  lineHeight: "20px",
-                  color: "#0085FF",
-                }}
-              >
-                <CalendarClock className="w-5 h-5" />
-                Reschedule
-              </button>
-            )}
-          </div>
         </div>
 
         <div style={{ borderTop: "1px solid #D9D9D9" }} />
 
-        {/* Footer */}
+        {/* Footer — sized to match the compact header (23px/24px padding, ~55px tall) */}
         <div
           className="flex flex-row justify-between items-center flex-shrink-0"
-          style={{ padding: "23px 24px", gap: 10 }}
+          style={{ padding: "9px 24px", gap: 10, height: 55, boxSizing: "border-box" }}
         >
           <button
             onClick={() => (onComplete ? onComplete(meetingData) : toast("Mark as complete isn't available yet"))}
             disabled={isCompleted}
             className="flex items-center justify-center gap-2 disabled:opacity-50"
             style={{
-              padding: "12px 14px",
+              padding: "8px 14px",
               backgroundColor: "rgba(0, 201, 80, 0.05)",
               border: "1px solid rgba(28, 176, 97, 0.3)",
               borderRadius: 80,
               fontFamily: "Inter",
               fontWeight: 500,
-              fontSize: 16,
-              lineHeight: "20px",
+              fontSize: 14,
+              lineHeight: "18px",
               color: "#1CB061",
             }}
           >
-            <CircleCheckIcon className="w-5 h-5" style={{ color: "#34C759" }} />
+            <CircleCheckIcon className="w-4 h-4" style={{ color: "#34C759" }} />
             {isCompleted ? "Completed" : "Mark As Complete"}
           </button>
           {!isCompleted && (
@@ -639,13 +578,13 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
               onClick={() => onEdit?.(meetingData)}
               className="flex items-center justify-center"
               style={{
-                padding: "12px 14px",
+                padding: "8px 14px",
                 backgroundColor: "#0085FF",
                 borderRadius: 88,
                 fontFamily: "Inter",
                 fontWeight: 500,
-                fontSize: 16,
-                lineHeight: "20px",
+                fontSize: 14,
+                lineHeight: "18px",
                 color: "#FFFFFF",
               }}
             >
