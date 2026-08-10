@@ -18,6 +18,9 @@ import {
   Video,
   EyeOff,
   X,
+  Eye,
+  Edit3,
+  Trash2,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
@@ -104,14 +107,24 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
   // Derived rather than copied into local state on a one-shot effect — a
   // copy raced the initial data load (whichever re-rendered first won) and
   // could get clobbered before ever becoming visible.
-  const showMeetingForm = manualMeetingFormOpen || autoOpenCreate;
+  const [editingMeeting, setEditingMeeting] = useState(null);
+  const showMeetingForm = manualMeetingFormOpen || autoOpenCreate || !!editingMeeting;
   const closeMeetingForm = () => {
+    // Editing a meeting updates it directly via API.put inside
+    // CompanyMeetingForm (there's no onUpdate callback like the Task form
+    // has), so the list needs an explicit refetch here to pick up the change.
+    if (editingMeeting) refetchMeetings();
     setManualMeetingFormOpen(false);
+    setEditingMeeting(null);
     if (autoOpenCreate) onAutoOpenCreateConsumed?.();
   };
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [editingMeeting, setEditingMeeting] = useState(null);
+  const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const [rowActionsPos, setRowActionsPos] = useState(null);
+  const rowActionsRef = useRef(null);
+  const [meetingToDelete, setMeetingToDelete] = useState(null);
+  const [deletingMeeting, setDeletingMeeting] = useState(false);
   const [viewMode, setViewMode] = useState("list");
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [leftPinned, setLeftPinned] = useState(new Set());
@@ -449,6 +462,24 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
   const handleMeetingClick = (meeting) => {
     setSelectedMeeting(meeting);
     setIsDetailsOpen(true);
+  };
+
+  const handleEditMeeting = (meeting) => {
+    setIsDetailsOpen(false);
+    setEditingMeeting(meeting);
+  };
+
+  const handleDeleteMeetingConfirmed = async () => {
+    if (!meetingToDelete) return;
+    setDeletingMeeting(true);
+    try {
+      await handleMeetingDelete(meetingToDelete._id);
+      setMeetingToDelete(null);
+    } catch {
+      // handleMeetingDelete already surfaced a toast for the failure.
+    } finally {
+      setDeletingMeeting(false);
+    }
   };
 
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
@@ -1047,6 +1078,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                   const isSelected = selectedItems.includes(meeting._id);
                   const participants = meeting.participants || [];
                   const organizer = typeof meeting.createdBy === "object" ? meeting.createdBy : null;
+                  const isActionsOpen = openRowActionsId === meeting._id;
                   const cells = {
                     title: (
                         <td key="title" style={{ height: 60 }} className="pl-6 pr-3 border-r border-b border-[#E1E4EA]">
@@ -1155,7 +1187,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                     ),
                     status: (
                         <td key="status" style={{ height: 60 }} className="px-3 border-b border-[#E1E4EA]">
-                          <div className="flex items-center justify-start" style={{ gap: 8 }}>
+                          <div className="flex items-center justify-between w-full" style={{ gap: 8 }}>
                             <span
                               className="inline-flex items-center justify-center capitalize"
                               style={{
@@ -1171,16 +1203,96 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                             >
                               <HighlightText text={meeting.status || "scheduled"} query={searchTerm} />
                             </span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMeetingClick(meeting);
-                              }}
-                              className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
-                              title="More options"
-                            >
-                              <MoreVertIcon className="w-5 h-5" />
-                            </button>
+                            <div className="relative flex items-center justify-center flex-shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isActionsOpen) {
+                                    setOpenRowActionsId(null);
+                                    setRowActionsPos(null);
+                                    return;
+                                  }
+                                  // rect is VISUAL px; the menu is portaled into
+                                  // document.body, which paints inside the app's
+                                  // dynamic <html> zoom, so rect-derived values are
+                                  // divided by that zoom, the menu is centered on
+                                  // the row rather than hanging off an edge, and
+                                  // both axes are clamped to the viewport — same
+                                  // approach as the Deals/Tasks row-actions menus.
+                                  const zMenu = getAncestorZoom(document.body);
+                                  const MENU_W = 170;
+                                  const MENU_H = 110; // View Meeting + Edit Meeting + divider + Delete Meeting
+                                  const MARGIN = 8;
+
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const viewportH = window.innerHeight / zMenu;
+                                  const viewportW = window.innerWidth / zMenu;
+
+                                  const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                                  let calcTop = rowCenter - MENU_H / 2;
+                                  calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+                                  let calcLeft = rect.right / zMenu - MENU_W;
+                                  calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                                  calcLeft = Math.max(calcLeft, MARGIN);
+
+                                  setRowActionsPos({ top: calcTop, left: calcLeft });
+                                  setOpenRowActionsId(meeting._id);
+                                }}
+                                className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
+                                title="More options"
+                              >
+                                <MoreVertIcon className="w-5 h-5" />
+                              </button>
+
+                              {isActionsOpen && rowActionsPos && createPortal(
+                                <>
+                                  <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+                                  <div
+                                    ref={rowActionsRef}
+                                    style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+                                    className="w-[170px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      onClick={() => {
+                                        setOpenRowActionsId(null);
+                                        setRowActionsPos(null);
+                                        handleMeetingClick(meeting);
+                                      }}
+                                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                    >
+                                      <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                      View Meeting
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setOpenRowActionsId(null);
+                                        setRowActionsPos(null);
+                                        handleEditMeeting(meeting);
+                                      }}
+                                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                      Edit Meeting
+                                    </button>
+                                    <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                                    <button
+                                      onClick={() => {
+                                        setOpenRowActionsId(null);
+                                        setRowActionsPos(null);
+                                        setMeetingToDelete(meeting);
+                                      }}
+                                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      Delete Meeting
+                                    </button>
+                                  </div>
+                                </>,
+                                document.body
+                              )}
+                            </div>
                           </div>
                         </td>
                     ),
@@ -1917,7 +2029,9 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
       {showMeetingForm && (
         <CompanyMeetingForm
           open={showMeetingForm}
-          mode="create"
+          mode={editingMeeting ? "view" : "create"}
+          startInEditMode={!!editingMeeting}
+          meetingData={editingMeeting}
           companyId={companyId}
           users={users}
           onSave={handleMeetingSave}
@@ -1931,8 +2045,43 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
         meetingData={selectedMeeting}
         users={users}
         onDelete={handleMeetingDelete}
+        onEdit={handleEditMeeting}
         onClose={() => setIsDetailsOpen(false)}
       />
+
+      {meetingToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
+                Confirm Delete
+              </h3>
+              <p className="text-sm text-gray-500 font-inter mb-6">
+                Delete meeting "{meetingToDelete.title || "Meeting"}"? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setMeetingToDelete(null)}
+                  disabled={deletingMeeting}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteMeetingConfirmed}
+                  disabled={deletingMeeting}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {deletingMeeting ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {dragGhost && createPortal(
         <div

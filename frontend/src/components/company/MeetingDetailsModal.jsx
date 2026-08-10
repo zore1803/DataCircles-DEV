@@ -76,7 +76,7 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
         onClick={onClose}
       />
       <div
-        className={`fixed dc-panel-card z-[10001] w-full sm:w-[500px] md:w-[600px] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${
           isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
         onClick={(e) => e.stopPropagation()}
