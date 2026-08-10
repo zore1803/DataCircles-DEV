@@ -752,6 +752,7 @@ const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, on
 
 const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = "" }) => {
   const [name, setName] = useState(initialName);
+  const [error, setError] = useState("");
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
 
@@ -759,6 +760,7 @@ const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = 
     if (isOpen) {
       setShouldRender(true);
       setName(initialName);
+      setError("");
       setTimeout(() => setIsSliding(true), 10);
     } else {
       setIsSliding(false);
@@ -766,13 +768,28 @@ const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = 
     }
   }, [isOpen, initialName]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (name.trim()) {
-      onSubmit(name.trim());
-      setName("");
-      onClose();
+    if (!name.trim()) return;
+    setError("");
+    // Stays open with the typed name + an inline error on a duplicate-name
+    // conflict, rather than closing and discarding what the user typed.
+    const result = await onSubmit(name.trim());
+    if (result && result.error) {
+      // The generic "failed" sentinel means a toast was already shown for
+      // a non-duplicate-name failure (e.g. subscription gate) — close as
+      // before. A real message means a 409 duplicate-name conflict, which
+      // stays inline and keeps the modal open.
+      if (result.error !== "failed") {
+        setError(result.error);
+      } else {
+        setName("");
+        onClose();
+      }
+      return;
     }
+    setName("");
+    onClose();
   };
 
   const handleDelete = () => {
@@ -861,7 +878,7 @@ const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = 
               <input
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => { setName(e.target.value); if (error) setError(""); }}
                 placeholder="e.g. Document Assets"
                 className="self-stretch focus:outline-none focus:border-blue-400 transition-all"
                 style={{
@@ -870,7 +887,7 @@ const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = 
                   gap: 8,
                   height: 40,
                   background: "#FFFFFF",
-                  border: "1px solid #EBEBEB",
+                  border: error ? "1px solid #EF4444" : "1px solid #EBEBEB",
                   boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
                   borderRadius: 8,
                   fontFamily: "Inter Tight",
@@ -881,6 +898,11 @@ const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = 
                 }}
                 autoFocus
               />
+              {error && (
+                <p style={{ fontFamily: "Inter Tight", fontSize: 12, lineHeight: "120%", color: "#EF4444" }}>
+                  {error}
+                </p>
+              )}
             </div>
           </div>
 
@@ -1067,6 +1089,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   });
   const [inlineEditingId, setInlineEditingId] = useState(null);
   const [inlineEditingName, setInlineEditingName] = useState("");
+  const [inlineEditingError, setInlineEditingError] = useState("");
   const [linkModalOpen, setLinkModalOpen] = useState(false);
 
   useEffect(() => {
@@ -1093,14 +1116,20 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
     }
   };
 
+  // Called by the modal form. Returns { error } on a duplicate-name
+  // conflict so the modal can show it inline and stay open with what the
+  // user typed, instead of closing on every submit regardless of outcome.
   const handleModalSubmit = async (name) => {
     if (modalState.editingId) {
-      await renameFolder(modalState.editingId, name);
-    } else {
-      await createFolder(name);
+      return renameFolder(modalState.editingId, name);
     }
+    return createFolder(name);
   };
 
+  // Returns {} on success, or { error } on a duplicate-name conflict (409)
+  // without toasting — callers keep whatever input UI is open and show the
+  // message right there instead of firing a corner notification and
+  // discarding what the user typed.
   const createFolder = async (name) => {
     try {
       await API.post("/folders", {
@@ -1109,12 +1138,17 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
       });
       setRefresh(!refresh);
       toast.success("Folder created");
+      return {};
     } catch (err) {
+      if (err.response?.status === 409) {
+        return { error: err.response?.data?.error || "A folder with this name already exists" };
+      }
       if (err.response?.status === 402) {
         toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
       } else {
         toast.error(err.response?.data?.error || "Failed to create folder");
       }
+      return { error: "failed" };
     }
   };
 
@@ -1123,27 +1157,49 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
       await API.put(`/folders/${folderId}`, { name });
       setRefresh(!refresh);
       toast.success("Folder renamed");
+      return {};
     } catch (err) {
+      if (err.response?.status === 409) {
+        return { error: err.response?.data?.error || "A folder with this name already exists" };
+      }
       if (err.response?.status === 402) {
         toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
       } else {
         toast.error(err.response?.data?.error || "Failed to rename folder");
       }
+      return { error: "failed" };
     }
   };
 
   const handleInlineSave = async (id) => {
     if (!inlineEditingId) return; // Prevent double save
     const nameToSave = inlineEditingName.trim() || "Untitled Folder";
-    setInlineEditingId(null);
-    setInlineEditingName("");
-    
+    setInlineEditingError("");
+
     if (id === "NEW") {
-      await createFolder(nameToSave);
+      const result = await createFolder(nameToSave);
+      if (!result.error) {
+        setInlineEditingId(null);
+        setInlineEditingName("");
+      } else if (result.error !== "failed") {
+        // Duplicate-name conflict: keep the input open with the error
+        // shown right there so the user can just change the name and
+        // retry instead of restarting the whole creation from scratch.
+        setInlineEditingError(result.error);
+      }
     } else {
       const folder = folders.find(f => f._id === id);
       if (folder && folder.name !== nameToSave) {
-        await renameFolder(id, nameToSave);
+        const result = await renameFolder(id, nameToSave);
+        if (!result.error) {
+          setInlineEditingId(null);
+          setInlineEditingName("");
+        } else if (result.error !== "failed") {
+          setInlineEditingError(result.error);
+        }
+      } else {
+        setInlineEditingId(null);
+        setInlineEditingName("");
       }
     }
   };
