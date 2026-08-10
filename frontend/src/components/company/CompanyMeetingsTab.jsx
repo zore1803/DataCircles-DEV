@@ -13,7 +13,6 @@ import {
   ChevronDown,
   Pin,
   PinOff,
-  MoreVertical,
   AlarmClock,
   Video,
   EyeOff,
@@ -1737,7 +1736,15 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                                 Organiser
                               </span>
                             </div>
-                            <MoreVertical size={16} style={{ color: "#BEBEC8", marginLeft: 12, flexShrink: 0 }} />
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleMeetingClick(meeting); }}
+                              className="flex items-center justify-center flex-shrink-0 hover:bg-gray-100 rounded-lg transition-colors"
+                              style={{ marginLeft: 12, padding: 4 }}
+                              title="View meeting"
+                            >
+                              <Eye size={16} style={{ color: "#78788D" }} />
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1969,7 +1976,15 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                                 Organiser
                               </span>
                             </div>
-                            <MoreVertical size={16} style={{ color: "#BEBEC8", marginLeft: 12, flexShrink: 0 }} />
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleMeetingClick(meeting); }}
+                              className="flex items-center justify-center flex-shrink-0 hover:bg-gray-100 rounded-lg transition-colors"
+                              style={{ marginLeft: 12, padding: 4 }}
+                              title="View meeting"
+                            >
+                              <Eye size={16} style={{ color: "#78788D" }} />
+                            </button>
                           </div>
                         </div>
                       </div>
