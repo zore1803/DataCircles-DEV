@@ -512,13 +512,18 @@ const CompanyCalendar = ({ companyId }) => {
   };
 
   const filteredEvents = (dayMeetings, dayTasks) => {
-    if (!searchTerm) return { meetings: dayMeetings, tasks: dayTasks };
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return { meetings: dayMeetings, tasks: dayTasks };
 
+    // A missing title used to throw here (undefined.toLowerCase()) and
+    // silently crash the whole month grid the moment a search term was
+    // typed — every day cell would just stop rendering, which is
+    // indistinguishable from "the search box doesn't work".
     const meetings = dayMeetings.filter((m) =>
-      m.title.toLowerCase().includes(searchTerm.toLowerCase())
+      (m.title || "").toLowerCase().includes(term)
     );
     const tasks = dayTasks.filter((t) =>
-      t.title.toLowerCase().includes(searchTerm.toLowerCase())
+      (t.title || "").toLowerCase().includes(term)
     );
 
     return { meetings, tasks };
