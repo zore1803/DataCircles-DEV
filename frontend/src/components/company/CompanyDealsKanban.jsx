@@ -1784,189 +1784,207 @@ export default function CompanyDealsKanban({
                               />
                             </div>
                           </td>
-                          {orderedDealColumns.map((col) => {
-                            const boundarySide = getDealBoundaryShadowSide(col.id);
-                            const boundaryOverlay = boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />;
-                            if (col.id === "dealId") {
-                              return (
-                                <td
-                                  key={col.id}
-                                  style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
-                                  className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
+                          {(() => {
+                            const lastColId = orderedDealColumns[orderedDealColumns.length - 1]?.id;
+                            const dealActionsMenu = (
+                              <div className="relative flex items-center justify-center flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isActionsOpen) {
+                                      setOpenRowActionsId(null);
+                                      setRowActionsPos(null);
+                                      return;
+                                    }
+                                    // Was anchored to the raw click coordinates
+                                    // (e.clientX/Y) with no zoom correction — so
+                                    // `left: e.clientX - 160` drifted further left
+                                    // the further right on the button you happened
+                                    // to click, and drifted again under this app's
+                                    // dynamic zoom. Same fix as the main Deals
+                                    // table: anchor to the button's own rect,
+                                    // divide by ancestor zoom (the menu portals to
+                                    // document.body, which paints inside the zoom),
+                                    // center vertically on the row rather than
+                                    // hanging off its bottom edge, and clamp both
+                                    // axes to the viewport.
+                                    const zMenu = getAncestorZoom(document.body);
+                                    const MENU_W = 160;
+                                    const MENU_H = 110; // View Deal + Edit Deal + divider + Delete Deal
+                                    const MARGIN = 8;
+
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const viewportH = window.innerHeight / zMenu;
+                                    const viewportW = window.innerWidth / zMenu;
+
+                                    const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                                    let calcTop = rowCenter - MENU_H / 2;
+                                    calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+                                    let calcLeft = rect.right / zMenu - MENU_W - 12;
+                                    calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                                    calcLeft = Math.max(calcLeft, MARGIN);
+
+                                    setRowActionsPos({ top: calcTop, left: calcLeft });
+                                    setOpenRowActionsId(deal._id);
+                                  }}
+                                  className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                                  title="More actions"
                                 >
-                                  <HighlightText text={dealIdShort} query={searchTerm} />
-                                  {boundaryOverlay}
-                                </td>
-                              );
-                            }
-                            if (col.id === "title") {
-                              return (
-                                <td key={col.id} style={{ height: 54, ...getDealStickyStyle(col.id, false) }} className="px-3 text-left">
-                                  <Link
-                                    to={`/deals/${deal._id}`}
-                                    className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
-                                  >
-                                    <HighlightText text={deal.title || "Deal Name"} query={searchTerm} />
-                                  </Link>
-                                  {boundaryOverlay}
-                                </td>
-                              );
-                            }
-                            if (col.id === "contact") {
-                              return (
-                                <td
-                                  key={col.id}
-                                  style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
-                                  className="px-3 text-[14px] leading-5 font-medium text-[#222530] text-left"
-                                >
-                                  <span className="truncate block">
-                                    <HighlightText text={deal.contact?.name || "-"} query={searchTerm} />
-                                  </span>
-                                  {boundaryOverlay}
-                                </td>
-                              );
-                            }
-                            if (col.id === "stage") {
-                              return (
-                                <td key={col.id} style={{ height: 54, ...getDealStickyStyle(col.id, false) }} className="px-3">
-                                  <div className="flex items-center justify-start">
-                                    <span
-                                      style={{ width: 80, height: 24, padding: "5px 12px", borderRadius: 53, ...pillStyle }}
-                                      className="inline-flex items-center justify-center text-xs font-medium"
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+                                {isActionsOpen && rowActionsPos && createPortal(
+                                  <>
+                                    <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+                                    <div
+                                      ref={rowActionsRef}
+                                      style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+                                      className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
                                     >
-                                      <HighlightText text={deal.status || "Open"} query={searchTerm} />
-                                    </span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenRowActionsId(null);
+                                          setRowActionsPos(null);
+                                          navigate(`/deals/${deal._id}`);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                      >
+                                        <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                        View Deal
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenRowActionsId(null);
+                                          setRowActionsPos(null);
+                                          navigate(`/deals/${deal._id}`);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                        Edit Deal
+                                      </button>
+                                      <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenRowActionsId(null);
+                                          setRowActionsPos(null);
+                                          setDealToDelete(deal);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        Delete Deal
+                                      </button>
+                                    </div>
+                                  </>,
+                                  document.body,
+                                )}
+                              </div>
+                            );
+
+                            return orderedDealColumns.map((col) => {
+                              const boundarySide = getDealBoundaryShadowSide(col.id);
+                              const boundaryOverlay = boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />;
+                              const isLastCol = col.id === lastColId;
+
+                              if (col.id === "dealId") {
+                                return (
+                                  <td
+                                    key={col.id}
+                                    style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
+                                    className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <HighlightText text={dealIdShort} query={searchTerm} />
+                                      {isLastCol && dealActionsMenu}
+                                    </div>
+                                    {boundaryOverlay}
+                                  </td>
+                                );
+                              }
+                              if (col.id === "title") {
+                                return (
+                                  <td key={col.id} style={{ height: 54, ...getDealStickyStyle(col.id, false) }} className="px-3 text-left">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <Link
+                                        to={`/deals/${deal._id}`}
+                                        className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block min-w-0"
+                                      >
+                                        <HighlightText text={deal.title || "Deal Name"} query={searchTerm} />
+                                      </Link>
+                                      {isLastCol && dealActionsMenu}
+                                    </div>
+                                    {boundaryOverlay}
+                                  </td>
+                                );
+                              }
+                              if (col.id === "contact") {
+                                return (
+                                  <td
+                                    key={col.id}
+                                    style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
+                                    className="px-3 text-[14px] leading-5 font-medium text-[#222530] text-left"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="truncate block min-w-0">
+                                        <HighlightText text={deal.contact?.name || "-"} query={searchTerm} />
+                                      </span>
+                                      {isLastCol && dealActionsMenu}
+                                    </div>
+                                    {boundaryOverlay}
+                                  </td>
+                                );
+                              }
+                              if (col.id === "stage") {
+                                return (
+                                  <td key={col.id} style={{ height: 54, ...getDealStickyStyle(col.id, false) }} className="px-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span
+                                        style={{ width: 80, height: 24, padding: "5px 12px", borderRadius: 53, ...pillStyle }}
+                                        className="inline-flex items-center justify-center text-xs font-medium"
+                                      >
+                                        <HighlightText text={deal.status || "Open"} query={searchTerm} />
+                                      </span>
+                                      {isLastCol && dealActionsMenu}
+                                    </div>
+                                    {boundaryOverlay}
+                                  </td>
+                                );
+                              }
+                              if (col.id === "amount") {
+                                return (
+                                  <td
+                                    key={col.id}
+                                    style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
+                                    className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <HighlightText text={`₹${(deal.amount || 0).toLocaleString("en-IN")}`} query={searchTerm} />
+                                      {isLastCol && dealActionsMenu}
+                                    </div>
+                                    {boundaryOverlay}
+                                  </td>
+                                );
+                              }
+                              // lastUpdated
+                              return (
+                                <td
+                                  key={col.id}
+                                  style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
+                                  className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <HighlightText text={lastUpdated} query={searchTerm} />
+                                    {isLastCol && dealActionsMenu}
                                   </div>
                                   {boundaryOverlay}
                                 </td>
                               );
-                            }
-                            if (col.id === "amount") {
-                              return (
-                                <td
-                                  key={col.id}
-                                  style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
-                                  className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
-                                >
-                                  <HighlightText text={`₹${(deal.amount || 0).toLocaleString("en-IN")}`} query={searchTerm} />
-                                  {boundaryOverlay}
-                                </td>
-                              );
-                            }
-                            // lastUpdated is last in the base column order and carries
-                            // the row-actions menu — same "actions rides the last
-                            // column" pattern as the Vendors list, but here anchored
-                            // specifically to this column rather than whichever ends up
-                            // last, since pinning/reordering can move other columns past it.
-                            return (
-                            <td
-                              key={col.id}
-                              style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
-                              className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap"
-                            >
-                              <div className="flex items-center justify-between gap-2" onMouseDown={(e) => e.stopPropagation()}>
-                                <HighlightText text={lastUpdated} query={searchTerm} />
-                                <div className="relative flex items-center justify-center flex-shrink-0">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (isActionsOpen) {
-                                        setOpenRowActionsId(null);
-                                        setRowActionsPos(null);
-                                        return;
-                                      }
-                                      // Was anchored to the raw click coordinates
-                                      // (e.clientX/Y) with no zoom correction — so
-                                      // `left: e.clientX - 160` drifted further left
-                                      // the further right on the button you happened
-                                      // to click, and drifted again under this app's
-                                      // dynamic zoom. Same fix as the main Deals
-                                      // table: anchor to the button's own rect,
-                                      // divide by ancestor zoom (the menu portals to
-                                      // document.body, which paints inside the zoom),
-                                      // center vertically on the row rather than
-                                      // hanging off its bottom edge, and clamp both
-                                      // axes to the viewport.
-                                      const zMenu = getAncestorZoom(document.body);
-                                      const MENU_W = 160;
-                                      const MENU_H = 110; // View Deal + Edit Deal + divider + Delete Deal
-                                      const MARGIN = 8;
-
-                                      const rect = e.currentTarget.getBoundingClientRect();
-                                      const viewportH = window.innerHeight / zMenu;
-                                      const viewportW = window.innerWidth / zMenu;
-
-                                      const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
-                                      let calcTop = rowCenter - MENU_H / 2;
-                                      calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
-
-                                      let calcLeft = rect.right / zMenu - MENU_W - 12;
-                                      calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
-                                      calcLeft = Math.max(calcLeft, MARGIN);
-
-                                      setRowActionsPos({ top: calcTop, left: calcLeft });
-                                      setOpenRowActionsId(deal._id);
-                                    }}
-                                    className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                                    title="More actions"
-                                  >
-                                    <MoreVertical className="w-4 h-4" />
-                                  </button>
-                                  {isActionsOpen && rowActionsPos && createPortal(
-                                    <>
-                                      <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
-                                      <div
-                                        ref={rowActionsRef}
-                                        style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-                                        className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
-                                      >
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setOpenRowActionsId(null);
-                                            setRowActionsPos(null);
-                                            navigate(`/deals/${deal._id}`);
-                                          }}
-                                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                                        >
-                                          <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                                          View Deal
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setOpenRowActionsId(null);
-                                            setRowActionsPos(null);
-                                            navigate(`/deals/${deal._id}`);
-                                          }}
-                                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                                        >
-                                          <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                                          Edit Deal
-                                        </button>
-                                        <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setOpenRowActionsId(null);
-                                            setRowActionsPos(null);
-                                            setDealToDelete(deal);
-                                          }}
-                                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                          Delete Deal
-                                        </button>
-                                      </div>
-                                    </>,
-                                    document.body,
-                                  )}
-                                </div>
-                              </div>
-                              {boundaryOverlay}
-                            </td>
-                            );
-                          })}
+                            });
+                          })()}
                         </tr>
                       );
                     })

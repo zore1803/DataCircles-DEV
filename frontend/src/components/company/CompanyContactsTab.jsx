@@ -914,21 +914,39 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                       };
                       const boundarySide = getBoundaryShadowSide(col.id);
                       const boundaryOverlay = boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />;
+                      const isLastCol = col.id === orderedColumns[orderedColumns.length - 1]?.id;
+                      // Was a MoreVertical button with no onClick — a dead control.
+                      // Replaced with a direct link to the same contact detail route
+                      // the Name cell already uses (/contacts/:id), so a row can be
+                      // opened from here without depending on which column is last.
+                      const openContactButton = (
+                        <Link
+                          to={`/contacts/${contact._id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                          title="Open contact details"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </Link>
+                      );
 
                       if (col.id === "name") {
                         return (
                           <td key={col.id} style={cellStyle} className="px-3 text-left">
-                            <div className="flex items-center space-x-3 truncate w-full">
-                              <div className="flex-shrink-0">
-                                <ProfilePicture contact={contact} />
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center space-x-3 truncate min-w-0">
+                                <div className="flex-shrink-0">
+                                  <ProfilePicture contact={contact} />
+                                </div>
+                                <Link
+                                  to={`/contacts/${contact._id}`}
+                                  className="text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-all duration-150 ease-out"
+                                  title={contact.name}
+                                >
+                                  <HighlightText text={contact.name} query={searchTerm} />
+                                </Link>
                               </div>
-                              <Link
-                                to={`/contacts/${contact._id}`}
-                                className="text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-all duration-150 ease-out"
-                                title={contact.name}
-                              >
-                                <HighlightText text={contact.name} query={searchTerm} />
-                              </Link>
+                              {isLastCol && openContactButton}
                             </div>
                             {boundaryOverlay}
                           </td>
@@ -937,12 +955,15 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                       if (col.id === "email") {
                         return (
                           <td key={col.id} style={cellStyle} className="px-3 text-left" title={contact.email}>
-                            <a
-                              href={`mailto:${contact.email}`}
-                              className="text-[14px] leading-5 font-medium text-blue-600 hover:underline transition-colors truncate block"
-                            >
-                              <HighlightText text={contact.email} query={searchTerm} />
-                            </a>
+                            <div className="flex items-center justify-between gap-2">
+                              <a
+                                href={`mailto:${contact.email}`}
+                                className="text-[14px] leading-5 font-medium text-blue-600 hover:underline transition-colors truncate block min-w-0"
+                              >
+                                <HighlightText text={contact.email} query={searchTerm} />
+                              </a>
+                              {isLastCol && openContactButton}
+                            </div>
                             {boundaryOverlay}
                           </td>
                         );
@@ -950,16 +971,19 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                       if (col.id === "phone") {
                         return (
                           <td key={col.id} style={cellStyle} className="px-3 text-left whitespace-nowrap" title={contact.phone}>
-                            {contact.phone ? (
-                              <a
-                                href={`tel:${contact.phone}`}
-                                className="text-[14px] leading-5 font-medium text-blue-600 hover:underline transition-colors"
-                              >
-                                <HighlightText text={contact.phone} query={searchTerm} />
-                              </a>
-                            ) : (
-                              <span className="text-[14px] leading-5 font-medium text-gray-400">—</span>
-                            )}
+                            <div className="flex items-center justify-between gap-2">
+                              {contact.phone ? (
+                                <a
+                                  href={`tel:${contact.phone}`}
+                                  className="text-[14px] leading-5 font-medium text-blue-600 hover:underline transition-colors"
+                                >
+                                  <HighlightText text={contact.phone} query={searchTerm} />
+                                </a>
+                              ) : (
+                                <span className="text-[14px] leading-5 font-medium text-gray-400">—</span>
+                              )}
+                              {isLastCol && openContactButton}
+                            </div>
                             {boundaryOverlay}
                           </td>
                         );
@@ -971,9 +995,12 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                             style={cellStyle}
                             className="px-3 text-[14px] leading-5 font-medium text-[#525866] text-left"
                           >
-                            <span className="truncate block">
-                              <HighlightText text={contact.role} query={searchTerm} />
-                            </span>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate block min-w-0">
+                                <HighlightText text={contact.role} query={searchTerm} />
+                              </span>
+                              {isLastCol && openContactButton}
+                            </div>
                             {boundaryOverlay}
                           </td>
                         );
@@ -981,7 +1008,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                       if (col.id === "status") {
                         return (
                           <td key={col.id} style={cellStyle} className="px-3">
-                            <div className="relative flex items-center justify-start">
+                            <div className="flex items-center justify-between gap-2">
                               <span
                                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getBadgeColor(
                                   contact.stageStatus || contact.lifecycleStage
@@ -989,18 +1016,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                               >
                                 <HighlightText text={contact.stageStatus || contact.lifecycleStage || "New"} query={searchTerm} />
                               </span>
-                              {/* Was a MoreVertical button with no onClick — a dead control.
-                                  Replaced with a direct link to the same contact detail route
-                                  the Name cell already uses (/contacts/:id), so a row can be
-                                  opened from here without depending on which column is visible. */}
-                              <Link
-                                to={`/contacts/${contact._id}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                                title="Open contact details"
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                              </Link>
+                              {isLastCol && openContactButton}
                             </div>
                             {boundaryOverlay}
                           </td>
