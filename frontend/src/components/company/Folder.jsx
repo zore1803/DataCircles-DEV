@@ -617,7 +617,7 @@ const FileCard = ({ file, onView, onDelete, isLast }) => {
   );
 };
 
-const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, isFirst, isLast, isEditing, editingName, onEditingNameChange, onSaveEdit, onCancelEdit, searchTerm }) => (
+const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, isFirst, isLast, isEditing, editingName, editingError, onEditingNameChange, onSaveEdit, onCancelEdit, searchTerm }) => (
   <div className="transition-all">
     <div
       className="flex items-center justify-between gap-2"
@@ -639,19 +639,27 @@ const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, on
         )}
         <div className="flex-1 min-w-0">
           {isEditing ? (
-            <input
-              autoFocus
-              type="text"
-              value={editingName}
-              onChange={(e) => onEditingNameChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onSaveEdit();
-                if (e.key === "Escape") onCancelEdit();
-              }}
-              onBlur={onSaveEdit}
-              onClick={(e) => e.stopPropagation()}
-              className="text-sm font-medium text-gray-900 truncate bg-transparent border-b border-blue-500 focus:outline-none w-full"
-            />
+            <>
+              <input
+                autoFocus
+                type="text"
+                value={editingName}
+                onChange={(e) => onEditingNameChange(e.target.value)}
+                onKeyDown={(e) => {
+                  // Escape attempts a save too (instead of a blind discard)
+                  // so a duplicate name still shows its error, same as
+                  // Enter/blur.
+                  if (e.key === "Enter" || e.key === "Escape") onSaveEdit();
+                }}
+                onBlur={onSaveEdit}
+                onClick={(e) => e.stopPropagation()}
+                className="text-sm font-medium text-gray-900 truncate bg-transparent border-b focus:outline-none w-full"
+                style={{ borderColor: editingError ? "#EF4444" : "#3B82F6" }}
+              />
+              {editingError && (
+                <p className="text-xs mt-0.5" style={{ color: "#EF4444" }}>{editingError}</p>
+              )}
+            </>
           ) : (
             <h3 className="text-sm font-medium text-gray-900 truncate"><HighlightText text={folder.name || "Untitled"} highlight={searchTerm || ""} /></h3>
           )}
@@ -1069,6 +1077,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   const [folders, setFolders] = useState([]);
   const [selectedFolderId, setSelectedFolderId] = useState("");
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const [folderPickerSearch, setFolderPickerSearch] = useState("");
   const [selectedFileNames, setSelectedFileNames] = useState([]);
   const [fileSearchTerm, setFileSearchTerm] = useState("");
   const [openFolderId, setOpenFolderId] = useState("");
@@ -1851,20 +1860,39 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                     style={{ boxSizing: "border-box", padding: 0, height: 41 }}
                   >
                     {inlineEditingId === folder._id ? (
-                      <input
-                        autoFocus
-                        type="text"
-                        value={inlineEditingName}
-                        onChange={(e) => setInlineEditingName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleInlineSave(folder._id);
-                          if (e.key === "Escape") { setInlineEditingId(null); setInlineEditingName(""); }
-                        }}
-                        onBlur={() => handleInlineSave(folder._id)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full text-center border-b-2 border-blue-500 focus:outline-none bg-transparent px-1"
-                        style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 18, lineHeight: "22px", color: "#111216" }}
-                      />
+                      <>
+                        <input
+                          autoFocus
+                          type="text"
+                          value={inlineEditingName}
+                          onChange={(e) => { setInlineEditingName(e.target.value); if (inlineEditingError) setInlineEditingError(""); }}
+                          onKeyDown={(e) => {
+                            // Escape now attempts a save too (instead of a
+                            // blind discard) so a duplicate name still shows
+                            // its error right below, same as Enter/blur.
+                            if (e.key === "Enter" || e.key === "Escape") handleInlineSave(folder._id);
+                          }}
+                          onBlur={() => handleInlineSave(folder._id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full text-center border-b-2 focus:outline-none bg-transparent px-1"
+                          style={{
+                            fontFamily: "Inter",
+                            fontWeight: 500,
+                            fontSize: 18,
+                            lineHeight: "22px",
+                            color: "#111216",
+                            borderColor: inlineEditingError ? "#EF4444" : "#3B82F6",
+                          }}
+                        />
+                        {inlineEditingError && (
+                          <span
+                            className="w-full text-center"
+                            style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 11, lineHeight: "14px", color: "#EF4444" }}
+                          >
+                            {inlineEditingError}
+                          </span>
+                        )}
+                      </>
                     ) : (
                       <span
                         style={{
@@ -1976,7 +2004,8 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                 onDeleteFile={deleteFile}
                 isEditing={inlineEditingId === folder._id}
                 editingName={inlineEditingName}
-                onEditingNameChange={setInlineEditingName}
+                editingError={inlineEditingError}
+                onEditingNameChange={(v) => { setInlineEditingName(v); if (inlineEditingError) setInlineEditingError(""); }}
                 onSaveEdit={() => handleInlineSave(folder._id)}
                 searchTerm={searchTerm}
                 onCancelEdit={() => {
@@ -2206,7 +2235,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                       boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
                       borderRadius: 8,
                     }}
-                    onClick={() => setFolderPickerOpen((prev) => !prev)}
+                    onClick={() => {
+                      setFolderPickerOpen((prev) => !prev);
+                      setFolderPickerSearch("");
+                    }}
                   >
                     <span
                       className="flex-1 truncate"
@@ -2232,39 +2264,73 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                           }}
                         />
                         <div
-                          className="absolute left-0 top-full mt-1 bg-white overflow-y-auto z-20"
+                          className="absolute left-0 top-full mt-1 bg-white z-20 flex flex-col"
                           style={{
                             boxSizing: "border-box",
                             width: "100%",
-                            maxHeight: 4 * 40,
                             border: "1px solid #EBEBEB",
                             borderRadius: 8,
                             boxShadow: "0px 4px 12px rgba(10, 13, 20, 0.08)",
                           }}
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          {folders.map((f) => (
-                            <div
-                              key={f._id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedFolderId(f._id);
-                                setFolderPickerOpen(false);
-                              }}
-                              className="flex items-center hover:bg-gray-50 cursor-pointer truncate"
-                              style={{
-                                boxSizing: "border-box",
-                                height: 40,
-                                padding: "10px 12px",
-                                background: f._id === selectedFolderId ? "#F5F7FA" : "#FFFFFF",
-                                fontFamily: "Inter Tight",
-                                fontWeight: 400,
-                                fontSize: 14,
-                                color: "#171717",
-                              }}
-                            >
-                              {f.name}
+                          {folders.length > 5 && (
+                            <div style={{ padding: 6, borderBottom: "1px solid #EBEBEB" }}>
+                              <input
+                                type="text"
+                                autoFocus
+                                value={folderPickerSearch}
+                                onChange={(e) => setFolderPickerSearch(e.target.value)}
+                                placeholder="Search folders..."
+                                className="w-full focus:outline-none"
+                                style={{
+                                  boxSizing: "border-box",
+                                  padding: "6px 8px",
+                                  background: "#F7F7F7",
+                                  borderRadius: 6,
+                                  fontFamily: "Inter Tight",
+                                  fontWeight: 400,
+                                  fontSize: 13,
+                                  color: "#171717",
+                                }}
+                              />
                             </div>
-                          ))}
+                          )}
+                          <div className="overflow-y-auto" style={{ maxHeight: 4 * 40 }}>
+                            {folders
+                              .filter((f) => f.name.toLowerCase().includes(folderPickerSearch.trim().toLowerCase()))
+                              .map((f) => (
+                                <div
+                                  key={f._id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedFolderId(f._id);
+                                    setFolderPickerOpen(false);
+                                  }}
+                                  className="flex items-center hover:bg-gray-50 cursor-pointer truncate"
+                                  style={{
+                                    boxSizing: "border-box",
+                                    height: 40,
+                                    padding: "10px 12px",
+                                    background: f._id === selectedFolderId ? "#F5F7FA" : "#FFFFFF",
+                                    fontFamily: "Inter Tight",
+                                    fontWeight: 400,
+                                    fontSize: 14,
+                                    color: "#171717",
+                                  }}
+                                >
+                                  {f.name}
+                                </div>
+                              ))}
+                            {folders.length > 0 && folders.filter((f) => f.name.toLowerCase().includes(folderPickerSearch.trim().toLowerCase())).length === 0 && (
+                              <div
+                                className="flex items-center justify-center"
+                                style={{ height: 40, fontFamily: "Inter Tight", fontSize: 13, color: "#A3A3A3" }}
+                              >
+                                No folders found
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </>
                     )}
