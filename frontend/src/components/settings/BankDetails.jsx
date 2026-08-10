@@ -34,7 +34,7 @@ import BankModal from "./BankModal";
 const maskAccountNumber = (num = "") => {
   const value = String(num);
   if (value.length <= 4) return value;
-  return `${"*".repeat(Math.max(value.length - 4, 0))}${value.slice(-4)}`;
+  return `${"X".repeat(Math.max(value.length - 4, 0))}${value.slice(-4)}`;
 };
 
 const BankDetails = () => {
@@ -42,6 +42,7 @@ const BankDetails = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBank, setEditingBank] = useState(null);
+  const [deleteBankId, setDeleteBankId] = useState(null);
 
   const fetchBanks = useCallback(async () => {
     try {
@@ -104,16 +105,27 @@ const BankDetails = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this bank account?")) return;
+  const handleDelete = (id) => {
+    // Open confirmation modal
+    setDeleteBankId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteBankId) return;
     try {
-      await API.delete(`/bank-details/${id}`);
+      await API.delete(`/bank-details/${deleteBankId}`);
       toast.success("Bank account deleted");
       await fetchBanks();
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.error || "Failed to delete bank account");
+    } finally {
+      setDeleteBankId(null);
     }
+  };
+
+  const cancelDelete = () => {
+    setDeleteBankId(null);
   };
 
   const handleTransferFunds = () => {
@@ -227,7 +239,7 @@ const BankDetails = () => {
                 <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs">
                   <div>
                     <span className="font-semibold text-gray-500">Account No</span>
-                    <p className="mt-0.5 font-mono font-medium text-gray-800">
+                    <p className="mt-0.5 font-mono font-medium text-gray-800 leading-none">
                       {maskAccountNumber(bank.accountNumber)}
                     </p>
                   </div>
@@ -299,6 +311,33 @@ const BankDetails = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {deleteBankId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900">Confirm Deletion</h3>
+            <p className="mb-4 text-sm text-gray-700">
+              Deleting the bank account from here will remove the bank details from all existing invoices and it is irreversible.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={cancelDelete}
+                className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
