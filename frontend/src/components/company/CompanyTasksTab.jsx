@@ -20,6 +20,7 @@ import {
   Eye,
   Edit3,
   Trash2,
+  CheckCircle,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
@@ -475,6 +476,23 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
         toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
       } else {
         toast.error(err.response?.data?.error || "Failed to update task.");
+      }
+    }
+  };
+
+  // Toggle used by the checkmark next to the task title in the table, same
+  // as the global Tasks & Meetings page — Completed <-> Pending.
+  const handleToggleTaskStatus = async (task) => {
+    const nextStatus = task.status === "Completed" ? "Pending" : "Completed";
+    try {
+      await API.put(`/tasks/${task._id}/status`, { status: nextStatus });
+      await refetchTasks();
+      toast.success("Status updated");
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Update failed");
       }
     }
   };
@@ -1241,21 +1259,34 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                     ),
                     title: (
                         <td key="title" style={{ height: 60 }} className="pl-6 pr-3 py-3 border-r border-b border-[#E1E4EA]">
-                          <div className="flex flex-col gap-0.5">
-                            <span
-                              style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "20px", color: "#0E121B", textDecoration }}
-                              className="truncate"
+                          <div className="flex items-start gap-3 w-full overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleTaskStatus(task);
+                              }}
+                              title={isCompleted ? "Mark as pending" : "Mark as complete"}
+                              className={`flex-shrink-0 mt-0.5 p-0.5 rounded-full transition-all duration-200 ${isCompleted ? "bg-green-100 text-green-600" : "text-gray-300 hover:text-green-500 hover:bg-green-50"}`}
                             >
-                              <HighlightText text={task.title || "Untitled Task"} query={searchTerm} />
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <BriefcaseIcon className="flex-shrink-0" />
+                              <CheckCircle className="w-5 h-5" />
+                            </button>
+                            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                               <span
-                                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#8D8D8E", textDecoration }}
+                                style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "20px", color: "#0E121B", textDecoration }}
                                 className="truncate"
                               >
-                                Related to: <HighlightText text={linkedEntity?.entityId?.name || linkedEntity?.entityId?.title || "(Deal Name)"} query={searchTerm} />
+                                <HighlightText text={task.title || "Untitled Task"} query={searchTerm} />
                               </span>
+                              <div className="flex items-center gap-1">
+                                <BriefcaseIcon className="flex-shrink-0" />
+                                <span
+                                  style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#8D8D8E", textDecoration }}
+                                  className="truncate"
+                                >
+                                  Related to: <HighlightText text={linkedEntity?.entityId?.name || linkedEntity?.entityId?.title || "(Deal Name)"} query={searchTerm} />
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </td>
