@@ -55,7 +55,7 @@ const QuickAddModal = ({ isOpen, onClose, onAddMeeting, onAddTask, date }) => {
   const displayDate = date ? new Date(date + "T00:00:00") : null;
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[10000] p-4">
       <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-xs border border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xl font-semibold text-gray-900">Quick Add</h3>
@@ -111,12 +111,14 @@ const ActivityListPopup = ({
   tasks,
   onMeetingClick,
   onTaskClick,
+  onAddMeeting,
+  onAddTask,
   onClose,
 }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[10000] p-4">
       <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-sm border border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-semibold text-gray-900">
@@ -134,46 +136,58 @@ const ActivityListPopup = ({
           </button>
         </div>
         <div className="max-h-[60vh] overflow-y-auto space-y-2">
-          {meetings.length === 0 && tasks.length === 0 ? (
-            <p className="text-sm text-gray-600">No activities for this day.</p>
-          ) : (
-            <>
-              {meetings.length > 0 && (
-                <div className="mb-3">
-                  <h4 className="text-xs font-medium text-gray-700 mb-2">
-                    Meetings
-                  </h4>
-                  {meetings.map((meeting) => (
-                    <div
-                      key={meeting._id}
-                      className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
-                      onClick={() => onMeetingClick(meeting)}
-                    >
-                      <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                      <span className="truncate">{meeting.title}</span>
-                    </div>
-                  ))}
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-gray-700">Meetings</h4>
+              <button
+                onClick={() => onAddMeeting(date)}
+                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                <Plus className="w-3 h-3" />
+                Add
+              </button>
+            </div>
+            {meetings.length === 0 ? (
+              <p className="text-xs text-gray-500">No meetings scheduled.</p>
+            ) : (
+              meetings.map((meeting) => (
+                <div
+                  key={meeting._id}
+                  className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
+                  onClick={() => onMeetingClick(meeting)}
+                >
+                  <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                  <span className="truncate">{meeting.title}</span>
                 </div>
-              )}
-              {tasks.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-medium text-gray-700 mb-2">
-                    Tasks
-                  </h4>
-                  {tasks.map((task) => (
-                    <div
-                      key={task._id}
-                      className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
-                      onClick={() => onTaskClick(task)}
-                    >
-                      <CheckSquare className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                      <span className="truncate">{task.title}</span>
-                    </div>
-                  ))}
+              ))
+            )}
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-gray-700">Tasks</h4>
+              <button
+                onClick={() => onAddTask(date)}
+                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                <Plus className="w-3 h-3" />
+                Add
+              </button>
+            </div>
+            {tasks.length === 0 ? (
+              <p className="text-xs text-gray-500">No tasks scheduled.</p>
+            ) : (
+              tasks.map((task) => (
+                <div
+                  key={task._id}
+                  className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
+                  onClick={() => onTaskClick(task)}
+                >
+                  <CheckSquare className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                  <span className="truncate">{task.title}</span>
                 </div>
-              )}
-            </>
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -404,6 +418,26 @@ const CompanyCalendar = ({ companyId }) => {
     setSelectedTask(null);
     setModalOpen(true);
     setQuickAddOpen(false);
+  };
+
+  // "+ Add" inside the day's activity list popup — same create flow as
+  // Quick Add, just seeded with that day's date instead of quickAddDate.
+  const handleAddMeetingForDate = (date) => {
+    setModalType("meeting");
+    setModalMode("create");
+    setCalendarDate(formatDateToString(date));
+    setSelectedMeeting(null);
+    setModalOpen(true);
+    setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
+  };
+
+  const handleAddTaskForDate = (date) => {
+    setModalType("task");
+    setModalMode("create");
+    setCalendarDate(formatDateToString(date));
+    setSelectedTask(null);
+    setModalOpen(true);
+    setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
   };
 
   const handleMeetingClick = (meeting) => {
@@ -867,6 +901,8 @@ const CompanyCalendar = ({ companyId }) => {
         tasks={activityPopup.tasks}
         onMeetingClick={handleMeetingClick}
         onTaskClick={handleTaskClick}
+        onAddMeeting={handleAddMeetingForDate}
+        onAddTask={handleAddTaskForDate}
         onClose={() =>
           setActivityPopup({
             isOpen: false,
