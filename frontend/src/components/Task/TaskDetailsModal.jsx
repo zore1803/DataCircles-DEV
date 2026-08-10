@@ -103,7 +103,7 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
         onClick={onClose}
       />
       <div
-        className={`fixed dc-panel-card z-[10001] w-full sm:w-[500px] md:w-[600px] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${
           isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -332,7 +332,7 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
                   >
                     {linkedContact?.name?.charAt(0)?.toUpperCase() || "?"}
                   </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
+                  <div className="flex flex-col items-start min-w-0 w-full" style={{ gap: 4 }}>
                     <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
                       Contact
                     </span>
@@ -351,7 +351,7 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
                   >
                     <DealIcon className="w-5 h-5" />
                   </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
+                  <div className="flex flex-col items-start min-w-0 w-full" style={{ gap: 4 }}>
                     <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
                       Deal
                     </span>
@@ -374,7 +374,7 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
                   >
                     <Video className="w-5 h-5" style={{ color: "#0085FF" }} />
                   </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
+                  <div className="flex flex-col items-start min-w-0 w-full" style={{ gap: 4 }}>
                     <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
                       Meeting
                     </span>
@@ -393,7 +393,7 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
                   >
                     <Landmark className="w-5 h-5" style={{ color: "#6155F5" }} />
                   </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
+                  <div className="flex flex-col items-start min-w-0 w-full" style={{ gap: 4 }}>
                     <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
                       Invoice
                     </span>
