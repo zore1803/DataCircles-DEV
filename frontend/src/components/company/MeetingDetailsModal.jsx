@@ -14,12 +14,6 @@ const DealIcon = (props) => (
   </svg>
 );
 
-const InvoiceIcon = (props) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M5.83333 15.5H14.1667V14H5.83333V15.5ZM5.83333 11.75H14.1667V10.25H5.83333V11.75ZM4.16667 18.3333C3.70833 18.3333 3.31597 18.1701 2.98958 17.8438C2.66319 17.5174 2.5 17.125 2.5 16.6667V3.33333C2.5 2.875 2.66319 2.48264 2.98958 2.15625C3.31597 1.82986 3.70833 1.66667 4.16667 1.66667H12.5L17.5 6.66667V16.6667C17.5 17.125 17.3368 17.5174 17.0104 17.8438C16.684 18.1701 16.2917 18.3333 15.8333 18.3333H4.16667ZM11.6667 7.5V3.33333H4.16667V16.6667H15.8333V7.5H11.6667Z" fill="#6155F5" />
-  </svg>
-);
-
 const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEdit, onComplete }) => {
   const [isSliding, setIsSliding] = React.useState(false);
   const [shouldRender, setShouldRender] = React.useState(false);
@@ -58,15 +52,15 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
   // Editing a completed meeting doesn't make sense — it already happened.
   const isCompleted = meetingData.status === "completed";
   const organizer = typeof meetingData.createdBy === "object" ? meetingData.createdBy : null;
-  const internalTeam =
-    users?.filter(
-      (user) =>
-        meetingData.participants?.includes(user._id) ||
-        meetingData.contact?._id === user._id ||
-        meetingData.vendor?._id === user._id ||
-        meetingData.company?._id === user._id,
-    ) || [];
-  const primaryContact = internalTeam[0];
+  // internalParticipants (your staff, ref: User) and participants (the
+  // client's contacts, ref: Contact) are now genuinely separate fields on
+  // the meeting itself — populated server-side, no need to cross-reference
+  // against a locally-fetched user/contact list here.
+  const internalTeam = meetingData.internalParticipants || [];
+  const clientContacts = meetingData.contact
+    ? [meetingData.contact]
+    : meetingData.participants || [];
+  const primaryContact = clientContacts[0];
 
   return (
     <>
@@ -308,6 +302,28 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
             </div>
           </div>
 
+          {/* Meeting Purpose */}
+          {meetingData.description && (
+            <div className="box-border flex flex-col items-start w-full" style={{ padding: "12px 24px" }}>
+              <div
+                className="flex flex-col items-start w-full"
+                style={{ padding: 14, gap: 16, backgroundColor: "#F8FAFC", borderRadius: 14 }}
+              >
+                <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
+                  Meeting Purpose
+                </span>
+                <p
+                  className="w-full whitespace-pre-line"
+                  style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}
+                >
+                  {meetingData.description}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div style={{ margin: "0 24px", borderBottom: "1px solid #D9D9D9" }} />
+
           {/* Organiser / Internal Team / Client Contacts */}
           <div className="flex flex-col items-start w-full" style={{ padding: "12px 24px", gap: 14 }}>
             {/* Organiser */}
@@ -412,22 +428,26 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
             <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
               Client Contacts
             </span>
-            {meetingData.contact ? (
-              <div className="flex flex-row items-center" style={{ gap: 12 }}>
-                <div
-                  className="rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0"
-                  style={{ width: 32, height: 32 }}
-                >
-                  {meetingData.contact?.name?.charAt(0)?.toUpperCase() || "?"}
-                </div>
-                <div className="flex flex-col items-start" style={{ gap: 4 }}>
-                  <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
-                    {meetingData.contact?.name}
-                  </span>
-                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
-                    {meetingData.contact?.role || "—"}
-                  </span>
-                </div>
+            {clientContacts.length > 0 ? (
+              <div className="flex flex-col items-start w-full" style={{ gap: 12 }}>
+                {clientContacts.map((contact) => (
+                  <div key={contact._id} className="flex flex-row items-center" style={{ gap: 12 }}>
+                    <div
+                      className="rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0"
+                      style={{ width: 32, height: 32 }}
+                    >
+                      {contact?.name?.charAt(0)?.toUpperCase() || "?"}
+                    </div>
+                    <div className="flex flex-col items-start" style={{ gap: 4 }}>
+                      <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
+                        {contact?.name}
+                      </span>
+                      <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+                        {contact?.role || "—"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, color: "#8D8D8E" }}>
@@ -449,26 +469,6 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
           </div>
 
           <div style={{ margin: "0 24px", borderBottom: "1px solid #D9D9D9" }} />
-
-          {/* Meeting Purpose */}
-          {meetingData.description && (
-            <div className="box-border flex flex-col items-start w-full" style={{ padding: "12px 24px" }}>
-              <div
-                className="flex flex-col items-start w-full"
-                style={{ padding: 14, gap: 16, backgroundColor: "#F8FAFC", borderRadius: 14 }}
-              >
-                <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
-                  Meeting Purpose
-                </span>
-                <p
-                  className="w-full whitespace-pre-line"
-                  style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}
-                >
-                  {meetingData.description}
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* Linked Records */}
           <div className="box-border flex flex-col items-start w-full" style={{ padding: "12px 24px", gap: 14 }}>
@@ -518,29 +518,6 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
                     </span>
                   </div>
                 </div>
-              </div>
-
-              <div className="flex flex-row justify-start items-center w-full" style={{ gap: 16 }}>
-                <div className="flex flex-row items-center flex-1 min-w-0" style={{ gap: 12 }}>
-                  <div
-                    className="rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ width: 32, height: 32, backgroundColor: "rgba(97, 85, 245, 0.1)" }}
-                  >
-                    <InvoiceIcon className="w-5 h-5" />
-                  </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
-                      Invoice
-                    </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#0085FF" }} className="truncate">
-                      —
-                    </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, lineHeight: "120%", color: "#6B7280" }} className="truncate">
-                      —
-                    </span>
-                  </div>
-                </div>
-                <div className="flex-1" />
               </div>
             </div>
           </div>

@@ -357,6 +357,7 @@ exports.createMeeting = async (req, res) => {
       companyId,
       vendorId,
       participants,
+      internalParticipants,
     } = req.body;
 
     // Add the normalizeDate function (same as in createTask)
@@ -486,6 +487,7 @@ exports.createMeeting = async (req, res) => {
     } else if (linkedTo === "company") {
       meetingData.company = companyId;
       meetingData.participants = participants;
+      meetingData.internalParticipants = internalParticipants || [];
     } else if (linkedTo === "vendor") {
       meetingData.vendor = vendorId;
     }
@@ -498,7 +500,8 @@ exports.createMeeting = async (req, res) => {
       { path: "contact", select: "name email phone" },
       { path: "company", select: "name industry" },
       { path: "vendor", select: "name email" },
-      { path: "participants", select: "name email" },
+      { path: "participants", select: "name email role" },
+      { path: "internalParticipants", select: "name email" },
       { path: "createdBy", select: "name email" },
     ]);
 
@@ -940,6 +943,7 @@ exports.updateMeeting = async (req, res) => {
       notes,
       outcome,
       participants,
+      internalParticipants,
     } = req.body;
 
     const meeting = await Meeting.findOne({
@@ -1011,6 +1015,7 @@ exports.updateMeeting = async (req, res) => {
     if (notes) meeting.notes = notes;
     if (outcome) meeting.outcome = outcome;
     if (participants) meeting.participants = participants;
+    if (internalParticipants) meeting.internalParticipants = internalParticipants;
 
     meeting.updatedBy = req.user.id;
     await meeting.save();
@@ -1020,7 +1025,8 @@ exports.updateMeeting = async (req, res) => {
       { path: "contact", select: "name email phone" },
       { path: "company", select: "name industry" },
       { path: "vendor", select: "name email" },
-      { path: "participants", select: "name email" },
+      { path: "participants", select: "name email role" },
+      { path: "internalParticipants", select: "name email" },
       { path: "createdBy", select: "name email" },
       { path: "updatedBy", select: "name email" },
     ]);
@@ -1444,6 +1450,8 @@ exports.getMeetings = async (req, res) => {
           { path: "contact", select: "name email phone" },
           { path: "company", select: "name industry" },
           { path: "vendor", select: "name email" },
+          { path: "participants", select: "name email role" },
+          { path: "internalParticipants", select: "name email" },
           { path: "createdBy", select: "name email" },
         ])
         .sort({ scheduledAt: -1 }),
@@ -1676,7 +1684,8 @@ exports.getMeetingById = async (req, res) => {
       { path: "contact", select: "name email phone company" },
       { path: "company", select: "name industry email phone" },
       { path: "vendor", select: "name email phone" },
-      { path: "participants", select: "name email" },
+      { path: "participants", select: "name email role" },
+      { path: "internalParticipants", select: "name email" },
       { path: "createdBy", select: "name email" },
     ]);
 

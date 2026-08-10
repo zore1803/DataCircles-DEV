@@ -2,15 +2,26 @@
 // a side-effect of a Calendar event with conferencing enabled, there's no
 // standalone "create a Meet link" endpoint.
 //
-// Shared-account model: one Google account (whoever completes the one-time
-// OAuth consent at GET /api/auth/google/connect) owns every generated
-// meeting. Its refresh token is stored in GoogleIntegration, keyed by
-// organization, and reused to mint short-lived access tokens on demand.
+// Two ways to configure the shared Google account this runs under:
 //
-// Requires in backend/.env:
-//   GOOGLE_CLIENT_ID
-//   GOOGLE_CLIENT_SECRET
-//   GOOGLE_REDIRECT_URI   (e.g. http://localhost:5000/api/auth/google/callback)
+//   1. Static refresh token (simplest — use this if you already have one,
+//      e.g. from Google's OAuth Playground): set
+//        GOOGLE_OAUTH_CLIENT_ID
+//        GOOGLE_OAUTH_CLIENT_SECRET
+//        GOOGLE_OAUTH_REFRESH_TOKEN
+//      and every meeting uses it immediately — no "Connect Google Account"
+//      click needed, isGoogleConnected() reports true right away.
+//
+//   2. Per-organization OAuth consent flow (GET /api/auth/google/connect +
+//      /callback in authController.js): set
+//        GOOGLE_CLIENT_ID
+//        GOOGLE_CLIENT_SECRET
+//        GOOGLE_REDIRECT_URI
+//      A user clicks "Connect Google Account" once; the refresh token that
+//      flow gets back is stored per-organization in GoogleIntegration.
+//
+// The static token takes priority when present, since it needs no consent
+// step from anyone.
 
 const { google } = require("googleapis");
 const GoogleIntegration = require("../models/GoogleIntegration");
@@ -19,16 +30,38 @@ const {
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
   GOOGLE_REDIRECT_URI,
+  GOOGLE_OAUTH_CLIENT_ID,
+  GOOGLE_OAUTH_CLIENT_SECRET,
+  GOOGLE_OAUTH_REFRESH_TOKEN,
 } = process.env;
 
+const hasStaticToken = Boolean(
+  (GOOGLE_OAUTH_CLIENT_ID || GOOGLE_CLIENT_ID) &&
+  (GOOGLE_OAUTH_CLIENT_SECRET || GOOGLE_CLIENT_SECRET) &&
+  GOOGLE_OAUTH_REFRESH_TOKEN
+);
+
+// Whichever client id/secret pair is present — static-token setups often
+// use a different Google Cloud project than the per-org consent flow, so
+// these intentionally aren't assumed to match.
+const staticClientId = GOOGLE_OAUTH_CLIENT_ID || GOOGLE_CLIENT_ID;
+const staticClientSecret = GOOGLE_OAUTH_CLIENT_SECRET || GOOGLE_CLIENT_SECRET;
+
 function isGoogleConfigured() {
-  return Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI);
+  return hasStaticToken || Boolean(staticClientId && staticClientSecret && GOOGLE_REDIRECT_URI);
+}
+
+// Used by GET /api/auth/google/status so the frontend can hide "Connect
+// Google Account" when a static token already makes the connect flow
+// unnecessary.
+function isGoogleConnectedByDefault() {
+  return hasStaticToken;
 }
 
 function getOAuthClient() {
   return new google.auth.OAuth2(
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
+    staticClientId,
+    staticClientSecret,
     GOOGLE_REDIRECT_URI,
   );
 }
@@ -42,7 +75,15 @@ function getAuthUrl(state) {
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: ["https://www.googleapis.com/auth/calendar.events"],
+    // calendar.events creates the Meet-enabled events; userinfo.email is
+    // needed separately because connectAccount() below calls the Google
+    // OAuth2 userinfo endpoint (a different API) to show which account got
+    // connected — without this scope that call 401s even though the
+    // Calendar scope was granted fine.
+    scope: [
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/userinfo.email",
+    ],
     state,
   });
 }
@@ -79,6 +120,13 @@ async function connectAccount({ code, organizationId, userId }) {
 }
 
 async function getAuthorizedClientForOrg(organizationId) {
+  // Static token short-circuits the per-org DB lookup entirely.
+  if (hasStaticToken) {
+    const oauth2Client = new google.auth.OAuth2(staticClientId, staticClientSecret);
+    oauth2Client.setCredentials({ refresh_token: GOOGLE_OAUTH_REFRESH_TOKEN });
+    return oauth2Client;
+  }
+
   const integration = await GoogleIntegration.findOne({ organization: organizationId });
   if (!integration) return null;
 
@@ -90,8 +138,9 @@ async function getAuthorizedClientForOrg(organizationId) {
 /**
  * Creates a Calendar event with Google Meet conferencing and returns the
  * join link. Returns null if this organization hasn't connected a Google
- * account yet, rather than throwing — callers should treat that the same
- * as "not configured" and fall back to another link source.
+ * account yet (and no static token is set), rather than throwing — callers
+ * should treat that the same as "not configured" and fall back to another
+ * link source.
  */
 async function createGoogleMeetEvent({ organizationId, title, startTime, durationMinutes }) {
   const oauth2Client = await getAuthorizedClientForOrg(organizationId);
@@ -125,6 +174,7 @@ async function createGoogleMeetEvent({ organizationId, title, startTime, duratio
 
 module.exports = {
   isGoogleConfigured,
+  isGoogleConnectedByDefault,
   getAuthUrl,
   connectAccount,
   createGoogleMeetEvent,
