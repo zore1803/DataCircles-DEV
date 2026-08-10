@@ -59,6 +59,18 @@ router.post(
   meetingController.createMeeting
 );
 
+// POST /meetings/generate-video-link - On-demand video link for the "Generate
+// Link" button. Tries a real Zoom meeting first (if Zoom is configured on
+// the backend); the client falls back to a client-side Jitsi link if this
+// call fails or Zoom isn't set up yet.
+router.post(
+  "/generate-video-link",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("meetings", "write"),
+  meetingController.generateVideoLink
+);
+
 // GET /meetings/pagination - Paginated meetings
 router.get(
   "/pagination",

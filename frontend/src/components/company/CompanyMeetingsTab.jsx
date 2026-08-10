@@ -442,6 +442,21 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     }
   };
 
+  const handleMeetingComplete = async (meeting) => {
+    try {
+      await API.put(`/meetings/${meeting._id}`, { status: "completed" });
+      await refetchMeetings();
+      setSelectedMeeting((prev) => (prev && prev._id === meeting._id ? { ...prev, status: "completed" } : prev));
+      toast.success("Meeting marked as complete!");
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Failed to update meeting.");
+      }
+    }
+  };
+
   const handleMeetingDelete = async (meetingId) => {
     try {
       await API.delete(`/meetings/${meetingId}`);
@@ -2056,6 +2071,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
         users={users}
         onDelete={handleMeetingDelete}
         onEdit={handleEditMeeting}
+        onComplete={handleMeetingComplete}
         onClose={() => setIsDetailsOpen(false)}
       />
 

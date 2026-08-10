@@ -284,6 +284,9 @@ const CompanyMeetingForm = ({
 }) => {
   const [form, setForm] = useState(initialState);
   const [loading, setLoading] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [googleStatus, setGoogleStatus] = useState(null); // { configured, connected, connectedEmail }
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
   const [existingMeetings, setExistingMeetings] = useState([]);
@@ -387,6 +390,9 @@ const CompanyMeetingForm = ({
       setShouldRender(true);
       setTimeout(() => setIsSliding(true), 10);
       fetchCompanyDetails();
+      API.get("/auth/google/status")
+        .then((res) => setGoogleStatus(res.data))
+        .catch(() => setGoogleStatus(null));
 
       if (meetingData && mode === "view") {
         const initialFormData = {
@@ -607,13 +613,81 @@ const CompanyMeetingForm = ({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700">Location</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-gray-700">Location</label>
+                    <div className="flex items-center gap-3">
+                    {(isEditMode || mode === "create") && googleStatus?.configured && !googleStatus?.connected && (
+                      <button
+                        type="button"
+                        disabled={connectingGoogle}
+                        onClick={async () => {
+                          setConnectingGoogle(true);
+                          try {
+                            const res = await API.get("/auth/google/connect");
+                            if (res.data?.authUrl) {
+                              window.location.href = res.data.authUrl;
+                            } else {
+                              toast.error("Could not start Google connect flow");
+                              setConnectingGoogle(false);
+                            }
+                          } catch {
+                            toast.error("Could not start Google connect flow");
+                            setConnectingGoogle(false);
+                          }
+                        }}
+                        className="text-xs font-medium text-gray-500 hover:text-gray-700 underline disabled:opacity-50"
+                        title="One-time setup: connects a Google account so Generate Link can create real Google Meet links"
+                      >
+                        {connectingGoogle ? "Connecting…" : "Connect Google Account"}
+                      </button>
+                    )}
+                    {(isEditMode || mode === "create") && (
+                      <button
+                        type="button"
+                        disabled={generatingLink}
+                        onClick={async () => {
+                          setGeneratingLink(true);
+                          try {
+                            // Real Zoom or Google Meet link when the backend
+                            // has one configured (tries Zoom first, then this
+                            // org's connected Google account) — same link
+                            // works for staff and the external client, no
+                            // login required on either side.
+                            const res = await API.post("/meetings/generate-video-link", {
+                              title: form.title,
+                              scheduledAt: form.date ? getScheduledAt() : undefined,
+                              duration: form.duration,
+                            });
+                            if (res.data?.provider && res.data?.joinUrl) {
+                              handleChange("location", res.data.joinUrl);
+                            } else {
+                              throw new Error("no-provider-available");
+                            }
+                          } catch {
+                            // Zoom isn't configured yet (or the call failed) —
+                            // fall back to a Jitsi link, which needs no
+                            // account or API key on either side either.
+                            const roomId = `dc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+                            handleChange("location", `https://meet.jit.si/${roomId}`);
+                          } finally {
+                            setGeneratingLink(false);
+                          }
+                          if (form.meetingType !== "video-call") handleChange("meetingType", "video-call");
+                        }}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                        {generatingLink ? "Generating…" : "Generate Link"}
+                      </button>
+                    )}
+                    </div>
+                  </div>
                   <input
                     type="text"
                     value={form.location}
                     onChange={(e) => handleChange("location", e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none text-sm text-gray-600"
-                    placeholder="Meeting Room Address"
+                    placeholder="Meeting Room Address or video call link"
                     disabled={!isEditMode && mode === "view"}
                   />
                 </div>
