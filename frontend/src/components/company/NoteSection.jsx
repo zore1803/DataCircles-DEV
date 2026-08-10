@@ -251,30 +251,12 @@ const NoteStyles = () => (
   `}</style>
 );
 
-// Custom Quill modules and formats configuration
-const quillModules = {
+// Base Quill modules/formats config, shared by every editor instance. The
+// "link" handler is patched per-instance in NoteEditor (see linkModalRef
+// below) so it can open our own styled dialog instead of window.prompt().
+const baseQuillModules = {
   toolbar: {
     container: "#toolbar",
-    handlers: {
-      // Quill's default link handler silently no-ops when nothing is
-      // selected — prompt for a URL either way, inserting it as the link
-      // text when there's no selection to format.
-      link(value) {
-        if (!value) {
-          this.quill.format('link', false);
-          return;
-        }
-        const url = window.prompt('Enter a URL:');
-        if (!url) return;
-        const range = this.quill.getSelection(true);
-        if (range.length === 0) {
-          this.quill.insertText(range.index, url, 'link', url, 'user');
-          this.quill.setSelection(range.index + url.length, 0, 'user');
-        } else {
-          this.quill.format('link', url);
-        }
-      }
-    }
   },
   clipboard: {
     matchVisual: false,
@@ -1023,6 +1005,9 @@ export const NoteEditor = ({
 }) => {
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkModalUrl, setLinkModalUrl] = useState("");
+  const pendingLinkRef = useRef({ quill: null, range: null });
 
   useEffect(() => {
     if (isOpen) {
@@ -1033,6 +1018,41 @@ export const NoteEditor = ({
       setTimeout(() => setShouldRender(false), 300);
     }
   }, [isOpen]);
+
+  const quillModules = useMemo(() => ({
+    ...baseQuillModules,
+    toolbar: {
+      ...baseQuillModules.toolbar,
+      handlers: {
+        // Quill's default link handler silently no-ops when nothing is
+        // selected — open our own styled dialog either way, inserting the
+        // URL as the link text when there's no selection to format.
+        link(value) {
+          if (!value) {
+            this.quill.format('link', false);
+            return;
+          }
+          pendingLinkRef.current = { quill: this.quill, range: this.quill.getSelection(true) };
+          setLinkModalUrl("");
+          setLinkModalOpen(true);
+        }
+      }
+    }
+  }), []);
+
+  const confirmInsertLink = () => {
+    const url = linkModalUrl.trim();
+    const { quill, range } = pendingLinkRef.current;
+    if (url && quill && range) {
+      if (range.length === 0) {
+        quill.insertText(range.index, url, 'link', url, 'user');
+        quill.setSelection(range.index + url.length, 0, 'user');
+      } else {
+        quill.format('link', url);
+      }
+    }
+    setLinkModalOpen(false);
+  };
 
   if (!shouldRender) return null;
 
@@ -1197,6 +1217,48 @@ export const NoteEditor = ({
           </div>
         </form>
       </div>
+
+      {linkModalOpen && (
+        <div className="fixed inset-0 z-[10002] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm"
+            onClick={() => setLinkModalOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-sm bg-white rounded-2xl shadow-2xl p-5">
+            <h4 className="text-sm font-semibold text-gray-900 mb-3">Insert Link</h4>
+            <input
+              type="text"
+              autoFocus
+              value={linkModalUrl}
+              onChange={(e) => setLinkModalUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); confirmInsertLink(); }
+                if (e.key === "Escape") setLinkModalOpen(false);
+              }}
+              placeholder="https://example.com"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 focus:outline-none focus:border-blue-400"
+            />
+            <div className="flex items-center justify-end gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setLinkModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmInsertLink}
+                disabled={!linkModalUrl.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Insert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <NoteStyles />
     </>
   );
