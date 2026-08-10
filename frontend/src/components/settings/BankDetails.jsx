@@ -1,6 +1,6 @@
 import BankLogo from '../BankLogo';
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 
 // Inside component render
 // Replace the existing flex block for bank icon and name
@@ -38,17 +38,41 @@ const maskAccountNumber = (num = "") => {
 };
 
 const BankDetails = () => {
+
   const [banks, setBanks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBank, setEditingBank] = useState(null);
   const [deleteBankId, setDeleteBankId] = useState(null);
+  const orderRef = useRef([]); // holds order of bank IDs
 
   const fetchBanks = useCallback(async () => {
     try {
       setLoading(true);
       const res = await API.get("/bank-details/all");
-      setBanks(Array.isArray(res.data) ? res.data : []);
+      const incoming = Array.isArray(res.data) ? res.data : [];
+      // Preserve previous order to avoid moving default to top
+      setBanks((prev) => {
+        if (prev.length === 0) {
+          // First load, store order
+          orderRef.current = incoming.map((b) => b._id);
+          return incoming;
+        }
+        // Create a map of previous order
+        const prevOrder = orderRef.current;
+        const sorted = incoming.slice().sort((a, b) => {
+          const ia = prevOrder.indexOf(a._id);
+          const ib = prevOrder.indexOf(b._id);
+          // If both exist in previous order, keep that order
+          if (ia !== -1 && ib !== -1) return ia - ib;
+          // New items go to the end
+          if (ia === -1 && ib === -1) return 0;
+          return ia === -1 ? 1 : -1;
+        });
+        // Update the stored order for next fetch
+        orderRef.current = sorted.map((b) => b._id);
+        return sorted;
+      });
     } catch (error) {
       console.error("Failed to load banks:", error);
       toast.error("Failed to load bank accounts");
@@ -239,7 +263,7 @@ const BankDetails = () => {
                 <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs">
                   <div>
                     <span className="font-semibold text-gray-500">Account No</span>
-                    <p className="mt-0.5 font-mono font-medium text-gray-800 leading-none">
+                    <p className="mt-0.5 font-mono font-medium text-gray-800 flex items-center">
                       {maskAccountNumber(bank.accountNumber)}
                     </p>
                   </div>
@@ -283,7 +307,7 @@ const BankDetails = () => {
                     onClick={() => handleSetDefault(bank._id)}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 hover:underline"
                   >
-                    <Star className="h-3.5 w-3.5" />
+                    <Star className="h-3.5 w-3.5 align-middle" />
                     Make Default
                   </button>
                 ) : (
