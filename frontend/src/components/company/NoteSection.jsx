@@ -49,7 +49,7 @@ import AppToaster from "../AppToaster";
 import SearchIcon from "../common/SearchIcon";
 // Custom Quill modules and formats configuration
 const QuillToolbar = () => (
-  <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white border-b border-gray-100">
+  <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white border-b border-gray-100 rounded-t-2xl">
     <div className="flex gap-0.5 pr-1.5 border-r border-gray-100">
       <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="1">
         <Heading1 className="w-4 h-4" />
@@ -917,7 +917,12 @@ export const NoteEditor = ({
     }),
     placeholder: (base) => ({
       ...base,
-      whiteSpace: 'nowrap'
+      whiteSpace: 'nowrap',
+      color: '#374151'
+    }),
+    singleValue: (base) => ({
+      ...base,
+      color: '#374151'
     })
   };
 
@@ -1352,22 +1357,19 @@ const NoteSection = ({ companyId: propCompanyId, dealId, isQuickView }) => {
 
         /* Toolbar Button Overrides */
         #toolbar button {
-          border: 1px solid #f3f4f6 !important;
+          border: none !important;
           color: #6b7280 !important;
           transition: all 0.2s !important;
-          margin-bottom: 2px !important;
         }
 
         #toolbar button:hover {
           background-color: #f9fafb !important;
           color: #111827 !important;
-          border-color: #e5e7eb !important;
         }
 
         #toolbar button.ql-active {
           background-color: #eff6ff !important;
           color: #2563eb !important;
-          border-color: #bfdbfe !important;
         }
 
         #toolbar .ql-stroke {
