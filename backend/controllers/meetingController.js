@@ -434,7 +434,7 @@ exports.createMeeting = async (req, res) => {
     }
 
     // A video-call meeting with no location set (the client didn't already
-    // fill in a Jitsi/manual link, e.g. via "Generate Link") gets a real
+    // fill in a link, e.g. via "Generate Link") gets a real
     // Zoom or Google Meet link here, whichever is configured — same
     // priority as the generate-video-link endpoint. Failures here are
     // non-fatal — the meeting still gets created, just without a link.
@@ -560,7 +560,7 @@ exports.createMeeting = async (req, res) => {
 // the meeting form, ahead of the meeting actually being saved. Tries Zoom
 // first (if configured), then this org's connected Google account, and
 // always 200s with provider: null on failure/not-configured rather than
-// erroring — the frontend falls back to its client-side Jitsi generator.
+// erroring — the frontend shows a message asking to configure a provider.
 exports.generateVideoLink = async (req, res) => {
   try {
     const { title, scheduledAt, duration } = req.body;

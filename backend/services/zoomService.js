@@ -1,6 +1,6 @@
 // Zoom Server-to-Server OAuth integration. Creates a real Zoom meeting and
 // returns its join URL, so the CRM's meeting "location" field can hold a
-// working video-call link instead of the client-side Jitsi fallback.
+// working video-call link.
 //
 // Requires three env vars (Zoom Marketplace > your app > App Credentials):
 //   ZOOM_ACCOUNT_ID
