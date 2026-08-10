@@ -13,6 +13,7 @@ import {
   CheckSquare,
   X,
   Calendar,
+  Loader2,
 } from "lucide-react";
 import AppToaster from "../AppToaster";
 
@@ -191,6 +192,7 @@ const CompanyCalendar = ({ companyId }) => {
   }, [viewMode]);
   const [meetings, setMeetings] = useState({});
   const [tasks, setTasks] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("create");
   const [modalType, setModalType] = useState("meeting");
@@ -237,6 +239,7 @@ const CompanyCalendar = ({ companyId }) => {
   };
 
   const fetchData = useCallback(async () => {
+    setIsLoading(true);
     try {
       const meetingsRes = await API.get("/meetings", { params: { companyId } });
       const meetingsWithNames = await Promise.all(
@@ -274,7 +277,9 @@ const CompanyCalendar = ({ companyId }) => {
       });
       setTasks(tasksByDate);
     } catch (error) {
-      toast.error(err.response?.data?.error || "Failed to fetch calendar data");
+      toast.error(error.response?.data?.error || "Failed to fetch calendar data");
+    } finally {
+      setIsLoading(false);
     }
   }, [companyId]);
 
@@ -591,8 +596,15 @@ const CompanyCalendar = ({ companyId }) => {
         </button>
       </div>
 
+      {isLoading && (
+        <div className="bg-white border border-gray-200 rounded-lg flex flex-col items-center justify-center gap-2 min-h-[740px] text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+          <p className="text-sm">Loading meetings and tasks…</p>
+        </div>
+      )}
+
       {/* Calendar Grid */}
-      {viewMode === "month" && (
+      {!isLoading && viewMode === "month" && (
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
           {weekdays.map((day, index) => (
@@ -703,7 +715,7 @@ const CompanyCalendar = ({ companyId }) => {
       )}
 
       {/* Week View */}
-      {viewMode === "week" && (
+      {!isLoading && viewMode === "week" && (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
             {weekDays.map((date, idx) => {
@@ -763,7 +775,7 @@ const CompanyCalendar = ({ companyId }) => {
       )}
 
       {/* Day View */}
-      {viewMode === "day" && (() => {
+      {!isLoading && viewMode === "day" && (() => {
         const key = currentDate.toDateString();
         const isFuture = currentDate >= today;
         const dayMeetings = meetings[key] || [];
