@@ -1,7 +1,7 @@
 const Invoice = require("../models/Invoice");
 const Counter = require("../models/Counter");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
-const BankDetails = require("../models/BankDetails");
+const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const Branding = require("../models/Branding");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
@@ -468,9 +468,7 @@ const downloadInvoice = async (req, res) => {
     if (!invoice) {
       return res.status(404).json({ error: "Invoice not found" });
     }
-    const bankDetails = await BankDetails.findOne({
-      organization: req.user.organization,
-    }).sort({ updatedAt: -1 });
+    const bankDetails = await getDefaultBankDetails(req.user.organization);
     const OrgDetails = await Branding.findOne({
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
