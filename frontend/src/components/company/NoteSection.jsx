@@ -952,31 +952,33 @@ export const NoteEditor = ({
             />
 
             {/* Action Row */}
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                className="flex items-center gap-2 px-4 py-2 border border-gray-100 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                Assign
-              </button>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all flex-shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  Assign
+                </button>
 
-              <div className="flex items-center gap-2 px-4 py-2 border border-gray-100 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all min-w-[200px]">
-                <Users className="w-4 h-4" />
-                <Select
-                  isMulti
-                  options={contactOptions}
-                  value={taggedContacts}
-                  onChange={setTaggedContacts}
-                  placeholder="Select Contact"
-                  styles={customSelectStyles}
-                  className="flex-1"
-                  components={{
-                    MultiValue: () => null, // Don't show chips here
-                    IndicatorSeparator: () => null,
-                    DropdownIndicator: () => null
-                  }}
-                />
+                <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all min-w-[200px] flex-shrink-0">
+                  <Users className="w-4 h-4" />
+                  <Select
+                    isMulti
+                    options={contactOptions}
+                    value={taggedContacts}
+                    onChange={setTaggedContacts}
+                    placeholder="Select Contact"
+                    styles={customSelectStyles}
+                    className="flex-1"
+                    components={{
+                      MultiValue: () => null, // Don't show chips here
+                      IndicatorSeparator: () => null,
+                      DropdownIndicator: () => null
+                    }}
+                  />
+                </div>
               </div>
 
               <span className="text-xs text-gray-400 font-medium font-['Outfit']">
@@ -985,8 +987,8 @@ export const NoteEditor = ({
             </div>
 
             {/* Note Type / Visibility Row */}
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 px-4 py-2 border border-gray-100 rounded-xl min-w-[180px]">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl min-w-[180px]">
                 <Type className="w-4 h-4 text-gray-500" />
                 <select
                   value={noteType}
@@ -1000,7 +1002,7 @@ export const NoteEditor = ({
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 px-4 py-2 border border-gray-100 rounded-xl min-w-[140px]">
+              <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl min-w-[140px]">
                 <Eye className="w-4 h-4 text-gray-500" />
                 <select
                   value={visibility}
@@ -1034,7 +1036,7 @@ export const NoteEditor = ({
               <button
                 type="button"
                 onClick={onDelete}
-                className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-100 bg-white mr-auto"
+                className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-300 bg-white mr-auto"
                 title="Delete Note"
               >
                 <Trash2 className="w-5 h-5" />
@@ -1043,7 +1045,7 @@ export const NoteEditor = ({
 
             <button
               type="button"
-              className="p-2.5 text-gray-500 hover:bg-gray-50 rounded-xl transition-all border border-gray-100 bg-white"
+              className="p-2.5 text-gray-500 hover:bg-gray-50 rounded-xl transition-all border border-gray-300 bg-white"
               title="Export/Share"
             >
               <Share className="w-5 h-5" />
@@ -1051,7 +1053,7 @@ export const NoteEditor = ({
 
             <button
               type="button"
-              className="p-2.5 text-gray-500 hover:bg-gray-50 rounded-xl transition-all border border-gray-100 bg-white"
+              className="p-2.5 text-gray-500 hover:bg-gray-50 rounded-xl transition-all border border-gray-300 bg-white"
               title="Edit Mode"
             >
               <Edit3 className="w-5 h-5" />
