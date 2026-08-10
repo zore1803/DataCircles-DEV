@@ -21,7 +21,6 @@ import {
   MoreVertical,
   Type,
   Flag,
-  Share,
   CheckCircle,
   Link2,
   Landmark,
@@ -50,78 +49,78 @@ import AppToaster from "../AppToaster";
 import SearchIcon from "../common/SearchIcon";
 // Custom Quill modules and formats configuration
 const QuillToolbar = () => (
-  <div id="toolbar" className="flex flex-wrap gap-2 p-3 bg-white border-b border-gray-100">
-    <div className="flex gap-1 pr-2 border-r border-gray-100">
-      <button className="ql-header w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="1">
+  <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white border-b border-gray-100">
+    <div className="flex gap-0.5 pr-1.5 border-r border-gray-100">
+      <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="1">
         <Heading1 className="w-4 h-4" />
       </button>
-      <button className="ql-header w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="2">
+      <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="2">
         <Heading2 className="w-4 h-4" />
       </button>
-      <button className="ql-header w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="3">
+      <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="3">
         <Heading3 className="w-4 h-4" />
       </button>
-      <button className="ql-header w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="4">
+      <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="4">
         <Heading4 className="w-4 h-4" />
       </button>
     </div>
 
-    <div className="flex gap-1 px-2 border-r border-gray-100">
-      <button className="ql-bold w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+    <div className="flex gap-0.5 px-1.5 border-r border-gray-100">
+      <button className="ql-bold w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Bold className="w-4 h-4" />
       </button>
-      <button className="ql-italic w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+      <button className="ql-italic w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Italic className="w-4 h-4" />
       </button>
-      <button className="ql-underline w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+      <button className="ql-underline w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Underline className="w-4 h-4" />
       </button>
-      <button className="ql-strike w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+      <button className="ql-strike w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Strikethrough className="w-4 h-4" />
       </button>
     </div>
 
-    <div className="flex gap-1 px-2 border-r border-gray-100">
-      <button className="ql-list w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="ordered">
+    <div className="flex gap-0.5 px-1.5 border-r border-gray-100">
+      <button className="ql-list w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="ordered">
         <ListOrdered className="w-4 h-4" />
       </button>
-      <button className="ql-list w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="bullet">
+      <button className="ql-list w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="bullet">
         <List className="w-4 h-4" />
       </button>
-      <button className="ql-indent w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="-1">
+      <button className="ql-indent w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="-1">
         <AlignLeft className="w-4 h-4" />
       </button>
-      <button className="ql-indent w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="+1">
+      <button className="ql-indent w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="+1">
         <AlignRight className="w-4 h-4" />
       </button>
     </div>
 
-    <div className="flex gap-1 px-2 border-r border-gray-100">
-      <button className="ql-align w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="">
+    <div className="flex gap-0.5 px-1.5 border-r border-gray-100">
+      <button className="ql-align w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="">
         <AlignLeft className="w-4 h-4" />
       </button>
-      <button className="ql-align w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="center">
+      <button className="ql-align w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="center">
         <AlignCenter className="w-4 h-4" />
       </button>
-      <button className="ql-align w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="right">
+      <button className="ql-align w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="right">
         <AlignRight className="w-4 h-4" />
       </button>
-      <button className="ql-align w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="justify">
+      <button className="ql-align w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="justify">
         <AlignJustify className="w-4 h-4" />
       </button>
     </div>
 
-    <div className="flex gap-1 pl-2">
-      <button className="ql-link w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+    <div className="flex gap-0.5 pl-1.5">
+      <button className="ql-link w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Link2 className="w-4 h-4" />
       </button>
-      <button className="ql-blockquote w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+      <button className="ql-blockquote w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Quote className="w-4 h-4" />
       </button>
-      <button className="ql-code-block w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+      <button className="ql-code-block w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Code className="w-4 h-4" />
       </button>
-      <button className="ql-clean w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+      <button className="ql-clean w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Type className="w-4 h-4" />
       </button>
     </div>
@@ -954,14 +953,6 @@ export const NoteEditor = ({
             {/* Action Row */}
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-3 flex-wrap">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all flex-shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                  Assign
-                </button>
-
                 <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all min-w-[200px] flex-shrink-0">
                   <Users className="w-4 h-4" />
                   <Select
@@ -979,40 +970,37 @@ export const NoteEditor = ({
                     }}
                   />
                 </div>
+
+                <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl min-w-[180px] flex-shrink-0">
+                  <Type className="w-4 h-4 text-gray-500" />
+                  <select
+                    value={noteType}
+                    onChange={(e) => setNoteType(e.target.value)}
+                    className="w-full bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
+                  >
+                    <option value="General Note">General Note</option>
+                    <option value="Meeting Note">Meeting Note</option>
+                    <option value="Call Note">Call Note</option>
+                    <option value="Follow-up Note">Follow-up Note</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl min-w-[140px] flex-shrink-0">
+                  <Eye className="w-4 h-4 text-gray-500" />
+                  <select
+                    value={visibility}
+                    onChange={(e) => setVisibility(e.target.value)}
+                    className="w-full bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
+                  >
+                    <option value="Team">Team</option>
+                    <option value="Private">Private</option>
+                  </select>
+                </div>
               </div>
 
               <span className="text-xs text-gray-400 font-medium font-['Outfit']">
                 Tagged Contacts will Receive Notifications About this Note
               </span>
-            </div>
-
-            {/* Note Type / Visibility Row */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl min-w-[180px]">
-                <Type className="w-4 h-4 text-gray-500" />
-                <select
-                  value={noteType}
-                  onChange={(e) => setNoteType(e.target.value)}
-                  className="w-full bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
-                >
-                  <option value="General Note">General Note</option>
-                  <option value="Meeting Note">Meeting Note</option>
-                  <option value="Call Note">Call Note</option>
-                  <option value="Follow-up Note">Follow-up Note</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl min-w-[140px]">
-                <Eye className="w-4 h-4 text-gray-500" />
-                <select
-                  value={visibility}
-                  onChange={(e) => setVisibility(e.target.value)}
-                  className="w-full bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
-                >
-                  <option value="Team">Team</option>
-                  <option value="Private">Private</option>
-                </select>
-              </div>
             </div>
 
             {/* Editor Area */}
@@ -1042,22 +1030,6 @@ export const NoteEditor = ({
                 <Trash2 className="w-5 h-5" />
               </button>
             )}
-
-            <button
-              type="button"
-              className="p-2.5 text-gray-500 hover:bg-gray-50 rounded-xl transition-all border border-gray-300 bg-white"
-              title="Export/Share"
-            >
-              <Share className="w-5 h-5" />
-            </button>
-
-            <button
-              type="button"
-              className="p-2.5 text-gray-500 hover:bg-gray-50 rounded-xl transition-all border border-gray-300 bg-white"
-              title="Edit Mode"
-            >
-              <Edit3 className="w-5 h-5" />
-            </button>
 
             <button
               type="submit"
