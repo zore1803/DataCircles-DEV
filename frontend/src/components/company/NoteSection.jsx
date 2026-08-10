@@ -49,7 +49,7 @@ import AppToaster from "../AppToaster";
 import SearchIcon from "../common/SearchIcon";
 
 const QuillToolbar = () => (
-  <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white border-b border-gray-300">
+  <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white border-b border-gray-300 rounded-t-2xl">
     <div className="flex gap-0.5 pr-1.5">
       <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="1">
         <Heading1 className="w-4 h-4" />
@@ -149,6 +149,8 @@ const NoteStyles = () => (
 
     .ql-container.ql-snow {
       font-family: inherit !important;
+      border-bottom-left-radius: 1rem !important;
+      border-bottom-right-radius: 1rem !important;
     }
 
     .ql-editor {
@@ -157,6 +159,8 @@ const NoteStyles = () => (
       font-size: 1rem !important;
       line-height: 1.8 !important;
       color: #374151 !important;
+      border-bottom-left-radius: 1rem !important;
+      border-bottom-right-radius: 1rem !important;
     }
 
     .ql-editor.ql-blank::before {
@@ -1041,9 +1045,10 @@ export const NoteEditor = ({
   }), []);
 
   const confirmInsertLink = () => {
-    const url = linkModalUrl.trim();
+    const suffix = linkModalUrl.trim();
     const { quill, range } = pendingLinkRef.current;
-    if (url && quill && range) {
+    if (suffix && quill && range) {
+      const url = `https://${suffix}`;
       if (range.length === 0) {
         quill.insertText(range.index, url, 'link', url, 'user');
         quill.setSelection(range.index + url.length, 0, 'user');
@@ -1179,7 +1184,7 @@ export const NoteEditor = ({
             </div>
 
             {/* Editor Area */}
-            <div className="border border-gray-300 rounded-2xl overflow-hidden">
+            <div className="border border-gray-300 rounded-2xl">
               <QuillToolbar />
               <ReactQuill
                 value={noteContent}
@@ -1226,18 +1231,21 @@ export const NoteEditor = ({
           />
           <div className="relative z-10 w-full max-w-sm bg-white rounded-2xl shadow-2xl p-5">
             <h4 className="text-sm font-semibold text-gray-900 mb-3">Insert Link</h4>
-            <input
-              type="text"
-              autoFocus
-              value={linkModalUrl}
-              onChange={(e) => setLinkModalUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") { e.preventDefault(); confirmInsertLink(); }
-                if (e.key === "Escape") setLinkModalOpen(false);
-              }}
-              placeholder="https://example.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 focus:outline-none focus:border-blue-400"
-            />
+            <div className="flex items-center w-full px-3 py-2 border border-gray-300 rounded-lg focus-within:border-blue-400">
+              <span className="text-sm font-bold text-gray-800 flex-shrink-0">https://</span>
+              <input
+                type="text"
+                autoFocus
+                value={linkModalUrl}
+                onChange={(e) => setLinkModalUrl(e.target.value.replace(/^https?:\/\//i, ""))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); confirmInsertLink(); }
+                  if (e.key === "Escape") setLinkModalOpen(false);
+                }}
+                placeholder="example.com"
+                className="flex-1 min-w-0 text-sm text-gray-800 focus:outline-none"
+              />
+            </div>
             <div className="flex items-center justify-end gap-2 mt-4">
               <button
                 type="button"
