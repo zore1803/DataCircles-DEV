@@ -47,9 +47,9 @@ import AppToaster from "../AppToaster";
 
 
 import SearchIcon from "../common/SearchIcon";
-// Custom Quill modules and formats configuration
+
 const QuillToolbar = () => (
-  <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white">
+  <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white border-b border-gray-300">
     <div className="flex gap-0.5 pr-1.5">
       <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="1">
         <Heading1 className="w-4 h-4" />
@@ -125,6 +125,124 @@ const QuillToolbar = () => (
       </button>
     </div>
   </div>
+);
+
+// Global styles for the Quill editor/viewer. Rendered by whichever
+// component (NoteEditor, NoteViewer, or the embedded NoteSection) mounts
+// first — it must NOT live only inside NoteSection's own render tree, since
+// NoteEditor/NoteViewer are also used standalone (e.g. from
+// CompanyNotesTab.jsx) without NoteSection ever mounting.
+const NoteStyles = () => (
+  <style jsx global>{`
+    /* Premium Note Editor Styles */
+    .quill,
+    .ql-toolbar.ql-snow,
+    .ql-container.ql-snow,
+    .ql-editor {
+      border: none !important;
+    }
+
+    .ql-toolbar.ql-snow {
+      padding: 0.5rem !important;
+    }
+
+    .ql-container.ql-snow {
+      font-family: inherit !important;
+    }
+
+    .ql-editor {
+      padding: 2rem !important;
+      min-height: 400px !important;
+      font-size: 1rem !important;
+      line-height: 1.8 !important;
+      color: #374151 !important;
+    }
+
+    .ql-editor.ql-blank::before {
+      left: 2rem !important;
+      color: #9ca3af !important;
+      font-style: normal !important;
+      font-weight: 500 !important;
+    }
+
+    /* Toolbar Button Overrides */
+    #toolbar button {
+      border: none !important;
+      color: #6b7280 !important;
+      transition: all 0.2s !important;
+    }
+
+    #toolbar button:hover {
+      background-color: #f9fafb !important;
+      color: #111827 !important;
+    }
+
+    #toolbar button.ql-active {
+      background-color: #eff6ff !important;
+      color: #2563eb !important;
+    }
+
+    #toolbar .ql-stroke {
+      stroke: currentColor !important;
+    }
+
+    #toolbar .ql-fill {
+      fill: currentColor !important;
+    }
+
+    /* Typography */
+    .ql-editor h1 {
+      font-size: 2.25rem !important;
+      font-weight: 800 !important;
+      margin-bottom: 1rem !important;
+      border-bottom: none !important;
+    }
+    .ql-editor h2 {
+      font-size: 1.875rem !important;
+      font-weight: 700 !important;
+      margin-bottom: 0.75rem !important;
+      border-bottom: none !important;
+    }
+    .ql-editor h3 {
+      font-size: 1.5rem !important;
+      font-weight: 600 !important;
+      margin-bottom: 0.5rem !important;
+      border-bottom: none !important;
+    }
+    .ql-editor p {
+      margin-bottom: 1.25rem !important;
+    }
+
+    /* List Styling */
+    .ql-editor ol,
+    .ql-editor ul {
+      padding-left: 1.5rem !important;
+      margin-bottom: 1.25rem !important;
+    }
+
+    .ql-editor li {
+      margin-bottom: 0.5rem !important;
+    }
+
+    /* Prose styles for viewer */
+    .prose h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 0.5rem;
+    }
+    .prose h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 0.5rem;
+    }
+    .prose p {
+      line-height: 1.8;
+      color: #374151;
+      margin-bottom: 1rem;
+    }
+  `}</style>
 );
 
 // Custom Quill modules and formats configuration
@@ -601,6 +719,7 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
           </button>
         </div>
       </div>
+      <NoteStyles />
     </>
   );
 };
@@ -1014,7 +1133,7 @@ export const NoteEditor = ({
             </div>
 
             {/* Editor Area */}
-            <div>
+            <div className="border border-gray-300 rounded-2xl overflow-hidden">
               <QuillToolbar />
               <ReactQuill
                 value={noteContent}
@@ -1052,6 +1171,7 @@ export const NoteEditor = ({
           </div>
         </form>
       </div>
+      <NoteStyles />
     </>
   );
 };
@@ -1328,116 +1448,7 @@ const NoteSection = ({ companyId: propCompanyId, dealId, isQuickView }) => {
         onDelete={handleDelete}
       />
 
-      <style jsx global>{`
-        /* Premium Note Editor Styles */
-        .quill,
-        .ql-toolbar.ql-snow,
-        .ql-container.ql-snow,
-        .ql-editor {
-          border: none !important;
-        }
-
-        .ql-toolbar.ql-snow {
-          padding: 0.5rem !important;
-        }
-
-        .ql-container.ql-snow {
-          font-family: inherit !important;
-        }
-
-        .ql-editor {
-          padding: 2rem !important;
-          min-height: 400px !important;
-          font-size: 1rem !important;
-          line-height: 1.8 !important;
-          color: #374151 !important;
-        }
-
-        .ql-editor.ql-blank::before {
-          left: 2rem !important;
-          color: #9ca3af !important;
-          font-style: normal !important;
-          font-weight: 500 !important;
-        }
-
-        /* Toolbar Button Overrides */
-        #toolbar button {
-          border: none !important;
-          color: #6b7280 !important;
-          transition: all 0.2s !important;
-        }
-
-        #toolbar button:hover {
-          background-color: #f9fafb !important;
-          color: #111827 !important;
-        }
-
-        #toolbar button.ql-active {
-          background-color: #eff6ff !important;
-          color: #2563eb !important;
-        }
-
-        #toolbar .ql-stroke {
-          stroke: currentColor !important;
-        }
-
-        #toolbar .ql-fill {
-          fill: currentColor !important;
-        }
-
-        /* Typography */
-        .ql-editor h1 {
-          font-size: 2.25rem !important;
-          font-weight: 800 !important;
-          margin-bottom: 1rem !important;
-          border-bottom: none !important;
-        }
-        .ql-editor h2 {
-          font-size: 1.875rem !important;
-          font-weight: 700 !important;
-          margin-bottom: 0.75rem !important;
-          border-bottom: none !important;
-        }
-        .ql-editor h3 {
-          font-size: 1.5rem !important;
-          font-weight: 600 !important;
-          margin-bottom: 0.5rem !important;
-          border-bottom: none !important;
-        }
-        .ql-editor p {
-          margin-bottom: 1.25rem !important;
-        }
-
-        /* List Styling */
-        .ql-editor ol,
-        .ql-editor ul {
-          padding-left: 1.5rem !important;
-          margin-bottom: 1.25rem !important;
-        }
-
-        .ql-editor li {
-          margin-bottom: 0.5rem !important;
-        }
-
-        /* Prose styles for viewer */
-        .prose h1 {
-          font-size: 2rem;
-          font-weight: 800;
-          color: #111827;
-          margin-bottom: 0.5rem;
-        }
-        .prose h2 {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #111827;
-          margin-bottom: 0.5rem;
-        }
-        .prose p {
-          line-height: 1.8;
-          color: #374151;
-          margin-bottom: 1rem;
-        }
-      `}</style>
+      <NoteStyles />
     </div>
   );
 };
