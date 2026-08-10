@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, Pin, PinOff, EyeOff } from "lucide-react";
+import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   useReactTable,
   getCoreRowModel,

@@ -30,6 +30,7 @@ const animateLayoutChanges = (args) =>
   defaultAnimateLayoutChanges({ ...args, wasDragging: true });
 import { CSS } from "@dnd-kit/utilities";
 import { getAncestorZoom } from "../../utils/domUtils";
+import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   Filter,
   LayoutGrid,
@@ -619,12 +620,12 @@ export default function CompanyDealsKanban({
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    // A single press does nothing: the column menu opens from its own chevron
-    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
-    // meant the FIRST press of every double-click popped the menu, whose
-    // full-screen backdrop then swallowed the second press — making the header
-    // effectively un-double-clickable. Drag still starts on the second press.
-    if (e.detail < 2) return;
+    // No click-count gate here, matching the Companies list page: a press plus
+    // DRAG_THRESHOLD px of movement starts the drag, at whatever speed the user
+    // moves. Gating on `e.detail` meant only a fast-enough double-click could
+    // begin a move. The threshold below is what keeps a plain click harmless,
+    // and the column menu opens from its own chevron button, never from the
+    // header background — so nothing competes with the drag for a single press.
 
     const th = e.currentTarget;
     const startX = e.clientX;
@@ -957,6 +958,79 @@ export default function CompanyDealsKanban({
     () => Object.values(colWidths).reduce((sum, w) => sum + w, 0),
     [colWidths],
   );
+
+  // Single source of truth for column order (pinned-left, then unpinned in
+  // drag order, then pinned-right) — shared by the header AND the body, so a
+  // pinned/dragged column moves the data cells along with it instead of only
+  // sliding the header label.
+  const DEAL_COLS_BASE = useMemo(
+    () => [
+      { id: "dealId", label: "Deal ID", width: 127, sortable: false },
+      { id: "title", label: "Deal Name", width: 185 },
+      { id: "contact", label: "Contact", width: 150 },
+      { id: "stage", label: "Stage", width: 131 },
+      { id: "amount", label: "Amount", width: 123 },
+      { id: "lastUpdated", label: "Last Updated", width: 171, sortable: false },
+    ],
+    [],
+  );
+  const orderedDealColumns = useMemo(() => {
+    const allCols = DEAL_COLS_BASE.filter((col) => !hiddenColumns.includes(col.id));
+    const orderRank = (id) => {
+      const idx = columnOrder.indexOf(id);
+      return idx === -1 ? columnOrder.length + allCols.findIndex((c) => c.id === id) : idx;
+    };
+    const rank = (id) => (getColumnPinSide(id) === "left" ? 0 : getColumnPinSide(id) === "right" ? 2 : 1);
+    return allCols.slice().sort((a, b) => {
+      const pinDiff = rank(a.id) - rank(b.id);
+      if (pinDiff !== 0) return pinDiff;
+      return orderRank(a.id) - orderRank(b.id);
+    });
+  }, [DEAL_COLS_BASE, hiddenColumns, columnOrder, pinnedColumns]);
+
+  // Sticky offsets + boundary shadow — same treatment as the other Company
+  // detail tabs (Contacts/Invoices/Meetings/Notes/Tasks): the selection
+  // checkbox column is always the first left-sticky column (44px wide), and
+  // the pinned boundary — the rightmost left-pinned column, or the leftmost
+  // right-pinned one — gets the soft depth-edge shadow.
+  const dealStickyStyles = useMemo(() => {
+    const map = {};
+    let leftOffset = 44;
+    for (const col of orderedDealColumns) {
+      if (getColumnPinSide(col.id) === "left") {
+        map[col.id] = { position: "sticky", left: leftOffset, zIndex: 20 };
+        leftOffset += colWidths[col.id] || col.width;
+      }
+    }
+    let rightOffset = 0;
+    for (const col of [...orderedDealColumns].reverse()) {
+      if (getColumnPinSide(col.id) === "right") {
+        map[col.id] = { position: "sticky", right: rightOffset, zIndex: 20 };
+        rightOffset += colWidths[col.id] || col.width;
+      }
+    }
+    return map;
+  }, [orderedDealColumns, pinnedColumns, colWidths]);
+
+  const getDealStickyStyle = (colId, isHeader) => {
+    const pinSide = getColumnPinSide(colId);
+    const style = dealStickyStyles[colId] || {};
+    return {
+      ...style,
+      position: pinSide ? "sticky" : "relative",
+      zIndex: pinSide ? (isHeader ? 35 : 20) : undefined,
+      backgroundColor: pinSide ? (isHeader ? "#F5F7FA" : "#fff") : undefined,
+      boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+    };
+  };
+
+  const getDealBoundaryShadowSide = (colId) => {
+    const leftPinnedCols = orderedDealColumns.filter((c) => getColumnPinSide(c.id) === "left");
+    const rightPinnedCols = orderedDealColumns.filter((c) => getColumnPinSide(c.id) === "right");
+    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) return "left";
+    if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) return "right";
+    return null;
+  };
 
   const startResize = (e, colId) => {
     e.preventDefault();
@@ -1503,7 +1577,7 @@ export default function CompanyDealsKanban({
                 className="text-sm text-left border-separate"
                 style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%", borderSpacing: 0 }}
               >
-                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
+                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30">
                   <tr>
                     {/* Page-scoped select-all: ticks exactly the rows on the CURRENT page
                         (10 per page -> 10, 50 -> 50). Distinct from the bulk strip's
@@ -1519,39 +1593,21 @@ export default function CompanyDealsKanban({
                       </div>
                     </th>
                     {(() => {
-                      const allCols = [
-                        { id: "dealId", label: "Deal ID", width: 127, sortable: false },
-                        { id: "title", label: "Deal Name", width: 185 },
-                        { id: "contact", label: "Contact", width: 150 },
-                        { id: "stage", label: "Stage", width: 131 },
-                        { id: "amount", label: "Amount", width: 123 },
-                        { id: "lastUpdated", label: "Last Updated", width: 171, sortable: false },
-                      ].filter((col) => !hiddenColumns.includes(col.id));
-                      const orderRank = (id) => {
-                        const idx = columnOrder.indexOf(id);
-                        return idx === -1 ? columnOrder.length + allCols.findIndex((c) => c.id === id) : idx;
-                      };
-                      const fallbackOrder = allCols.map((c) => c.id);
-                      return allCols
-                        .slice()
-                        .sort((a, b) => {
-                          const rank = (id) => (getColumnPinSide(id) === "left" ? 0 : getColumnPinSide(id) === "right" ? 2 : 1);
-                          const pinDiff = rank(a.id) - rank(b.id);
-                          if (pinDiff !== 0) return pinDiff;
-                          return orderRank(a.id) - orderRank(b.id);
-                        })
+                      const fallbackOrder = orderedDealColumns.map((c) => c.id);
+                      return orderedDealColumns
                         .map((col) => {
                           const isMenuOpen = openColMenuKey === col.id;
                           const pinSide = getColumnPinSide(col.id);
                           const isDragging = draggedColKey === col.id;
                           const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
+                          const boundarySide = getDealBoundaryShadowSide(col.id);
                           return (
                             <th
                               key={col.id}
                               data-col-id={col.id}
                               onMouseDown={(e) => startColumnDrag(e, col.id, col.label, fallbackOrder)}
-                              style={{ width: colWidths[col.id], height: 56, position: "relative", opacity: isDragging ? 0.35 : 1 }}
-                              className={`px-3 py-2.5 font-medium text-[#525866] text-xs border-r border-b border-[#E1E4EA] cursor-grab active:cursor-grabbing transition-colors ${isDragOver ? "bg-blue-100" : ""}`}
+                              style={{ width: colWidths[col.id], height: 56, opacity: isDragging ? 0.35 : 1, ...getDealStickyStyle(col.id, true) }}
+                              className={`px-3 py-2.5 font-medium text-[#525866] text-xs cursor-grab active:cursor-grabbing transition-colors ${isDragOver ? "bg-blue-100" : "bg-[#F5F7FA]"}`}
                             >
                               <div className="flex items-center justify-between w-full group">
                                 {/* Not clickable — a plain click on the header does nothing now.
@@ -1560,6 +1616,13 @@ export default function CompanyDealsKanban({
                                 <div className="flex items-center gap-1.5 flex-1 overflow-hidden select-none">
                                   {col.icon && <col.icon className="w-3.5 h-3.5 flex-shrink-0" />}
                                   <span className="truncate">{col.label}</span>
+                                  {pinSide && (
+                                    <Pin
+                                      size={12}
+                                      className="text-blue-500 fill-blue-500 flex-shrink-0"
+                                      style={{ transform: "rotate(45deg)" }}
+                                    />
+                                  )}
                                 </div>
                                 <button
                                   onClick={(e) => {
@@ -1673,6 +1736,7 @@ export default function CompanyDealsKanban({
                                 className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"
                                   }`}
                               />
+                              {boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />}
                             </th>
                           );
                         });
@@ -1720,56 +1784,85 @@ export default function CompanyDealsKanban({
                               />
                             </div>
                           </td>
-                          {!hiddenColumns.includes("dealId") && (
-                            <td
-                              style={{ height: 54 }}
-                              className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left border-r border-b border-[#E1E4EA]"
-                            >
-                              <HighlightText text={dealIdShort} query={searchTerm} />
-                            </td>
-                          )}
-                          {!hiddenColumns.includes("title") && (
-                            <td style={{ height: 54 }} className="px-3 text-left border-r border-b border-[#E1E4EA]">
-                              <Link
-                                to={`/deals/${deal._id}`}
-                                className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
-                              >
-                                <HighlightText text={deal.title || "Deal Name"} query={searchTerm} />
-                              </Link>
-                            </td>
-                          )}
-                          {!hiddenColumns.includes("contact") && (
-                            <td
-                              style={{ height: 54 }}
-                              className="px-3 text-[14px] leading-5 font-medium text-[#222530] truncate text-left border-r border-b border-[#E1E4EA]"
-                            >
-                              <HighlightText text={deal.contact?.name || "-"} query={searchTerm} />
-                            </td>
-                          )}
-                          {!hiddenColumns.includes("stage") && (
-                            <td style={{ height: 54 }} className="px-3 border-r border-b border-[#E1E4EA]">
-                              <div className="flex items-center justify-start">
-                                <span
-                                  style={{ width: 80, height: 24, padding: "5px 12px", borderRadius: 53, ...pillStyle }}
-                                  className="inline-flex items-center justify-center text-xs font-medium"
+                          {orderedDealColumns.map((col) => {
+                            const boundarySide = getDealBoundaryShadowSide(col.id);
+                            const boundaryOverlay = boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />;
+                            if (col.id === "dealId") {
+                              return (
+                                <td
+                                  key={col.id}
+                                  style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
+                                  className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
                                 >
-                                  <HighlightText text={deal.status || "Open"} query={searchTerm} />
-                                </span>
-                              </div>
-                            </td>
-                          )}
-                          {!hiddenColumns.includes("amount") && (
+                                  <HighlightText text={dealIdShort} query={searchTerm} />
+                                  {boundaryOverlay}
+                                </td>
+                              );
+                            }
+                            if (col.id === "title") {
+                              return (
+                                <td key={col.id} style={{ height: 54, ...getDealStickyStyle(col.id, false) }} className="px-3 text-left">
+                                  <Link
+                                    to={`/deals/${deal._id}`}
+                                    className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
+                                  >
+                                    <HighlightText text={deal.title || "Deal Name"} query={searchTerm} />
+                                  </Link>
+                                  {boundaryOverlay}
+                                </td>
+                              );
+                            }
+                            if (col.id === "contact") {
+                              return (
+                                <td
+                                  key={col.id}
+                                  style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
+                                  className="px-3 text-[14px] leading-5 font-medium text-[#222530] text-left"
+                                >
+                                  <span className="truncate block">
+                                    <HighlightText text={deal.contact?.name || "-"} query={searchTerm} />
+                                  </span>
+                                  {boundaryOverlay}
+                                </td>
+                              );
+                            }
+                            if (col.id === "stage") {
+                              return (
+                                <td key={col.id} style={{ height: 54, ...getDealStickyStyle(col.id, false) }} className="px-3">
+                                  <div className="flex items-center justify-start">
+                                    <span
+                                      style={{ width: 80, height: 24, padding: "5px 12px", borderRadius: 53, ...pillStyle }}
+                                      className="inline-flex items-center justify-center text-xs font-medium"
+                                    >
+                                      <HighlightText text={deal.status || "Open"} query={searchTerm} />
+                                    </span>
+                                  </div>
+                                  {boundaryOverlay}
+                                </td>
+                              );
+                            }
+                            if (col.id === "amount") {
+                              return (
+                                <td
+                                  key={col.id}
+                                  style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
+                                  className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
+                                >
+                                  <HighlightText text={`₹${(deal.amount || 0).toLocaleString("en-IN")}`} query={searchTerm} />
+                                  {boundaryOverlay}
+                                </td>
+                              );
+                            }
+                            // lastUpdated is last in the base column order and carries
+                            // the row-actions menu — same "actions rides the last
+                            // column" pattern as the Vendors list, but here anchored
+                            // specifically to this column rather than whichever ends up
+                            // last, since pinning/reordering can move other columns past it.
+                            return (
                             <td
-                              style={{ height: 54 }}
-                              className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left border-r border-b border-[#E1E4EA]"
-                            >
-                              <HighlightText text={`₹${(deal.amount || 0).toLocaleString("en-IN")}`} query={searchTerm} />
-                            </td>
-                          )}
-                          {!hiddenColumns.includes("lastUpdated") && (
-                            <td
-                              style={{ height: 54 }}
-                              className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap border-b border-[#E1E4EA]"
+                              key={col.id}
+                              style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
+                              className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap"
                             >
                               <div className="flex items-center justify-between gap-2" onMouseDown={(e) => e.stopPropagation()}>
                                 <HighlightText text={lastUpdated} query={searchTerm} />
@@ -1870,8 +1963,10 @@ export default function CompanyDealsKanban({
                                   )}
                                 </div>
                               </div>
+                              {boundaryOverlay}
                             </td>
-                          )}
+                            );
+                          })}
                         </tr>
                       );
                     })

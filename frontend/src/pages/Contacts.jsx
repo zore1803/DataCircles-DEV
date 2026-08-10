@@ -2511,46 +2511,50 @@ function Contacts() {
       >
         {showBulkStrip ? (
           <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-3 w-full h-full overflow-x-auto lg:overflow-visible`}>
-            <div className="flex flex-nowrap lg:flex-wrap items-center gap-3 flex-shrink-0">
+            {/* One joined strip instead of separate pills, matching Companies: no gap
+    between buttons, rounding only on the two outer corners, and each
+    border pulled left by 1px onto its neighbour so touching borders
+    don't double up. Only the icons carry each action's colour. */}
+<div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
               <button
                 onClick={() => setShowExportModal(true)}
-                className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 text-green-600" />
                 Export
               </button>
               <button
                 onClick={() => setShowBulkNoteModal(true)}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <StickyNote className="w-4 h-4 text-emerald-600" />
                 Add Note
               </button>
               <button
                 onClick={() => setShowAddToHotlistModal(true)}
-                className="h-10 px-4 bg-white border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <FolderPlus className="w-4 h-4" />
+                <FolderPlus className="w-4 h-4 text-blue-600" />
                 Add to Folder
               </button>
               <button
                 onClick={() => setShowBulkActions(true)}
-                className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Edit2 className="w-4 h-4" />
+                <Edit2 className="w-4 h-4 text-blue-600" />
                 Bulk Update
               </button>
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={loading}
-                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4 h-4 text-red-600" />
                 Delete
               </button>
               <button
                 onClick={exitSelectionMode}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Cancel

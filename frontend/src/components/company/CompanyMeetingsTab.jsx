@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
-import { PINNED_LEFT_BOUNDARY_SHADOW, PINNED_RIGHT_BOUNDARY_SHADOW } from "../../utils/pinnedColumnShadow";
+import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   Filter,
   Plus,
@@ -177,56 +177,73 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    // A single press does nothing: the column menu opens from its own chevron
-    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
-    // meant the FIRST press of every double-click popped the menu, whose
-    // full-screen backdrop then swallowed the second press — making the header
-    // effectively un-double-clickable. Drag still starts on the second press.
-    if (e.detail < 2) return;
+    // No click-count gate here, matching the Companies list page: a press plus
+    // DRAG_THRESHOLD px of movement starts the drag, at whatever speed the user
+    // moves. Gating on `e.detail` meant only a fast-enough double-click could
+    // begin a move. The threshold below is what keeps a plain click harmless,
+    // and the column menu opens from its own chevron button, never from the
+    // header background — so nothing competes with the drag for a single press.
 
-    e.preventDefault();
-    window.getSelection?.()?.removeAllRanges();
-
+    // A plain click must stay harmless, so nothing happens until the pointer
+    // has travelled DRAG_THRESHOLD px — the same deferred start the Companies
+    // list page uses. Until then no ghost is mounted and no drag state is set.
     const th = e.currentTarget;
-    const rect = th.getBoundingClientRect();
-    const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
+    let dragStarted = false;
+    let positionGhost = () => {};
+
+    const beginDrag = () => {
+      dragStarted = true;
+      e.preventDefault();
+      window.getSelection?.()?.removeAllRanges();
+      const rect = th.getBoundingClientRect();
+      const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
     
-    const previewRows = (meetings || []).slice(0, 10).map((m) => {
-      let val = m[colId];
-      if (typeof val === 'object' && val !== null) val = val?.name || val?.title || "";
-      return String(val ?? "").trim() || "—";
-    });
+      const previewRows = (meetings || []).slice(0, 10).map((m) => {
+        let val = m[colId];
+        if (typeof val === 'object' && val !== null) val = val?.name || val?.title || "";
+        return String(val ?? "").trim() || "—";
+      });
 
-    const zGhost = getAncestorZoom(document.body);
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+      const zGhost = getAncestorZoom(document.body);
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
 
-    dragOverRef.current = null;
-    setDraggedColKey(colId);
-    setDragOverColKey(null);
-    document.body.style.userSelect = "none";
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
 
-    setDragGhost({
-      label,
-      previewRows,
-      offsetX,
-      offsetY,
-      width: rect.width / zGhost,
-      height: rect.height / zGhost,
-    });
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX,
+        offsetY,
+        width: rect.width / zGhost,
+        height: rect.height / zGhost,
+      });
 
-    const positionGhost = (clientX, clientY) => {
-      const el = ghostElRef.current;
-      if (!el) return;
-      const visualTop = clientY - offsetY;
-      const visualLeft = clientX - offsetX;
-      el.style.top = `${visualTop / zGhost}px`;
-      el.style.left = `${visualLeft / zGhost}px`;
-      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      positionGhost = (clientX, clientY) => {
+        const el = ghostElRef.current;
+        if (!el) return;
+        const visualTop = clientY - offsetY;
+        const visualLeft = clientX - offsetX;
+        el.style.top = `${visualTop / zGhost}px`;
+        el.style.left = `${visualLeft / zGhost}px`;
+        el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      };
+      requestAnimationFrame(() => positionGhost(startX, startY));
     };
-    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
 
     const handleMouseMove = (moveEvent) => {
+      if (!dragStarted) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        beginDrag();
+      }
       positionGhost(moveEvent.clientX, moveEvent.clientY);
       const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
       const thAtPoint = elAtPoint?.closest("th[data-col-id]");
@@ -240,6 +257,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragStarted) return;
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) {
@@ -328,24 +346,21 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
   const getStickyStyle = (colId, isHeader = false, isSelected = false) => {
     const isPinned = leftPinned.has(colId) || rightPinned.has(colId);
     const style = stickyStyles[colId] || {};
-    
-    let borderShadows = "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA";
-    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
-    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
-    
-    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) {
-      borderShadows = `${PINNED_LEFT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
-    } else if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) {
-      borderShadows = `${PINNED_RIGHT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
-    }
-    
     return {
       ...style,
-      position: isPinned ? "sticky" : undefined,
+      position: isPinned ? "sticky" : "relative",
       zIndex: isPinned ? (isHeader ? 35 : 20) : undefined,
       backgroundColor: isPinned ? (isHeader ? "#F5F7FA" : (isSelected ? "#EFF6FF" : "#fff")) : undefined,
-      boxShadow: borderShadows,
+      boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
     };
+  };
+
+  const getBoundaryShadowSide = (colId) => {
+    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
+    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
+    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) return "left";
+    if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) return "right";
+    return null;
   };
 
   const togglePinColumn = (colId) => {
@@ -866,6 +881,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                 {orderedColumns.map((col) => {
                   const isDragging = draggedColKey === col.id;
                   const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
+                  const boundarySide = getBoundaryShadowSide(col.id);
                   return (
                     <th
                       key={col.id}
@@ -877,7 +893,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                         opacity: isDragging ? 0.35 : 1,
                         ...getStickyStyle(col.id, true)
                       }}
-                      className={`py-2.5 font-medium text-[#525252] text-xs cursor-grab active:cursor-grabbing ${
+                      className={`py-2.5 font-medium text-[#525252] text-xs cursor-grab active:cursor-grabbing bg-[#F5F7FA] ${
                         col.firstCol ? "pl-6 pr-3" : "px-3"
                       } ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
@@ -1006,11 +1022,13 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                         )}
                       </div>
                       <div
+                        data-resize-handle="true"
                         onMouseDown={(e) => startResize(e, col.id)}
                         className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${
                           resizingCol === col.id ? "bg-blue-500" : "bg-transparent"
                         }`}
                       />
+                      {boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />}
                     </th>
                   );
                 })}
@@ -1031,8 +1049,8 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                   const organizer = typeof meeting.createdBy === "object" ? meeting.createdBy : null;
                   const cells = {
                     title: (
-                        <td key="title" style={{ height: 60 }} className="pl-6 pr-3 truncate border-r border-b border-[#E1E4EA]">
-                          <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#222530" }} className="truncate">
+                        <td key="title" style={{ height: 60 }} className="pl-6 pr-3 border-r border-b border-[#E1E4EA]">
+                          <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#222530" }} className="truncate block">
                             <HighlightText text={meeting.title || "Untitled Meeting"} query={searchTerm} />
                           </span>
                         </td>
@@ -1206,16 +1224,21 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                           opacity: isDragging ? 0.35 : undefined,
                           ...stickyStyle,
                         };
-                        
+
                         const cleanClassName = (cell.props.className || "")
                           .replace("border-r", "")
                           .replace("border-b", "")
                           .replace("border-[#E1E4EA]", "");
-                          
-                        return React.cloneElement(cell, {
-                          style: mergedStyle,
-                          className: cleanClassName,
-                        });
+
+                        const boundarySide = getBoundaryShadowSide(col.id);
+                        return React.cloneElement(
+                          cell,
+                          { style: mergedStyle, className: cleanClassName },
+                          <>
+                            {cell.props.children}
+                            {boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />}
+                          </>
+                        );
                       })}
                     </tr>
                   );
