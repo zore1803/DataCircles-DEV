@@ -272,9 +272,15 @@ const BankDetails = () => {
                     <p className="mt-0.5 font-mono font-medium text-gray-800">{bank.ifscCode || "—"}</p>
                   </div>
                   {bank.upi && (
-                    <div className="col-span-2">
+                    <div>
                       <span className="font-semibold text-gray-500">UPI ID</span>
                       <p className="mt-0.5 font-medium text-gray-800">{bank.upi}</p>
+                    </div>
+                  )}
+                  {bank.upiNumber && (
+                    <div>
+                      <span className="font-semibold text-gray-500">UPI NUMBER</span>
+                      <p className={`mt-0.5 font-medium ${/^\d{10,12}$/.test(bank.upiNumber) ? 'text-green-600' : 'text-rose-600'}`}>{bank.upiNumber}</p>
                     </div>
                   )}
                   {bank.openingBalance !== null && bank.openingBalance !== undefined && (
@@ -283,12 +289,6 @@ const BankDetails = () => {
                       <p className="mt-0.5 font-medium text-gray-800">
                         ₹{Number(bank.openingBalance).toLocaleString("en-IN")}
                       </p>
-                    </div>
-                  )}
-                  {bank.swiftCode && (
-                    <div>
-                      <span className="font-semibold text-gray-500">SWIFT</span>
-                      <p className="mt-0.5 font-medium text-gray-800">{bank.swiftCode}</p>
                     </div>
                   )}
                 </div>
