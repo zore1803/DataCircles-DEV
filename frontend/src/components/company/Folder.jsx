@@ -2274,7 +2274,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                           }}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {folders.length > 5 && (
+                          {folders.length > 0 && (
                             <div style={{ padding: 6, borderBottom: "1px solid #EBEBEB" }}>
                               <input
                                 type="text"
