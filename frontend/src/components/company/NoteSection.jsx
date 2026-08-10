@@ -49,7 +49,7 @@ import AppToaster from "../AppToaster";
 import SearchIcon from "../common/SearchIcon";
 // Custom Quill modules and formats configuration
 const QuillToolbar = () => (
-  <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white border-b border-gray-300 rounded-t-2xl">
+  <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white border-b border-gray-300">
     <div className="flex gap-0.5 pr-1.5 border-r border-gray-100">
       <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="1">
         <Heading1 className="w-4 h-4" />
