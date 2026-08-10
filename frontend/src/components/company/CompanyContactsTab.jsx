@@ -745,12 +745,12 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                           <Skeleton width="65%" height={12} />
                         ) : (
                           <div className="flex items-center gap-1.5 min-w-0 truncate">
-                            {(leftPinned.has(col.id) || rightPinned.has(col.id)) && (
-                              <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0" style={{ transform: "rotate(45deg)" }} />
-                            )}
                             <span className="truncate flex-1 min-w-0" title={col.label}>
                               {col.label}
                             </span>
+                            {(leftPinned.has(col.id) || rightPinned.has(col.id)) && (
+                              <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0 ml-1" style={{ transform: "rotate(45deg)" }} />
+                            )}
                           </div>
                         )}
                         <button
