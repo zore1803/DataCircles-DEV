@@ -952,9 +952,9 @@ export const NoteEditor = ({
 
             {/* Action Row */}
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all min-w-[200px] flex-shrink-0">
-                  <Users className="w-4 h-4" />
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all flex-1 min-w-0">
+                  <Users className="w-4 h-4 flex-shrink-0" />
                   <Select
                     isMulti
                     options={contactOptions}
@@ -962,7 +962,7 @@ export const NoteEditor = ({
                     onChange={setTaggedContacts}
                     placeholder="Select Contact"
                     styles={customSelectStyles}
-                    className="flex-1"
+                    className="flex-1 min-w-0"
                     components={{
                       MultiValue: () => null, // Don't show chips here
                       IndicatorSeparator: () => null,
@@ -971,12 +971,12 @@ export const NoteEditor = ({
                   />
                 </div>
 
-                <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl min-w-[180px] flex-shrink-0">
-                  <Type className="w-4 h-4 text-gray-500" />
+                <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-xl flex-shrink-0">
+                  <Type className="w-4 h-4 text-gray-500 flex-shrink-0" />
                   <select
                     value={noteType}
                     onChange={(e) => setNoteType(e.target.value)}
-                    className="w-full bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
+                    className="bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
                   >
                     <option value="General Note">General Note</option>
                     <option value="Meeting Note">Meeting Note</option>
@@ -985,12 +985,12 @@ export const NoteEditor = ({
                   </select>
                 </div>
 
-                <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl min-w-[140px] flex-shrink-0">
-                  <Eye className="w-4 h-4 text-gray-500" />
+                <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-xl flex-shrink-0">
+                  <Eye className="w-4 h-4 text-gray-500 flex-shrink-0" />
                   <select
                     value={visibility}
                     onChange={(e) => setVisibility(e.target.value)}
-                    className="w-full bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
+                    className="bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
                   >
                     <option value="Team">Team</option>
                     <option value="Private">Private</option>
