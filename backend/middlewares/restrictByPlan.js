@@ -31,6 +31,32 @@ const EmailLog = require('../models/EmailLog');
 const EmailTemplate = require('../models/EmailTemplate');
 const StorageUsage = require('../models/StorageUsage');
 const FormDefinition = require('../models/FormDefinition');
+const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+// multer-s3 has already streamed req.files to S3 by the time this
+// middleware runs (it must run after multer to know the upload size) —
+// so a rejected-for-storage-limit upload otherwise leaves orphaned,
+// permanently-billed objects in the bucket with nothing in Mongo
+// pointing at them. Delete them before responding.
+const deleteOrphanedUploads = async (files) => {
+  await Promise.all(
+    (files || []).map((file) =>
+      file.key
+        ? s3Client
+            .send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: file.key }))
+            .catch((err) => console.error('Failed to delete orphaned upload:', file.key, err))
+        : Promise.resolve()
+    )
+  );
+};
 
 // ----------------------------------------------------------------------
 // Per-module numeric limits, ORG-WIDE (all users combined), checked
@@ -305,6 +331,7 @@ module.exports = (moduleName, actionType, options = {}) => async (req, res, next
       const storageCheck = await checkStorageLimit(req, planLimits);
 
       if (!storageCheck.allowed) {
+        await deleteOrphanedUploads(req.files);
         return res.status(413).json({
           error: storageCheck.error,
           code: 'STORAGE_LIMIT_EXCEEDED',

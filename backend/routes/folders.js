@@ -20,7 +20,18 @@ router.post('/',
 router.post('/upload',
   requireAuth,
   subscriptionGate,
-  uploadMiddlewareS3().array('files', 10),
+  (req, res, next) => {
+    uploadMiddlewareS3().array('files', 10)(req, res, (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ error: 'Each file must be 100MB or smaller.', code: 'FILE_TOO_LARGE' });
+        }
+        console.error('Upload middleware error:', err);
+        return res.status(400).json({ error: 'Failed to upload file(s).' });
+      }
+      next();
+    });
+  },
   restrictByPlan('folders', 'write'),
   folderController.uploadFiles
 );
