@@ -243,6 +243,11 @@ const NoteStyles = () => (
       color: #374151;
       margin-bottom: 1rem;
     }
+    .prose a,
+    .ql-editor a {
+      color: #2563eb;
+      text-decoration: underline;
+    }
   `}</style>
 );
 
