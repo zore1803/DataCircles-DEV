@@ -3,6 +3,8 @@ import HighlightText from "../common/HighlightText";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
+import BulkActionBar from "../common/BulkActionBar";
+import { useBulkStrip } from "../../hooks/useBulkSelection";
 import folderIconImg from "../../assets/Folder-icon.png";
 import pdfIconImg from "../../assets/pdf-icon.png";
 import { useParams } from "react-router-dom";
@@ -1079,6 +1081,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [folderPickerSearch, setFolderPickerSearch] = useState("");
   const [selectedFileNames, setSelectedFileNames] = useState([]);
+  const { visible: fileBulkVisible, closing: fileBulkClosing } = useBulkStrip(selectedFileNames.length);
   const [fileSearchTerm, setFileSearchTerm] = useState("");
   const [openFolderId, setOpenFolderId] = useState("");
   const [newFiles, setNewFiles] = useState([]);
@@ -1326,6 +1329,37 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
     }
   };
 
+  const bulkDeleteFiles = async (folderId, files) => {
+    if (
+      await confirmToast(
+        "Delete Files?",
+        <>{files.length} file{files.length !== 1 ? "s" : ""} will be permanently deleted. This action cannot be undone.</>,
+        "Delete",
+        null,
+        true,
+      )
+    ) {
+      try {
+        await Promise.all(
+          files.map((file) =>
+            API.delete(`/folders/${folderId}/files`, {
+              data: { fileName: file.fileName, fileUrl: file.fileUrl },
+            })
+          )
+        );
+        setRefresh(!refresh);
+        setSelectedFileNames([]);
+        toast.success(`${files.length} file${files.length !== 1 ? "s" : ""} deleted`);
+      } catch (err) {
+        if (err.response?.status === 402) {
+          toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+        } else {
+          toast.error(err.response?.data?.error || "Failed to delete files");
+        }
+      }
+    }
+  };
+
   const handleFileDrop = useCallback(
     (files) => {
       if (!selectedFolderId) {
@@ -1566,6 +1600,23 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                 </div>
               </div>
             </div>
+
+            {fileBulkVisible && (
+              <BulkActionBar
+                selectedCount={selectedFileNames.length}
+                entityName="file"
+                isClosing={fileBulkClosing}
+                onSelectAll={() => setSelectedFileNames(openFolder.files.map((f) => f.fileName))}
+                onDeselectAll={() => setSelectedFileNames([])}
+                onDelete={() =>
+                  bulkDeleteFiles(
+                    openFolder._id,
+                    openFolder.files.filter((f) => selectedFileNames.includes(f.fileName))
+                  )
+                }
+                onCancel={() => setSelectedFileNames([])}
+              />
+            )}
 
             {openFolder.files?.length > 0 ? (
               <div
