@@ -24,6 +24,8 @@ import {
   ChevronDown,
   EyeOff,
   X,
+  Edit3,
+  Trash2,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
@@ -160,6 +162,11 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
   const [dragGhost, setDragGhost] = useState(null);
   const dragOverRef = useRef(null);
   const ghostElRef = useRef(null);
+  const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const [rowActionsPos, setRowActionsPos] = useState(null);
+  const rowActionsRef = useRef(null);
+  const [noteToDelete, setNoteToDelete] = useState(null);
+  const [deletingNote, setDeletingNote] = useState(false);
 
   const orderedColumns = useMemo(() => {
     const sortedBase = [...BASE_COLUMNS].sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
@@ -529,6 +536,25 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
       } else {
         toast.error(err.response?.data?.error || "Failed to delete note");
       }
+    }
+  };
+
+  const handleDeleteNoteConfirmed = async () => {
+    if (!noteToDelete) return;
+    setDeletingNote(true);
+    try {
+      await API.delete(`/notes/${noteToDelete._id}`);
+      await fetchNotes();
+      toast.success("Note deleted");
+      setNoteToDelete(null);
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Failed to delete note");
+      }
+    } finally {
+      setDeletingNote(false);
     }
   };
 
@@ -1251,17 +1277,99 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
                         </td>
                     ),
                   };
+                  const isActionsOpen = openRowActionsId === note._id;
                   const noteActionsButton = (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleView(note);
-                      }}
-                      className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                      title="More options"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
+                    <div className="relative flex items-center justify-center flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isActionsOpen) {
+                            setOpenRowActionsId(null);
+                            setRowActionsPos(null);
+                            return;
+                          }
+                          // rect is VISUAL px; the menu is portaled into
+                          // document.body, which paints inside the app's
+                          // dynamic <html> zoom, so rect-derived values are
+                          // divided by that zoom, the menu is centered on
+                          // the row rather than hanging off an edge, and
+                          // both axes are clamped to the viewport — same
+                          // approach as the Deals/Tasks/Meetings row-actions
+                          // menus.
+                          const zMenu = getAncestorZoom(document.body);
+                          const MENU_W = 160;
+                          const MENU_H = 110; // View Note + Edit Note + divider + Delete Note
+                          const MARGIN = 8;
+
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const viewportH = window.innerHeight / zMenu;
+                          const viewportW = window.innerWidth / zMenu;
+
+                          const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                          let calcTop = rowCenter - MENU_H / 2;
+                          calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+                          let calcLeft = rect.right / zMenu - MENU_W;
+                          calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                          calcLeft = Math.max(calcLeft, MARGIN);
+
+                          setRowActionsPos({ top: calcTop, left: calcLeft });
+                          setOpenRowActionsId(note._id);
+                        }}
+                        className="p-1 rounded hover:bg-gray-200 text-gray-800 transition-colors flex-shrink-0"
+                        title="More options"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+
+                      {isActionsOpen && rowActionsPos && createPortal(
+                        <>
+                          <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+                          <div
+                            ref={rowActionsRef}
+                            style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+                            className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={() => {
+                                setOpenRowActionsId(null);
+                                setRowActionsPos(null);
+                                handleView(note);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                              View Note
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenRowActionsId(null);
+                                setRowActionsPos(null);
+                                handleEdit(note);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                              Edit Note
+                            </button>
+                            <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                            <button
+                              onClick={() => {
+                                setOpenRowActionsId(null);
+                                setRowActionsPos(null);
+                                setNoteToDelete(note);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Delete Note
+                            </button>
+                          </div>
+                        </>,
+                        document.body
+                      )}
+                    </div>
                   );
                   return (
                     <tr key={note._id} className={`hover:bg-gray-50 transition-colors group ${isSelected ? "!bg-blue-50" : ""}`}>
@@ -1397,6 +1505,40 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
         title="Filter Notes"
         subtitle="Filter this list by column"
       />
+
+      {noteToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
+                Confirm Delete
+              </h3>
+              <p className="text-sm text-gray-500 font-inter mb-6">
+                Delete note "{noteToDelete.title || "Note"}"? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setNoteToDelete(null)}
+                  disabled={deletingNote}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteNoteConfirmed}
+                  disabled={deletingNote}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {deletingNote ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <NoteEditor
         isOpen={isEditorOpen}
