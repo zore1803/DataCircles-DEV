@@ -68,6 +68,7 @@ import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 
 import SearchIcon from "../components/common/SearchIcon";
+import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 const SectionHeader = ({ number, title }) => (
   <div className="flex items-center gap-2.5 w-full mb-1.5 mt-2 first:mt-0">
     <div className="flex items-center justify-center w-5 h-5 rounded-full bg-[#F0F6FF] text-[#0085FF] text-[10px] font-semibold flex-shrink-0">
@@ -2429,6 +2430,26 @@ const Accounting = () => {
     [stickyStyles]
   );
 
+  // Boundary shadow — same treatment as Companies: a soft edge on the
+  // RIGHTMOST left-pinned column and the LEFTMOST right-pinned column, the
+  // ones actually touching the scrollable content on screen.
+  const lastLeftPinnedKey = useMemo(() => {
+    const keys = orderedColumns.filter((c) => pinnedCols[c.id] === "left").map((c) => c.id);
+    return keys.length ? keys[keys.length - 1] : null;
+  }, [orderedColumns, pinnedCols]);
+  const firstRightPinnedKey = useMemo(() => {
+    const key = orderedColumns.find((c) => pinnedCols[c.id] === "right")?.id;
+    return key || null;
+  }, [orderedColumns, pinnedCols]);
+  const boundaryShadowSideFor = useCallback(
+    (colId) => {
+      if (colId === lastLeftPinnedKey) return "left";
+      if (colId === firstRightPinnedKey) return "right";
+      return null;
+    },
+    [lastLeftPinnedKey, firstRightPinnedKey]
+  );
+
   const closeColumnMenu = useCallback(() => {
     setOpenColumnMenuKey(null);
     setColumnMenuPos(null);
@@ -3372,12 +3393,16 @@ const Accounting = () => {
               className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}
             >
               {/* Left: bulk action buttons */}
-              <div className="flex flex-nowrap lg:flex-wrap items-center gap-3 flex-shrink-0">
+              {/* One joined strip instead of separate pills, matching Companies: no gap
+    between buttons, rounding only on the two outer corners, and each
+    border pulled left by 1px onto its neighbour so touching borders
+    don't double up. Only the icons carry each action's colour. */}
+<div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
                 <button
                   onClick={handleExportSelected}
-                  className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-4 h-4 text-green-600" />
                   Export
                 </button>
                 <button
@@ -3385,22 +3410,22 @@ const Accounting = () => {
                     setBulkUpdateStatus("");
                     setShowBulkUpdateModal(true);
                   }}
-                  className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <Pencil className="w-4 h-4 text-blue-600" />
                   Bulk Update
                 </button>
                 <button
                   onClick={() => setShowBulkDeleteModal(true)}
                   disabled={bulkDeleting}
-                  className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4 text-red-600" />
                   Delete
                 </button>
                 <button
                   onClick={() => setSelectedIds([])}
-                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <X className="w-4 h-4" />
                   Cancel
@@ -3695,14 +3720,20 @@ const Accounting = () => {
                         } active:cursor-grabbing`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="truncate flex-1">
-                          {typeof col.label === "function"
-                            ? col.label(activeTab)
-                            : col.label}
+                        <span className="truncate flex-1 min-w-0 flex items-center gap-1.5">
+                          <span className="truncate">
+                            {typeof col.label === "function"
+                              ? col.label(activeTab)
+                              : col.label}
+                          </span>
+                          {pinnedCols[col.id] && (
+                            <Pin
+                              size={12}
+                              className="text-blue-500 fill-blue-500 flex-shrink-0"
+                              style={{ transform: "rotate(45deg)" }}
+                            />
+                          )}
                         </span>
-                        {pinnedCols[col.id] && (
-                          <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                        )}
                         {/* Actions isn't a data column — nothing to sort, pin or
                           hide, so it gets no options button at all instead of
                           a menu whose items would all be no-ops. */}
@@ -3717,6 +3748,9 @@ const Accounting = () => {
                         )}
                       </div>
                       <ResizeHandle colId={col.id} />
+                      {boundaryShadowSideFor(col.id) && (
+                        <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSideFor(col.id))} />
+                      )}
                     </th>
                   );
                 })}
@@ -3773,9 +3807,12 @@ const Accounting = () => {
                         width: colWidths[col.id],
                         ...stickyStyleFor(col.id),
                       }}
-                      className="px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] overflow-hidden bg-inherit"
+                      className="relative px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
                     >
                       {renderCell(col.id, doc)}
+                      {boundaryShadowSideFor(col.id) && (
+                        <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSideFor(col.id))} />
+                      )}
                     </td>
                   ))}
                 </tr>

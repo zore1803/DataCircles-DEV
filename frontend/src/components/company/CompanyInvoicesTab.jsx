@@ -2,7 +2,7 @@ import React, { useMemo, useState, useRef, useEffect } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
-import { PINNED_LEFT_BOUNDARY_SHADOW, PINNED_RIGHT_BOUNDARY_SHADOW } from "../../utils/pinnedColumnShadow";
+import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import InvoiceForm from "../invoice/InvoiceForm";
@@ -315,56 +315,73 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    // A single press does nothing: the column menu opens from its own chevron
-    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
-    // meant the FIRST press of every double-click popped the menu, whose
-    // full-screen backdrop then swallowed the second press — making the header
-    // effectively un-double-clickable. Drag still starts on the second press.
-    if (e.detail < 2) return;
+    // No click-count gate here, matching the Companies list page: a press plus
+    // DRAG_THRESHOLD px of movement starts the drag, at whatever speed the user
+    // moves. Gating on `e.detail` meant only a fast-enough double-click could
+    // begin a move. The threshold below is what keeps a plain click harmless,
+    // and the column menu opens from its own chevron button, never from the
+    // header background — so nothing competes with the drag for a single press.
 
-    e.preventDefault();
-    window.getSelection?.()?.removeAllRanges();
-
+    // A plain click must stay harmless, so nothing happens until the pointer
+    // has travelled DRAG_THRESHOLD px — the same deferred start the Companies
+    // list page uses. Until then no ghost is mounted and no drag state is set.
     const th = e.currentTarget;
-    const rect = th.getBoundingClientRect();
-    const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
+    let dragStarted = false;
+    let positionGhost = () => {};
+
+    const beginDrag = () => {
+      dragStarted = true;
+      e.preventDefault();
+      window.getSelection?.()?.removeAllRanges();
+      const rect = th.getBoundingClientRect();
+      const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
     
-    const previewRows = (invoices || []).slice(0, 10).map((inv) => {
-      let val = inv[colId];
-      if (typeof val === 'object' && val !== null) val = val?.name || val?.title || "";
-      return String(val ?? "").trim() || "—";
-    });
+      const previewRows = (invoices || []).slice(0, 10).map((inv) => {
+        let val = inv[colId];
+        if (typeof val === 'object' && val !== null) val = val?.name || val?.title || "";
+        return String(val ?? "").trim() || "—";
+      });
 
-    const zGhost = getAncestorZoom(document.body);
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+      const zGhost = getAncestorZoom(document.body);
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
 
-    dragOverRef.current = null;
-    setDraggedColKey(colId);
-    setDragOverColKey(null);
-    document.body.style.userSelect = "none";
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
 
-    setDragGhost({
-      label,
-      previewRows,
-      offsetX,
-      offsetY,
-      width: rect.width / zGhost,
-      height: rect.height / zGhost,
-    });
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX,
+        offsetY,
+        width: rect.width / zGhost,
+        height: rect.height / zGhost,
+      });
 
-    const positionGhost = (clientX, clientY) => {
-      const el = ghostElRef.current;
-      if (!el) return;
-      const visualTop = clientY - offsetY;
-      const visualLeft = clientX - offsetX;
-      el.style.top = `${visualTop / zGhost}px`;
-      el.style.left = `${visualLeft / zGhost}px`;
-      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      positionGhost = (clientX, clientY) => {
+        const el = ghostElRef.current;
+        if (!el) return;
+        const visualTop = clientY - offsetY;
+        const visualLeft = clientX - offsetX;
+        el.style.top = `${visualTop / zGhost}px`;
+        el.style.left = `${visualLeft / zGhost}px`;
+        el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      };
+      requestAnimationFrame(() => positionGhost(startX, startY));
     };
-    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
 
     const handleMouseMove = (moveEvent) => {
+      if (!dragStarted) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        beginDrag();
+      }
       positionGhost(moveEvent.clientX, moveEvent.clientY);
       const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
       const thAtPoint = elAtPoint?.closest("th[data-col-id]");
@@ -378,6 +395,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragStarted) return;
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) {
@@ -464,24 +482,21 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
   const getStickyStyle = (colId, isHeader = false, isSelected = false) => {
     const isPinned = leftPinned.has(colId) || rightPinned.has(colId);
     const style = stickyStyles[colId] || {};
-    
-    let borderShadows = "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA";
-    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
-    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
-    
-    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) {
-      borderShadows = `${PINNED_LEFT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
-    } else if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) {
-      borderShadows = `${PINNED_RIGHT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
-    }
-    
     return {
       ...style,
-      position: isPinned ? "sticky" : undefined,
+      position: isPinned ? "sticky" : "relative",
       zIndex: isPinned ? (isHeader ? 35 : 20) : undefined,
       backgroundColor: isPinned ? (isHeader ? "#F5F7FA" : (isSelected ? "#EFF6FF" : "#fff")) : undefined,
-      boxShadow: borderShadows,
+      boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
     };
+  };
+
+  const getBoundaryShadowSide = (colId) => {
+    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
+    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
+    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) return "left";
+    if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) return "right";
+    return null;
   };
 
   const startResize = (e, colId) => {
@@ -809,6 +824,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
               {orderedColumns.map((col) => {
                 const isDragging = draggedColKey === col.id;
                 const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
+                const boundarySide = getBoundaryShadowSide(col.id);
                 return (
                   <th
                     key={col.id}
@@ -820,7 +836,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                       opacity: isDragging ? 0.35 : 1,
                       ...getStickyStyle(col.id, true)
                     }}
-                    className={`px-3 py-2.5 font-medium text-[#525866] text-xs cursor-grab active:cursor-grabbing ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                    className={`px-3 py-2.5 font-medium text-[#525866] text-xs cursor-grab active:cursor-grabbing bg-[#F5F7FA] ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                   >
                     <div className={`flex items-center justify-between w-full group ${loading ? "[&_button]:invisible" : ""}`}>
                       {loading ? (
@@ -936,10 +952,12 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                       )}
 
                       <div
+                        data-resize-handle="true"
                         onMouseDown={(e) => startResize(e, col.id)}
                         className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"}`}
                       />
                     </div>
+                    {boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />}
                   </th>
                 );
               })}
@@ -1016,7 +1034,9 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                         opacity: isDragging ? 0.35 : 1,
                         ...getStickyStyle(col.id, false, isSelected)
                       };
-                      
+                      const boundarySide = getBoundaryShadowSide(col.id);
+                      const boundaryOverlay = boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />;
+
                       if (col.id === "invoiceNumber") {
                         return (
                           <td key={col.id} style={cellStyle} className="px-3 text-left">
@@ -1026,6 +1046,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                             >
                               <HighlightText text={invoice.invoiceNumber || invoice._id} query={searchTerm} />
                             </Link>
+                            {boundaryOverlay}
                           </td>
                         );
                       }
@@ -1034,9 +1055,12 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                           <td
                             key={col.id}
                             style={cellStyle}
-                            className="px-3 text-[14px] leading-5 font-medium text-[#525866] truncate text-left"
+                            className="px-3 text-[14px] leading-5 font-medium text-[#525866] text-left"
                           >
-                            <HighlightText text={invoice.deal?.title || "-"} query={searchTerm} />
+                            <span className="truncate block">
+                              <HighlightText text={invoice.deal?.title || "-"} query={searchTerm} />
+                            </span>
+                            {boundaryOverlay}
                           </td>
                         );
                       }
@@ -1048,6 +1072,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                             className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
                           >
                             {issueDate}
+                            {boundaryOverlay}
                           </td>
                         );
                       }
@@ -1059,6 +1084,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                             className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
                           >
                             {dueDate}
+                            {boundaryOverlay}
                           </td>
                         );
                       }
@@ -1073,6 +1099,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                                 <HighlightText text={invoice.status || "Pending"} query={searchTerm} />
                               </span>
                             </div>
+                            {boundaryOverlay}
                           </td>
                         );
                       }
@@ -1094,6 +1121,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                                 <Download className="w-4 h-4" />
                               </button>
                             </div>
+                            {boundaryOverlay}
                           </td>
                         );
                       }

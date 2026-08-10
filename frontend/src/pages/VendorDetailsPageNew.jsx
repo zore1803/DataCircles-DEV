@@ -800,7 +800,9 @@ const VendorDetailsPageNew = () => {
             SECTION 3 & 5 — TABS & CONTENT
            ═══════════════════════════════════════════════════════════ */}
         {/* TABS */}
-        <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <div className="border-b border-gray-200 mb-4 -mx-6"></div>
+
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <div className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
@@ -811,9 +813,9 @@ const VendorDetailsPageNew = () => {
                 key={tab}
                 ref={(el) => (tabRefs.current[tab] = el)}
                 onClick={() => setActiveTab(tab)}
-                className={`relative z-10 flex items-center justify-center h-9 px-3 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors ${activeTab === tab
+                className={`relative z-10 flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab
                     ? "text-[#0085FF]"
-                    : "text-gray-600 hover:text-gray-900"
+                    : "text-gray-700 hover:text-gray-900"
                   }`}
               >
                 {tab}
@@ -822,6 +824,8 @@ const VendorDetailsPageNew = () => {
           </div>
           <div id="tab-actions-portal" className="flex items-center gap-2"></div>
         </div>
+
+        <div className="border-b border-gray-200 mb-4 -mx-6"></div>
 
         {/* Sidebar trimmed 272px -> 240px and the gap 6 -> 4, handing ~95px
             back to the table column so its right-most columns (Amount /

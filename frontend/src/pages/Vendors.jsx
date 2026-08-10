@@ -48,6 +48,7 @@ import FilterIcon from "../components/common/FilterIcon";
 import ExportModal from "../components/common/ExportModal";
 
 import SearchIcon from "../components/common/SearchIcon";
+import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 function useOutsideClick(ref, callback) {
   useEffect(() => {
     function handleClickOutside(event) {
@@ -63,7 +64,8 @@ function useOutsideClick(ref, callback) {
 }
 
 // Fixed columns every vendor has. Custom fields (from vendorFields) are
-// appended after these, and "actions" always comes last.
+// appended after these. There is no separate "actions" column: the row-actions
+// menu rides along inside the last visible column's cell, same as Companies.
 const BASE_COLUMN_DEFS = [
   { id: "name", label: "Name", required: true, width: 200 },
   { id: "email", label: "Email", width: 220 },
@@ -74,13 +76,6 @@ const BASE_COLUMN_DEFS = [
   // truncating to "CLOSING BAL...".
   { id: "balance", label: "Closing Balance", width: 190 },
 ];
-const ACTIONS_COLUMN_DEF = {
-  id: "actions",
-  label: "Actions",
-  required: true,
-  sortable: false,
-  width: 120,
-};
 const MIN_COL_WIDTH = 60;
 
 function Vendors() {
@@ -156,6 +151,7 @@ function Vendors() {
     direction: "",
   });
   const [showDropdown, setShowDropdown] = useState(null);
+  const [rowActionsPos, setRowActionsPos] = useState(null);
   const dropdownRef = useRef(null);
   const location = useLocation();
   const { state } = location;
@@ -224,7 +220,7 @@ function Vendors() {
     [vendorFields]
   );
   const allColumnDefs = useMemo(
-    () => [...BASE_COLUMN_DEFS, ...customColumnDefs, ACTIONS_COLUMN_DEF],
+    () => [...BASE_COLUMN_DEFS, ...customColumnDefs],
     [customColumnDefs]
   );
   const columnDefById = useMemo(() => {
@@ -234,9 +230,8 @@ function Vendors() {
   }, [allColumnDefs]);
 
   // Column list handed to the shared ExportModal. Same shape Companies.jsx
-  // passes: { key, label, isCustomField }. "actions" is a UI-only column, so
-  // it is dropped — everything else, including vendor custom fields, is
-  // offered as an exportable column.
+  // passes: { key, label, isCustomField }. Every column here is real data —
+  // including vendor custom fields — so all of them are offered for export.
   const baseColumnIds = useMemo(
     () => new Set(BASE_COLUMN_DEFS.map((c) => c.id)),
     []
@@ -244,7 +239,6 @@ function Vendors() {
   const exportColumns = useMemo(
     () =>
       allColumnDefs
-        .filter((c) => c.id !== "actions")
         .map((c) => ({
           key: c.id,
           label: c.label,
@@ -254,29 +248,28 @@ function Vendors() {
   );
 
   const [columnOrder, setColumnOrder] = useState(() =>
-    [...BASE_COLUMN_DEFS, ACTIONS_COLUMN_DEF].map((c) => c.id)
+    BASE_COLUMN_DEFS.map((c) => c.id)
   );
   const [hiddenCols, setHiddenCols] = useState([]);
   const [pinnedCols, setPinnedCols] = useState({});
   const [colWidths, setColWidths] = useState(() => {
     const widths = { selection: 60 };
-    [...BASE_COLUMN_DEFS, ACTIONS_COLUMN_DEF].forEach((c) => {
+    BASE_COLUMN_DEFS.forEach((c) => {
       widths[c.id] = c.width || 180;
     });
     return widths;
   });
 
-  // Custom fields load after the initial fetch; splice them into the order
-  // (before "actions") and default them hidden, same as the old
-  // useColumnSettings-based behaviour ("hidden by default, user can show").
+  // Custom fields load after the initial fetch; append them to the order and
+  // default them hidden, same as the old useColumnSettings-based behaviour
+  // ("hidden by default, user can show").
   useEffect(() => {
     if (customColumnDefs.length === 0) return;
     const customIds = customColumnDefs.map((c) => c.id);
     setColumnOrder((prev) => {
       const missing = customIds.filter((id) => !prev.includes(id));
       if (missing.length === 0) return prev;
-      const withoutActions = prev.filter((id) => id !== "actions");
-      return [...withoutActions, ...missing, "actions"];
+      return [...prev, ...missing];
     });
     setHiddenCols((prev) => {
       const missing = customIds.filter((id) => !prev.includes(id));
@@ -308,6 +301,11 @@ function Vendors() {
     [columnOrder, hiddenCols, pinnedCols, columnDefById]
   );
 
+  // The row-actions menu is rendered inside this column's cell instead of in a
+  // column of its own. Hiding/reordering/pinning columns moves it along with
+  // whatever ends up last, so it is always reachable at the row's right edge.
+  const lastColumnId = orderedColumns[orderedColumns.length - 1]?.id;
+
   const stickyStyles = useMemo(() => {
     const map = {};
     let leftOffset = colWidths.selection;
@@ -329,6 +327,26 @@ function Vendors() {
   const stickyStyleFor = useCallback(
     (colId) => stickyStyles[colId] || {},
     [stickyStyles]
+  );
+
+  // Boundary shadow — same treatment as Companies: a soft edge on the
+  // RIGHTMOST left-pinned column and the LEFTMOST right-pinned column, the
+  // ones actually touching the scrollable content on screen.
+  const lastLeftPinnedKey = useMemo(() => {
+    const keys = orderedColumns.filter((c) => pinnedCols[c.id] === "left").map((c) => c.id);
+    return keys.length ? keys[keys.length - 1] : null;
+  }, [orderedColumns, pinnedCols]);
+  const firstRightPinnedKey = useMemo(() => {
+    const key = orderedColumns.find((c) => pinnedCols[c.id] === "right")?.id;
+    return key || null;
+  }, [orderedColumns, pinnedCols]);
+  const boundaryShadowSideFor = useCallback(
+    (colId) => {
+      if (colId === lastLeftPinnedKey) return "left";
+      if (colId === firstRightPinnedKey) return "right";
+      return null;
+    },
+    [lastLeftPinnedKey, firstRightPinnedKey]
   );
 
   const tableWidth = useMemo(
@@ -615,8 +633,108 @@ function Vendors() {
 
   const handleCloseDropdown = useCallback(() => {
     setShowDropdown(null);
+    setRowActionsPos(null);
   }, []);
   useOutsideClick(dropdownRef, handleCloseDropdown);
+
+  // Row actions live inside the last column's cell now, and those cells clip
+  // their overflow — so the menu is portaled to document.body and positioned
+  // from the button's own rect, the same approach Companies.jsx uses. Rects are
+  // visual px; the portal paints inside the app's dynamic <html> zoom, so they
+  // are divided by that zoom. The menu flips above the button when there isn't
+  // room below and is clamped to the viewport on both axes.
+  const renderRowActionsMenu = (vendor) => {
+    const isOpen = showDropdown === vendor._id;
+    return (
+      <div className="relative flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isOpen) {
+              handleCloseDropdown();
+              return;
+            }
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 160;
+            const MARGIN = 8;
+            // 4 items (Edit, Credited, Debited, Delete) + container padding.
+            const MENU_H = 176;
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const viewportH = window.innerHeight / zMenu;
+            const viewportW = window.innerWidth / zMenu;
+            const below = rect.bottom / zMenu + 4;
+            const above = rect.top / zMenu - 4;
+
+            const openUp = viewportH - below < MENU_H + MARGIN;
+            let calcTop = openUp ? above - MENU_H : below;
+            calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+            calcLeft = Math.max(calcLeft, MARGIN);
+
+            setRowActionsPos({ top: calcTop, left: calcLeft });
+            setShowDropdown(vendor._id);
+          }}
+          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+          title="More actions"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+
+        {isOpen && rowActionsPos && createPortal(
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={handleCloseDropdown} />
+            <div
+              ref={dropdownRef}
+              style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+              className="w-40 z-[9999] flex flex-col bg-white border border-[#E1E4EA] rounded-lg shadow-lg text-left py-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => {
+                  handleEditVendor(vendor);
+                  handleCloseDropdown();
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+              >
+                <Edit2 className="w-4 h-4 text-gray-400" /> Edit
+              </button>
+              <button
+                onClick={() => {
+                  handleOpenPaymentModal(vendor._id, "IN");
+                  handleCloseDropdown();
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm font-medium text-green-600 hover:bg-green-50 flex items-center gap-3 transition-colors"
+              >
+                <History className="w-4 h-4" /> Credited
+              </button>
+              <button
+                onClick={() => {
+                  handleOpenPaymentModal(vendor._id, "OUT");
+                  handleCloseDropdown();
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
+              >
+                <History className="w-4 h-4" /> Debited
+              </button>
+              <button
+                onClick={() => {
+                  handleDelete(vendor._id);
+                  handleCloseDropdown();
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors border-t border-gray-100"
+              >
+                <Trash2 className="w-4 h-4" /> Delete
+              </button>
+            </div>
+          </>,
+          document.body
+        )}
+      </div>
+    );
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1028,32 +1146,39 @@ function Vendors() {
               bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"
             } flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}
           >
-            <div className="flex flex-nowrap items-center gap-3 flex-shrink-0">
+            {/* One joined strip instead of separate pills, matching Companies:
+                no gap between buttons, square inner edges, rounding only on the
+                two outer corners, and each border pulled left by 1px (-ml-px)
+                onto its neighbour so touching borders don't double up into a
+                thick seam. All buttons share one neutral treatment — white fill,
+                grey border, near-black text — with only the icon carrying each
+                action's colour as an accent. */}
+            <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
               <button
                 onClick={() => setShowExportModal(true)}
-                className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 text-green-600" />
                 Export
               </button>
               <button
                 onClick={() => setShowBulkActions(true)}
-                className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Edit2 className="w-4 h-4" />
+                <Edit2 className="w-4 h-4 text-blue-600" />
                 Bulk Update
               </button>
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={bulkDeleting}
-                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4 h-4 text-red-600" />
                 Delete
               </button>
               <button
                 onClick={exitSelectionMode}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Cancel
@@ -1368,20 +1493,24 @@ function Vendors() {
                       } active:cursor-grabbing`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="truncate flex-1">{col.label}</span>
-                        {pinnedCols[col.id] && (
-                          <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                        )}
+                        <span className="truncate flex-1 min-w-0 flex items-center gap-1.5">
+                          <span className="truncate">{col.label}</span>
+                          {pinnedCols[col.id] && (
+                            <Pin
+                              size={12}
+                              className="text-blue-500 fill-blue-500 flex-shrink-0"
+                              style={{ transform: "rotate(45deg)" }}
+                            />
+                          )}
+                        </span>
 
-                        {col.id !== "actions" && (
-                          <button
-                            onClick={(e) => openColumnMenu(e, col.id)}
-                            title="Column options"
-                            className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        <button
+                          onClick={(e) => openColumnMenu(e, col.id)}
+                          title="Column options"
+                          className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       <div
                         data-resize-handle="true"
@@ -1390,6 +1519,9 @@ function Vendors() {
                         title="Drag to resize column"
                         className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none z-30 hover:bg-[#0085FF]/40 active:bg-[#0085FF]"
                       />
+                      {boundaryShadowSideFor(col.id) && (
+                        <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSideFor(col.id))} />
+                      )}
                     </th>
                   );
                 })}
@@ -1443,82 +1575,27 @@ function Vendors() {
                       </div>
                     </td>
 
-                    {orderedColumns.map((col) =>
-                      col.id === "actions" ? (
-                        <td
-                          key="actions"
-                          style={{ width: colWidths.actions, ...stickyStyleFor("actions") }}
-                          className="px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit relative"
-                        >
-                          <div className="flex items-center justify-center">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowDropdown(
-                                  showDropdown === vendor._id ? null : vendor._id,
-                                );
-                              }}
-                              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
-
-                            {showDropdown === vendor._id && (
-                              <div
-                                ref={dropdownRef}
-                                className="absolute right-2 mt-2 top-8 flex flex-col w-40 bg-white border border-[#E1E4EA] rounded-lg shadow-lg z-50 text-left py-1"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <button
-                                  onClick={() => {
-                                    handleEditVendor(vendor);
-                                    setShowDropdown(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-                                >
-                                  <Edit2 className="w-4 h-4 text-gray-400" /> Edit
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    handleOpenPaymentModal(vendor._id, "IN");
-                                    setShowDropdown(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-green-600 hover:bg-green-50 flex items-center gap-3 transition-colors"
-                                >
-                                  <History className="w-4 h-4" /> Credited
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    handleOpenPaymentModal(vendor._id, "OUT");
-                                    setShowDropdown(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
-                                >
-                                  <History className="w-4 h-4" /> Debited
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    handleDelete(vendor._id);
-                                    setShowDropdown(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors border-t border-gray-100"
-                                >
-                                  <Trash2 className="w-4 h-4" /> Delete
-                                </button>
-                              </div>
-                            )}
+                    {orderedColumns.map((col) => (
+                      <td
+                        key={col.id}
+                        style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
+                        className="relative px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
+                      >
+                        {col.id === lastColumnId ? (
+                          <div className="flex items-center justify-between w-full gap-2">
+                            <div className="min-w-0 flex-1">
+                              {renderCellContent(vendor, col.id)}
+                            </div>
+                            {renderRowActionsMenu(vendor)}
                           </div>
-                        </td>
-                      ) : (
-                        <td
-                          key={col.id}
-                          style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                          className="px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] overflow-hidden bg-inherit"
-                        >
-                          {renderCellContent(vendor, col.id)}
-                        </td>
-                      )
-                    )}
+                        ) : (
+                          renderCellContent(vendor, col.id)
+                        )}
+                        {boundaryShadowSideFor(col.id) && (
+                          <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSideFor(col.id))} />
+                        )}
+                      </td>
+                    ))}
                   </tr>
                 ))}
             </tbody>

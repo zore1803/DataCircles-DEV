@@ -26,6 +26,7 @@ import { exportToCSV } from "../../utils/exportToCSV";
 import TablePaginationFooter from "../common/TablePaginationFooter";
 import CompanyFilterPanel from "../company/CompanyFilterPanel";
 import FilterIcon from "../common/FilterIcon";
+import SearchIcon from "../common/SearchIcon";
 import { useRef } from "react";
 import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { useTopLoadingSignal } from "../common/TopLoadingBar";
@@ -97,7 +98,6 @@ const formatNoteDate = (iso) =>
     ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "—";
 
-import SearchIcon from "../common/SearchIcon";
 // Custom Quill modules and formats configuration
 const quillModules = {
   toolbar: [
@@ -921,7 +921,7 @@ const NoteSection = () => {
 
         <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
-            <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
+            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-900 opacity-50" />
             <input
               type="text"
               value={searchTerm}
