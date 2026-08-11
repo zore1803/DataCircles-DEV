@@ -741,7 +741,68 @@ const CompanyForm = ({
               </div>
             </div>
 
-            {/* Social Media Links Section */}
+            {/* Custom Fields (Categorized & Collapsible) — sits directly
+                after the basic info above, ahead of the additional-info
+                sections below, so org-defined fields aren't buried at the
+                very bottom of the form. */}
+            {sortedCategories.length > 0 && (
+              <div className="pt-4 space-y-4">
+                <h3 className="text-[16px] font-bold text-[#111216]">
+                  Custom Fields
+                </h3>
+
+                {sortedCategories.map((category) => (
+                  <div key={category} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    {/* Category Header / Button */}
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(category)}
+                      className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FolderOpen className="w-4 h-4 text-indigo-600" />
+                        <span className="font-bold text-gray-800 text-sm uppercase tracking-wide">
+                          {category}
+                        </span>
+                        <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-medium ml-2">
+                          {groupedFields[category].length}
+                        </span>
+                      </div>
+                      <ChevronDown
+                        className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${expandedSections[category] ? "rotate-180" : ""}`}
+                      />
+                    </button>
+
+                    {/* Category Fields (Visible only when expanded) */}
+                    {expandedSections[category] && (
+                      <div className="p-5 bg-white border-t border-gray-200 space-y-5">
+                        {groupedFields[category].map((fieldDef) => (
+                          <div key={fieldDef.name}>
+                            {/* No raw "(type)" annotation here — that's field-builder
+                                metadata for the admin configuring this field in Settings,
+                                not something an end user filling out the form needs to
+                                see. The input control itself already communicates the
+                                type (dropdown, checkboxes, etc). */}
+                            <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                              {fieldDef.name}
+                              {fieldDef.required && (
+                                <span className="text-red-500 ml-1">*</span>
+                              )}
+                            </label>
+                            {renderFieldInput(
+                              fieldDef,
+                              additionalFields[fieldDef.name]
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Additional Info — Social Media Links Section */}
             <div className="pt-2">
               <h3 className="text-[16px] font-bold text-[#111216] mb-4 flex items-center gap-2">
                 <span>Social Media Links</span>
@@ -816,64 +877,6 @@ const CompanyForm = ({
               </div>
             </div>
 
-            {/* Dynamic Additional Fields */}
-            {/* 👉 FIXED: Dynamic Additional Fields (Categorized & Collapsible) */}
-            {sortedCategories.length > 0 && (
-              <div className="pt-4 space-y-4">
-                <h3 className="text-[16px] font-bold text-[#111216]">
-                  Additional Information
-                </h3>
-
-                {sortedCategories.map((category) => (
-                  <div key={category} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                    {/* Category Header / Button */}
-                    <button
-                      type="button"
-                      onClick={() => toggleSection(category)}
-                      className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none"
-                    >
-                      <div className="flex items-center gap-2">
-                        <FolderOpen className="w-4 h-4 text-indigo-600" />
-                        <span className="font-bold text-gray-800 text-sm uppercase tracking-wide">
-                          {category}
-                        </span>
-                        <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-medium ml-2">
-                          {groupedFields[category].length}
-                        </span>
-                      </div>
-                      <ChevronDown
-                        className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${expandedSections[category] ? "rotate-180" : ""}`}
-                      />
-                    </button>
-
-                    {/* Category Fields (Visible only when expanded) */}
-                    {expandedSections[category] && (
-                      <div className="p-5 bg-white border-t border-gray-200 space-y-5">
-                        {groupedFields[category].map((fieldDef) => (
-                          <div key={fieldDef.name}>
-                            {/* No raw "(type)" annotation here — that's field-builder
-                                metadata for the admin configuring this field in Settings,
-                                not something an end user filling out the form needs to
-                                see. The input control itself already communicates the
-                                type (dropdown, checkboxes, etc). */}
-                            <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                              {fieldDef.name}
-                              {fieldDef.required && (
-                                <span className="text-red-500 ml-1">*</span>
-                              )}
-                            </label>
-                            {renderFieldInput(
-                              fieldDef,
-                              additionalFields[fieldDef.name]
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {error && (

@@ -613,7 +613,7 @@ const QuickDealForm = ({
             {fieldDefinitions.length > 0 && (
               <div className="pt-4 space-y-6">
                 <h3 className="text-[16px] font-bold text-[#111216]">
-                  Additional Information
+                  Custom Fields
                 </h3>
                 <div className="space-y-3 sm:space-y-4">
                   {fieldDefinitions.map((fieldDef) => (
