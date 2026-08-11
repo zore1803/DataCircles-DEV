@@ -36,7 +36,10 @@ import {
   FilePlus,
   BadgeCheck,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Building2,
+  Phone,
+  MapPin
 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 
