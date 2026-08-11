@@ -17,8 +17,6 @@ import PageSkeleton from "../components/common/PageSkeleton";
 import toast from "react-hot-toast";
 import {
   Mail,
-  Phone,
-  MapPin,
   Globe,
   Edit2,
   MoreVertical,
@@ -35,9 +33,7 @@ import {
   PhoneCall,
   Video,
   FolderOpen,
-  Building2,
   FilePlus,
-  BadgeCheck
 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 
@@ -227,21 +223,40 @@ const VendorDetailsPageNew = () => {
   useLayoutEffect(() => {
     const measure = () => {
       const el = tabRefs.current[activeTab];
-      if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+      // Ignore zero-width reads: the button can be measured before the web
+      // font lands or while an ancestor is still laying out, and writing a 0
+      // here leaves the pill invisible with no later event to correct it.
+      if (el && el.offsetWidth > 0) {
+        setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+      }
     };
     measure();
+    // Re-measure after paint too — the first synchronous pass can land
+    // before layout has settled, which is what left the pill missing on the
+    // active tab at load.
+    const raf = requestAnimationFrame(measure);
+
     // Same fix as CompanyProfilePage: a refresh landing directly on a
     // non-default tab mounts this row while the header is still showing
-    // loading skeletons, so a ResizeObserver on the whole track re-measures
-    // whenever any tab's width shifts, not just when activeTab changes.
+    // loading skeletons. Observe every tab button, not just the track — a
+    // tab's own width can change (font swap) without the track resizing.
     const ro = new ResizeObserver(measure);
     if (tabTrackRef.current) ro.observe(tabTrackRef.current);
+    Object.values(tabRefs.current).forEach((el) => el && ro.observe(el));
+
+    // Fonts finishing load reflows the labels after every observer above has
+    // already settled.
+    if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
+
     window.addEventListener("resize", measure);
     return () => {
+      cancelAnimationFrame(raf);
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [activeTab]);
+    // `dataLoaded` (not showSkeleton) — showSkeleton is declared further
+    // down and referencing it here is a temporal dead zone error.
+  }, [activeTab, dataLoaded]);
 
   // Actions menu
   const [showActionsMenu, setShowActionsMenu] = useState(false);
@@ -574,13 +589,16 @@ const VendorDetailsPageNew = () => {
           table is visible.
          ═══════════════════════════════════════════════════════════ */}
       <div className="px-6 sm:px-8 pt-1">
-        <div className="bg-white border border-[#DCEBFC] rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_260px]">
+        <div>
 
-          {/* LEFT COLUMN: info row (top) + KPI strip (bottom) */}
           <div className="flex flex-col min-w-0">
-            {/* Info row */}
-            <div className="flex items-start justify-between gap-4 py-4 pl-5 sm:pl-6 pr-4">
-              <div className="flex items-start gap-4 min-w-0">
+            {/* Info strip — compact single row (avatar + name + address on
+                the left, actions on the right), matching the header on
+                CompanyProfilePage.jsx rather than the tall bordered card
+                this used to be. The email/phone/address detail that used to
+                stack here now lives in the Overview tab's Vendor Details. */}
+            <div className="flex items-center justify-between gap-4 mb-2 lg:mb-3">
+              <div className="flex items-center gap-3 min-w-0">
                 {/* Gated on showSkeleton, not just `vendor` — the vendor fetch
                   resolves well before payments/tasks/meetings/notes do, so
                   gating on `vendor` alone made the header pop in with real
@@ -590,68 +608,41 @@ const VendorDetailsPageNew = () => {
                 {!showSkeleton && vendor ? (
                   <ProfilePicture
                     contact={{ name: vendor.name, avatar: vendor.avatar || vendor.logo }}
-                    size="w-[56px] h-[56px]"
-                    textSize="text-xl"
+                    size="w-9 h-9"
+                    textSize="text-sm"
                   />
                 ) : (
-                  <div className="w-[56px] h-[56px] rounded-full bg-gray-200 animate-pulse flex-shrink-0" />
+                  <div className="w-9 h-9 rounded-full bg-gray-200 animate-pulse flex-shrink-0" />
                 )}
 
-                <div className="flex flex-col gap-1 mt-0.5 min-w-0">
+                <div className="min-w-0">
                   {!showSkeleton && vendor ? (
-                    <div className="flex items-center gap-3">
-                      <h1 className="text-[22px] font-bold text-gray-900 leading-none">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <h1 className="text-base font-semibold text-gray-900 truncate">
                         {vendor.name}
                       </h1>
-                      <span className="px-2 py-0.5 text-[10px] font-medium bg-green-50 text-green-700 rounded-full">
+                      <span className="flex-shrink-0 px-2 py-0.5 text-[10px] font-medium bg-green-50 text-green-700 rounded-full">
                         Active
                       </span>
                     </div>
                   ) : (
-                    <Skeleton width={180} height={28} className="mb-1" />
+                    <Skeleton width={140} height={16} className="mb-1" />
                   )}
 
                   {!showSkeleton && vendor ? (
-                    <div className="flex flex-col gap-1.5 mt-1">
-                      {/* Stacked contact block: one row per field (Company, Email, Phone, Address). */}
-                      {vendor.company && (
-                        <span className="text-[13px] text-blue-600 font-medium flex items-center gap-2">
-                          <Building2 size={14} /> {vendor.company}
-                        </span>
-                      )}
-                      {vendor.email && (
-                        <span className="text-[12px] text-gray-600 flex items-center gap-2">
-                          <Mail size={14} className="text-gray-400 flex-shrink-0" />
-                          {vendor.email}
-                          <BadgeCheck size={14} className="text-green-500 flex-shrink-0" />
-                        </span>
-                      )}
-                      {vendor.phone && (
-                        <span className="text-[12px] text-gray-600 flex items-center gap-2">
-                          <Phone size={14} className="text-gray-400 flex-shrink-0" />
-                          {vendor.phone}
-                        </span>
-                      )}
-                      {vendor.address && formatAddress(vendor.address) && (
-                        <span className="text-[12px] text-gray-600 flex items-center gap-2">
-                          <MapPin size={14} className="text-gray-400 flex-shrink-0" />{" "}
-                          {formatAddress(vendor.address)}
-                        </span>
-                      )}
-                    </div>
+                    vendor.address && formatAddress(vendor.address) && (
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">
+                        {formatAddress(vendor.address)}
+                      </p>
+                    )
                   ) : (
-                    <div className="flex flex-col gap-2 mt-2">
-                      <Skeleton width={150} height={14} />
-                      <Skeleton width={200} height={14} />
-                      <Skeleton width={120} height={14} />
-                    </div>
+                    <Skeleton width={100} height={11} />
                   )}
                 </div>
               </div>
 
-              {/* Action Toolbar — moved up next to vendor info now that the
-                gauge owns the whole right column. */}
-              <div className="flex items-start justify-center gap-2 sm:gap-3 flex-shrink-0">
+              {/* Action Toolbar — sits at the right end of the strip. */}
+              <div className="flex items-center justify-center gap-2 sm:gap-3 flex-shrink-0">
                 <ActionIconButton icon={PhoneCall} colorClass="text-blue-500" title="Call" />
                 <ActionIconButton icon={Mail} colorClass="text-blue-500" title="Email" />
                 <ActionIconButton icon={Video} colorClass="text-purple-500" title="Video Meeting" />
@@ -718,7 +709,7 @@ const VendorDetailsPageNew = () => {
               Toggleable via the ⋮ menu's "Hide/Show Financial Summary".
              ═══════════════════════════════════════════════════════════ */}
             {showKPI && (
-              <div className="px-5 py-3.5 mt-auto">
+              <div className="pb-1">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     {
@@ -787,20 +778,9 @@ const VendorDetailsPageNew = () => {
             )}
           </div>
 
-          {/* RIGHT COLUMN: Relationship Health Gauge — spans the full card
-            height (a single grid item stretches to match the left
-            column's height by default) and gets its own tinted
-            background so it reads as the highlighted focal point. */}
-          <div className="hidden sm:flex flex-col items-center justify-center bg-gradient-to-b from-[#EAF4FF] to-[#F6FAFF] py-6 px-6">
-            {showSkeleton ? (
-              <div className="flex flex-col items-center gap-3">
-                <Skeleton width={130} height={13} />
-                <Skeleton width={152} height={76} shape="rect" className="rounded-t-full" />
-              </div>
-            ) : (
-              <RelationshipGauge score={82} label="Excellent" radius={76} stroke={16} />
-            )}
-          </div>
+          {/* The Relationship Health gauge used to occupy a second column
+              here. It now lives in the right sidebar above the Activity
+              Timeline instead — see SECTION 3 & 5 below. */}
         </div>
       </div>
 
@@ -970,8 +950,24 @@ const VendorDetailsPageNew = () => {
             </div>
           </div>
 
-          {/* ── Right Column: Activity Timeline Sidebar ── */}
-          <div className="hidden lg:block">
+          {/* ── Right Column: Relationship Health + Activity Timeline ── */}
+          <div className="hidden lg:block space-y-3">
+            {/* Relationship Health — moved out of the header card so the
+                header can use its full width for vendor details. Radius is
+                smaller here than it was in the header (the sidebar card is
+                240px wide, 216px inside its padding) so the gauge fits
+                without overflowing. */}
+            <div className="bg-gradient-to-b from-[#EAF4FF] to-[#F6FAFF] border border-[#DCEBFC] rounded-xl py-5 px-3 flex flex-col items-center justify-center">
+              {showSkeleton ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Skeleton width={120} height={13} />
+                  <Skeleton width={144} height={72} shape="rect" className="rounded-t-full" />
+                </div>
+              ) : (
+                <RelationshipGauge score={82} label="Excellent" radius={72} stroke={15} />
+              )}
+            </div>
+
             <div className="bg-white border border-gray-200 rounded-xl p-3 sticky top-6">
               {showSkeleton ? (
                 <Skeleton width={110} height={14} className="mb-5" />
