@@ -2,7 +2,7 @@ const Payment = require("../models/Payment");
 const Vendor = require("../models/Vendor");
 const Invoice = require("../models/Invoice");
 const Purchase = require("../models/Purchase");
-const SubscriptionPayment = require("../models/SubscriptionPayment.js.js"); 
+const SubscriptionPayment = require("../models/SubscriptionPayment.js");
 
 exports.getPaymentsTimeline = async (req, res) => {
   try {
