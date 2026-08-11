@@ -108,7 +108,19 @@ export default function PaymentsTimeline() {
   /* Fetch companies list for Party filter */
   useEffect(() => {
     API.get("/companies")
-      .then(res => setCompanies(res.data?.companies || res.data || []))
+      .then(res => {
+        const raw = res.data?.companies || res.data || [];
+        const seen = new Set();
+        const unique = [];
+        raw.forEach(c => {
+          const name = (c.companyName || c.name || (typeof c === "string" ? c : "")).trim();
+          if (name && !seen.has(name.toLowerCase())) {
+            seen.add(name.toLowerCase());
+            unique.push(c);
+          }
+        });
+        setCompanies(unique);
+      })
       .catch(err => console.error("Error fetching companies:", err));
   }, []);
 
@@ -182,7 +194,8 @@ export default function PaymentsTimeline() {
   const fetchData = useCallback(async () => {
     setShowLoadingSkeleton(true);
     try {
-      const res = await API.get(`/payments-timeline?page=${pagination.currentPage}&limit=${pagination.limit}`);
+      const partyParam = partyFilter ? `&party=${encodeURIComponent(partyFilter)}` : "";
+      const res = await API.get(`/payments-timeline?page=${pagination.currentPage}&limit=${pagination.limit}${partyParam}`);
       setDocuments(res.data.documents || []);
       if (res.data.pagination) setPagination(res.data.pagination);
     } catch (err) {
@@ -191,9 +204,9 @@ export default function PaymentsTimeline() {
     } finally {
       setShowLoadingSkeleton(false);
     }
-  }, [pagination.currentPage, pagination.limit]);
+  }, [pagination.currentPage, pagination.limit, partyFilter]);
 
-  useEffect(() => { fetchData(); }, [pagination.currentPage, pagination.limit]);
+  useEffect(() => { fetchData(); }, [pagination.currentPage, pagination.limit, partyFilter]);
 
   /* ── filtered and sorted docs ─────────────────────────────────────── */
   const filteredDocs = useMemo(() => {
