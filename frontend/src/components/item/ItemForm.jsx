@@ -11,6 +11,8 @@ import {
   Check,
   Type,
   Layers,
+  FolderOpen,
+  ChevronDown,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ReactQuill from "react-quill-new";
@@ -46,6 +48,205 @@ const ItemForm = ({
   const fileInputRef = useRef(null);
   const [validationErrors, setValidationErrors] = useState({});
   const [variantValidationErrors, setVariantValidationErrors] = useState({});
+
+  // Org-defined custom fields (configured in Settings -> Item Fields).
+  // Definitions come from /item-fields/latest; the entered values live in
+  // additionalFieldValues keyed by field name, and are flattened into the
+  // Item's additionalFields array on submit.
+  const [itemFields, setItemFields] = useState([]);
+  const [additionalFieldValues, setAdditionalFieldValues] = useState({});
+  const [expandedSections, setExpandedSections] = useState({});
+
+  useEffect(() => {
+    const fetchItemFields = async () => {
+      try {
+        const res = await API.get("/item-fields/latest");
+        setItemFields(res.data?.fields || []);
+      } catch (err) {
+        // A missing/forbidden field config just means no custom fields to
+        // show — the rest of the form still works, so fail quietly.
+        setItemFields([]);
+      }
+    };
+    fetchItemFields();
+  }, []);
+
+  // Seed values from the item being edited.
+  useEffect(() => {
+    if (form.additionalFields && form.additionalFields.length > 0) {
+      const seeded = {};
+      form.additionalFields.forEach((field) => {
+        if (field?.key) seeded[field.key] = field.value;
+      });
+      setAdditionalFieldValues(seeded);
+    } else {
+      setAdditionalFieldValues({});
+    }
+  }, [form._id]);
+
+  const toggleSection = (category) => {
+    setExpandedSections((prev) => ({ ...prev, [category]: !prev[category] }));
+  };
+
+  const handleAdditionalFieldChange = (fieldName, value) => {
+    setAdditionalFieldValues((prev) => ({ ...prev, [fieldName]: value }));
+    setIsFormDirty(true);
+    if (validationErrors[`additional_${fieldName}`]) {
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[`additional_${fieldName}`];
+        return newErrors;
+      });
+    }
+  };
+
+  const groupedFields = (itemFields || []).reduce((acc, fieldDef) => {
+    const category = fieldDef.category || "Uncategorized";
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(fieldDef);
+    return acc;
+  }, {});
+
+  // "Uncategorized" sorts last so named groups lead.
+  const sortedCategories = Object.keys(groupedFields).sort((a, b) => {
+    if (a === "Uncategorized") return 1;
+    if (b === "Uncategorized") return -1;
+    return a.localeCompare(b);
+  });
+
+  const renderFieldInput = (fieldDef, rawValue) => {
+    const hasError = validationErrors[`additional_${fieldDef.name}`];
+    const value = rawValue !== undefined && rawValue !== null ? rawValue : "";
+    const handleFieldChange = (newValue) => handleAdditionalFieldChange(fieldDef.name, newValue);
+
+    const typeStr = (fieldDef.type || "").toLowerCase();
+    let normalizedType = "string";
+    if (typeStr.includes("multi-line") || typeStr === "text") normalizedType = "text";
+    else if (typeStr.includes("number")) normalizedType = "number";
+    else if (typeStr.includes("dropdown")) normalizedType = "dropdown";
+    else if (typeStr.includes("url")) normalizedType = "url";
+    else if (typeStr.includes("date")) normalizedType = "date";
+    else if (typeStr.includes("multi-select") || typeStr.includes("checkbox") || typeStr === "multiselect")
+      normalizedType = "multiselect";
+
+    const baseInputClass = `w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 transition-all ${hasError ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"
+      }`;
+
+    const errorText = hasError ? <p className="text-red-500 text-xs mt-1">{hasError}</p> : null;
+
+    switch (normalizedType) {
+      case "number":
+        return (
+          <>
+            <input
+              type="number"
+              step="any"
+              value={value}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className={baseInputClass}
+              placeholder={`Enter ${fieldDef.name}`}
+            />
+            {errorText}
+          </>
+        );
+      case "dropdown":
+        return (
+          <>
+            <select
+              value={value}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className={`${baseInputClass} cursor-pointer`}
+            >
+              <option value="">Select {fieldDef.name}</option>
+              {fieldDef.options?.map((option, index) => (
+                <option key={index} value={option}>{option}</option>
+              ))}
+            </select>
+            {errorText}
+          </>
+        );
+      case "text":
+        return (
+          <>
+            <textarea
+              rows={3}
+              value={value}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className={`${baseInputClass} resize-vertical`}
+              placeholder={`Enter ${fieldDef.name}`}
+            />
+            {errorText}
+          </>
+        );
+      case "date": {
+        const formattedDate = value && String(value).includes("T") ? String(value).split("T")[0] : value;
+        return (
+          <>
+            <input
+              type="date"
+              value={formattedDate}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className={baseInputClass}
+            />
+            {errorText}
+          </>
+        );
+      }
+      case "url":
+        return (
+          <>
+            <input
+              type="url"
+              value={value}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className={baseInputClass}
+              placeholder="https://example.com"
+            />
+            {errorText}
+          </>
+        );
+      case "multiselect": {
+        const selected = Array.isArray(value) ? value : value ? String(value).split(",").map((v) => v.trim()) : [];
+        return (
+          <>
+            <div className="flex flex-wrap gap-3 border border-gray-200 rounded-lg p-3">
+              {fieldDef.options?.map((option, index) => (
+                <label key={index} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(option)}
+                    onChange={() =>
+                      handleFieldChange(
+                        selected.includes(option)
+                          ? selected.filter((v) => v !== option)
+                          : [...selected, option]
+                      )
+                    }
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  {option}
+                </label>
+              ))}
+            </div>
+            {errorText}
+          </>
+        );
+      }
+      default:
+        return (
+          <>
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className={baseInputClass}
+              placeholder={`Enter ${fieldDef.name}`}
+            />
+            {errorText}
+          </>
+        );
+    }
+  };
 
   useEffect(() => {
     setShouldRender(true);
@@ -127,6 +328,19 @@ const ItemForm = ({
     if (!form.name.trim()) errors.name = "Item name is required";
     if (form.purchasePrice < 0) errors.purchasePrice = "Invalid price";
     if (form.sellingPrice < 0) errors.sellingPrice = "Invalid price";
+
+    itemFields?.forEach((fieldDef) => {
+      if (fieldDef.required) {
+        const value = additionalFieldValues[fieldDef.name];
+        const isEmpty = Array.isArray(value)
+          ? value.length === 0
+          : !value || String(value).trim() === "";
+        if (isEmpty) {
+          errors[`additional_${fieldDef.name}`] = `${fieldDef.name} is required`;
+        }
+      }
+    });
+
     return errors;
   };
 
@@ -141,7 +355,24 @@ const ItemForm = ({
 
     try {
       setLoading(true);
-      const payload = { ...form, variants };
+
+      // Flatten the entered custom-field values into the array shape the
+      // Item model stores. Multiselect arrays collapse to a comma-separated
+      // string, matching how the other modules persist them.
+      const processedAdditionalFields = (itemFields || [])
+        .map((fieldDef) => {
+          let value = additionalFieldValues[fieldDef.name] ?? "";
+          if (Array.isArray(value)) value = value.join(", ");
+          return {
+            key: fieldDef.name,
+            value,
+            type: fieldDef.type,
+            category: fieldDef.category || "Uncategorized",
+          };
+        })
+        .filter((field) => field.value !== "");
+
+      const payload = { ...form, variants, additionalFields: processedAdditionalFields };
       if (form._id) {
         await API.put(`/items/${form._id}`, payload);
         toast.success("Item updated successfully!");
@@ -434,7 +665,51 @@ const ItemForm = ({
             </select>
           </div>
 
-          {/* Variants List (Minified) */}
+          {/* Custom Fields (Categorized & Collapsible) — sits after the
+              basic info above and before the stock/variants block below,
+              matching the section order used across the other modules. */}
+          {sortedCategories.length > 0 && (
+            <div className="mt-6 border-t border-gray-100 pt-6 space-y-4">
+              <h3 className="text-sm font-semibold text-gray-900">Custom Fields</h3>
+
+              {sortedCategories.map((category) => (
+                <div key={category} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(category)}
+                    className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-indigo-600" />
+                      <span className="font-bold text-gray-800 text-sm uppercase tracking-wide">{category}</span>
+                      <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-medium ml-2">
+                        {groupedFields[category].length}
+                      </span>
+                    </div>
+                    <ChevronDown
+                      className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${expandedSections[category] ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  {expandedSections[category] && (
+                    <div className="p-5 bg-white border-t border-gray-200 space-y-5">
+                      {groupedFields[category].map((fieldDef) => (
+                        <div key={fieldDef.name}>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                            {fieldDef.name}
+                            {fieldDef.required && <span className="text-red-500 ml-1">*</span>}
+                          </label>
+                          {renderFieldInput(fieldDef, additionalFieldValues[fieldDef.name])}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Stock — Variants List (Minified) */}
           {variants.length > 0 && (
             <div className="mt-6 border-t border-gray-100 pt-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">

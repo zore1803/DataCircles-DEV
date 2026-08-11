@@ -172,6 +172,9 @@ app.use("/api/purchase-orders", purchaseOrderRoutes);
 const purchaseRoutes = require("./routes/purchase");
 app.use("/api/purchases", purchaseRoutes);
 
+const itemFieldsRoutes = require('./routes/itemFields');
+app.use('/api/item-fields', itemFieldsRoutes);
+
 const itemRoutes = require("./routes/itemRoutes");
 app.use("/api/items", itemRoutes);
 
