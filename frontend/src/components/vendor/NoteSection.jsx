@@ -30,6 +30,7 @@ import SearchIcon from "../common/SearchIcon";
 import { useRef } from "react";
 import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { useTopLoadingSignal } from "../common/TopLoadingBar";
+import { useLocalStorageState } from "../../hooks/useLocalStorageState";
 
 const NOTE_FILTER_COLUMNS = [{ key: "author", label: "Author" }];
 
@@ -506,7 +507,7 @@ const NoteSection = () => {
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({});
   const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [columnSizing, setColumnSizing] = useState({});
+  const [columnSizing, setColumnSizing] = useLocalStorageState("vendor-notes-col-widths", {});
   const [isDeleting, setIsDeleting] = useState(false);
   const filterButtonRef = useRef(null);
 
@@ -612,11 +613,11 @@ const NoteSection = () => {
     setIsViewerOpen(false);
   };
 
-  const [columnOrder, setColumnOrder] = useState(() => [
+  const [columnOrder, setColumnOrder] = useLocalStorageState("vendor-notes-col-order", () => [
     "selection", "title", "note", "author", "createdAt", "updatedAt", "actions"
   ]);
-  const [hiddenColumns, setHiddenColumns] = useState(new Set());
-  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const [hiddenColumns, setHiddenColumns] = useLocalStorageState("vendor-notes-hidden-cols", new Set());
+  const [pinnedColumns, setPinnedColumns] = useLocalStorageState("vendor-notes-pinned-cols", []);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
 
   const handleColumnReorder = (draggedKey, targetKey) => {
@@ -919,6 +920,20 @@ const NoteSection = () => {
     <div className="h-full mt-0">
       <AppToaster />
 
+      {!initialLoading && notes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+          <StickyNote className="w-10 h-10 text-gray-400" />
+          <p className="text-sm text-gray-600">No notes yet</p>
+          <button
+            onClick={() => setIsEditorOpen(true)}
+            className="mt-2 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} />
+            Add new note
+          </button>
+        </div>
+      ) : (
+      <>
         <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
             <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-900 opacity-50" />
@@ -927,8 +942,7 @@ const NoteSection = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search notes..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              className="w-full h-full pl-10 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
           </div>
           <div className="relative flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0 overflow-hidden" style={{ height: "44px" }}>
@@ -998,9 +1012,10 @@ const NoteSection = () => {
             {!searchTerm && !activeFilterCount && (
               <button
                 onClick={() => setIsEditorOpen(true)}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
+                className="mt-4 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Create Note
+                <Plus size={16} />
+                Add new note
               </button>
             )}
           </div>
@@ -1081,9 +1096,10 @@ const NoteSection = () => {
                 {!searchTerm && !activeFilterCount && (
                   <button
                     onClick={() => setIsEditorOpen(true)}
-                    className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
+                    className="mt-2 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    Create Note
+                    <Plus size={16} />
+                    Add new note
                   </button>
                 )}
               </div>
@@ -1103,6 +1119,8 @@ const NoteSection = () => {
             />
           </div>
         </div>
+      )}
+      </>
       )}
 
       <CompanyFilterPanel

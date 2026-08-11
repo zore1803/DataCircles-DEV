@@ -21,6 +21,7 @@ import {
   TrendingDown,
   Clock,
   AlertCircle,
+  Plus,
 } from "lucide-react";
 import VendorForm from "../vendor/VendorForm";
 import VendorPaymentForm from "../vendor/VendorPaymentForm";
@@ -37,6 +38,7 @@ import { Search } from "lucide-react";
 import toast from "react-hot-toast";
 import AppToaster from "../AppToaster";
 import HighlightText from "../common/HighlightText";
+import { useLocalStorageState } from "../../hooks/useLocalStorageState";
 
 /* `options` seeds each dropdown with the schema's full enum (models/Payment.js)
    so a value stays filterable even when no current row uses it. */
@@ -70,14 +72,14 @@ const PaymentsTable = ({ payments, vendor }) => {
   const [search, setSearch] = useState("");
   const [selectedFilters, setSelectedFilters] = useState({});
   const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [columnSizing, setColumnSizing] = useState({});
+  const [columnSizing, setColumnSizing] = useLocalStorageState("vendor-payments-col-widths", {});
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [columnOrder, setColumnOrder] = useState(() => [
+  const [columnOrder, setColumnOrder] = useLocalStorageState("vendor-payments-col-order", () => [
     "selection", "reference_id", "paymentDate", "direction", "paymentType", "bank", "reference", "amount", "actions"
   ]);
-  const [hiddenColumns, setHiddenColumns] = useState(new Set());
-  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const [hiddenColumns, setHiddenColumns] = useLocalStorageState("vendor-payments-hidden-cols", new Set());
+  const [pinnedColumns, setPinnedColumns] = useLocalStorageState("vendor-payments-pinned-cols", []);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
 
   const filterButtonRef = useRef(null);
@@ -659,7 +661,24 @@ const PaymentsTable = ({ payments, vendor }) => {
 
       {/* Payments table — same chrome as the CompanyProfilePage tabs: bordered
           shell, sticky #F5F7FA header, per-row selection and a bulk strip. */}
-      {stripVisible ? (
+      {payments.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 min-h-[300px] justify-center bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+            <CreditCard className="w-8 h-8 text-gray-400" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-gray-900 mb-1 text-center">No Payments Found</h3>
+            <p className="text-sm text-gray-600">Add your first payment to get started.</p>
+          </div>
+          <button
+            onClick={() => handleOpenForm("IN")}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} />
+            Add new payment
+          </button>
+        </div>
+      ) : stripVisible ? (
         <BulkActionBar
           selectedCount={selectedItems.length}
           entityName="payment"
@@ -680,8 +699,7 @@ const PaymentsTable = ({ payments, vendor }) => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search payments..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              className="w-full h-full pl-10 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
           </div>
           <button
@@ -739,6 +757,7 @@ const PaymentsTable = ({ payments, vendor }) => {
         </div>
       )}
 
+      {payments.length > 0 && (
       <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
         <DataTable
           data={paginatedPayments}
@@ -789,9 +808,10 @@ const PaymentsTable = ({ payments, vendor }) => {
               {!search && !activeFilterCount && (
                 <button
                   onClick={() => handleOpenForm("IN")}
-                  className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  Add Payment
+                  <Plus size={16} />
+                  Add new payment
                 </button>
               )}
             </div>
@@ -812,6 +832,7 @@ const PaymentsTable = ({ payments, vendor }) => {
           />
         </div>
       </div>
+      )}
 
       <CompanyFilterPanel
         isOpen={showFilterPanel}

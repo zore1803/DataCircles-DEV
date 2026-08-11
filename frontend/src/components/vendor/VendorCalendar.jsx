@@ -427,7 +427,7 @@ const VendorCalendar = ({ vendorId }) => {
           placeholder="Search..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-11 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:border-gray-400"
+          className="w-full pl-11 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:border-[#0085FF]"
         />
       </div>
 

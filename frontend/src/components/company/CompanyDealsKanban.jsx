@@ -315,7 +315,7 @@ const DealCardOverlay = ({ deal }) => (
 // company-profile Deals tab and the standalone /deals board look identical:
 // same 340px shell, #F5F7FA header, pill counter, per-status tinted summary card
 // and week-over-week trend badge.
-const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddClick, loading = false, selectedDeals = [], onToggleSelect, onToggleColumnSelect }) => {
+const KanbanColumn = ({ status, deals, amountDeals, totalDealsCount, colorTheme = "blue", onAddClick, loading = false, selectedDeals = [], onToggleSelect, onToggleColumnSelect }) => {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
 
@@ -386,7 +386,8 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
           <span
             className="flex items-center justify-center flex-shrink-0"
             style={{
-              width: "22px",
+              minWidth: "22px",
+              padding: "0 6px",
               height: "22px",
               background: "#FFFFFF",
               border: "1px solid #E5E5EC",
@@ -400,7 +401,7 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
               color: "#161618",
             }}
           >
-            {loading ? <Skeleton width={14} height={12} /> : deals.length}
+            {loading ? <Skeleton width={14} height={12} /> : (totalDealsCount !== undefined ? `${deals.length}/${totalDealsCount}` : deals.length)}
           </span>
         </div>
         <button
@@ -1406,8 +1407,7 @@ export default function CompanyDealsKanban({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search deals by name, contact, or status..."
-              className="w-full h-full pl-10 pr-10 border rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              className="w-full h-full pl-10 pr-10 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
             {searchTerm && (
               <button
@@ -1529,6 +1529,7 @@ export default function CompanyDealsKanban({
                   status={status}
                   deals={dealsByStatus[status] || []}
                   amountDeals={stableDealsByStatus[status] || []}
+                  totalDealsCount={totalCount}
                   colorTheme={status === "Won" ? "green" : status === "Lost" ? "red" : "blue"}
                   onAddClick={() => setManualDealFormOpen(true)}
                   selectedDeals={selectedDeals}
@@ -1564,16 +1565,16 @@ export default function CompanyDealsKanban({
             )}
           </DndContext>
         )
-      ) : totalCount === 0 ? (
+      ) : !isLoading && deals.length === 0 ? (
         <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <Handshake size={28} className="mb-3 text-blue-500" />
+          <Handshake size={28} className="mb-3 text-gray-400" />
           <button
             type="button"
             onClick={() => setManualDealFormOpen(true)}
-            className="flex items-center gap-1.5 h-9 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus size={16} />
-            Add new
+            Add new deal
           </button>
         </div>
       ) : (

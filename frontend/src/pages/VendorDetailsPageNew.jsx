@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo, useLayoutEffect } from "react";
-import { useParams, Link, useSearchParams } from "react-router-dom";
+import { useParams, Link, useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import useMinDelay from "../hooks/useMinDelay";
@@ -37,7 +37,9 @@ import {
   FolderOpen,
   Building2,
   FilePlus,
-  BadgeCheck
+  BadgeCheck,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 
@@ -192,6 +194,22 @@ const ActionIconButton = ({ icon: Icon, colorClass, onClick, title }) => (
 const VendorDetailsPageNew = () => {
   const { id } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Navigation logic
+  const vendorIds = location.state?.vendorIds || null;
+  const vendorIdsIndex = vendorIds ? vendorIds.indexOf(id) : -1;
+  const prevVendorId =
+    vendorIdsIndex > 0 ? vendorIds[vendorIdsIndex - 1] : null;
+  const nextVendorId =
+    vendorIdsIndex !== -1 && vendorIdsIndex < vendorIds?.length - 1
+      ? vendorIds[vendorIdsIndex + 1]
+      : null;
+
+  const goToVendor = (vendorId) => {
+    navigate(`/vendors/${vendorId}`, { state: { vendorIds } });
+  };
 
   /* ── State ── */
   const [vendor, setVendor] = useState(null);
@@ -333,6 +351,9 @@ const VendorDetailsPageNew = () => {
   };
 
   useEffect(() => {
+    // Reset so switching vendors (via next/prev arrows) shows the skeleton
+    // again instead of leaving the previous vendor's data on screen.
+    setDataLoaded(false);
     fetchVendorDetails();
   }, [id]);
 
@@ -581,13 +602,20 @@ const VendorDetailsPageNew = () => {
             {/* Info row */}
             <div className="flex items-start justify-between gap-4 py-4 pl-5 sm:pl-6 pr-4">
               <div className="flex items-start gap-4 min-w-0">
-                {/* Gated on showSkeleton, not just `vendor` — the vendor fetch
-                  resolves well before payments/tasks/meetings/notes do, so
-                  gating on `vendor` alone made the header pop in with real
-                  data while the KPI strip/table/timeline below it were still
-                  skeletons. Everything below now flips from skeleton to real
-                  content in the same render, like CompanyProfilePage.jsx. */}
-                {!showSkeleton && vendor ? (
+                {vendorIds && (
+                  <button
+                    type="button"
+                    onClick={() => goToVendor(prevVendorId)}
+                    disabled={!prevVendorId}
+                    title="Previous vendor"
+                    aria-label="Previous vendor"
+                    className="flex-shrink-0 w-7 h-7 mt-3.5 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                )}
+
+                {vendor ? (
                   <ProfilePicture
                     contact={{ name: vendor.name, avatar: vendor.avatar || vendor.logo }}
                     size="w-[56px] h-[56px]"
@@ -598,7 +626,7 @@ const VendorDetailsPageNew = () => {
                 )}
 
                 <div className="flex flex-col gap-1 mt-0.5 min-w-0">
-                  {!showSkeleton && vendor ? (
+                  {vendor ? (
                     <div className="flex items-center gap-3">
                       <h1 className="text-[22px] font-bold text-gray-900 leading-none">
                         {vendor.name}
@@ -611,7 +639,7 @@ const VendorDetailsPageNew = () => {
                     <Skeleton width={180} height={28} className="mb-1" />
                   )}
 
-                  {!showSkeleton && vendor ? (
+                  {vendor ? (
                     <div className="flex flex-col gap-1.5 mt-1">
                       {/* Stacked contact block: one row per field (Company, Email, Phone, Address). */}
                       {vendor.company && (
@@ -647,6 +675,19 @@ const VendorDetailsPageNew = () => {
                     </div>
                   )}
                 </div>
+
+                {vendorIds && (
+                  <button
+                    type="button"
+                    onClick={() => goToVendor(nextVendorId)}
+                    disabled={!nextVendorId}
+                    title="Next vendor"
+                    aria-label="Next vendor"
+                    className="flex-shrink-0 w-7 h-7 mt-3.5 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
 
               {/* Action Toolbar — moved up next to vendor info now that the
