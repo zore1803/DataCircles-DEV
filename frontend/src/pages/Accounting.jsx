@@ -1532,7 +1532,19 @@ const CreateInvoicePanel = ({
                   options={dealOptions}
                   placeholder="Search and select deal"
                   icon={Search}
-                  onSelect={(o) => setField("deal", o.value)}
+                  onSelect={(o) => {
+                    // Select the deal and, for GSTIN-bearing docs, auto-fill the
+                    // Receiver GSTIN from the deal's company when it has one.
+                    const selectedDeal = deals.find((d) => d._id === o.value);
+                    setForm((p) => ({
+                      ...p,
+                      deal: o.value,
+                      receiverGSTIN:
+                        supportsGSTIN && selectedDeal?.company?.gstin
+                          ? selectedDeal.company.gstin
+                          : p.receiverGSTIN,
+                    }));
+                  }}
                 />
                 <button
                   type="button"
@@ -1576,6 +1588,46 @@ const CreateInvoicePanel = ({
                   />
                 </div>
                 <div className="w-10 flex-shrink-0" aria-hidden="true" />
+              </div>
+            </div>
+
+            {/* Quick set — sits in the empty grid cell to the RIGHT of Due Date.
+                justify-end bottom-aligns the control so it lines up exactly with
+                the Due Date input rather than its label. Fills Due Date from the
+                document date + N days; the document date must be picked first,
+                otherwise there is no base to add days to. */}
+            <div className="flex flex-col justify-end gap-1">
+              <div className="flex items-center h-10">
+                <select
+                  value=""
+                  disabled={!form.date}
+                  title={
+                    form.date
+                      ? `Set Due Date from the ${docName} date`
+                      : `Select the ${docName} date first`
+                  }
+                  onChange={(e) => {
+                    const days = Number(e.target.value);
+                    if (!days) return;
+                    if (!form.date) {
+                      toast.error(`Please select the ${docName} date first.`);
+                      return;
+                    }
+                    const d = new Date(form.date);
+                    d.setDate(d.getDate() + days);
+                    setField("dueDate", d.toISOString().split("T")[0]);
+                  }}
+                  className={`h-10 px-4 text-[13px] font-medium rounded-[25px] border-none focus:outline-none transition-colors ${
+                    form.date
+                      ? "text-blue-600 bg-blue-50 hover:bg-blue-100 cursor-pointer"
+                      : "text-gray-400 bg-gray-100 cursor-not-allowed"
+                  }`}
+                >
+                  <option value="" disabled>Quick set…</option>
+                  <option value="7">+7 Days</option>
+                  <option value="15">+15 Days</option>
+                  <option value="30">+30 Days</option>
+                </select>
               </div>
             </div>
           </div>

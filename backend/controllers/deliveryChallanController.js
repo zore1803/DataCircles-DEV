@@ -34,6 +34,8 @@ exports.createDeliveryChallan = async (req, res) => {
       signature,
       signatureType,
       discount,
+      billingAddress,
+      shippingAddress,
     } = req.body;
 
     // Validate required fields
@@ -82,6 +84,19 @@ exports.createDeliveryChallan = async (req, res) => {
     });
     const deliveryChallanNumber = `DC-${maxNumber + 1}`;
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+    }
+
     const deliveryChallan = new DeliveryChallan({
       deal,
       deliveryChallanNumber,
@@ -95,7 +110,9 @@ exports.createDeliveryChallan = async (req, res) => {
       terms: terms || "",
       signature,
       signatureType: signatureType || "text",
-      discount,
+      discount: discount || { type: "fixed", value: 0 },
+      billingAddress: finalBillingAddress,
+      shippingAddress: finalShippingAddress,
       user: req.user.id,
       organization: req.user.organization,
     });
@@ -289,6 +306,8 @@ exports.updateDeliveryChallan = async (req, res) => {
       signature,
       signatureType,
       discount,
+      billingAddress,
+      shippingAddress,
     } = req.body;
 
     const requiredFields = ["deal", "date", "amount", "status", "discount"];
@@ -311,8 +330,24 @@ exports.updateDeliveryChallan = async (req, res) => {
       }
     }
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+    }
+
     const deliveryChallan = await DeliveryChallan.findOneAndUpdate(
-      { _id: req.params.id, organization: req.user.organization },
+      {
+        _id: req.params.id,
+        organization: req.user.organization,
+      },
       {
         deal,
         date,
@@ -326,6 +361,8 @@ exports.updateDeliveryChallan = async (req, res) => {
         signature,
         signatureType,
         discount,
+        billingAddress: finalBillingAddress,
+        shippingAddress: finalShippingAddress,
       },
       { new: true }
     );

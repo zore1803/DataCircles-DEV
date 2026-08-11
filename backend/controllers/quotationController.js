@@ -36,6 +36,8 @@ exports.createQuotation = async (req, res) => {
       signatureType,
       discount,
       receiverGSTIN,
+      billingAddress,
+      shippingAddress,
     } = req.body;
 
     // Validate required fields
@@ -84,6 +86,23 @@ exports.createQuotation = async (req, res) => {
     });
     const quotationNumber = `QUO-${maxNumber + 1}`;
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+    let finalReceiverGSTIN = receiverGSTIN;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+      if (!finalReceiverGSTIN) {
+        finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
+
     const quotation = new Quotation({
       deal,
       quotationNumber,
@@ -98,8 +117,10 @@ exports.createQuotation = async (req, res) => {
       isTaxQuotation: isTaxQuotation || false,
       signature,
       signatureType: signatureType || "text",
-      discount,
-      receiverGSTIN,
+      discount: discount || { type: "fixed", value: 0 },
+      receiverGSTIN: finalReceiverGSTIN,
+      billingAddress: finalBillingAddress,
+      shippingAddress: finalShippingAddress,
       user: req.user.id,
       organization: req.user.organization,
     });
@@ -297,6 +318,8 @@ exports.updateQuotation = async (req, res) => {
       signatureType,
       discount,
       receiverGSTIN,
+      billingAddress,
+      shippingAddress,
     } = req.body;
 
     const requiredFields = ["deal", "date", "amount", "status", "discount"];
@@ -319,8 +342,28 @@ exports.updateQuotation = async (req, res) => {
       }
     }
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+    let finalReceiverGSTIN = receiverGSTIN;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+      if (!finalReceiverGSTIN) {
+        finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
+
     const quotation = await Quotation.findOneAndUpdate(
-      { _id: req.params.id, organization: req.user.organization },
+      {
+        _id: req.params.id,
+        organization: req.user.organization,
+      },
       {
         deal,
         date,
@@ -335,7 +378,9 @@ exports.updateQuotation = async (req, res) => {
         signature,
         signatureType,
         discount,
-        receiverGSTIN,
+        receiverGSTIN: finalReceiverGSTIN,
+        billingAddress: finalBillingAddress,
+        shippingAddress: finalShippingAddress,
       },
       { new: true }
     );
