@@ -15,7 +15,7 @@ const couponRedemptionSchema = new mongoose.Schema({
   context: {
     planId: String,
     billingCycle: String,
-    checkoutType: { type: String, enum: ['new_subscription', 'addon_purchase', 'plan_upgrade'] },
+    checkoutType: { type: String, enum: ['new_subscription', 'addon_purchase', 'plan_upgrade', 'coupon_replace'] },
   },
 
   baseAmount: { type: Number, required: true }, // pre-discount, pre-GST

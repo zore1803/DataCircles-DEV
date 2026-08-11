@@ -1,6 +1,7 @@
 // middlewares/subscriptionCheck.js
 const Subscription = require('../models/Subscription');
 const PlanConfig = require('../models/PlanConfig');
+const { getAccessEntitlementEnd } = require('../utils/prorationMath');
 
 // Cache to reduce database queries (optional but recommended)
 const subscriptionCache = new Map();
@@ -20,9 +21,9 @@ const checkSubscriptionLimits = (featureType) => {
       }
 
       // Get subscription from your database
-      const subscription = await Subscription.findOne({ 
+      const subscription = await Subscription.findOne({
         organization: req.user.organization
-      }).select('razorpaySubscriptionId planName trialEnd isTrialActive organization status currentPeriodEnd');
+      }).select('razorpaySubscriptionId planName trialEnd isTrialActive organization status currentPeriodEnd billingCycle billingAnchor');
       
       if (!subscription) {
         return res.status(403).json({ 
@@ -75,13 +76,21 @@ const checkSubscriptionLimits = (featureType) => {
         });
       }
 
-      // Check if subscription has ended
-      if (subscription.currentPeriodEnd && 
-          new Date() > subscription.currentPeriodEnd) {
+      // Check if subscription has ended. Hotfix (docs/audit/
+      // PHASE3_ENTITLEMENT_WINDOW_SCHEMA_TRACE.md finding #21): this used to
+      // compare against currentPeriodEnd directly, which is the ROLLING
+      // invoice-cycle field, not the customer's actual paid-for entitlement
+      // — correct only by coincidence for monthly plans (the two concepts
+      // are numerically identical there). getAccessEntitlementEnd()
+      // returns currentPeriodEnd unchanged for monthly (byte-for-byte
+      // identical to the old behavior) and the real anchor-relative
+      // entitlement window end for yearly.
+      const entitlementEnd = getAccessEntitlementEnd(subscription);
+      if (entitlementEnd && new Date() > entitlementEnd) {
         subscription.status = 'expired';
         await subscription.save();
-        
-        return res.status(403).json({ 
+
+        return res.status(403).json({
           error: 'Subscription has ended',
           code: 'SUBSCRIPTION_ENDED'
         });

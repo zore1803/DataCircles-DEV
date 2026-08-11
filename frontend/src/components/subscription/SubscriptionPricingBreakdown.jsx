@@ -13,11 +13,18 @@
 import React from "react";
 import { Tag } from "lucide-react";
 import { formatPrice, computeGST } from "../../utils/pricingSnapshot";
+import { isCouponStillRecurring } from "../../utils/couponHelpers";
 
 const SubscriptionPricingBreakdown = ({ subscription, compact = false }) => {
   if (!subscription) return null;
 
-  const appliedCoupon = subscription.appliedCoupon?.code ? subscription.appliedCoupon : null;
+  // Coupon P0 fix (found via live QA): subscription.totalAmount is now
+  // always synced to reality (the backend fix from this same pass) — for a
+  // coupon that's no longer recurring-eligible, totalAmount already excludes
+  // its discount. Showing a "Coupon − ₹X" line above a Subtotal that doesn't
+  // actually reflect that subtraction was exactly the inconsistency found
+  // live, so this line only renders while the discount is still real.
+  const appliedCoupon = (subscription.appliedCoupon?.code && isCouponStillRecurring(subscription.appliedCoupon)) ? subscription.appliedCoupon : null;
   const cycleLabel = subscription.billingCycle === "monthly" ? "mo" : "yr";
   const gst = computeGST(subscription.totalAmount);
   const recurringTotal = subscription.totalAmount + gst;

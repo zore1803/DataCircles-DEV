@@ -162,6 +162,13 @@ function Login() {
         otp: userOtp,
       });
       if (res.data.success) {
+        // Security fix: a stale superAdminToken from a prior super-admin
+        // session in this browser must never coexist with a regular-user
+        // token — services/api.js's request interceptor checks the phone
+        // token first, so leaving superAdminToken in place would silently
+        // downgrade every subsequent request to regular-user permissions
+        // with no visible error.
+        localStorage.removeItem("superAdminToken");
         localStorage.setItem("token", res.data.token);
         localStorage.setItem("user", JSON.stringify(res.data.user));
         configureAxios(() => Promise.resolve(localStorage.getItem("token")));
@@ -210,6 +217,8 @@ function Login() {
 
       if (res.data.success) {
         if (res.data.token) {
+          // Security fix — see other setItem("token") call sites in this file.
+          localStorage.removeItem("superAdminToken");
           localStorage.setItem("token", res.data.token);
           configureAxios(() => Promise.resolve(localStorage.getItem("token")));
         }
@@ -257,6 +266,13 @@ function Login() {
       });
 
       if (res.data.success) {
+        // Security fix: a stale superAdminToken from a prior super-admin
+        // session in this browser must never coexist with a regular-user
+        // token — services/api.js's request interceptor checks the phone
+        // token first, so leaving superAdminToken in place would silently
+        // downgrade every subsequent request to regular-user permissions
+        // with no visible error.
+        localStorage.removeItem("superAdminToken");
         localStorage.setItem("token", res.data.token);
         localStorage.setItem("user", JSON.stringify(res.data.user));
         configureAxios(() => Promise.resolve(localStorage.getItem("token")));
@@ -417,6 +433,8 @@ function Login() {
       localStorage.removeItem("referralCode"); // consumed — one-shot, don't reuse on a later signup from this browser
 
       if (res.data.token) {
+        // Security fix — see other setItem("token") call sites in this file.
+        localStorage.removeItem("superAdminToken");
         localStorage.setItem("token", res.data.token);
         configureAxios(() => Promise.resolve(localStorage.getItem("token")));
       }

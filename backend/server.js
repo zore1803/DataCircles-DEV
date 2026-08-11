@@ -14,6 +14,8 @@ mongoose.plugin(require('./utils/changeNotifier'));
 const cors = require('cors');
 const startReminderJob = require('./utils/reminderJob');
 require('./jobs/subscriptionLifecycleJobs');
+require('./jobs/referralLifecycleJobs');
+require('./jobs/renewalLifecycleJobs');
 const swaggerUi = require('swagger-ui-express');
 const fs = require('fs');
 const YAML = require('yaml');
@@ -64,6 +66,7 @@ app.use(requestContext);
 
 const subscriptionRoutes = require("./routes/subscription");
 app.use("/api/subscription", subscriptionRoutes)
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.raw({ type: 'application/json', limit: '50mb' }));
 app.use('/uploads', express.static('uploads'));
