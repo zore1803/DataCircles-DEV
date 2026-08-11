@@ -4,7 +4,7 @@ import API from "../../services/api";
 import toast from "react-hot-toast";
 import BankLogo from "../BankLogo";
 
-export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
+export default function PaymentFormModal({ isOpen, onClose, onSuccess, editItem = null }) {
   const [vendors, setVendors] = useState([]);
   const [banks, setBanks] = useState([]);
   const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
@@ -21,6 +21,8 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
     notes: ""
   });
 
+  const isEdit = Boolean(editItem);
+
   const fetchVendors = async () => {
     try {
       const res = await API.get("/vendors");
@@ -35,10 +37,13 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
       const res = await API.get("/bank-details/all");
       const fetchedBanks = Array.isArray(res.data) ? res.data : [];
       setBanks(fetchedBanks);
-      const defaultBank = fetchedBanks.find(b => b.isDefault) || fetchedBanks[0];
-      if (defaultBank) {
-        setFormData(prev => ({ ...prev, bank: defaultBank.bankName || defaultBank.bank || "" }));
-        setSelectedBankId(defaultBank._id);
+      
+      if (!isEdit) {
+        const defaultBank = fetchedBanks.find(b => b.isDefault) || fetchedBanks[0];
+        if (defaultBank) {
+          setFormData(prev => ({ ...prev, bank: defaultBank.bankName || defaultBank.bank || "" }));
+          setSelectedBankId(defaultBank._id);
+        }
       }
     } catch (err) {
       console.error("Fetch banks failed", err);
@@ -49,18 +54,32 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
     if (isOpen) {
       fetchVendors();
       fetchBanks();
-      setVendorSearch("");
-      setSelectedVendorId("");
-      setFormData({
-        amount: "",
-        paymentDate: new Date().toISOString().slice(0, 10),
-        direction: "OUT",
-        paymentType: "UPI",
-        bank: "",
-        notes: ""
-      });
+      if (editItem) {
+        setVendorSearch(editItem.party || editItem.vendorName || "");
+        setSelectedVendorId(editItem.vendorId || editItem.vendor || "");
+        const formattedDate = editItem.date ? new Date(editItem.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+        setFormData({
+          amount: editItem.amount !== undefined ? editItem.amount : "",
+          paymentDate: formattedDate,
+          direction: editItem.direction || "OUT",
+          paymentType: editItem.paymentType || "UPI",
+          bank: editItem.bank || "",
+          notes: editItem.notes || ""
+        });
+      } else {
+        setVendorSearch("");
+        setSelectedVendorId("");
+        setFormData({
+          amount: "",
+          paymentDate: new Date().toISOString().slice(0, 10),
+          direction: "OUT",
+          paymentType: "UPI",
+          bank: "",
+          notes: ""
+        });
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, editItem]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -71,13 +90,19 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
         vendor: selectedVendorId || undefined,
         vendorName: selectedVendorId ? undefined : vendorSearch
       };
-      await API.post("/payments-timeline", payload);
-      toast.success("Payment added successfully!");
+      if (isEdit) {
+        payload.source = editItem.source;
+        await API.put(`/payments-timeline/${editItem._id}`, payload);
+        toast.success("Entry updated successfully!");
+      } else {
+        await API.post("/payments-timeline", payload);
+        toast.success("Payment added successfully!");
+      }
       onSuccess();
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.error || "Failed to add payment");
+      toast.error(err.response?.data?.error || `Failed to ${isEdit ? "update" : "add"} payment`);
     } finally {
       setLoading(false);
     }
@@ -100,7 +125,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
       />
       <div className="relative w-1/2 max-w-none h-full bg-white shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-300">
         <div className="flex items-center justify-between px-6 py-5 border-b border-[#E1E4EA] bg-white">
-          <h2 className="text-lg font-bold text-gray-900">Add Payment</h2>
+          <h2 className="text-lg font-bold text-gray-900">{isEdit ? "Edit Payment" : "Add Payment"}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1.5 rounded-full hover:bg-gray-100">
             <X size={20} />
           </button>
@@ -152,9 +177,11 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                     required
                     min="0"
                     step="0.01"
+                    disabled={isEdit}
+                    title={isEdit ? "Amount cannot be edited" : ""}
                     value={formData.amount}
                     onChange={e => setFormData(p => ({ ...p, amount: e.target.value }))}
-                    className="w-full h-10 pl-8 pr-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
+                    className={`w-full h-10 pl-8 pr-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none ${isEdit ? "bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200" : "focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"}`}
                   />
                 </div>
               </div>

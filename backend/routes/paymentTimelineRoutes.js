@@ -9,5 +9,7 @@ const requireAuth = [authMiddleware, userSync];
 
 router.get("/", requireAuth, subscriptionGate, paymentTimelineController.getPaymentsTimeline);
 router.post("/", requireAuth, subscriptionGate, paymentTimelineController.createPayment);
+router.put("/:id", requireAuth, subscriptionGate, paymentTimelineController.updateTimelineEntry);
+router.delete("/:id", requireAuth, subscriptionGate, paymentTimelineController.deleteTimelineEntry);
 
 module.exports = router;

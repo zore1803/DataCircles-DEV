@@ -170,3 +170,99 @@ exports.createPayment = async (req, res) => {
     res.status(500).json({ error: "Failed to create payment" });
   }
 };
+
+exports.updateTimelineEntry = async (req, res) => {
+  try {
+    const orgId = req.user.organization;
+    const { id } = req.params;
+    const { source, vendor, vendorName, paymentDate, direction, paymentType, bank, notes } = req.body;
+
+    if (!source) {
+      return res.status(400).json({ error: "Missing 'source' parameter" });
+    }
+
+    let Model;
+    switch (source) {
+      case "Payment":      Model = Payment; break;
+      case "Invoice":       Model = Invoice; break;
+      case "Purchase":      Model = Purchase; break;
+      case "Subscription":  Model = SubscriptionPayment; break;
+      default:
+        return res.status(400).json({ error: `Unknown source: ${source}` });
+    }
+
+    const doc = await Model.findOne({ _id: id, organization: orgId });
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found or not authorized" });
+    }
+
+    // Resolve vendor if changing vendor
+    let vendorId = vendor;
+    if (!vendorId && vendorName) {
+      const newVendor = new Vendor({
+        name: vendorName,
+        organization: orgId,
+        user: req.user._id,
+      });
+      await newVendor.save();
+      vendorId = newVendor._id;
+    }
+
+    if (source === "Payment") {
+      if (vendorId) doc.vendor = vendorId;
+      if (paymentDate) doc.paymentDate = new Date(paymentDate);
+      if (direction) doc.direction = direction;
+      if (paymentType) doc.paymentType = paymentType;
+      if (bank !== undefined) doc.bank = bank;
+      if (notes !== undefined) doc.notes = notes;
+    } else {
+      // Generic fallback fields update across models
+      if (paymentDate) {
+        if (doc.date !== undefined) doc.date = new Date(paymentDate);
+        if (doc.paymentDate !== undefined) doc.paymentDate = new Date(paymentDate);
+        if (doc.issueDate !== undefined) doc.issueDate = new Date(paymentDate);
+      }
+      if (notes !== undefined) doc.notes = notes;
+      if (bank !== undefined) doc.bank = bank;
+    }
+
+    await doc.save();
+    res.json({ message: "Updated successfully", doc });
+  } catch (err) {
+    console.error("Update timeline entry error:", err);
+    res.status(500).json({ error: "Failed to update entry" });
+  }
+};
+
+exports.deleteTimelineEntry = async (req, res) => {
+  try {
+    const orgId = req.user.organization;
+    const { id } = req.params;
+    const source = (req.query.source || "").trim();
+
+    if (!source) {
+      return res.status(400).json({ error: "Missing 'source' query parameter" });
+    }
+
+    let Model;
+    switch (source) {
+      case "Payment":      Model = Payment; break;
+      case "Invoice":       Model = Invoice; break;
+      case "Purchase":      Model = Purchase; break;
+      case "Subscription":  Model = SubscriptionPayment; break;
+      default:
+        return res.status(400).json({ error: `Unknown source: ${source}` });
+    }
+
+    const doc = await Model.findOneAndDelete({ _id: id, organization: orgId });
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found or not authorized" });
+    }
+
+    res.json({ message: "Deleted successfully", id, source });
+  } catch (err) {
+    console.error("Delete timeline entry error:", err);
+    res.status(500).json({ error: "Failed to delete timeline entry" });
+  }
+};
+
