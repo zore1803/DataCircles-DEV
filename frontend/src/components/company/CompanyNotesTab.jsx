@@ -864,8 +864,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by note by name, deal..."
-            className="w-full h-full pl-11 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-            style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+            className="w-full h-full pl-11 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
           />
           {searchTerm && (
             <button
@@ -973,15 +972,19 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
         )
       ) : notes.length === 0 ? (
         <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <StickyNote size={28} className="mb-3 text-blue-500" />
+          <StickyNote size={28} className="mb-3 text-gray-400" />
           <button
             type="button"
             onClick={() => setManualEditorOpen(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus size={16} />
-            Add new
+            Add new note
           </button>
+        </div>
+      ) : viewMode === "grid" && filteredNotes.length === 0 ? (
+        <div className="flex items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 text-sm font-medium">
+          No notes found.
         </div>
       ) : viewMode === "grid" ? (
         <div

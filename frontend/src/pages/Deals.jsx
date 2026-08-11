@@ -325,7 +325,7 @@ const DealSettingSidebar = ({ isOpen, onClose, staleDays, setStaleDays }) => {
 
 // --- MODERN UI COMPONENTS (New) ---
 
-const ModernDealCard = ({ deal, onClick, isStale, colorTheme = "blue" }) => {
+const ModernDealCard = ({ deal, onClick, isStale, colorTheme = "blue", selected = false, onToggleSelect }) => {
   const {
     attributes,
     listeners,
@@ -349,20 +349,43 @@ const ModernDealCard = ({ deal, onClick, isStale, colorTheme = "blue" }) => {
   return (
     <div
       ref={setNodeRef}
-      style={{ ...style, width: "300px", height: "132px", boxSizing: "border-box" }}
+      style={{
+        ...style,
+        width: "300px",
+        height: "132px",
+        boxSizing: "border-box",
+        ...(selected ? { borderColor: "#0085FF", background: "#F5FAFF" } : null),
+      }}
       {...attributes}
       {...listeners}
       onClick={() => onClick(deal)}
       className="flex flex-col items-start bg-white border border-[#E5E5EC] rounded-[10px] p-4 gap-4 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group relative"
     >
       <div className="flex flex-col items-start gap-2 w-full">
-        <div className="flex items-center justify-between w-full">
-          <span
-            className="truncate"
-            style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "14px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
-          >
-            {deal.title}
-          </span>
+        <div className="flex items-center justify-between w-full gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {onToggleSelect && (
+              <span
+                className="flex items-center flex-shrink-0"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => onToggleSelect(deal._id)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                  aria-label={`Select ${deal.title || "deal"}`}
+                />
+              </span>
+            )}
+            <span
+              className="truncate"
+              style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "14px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
+            >
+              {deal.title}
+            </span>
+          </div>
           <MoreVertical className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
         </div>
         <div
@@ -406,14 +429,27 @@ const ModernDealCard = ({ deal, onClick, isStale, colorTheme = "blue" }) => {
 const ModernKanbanColumn = ({
   status,
   deals,
+  totalDealsCount,
   colorTheme = "blue",
   onAddClick,
   handleEditDeal,
   isStale,
   loading = false,
+  selectedDeals = [],
+  onToggleSelect,
+  onToggleColumnSelect,
 }) => {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
+
+  // Header select-all state for this column: fully ticked when every card here
+  // is selected, indeterminate (native dash) when only some are.
+  const allSelected = dealIds.length > 0 && dealIds.every((id) => selectedDeals.includes(id));
+  const someSelected = dealIds.some((id) => selectedDeals.includes(id));
+  const headerCbRef = useRef(null);
+  useEffect(() => {
+    if (headerCbRef.current) headerCbRef.current.indeterminate = someSelected && !allSelected;
+  }, [someSelected, allSelected]);
 
   const totalAmount = deals.reduce((sum, deal) => sum + (parseInt(deal.amount) || 0), 0);
   const formattedTotal = formatNumberToIndian(totalAmount);
@@ -448,6 +484,17 @@ const ModernKanbanColumn = ({
         style={{ height: "46px", padding: "0 18px", background: "#F5F7FA" }}
       >
         <div className="flex items-center gap-1.5">
+          {onToggleColumnSelect && !loading && dealIds.length > 0 && (
+            <input
+              ref={headerCbRef}
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => onToggleColumnSelect(dealIds)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+              title={`Select all in ${status}`}
+              aria-label={`Select all deals in ${status}`}
+            />
+          )}
           <span
             className="truncate"
             style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}
@@ -457,7 +504,8 @@ const ModernKanbanColumn = ({
           <span
             className="flex items-center justify-center flex-shrink-0"
             style={{
-              width: "22px",
+              minWidth: "22px",
+              padding: "0 6px",
               height: "22px",
               background: "#FFFFFF",
               border: "1px solid #E5E5EC",
@@ -471,7 +519,7 @@ const ModernKanbanColumn = ({
               color: "#161618",
             }}
           >
-            {loading ? <Skeleton width={14} height={12} /> : deals.length}
+            {loading ? <Skeleton width={14} height={12} /> : (totalDealsCount !== undefined ? `${deals.length}/${totalDealsCount}` : deals.length)}
           </span>
         </div>
         <button
@@ -553,6 +601,8 @@ const ModernKanbanColumn = ({
                     onClick={handleEditDeal}
                     isStale={isStale}
                     colorTheme={colorTheme}
+                    selected={selectedDeals.includes(deal._id)}
+                    onToggleSelect={onToggleSelect}
                   />
                 ))}
               </SortableContext>
@@ -1804,6 +1854,19 @@ function Deals() {
     setSelectedRows(paginatedTableDeals.map((deal) => deal._id));
   };
 
+  // Kanban column-header "select all in this column" checkbox: given that
+  // column's deal ids, unions them in, or — if every one is already
+  // selected — removes just those ids, leaving other columns' selections
+  // untouched. Same handler is reused for every column.
+  const handleToggleColumnSelect = (dealIds) => {
+    setSelectedRows((prev) => {
+      const allSelected = dealIds.every((id) => prev.includes(id));
+      return allSelected
+        ? prev.filter((id) => !dealIds.includes(id))
+        : [...new Set([...prev, ...dealIds])];
+    });
+  };
+
   const handleExport = (format) => {
     if (permission === "readonly") {
       toast.error("You do not have permission to export deals.", {
@@ -2629,11 +2692,15 @@ function Deals() {
                       key={status}
                       status={status}
                       deals={columnDeals}
+                      totalDealsCount={sortedTableDeals.length}
                       colorTheme={colorTheme}
                       onAddClick={toggleForm}
                       handleEditDeal={handleEditDeal}
                       isStale={isStale}
                       loading={showKanbanSkeleton}
+                      selectedDeals={selectedRows}
+                      onToggleSelect={handleRowSelect}
+                      onToggleColumnSelect={handleToggleColumnSelect}
                     />
                   );
                 })}
