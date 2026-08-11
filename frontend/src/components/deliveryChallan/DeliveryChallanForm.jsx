@@ -1057,6 +1057,24 @@ const DeliveryChallanForm = ({
                     aria-label="Select due date"
                   />
                 </div>
+                <div className="flex items-center gap-2 mt-2">
+                  {[7, 15, 30].map(days => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => {
+                        const baseDate = form.date || new Date().toISOString().split("T")[0];
+                        const d = new Date(baseDate);
+                        d.setDate(d.getDate() + days);
+                        setForm(prev => ({ ...prev, dueDate: d.toISOString().split("T")[0] }));
+                        setHasUnsavedChanges(true);
+                      }}
+                      className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors"
+                    >
+                      +{days} Days
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 

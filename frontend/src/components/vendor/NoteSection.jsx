@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import AppToaster from "../AppToaster";
 import DataTable from "../common/DataTable";
+import RowActionsMenu, { withRowActionsColumn } from "../common/RowActionsMenu";
 import BulkActionBar from "../common/BulkActionBar";
 import { exportToCSV } from "../../utils/exportToCSV";
 import TablePaginationFooter from "../common/TablePaginationFooter";
@@ -840,37 +841,6 @@ const NoteSection = () => {
           <span className="text-gray-700">{formatNoteDate(row.original.updatedAt)}</span>
         ),
       },
-      {
-        id: "actions",
-        size: 120,
-        enableResizing: false,
-        header: "Actions",
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={(e) => { e.stopPropagation(); handleView(row.original); }}
-              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-              title="View"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleEdit(row.original); }}
-              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-              title="Edit"
-            >
-              <Edit3 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleDelete(row.original._id); }}
-              className="p-1 text-gray-500 hover:text-red-600 transition-colors"
-              title="Delete"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        ),
-      },
     ],
     [paginatedNotes, selectedItems, selectAll, clearSelection, toggleItem],
   );
@@ -878,7 +848,6 @@ const NoteSection = () => {
   const finalListColumns = useMemo(() => {
     const visibleBase = baseListColumns.filter(c => !hiddenColumns.has(c.id));
     const selectionCol = visibleBase.find(c => c.id === "selection");
-    const actionsCol = visibleBase.find(c => c.id === "actions");
     const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
 
     const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
@@ -890,13 +859,19 @@ const NoteSection = () => {
     
     midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
     
-    return [
+    const ordered = [
       ...(selectionCol ? [selectionCol] : []),
       ...leftCols,
       ...midCols,
       ...rightCols,
-      ...(actionsCol ? [actionsCol] : [])
     ];
+    return withRowActionsColumn(ordered, (note) => (
+      <RowActionsMenu
+        onView={() => handleView(note)}
+        onEdit={() => handleEdit(note)}
+        onDelete={() => handleDelete(note._id)}
+      />
+    ));
   }, [baseListColumns, columnOrder, hiddenColumns, pinnedColumns]);
 
   const visibleColumnsForGhost = useMemo(() => finalListColumns.map(c => ({ key: c.id, label: c.header })), [finalListColumns]);
