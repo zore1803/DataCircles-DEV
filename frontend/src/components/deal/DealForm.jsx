@@ -400,10 +400,12 @@ const DealForm = ({
               </div>
             </div>
 
-            {/* Dynamic Collapsible Additional Fields */}
+            {/* Custom Fields (Categorized & Collapsible) — directly after the
+                basic info above. This form has no trailing additional-info
+                sections, so it's last by default rather than by placement. */}
             {sortedCategories.length > 0 && (
               <div className="pt-4 space-y-4">
-                <h3 className="text-[16px] font-bold text-[#111216]">Additional Information</h3>
+                <h3 className="text-[16px] font-bold text-[#111216]">Custom Fields</h3>
                 {sortedCategories.map((category) => (
                   <div key={category} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                     <button type="button" onClick={() => toggleSection(category)} className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none">
