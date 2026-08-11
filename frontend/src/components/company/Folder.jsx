@@ -1750,9 +1750,18 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
               placeholder="Search folder by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-full pl-11 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              className="w-full h-full pl-11 pr-10 border rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
               style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <button
             onClick={() => setShowFilterPanel(true)}
@@ -1836,7 +1845,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                 setInlineEditingId("NEW");
                 setInlineEditingName("New Folder");
               }}
-              className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+              className="flex items-center gap-1.5 h-9 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
             >
               <Plus size={16} />
               Add new
@@ -1999,7 +2008,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                   initialName: "",
                 })
               }
-              className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+              className="flex items-center gap-1.5 h-9 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
             >
               <Plus size={16} />
               Add new

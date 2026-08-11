@@ -60,6 +60,7 @@ import {
   Tag,
   IndianRupee,
   Calendar,
+  X,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
@@ -1405,9 +1406,18 @@ export default function CompanyDealsKanban({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search deals by name, contact, or status..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              className="w-full h-full pl-10 pr-10 border rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
               style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <button
             onClick={() => setShowFilterPanel(true)}
@@ -1560,7 +1570,7 @@ export default function CompanyDealsKanban({
           <button
             type="button"
             onClick={() => setManualDealFormOpen(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+            className="flex items-center gap-1.5 h-9 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
           >
             <Plus size={16} />
             Add new
