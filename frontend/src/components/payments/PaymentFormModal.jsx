@@ -2,15 +2,16 @@ import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
+import BankLogo from "../BankLogo";
 
 export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
   const [vendors, setVendors] = useState([]);
   const [banks, setBanks] = useState([]);
+  const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
+  const [selectedBankId, setSelectedBankId] = useState("");
   const [loading, setLoading] = useState(false);
-  
   const [vendorSearch, setVendorSearch] = useState("");
   const [selectedVendorId, setSelectedVendorId] = useState("");
-  
   const [formData, setFormData] = useState({
     amount: "",
     paymentDate: new Date().toISOString().slice(0, 10),
@@ -19,6 +20,30 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
     bank: "",
     notes: ""
   });
+
+  const fetchVendors = async () => {
+    try {
+      const res = await API.get("/vendors");
+      setVendors(res.data.vendors || res.data || []);
+    } catch (err) {
+      console.error("Fetch vendors failed", err);
+    }
+  };
+
+  const fetchBanks = async () => {
+    try {
+      const res = await API.get("/bank-details/all");
+      const fetchedBanks = Array.isArray(res.data) ? res.data : [];
+      setBanks(fetchedBanks);
+      const defaultBank = fetchedBanks.find(b => b.isDefault) || fetchedBanks[0];
+      if (defaultBank) {
+        setFormData(prev => ({ ...prev, bank: defaultBank.bankName || defaultBank.bank || "" }));
+        setSelectedBankId(defaultBank._id);
+      }
+    } catch (err) {
+      console.error("Fetch banks failed", err);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -36,30 +61,6 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
       });
     }
   }, [isOpen]);
-
-  const fetchVendors = async () => {
-    try {
-      const res = await API.get("/vendors");
-      setVendors(res.data.vendors || res.data || []);
-    } catch (err) {
-      console.error("Fetch vendors failed", err);
-    }
-  };
-
-  const fetchBanks = async () => {
-    try {
-      const res = await API.get("/bank-details/all");
-      const fetchedBanks = Array.isArray(res.data) ? res.data : [];
-      setBanks(fetchedBanks);
-      
-      const defaultBank = fetchedBanks.find(b => b.isDefault) || fetchedBanks[0];
-      if (defaultBank) {
-        setFormData(prev => ({ ...prev, bank: defaultBank.bankName }));
-      }
-    } catch (err) {
-      console.error("Fetch banks failed", err);
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -88,12 +89,19 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
     (v.name || v.companyName || "").toLowerCase().includes(vendorSearch.toLowerCase())
   );
 
+  const selectedBankObj = banks.find(bk => bk._id === selectedBankId);
+
   return (
-    <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#E1E4EA] bg-gray-50">
+    <div className="fixed inset-0 z-[100000] flex justify-end bg-black/40 backdrop-blur-sm transition-opacity duration-300">
+      <div 
+        className="fixed inset-0" 
+        onClick={onClose} 
+        aria-hidden="true" 
+      />
+      <div className="relative w-1/2 max-w-none h-full bg-white shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-300">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-[#E1E4EA] bg-white">
           <h2 className="text-lg font-bold text-gray-900">Add Payment</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 transition-colors p-1 rounded-md hover:bg-gray-200">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1.5 rounded-full hover:bg-gray-100">
             <X size={20} />
           </button>
         </div>
@@ -192,26 +200,55 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bank</label>
-              {banks.length > 0 ? (
-                <select 
-                  value={formData.bank}
-                  onChange={e => setFormData(p => ({ ...p, bank: e.target.value }))}
-                  className="w-full h-10 px-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] bg-white"
+              <label className="block text-sm font-medium text-gray-700 mb-1">Select Bank Account</label>
+              <div className="relative w-full">
+                <button 
+                  type="button"
+                  onClick={() => setBankDropdownOpen(!bankDropdownOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 border border-[#E1E4EA] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0085FF] bg-white"
                 >
-                  <option value="">Select a bank...</option>
-                  {banks.map(b => (
-                    <option key={b._id} value={b.bankName}>{b.bankName} - {b.accountNumber ? b.accountNumber.slice(-4) : ''}</option>
-                  ))}
-                </select>
-              ) : (
-                <div className="flex items-center justify-between p-3 border border-yellow-200 bg-yellow-50 rounded-lg">
-                  <span className="text-sm text-yellow-800">No banks found in settings.</span>
-                  <a href="/settings" target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-[#0085FF] hover:underline">
-                    Add Bank Details
-                  </a>
-                </div>
-              )}
+                  {selectedBankObj ? (
+                    <div className="flex items-center gap-2.5">
+                      <BankLogo bankName={selectedBankObj.bankName || selectedBankObj.bank || ""} size={28} />
+                      <span className="text-sm font-medium text-gray-800">
+                        {selectedBankObj.bankName || selectedBankObj.bank}
+                        {selectedBankObj.branch ? ` (${selectedBankObj.branch})` : ""}
+                        {selectedBankObj.accountNumber ? ` - XXXX${selectedBankObj.accountNumber.slice(-4)}` : ""}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-gray-500 text-sm">Select a bank...</span>
+                  )}
+                  <svg className="h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {bankDropdownOpen && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-[#E1E4EA] rounded-md shadow-lg max-h-48 overflow-y-auto">
+                    {banks.map(b => {
+                      const name = b.bankName || b.bank || "Bank";
+                      const branch = b.branch ? ` (${b.branch})` : "";
+                      const lastFour = b.accountNumber ? b.accountNumber.slice(-4) : "";
+                      return (
+                        <button 
+                          key={b._id} 
+                          type="button"
+                          onClick={() => {
+                            setSelectedBankId(b._id);
+                            setFormData(p => ({ ...p, bank: name }));
+                            setBankDropdownOpen(false);
+                          }}
+                          className="flex items-center gap-2.5 w-full px-3 py-2 text-sm hover:bg-blue-50 text-left transition-colors"
+                        >
+                          <BankLogo bankName={name} size={28} />
+                          <span className="font-medium text-gray-800">{name}{branch}</span>
+                          {lastFour && <span className="text-gray-500 text-xs ml-auto">XXXX{lastFour}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div>
