@@ -42,7 +42,7 @@ import {
 import { FaWhatsapp } from "react-icons/fa";
 
 /* ─── Tab Configuration ─── */
-const tabs = ["Payments", "Notes", "Tasks", "Meetings", "Calendar"];
+const tabs = ["Overview", "Payments", "Notes", "Tasks", "Meetings", "Calendar"];
 
 /* ─── Financial Summary Icons ─── */
 const TotalReceivedIcon = () => (
@@ -206,7 +206,7 @@ const VendorDetailsPageNew = () => {
   // Tab management (synced to URL)
   const tabFromUrl = searchParams.get("tab");
   const [activeTab, setActiveTabState] = useState(
-    tabs.includes(tabFromUrl) ? tabFromUrl : "Payments"
+    tabs.includes(tabFromUrl) ? tabFromUrl : "Overview"
   );
   const setActiveTab = (tab) => {
     setActiveTabState(tab);
@@ -855,6 +855,109 @@ const VendorDetailsPageNew = () => {
                 <TabTableSkeleton />
               ) : (
                 <>
+                  {activeTab === "Overview" && (
+                    <div className="space-y-4">
+                      {/* Record counts — each tile jumps to its own tab so the
+                          overview works as navigation, not just a readout. */}
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        {[
+                          { label: "Payments", count: payments?.length || 0, icon: Receipt, tab: "Payments", color: "text-blue-600", bg: "bg-blue-50" },
+                          { label: "Tasks", count: tasks?.length || 0, icon: CheckSquare, tab: "Tasks", color: "text-indigo-600", bg: "bg-indigo-50" },
+                          { label: "Meetings", count: meetings?.length || 0, icon: Video, tab: "Meetings", color: "text-purple-600", bg: "bg-purple-50" },
+                          { label: "Notes", count: notes?.length || 0, icon: FolderOpen, tab: "Notes", color: "text-emerald-600", bg: "bg-emerald-50" },
+                        ].map((tile) => (
+                          <button
+                            key={tile.label}
+                            type="button"
+                            onClick={() => setActiveTab(tile.tab)}
+                            className="bg-white border border-gray-200 rounded-lg p-4 text-left hover:border-blue-300 hover:shadow-sm transition-all"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className={`${tile.bg} p-2 rounded-lg`}>
+                                <tile.icon className={`w-4 h-4 ${tile.color}`} />
+                              </div>
+                            </div>
+                            <p className="text-2xl font-bold text-gray-900 leading-tight">{tile.count}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{tile.label}</p>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Vendor Details */}
+                      <div className="bg-white border border-gray-200 rounded-lg p-5">
+                        <h3 className="text-sm font-semibold text-gray-900 mb-4">Vendor Details</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+                          {[
+                            { label: "Vendor Name", value: vendor?.name },
+                            { label: "Email", value: vendor?.email },
+                            { label: "Phone", value: vendor?.phone },
+                            { label: "GSTIN", value: vendor?.gstin },
+                            { label: "Website", value: vendor?.website },
+                            { label: "Status", value: vendor?.status },
+                            {
+                              label: "Address",
+                              value: [
+                                vendor?.address?.line1,
+                                vendor?.address?.line2,
+                                vendor?.address?.city,
+                                vendor?.address?.state,
+                                vendor?.address?.pincode,
+                                vendor?.address?.country,
+                              ].filter(Boolean).join(", "),
+                            },
+                          ].map((row) => (
+                            <div key={row.label} className="flex items-start justify-between gap-4 py-1.5 border-b border-gray-50 last:border-b-0">
+                              <span className="text-xs text-gray-500 flex-shrink-0">{row.label}</span>
+                              <span className="text-xs font-medium text-gray-900 text-right break-words">
+                                {row.value || "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Financial Summary — same numbers as the KPI strip
+                          above, repeated here so Overview stands alone when
+                          the KPI row is toggled off. */}
+                      <div className="bg-white border border-gray-200 rounded-lg p-5">
+                        <h3 className="text-sm font-semibold text-gray-900 mb-4">Financial Summary</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Total Received</p>
+                            <p className="text-lg font-bold text-gray-900">{fmtMoney(totalReceived)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Total Paid</p>
+                            <p className="text-lg font-bold text-gray-900">{fmtMoney(totalPaid)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Net Balance</p>
+                            <p className={`text-lg font-bold ${netBalance >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                              {fmtMoney(netBalance)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Custom Fields — only rendered when the org has
+                          defined some and this vendor has values for them. */}
+                      {vendor?.additionalFields?.length > 0 && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-5">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-4">Custom Fields</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+                            {vendor.additionalFields.map((field) => (
+                              <div key={field.key} className="flex items-start justify-between gap-4 py-1.5 border-b border-gray-50 last:border-b-0">
+                                <span className="text-xs text-gray-500 flex-shrink-0">{field.key}</span>
+                                <span className="text-xs font-medium text-gray-900 text-right break-words">
+                                  {field.value || "—"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {activeTab === "Payments" && (
                     <PaymentsTable payments={payments} vendor={vendor} />
                   )}
