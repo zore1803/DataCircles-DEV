@@ -588,7 +588,10 @@ const VendorDetailsPageNew = () => {
           the tab bar below never forces the page to scroll before the
           table is visible.
          ═══════════════════════════════════════════════════════════ */}
-      <div className="px-6 sm:px-8 pt-1">
+      {/* No extra top padding here — the page root already carries pt-6, so
+          the strip sits at the same height off the navbar as the one on
+          CompanyProfilePage.jsx. */}
+      <div className="px-6 sm:px-8">
         <div>
 
           <div className="flex flex-col min-w-0">
@@ -712,13 +715,13 @@ const VendorDetailsPageNew = () => {
         </div>
       </div>
 
-      <div className="mx-auto px-6 sm:px-8 mt-3">
+      <div className="mx-auto px-6 sm:px-8">
         {/* ═══════════════════════════════════════════════════════════
             SECTION 3 & 5 — TABS & CONTENT
            ═══════════════════════════════════════════════════════════ */}
-        {/* TABS */}
-        <div className="border-b border-gray-200 mb-4 -mx-6"></div>
-
+        {/* TABS — no divider above them: the strip's own bottom margin
+            provides the separation, same as CompanyProfilePage.jsx, and the
+            extra rule here made the strip read as cramped against it. */}
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <div ref={tabTrackRef} className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
             <span
