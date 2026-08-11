@@ -610,6 +610,7 @@ const VendorDetailsPageNew = () => {
         key: `${d.getFullYear()}-${d.getMonth()}`,
         month: d.toLocaleDateString("en-US", { month: "short" }),
         income: 0,
+        paid: 0,
       });
     }
     (payments || []).forEach((p) => {
@@ -620,7 +621,10 @@ const VendorDetailsPageNew = () => {
       const bucket = buckets.find((b) => b.key === key);
       if (!bucket) return;
       if (p.direction === "IN") bucket.income += p.amount || 0;
-      if (p.direction === "OUT") bucket.hasPayment = true;
+      if (p.direction === "OUT") {
+        bucket.paid += p.amount || 0;
+        bucket.hasPayment = true;
+      }
     });
     buckets.forEach((b) => {
       b.paidHighlight = b.hasPayment ? b.income : null;
@@ -665,7 +669,7 @@ const VendorDetailsPageNew = () => {
   };
 
   const incomeYMax = (() => {
-    const max = Math.max(0, ...monthlyIncomeData.map((b) => b.income));
+    const max = Math.max(0, ...monthlyIncomeData.map((b) => Math.max(b.income, b.paid)));
     if (max === 0) return 100;
     const magnitude = Math.pow(10, Math.floor(Math.log10(max)));
     return Math.ceil(max / magnitude) * magnitude;
@@ -1151,6 +1155,11 @@ const VendorDetailsPageNew = () => {
                                     <pattern id="vendorHatchPattern" patternUnits="userSpaceOnUse" width="9" height="8">
                                       <rect width="1" height="8" fill="rgba(0, 133, 255, 0.3)" />
                                     </pattern>
+                                    {/* Paid series — same hatch-fill treatment as Received, just red
+                                        instead of blue, so both lines read as one consistent pattern. */}
+                                    <pattern id="vendorHatchPatternRed" patternUnits="userSpaceOnUse" width="9" height="8">
+                                      <rect width="1" height="8" fill="rgba(239, 68, 68, 0.3)" />
+                                    </pattern>
                                   </defs>
                                   <CartesianGrid strokeDasharray="3 3" stroke="#E7E4E3" vertical={false} />
                                   <XAxis
@@ -1165,23 +1174,35 @@ const VendorDetailsPageNew = () => {
                                     content={({ active, payload }) => {
                                       if (!active || !payload || payload.length === 0) return null;
                                       const income = payload[0]?.payload?.income || 0;
+                                      const paid = payload[0]?.payload?.paid || 0;
                                       return (
-                                        <div style={{ position: "relative", display: "inline-block" }}>
-                                          <svg
-                                            viewBox="0 0 86 62"
-                                            preserveAspectRatio="none"
-                                            style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-                                            fill="none"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                          >
-                                            <path fillRule="evenodd" clipRule="evenodd" d="M47.5426 60.1492C45.3504 62.6169 41.7962 62.6169 39.6041 60.1492L35.7402 56.4079C34.8076 55.5049 33.5603 55 32.2621 55H22.0494C14.3824 55 11.6021 54.3038 8.79913 52.9965C5.99616 51.6892 3.79638 49.7708 2.29734 47.3263C0.7983 44.8819 0 42.4573 0 35.7709V19.2291C0 12.5427 0.7983 10.1181 2.29734 7.67366C3.79638 5.22921 5.99616 3.3108 8.79913 2.0035C11.6021 0.696192 14.3824 0 22.0494 0H63.9506C71.6176 0 74.3979 0.696192 77.2009 2.0035C80.0038 3.3108 82.2036 5.22921 83.7027 7.67366C85.2017 10.1181 86 12.5427 86 19.2291V35.7709C86 42.4573 85.2017 44.8819 83.7027 47.3263C82.2036 49.7708 80.0038 51.6892 77.2009 52.9965C74.3979 54.3038 71.6176 55 63.9506 55H56.9085C54.3122 55 51.8177 56.0098 49.9524 57.8158L47.5426 60.1492Z" fill="#21201F" />
-                                          </svg>
-                                          <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "12px 16px 22px", gap: 2, whiteSpace: "nowrap" }}>
-                                            <span style={{ color: "#fff", fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>
+                                        <div
+                                          style={{
+                                            background: "#21201F",
+                                            borderRadius: 10,
+                                            padding: "10px 14px",
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: 4,
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#0085FF", flexShrink: 0 }} />
+                                            <span style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>
                                               {`₹${income.toLocaleString("en-IN")}`}
                                             </span>
-                                            <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 500, lineHeight: 1.2 }}>
+                                            <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: 500 }}>
                                               Received
+                                            </span>
+                                          </div>
+                                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#EF4444", flexShrink: 0 }} />
+                                            <span style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>
+                                              {`₹${paid.toLocaleString("en-IN")}`}
+                                            </span>
+                                            <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: 500 }}>
+                                              Paid
                                             </span>
                                           </div>
                                         </div>
@@ -1195,6 +1216,13 @@ const VendorDetailsPageNew = () => {
                                     fill="url(#vendorHatchPattern)"
                                     isAnimationActive={false}
                                   />
+                                  <Area
+                                    type="linear"
+                                    dataKey="paid"
+                                    stroke="none"
+                                    fill="url(#vendorHatchPatternRed)"
+                                    isAnimationActive={false}
+                                  />
                                   <Bar dataKey="paidHighlight" shape={renderHighlightShape} background={{ fill: "transparent" }} isAnimationActive={false} />
                                   <Area
                                     type="linear"
@@ -1203,6 +1231,17 @@ const VendorDetailsPageNew = () => {
                                     strokeWidth={2}
                                     fill="none"
                                     dot={{ r: 3, fill: "#0085FF", strokeWidth: 0 }}
+                                    activeDot={{ r: 5 }}
+                                  />
+                                  {/* Paid — same line/dot styling as Received, just red, so both
+                                      series read as the same visual pattern. */}
+                                  <Area
+                                    type="linear"
+                                    dataKey="paid"
+                                    stroke="#EF4444"
+                                    strokeWidth={2}
+                                    fill="none"
+                                    dot={{ r: 3, fill: "#EF4444", strokeWidth: 0 }}
                                     activeDot={{ r: 5 }}
                                   />
                                 </ComposedChart>
@@ -1259,21 +1298,61 @@ const VendorDetailsPageNew = () => {
           {activeTab === "Overview" && (
           <div
             className="hidden lg:flex lg:flex-col gap-3"
-            style={{ height: leftColHeight != null ? `${leftColHeight + 80}px` : undefined }}
+            style={{ height: leftColHeight != null ? `${leftColHeight + 15}px` : undefined }}
           >
-            {/* Relationship Health — moved out of the header card so the
-                header can use its full width for vendor details. Radius is
-                smaller here than it was in the header (the sidebar card is
-                240px wide, 216px inside its padding) so the gauge fits
-                without overflowing. */}
-            <div className="flex-shrink-0 bg-gradient-to-b from-[#EAF4FF] to-[#F6FAFF] border border-[#DCEBFC] rounded-xl py-5 px-3 flex flex-col items-center justify-center">
+            {/* Vendor Snapshot — replaces the Relationship Health gauge,
+                which was a single fuzzy 0-100 score that read as "made up"
+                even once it was wired to real data. This instead surfaces
+                concrete, individually-legible facts: how long the vendor's
+                been onboarded, when they were last active, and what's
+                outstanding right now — nothing here is a synthesized score. */}
+            <div className="flex-shrink-0 bg-white border border-gray-200 rounded-xl p-4">
               {showSkeleton ? (
-                <div className="flex flex-col items-center gap-3">
-                  <Skeleton width={120} height={13} />
-                  <Skeleton width={144} height={72} shape="rect" className="rounded-t-full" />
+                <div className="space-y-3">
+                  <Skeleton width={100} height={13} />
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <Skeleton width={70} height={11} />
+                      <Skeleton width={50} height={11} />
+                    </div>
+                  ))}
                 </div>
               ) : (
-                <RelationshipGauge score={relationshipScore} label={relationshipLabel} radius={72} stroke={15} />
+                <>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Vendor Snapshot</h3>
+                  <div className="space-y-2.5">
+                    {[
+                      {
+                        label: "Onboarded",
+                        value: vendor?.createdAt
+                          ? new Date(vendor.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                          : "—",
+                      },
+                      {
+                        label: "Last Activity",
+                        value: activityFeedItems[0]
+                          ? activityFeedItems[0].date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                          : "No activity yet",
+                      },
+                      {
+                        label: "Pending Tasks",
+                        value: tasks.filter((t) => t.status !== "Completed").length,
+                        valueClass: tasks.filter((t) => t.status !== "Completed").length > 0 ? "text-amber-600" : "text-gray-900",
+                      },
+                      {
+                        label: "Upcoming Meetings",
+                        value: meetings.filter((m) => m.scheduledAt && new Date(m.scheduledAt) >= new Date()).length,
+                      },
+                    ].map((row) => (
+                      <div key={row.label} className="flex items-center justify-between gap-3">
+                        <span className="text-xs text-gray-600">{row.label}</span>
+                        <span className={`text-xs font-semibold ${row.valueClass || "text-gray-900"}`}>
+                          {row.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
 
