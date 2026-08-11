@@ -120,7 +120,26 @@ export default function BankModal({ isOpen, onClose, onSave, initialData, hasExi
       toast.error("IFSC code is required");
       return;
     }
-    // Bank name and branch are auto‑filled via IFSC fetch; validation handled after fetch
+// UPI validation (optional)
+    const upi = form.upi.trim();
+    if (upi) {
+      // No symbols before '@', no spaces, simple format check
+      const upiRegex = /^[\w.-]{2,256}@[A-Za-z0-9]{2,64}$/;
+      if (!upiRegex.test(upi)) {
+        toast.error("Invalid UPI ID format");
+        return;
+      }
+    }
+    // UPI Number validation (optional)
+    const upiNumber = form.upiNumber.trim();
+    if (upiNumber) {
+      const upiNumberRegex = /^\d{10,12}$/;
+      if (!upiNumberRegex.test(upiNumber)) {
+        toast.error("Invalid UPI Number format");
+        return;
+      }
+    }
+    // Bank name and branch are auto‑filled via IFSC fetch;
 
     const payload = {
       accountHolder: form.accountHolder.trim(),
@@ -128,7 +147,7 @@ export default function BankModal({ isOpen, onClose, onSave, initialData, hasExi
       ifscCode: form.ifscCode.trim().toUpperCase(),
       bank: form.bank.trim(),
       branch: form.branch.trim(),
-      upi: form.upi.trim(),
+      upi: upi,
       upiNumber: form.upiNumber.trim(),
       openingBalance: form.openingBalance === "" ? null : Number(form.openingBalance),
       notes: form.notes.trim(),
