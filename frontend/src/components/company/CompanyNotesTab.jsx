@@ -864,7 +864,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by note by name, deal..."
-            className="w-full h-full pl-11 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+            className="w-full h-full pl-11 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
           />
           {searchTerm && (
@@ -977,7 +977,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
           <button
             type="button"
             onClick={() => setManualEditorOpen(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+            className="flex items-center gap-1.5 h-9 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
           >
             <Plus size={16} />
             Add new

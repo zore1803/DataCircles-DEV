@@ -622,8 +622,17 @@ const CompanyCalendar = ({ companyId }) => {
             placeholder="Search Events"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-8 lg:h-9 pl-11 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
+            className="w-full h-8 lg:h-9 pl-11 lg:pl-9 pr-8 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-[#0085FF]"
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="absolute right-2.5 lg:right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         <button
