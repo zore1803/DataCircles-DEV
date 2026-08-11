@@ -2,12 +2,16 @@
 import React from "react";
 import { X, ShoppingCart, AlertTriangle, CheckCircle2 } from "lucide-react";
 import OrderSummary from "./OrderSummary";
+import TransitionConfirmationCard from "./TransitionConfirmationCard";
 
 // Coupons are applied/removed on the plans page (outside checkout) so the
 // customer sees the discount ripple across every plan/add-on card before
 // they even open checkout. This modal only DISPLAYS the already-applied
 // coupon's effect — no apply/remove controls here.
-const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwardChange, onDowngradeResolutionChange, processing }) => {
+const CheckoutSummaryModal = ({
+  checkoutData, onConfirm, onCancel, onCarryForwardChange, onDowngradeResolutionChange, processing,
+  transitionAddonChoices = {}, onTransitionAddonChoiceChange,
+}) => {
   if (!checkoutData) return null;
 
   const {
@@ -43,6 +47,21 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
     // call failed, in which case this branch falls back to the legacy
     // client-computed display below rather than showing nothing.
     pricingBreakdown,
+    // cycle_transition fields — Phase 3 (docs/audit/PHASE3_MONTHLY_TO_ANNUAL_PRORATION.md).
+    // ALL numbers here come from previewMonthlyToAnnualTransition() — nothing
+    // is computed client-side, per the same Single Source of Truth rule
+    // every other branch in this modal already follows.
+    fromPlanId, fromPricePerUser, toPlanId, toPricePerUser,
+    newAnnualValue, unusedMonthlyValue, monthsCompleted, monthsIntoWindow,
+    windowStart, windowEnd, supersedesScheduledChange, pendingCancellationWillClear,
+    // Task 2 — existing monthly add-ons offered a per-add-on keep/convert
+    // choice at this same checkout. addonConversions = 'yearly'-chosen items
+    // (itemized, real backend-computed prices); incompatibleAddons = target
+    // plan doesn't support at all (informational, access continues).
+    addonConversions = [], incompatibleAddons: transitionIncompatibleAddons = [], choosableAddons = [], totalAddonConversionAmount = 0, grandTotal,
+    // Task 4 — real backend-computed preview for a NEW single-addon purchase
+    // (null for removals/mixed selections, or if the preview call failed).
+    addonPurchasePreview,
   } = checkoutData;
 
   const prettyKey = (k) => (k || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -51,7 +70,9 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
   const isAddonRemoval = type === "addon_removal";
   const isPlanUpgrade = type === "plan_upgrade";
   const isPlanDowngrade = type === "plan_downgrade";
-  const isNewSubscription = !isAddonChange && !isAddonRemoval && !isPlanUpgrade && !isPlanDowngrade;
+  const isCycleTransition = type === "cycle_transition";
+  const isConfirmReactivate = type === "confirm_reactivate_and_change_plan";
+  const isNewSubscription = !isAddonChange && !isAddonRemoval && !isPlanUpgrade && !isPlanDowngrade && !isCycleTransition && !isConfirmReactivate;
   // For addon_change, use newTotal; for new subs/upgrades, use total
   const rawTotal = isAddonChange ? (newTotal ?? currentTotal + (addonsTotal || 0)) : total;
   // Coupon discounts the base rupee amount BEFORE GST, mirroring the backend.
@@ -89,15 +110,17 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
         {/* Header — fixed, never scrolls */}
         <div className="flex items-center justify-between p-8 pb-6 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isAddonRemoval || isPlanDowngrade ? "bg-amber-100" : "bg-blue-100"}`}>
-              {isAddonRemoval || isPlanDowngrade
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isAddonRemoval || isPlanDowngrade || isConfirmReactivate ? "bg-amber-100" : "bg-blue-100"}`}>
+              {isAddonRemoval || isPlanDowngrade || isConfirmReactivate
                 ? <AlertTriangle className="w-5 h-5 text-amber-600" />
                 : <ShoppingCart className="w-5 h-5 text-blue-600" />}
             </div>
             <h3 className="text-xl font-bold text-gray-900">
               {isAddonRemoval ? "Schedule Removal"
+                : isConfirmReactivate ? "Keep Subscription Active?"
                 : isPlanUpgrade ? `Upgrade to ${plan?.name || plan?.id || ""}`
                 : isPlanDowngrade ? `Downgrade to ${plan?.name || plan?.id || ""}`
+                : isCycleTransition ? `Switch to ${prettyKey(toPlanId)} — Annual`
                 : "Order Summary"}
             </h3>
           </div>
@@ -113,8 +136,23 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
         {/* Scrollable body — everything between header and actions */}
         <div className="px-8 pb-2 overflow-y-auto flex-1 min-h-0">
         {/* Line items */}
-        {isPlanDowngrade ? (
+        {isConfirmReactivate ? (
+          <div className="mb-4">
+            <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-3">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>
+                Your scheduled cancellation will be cancelled — choosing {plan?.name || plan?.id || "a new plan"} keeps your subscription active.
+              </span>
+            </div>
+          </div>
+        ) : isPlanDowngrade ? (
           <div className="space-y-3 mb-4">
+            {pendingCancellationWillClear && (
+              <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                <span>Your scheduled cancellation will be cancelled — choosing this plan keeps your subscription active.</span>
+              </div>
+            )}
             {/* Compatibility checks — generic renderer over downgradeChecks,
                 no business-rule knowledge here. Shown FIRST (wizard step 1):
                 validate before configuring/reviewing pricing. */}
@@ -399,6 +437,196 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
               </div>
             )}
           </div>
+        ) : isCycleTransition ? (
+          <div className="space-y-3 mb-4">
+            {/* Current -> Switching to — mirrors doc 3's exact requested
+                layout. All values are backend-computed (previewMonthlyToAnnualTransition),
+                never recalculated here. */}
+            <div className="flex items-start justify-between pb-2 border-b border-gray-100">
+              <div>
+                <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Current</span>
+                <p className="text-sm font-semibold text-gray-900 capitalize mt-0.5">{prettyKey(fromPlanId)}</p>
+                <p className="text-xs text-gray-400">{formatPrice(fromPricePerUser)}/mo · Monthly period</p>
+              </div>
+              <div className="text-right">
+                <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Switching to</span>
+                <p className="text-sm font-semibold text-gray-900 capitalize mt-0.5">{prettyKey(toPlanId)}</p>
+                <p className="text-xs text-gray-400">{formatPrice(toPricePerUser)}/yr · Annual entitlement window</p>
+              </div>
+            </div>
+
+            {/* Distinguish what this transition supersedes vs. what survives
+                untouched — settled business contract: committing this cancels
+                any pending base-plan PLAN_CHANGE/BILLING_CYCLE_CHANGE, but a
+                pending add-on removal is unaffected. The user should see this
+                before committing, not discover it after via the Timeline. */}
+            {supersedesScheduledChange && (
+              <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                <span>Your scheduled plan change will be cancelled — switching to Annual now replaces it immediately.</span>
+              </div>
+            )}
+
+            {/* Task 2: explicit per-add-on choice — 'Keep Monthly' is the
+                default and a pure no-op (never silently converted); choosing
+                'Convert to Annual' shows the REAL backend-computed prorated
+                price, itemized separately from the base transition amount
+                below. */}
+            {choosableAddons.length > 0 && (
+              <div className="space-y-2 pb-3 border-b border-gray-100">
+                <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Your existing add-ons</div>
+                {choosableAddons.map((addon) => (
+                  <div key={addon.addonKey} className="flex items-center justify-between gap-2 p-2 bg-gray-50 rounded-lg">
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-800 truncate">
+                        {prettyKey(addon.addonKey)} {addon.quantity > 1 && `×${addon.quantity}`}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {addon.chosenCycle === "yearly"
+                          ? `${formatPrice(addon.amount)} prorated for the annual window`
+                          : `${formatPrice(addon.monthlyPricePerUnit)}/mo each · billed monthly, separately`}
+                      </p>
+                      {/* Live-QA visibility fix: a pending partial removal
+                          must stay visible here — the quantity above already
+                          excludes it (backend-computed), but silently
+                          excluding it without saying so reads as a mystery
+                          discrepancy rather than a fact the user already knows. */}
+                      {addon.pendingRemovalQuantity > 0 && (
+                        <p className="text-xs text-amber-600 mt-0.5">
+                          {addon.pendingRemovalQuantity} more scheduled for removal
+                          {addon.pendingRemovalEffectiveAt ? ` on ${new Date(addon.pendingRemovalEffectiveAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""} — unaffected by this switch
+                        </p>
+                      )}
+                    </div>
+                    <div className="inline-flex rounded-md p-0.5 bg-gray-200 flex-shrink-0">
+                      {["monthly", "yearly"].map((cyc) => (
+                        <button
+                          key={cyc}
+                          type="button"
+                          disabled={cyc === "yearly" && !addon.annualPricePerUnit}
+                          onClick={() => onTransitionAddonChoiceChange && onTransitionAddonChoiceChange(addon.addonKey, cyc)}
+                          className={`px-2 py-1 rounded text-xs font-medium transition-colors disabled:opacity-40 ${
+                            addon.chosenCycle === cyc ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+                          }`}
+                        >
+                          {cyc === "monthly" ? "Keep Monthly" : "Convert to Annual"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Target plan doesn't support this add-on at all — informational
+                only, no choice offered. Access continues on its current term. */}
+            {transitionIncompatibleAddons.length > 0 && (
+              <div className="space-y-1.5 pb-3 border-b border-gray-100">
+                <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Not available on {prettyKey(toPlanId)}</div>
+                {transitionIncompatibleAddons.map((addon) => (
+                  <div key={addon.addonKey} className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                    <span>
+                      {prettyKey(addon.addonKey)} {addon.quantity > 1 && `×${addon.quantity}`} isn't available on {prettyKey(toPlanId)} —
+                      {" "}you'll keep access until {new Date(addon.effectiveAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}.
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Explanation, so the number isn't mysterious — per doc 3's own
+                framing: "explain why they're paying X rather than simply
+                displaying a mysterious number." */}
+            {monthsCompleted > 0 && (
+              <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                Your annual entitlement window is anchored to your original billing date —
+                {" "}{monthsCompleted} month{monthsCompleted === 1 ? "" : "s"} completed since then,
+                {" "}{monthsIntoWindow} month{monthsIntoWindow === 1 ? "" : "s"} into your current window.
+              </div>
+            )}
+
+            {/* Proration breakdown — exact shape requested: Annual remaining
+                value minus unused monthly value, before GST. */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">{prettyKey(toPlanId)} Annual remaining value</span>
+                <span className="text-gray-900 font-medium">{formatPrice(newAnnualValue)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Unused {prettyKey(fromPlanId)} monthly value</span>
+                <span className="text-red-600 font-medium">− {formatPrice(unusedMonthlyValue)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm font-semibold border-t border-gray-100 pt-1.5">
+                <span className="text-gray-900">Transition amount (before GST)</span>
+                <span className="text-gray-900">{formatPrice(Math.max(1, newAnnualValue - unusedMonthlyValue))}</span>
+              </div>
+            </div>
+
+            {/* GST + total — deliberately NOT reusing OrderSummary here (found
+                via live QA): its generic pricingLineItems table would show
+                the underlying invoice engine's own "Plan Price ₹0" +
+                "Prorated Adjustment ₹4,550" lines, duplicating and
+                contradicting the breakdown already shown above in
+                commercial-calculation terms. Every number below is still
+                backend-sourced (pricingBreakdown.gst/taxableAmount/total,
+                couponDiscount/referralDiscount if ever applicable) — this is
+                a display-shape choice, not a second calculation. */}
+            {pricingBreakdown && (
+              <div className="space-y-1.5 pt-1 border-t border-gray-100">
+                {pricingBreakdown.couponDiscount && (
+                  <div className="flex items-center justify-between text-sm text-red-600">
+                    <span>Coupon Discount{pricingBreakdown.couponDiscount.code ? ` (${pricingBreakdown.couponDiscount.code})` : ""}</span>
+                    <span>− {formatPrice(pricingBreakdown.couponDiscount.amount)}</span>
+                  </div>
+                )}
+                {pricingBreakdown.referralDiscount && (
+                  <div className="flex items-center justify-between text-sm text-purple-600">
+                    <span>Referral Reward</span>
+                    <span>− {formatPrice(pricingBreakdown.referralDiscount.amount)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">GST (18%)</span>
+                  <span className="text-gray-900 font-medium">+ {formatPrice(pricingBreakdown.gst)}</span>
+                </div>
+                <div className={`flex items-center justify-between text-sm ${addonConversions.length > 0 ? "" : "text-base font-bold text-gray-900 border-t border-gray-100 pt-1.5"}`}>
+                  <span className={addonConversions.length > 0 ? "text-gray-600" : ""}>{addonConversions.length > 0 ? "Base plan total" : "Total Payable"}</span>
+                  <span className={addonConversions.length > 0 ? "text-gray-900 font-medium" : ""}>{formatPrice(pricingBreakdown.total)}</span>
+                </div>
+                {/* Task 2: itemized, never folded into the base plan total
+                    above — one line per converted add-on, same
+                    backend-computed pricingBreakdown each already carries. */}
+                {addonConversions.map((c) => (
+                  <div key={c.addonKey} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">{prettyKey(c.addonKey)} → Annual (incl. GST)</span>
+                    <span className="text-gray-900 font-medium">+ {formatPrice(c.pricingBreakdown?.total || c.amount)}</span>
+                  </div>
+                ))}
+                {addonConversions.length > 0 && (
+                  <div className="flex items-center justify-between text-base font-bold text-gray-900 border-t border-gray-100 pt-1.5">
+                    <span>Total Payable</span>
+                    <span>{formatPrice(pricingBreakdown.total + addonConversions.reduce((s, c) => s + (c.pricingBreakdown?.total || 0), 0))}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
+              Your current <strong className="capitalize">{prettyKey(fromPlanId)}</strong> monthly plan will be replaced immediately.
+              Your annual billing period stays aligned with your original billing anchor and renews on{" "}
+              <strong>{formatDate(windowEnd)}</strong>.
+            </div>
+
+            {/* Task 1 (Aug 2026): a "kept Monthly" add-on's price/plan
+                details are NOT touched by this transition, but it now
+                genuinely renews and is charged every month on its own —
+                the old "unaffected" framing understated this once
+                independent per-add-on billing was built. */}
+            <p className="text-xs text-gray-400">
+              Add-ons you keep on Monthly aren't converted — they'll continue billing you every month, separately from this annual plan.
+            </p>
+          </div>
         ) : isAddonRemoval ? (
           <div className="space-y-3 mb-4">
             <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Removing</div>
@@ -441,6 +669,19 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
 
               return (
                 <>
+                  {/* Task 4: real backend-computed one-time charge, when a
+                      preview was fetched for this single-addon addition —
+                      the block below this only ever showed the resulting
+                      RECURRING total, never what gets charged today. */}
+                  {additions.length === 1 && addonPurchasePreview && (
+                    <TransitionConfirmationCard
+                      currentLabel={`${plan?.name || plan?.id || ""} — current add-ons`}
+                      targetLabel={`+ ${additions[0].delta} × ${additions[0].displayName}`}
+                      targetSubLabel={`${cycleLabel === "yr" ? "Annual" : "Monthly"} add-on`}
+                      pricingBreakdown={addonPurchasePreview.pricingBreakdown}
+                    />
+                  )}
+
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <span className="text-sm text-gray-600">Current billing</span>
                     <span className="text-sm font-semibold text-gray-800">{formatPrice(currentTotal)}/{cycleLabel}</span>
@@ -591,8 +832,8 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
           </div>
         )}
 
-        {/* Divider + Total — hidden for addon_removal, plan_upgrade, plan_downgrade (shown inline above) */}
-        {!isAddonRemoval && !isPlanUpgrade && !isPlanDowngrade && (
+        {/* Divider + Total — hidden for addon_removal, plan_upgrade, plan_downgrade, cycle_transition (shown inline above) */}
+        {!isAddonRemoval && !isPlanUpgrade && !isPlanDowngrade && !isCycleTransition && !isConfirmReactivate && (
           <>
             {isAddonChange ? (
               <>
@@ -717,6 +958,8 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
         })()}
         {isPlanDowngrade && <div className="mb-6" />}
         {isAddonRemoval && <div className="mb-6" />}
+        {isCycleTransition && <div className="mb-2" />}
+        {isConfirmReactivate && <div className="mb-2" />}
         </div>
 
         {/* Actions — fixed, never scrolls, always reachable */}
@@ -724,22 +967,28 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
           <button
             onClick={onConfirm}
             disabled={processing || (isPlanDowngrade && hasHardBlocker)}
-            className={`w-full py-3 px-4 rounded-lg font-medium disabled:opacity-50 transition-colors text-white ${isAddonRemoval || isPlanDowngrade ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700"}`}
+            className={`w-full py-3 px-4 rounded-lg font-medium disabled:opacity-50 transition-colors text-white ${isAddonRemoval || isPlanDowngrade || isConfirmReactivate ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700"}`}
           >
             {processing ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Processing...
               </span>
+            ) : isConfirmReactivate ? (
+              "Keep Active & Continue"
             ) : isAddonRemoval ? (
               "Schedule Removal"
             ) : isPlanDowngrade ? (
               "Schedule Downgrade"
+            ) : isCycleTransition ? (
+              `Continue to Payment${pricingBreakdown ? ` — ${formatPrice(
+                pricingBreakdown.total + addonConversions.reduce((s, c) => s + (c.pricingBreakdown?.total || 0), 0)
+              )}` : ""}`
             ) : isPlanUpgrade ? (
               `Pay ${formatPrice(proratedAmount + Math.round(proratedAmount * 0.18))} & Upgrade`
             ) : isAddonChange ? (
               (addonChanges || []).some((c) => c.delta > 0)
-                ? `Pay (Prorated) & Add`
+                ? `Pay${addonPurchasePreview ? ` ${formatPrice(addonPurchasePreview.prorationAmountWithGST)}` : " (Prorated)"} & Add`
                 : `Schedule Removal (no charge)`
             ) : (
               // A1 fix (found via live QA): this used to compute its own total
@@ -763,7 +1012,7 @@ const CheckoutSummaryModal = ({ checkoutData, onConfirm, onCancel, onCarryForwar
             disabled={processing}
             className="w-full bg-gray-100 text-gray-700 py-3 px-4 rounded-lg font-medium hover:bg-gray-200 transition-colors"
           >
-            Back
+            {isCycleTransition || isConfirmReactivate ? "Cancel" : "Back"}
           </button>
         </div>
       </div>

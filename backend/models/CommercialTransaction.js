@@ -20,6 +20,10 @@ const commercialTransactionSchema = new mongoose.Schema({
     enum: [
       'NEW_PURCHASE', 'UPGRADE', 'DOWNGRADE', 'ADDON_PURCHASE', 'ADDON_REMOVAL',
       'BILLING_CYCLE_CHANGE', 'CANCELLATION', 'START_TRIAL', 'CORRECTION', 'RENEWAL',
+      // Task 1 (Aug 2026) — independent per-add-on monthly renewal, separate
+      // from the base subscription's own RENEWAL, for a monthly-cadence
+      // add-on riding on an annual base plan. See utils/addonRenewalEngine.js.
+      'ADDON_RENEWAL',
     ],
     required: true,
   },

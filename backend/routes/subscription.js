@@ -45,6 +45,7 @@ router.post('/cancel', requireAuth, adminMiddleware, subscriptionController.canc
 // (pendingUpdate), reverting to no pending plan change. No "edit" endpoint
 // exists by design; re-run the downgrade flow from scratch instead.
 router.post('/downgrade/cancel', requireAuth, adminMiddleware, subscriptionController.cancelScheduledDowngrade);
+router.post('/cancellation/undo', requireAuth, adminMiddleware, subscriptionController.undoCancellation);
 
 
 // New payment-related routes
@@ -53,6 +54,7 @@ router.get('/payments', requireAuth, adminMiddleware, subscriptionController.get
 router.get('/billing-events', requireAuth, adminMiddleware, subscriptionController.getBillingTimeline);
 router.get('/scheduled-changes', requireAuth, adminMiddleware, subscriptionController.getScheduledChanges);
 router.get('/renewal-preview', requireAuth, adminMiddleware, subscriptionController.getRenewalPreview);
+router.get('/billing-projection', requireAuth, adminMiddleware, subscriptionController.getBillingProjection);
 router.get('/payments/:paymentId', requireAuth, adminMiddleware, subscriptionController.getPaymentDetails);
 router.post('/:id/retry-payment', requireAuth, adminMiddleware, subscriptionController.retryPayment);
 
@@ -68,8 +70,16 @@ router.post('/addons/seats', requireAuth, adminMiddleware, subscriptionControlle
 // Generic add-on catalog endpoints
 router.get('/addons', requireAuth, adminMiddleware, subscriptionController.getAvailableAddons);
 router.get('/addons/compatibility', requireAuth, adminMiddleware, subscriptionController.checkAddonCompatibility);
+// Phase 3 — Monthly -> Annual base-plan cadence transition
+router.get('/cycle-transition/monthly-to-annual/preview', requireAuth, adminMiddleware, subscriptionController.previewMonthlyToAnnualTransition);
+router.post('/cycle-transition/monthly-to-annual', requireAuth, adminMiddleware, subscriptionController.initiateMonthlyToAnnualTransition);
+router.get('/reactivation/preview', requireAuth, adminMiddleware, subscriptionController.previewReactivation);
+router.post('/reactivation', requireAuth, adminMiddleware, subscriptionController.initiateReactivation);
+router.get('/addons/purchase/preview', requireAuth, adminMiddleware, subscriptionController.previewAddonPurchase);
 router.post('/addons/purchase', requireAuth, adminMiddleware, subscriptionController.initiateAddonPurchase);
 router.post('/addons/remove', requireAuth, adminMiddleware, subscriptionController.scheduleAddonRemovalEndpoint);
+// Phase 2d.1 — read-only preview of a removal's effectiveAt before committing.
+router.get('/addons/remove/preview', requireAuth, adminMiddleware, subscriptionController.previewAddonRemoval);
 router.post('/addons/adjust', requireAuth, adminMiddleware, subscriptionController.adjustAddon);
 
 // Coupon preview (plans page) — order-level eligibility + rules, no line items

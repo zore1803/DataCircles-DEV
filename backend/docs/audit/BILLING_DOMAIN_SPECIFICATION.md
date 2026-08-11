@@ -2572,6 +2572,22 @@ relationships:
    Components, Scheduled Changes, and Mandate, with no crossing between it and any prior Subscription
    the same Organization once had.
 
+   **AMENDED (Aug 2026, Task D — "Reactivation after annual term lapse"):** statement 4 above is
+   overridden specifically for the case of a subscription whose `cancelAtPeriodEnd` scheduled
+   cancellation has taken effect (cron-finalized to `appStatus: 'cancelled'`) and the SAME
+   organization now wants back in before starting a wholly new commercial relationship. This is
+   NOT the general "organization was cancelled long ago, later becomes a brand-new customer" case
+   this statement was written for — explicitly decided to reuse the SAME Subscription record and
+   preserve its original `billingAnchor`, routed through the existing plan-purchase/transition
+   flow (`updateSubscription` with `reactivateAndProceed: true`, same mechanism as Task B), rather
+   than creating a new Subscription with a fresh anchor. Rationale: the anchor-lifetime rule
+   ("first payment ever, never resets") is meant to protect the customer's original entitlement-
+   window cadence across cancel/resume cycles on what is, from the customer's perspective, one
+   ongoing relationship — not just across in-flight billing operations. A genuinely new Subscription
+   record (fresh anchor) remains correct for a truly new commercial relationship (e.g. a different
+   plan tier entirely, long after lapse, treated as a fresh signup) — this amendment only covers
+   the "same org, wants back in on essentially the same terms" reactivation path.
+
 **Why this is a correction to how this document had been reasoning, not just a tie-breaker between
 two prior statements:** the Subscription was being treated, in places, as *the* permanent container —
 Chapter 4.2 and Chapter 10 Object 1 correctly said a cancelled Subscription is never resurrected, but

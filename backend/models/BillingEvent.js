@@ -52,6 +52,10 @@ const billingEventSchema = new mongoose.Schema({
       'PLAN_DOWNGRADE',
       'DOWNGRADE_SCHEDULED',
       'BILLING_CYCLE_CHANGE_SCHEDULED',
+      // Phase 3 (docs/audit/PHASE3_MONTHLY_TO_ANNUAL_PRORATION.md) — the
+      // IMMEDIATE Monthly->Annual transition, distinct from the *_SCHEDULED
+      // value above (which is the deferred non-UPI cycle-change path).
+      'BILLING_CYCLE_CHANGE_COMPLETED',
       'SCHEDULE_CANCELLED',
       'ADDON_ADDED',
       'ADDON_REMOVAL_SCHEDULED',

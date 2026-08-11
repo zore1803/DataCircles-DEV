@@ -1,9 +1,10 @@
 // components/settings/SubscriptionPlans.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { Gift, Building2, Star, Crown, CheckCircle, AlertCircle, X, Users } from "lucide-react";
+import { Gift, Building2, Star, Crown, CheckCircle, AlertCircle, X, Users, Calendar } from "lucide-react";
 import { useSubscription } from "../../contexts/SubscriptionContext";
 import PlanCard from "../subscription/PlanCard";
 import CurrentSubscriptionInfo from "../subscription/CurrentSubscriptionInfo";
+import BillingCalendarModal from "../subscription/BillingCalendarModal";
 import TrialModal from "../subscription/TrialModal";
 import BillingProfileModal from "../subscription/BillingProfileModal";
 import CheckoutSummaryModal from "../subscription/CheckoutSummaryModal";
@@ -13,7 +14,7 @@ import useRazorpay from "../../hooks/useRazorpay";
 import PaymentStatusAlert from "../subscription/PaymentStatusAlert";
 import { subscriptionAPI } from "../../services/subscriptionApi";
 import SuccessConfetti from "../subscription/SuccessConfetti";
-import { hasValidPendingUpdate, deriveSubscriptionUIState, SUBSCRIPTION_UI_STATES } from "../../utils/subscriptionHelpers";
+import { hasValidPendingUpdate, deriveSubscriptionUIState, SUBSCRIPTION_UI_STATES, resolveBaseCardAction } from "../../utils/subscriptionHelpers";
 import { formatPrice } from "../../utils/pricingSnapshot";
 import { waitForSettlement } from "../../utils/waitForSettlement";
 import { Tag, CheckCircle2 } from "lucide-react";
@@ -50,6 +51,7 @@ const SubscriptionPlans = () => {
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem("user") || "{}"));
   const isAdmin = currentUser?.role === "admin";
   const [showBillingProfileModal, setShowBillingProfileModal] = useState(false);
+  const [showBillingCalendar, setShowBillingCalendar] = useState(false);
 
   const [billingCycle, setBillingCycle] = useState("monthly");
   const [processing, setProcessing] = useState(false);
@@ -66,7 +68,26 @@ const SubscriptionPlans = () => {
   // Add-on state
   const [planAddons, setPlanAddons] = useState({}); // { [planId]: addon[] }
   const [expandedPlan, setExpandedPlan] = useState(null); // planId of expanded card
-  const [selectedAddons, setSelectedAddons] = useState({}); // { [addonKey]: quantity }
+  // Live-QA architecture fix (Aug 2026): this used to be a single flat
+  // { [addonKey]: quantity } map shared by EVERY plan card — configuring
+  // add-ons on Starter while browsing would silently show up on Growth's
+  // card too, since both cards read/wrote the exact same object. Each plan
+  // card's add-on configuration is its own independent thing (browsing
+  // Starter's hypothetical add-ons must never touch Growth's), so this is
+  // now keyed per plan: { [planId]: { [addonKey]: quantity } }.
+  const [selectedAddons, setSelectedAddons] = useState({}); // { [planId]: { [addonKey]: quantity } }
+  // Which cycle a NEW add-on purchase targets, independent of the page-level
+  // billingCycle toggle — an annual base plan (or a plan being configured
+  // while browsing Annual mode) can hold either cycle of add-on; Monthly
+  // mode has no such choice (a monthly plan can only ever hold monthly
+  // add-ons). Same per-plan-card independence as selectedAddons above — a
+  // single global value here caused the exact same cross-card leak.
+  const [addonPurchaseCycle, setAddonPurchaseCycle] = useState({}); // { [planId]: 'monthly' | 'yearly' }
+  // Task 2: per-add-on choice at the Monthly->Annual transition checkout —
+  // { [addonKey]: 'monthly' | 'yearly' }. Any add-on not present here
+  // defaults to 'monthly' (keep, no-op) server-side — never silently
+  // converted. Reset each time the transition confirmation is (re)opened.
+  const [transitionAddonChoices, setTransitionAddonChoices] = useState({});
   const [checkoutData, setCheckoutData] = useState(null); // modal data, null = closed
 
   // Coupon applied on this page (before checkout). Holds { code, name, rules }.
@@ -186,6 +207,28 @@ const SubscriptionPlans = () => {
       setMessage({
         type: "error",
         text: error.response?.data?.error || "Failed to cancel subscription",
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Task 2 (Aug 2026): the gap found while auditing cancellation states —
+  // Task B's reactivateAndProceed requires picking a DIFFERENT plan; this is
+  // the "just undo it, same plan" path that had no button at all before.
+  const handleUndoCancellation = async () => {
+    setProcessing(true);
+    try {
+      const response = await subscriptionAPI.undoCancellation();
+      setMessage({
+        type: "success",
+        text: response.data.message || "Cancellation undone. Your subscription remains active.",
+      });
+      await fetchSubscription();
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error.response?.data?.error || "Failed to undo cancellation",
       });
     } finally {
       setProcessing(false);
@@ -433,10 +476,16 @@ const SubscriptionPlans = () => {
   };
 
   // Toggle expansion of a plan card and lazily load its add-ons
-  const handleRemoveAddon = (addonKey, displayName) => {
+  const handleRemoveAddon = (addonKey, displayName, addonCycle) => {
     const sub = subscription?.subscription;
-    const activeAddon = (sub?.activeAddons || []).find((a) => a.addonKey === addonKey);
+    // Monthly and Annual are independent instances of the same addonKey
+    // (Phase 2d.1) — must match on both, or removing the annual instance
+    // could pick up the monthly one's pricePerUnit/periodEnd instead.
+    const activeAddon = (sub?.activeAddons || []).find(
+      (a) => a.addonKey === addonKey && (addonCycle ? (a.billingCycle || sub.billingCycle) === addonCycle : true)
+    );
     if (!activeAddon) return;
+    const resolvedCycle = activeAddon.billingCycle || sub.billingCycle;
     // effectiveRecurringTotal (from getScheduledChanges) is null when
     // nothing is currently scheduled — falls back to the raw total in that
     // case, but whenever another change is already pending (e.g. a
@@ -452,8 +501,12 @@ const SubscriptionPlans = () => {
       pricePerUnit: activeAddon.pricePerUnit,
       currentTotal,
       newRecurringTotal: currentTotal - activeAddon.pricePerUnit,
-      effectiveAt: sub.currentPeriodEnd,
-      billingCycle: sub.billingCycle,
+      // This add-on's OWN term end, not the base plan's currentPeriodEnd —
+      // an annual add-on outlives a monthly renewal cycle, so the two can
+      // legitimately differ (this was showing the wrong date for annual
+      // add-ons before this fix).
+      effectiveAt: activeAddon.periodEnd || sub.currentPeriodEnd,
+      billingCycle: resolvedCycle,
     });
   };
 
@@ -464,7 +517,10 @@ const SubscriptionPlans = () => {
     }
     setExpandedPlan(planId);
 
-    setSelectedAddons({});
+    // No longer resets selectedAddons/addonPurchaseCycle here — both are now
+    // keyed per-plan, so expanding a DIFFERENT plan can never touch this
+    // plan's own selections, and re-expanding the SAME plan correctly keeps
+    // whatever the user had already configured instead of discarding it.
     if (!planAddons[planId]) {
       try {
         const res = await subscriptionAPI.getAddonsForPlan(planId, billingCycle);
@@ -476,8 +532,53 @@ const SubscriptionPlans = () => {
     }
   };
 
+  // Task 2: fetches (or re-fetches, when the user toggles a per-add-on
+  // choice) the Monthly->Annual transition preview and populates the
+  // confirmation modal. Extracted so both the initial open and any later
+  // choice change go through the exact same call — the displayed numbers
+  // always come from this one backend preview, never recomputed locally.
+  const fetchTransitionPreview = async (plan, addonChoices) => {
+    try {
+      setProcessing(true);
+      const preview = await subscriptionAPI.previewMonthlyToAnnualTransition(plan.id, addonChoices);
+      setProcessing(false);
+      // Distinguish what this transition actually supersedes: the backend
+      // cancels any pending PLAN_CHANGE/BILLING_CYCLE_CHANGE on commit (see
+      // subscriptionController.js's cycle-transition webhook branch), but
+      // leaves REMOVE_ADDON scheduled changes untouched (settled business
+      // contract — add-on removals survive a base-plan cycle switch). The
+      // user should see that distinction BEFORE committing, not discover it
+      // after the fact via the Timeline.
+      const pendingBasePlanChange = (scheduledChanges || []).find(
+        (c) => c.type === "PLAN_CHANGE" || c.type === "BILLING_CYCLE_CHANGE"
+      );
+      setCheckoutData({
+        type: "cycle_transition",
+        plan,
+        ...preview.data,
+        supersedesScheduledChange: !!pendingBasePlanChange,
+      });
+    } catch (err) {
+      setProcessing(false);
+      const apiError = err.response?.data;
+      setMessage({
+        type: "error",
+        text: apiError?.code === "DOWNGRADE_INELIGIBLE"
+          ? apiError.error
+          : (apiError?.error || "Failed to load the annual switch preview. Please try again."),
+      });
+    }
+  };
+
+  const handleTransitionAddonChoiceChange = (addonKey, choice) => {
+    const next = { ...transitionAddonChoices, [addonKey]: choice };
+    setTransitionAddonChoices(next);
+    fetchTransitionPreview(checkoutData.plan, next);
+  };
+
   // Open the checkout summary modal instead of going straight to Razorpay
-  const handlePlanSelection = async (plan) => {
+  const handlePlanSelection = async (plan, opts = {}) => {
+    const { reactivateAndProceed = false } = opts;
     if (!isAdmin) {
       setMessage({
         type: "error",
@@ -491,6 +592,11 @@ const SubscriptionPlans = () => {
       setShowTrialModal(true);
       return;
     }
+
+    // Scoped to THIS plan only — see selectedAddons' own declaration comment
+    // for why a bare global read here was the cross-card leak bug.
+    const planSelectedAddons = selectedAddons[plan.id] || {};
+    const planAddonCycle = addonPurchaseCycle[plan.id] || null;
 
     const addons = planAddons[plan.id] || [];
 
@@ -514,7 +620,7 @@ const SubscriptionPlans = () => {
     const isResumingSamePendingPlan =
       pendingSub && !pendingSub.isPaymentConfirmed &&
       pendingSub.planName === plan.id && pendingSub.billingCycle === billingCycle &&
-      Object.keys(selectedAddons).length === 0;
+      Object.keys(planSelectedAddons).length === 0;
 
     const selectedAddonsList = isResumingSamePendingPlan
       ? (pendingSub.activeAddons || []).map((persisted) => {
@@ -527,11 +633,11 @@ const SubscriptionPlans = () => {
           };
         })
       : addons
-          .filter((a) => (selectedAddons[a.key] || 0) > 0)
+          .filter((a) => (planSelectedAddons[a.key] || 0) > 0)
           .map((a) => ({
             ...a,
-            quantity: selectedAddons[a.key],
-            subtotal: selectedAddons[a.key] * (billingCycle === "yearly" ? a.price?.yearly : a.price?.monthly),
+            quantity: planSelectedAddons[a.key],
+            subtotal: planSelectedAddons[a.key] * (billingCycle === "yearly" ? a.price?.yearly : a.price?.monthly),
           }));
 
     const basePrice = billingCycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
@@ -542,6 +648,35 @@ const SubscriptionPlans = () => {
       subscription?.subscription?.isPaymentConfirmed &&
       !subscription?.subscription?.isTrialActive;
 
+    // Phase 3 (docs/audit/PHASE3_MONTHLY_TO_ANNUAL_PRORATION.md): a Monthly ->
+    // Annual base-plan transition — same tier or cross-tier (settled this
+    // session: cross-tier is an intended, immediate action, generalizing the
+    // same proration formula). Takes priority over the upgrade/downgrade/
+    // same-plan branches below, since this is a distinct flow with its own
+    // backend endpoint (proration, eligibility gating for a cross-tier
+    // downgrade, and ScheduledChange supersession all handled server-side —
+    // this branch only needs to call it and handle the one-time Order
+    // payment, mirroring the add-on-purchase Razorpay flow exactly).
+    // Annual -> Monthly is NOT handled here (settled separately as
+    // cancel -> wait for term end -> resubscribe, not a live transition).
+    const isMonthlyToAnnualTransition =
+      isExistingActiveSub &&
+      resolveBaseCardAction(subscription.subscription, plan.id, billingCycle) === "SWITCH_TO_ANNUAL";
+
+    if (isMonthlyToAnnualTransition) {
+      // Missing-frontend-requirement fix (found via live QA, Aug 2026): this
+      // used to call initiateMonthlyToAnnualTransition (which creates a real
+      // Order) directly and jump straight to Razorpay — skipping our own
+      // confirmation screen entirely. Now calls the read-only PREVIEW
+      // endpoint first (creates nothing), shows CheckoutSummaryModal's new
+      // "cycle_transition" branch explaining the calculation, and only calls
+      // the real initiate endpoint (which DOES create the Order) after the
+      // user clicks "Continue to Payment" — see handleConfirmCheckout below.
+      setTransitionAddonChoices({}); // fresh modal open — no choices made yet, default 'monthly' for every add-on
+      await fetchTransitionPreview(plan, {});
+      return;
+    }
+
     const isSamePlan =
       subscription?.subscription?.planName === plan.id &&
       subscription?.subscription?.billingCycle === billingCycle;
@@ -551,11 +686,20 @@ const SubscriptionPlans = () => {
       const currentAddons = subscription.subscription.activeAddons || [];
       const allPlanAddons = planAddons[plan.id] || [];
 
-      // selectedAddons[key] now represents HOW MANY MORE to add (delta), not total
+      // Which cycle a NEW purchase targets — an annual base plan may choose
+      // either (addonPurchaseCycle, set via the per-purchase selector on the
+      // card), a monthly base plan has no choice at all (must stay monthly,
+      // per the business contract). Only a single value is needed, not a
+      // per-addonKey one, since only one add-on can be purchased per confirm
+      // (enforced below in handleConfirmCheckout).
+      const purchaseCycle =
+        subscription.subscription.billingCycle === "yearly" ? (planAddonCycle || "yearly") : "monthly";
+
+      // planSelectedAddons[key] now represents HOW MANY MORE to add (delta), not total
       const addonChanges = allPlanAddons
         .map((a) => {
           const currentQty = currentAddons.find((c) => c.addonKey === a.key)?.quantity || 0;
-          const delta = selectedAddons[a.key] || 0;
+          const delta = planSelectedAddons[a.key] || 0;
           const newQty = currentQty + delta;
           return {
             addonKey: a.key,
@@ -563,7 +707,8 @@ const SubscriptionPlans = () => {
             delta,
             currentQty,
             newQty,
-            pricePerUnit: billingCycle === "yearly" ? a.price?.yearly : a.price?.monthly,
+            billingCycle: purchaseCycle,
+            pricePerUnit: purchaseCycle === "yearly" ? a.price?.yearly : a.price?.monthly,
           };
         })
         .filter((c) => c.delta > 0); // removals go through the × button, not this path
@@ -580,19 +725,43 @@ const SubscriptionPlans = () => {
       const currentTotal = effectiveRecurringTotal ?? subscription.subscription.totalAmount ?? basePrice;
       const deltaTotal = addonChanges.reduce((sum, c) => sum + c.delta * c.pricePerUnit, 0);
 
+      // Task 4: for a single-addon ADDITION, fetch the real backend-computed
+      // prorated charge before showing the confirmation — previously this
+      // modal only ever showed a client-side recurring-total estimate, never
+      // the actual one-time amount that gets charged today. Skipped for
+      // mixed/multi-addon selections (already blocked at commit anyway, "one
+      // add-on at a time") and for pure removals (no charge to preview).
+      let addonPurchasePreview = null;
+      if (addonChanges.length === 1) {
+        try {
+          const previewRes = await subscriptionAPI.previewAddonPurchase({
+            addonKey: addonChanges[0].addonKey,
+            quantity: addonChanges[0].delta,
+            billingCycle: purchaseCycle,
+          });
+          addonPurchasePreview = previewRes.data;
+        } catch (previewErr) {
+          console.error("previewAddonPurchase failed (falling back to estimate-only display):", previewErr);
+        }
+      }
+
       setCheckoutData({
         type: "addon_change",
         plan,
         addonChanges,
         currentTotal,
         newTotal: currentTotal + deltaTotal,
-        billingCycle,
+        // The cycle actually being PURCHASED (per-add-on choice on an annual
+        // base), not necessarily the page's browsing toggle — those two only
+        // coincide by construction on a monthly base.
+        billingCycle: purchaseCycle,
+        addonPurchasePreview,
         selectedAddonsList: addonChanges.map((c) => ({
           key: c.addonKey,
           displayName: c.displayName,
           quantity: c.delta,
           subtotal: c.delta * c.pricePerUnit,
-          price: { [billingCycle]: c.pricePerUnit },
+          price: { [purchaseCycle]: c.pricePerUnit },
         })),
       });
       return;
@@ -619,7 +788,7 @@ const SubscriptionPlans = () => {
 
         // New addons the user selected on the target plan card
         const targetPlanAddons = planAddons[plan.id] || [];
-        const newSelectedAddons = Object.entries(selectedAddons)
+        const newSelectedAddons = Object.entries(planSelectedAddons)
           .filter(([key, qty]) => qty > 0 && targetPlanAddons.some((a) => a.key === key))
           .map(([key, qty]) => {
             const addonDef = targetPlanAddons.find((a) => a.key === key);
@@ -667,6 +836,11 @@ const SubscriptionPlans = () => {
           type: "plan_downgrade",
           plan,
           billingCycle,
+          // Task B: picking a new plan while a cancellation is scheduled
+          // implicitly cancels that cancellation and proceeds — same
+          // precedent as the annual transition superseding a pending
+          // PLAN_CHANGE. Surfaced so the modal can warn before commit.
+          pendingCancellationWillClear: !!subscription?.subscription?.cancelAtPeriodEnd,
           newBasePrice,
           newRecurringTotal,
           periodEnd: subscription?.subscription?.currentPeriodEnd,
@@ -700,10 +874,30 @@ const SubscriptionPlans = () => {
       try {
         setProcessing(true);
         // Pass add-ons the user selected on this plan card as NEW purchases
-        const newAddons = Object.entries(selectedAddons)
+        const newAddons = Object.entries(planSelectedAddons)
           .filter(([, qty]) => qty > 0)
           .map(([key, qty]) => ({ key, quantity: qty }));
-        const resp = await updateSubscription({ planId: plan.id, billingCycle, addons: newAddons });
+        // Task B: a scheduled cancellation blocks updateSubscription by
+        // default (CANCELLATION_PENDING). Confirm with the user first —
+        // picking a new plan implicitly cancels the scheduled cancellation,
+        // same precedent as the annual transition superseding a pending
+        // PLAN_CHANGE — then retry with the explicit opt-in flag.
+        if (subscription?.subscription?.cancelAtPeriodEnd && !reactivateAndProceed) {
+          setProcessing(false);
+          setCheckoutData({
+            type: "confirm_reactivate_and_change_plan",
+            plan,
+            billingCycle,
+            pendingAction: () => handlePlanSelection(plan, { reactivateAndProceed: true }),
+          });
+          return;
+        }
+        const resp = await updateSubscription({
+          planId: plan.id,
+          billingCycle,
+          addons: newAddons,
+          ...(reactivateAndProceed ? { reactivateAndProceed: true } : {}),
+        });
         setProcessing(false);
         if (resp?.paymentDetails) {
           // First response (no carryForward override sent) reflects the FULL
@@ -1041,6 +1235,85 @@ const SubscriptionPlans = () => {
     setMessage("");
 
     try {
+      // Task B: lightweight confirm-only step (no pricing to show) — just
+      // re-runs the original action with the reactivate flag now confirmed.
+      if (checkoutData.type === "confirm_reactivate_and_change_plan") {
+        const action = checkoutData.pendingAction;
+        setCheckoutData(null);
+        setProcessing(false);
+        if (action) await action();
+        return;
+      }
+
+      // Monthly -> Annual cycle transition — "Continue to Payment" from our
+      // own confirmation screen. Unlike plan_upgrade, the Order is NOT
+      // already created (the preview step that populated this modal creates
+      // nothing) — it's created here, now, only once the user has actually
+      // confirmed. Settlement is webhook-driven (pendingCycleTransition
+      // clearing), same pattern as add-on purchase, NOT verifyPayment —
+      // the backend commit logic for this transition lives in the
+      // payment.captured webhook handler, not the verify-payment endpoint.
+      if (checkoutData.type === "cycle_transition") {
+        try {
+          const result = await subscriptionAPI.initiateMonthlyToAnnualTransition({
+            targetPlanId: checkoutData.toPlanId,
+            addonChoices: transitionAddonChoices,
+          });
+          const { paymentDetails } = result.data;
+          setCheckoutData(null);
+          setProcessing(false);
+          setPaymentInProgress(true);
+          setCheckoutJourneyState("preparing_payment");
+
+          setTimeout(() => {
+            openCheckout({
+              ...paymentDetails,
+              handler: async function () {
+                setCheckoutJourneyState("confirming_payment");
+                setMessage({ type: "success", text: "Payment received! Switching to annual billing..." });
+                const settleResult = await waitForSettlement({
+                  fetchLatest: fetchSubscription,
+                  isSettled: (data) => !!data && !data.subscription?.pendingCycleTransition?.orderId,
+                  intervalMs: 3000,
+                  timeoutMs: 30000,
+                });
+                if (pollCancelledRef.current) return;
+                setPaymentInProgress(false);
+                if (settleResult.settled) {
+                  setCheckoutJourneyState("success");
+                  setMessage({ type: "success", text: "You're now on annual billing!" });
+                  setTimeout(() => {
+                    setCheckoutJourneyState(null);
+                    setShowConfetti(true);
+                    setTimeout(() => setShowConfetti(false), 3500);
+                  }, 2000);
+                } else {
+                  setCheckoutJourneyState(null);
+                  setMessage({ type: "warning", text: "Payment confirmed. Your annual plan will activate shortly — refresh if it doesn't appear." });
+                }
+              },
+              modal: {
+                ondismiss: function () {
+                  setMessage({ type: "warning", text: "Payment cancelled. Still on your current monthly plan." });
+                  setPaymentInProgress(false);
+                  setCheckoutJourneyState(null);
+                },
+              },
+            });
+          }, 500);
+        } catch (err) {
+          setProcessing(false);
+          const apiError = err.response?.data;
+          setMessage({
+            type: "error",
+            text: apiError?.code === "DOWNGRADE_INELIGIBLE"
+              ? apiError.error
+              : (apiError?.error || "Failed to start the annual switch. Please try again."),
+          });
+        }
+        return;
+      }
+
       // Plan upgrade — Order already created at preview; just open Razorpay
       if (checkoutData.type === "plan_upgrade") {
         const details = checkoutData.paymentDetails;
@@ -1091,6 +1364,11 @@ const SubscriptionPlans = () => {
           userCount: checkoutData.userCount,
           carryForward,
           addons: resolutionAddonsPayload,
+          // Task B: the user already saw and confirmed the "your scheduled
+          // cancellation will be cancelled" warning in THIS same modal
+          // (pendingCancellationWillClear), so no separate confirm step is
+          // needed here — just opt in.
+          ...(checkoutData.pendingCancellationWillClear ? { reactivateAndProceed: true } : {}),
         });
         setCheckoutData(null);
         await fetchSubscription();
@@ -1110,6 +1388,7 @@ const SubscriptionPlans = () => {
         const result = await subscriptionAPI.scheduleAddonRemoval({
           addonKey: checkoutData.addonKey,
           quantity: 1,
+          billingCycle: checkoutData.billingCycle,
         });
         const effectiveDate = new Date(result.data.effectiveAt).toLocaleDateString('en-IN', {
           day: 'numeric', month: 'short', year: 'numeric',
@@ -1141,6 +1420,7 @@ const SubscriptionPlans = () => {
               await subscriptionAPI.scheduleAddonRemoval({
                 addonKey: change.addonKey,
                 quantity: Math.abs(change.delta),
+                billingCycle: checkoutData.billingCycle,
               });
             }
             setCheckoutData(null);
@@ -1164,6 +1444,7 @@ const SubscriptionPlans = () => {
           const result = await subscriptionAPI.initiateAddonPurchase({
             addonKey: change.addonKey,
             quantity: change.delta,
+            billingCycle: checkoutData.billingCycle,
           });
 
           const { paymentDetails } = result.data;
@@ -1259,14 +1540,15 @@ const SubscriptionPlans = () => {
       // inherit a stale code from sessionStorage.
       try { sessionStorage.removeItem(PENDING_COUPON_STORAGE_KEY); } catch { /* non-fatal */ }
 
-      // A2 fix (found via live QA — plan-card price drift, ₹650 → ₹637 → ₹342
-      // for the same Business card): selectedAddons is a single flat map
-      // keyed only by addonKey, shared across every plan card (it is NOT
-      // scoped per plan). An addon key can legitimately exist on more than
-      // one plan's catalog, so a leftover quantity chosen on one card's
-      // expanded panel silently survived into another card's price math
-      // after this completion branch — every OTHER completion path already
-      // resets it (see the addon_change branches above), this one didn't.
+      // A2 (found via live QA — plan-card price drift, ₹650 → ₹637 → ₹342 for
+      // the same Business card): selectedAddons USED TO BE a single flat map
+      // keyed only by addonKey, shared across every plan card — an addon key
+      // existing on more than one plan's catalog let a leftover quantity
+      // chosen on one card's panel silently survive into another card's
+      // price math. Now genuinely scoped per plan (see its own declaration
+      // comment), so this can no longer leak across cards either way — kept
+      // as a full reset anyway since checkout has just completed and every
+      // card's in-progress configuration is stale regardless.
       setSelectedAddons({});
       setCheckoutData(null);
 
@@ -1560,6 +1842,8 @@ const SubscriptionPlans = () => {
         onCancel={() => setCheckoutData(null)}
         onCarryForwardChange={checkoutData?.type === "plan_downgrade" ? handleDowngradeCarryForwardChange : handleCarryForwardChange}
         onDowngradeResolutionChange={handleDowngradeResolutionChange}
+        transitionAddonChoices={transitionAddonChoices}
+        onTransitionAddonChoiceChange={handleTransitionAddonChoiceChange}
         processing={processing}
       />
 
@@ -1581,8 +1865,18 @@ const SubscriptionPlans = () => {
         onClose={() => setShowBillingProfileModal(false)}
       />
 
+      <BillingCalendarModal isOpen={showBillingCalendar} onClose={() => setShowBillingCalendar(false)} />
+
       <div>
         <div className="text-center mb-8">
+          {subscription?.subscription && (
+            <button
+              onClick={() => setShowBillingCalendar(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:underline mb-3"
+            >
+              <Calendar className="w-3.5 h-3.5" /> View Billing Calendar
+            </button>
+          )}
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Choose Your Plan</h1>
           <p className="text-gray-600 text-sm max-w-2xl mx-auto mb-6">
             Flexible pricing for teams of all sizes. Start with a free trial or scale with annual savings.
@@ -1964,6 +2258,13 @@ const SubscriptionPlans = () => {
                       </strong>
                       . You will continue to have access to all features until then.
                     </p>
+                    <button
+                      onClick={handleUndoCancellation}
+                      disabled={processing || paymentInProgress}
+                      className="mt-2 text-sm font-medium text-yellow-900 underline hover:text-yellow-700 disabled:opacity-50"
+                    >
+                      Undo Cancellation
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1995,16 +2296,51 @@ const SubscriptionPlans = () => {
                 currentSubscription={subscription?.subscription}
                 billingCycle={billingCycle}
                 onSelectPlan={handlePlanSelection}
-                processing={processing || paymentInProgress || !!subscription?.subscription?.cancelAtPeriodEnd}
-                locked={hasValidPendingUpdate(subscription?.subscription)}
-                isScheduledTarget={hasValidPendingUpdate(subscription?.subscription) && subscription?.subscription?.pendingUpdate?.planName === plan.id}
+                /* Bug found via live QA (Aug 2026): cancelAtPeriodEnd used to
+                   be OR'd into `processing` — but PlanCard.jsx's button
+                   renders a literal spinner + "Processing..." label
+                   whenever `processing` is truthy, with no regard for
+                   `action`. cancelAtPeriodEnd is a PERMANENT flag (stays
+                   true for the rest of the billing term, not a transient
+                   in-flight request), so every card got stuck showing
+                   "Processing..." forever after a successful cancellation —
+                   a real, live-blocking regression, not the same root cause
+                   as the earlier CAW razorpay.subscriptions.cancel() bug
+                   (verified separately, traced to this exact prop wiring
+                   instead). `processing` must only ever reflect an ACTUAL
+                   in-flight request. A pending cancellation is a `locked`
+                   concept (this codebase's own existing "disabled without
+                   spinner" pattern, see PlanCard.jsx's `locked` prop
+                   comment) — folded in below instead. */
+                processing={processing || paymentInProgress}
+                /* Phase 3 full-context-switch fix: a monthly-only scheduled
+                   change (pendingUpdate) must never lock/target-mark cards
+                   while viewing Annual — that pending change belongs to the
+                   committed monthly cycle, not to a fresh annual purchase
+                   context. Gated on billingCycle matching the subscription's
+                   OWN committed cycle, exactly like isCurrentPlan() already
+                   does in PlanCard.jsx. cancelAtPeriodEnd is cycle-agnostic
+                   (a cancellation freezes billing changes regardless of
+                   which cycle is being viewed), so it's OR'd in unconditionally. */
+                locked={
+                  (billingCycle === subscription?.subscription?.billingCycle && hasValidPendingUpdate(subscription?.subscription)) ||
+                  !!subscription?.subscription?.cancelAtPeriodEnd
+                }
+                isScheduledTarget={billingCycle === subscription?.subscription?.billingCycle && hasValidPendingUpdate(subscription?.subscription) && subscription?.subscription?.pendingUpdate?.planName === plan.id}
                 isExpanded={expandedPlan === plan.id}
                 onExpand={() => handleExpandPlan(plan.id)}
                 addons={planAddons[plan.id]}
                 allPlanAddons={planAddons}
-                selectedAddons={selectedAddons}
+                // Scoped to THIS plan's own key — see selectedAddons'
+                // declaration comment for why a shared object leaked
+                // Starter's selections into Growth's card.
+                selectedAddons={selectedAddons[plan.id] || {}}
                 onAddonChange={(key, qty) =>
-                  setSelectedAddons((prev) => ({ ...prev, [key]: qty }))
+                  setSelectedAddons((prev) => ({ ...prev, [plan.id]: { ...(prev[plan.id] || {}), [key]: qty } }))
+                }
+                addonPurchaseCycle={addonPurchaseCycle[plan.id] || null}
+                onAddonCycleChange={(cyc) =>
+                  setAddonPurchaseCycle((prev) => ({ ...prev, [plan.id]: cyc }))
                 }
                 onRemoveAddon={handleRemoveAddon}
                 // Found via live QA: for a paying org (couponAppliesAtCheckout

@@ -308,6 +308,49 @@ function mockReqRes(organizationId) {
     assert.equal(body.effectiveRecurringTotal, 450 - 23, `Growth's own 5% rule must apply (₹23 off), not the frozen business-plan ₹13, got total ${body.effectiveRecurringTotal}`);
   });
 
+  await test('P0 fix: monthly + annual instances of the SAME addonKey — removal on the monthly instance must not bleed into the annual one', async (registry) => {
+    // Regression for the bug found while verifying Task 3 (Aug 2026):
+    // getScheduledChanges matched keptAddons by addonKey alone, so with two
+    // coexisting instances of the same addonKey at different billingCycles,
+    // a removal scheduled against one instance could misattribute quantity
+    // against whichever instance the .find() happened to hit first.
+    const org = await Organization.create({ name: 'SC Dual Cycle Fixture 1', code: 'sc-dual1-' + Date.now() });
+    registry.Organization.push(org._id);
+    const annualPeriodEnd = new Date(Date.now() + 300 * 24 * 60 * 60 * 1000);
+    const sub = await Subscription.create({
+      organization: org._id, planName: 'growth', appStatus: 'active', status: 'active',
+      billingCycle: 'yearly', pricePerUser: 4800, userCount: 1, totalAmount: 5200,
+      isPaymentConfirmed: true, paymentStatus: 'payment_completed',
+      billingAnchor: new Date(),
+      activeAddons: [
+        { addonKey: 'seat', billingCycle: 'monthly', quantity: 2, pricePerUnit: 100 },
+        { addonKey: 'seat', billingCycle: 'yearly', quantity: 1, pricePerUnit: 1000, periodEnd: annualPeriodEnd },
+      ],
+    });
+    registry.Subscription.push(sub._id);
+    const effectiveAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const sc = await ScheduledChange.create({
+      organization: org._id, subscription: sub._id, type: 'REMOVE_ADDON', status: 'PENDING', effectiveAt,
+      payload: { addonKey: 'seat', billingCycle: 'monthly', quantity: 1 },
+    });
+    registry.ScheduledChange.push(sc._id);
+
+    const { req, res, get } = mockReqRes(org._id);
+    await getScheduledChanges(req, res);
+    const body = get();
+
+    assert.equal(body.removedAddons.length, 1, 'exactly one removal, targeting the monthly instance only');
+    assert.equal(body.removedAddons[0].billingCycle, 'monthly', 'removal must attribute to the MONTHLY instance, not the annual one');
+    assert.equal(body.removedAddons[0].quantity, 1);
+
+    const keptMonthly = body.keptAddons.find((a) => a.addonKey === 'seat' && a.billingCycle === 'monthly');
+    const keptYearly = body.keptAddons.find((a) => a.addonKey === 'seat' && a.billingCycle === 'yearly');
+    assert.ok(keptMonthly, 'monthly instance must still be present (2 - 1 = 1 remains)');
+    assert.equal(keptMonthly.quantity, 1, 'monthly instance must be reduced to 1, not removed entirely or left at 2');
+    assert.ok(keptYearly, 'annual instance must be completely untouched by the monthly removal');
+    assert.equal(keptYearly.quantity, 1, 'annual instance quantity must be unaffected');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   await mongoose.disconnect();
   process.exit(failed > 0 ? 1 : 0);

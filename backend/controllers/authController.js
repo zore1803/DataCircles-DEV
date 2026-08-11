@@ -18,6 +18,7 @@ const mongoose = require("mongoose");
 const sendGridMail = require("../utils/sendGridMail.js");
 const bcrypt = require("bcrypt");
 const { getSeatStatus } = require('../utils/addonManagement');
+const { getAccessEntitlementEnd } = require('../utils/prorationMath');
 const { calculateInvoice } = require('../utils/invoiceEngine');
 const PlanAddon = require("../models/PlanAddon");
 const { startAddonPurchase } = require('../utils/addonPurchaseLifecycle');
@@ -341,6 +342,12 @@ exports.getCurrentUser = async (req, res) => {
       trialUsed = subscription.trialUsed;
       isPaymentConfirmed = subscription.isPaymentConfirmed;
     }
+    // Hotfix (docs/audit/PHASE3_ENTITLEMENT_WINDOW_SCHEMA_TRACE.md §6.3, b1):
+    // this used to return currentPeriodEnd directly — the ROLLING invoice
+    // cycle field, not the customer's actual paid-for entitlement.
+    // getAccessEntitlementEnd() returns currentPeriodEnd unchanged for
+    // monthly (byte-for-byte identical response) and the real
+    // anchor-relative entitlement window end for yearly.
     res.status(200).json({
       user,
       isTrialActive,
@@ -348,7 +355,7 @@ exports.getCurrentUser = async (req, res) => {
       trialUsed,
       isPaymentConfirmed,
       appStatus: subscription?.appStatus || null,
-      currentPeriodEnd: subscription?.currentPeriodEnd || null,
+      currentPeriodEnd: subscription ? getAccessEntitlementEnd(subscription) : null,
     });
   } catch (err) {
     res.status(500).json({ error: "Server error" });

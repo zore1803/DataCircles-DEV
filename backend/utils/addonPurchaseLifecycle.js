@@ -2,10 +2,129 @@ const { calculateInvoice, toPricingBreakdown } = require('./invoiceEngine');
 const CommercialTransaction = require('../models/CommercialTransaction');
 const RewardUsage = require('../models/RewardUsage');
 const { rewardToModifier } = require('./modifierResolver');
-const { reserveNextAvailableReward, releaseReservation } = require('./referralRewards');
+const { reserveNextAvailableReward, releaseReservation, getNextAvailableReward } = require('./referralRewards');
 const { buildCouponModifierForItem } = require('./discountEngine');
 const { isCouponStillEligibleForRenewal } = require('./couponRenewalEligibility');
 const razorpay = require('../config/razorpay');
+
+// Task 4 (Aug 2026): shared guard checks + resolvedBillingCycle/pricePerUnit
+// derivation, used by BOTH the read-only preview and the real order-creating
+// flow, so a preview can never show a number/error the real commit wouldn't
+// also produce. Pure — no I/O beyond the reads already required to validate.
+function resolveAddonPurchaseInputs(subscription, plan, catalogEntry, billingCycle) {
+  if (!subscription || !subscription.isPaymentConfirmed) {
+    throw new Error('No active paid subscription found.');
+  }
+  if (subscription.cancelAtPeriodEnd) {
+    throw new Error('Cannot purchase add-ons when subscription is pending cancellation.');
+  }
+  if (!plan) {
+    throw new Error('Plan configuration not found.');
+  }
+  if (!catalogEntry) {
+    throw new Error('Add-on not found.');
+  }
+
+  const planAllowed =
+    (catalogEntry.availableOnPlans?.length || 0) === 0 ||
+    catalogEntry.availableOnPlans.includes(plan.planId);
+  if (!planAllowed) {
+    throw new Error(`Add-on "${catalogEntry.displayName}" is not available on the "${plan.planId}" plan.`);
+  }
+
+  const resolvedBillingCycle = billingCycle || subscription.billingCycle;
+  if (resolvedBillingCycle === 'yearly' && subscription.billingCycle !== 'yearly') {
+    throw new Error('An annual add-on can only be purchased on an annual base plan.');
+  }
+
+  const pricePerUnit = catalogEntry.price?.[resolvedBillingCycle];
+  if (!pricePerUnit) {
+    throw new Error(`No price configured for "${catalogEntry.displayName}" on the ${resolvedBillingCycle} billing cycle.`);
+  }
+
+  return { resolvedBillingCycle, pricePerUnit };
+}
+
+// Read-only preview — no Order, no CommercialTransaction, no reward
+// RESERVATION (uses getNextAvailableReward's pure read instead of
+// reserveNextAvailableReward's real reservation write), no subscription
+// mutation. Mirrors cycleTransitionLifecycle.js's previewMonthlyToAnnualTransition
+// shape: same pricing math as the real purchase, computed without any of
+// its side effects, so the confirmation UI can show a real number before
+// the user commits to paying.
+async function previewAddonPurchase({
+  subscription,
+  plan,
+  catalogEntry,
+  addonKey,
+  quantity,
+  billingCycle,
+  calculateInvoiceFn = calculateInvoice,
+  getNextAvailableRewardFn = getNextAvailableReward,
+}) {
+  const { resolvedBillingCycle, pricePerUnit } = resolveAddonPurchaseInputs(subscription, plan, catalogEntry, billingCycle);
+
+  const resolvedModifiers = [];
+  if (subscription.appliedCoupon?.fullRulesSnapshot && isCouponStillEligibleForRenewal(subscription.appliedCoupon)) {
+    const couponModifier = buildCouponModifierForItem(
+      subscription.appliedCoupon.fullRulesSnapshot,
+      { key: addonKey, type: 'addon', amount: pricePerUnit * quantity }
+    );
+    if (couponModifier) resolvedModifiers.push(couponModifier);
+  }
+
+  // Read-only peek — does NOT reserve. A reward that's available right now
+  // could still be claimed by a concurrent purchase before this preview's
+  // caller actually commits; the real purchase always re-resolves for
+  // itself at that point, exactly like every other preview/commit pair in
+  // this codebase (e.g. previewMonthlyToAnnualTransition's own preview-vs-
+  // commit relationship) — a preview quotes the best available answer NOW,
+  // it does not (and cannot, without reserving) guarantee it holds later.
+  let peekedReward = null;
+  try {
+    peekedReward = await getNextAvailableRewardFn(subscription.organization);
+  } catch (peekErr) {
+    console.error('Referral reward peek failed (proceeding at full price):', peekErr.message);
+  }
+  if (peekedReward) {
+    resolvedModifiers.push(rewardToModifier(peekedReward));
+  }
+
+  const addonInvoice = calculateInvoiceFn({
+    subscription: {
+      planName: subscription.planName,
+      billingCycle: subscription.billingCycle,
+      pricePerUser: 0,
+      activeAddons: [],
+    },
+    changeset: { pricePerUser: 0 },
+    adjustmentContext: {
+      type: 'addon_purchase',
+      quantity,
+      pricePerUnit,
+      currentPeriodStart: subscription.currentPeriodStart,
+      currentPeriodEnd: subscription.currentPeriodEnd,
+    },
+    resolvedModifiers,
+  });
+
+  const pricingBreakdown = toPricingBreakdown(addonInvoice, {
+    couponCode: subscription.appliedCoupon?.code,
+    referralPercent: peekedReward?.rewardType === 'percentage' ? peekedReward.rewardValue : undefined,
+  });
+  if (pricingBreakdown.pricingLineItems[0]) {
+    pricingBreakdown.pricingLineItems[0].label = `${catalogEntry.displayName} ×${quantity} (prorated)`;
+  }
+
+  return {
+    billingCycle: resolvedBillingCycle,
+    pricePerUnit,
+    prorationAmount: addonInvoice.adjustment,
+    discountedProrationAmount: addonInvoice.taxable,
+    prorationAmountWithGST: addonInvoice.total,
+    pricingBreakdown,
+  };
+}
 
 async function startAddonPurchase({
   user,
@@ -15,6 +134,11 @@ async function startAddonPurchase({
   catalogEntry,
   addonKey,
   quantity,
+  // Phase 2c (docs/audit/PHASE2_ADDON_CYCLE_TRACE.md) — optional, defaults to
+  // the subscription's own cycle so every existing caller (no route wires
+  // this param yet — that's Phase 2d) behaves exactly as before. Only a
+  // caller that explicitly passes 'yearly' can ever request an annual addon.
+  billingCycle,
   calculateInvoiceFn = calculateInvoice,
   reserveNextAvailableRewardFn = reserveNextAvailableReward,
   releaseReservationFn = releaseReservation,
@@ -48,9 +172,19 @@ async function startAddonPurchase({
     throw new Error(`Add-on "${catalogEntry.displayName}" is not available on the "${plan.planId}" plan.`);
   }
 
-  const pricePerUnit = catalogEntry.price?.[subscription.billingCycle];
+  // Phase 2c cycle: defaults to the subscription's own cycle (existing
+  // behavior, unchanged for every current caller). Business contract
+  // (docs/audit/PHASE2_ADDON_CYCLE_TRACE.md): a monthly base plan may only
+  // hold monthly add-ons; an annual base plan may hold either. This is the
+  // one place that asymmetry is enforced for purchases.
+  const resolvedBillingCycle = billingCycle || subscription.billingCycle;
+  if (resolvedBillingCycle === 'yearly' && subscription.billingCycle !== 'yearly') {
+    throw new Error('An annual add-on can only be purchased on an annual base plan.');
+  }
+
+  const pricePerUnit = catalogEntry.price?.[resolvedBillingCycle];
   if (!pricePerUnit) {
-    throw new Error(`No price configured for "${catalogEntry.displayName}" on the ${subscription.billingCycle} billing cycle.`);
+    throw new Error(`No price configured for "${catalogEntry.displayName}" on the ${resolvedBillingCycle} billing cycle.`);
   }
 
   if (subscription.pendingAddonAddition?.referralRewardUsageId) {
@@ -226,6 +360,7 @@ async function startAddonPurchase({
     addonKey,
     quantity,
     pricePerUnit,
+    billingCycle: resolvedBillingCycle,
     prorationAmount: prorationAmountWithGST,
     orderId: razorpayOrder.id,
     createdAt: new Date(),
@@ -262,4 +397,5 @@ async function startAddonPurchase({
 
 module.exports = {
   startAddonPurchase,
+  previewAddonPurchase,
 };

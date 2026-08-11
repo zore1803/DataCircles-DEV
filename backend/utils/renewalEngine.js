@@ -96,6 +96,7 @@ const { reserveNextAvailableReward, consumeReservation, getNextAvailableReward, 
 const { rewardToModifier } = require('./modifierResolver');
 const { isCouponStillEligibleForRenewal } = require('./couponRenewalEligibility');
 const { buildCouponModifierForLineItems } = require('./discountEngine');
+const { addonIdentityKey } = require('./addonManagement');
 // Reused, not reimplemented — same helper subscriptionLifecycleJobs.js already
 // imports this way; appends to Subscription.appStatusHistory automatically.
 const { setAppStatus } = require('../controllers/subscriptionController');
@@ -396,6 +397,19 @@ async function renewSubscription(subscription, { chargeMandateFn, _injectFailure
       // moves, per R12's own text ("Failure -> past_due only... zero
       // commercial state touched"). R8: same treatment for rewardUsageId —
       // left 'reserved' for the retry to reuse, not released.
+      //
+      // Task 1 (Aug 2026): persist orderId onto the transaction target —
+      // purely additive correlation info, not a status change, so it doesn't
+      // violate the "leave the transaction non-terminal" invariant above. A
+      // later async payment.failed webhook for this exact order (the bank
+      // declining after Razorpay accepted the request synchronously) needs
+      // this to find its way back to this subscription at all — before this
+      // fix, no webhook path could ever match a CAW renewal charge by
+      // order_id, so that failure mode went completely unhandled.
+      if (chargeResult?.orderId) {
+        commercialTransaction.target = { ...commercialTransaction.target, orderId: chargeResult.orderId };
+        await commercialTransaction.save();
+      }
       setAppStatus(subscription, 'past_due', 'Renewal charge failed');
       await subscription.save();
       return {
@@ -592,7 +606,12 @@ function applyScheduledChange(effective, change) {
       effective.pricePerUser = change.payload.pricePerUser;
       break;
     case 'REMOVE_ADDON': {
-      const idx = effective.activeAddons.findIndex(a => a.addonKey === change.payload.addonKey);
+      // Phase 2c: match (addonKey, billingCycle), not addonKey alone — a
+      // monthly removal must never touch an annual instance of the same key
+      // and vice versa.
+      const idx = effective.activeAddons.findIndex(
+        a => addonIdentityKey(a, effective.billingCycle) === addonIdentityKey(change.payload, effective.billingCycle)
+      );
       if (idx === -1) break;
       const remaining = effective.activeAddons[idx].quantity - change.payload.quantity;
       if (remaining <= 0) effective.activeAddons.splice(idx, 1);

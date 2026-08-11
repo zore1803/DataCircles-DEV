@@ -34,7 +34,7 @@ const PlanConfig = require('../models/PlanConfig');
 const PlanAddon = require('../models/PlanAddon');
 const User = require('../models/User');
 const Invited = require('../models/Invited');
-const { classifyAddonsForPlanChange } = require('./addonManagement');
+const { classifyAddonsForPlanChange, addonIdentityKey } = require('./addonManagement');
 const { buildEffectiveSubscription } = require('./renewalEngine');
 
 const STATUS = Object.freeze({
@@ -96,7 +96,13 @@ async function validateSeats(subscription, targetPlanId, plannedNewAddons = [], 
     // the customer touches the stepper.
     const previewHorizon = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000);
     const { effective } = await buildEffectiveSubscription(subscription, previewHorizon);
-    const effectiveQuantityByKey = new Map((effective.activeAddons || []).map((a) => [a.addonKey, a.quantity]));
+    // Phase 2b: key on (addonKey, billingCycle), not addonKey alone — see
+    // addonIdentityKey's own comment for why the fallback keeps this an
+    // exact no-op for every subscription that can't yet have two
+    // cycle-variants of the same addonKey.
+    const effectiveQuantityByKey = new Map(
+      (effective.activeAddons || []).map((a) => [addonIdentityKey(a, subscription.billingCycle), a.quantity])
+    );
 
     const rawActiveAddons = subscription.activeAddons || [];
     const { compatible } = rawActiveAddons.length > 0
@@ -108,7 +114,7 @@ async function validateSeats(subscription, targetPlanId, plannedNewAddons = [], 
     carriedSeatQuantity = compatible.reduce((sum, c) => {
       const entry = catalogEntries.find((e) => e.key === c.addonKey);
       if (entry?.targetKey !== 'seats') return sum;
-      const survives = effectiveQuantityByKey.get(c.remappedFrom || c.addonKey) ?? 0;
+      const survives = effectiveQuantityByKey.get(addonIdentityKey(c, subscription.billingCycle)) ?? 0;
       return sum + survives;
     }, 0);
   }

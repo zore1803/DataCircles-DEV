@@ -260,6 +260,38 @@ async function main() {
     assert.equal(eventCount, 1, 'only one RazorpayWebhookEvent row for this event id');
   });
 
+  await test('Task 1: an async payment.failed for a still-PRICED (in-flight) renewal charge correlates by order_id and lands the subscription in PAST_DUE — the exact gap this fixes', async (registry) => {
+    const organization = new mongoose.Types.ObjectId();
+    const subscription = await trackedCreate(Subscription, 'Subscription', registry, baseSubscriptionFields(organization, { appStatus: 'active' }));
+    const orderId = `order_fixture_pending_${Date.now()}`;
+
+    const commercialTransaction = await trackedCreate(CommercialTransaction, 'CommercialTransaction', registry, {
+      organization, subscription: subscription._id, type: 'RENEWAL', status: 'PRICED',
+      target: { orderId, total: 118, newPeriodStart: new Date(), newPeriodEnd: new Date(), appliedScheduledChangeIds: [] },
+    });
+
+    const { req, res } = buildWebhookCall('payment.failed', { order_id: orderId, invoice_id: null }, uniqueEventId('renewal-fail'));
+    await handleWebhook(req, res);
+    assert.equal(res.statusCode, 200);
+
+    const reloadedSub = await Subscription.findById(subscription._id);
+    assert.equal(reloadedSub.appStatus, 'past_due', 'before this fix, this webhook matched NO handler at all and appStatus would have silently stayed active');
+    assert.ok(
+      reloadedSub.appStatusHistory.some((h) => h.to === 'past_due' && /Renewal charge failed/.test(h.reason || '')),
+      'must reuse the SAME failure reason/transition renewSubscription() already uses for a synchronously-detected failure — no new failure-state path invented'
+    );
+
+    // Non-terminal transaction is left exactly as-is (still PRICED) — same
+    // invariant as renewSubscription()'s own synchronous failure branch, so
+    // a resumed retry finds this same transaction rather than a dead end.
+    const reloadedCt = await CommercialTransaction.findById(commercialTransaction._id);
+    assert.equal(reloadedCt.status, 'PRICED', 'must remain non-terminal for the retry engine to resume');
+
+    const webhookEvent = await RazorpayWebhookEvent.findOne({ subscription: subscription._id });
+    assert.ok(webhookEvent, 'webhook event must be recorded, correlated to the right subscription');
+    registry.RazorpayWebhookEvent.push(webhookEvent._id);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   await mongoose.disconnect();
   process.exit(failed > 0 ? 1 : 0);

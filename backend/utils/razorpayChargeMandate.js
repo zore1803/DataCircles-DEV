@@ -132,9 +132,17 @@ async function chargeMandateFn({ subscription, amount }) {
     };
   } catch (err) {
     if (isDefiniteApiRejection(err)) {
+      // Task 1 (Aug 2026): orderId included even on a clean rejection — the
+      // Order itself was already created above (before createRecurringPayment
+      // was attempted), so it's real and correlatable. Without this, a LATER
+      // async payment.failed webhook for this same order (e.g. the recurring
+      // charge was accepted synchronously but declined by the bank
+      // afterward) has nothing to match against, which was the exact gap
+      // that left renewal failures silently uncorrelated.
       return {
         success: false,
         reason: err.error?.description || err.error?.code || 'CHARGE_REJECTED',
+        orderId: order.id,
       };
     }
     // Ambiguous — network-level failure or unexpected shape. Rethrow so
