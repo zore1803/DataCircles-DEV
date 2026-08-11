@@ -242,13 +242,12 @@ const ItemSearchSelect = ({
                           )}
                           <div className="flex items-center gap-2 mt-2">
                             <span
-                              className={`text-xs px-2 py-1 rounded-full ${
-                                item.isVariant
+                              className={`text-xs px-2 py-1 rounded-full ${item.isVariant
                                   ? "bg-purple-100 text-purple-800"
                                   : item.type === "product"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-green-100 text-green-800"
-                              }`}
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-green-100 text-green-800"
+                                }`}
                             >
                               {item.isVariant ? "Variant" : item.type}
                             </span>
@@ -932,9 +931,8 @@ const DeliveryChallanForm = ({
       />
       <div
         ref={formRef}
-        className={`fixed inset-y-0 right-0 z-[10000] w-full md:w-[600px] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${
-          isSliding ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`fixed inset-y-0 right-0 z-[10000] w-full md:w-[600px] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${isSliding ? "translate-x-0" : "translate-x-full"
+          }`}
       >
         <form onSubmit={handleSubmit} className="p-6 space-y-8">
           <div className="flex justify-between items-center">

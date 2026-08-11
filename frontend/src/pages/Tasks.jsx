@@ -1380,6 +1380,19 @@ function Tasks() {
     );
   };
 
+  // Kanban column-header "select all in this column" checkbox: given that
+  // column's task ids, unions them in, or — if every one is already
+  // selected — removes just those ids, leaving other columns' selections
+  // untouched. Same handler is reused for every column.
+  const handleToggleColumnSelectTasks = (taskIds) => {
+    setSelectedTasks((prev) => {
+      const allSelected = taskIds.every((id) => prev.includes(id));
+      return allSelected
+        ? prev.filter((id) => !taskIds.includes(id))
+        : [...new Set([...prev, ...taskIds])];
+    });
+  };
+
   const handleSelectMeeting = (meetingId) => {
     setSelectedMeetings((prev) =>
       prev.includes(meetingId)
@@ -3631,6 +3644,9 @@ function Tasks() {
             onItemMove={handleTaskMove}
             onCardEdit={handleTaskEdit}
             onCardDelete={(task) => handleDelete(task._id, "task")}
+            selectedItems={selectedTasks}
+            onToggleSelect={handleSelectTask}
+            onToggleColumnSelect={handleToggleColumnSelectTasks}
           />
         </div>
       )}
@@ -3755,9 +3771,9 @@ function Tasks() {
       <BulkActions
         isOpen={showBulkActions}
         onClose={() => setShowBulkActions(false)}
-        selectedItems={selectedTasks.map((id) =>
-          tasks.find((t) => t._id === id),
-        )}
+        selectedItems={selectedTasks
+          .map((id) => tasks.find((t) => t._id === id))
+          .filter(Boolean)}
         onBulkUpdate={handleBulkUpdateTasks}
         fieldConfig={taskFieldConfig}
         module="tasks"
@@ -3766,9 +3782,9 @@ function Tasks() {
       <BulkActions
         isOpen={showMeetingBulkActions}
         onClose={() => setShowMeetingBulkActions(false)}
-        selectedItems={selectedMeetings.map((id) =>
-          meetings.find((m) => m._id === id),
-        )}
+        selectedItems={selectedMeetings
+          .map((id) => meetings.find((m) => m._id === id))
+          .filter(Boolean)}
         onBulkUpdate={handleBulkUpdateMeetings}
         fieldConfig={meetingFieldConfig}
         module="meetings"

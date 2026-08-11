@@ -1,5 +1,14 @@
 const mongoose = require('mongoose');
 
+const postalAddressSchema = new mongoose.Schema({
+  addressLine1: { type: String, default: '' },
+  addressLine2: { type: String, default: '' },
+  pincode: { type: String, default: '' },
+  city: { type: String, default: '' },
+  state: { type: String, default: '' },
+  country: { type: String, default: '' },
+}, { _id: false });
+
 const proformaInvoiceSchema = new mongoose.Schema({
   deal: { type: mongoose.Schema.Types.ObjectId, ref: 'Deal', required: true },
   performaInvoiceNumber: { type: String, required: true },
@@ -9,6 +18,8 @@ const proformaInvoiceSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true },
   status: { type: String, required: true },
+  billingAddress: { type: postalAddressSchema, default: () => ({}) },
+  shippingAddress: { type: postalAddressSchema, default: () => ({}) },
   discount: {
     type: {
       type: String,

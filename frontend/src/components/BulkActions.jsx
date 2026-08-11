@@ -17,11 +17,15 @@ const BulkActions = ({
 
   // Get common fields that exist in all selected items
   const commonFields = useMemo(() => {
-    if (!selectedItems?.length || !fieldConfig) return [];
+    // Items can arrive as `undefined` when a caller resolves ids against a
+    // partial/paginated local list (e.g. a "select all" that grabbed ids
+    // beyond what's currently loaded) — skip those rather than crashing.
+    const validItems = (selectedItems || []).filter(Boolean);
+    if (!validItems.length || !fieldConfig) return [];
 
     const allFields = fieldConfig.fields || [];
     return allFields.filter((field) => {
-      return selectedItems.every(
+      return validItems.every(
         (item) => item.hasOwnProperty(field.key) || field.isCustomField,
       );
     });
@@ -56,7 +60,7 @@ const BulkActions = ({
       await onBulkUpdate({
         field: selectedField,
         value: updateValue,
-        itemIds: selectedItems.map((item) => item._id || item.id),
+        itemIds: selectedItems.filter(Boolean).map((item) => item._id || item.id),
       });
 
       onClose();

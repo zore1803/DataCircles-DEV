@@ -32,7 +32,7 @@ import toast from "react-hot-toast";
 // ============================================================================
 // 1. PIXEL-PERFECT CARD COMPONENT FOR TASKS
 // ============================================================================
-const TaskKanbanCard = ({ task, isDragging, onEdit, onDelete }) => {
+const TaskKanbanCard = ({ task, isDragging, onEdit, onDelete, selected = false, onToggleSelect }) => {
   const [showMenu, setShowMenu] = useState(false);
 
   // Helper to format date
@@ -58,15 +58,32 @@ const TaskKanbanCard = ({ task, isDragging, onEdit, onDelete }) => {
 
   return (
     <div
-      className={`relative bg-white p-4 rounded-[10px] border border-[#E5E5EC] hover:shadow-sm transition-shadow group text-left ${
+      className={`relative bg-white p-4 rounded-[10px] border hover:shadow-sm transition-shadow group text-left ${
         isDragging ? "opacity-50" : "opacity-100"
-      }`}
+      } ${selected ? "border-[#0085FF] bg-[#F5FAFF]" : "border-[#E5E5EC]"}`}
     >
       {/* --- Top Row: Title & Actions --- */}
-      <div className="flex items-start justify-between mb-2">
-        <h4 className="font-bold text-gray-900 text-[14px] leading-tight flex-1 mr-2">
-          {task.title}
-        </h4>
+      <div className="flex items-start justify-between mb-2 gap-2">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
+          {onToggleSelect && (
+            <span
+              className="flex items-center flex-shrink-0 mt-0.5"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => onToggleSelect(task._id)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                aria-label={`Select ${task.title || "task"}`}
+              />
+            </span>
+          )}
+          <h4 className="font-bold text-gray-900 text-[14px] leading-tight flex-1 mr-2">
+            {task.title}
+          </h4>
+        </div>
 
         {/* --- 3 Dots Menu --- */}
         <div className="relative flex-shrink-0">
@@ -188,7 +205,7 @@ const TaskKanbanCard = ({ task, isDragging, onEdit, onDelete }) => {
 // 2. INTERNAL COMPONENTS
 // ============================================================================
 
-const SortableItem = ({ item, itemIdKey, renderItemWrapper, isDragging }) => {
+const SortableItem = ({ item, itemIdKey, renderItemWrapper, isDragging, selected, onToggleSelect }) => {
   const {
     attributes,
     listeners,
@@ -208,7 +225,7 @@ const SortableItem = ({ item, itemIdKey, renderItemWrapper, isDragging }) => {
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      {renderItemWrapper(item, isSortableDragging || isDragging)}
+      {renderItemWrapper(item, isSortableDragging || isDragging, selected, onToggleSelect)}
     </div>
   );
 };
@@ -219,10 +236,22 @@ const DroppableColumn = ({
   itemIdKey,
   renderItemWrapper,
   isDragging,
+  selectedItems = [],
+  onToggleSelect,
+  onToggleColumnSelect,
 }) => {
   const { setNodeRef, isOver } = useDroppable({ id: column });
   const columnItems = items.filter((item) => item.column === column);
   const itemIds = columnItems.map((item) => item[itemIdKey].toString());
+
+  // Header select-all state for this column: fully ticked when every card here
+  // is selected, indeterminate (native dash) when only some are.
+  const allSelected = itemIds.length > 0 && itemIds.every((id) => selectedItems.includes(id));
+  const someSelected = itemIds.some((id) => selectedItems.includes(id));
+  const headerCbRef = useRef(null);
+  useEffect(() => {
+    if (headerCbRef.current) headerCbRef.current.indeterminate = someSelected && !allSelected;
+  }, [someSelected, allSelected]);
 
   return (
     <div
@@ -235,6 +264,17 @@ const DroppableColumn = ({
         className="flex items-center gap-1.5"
         style={{ height: "46px", background: "#F5F7FA", padding: "0 18px" }}
       >
+        {onToggleColumnSelect && itemIds.length > 0 && (
+          <input
+            ref={headerCbRef}
+            type="checkbox"
+            checked={allSelected}
+            onChange={() => onToggleColumnSelect(itemIds)}
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+            title={`Select all in ${column}`}
+            aria-label={`Select all tasks in ${column}`}
+          />
+        )}
         <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}>
           {column}
         </span>
@@ -258,6 +298,8 @@ const DroppableColumn = ({
               itemIdKey={itemIdKey}
               renderItemWrapper={renderItemWrapper}
               isDragging={isDragging}
+              selected={selectedItems.includes(item[itemIdKey].toString())}
+              onToggleSelect={onToggleSelect}
             />
           ))}
         </SortableContext>
@@ -285,6 +327,9 @@ const TaskKanbanBoard = ({
   onCardDelete,
   renderItem,
   itemIdKey = "_id",
+  selectedItems = [],
+  onToggleSelect,
+  onToggleColumnSelect,
 }) => {
   const [activeItem, setActiveItem] = useState(null);
 
@@ -330,7 +375,7 @@ const TaskKanbanBoard = ({
     column: getItemColumn(item),
   }));
 
-  const renderWrapper = (item, isDragging) => {
+  const renderWrapper = (item, isDragging, selected, toggleSelect) => {
     if (renderItem) return renderItem(item, isDragging);
     return (
       <TaskKanbanCard
@@ -338,6 +383,8 @@ const TaskKanbanBoard = ({
         isDragging={isDragging}
         onEdit={onCardEdit}
         onDelete={onCardDelete}
+        selected={selected}
+        onToggleSelect={toggleSelect}
       />
     );
   };
@@ -359,6 +406,9 @@ const TaskKanbanBoard = ({
               itemIdKey={itemIdKey}
               renderItemWrapper={renderWrapper}
               isDragging={!!activeItem}
+              selectedItems={selectedItems}
+              onToggleSelect={onToggleSelect}
+              onToggleColumnSelect={onToggleColumnSelect}
             />
           ))}
         </div>

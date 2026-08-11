@@ -246,13 +246,12 @@ const ItemSearchSelect = ({
                           )}
                           <div className="flex items-center gap-2 mt-2">
                             <span
-                              className={`text-xs px-2 py-1 rounded-full ${
-                                item.isVariant
+                              className={`text-xs px-2 py-1 rounded-full ${item.isVariant
                                   ? "bg-purple-100 text-purple-800"
                                   : item.type === "product"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-green-100 text-green-800"
-                              }`}
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-green-100 text-green-800"
+                                }`}
                             >
                               {item.isVariant ? "Variant" : item.type}
                             </span>
@@ -811,17 +810,17 @@ const InvoiceForm = ({
         ...form,
         amount: form.isTaxInvoice
           ? calculateTotalAmount(
-              form.items,
-              form.discount,
-              form.gstRate,
-              form.transactionType
-            )
+            form.items,
+            form.discount,
+            form.gstRate,
+            form.transactionType
+          )
           : calculateTotalAmount(
-              form.items,
-              form.discount,
-              0,
-              form.transactionType
-            ),
+            form.items,
+            form.discount,
+            0,
+            form.transactionType
+          ),
         items: form.items.map((item) => ({
           itemId: item._id,
           name: item.name,
@@ -883,9 +882,9 @@ const InvoiceForm = ({
       } else {
         setToastMessage(
           err.response?.data?.error ||
-            (editingInvoice
-              ? "Failed to update invoice"
-              : "Failed to create invoice")
+          (editingInvoice
+            ? "Failed to update invoice"
+            : "Failed to create invoice")
         );
       }
     } finally {
@@ -1112,9 +1111,8 @@ const InvoiceForm = ({
       />
       <div
         ref={formRef}
-        className={`fixed dc-panel-card dc-panel-w z-[10000] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out ${
-          isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
-        }`}
+        className={`fixed dc-panel-card dc-panel-w z-[10000] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
+          }`}
       >
         <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
           <div className="flex justify-between items-center p-4 border-b flex-shrink-0 bg-white">
@@ -1134,14 +1132,14 @@ const InvoiceForm = ({
 
           <div className="p-4 space-y-6 overflow-y-auto flex-1">
             <div className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Select Deal *
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
-                    {/* <SearchableDropdown
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Select Deal *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      {/* <SearchableDropdown
                       options={localDeals}
                       value={form.deal}
                       onChange={(value) => {
@@ -1153,300 +1151,345 @@ const InvoiceForm = ({
                       valueKey="_id"
                       className="flex-1"
                     /> */}
-                    <SearchableDropdown
-                      options={formattedDeals}
-                      value={form.deal}
-                      onChange={(value) => {
-                        setForm((prev) => ({ ...prev, deal: value }));
-                        setHasUnsavedChanges(true);
-                      }}
-                      placeholder="Select Deal"
-                      valueKey="_id"
-                      className="flex-1"
-                      displayKey="label"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowQuickDealForm(true)}
-                    className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
-                    aria-label="Add new deal"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Invoice Style
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className="relative w-full">
-                    <select
-                      className="w-full appearance-none border border-slate-300 rounded-[25px] p-2.5 pr-9 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                      value={form.style}
-                      onChange={(e) => {
-                        setForm((prev) => ({ ...prev, style: e.target.value }));
-                        setHasUnsavedChanges(true);
-                      }}
-                      aria-label="Select invoice style"
-                    >
-                      <option value="">Select style...</option>
-                      {styles.map((s, idx) => (
-                        <option key={idx} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  </div>
-                  {form.style && (
+                      <SearchableDropdown
+                        options={formattedDeals}
+                        value={form.deal}
+                        onChange={(value) => {
+                          setForm((prev) => ({ ...prev, deal: value }));
+                          setHasUnsavedChanges(true);
+                        }}
+                        placeholder="Select Deal"
+                        valueKey="_id"
+                        className="flex-1"
+                        displayKey="label"
+                      />
+                    </div>
                     <button
                       type="button"
-                      onClick={() => onPreview(form)}
-                      className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
-                      aria-label="Preview invoice"
+                      onClick={() => setShowQuickDealForm(true)}
+                      className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
+                      aria-label="Add new deal"
                     >
-                      <Eye className="w-4 h-4" />
+                      <Plus className="w-4 h-4" />
                     </button>
-                  )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Invoice Style
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-full">
+                      <select
+                        className="w-full appearance-none border border-slate-300 rounded-[25px] p-2.5 pr-9 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                        value={form.style}
+                        onChange={(e) => {
+                          setForm((prev) => ({ ...prev, style: e.target.value }));
+                          setHasUnsavedChanges(true);
+                        }}
+                        aria-label="Select invoice style"
+                      >
+                        <option value="">Select style...</option>
+                        {styles.map((s, idx) => (
+                          <option key={idx} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    </div>
+                    {form.style && (
+                      <button
+                        type="button"
+                        onClick={() => onPreview(form)}
+                        className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                        aria-label="Preview invoice"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Invoice Date *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      className="w-full pl-4 pr-4 py-2.5 border border-slate-300 rounded-[25px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                      required
+                      value={form.date}
+                      onChange={(e) => {
+                        setForm((prev) => ({ ...prev, date: e.target.value }));
+                        setHasUnsavedChanges(true);
+                      }}
+                      aria-label="Select invoice date"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Due Date
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      className="w-full pl-4 pr-4 py-2.5 border border-slate-300 rounded-[25px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                      value={form.dueDate}
+                      onChange={(e) => {
+                        setForm((prev) => ({ ...prev, dueDate: e.target.value }));
+                        setHasUnsavedChanges(true);
+                      }}
+                      aria-label="Select due date"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Receiver GSTIN
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Enter Receiver GSTIN (e.g., 22AAAAA0000A1Z5)"
+                      className="w-full pl-4 pr-4 py-2.5 border border-slate-300 rounded-[25px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                      value={form.receiverGSTIN}
+                      onChange={(e) => {
+                        setForm((prev) => ({
+                          ...prev,
+                          receiverGSTIN: e.target.value.toUpperCase(),
+                        }));
+                        setHasUnsavedChanges(true);
+                      }}
+                      aria-label="Receiver GSTIN"
+                    />
+                  </div>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-slate-700">
-                  Invoice Date *
+                  Tax Invoice
                 </label>
-                <div className="relative">
+                <div className="flex items-center">
                   <input
-                    type="date"
-                    className="w-full pl-4 pr-4 py-2.5 border border-slate-300 rounded-[25px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                    required
-                    value={form.date}
-                    onChange={(e) => {
-                      setForm((prev) => ({ ...prev, date: e.target.value }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    aria-label="Select invoice date"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Due Date
-                </label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    className="w-full pl-4 pr-4 py-2.5 border border-slate-300 rounded-[25px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                    value={form.dueDate}
-                    onChange={(e) => {
-                      setForm((prev) => ({ ...prev, dueDate: e.target.value }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    aria-label="Select due date"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Receiver GSTIN
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Enter Receiver GSTIN (e.g., 22AAAAA0000A1Z5)"
-                    className="w-full pl-4 pr-4 py-2.5 border border-slate-300 rounded-[25px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                    value={form.receiverGSTIN}
+                    type="checkbox"
+                    checked={form.isTaxInvoice}
                     onChange={(e) => {
                       setForm((prev) => ({
                         ...prev,
-                        receiverGSTIN: e.target.value.toUpperCase(),
+                        isTaxInvoice: e.target.checked,
                       }));
                       setHasUnsavedChanges(true);
                     }}
-                    aria-label="Receiver GSTIN"
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                    aria-label="Enable tax invoice"
                   />
+                  <span className="ml-2 text-sm text-slate-600">
+                    Enable Tax Invoice
+                  </span>
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-700">
-                Tax Invoice
-              </label>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={form.isTaxInvoice}
-                  onChange={(e) => {
-                    setForm((prev) => ({
-                      ...prev,
-                      isTaxInvoice: e.target.checked,
-                    }));
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                  aria-label="Enable tax invoice"
-                />
-                <span className="ml-2 text-sm text-slate-600">
-                  Enable Tax Invoice
-                </span>
-              </div>
-            </div>
-
-            {form.isTaxInvoice && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-slate-700">
-                    Transaction Type
-                  </label>
-                  <select
-                    className="w-full border border-slate-300 rounded-[25px] p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                    value={form.transactionType}
-                    onChange={(e) =>
-                      handleTaxChange("transactionType", e.target.value)
-                    }
-                  >
-                    <option value="intra">Intra-State (CGST + SGST)</option>
-                    <option value="inter">Inter-State (IGST)</option>
-                  </select>
+              {form.isTaxInvoice && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-slate-700">
+                      Transaction Type
+                    </label>
+                    <select
+                      className="w-full border border-slate-300 rounded-[25px] p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                      value={form.transactionType}
+                      onChange={(e) =>
+                        handleTaxChange("transactionType", e.target.value)
+                      }
+                    >
+                      <option value="intra">Intra-State (CGST + SGST)</option>
+                      <option value="inter">Inter-State (IGST)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-slate-700">
+                      GST Rate (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      value={form.gstRate}
+                      onChange={(e) =>
+                        handleTaxChange(
+                          "gstRate",
+                          parseFloat(e.target.value) || 0
+                        )
+                      }
+                      className="w-full border border-slate-300 rounded-[25px] p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                      placeholder="18"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-slate-700">
-                    GST Rate (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.5"
-                    value={form.gstRate}
-                    onChange={(e) =>
-                      handleTaxChange(
-                        "gstRate",
-                        parseFloat(e.target.value) || 0
-                      )
-                    }
-                    className="w-full border border-slate-300 rounded-[25px] p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                    placeholder="18"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <IndianRupeeIcon className="w-5 h-5 text-slate-600" />
-                <label className="block font-semibold text-slate-700">
-                  Invoice Items
-                </label>
-              </div>
+              )}
 
               <div className="space-y-3">
-                {form.items.map((item, index) => (
-                  <div
-                    key={index}
-                    className="bg-white p-3 rounded-lg border border-slate-200 space-y-3"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Item
-                        </label>
-                        <ItemSearchSelect
-                          value={item}
-                          onSelect={(itemData) =>
-                            handleItemSelect(index, itemData)
-                          }
-                          onAddNew={handleOpenItemForm}
-                          fetchItems={fetchItems}
-                          items={items}
-                          setItems={setItems}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Description
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Item description"
-                          value={item.description}
-                          onChange={(e) => {
-                            handleItemChange(
-                              index,
-                              "description",
-                              e.target.value
-                            );
-                            setHasUnsavedChanges(true);
-                          }}
-                          className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                          aria-label="Item description"
-                        />
-                      </div>
-                    </div>
+                <div className="flex items-center gap-2">
+                  <IndianRupeeIcon className="w-5 h-5 text-slate-600" />
+                  <label className="block font-semibold text-slate-700">
+                    Invoice Items
+                  </label>
+                </div>
 
-                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-3`}>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Rate (₹)
-                        </label>
-                        <input
-                          type="number"
-                          placeholder="0"
-                          min="0"
-                          step="1"
-                          value={item.rate}
-                          onChange={(e) => {
-                            handleItemChange(index, "rate", e.target.value);
-                            setHasUnsavedChanges(true);
-                          }}
-                          className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                          required
-                          aria-label="Item rate"
-                        />
+                <div className="space-y-3">
+                  {form.items.map((item, index) => (
+                    <div
+                      key={index}
+                      className="bg-white p-3 rounded-lg border border-slate-200 space-y-3"
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-slate-600">
+                            Item
+                          </label>
+                          <ItemSearchSelect
+                            value={item}
+                            onSelect={(itemData) =>
+                              handleItemSelect(index, itemData)
+                            }
+                            onAddNew={handleOpenItemForm}
+                            fetchItems={fetchItems}
+                            items={items}
+                            setItems={setItems}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-slate-600">
+                            Description
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Item description"
+                            value={item.description}
+                            onChange={(e) => {
+                              handleItemChange(
+                                index,
+                                "description",
+                                e.target.value
+                              );
+                              setHasUnsavedChanges(true);
+                            }}
+                            className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                            aria-label="Item description"
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Quantity
-                        </label>
-                        <input
-                          type="number"
-                          placeholder="1"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            handleItemChange(index, "quantity", e.target.value);
-                            setHasUnsavedChanges(true);
-                          }}
-                          className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                          required
-                          aria-label="Item quantity"
-                        />
-                      </div>
-                      {form.isTaxInvoice && (
-                        <>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-600">
-                              HSN/SAC
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="HSN/SAC code"
-                              value={item.hsn}
-                              onChange={(e) => {
-                                handleItemChange(index, "hsn", e.target.value);
-                                setHasUnsavedChanges(true);
-                              }}
-                              className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                              required
-                              aria-label="HSN/SAC code"
-                            />
-                          </div>
+
+                      <div className={`grid grid-cols-1 md:grid-cols-2 gap-3`}>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-slate-600">
+                            Rate (₹)
+                          </label>
+                          <input
+                            type="number"
+                            placeholder="0"
+                            min="0"
+                            step="1"
+                            value={item.rate}
+                            onChange={(e) => {
+                              handleItemChange(index, "rate", e.target.value);
+                              setHasUnsavedChanges(true);
+                            }}
+                            className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                            required
+                            aria-label="Item rate"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-slate-600">
+                            Quantity
+                          </label>
+                          <input
+                            type="number"
+                            placeholder="1"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              handleItemChange(index, "quantity", e.target.value);
+                              setHasUnsavedChanges(true);
+                            }}
+                            className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                            required
+                            aria-label="Item quantity"
+                          />
+                        </div>
+                        {form.isTaxInvoice && (
+                          <>
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium text-slate-600">
+                                HSN/SAC
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="HSN/SAC code"
+                                value={item.hsn}
+                                onChange={(e) => {
+                                  handleItemChange(index, "hsn", e.target.value);
+                                  setHasUnsavedChanges(true);
+                                }}
+                                className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                                required
+                                aria-label="HSN/SAC code"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium text-slate-600">
+                                Discount
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  placeholder="0"
+                                  min="0"
+                                  step={
+                                    item.discountType === "percentage" ? "1" : "1"
+                                  }
+                                  value={item.discount}
+                                  onChange={(e) => {
+                                    handleItemChange(
+                                      index,
+                                      "discount",
+                                      e.target.value
+                                    );
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                  className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                                  aria-label="Item discount"
+                                />
+                                <select
+                                  value={item.discountType}
+                                  onChange={(e) => {
+                                    handleItemChange(
+                                      index,
+                                      "discountType",
+                                      e.target.value
+                                    );
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                  className="border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                                  aria-label="Discount type"
+                                >
+                                  <option value="amount">₹</option>
+                                  <option value="percentage">%</option>
+                                </select>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                        {!form.isTaxInvoice && (
                           <div className="space-y-2">
                             <label className="text-sm font-medium text-slate-600">
                               Discount
@@ -1489,316 +1532,269 @@ const InvoiceForm = ({
                               </select>
                             </div>
                           </div>
-                        </>
-                      )}
-                      {!form.isTaxInvoice && (
+                        )}
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-slate-600">
-                            Discount
+                            Amount
                           </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              placeholder="0"
-                              min="0"
-                              step={
-                                item.discountType === "percentage" ? "1" : "1"
-                              }
-                              value={item.discount}
-                              onChange={(e) => {
-                                handleItemChange(
-                                  index,
-                                  "discount",
-                                  e.target.value
-                                );
-                                setHasUnsavedChanges(true);
-                              }}
-                              className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                              aria-label="Item discount"
-                            />
-                            <select
-                              value={item.discountType}
-                              onChange={(e) => {
-                                handleItemChange(
-                                  index,
-                                  "discountType",
-                                  e.target.value
-                                );
-                                setHasUnsavedChanges(true);
-                              }}
-                              className="border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                              aria-label="Discount type"
-                            >
-                              <option value="amount">₹</option>
-                              <option value="percentage">%</option>
-                            </select>
+                          <div className="w-full p-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-medium">
+                            <h6>₹{calculateItemAmount(item).toFixed(2)}</h6>
                           </div>
                         </div>
-                      )}
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Amount
-                        </label>
-                        <div className="w-full p-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-medium">
-                          <h6>₹{calculateItemAmount(item).toFixed(2)}</h6>
+                      </div>
+
+                      {form.items.length > 1 && (
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItem(index)}
+                            className="flex items-center gap-2 text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-all duration-200"
+                            aria-label="Remove item"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Remove Item
+                          </button>
                         </div>
-                      </div>
+                      )}
                     </div>
+                  ))}
 
-                    {form.items.length > 1 && (
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveItem(index)}
-                          className="flex items-center gap-2 text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-all duration-200"
-                          aria-label="Remove item"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Remove Item
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={handleAddItem}
-                  className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium p-2 rounded-lg hover:bg-blue-50 transition-all duration-200"
-                  aria-label="Add another item"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Another Item
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-700">
-                Invoice Discount
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  placeholder="0"
-                  min="0"
-                  step={form.discount.type === "percentage" ? "1" : "1"}
-                  value={form.discount.value}
-                  onChange={(e) => {
-                    handleDiscountChange("value", e.target.value);
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                  aria-label="Invoice discount"
-                />
-                <select
-                  value={form.discount.type}
-                  onChange={(e) => {
-                    handleDiscountChange("type", e.target.value);
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                  aria-label="Invoice discount type"
-                >
-                  <option value="fixed">₹</option>
-                  <option value="percentage">%</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Signature Section */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <PenLine className="w-5 h-5 text-slate-600" />
-                <label className="block font-semibold text-slate-700">Signature</label>
-              </div>
-
-              {signaturesLoading ? (
-                <div className="flex items-center gap-2 text-slate-500 text-sm p-3">
-                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8h8a8 8 0 01-8 8v-8H4z" />
-                  </svg>
-                  Loading signatures...
-                </div>
-              ) : savedSignatures.length === 0 ? (
-                <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                  No saved signatures found. Add one in{" "}
-                  <span className="font-medium text-blue-600">Settings → Document Settings → Signatures</span>.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {/* No Signature option */}
                   <button
                     type="button"
-                    onClick={() => {
-                      setForm((prev) => ({ ...prev, signature: "" }));
+                    onClick={handleAddItem}
+                    className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium p-2 rounded-lg hover:bg-blue-50 transition-all duration-200"
+                    aria-label="Add another item"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Another Item
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-slate-700">
+                  Invoice Discount
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    placeholder="0"
+                    min="0"
+                    step={form.discount.type === "percentage" ? "1" : "1"}
+                    value={form.discount.value}
+                    onChange={(e) => {
+                      handleDiscountChange("value", e.target.value);
                       setHasUnsavedChanges(true);
                     }}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 text-left ${
-                      !form.signature
-                        ? "border-blue-500 bg-blue-50/60"
-                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                    }`}
-                    aria-label="No signature"
+                    className="w-full border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                    aria-label="Invoice discount"
+                  />
+                  <select
+                    value={form.discount.type}
+                    onChange={(e) => {
+                      handleDiscountChange("type", e.target.value);
+                      setHasUnsavedChanges(true);
+                    }}
+                    className="border border-slate-300 rounded-[25px] p-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                    aria-label="Invoice discount type"
                   >
-                    <div className="w-20 h-12 flex items-center justify-center bg-slate-100 rounded-lg border border-dashed border-slate-300 flex-shrink-0">
-                      <span className="text-slate-400 text-xs">None</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-700">No Signature</p>
-                      <p className="text-xs text-slate-400">Invoice will not include a signature</p>
-                    </div>
-                    {!form.signature && (
-                      <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                    )}
-                  </button>
+                    <option value="fixed">₹</option>
+                    <option value="percentage">%</option>
+                  </select>
+                </div>
+              </div>
 
-                  {/* Saved signature options */}
-                  {savedSignatures.map((sig) => (
+              {/* Signature Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <PenLine className="w-5 h-5 text-slate-600" />
+                  <label className="block font-semibold text-slate-700">Signature</label>
+                </div>
+
+                {signaturesLoading ? (
+                  <div className="flex items-center gap-2 text-slate-500 text-sm p-3">
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8h8a8 8 0 01-8 8v-8H4z" />
+                    </svg>
+                    Loading signatures...
+                  </div>
+                ) : savedSignatures.length === 0 ? (
+                  <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    No saved signatures found. Add one in{" "}
+                    <span className="font-medium text-blue-600">Settings → Document Settings → Signatures</span>.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {/* No Signature option */}
                     <button
-                      key={sig.id}
                       type="button"
                       onClick={() => {
-                        setForm((prev) => ({ ...prev, signature: sig.dataUrl || "" }));
+                        setForm((prev) => ({ ...prev, signature: "" }));
                         setHasUnsavedChanges(true);
                       }}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 text-left ${
-                        form.signature === sig.dataUrl
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 text-left ${!form.signature
                           ? "border-blue-500 bg-blue-50/60"
                           : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                      }`}
-                      aria-label={`Select signature: ${sig.name}`}
+                        }`}
+                      aria-label="No signature"
                     >
-                      <div className="w-20 h-12 flex items-center justify-center bg-white rounded-lg border border-slate-200 overflow-hidden flex-shrink-0">
-                        {sig.dataUrl ? (
-                          <img
-                            src={sig.dataUrl}
-                            alt={sig.name}
-                            className="max-w-full max-h-full object-contain"
-                          />
-                        ) : (
-                          <span className="text-slate-400 text-xs">No preview</span>
-                        )}
+                      <div className="w-20 h-12 flex items-center justify-center bg-slate-100 rounded-lg border border-dashed border-slate-300 flex-shrink-0">
+                        <span className="text-slate-400 text-xs">None</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-slate-700 truncate">{sig.name}</p>
-                          {sig.isDefault && (
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 flex-shrink-0">Default</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-400 capitalize">
-                          {sig.type === "draw" ? "Drawn" : sig.type === "upload" ? "Uploaded" : "Typed"}
-                        </p>
+                        <p className="text-sm font-medium text-slate-700">No Signature</p>
+                        <p className="text-xs text-slate-400">Invoice will not include a signature</p>
                       </div>
-                      {form.signature === sig.dataUrl && (
+                      {!form.signature && (
                         <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0" />
                       )}
                     </button>
-                  ))}
-                </div>
-              )}
-            </div>
 
-            <div className="space-y-2 p-4 bg-gradient-to-r from-slate-50 to-blue-50/30 rounded-lg border border-slate-200/50">
-              <div className="flex justify-between">
-                <span className="text-sm font-medium text-slate-600">
-                  Subtotal
-                </span>
-                <span className="text-sm font-medium text-slate-900">
-                  <h6>₹{formatNumberToIndian(subtotal)}</h6>
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm font-medium text-slate-600">
-                  Item Discounts
-                </span>
-                <span className="text-sm font-medium text-red-600">
-                  <h6>- ₹{formatNumberToIndian(totalItemDiscounts)}</h6>
-                </span>
-              </div>
-              <div className="flex justify-between border-t pt-1">
-                <span className="text-sm font-medium text-slate-600">
-                  After Item Discounts
-                </span>
-                <span className="text-sm font-medium text-slate-900">
-                  <h6>₹{formatNumberToIndian(subtotalAfterItemDiscounts)}</h6>
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm font-medium text-slate-600">
-                  Invoice Discount
-                </span>
-                <span className="text-sm font-medium text-red-600">
-                  <h6>- ₹{formatNumberToIndian(invoiceDiscountAmount)}</h6>
-                </span>
-              </div>
-              {form.isTaxInvoice && (
-                <>
-                  <div className="flex justify-between border-t pt-1">
-                    <span className="text-sm font-medium text-slate-600">
-                      Net Taxable Value
-                    </span>
-                    <span className="text-sm font-medium text-slate-900">
-                      <h6>₹{formatNumberToIndian(netTaxable)}</h6>
-                    </span>
+                    {/* Saved signature options */}
+                    {savedSignatures.map((sig) => (
+                      <button
+                        key={sig.id}
+                        type="button"
+                        onClick={() => {
+                          setForm((prev) => ({ ...prev, signature: sig.dataUrl || "" }));
+                          setHasUnsavedChanges(true);
+                        }}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 text-left ${form.signature === sig.dataUrl
+                            ? "border-blue-500 bg-blue-50/60"
+                            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                          }`}
+                        aria-label={`Select signature: ${sig.name}`}
+                      >
+                        <div className="w-20 h-12 flex items-center justify-center bg-white rounded-lg border border-slate-200 overflow-hidden flex-shrink-0">
+                          {sig.dataUrl ? (
+                            <img
+                              src={sig.dataUrl}
+                              alt={sig.name}
+                              className="max-w-full max-h-full object-contain"
+                            />
+                          ) : (
+                            <span className="text-slate-400 text-xs">No preview</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-slate-700 truncate">{sig.name}</p>
+                            {sig.isDefault && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 flex-shrink-0">Default</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-400 capitalize">
+                            {sig.type === "draw" ? "Drawn" : sig.type === "upload" ? "Uploaded" : "Typed"}
+                          </p>
+                        </div>
+                        {form.signature === sig.dataUrl && (
+                          <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                        )}
+                      </button>
+                    ))}
                   </div>
-                  {form.transactionType === "intra" ? (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-sm font-medium text-slate-600">
-                          CGST @{form.gstRate / 2}%
-                        </span>
-                        <span className="text-sm font-medium text-slate-900">
-                          <h6>₹{formatNumberToIndian(cgstAmount)}</h6>
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm font-medium text-slate-600">
-                          SGST @{form.gstRate / 2}%
-                        </span>
-                        <span className="text-sm font-medium text-slate-900">
-                          <h6>₹{formatNumberToIndian(sgstAmount)}</h6>
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex justify-between">
+                )}
+              </div>
+
+              <div className="space-y-2 p-4 bg-gradient-to-r from-slate-50 to-blue-50/30 rounded-lg border border-slate-200/50">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-slate-600">
+                    Subtotal
+                  </span>
+                  <span className="text-sm font-medium text-slate-900">
+                    <h6>₹{formatNumberToIndian(subtotal)}</h6>
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-slate-600">
+                    Item Discounts
+                  </span>
+                  <span className="text-sm font-medium text-red-600">
+                    <h6>- ₹{formatNumberToIndian(totalItemDiscounts)}</h6>
+                  </span>
+                </div>
+                <div className="flex justify-between border-t pt-1">
+                  <span className="text-sm font-medium text-slate-600">
+                    After Item Discounts
+                  </span>
+                  <span className="text-sm font-medium text-slate-900">
+                    <h6>₹{formatNumberToIndian(subtotalAfterItemDiscounts)}</h6>
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-slate-600">
+                    Invoice Discount
+                  </span>
+                  <span className="text-sm font-medium text-red-600">
+                    <h6>- ₹{formatNumberToIndian(invoiceDiscountAmount)}</h6>
+                  </span>
+                </div>
+                {form.isTaxInvoice && (
+                  <>
+                    <div className="flex justify-between border-t pt-1">
                       <span className="text-sm font-medium text-slate-600">
-                        IGST @{form.gstRate}%
+                        Net Taxable Value
                       </span>
                       <span className="text-sm font-medium text-slate-900">
-                        <h6>₹{igstAmount.toLocaleString()}</h6>
+                        <h6>₹{formatNumberToIndian(netTaxable)}</h6>
                       </span>
                     </div>
-                  )}
-                  <div className="flex justify-between border-t pt-1">
-                    <span className="text-sm font-bold text-slate-600">
-                      Total Tax
-                    </span>
-                    <span className="text-sm font-bold text-slate-900">
-                      <h6>₹{totalTax.toLocaleString()}</h6>
-                    </span>
-                  </div>
-                </>
-              )}
-              <div className="flex justify-between border-t pt-1 mt-1">
-                <span className="text-lg font-bold text-slate-900">
-                  Final Total
-                </span>
-                <span className="text-lg font-bold text-slate-900">
-                  <h6>₹{formatNumberToIndian(finalTotal)}</h6>
-                </span>
-              </div>
-              <div className="text-sm text-slate-600 italic text-right mt-1">
-                {numberToWords(finalTotal)}
+                    {form.transactionType === "intra" ? (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium text-slate-600">
+                            CGST @{form.gstRate / 2}%
+                          </span>
+                          <span className="text-sm font-medium text-slate-900">
+                            <h6>₹{formatNumberToIndian(cgstAmount)}</h6>
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium text-slate-600">
+                            SGST @{form.gstRate / 2}%
+                          </span>
+                          <span className="text-sm font-medium text-slate-900">
+                            <h6>₹{formatNumberToIndian(sgstAmount)}</h6>
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between">
+                        <span className="text-sm font-medium text-slate-600">
+                          IGST @{form.gstRate}%
+                        </span>
+                        <span className="text-sm font-medium text-slate-900">
+                          <h6>₹{igstAmount.toLocaleString()}</h6>
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t pt-1">
+                      <span className="text-sm font-bold text-slate-600">
+                        Total Tax
+                      </span>
+                      <span className="text-sm font-bold text-slate-900">
+                        <h6>₹{totalTax.toLocaleString()}</h6>
+                      </span>
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-between border-t pt-1 mt-1">
+                  <span className="text-lg font-bold text-slate-900">
+                    Final Total
+                  </span>
+                  <span className="text-lg font-bold text-slate-900">
+                    <h6>₹{formatNumberToIndian(finalTotal)}</h6>
+                  </span>
+                </div>
+                <div className="text-sm text-slate-600 italic text-right mt-1">
+                  {numberToWords(finalTotal)}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="p-4 border-t flex-shrink-0 bg-white">
+          <div className="p-4 border-t flex-shrink-0 bg-white">
             <div className="flex flex-col md:flex-row justify-between items-center gap-3 p-4 bg-gradient-to-r from-slate-50 to-blue-50/30 rounded-lg border border-slate-200/50">
               <button
                 type="submit"
