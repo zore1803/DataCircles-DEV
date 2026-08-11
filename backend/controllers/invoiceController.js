@@ -68,9 +68,10 @@ const createInvoice = async (req, res) => {
       transactionType,
       gstRate,
       invoicePrefix,
-      invoiceSuffix,
       invoiceNumber,
       nextInvoiceNumber,
+      billingAddress,
+      shippingAddress,
     } = req.body;
 
     // Validate items
@@ -201,6 +202,23 @@ const createInvoice = async (req, res) => {
       );
     }
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+    let finalReceiverGSTIN = receiverGSTIN;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+      if (!finalReceiverGSTIN) {
+        finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
+
     const invoice = new Invoice({
       deal,
       date,
@@ -215,7 +233,9 @@ const createInvoice = async (req, res) => {
       isTaxInvoice,
       signature,
       signatureType,
-      receiverGSTIN,
+      receiverGSTIN: finalReceiverGSTIN,
+      billingAddress: finalBillingAddress,
+      shippingAddress: finalShippingAddress,
       transactionType: isTaxInvoice ? transactionType || "intra" : undefined,
       gstRate: isTaxInvoice ? gstRate || 18 : undefined,
       invoiceNumber: finalInvoiceNumber,
@@ -525,6 +545,8 @@ const updateInvoice = async (req, res) => {
       signature,
       signatureType,
       receiverGSTIN,
+      billingAddress,
+      shippingAddress,
       transactionType,
       gstRate,
     } = req.body;
@@ -595,6 +617,23 @@ const updateInvoice = async (req, res) => {
     //   return res.status(400).json({ error: "Provided amount does not match calculated amount" });
     // }
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+    let finalReceiverGSTIN = receiverGSTIN;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+      if (!finalReceiverGSTIN) {
+        finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
+
     const invoice = await Invoice.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -614,7 +653,9 @@ const updateInvoice = async (req, res) => {
         isTaxInvoice,
         signature,
         signatureType,
-        receiverGSTIN, // Added receiverGSTIN
+        receiverGSTIN: finalReceiverGSTIN,
+        billingAddress: finalBillingAddress,
+        shippingAddress: finalShippingAddress,
         transactionType: isTaxInvoice ? transactionType || "intra" : undefined,
         gstRate: isTaxInvoice ? gstRate || 18 : undefined,
       },
