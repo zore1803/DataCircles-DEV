@@ -892,15 +892,19 @@ const Header = () => {
   useEffect(() => {
     const companyMatch = location.pathname.match(/^\/companies\/([^/]+)$/);
     const contactMatch = location.pathname.match(/^\/contacts\/([^/]+)$/);
-    const match = companyMatch || contactMatch;
+    const vendorMatch = location.pathname.match(/^\/vendors\/([^/]+)$/);
+    const match = companyMatch || contactMatch || vendorMatch;
     if (!match) {
       setDynamicCrumbName("");
       return;
     }
     const entityId = match[1];
     const isContact = !!contactMatch;
-    const list = isContact ? contacts : companies;
-    const endpoint = isContact ? "contacts" : "companies";
+    const isVendor = !!vendorMatch;
+    // Vendors have no preloaded list in this header (unlike companies/
+    // contacts), so they always fall through to the fetch below.
+    const list = isContact ? contacts : isVendor ? [] : companies;
+    const endpoint = isContact ? "contacts" : isVendor ? "vendors" : "companies";
     const cached = list.find((c) => c._id === entityId);
     if (cached) {
       setDynamicCrumbName(cached.name);
