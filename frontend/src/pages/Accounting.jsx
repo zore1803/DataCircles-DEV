@@ -54,7 +54,18 @@ import InvoiceStylePreview from "../components/invoice/InvoiceStylePreview";
 import InvoiceLivePreview from "../components/invoice/InvoiceLivePreview";
 import TemplateDrawer from "../components/invoice/TemplateDrawer";
 import NotesTermsDrawer from "../components/invoice/NotesTermsDrawer";
-import { buildDocumentHtml } from "../../../shared/documentTemplates.js";
+import { buildDocumentHtml, GST_RATES, splitGst } from "../../../shared/documentTemplates.js";
+import {
+  SectionHeader,
+  FieldLabel,
+  PickerSelect,
+  AddressFieldsGroup,
+  emptyAddress,
+  isAddressEmpty,
+  GSTIN_REGEX,
+  blankItem,
+} from "../components/invoice/formPrimitives.jsx";
+import FullWidthDocumentPanel from "../components/invoice/FullWidthDocumentPanel.jsx";
 import useNavReset from "../hooks/useNavReset";
 import PerformaInvoiceStylePreview from "../components/PerformaInvoice/PerformaInvoiceStylePreview";
 import QuickBrandingModal from "../components/invoice/QuickBrandingModal";
@@ -69,17 +80,6 @@ import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 
 import SearchIcon from "../components/common/SearchIcon";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
-const SectionHeader = ({ number, title }) => (
-  <div className="flex items-center gap-2.5 w-full mb-1.5 mt-2 first:mt-0">
-    <div className="flex items-center justify-center w-5 h-5 rounded-full bg-[#F0F6FF] text-[#0085FF] text-[10px] font-semibold flex-shrink-0">
-      {number}
-    </div>
-    <span className="text-[15px] font-semibold text-[#1F2937] whitespace-nowrap">
-      {title}
-    </span>
-  </div>
-);
-
 /* Drops the organization's saved boilerplate (Settings → document defaults)
    into a notes/terms box, so the same footer text doesn't have to be retyped
    on every document. Disabled — with the reason in the tooltip — when there's
@@ -542,179 +542,6 @@ function numberToWords(num) {
 
 // Single source of truth for the template list — the same one the renderer and
 // the PDF generator use, so a template added there shows up here automatically.
-const GSTIN_REGEX =
-  /^[0-9]{2}[A-Z0-9]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$/;
-
-const blankItem = () => ({
-  _id: null,
-  name: "",
-  description: "",
-  rate: "",
-  quantity: 1,
-  hsn: "",
-  isVariant: false,
-  parentItemId: null,
-  discountType: "amount",
-  discount: 0,
-});
-
-/* Small searchable select used for the Deal and Item pickers. Kept local so the
-   panel doesn't inherit behaviour from the older form's dropdowns. */
-const PickerSelect = ({
-  value,
-  options,
-  placeholder,
-  onSelect,
-  searchable = true,
-  icon: Icon,
-}) => {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [dropdownStyle, setDropdownStyle] = useState({});
-  const wrapRef = useRef(null);
-  const dropdownRef = useRef(null);
-
-  const updatePosition = useCallback(() => {
-    if (open && wrapRef.current) {
-      // rect is VISUAL px; this dropdown portals to document.body, which
-      // paints inside the app's dynamic <html> zoom, so every rect-derived
-      // value has to be divided by that zoom or it drifts off-position —
-      // same correction the column menu and drag ghost already apply.
-      const zoom = getAncestorZoom(document.body);
-      const rect = wrapRef.current.getBoundingClientRect();
-      const left = rect.left / zoom;
-      const top = rect.top / zoom;
-      const bottom = rect.bottom / zoom;
-      const triggerWidth = rect.width / zoom;
-      const viewportWidth = window.innerWidth / zoom;
-      const viewportHeight = window.innerHeight / zoom;
-      const spaceBelow = viewportHeight - bottom;
-      const spaceAbove = top;
-      const MARGIN = 8;
-
-      // Item pickers sit in narrow grid columns — tying the dropdown's width
-      // to the trigger's own width (as narrow as ~80px there) is what made
-      // it look like a crushed little box. Give it a real minimum width
-      // instead, and clamp so it never runs past the right edge.
-      const width = Math.max(triggerWidth, 260);
-      let left_ = Math.min(left, viewportWidth - width - MARGIN);
-      left_ = Math.max(left_, MARGIN);
-
-      let style = {
-        position: "fixed",
-        left: `${left_}px`,
-        width: `${width}px`,
-        zIndex: 99999, // Ensure it floats above dialogs
-      };
-
-      if (spaceBelow < 256 && spaceAbove > spaceBelow) {
-        style.bottom = `${viewportHeight - top + 4}px`;
-        style.maxHeight = `${Math.min(256, spaceAbove - 16)}px`;
-      } else {
-        style.top = `${bottom + 4}px`;
-        style.maxHeight = `${Math.min(256, spaceBelow - 16)}px`;
-      }
-      setDropdownStyle(style);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (open) {
-      updatePosition();
-      window.addEventListener("resize", updatePosition);
-      window.addEventListener("scroll", updatePosition, true);
-      return () => {
-        window.removeEventListener("resize", updatePosition);
-        window.removeEventListener("scroll", updatePosition, true);
-      };
-    }
-  }, [open, updatePosition]);
-
-  useEffect(() => {
-    const onDocClick = (e) => {
-      const clickedInWrap = wrapRef.current && wrapRef.current.contains(e.target);
-      const clickedInDropdown = dropdownRef.current && dropdownRef.current.contains(e.target);
-      if (!clickedInWrap && !clickedInDropdown) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
-  const selected = options.find((o) => o.value === value);
-  const filtered = query
-    ? options.filter((o) =>
-      o.label.toLowerCase().includes(query.toLowerCase())
-    )
-    : options;
-
-  return (
-    <div ref={wrapRef} className="relative w-full min-w-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full h-10 flex items-center gap-2 px-3 rounded-[25px] border border-[#E1E4EA] bg-white text-left hover:border-[#C9CFD8] focus:outline-none focus:border-[#0085FF] transition-colors"
-      >
-        {Icon && <Icon className="w-4 h-4 text-gray-400 flex-shrink-0" />}
-        <span
-          className={`flex-1 truncate text-sm ${selected ? "text-[#1F2937]" : "text-[#99A0AE]"
-            }`}
-        >
-          {selected ? selected.label : placeholder}
-        </span>
-        <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
-      </button>
-
-      {open && createPortal(
-        <div
-          ref={dropdownRef}
-          style={dropdownStyle}
-          className="bg-white border border-[#E1E4EA] rounded-lg shadow-xl flex flex-col overflow-hidden"
-        >
-          {searchable && (
-            <div className="p-2 bg-white border-b border-[#E1E4EA] flex-shrink-0">
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search..."
-                className="w-full h-8 px-2 text-sm rounded-md border border-[#E1E4EA] focus:outline-none focus:border-[#0085FF]"
-              />
-            </div>
-          )}
-          <div className="overflow-y-auto flex-1">
-            {filtered.length === 0 && (
-              <p className="px-3 py-3 text-sm text-gray-400">No results</p>
-            )}
-            {filtered.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => {
-                  onSelect(o);
-                  setOpen(false);
-                  setQuery("");
-                }}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors ${o.value === value ? "bg-blue-50 text-blue-600 font-medium" : "text-gray-700"
-                  }`}
-              >
-                <span className="flex-1 truncate">{o.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-};
-
-const FieldLabel = ({ children, required }) => (
-  <label className="block text-xs text-[#525866] mb-1.5">
-    {children}
-    {required && <span className="text-red-500 ml-0.5">*</span>}
-  </label>
-);
-
 /* The "Add Invoice" experience for the Invoices tab: details on the left,
    live preview on the right. */
 const CreateInvoicePanel = ({
@@ -740,6 +567,7 @@ const CreateInvoicePanel = ({
     let n = 1;
     const pad = (v) => String(v).padStart(2, "0");
     const out = { details: pad(n++) };
+    out.address = pad(n++);
     if (supportsGSTIN) out.billing = pad(n++);
     out.items = pad(n++);
     out.notes = pad(n++);
@@ -756,6 +584,15 @@ const CreateInvoicePanel = ({
           date: initialDoc.date ? initialDoc.date.slice(0, 10) : "",
           dueDate: initialDoc.dueDate ? initialDoc.dueDate.slice(0, 10) : "",
           receiverGSTIN: initialDoc.receiverGSTIN || "",
+          billingAddress: { ...emptyAddress(), ...(initialDoc.billingAddress || {}) },
+          shippingAddress: { ...emptyAddress(), ...(initialDoc.shippingAddress || {}) },
+          // "Same as billing" starts checked when the saved shipping address
+          // is blank or textually identical to billing — otherwise the two
+          // were deliberately set apart and shouldn't silently collapse.
+          sameAsBilling:
+            isAddressEmpty(initialDoc.shippingAddress) ||
+            JSON.stringify({ ...emptyAddress(), ...(initialDoc.billingAddress || {}) }) ===
+              JSON.stringify({ ...emptyAddress(), ...(initialDoc.shippingAddress || {}) }),
           isTaxInvoice:
             initialDoc[type === "quotation" ? "isTaxQuotation" : "isTaxInvoice"] ||
             false,
@@ -792,6 +629,9 @@ const CreateInvoicePanel = ({
           date: "",
           dueDate: "",
           receiverGSTIN: "",
+          billingAddress: emptyAddress(),
+          shippingAddress: emptyAddress(),
+          sameAsBilling: true,
           isTaxInvoice: false,
           transactionType: "intra",
           gstRate: 18,
@@ -1124,7 +964,13 @@ const CreateInvoicePanel = ({
         : form.discount.value
       : 0;
   const netTaxable = afterItemDiscounts - invoiceDiscountAmount;
-  const taxAmount = form.isTaxInvoice ? netTaxable * (form.gstRate / 100) : 0;
+  // Same split used for the item table and totals in the PDF/live preview
+  // (buildDocumentHtml → computeDocument → splitGst) — kept as one function
+  // so this summary can never disagree with what actually prints.
+  const gstSplit = form.isTaxInvoice
+    ? splitGst(netTaxable, form.gstRate, form.transactionType)
+    : { cgst: 0, sgst: 0, igst: 0, isInterState: false };
+  const taxAmount = gstSplit.cgst + gstSplit.sgst + gstSplit.igst;
   const finalTotal = netTaxable + taxAmount;
 
   const money = (n) =>
@@ -1190,6 +1036,14 @@ const CreateInvoicePanel = ({
       if (supportsGSTIN) {
         payload.receiverGSTIN = form.receiverGSTIN.trim().toUpperCase();
       }
+      // Sent for every document type — the backend model carries billing/
+      // shipping address on invoices, pro forma invoices, quotations and
+      // delivery challans alike. Left blank, the server falls back to the
+      // deal's company address on its own.
+      payload.billingAddress = form.billingAddress;
+      payload.shippingAddress = form.sameAsBilling
+        ? form.billingAddress
+        : form.shippingAddress;
       if (supportsTax) {
         payload[taxFlagKey] = form.isTaxInvoice;
       }
@@ -1522,6 +1376,31 @@ const CreateInvoicePanel = ({
           className="@container max-lg:!w-full flex-shrink-0 bg-white p-3 lg:p-4 lg:pr-6 overflow-y-auto self-stretch"
         >
           <div className="w-full flex flex-col items-start gap-1">
+          {/* Sections 01-04 (Details/Address/GST/Items) swap to the
+              full-width table layout when the preview is hidden — same form
+              state and handlers either way, just a different arrangement.
+              Notes onward always renders from this file, unchanged. */}
+          {hidePreview ? (
+            <FullWidthDocumentPanel
+              type={type}
+              docName={docName}
+              supportsGSTIN={supportsGSTIN}
+              supportsTax={supportsTax}
+              sectionNo={sectionNo}
+              form={form}
+              setField={setField}
+              setForm={setForm}
+              deals={deals}
+              dealOptions={dealOptions}
+              onAddDeal={onAddDeal}
+              catalogue={catalogue}
+              addItem={addItem}
+              removeItem={removeItem}
+              updateItem={updateItem}
+              stripHtml={stripHtml}
+            />
+          ) : (
+          <>
           <SectionHeader number={sectionNo.details} title={`${docName} Details`} />
           <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-2 w-full">
             <div className="flex flex-col gap-1">
@@ -1533,16 +1412,28 @@ const CreateInvoicePanel = ({
                   placeholder="Search and select deal"
                   icon={Search}
                   onSelect={(o) => {
-                    // Select the deal and, for GSTIN-bearing docs, auto-fill the
-                    // Receiver GSTIN from the deal's company when it has one.
+                    // Switching the deal always replaces the Receiver GSTIN
+                    // and billing/shipping address with whatever the new
+                    // deal's company has — including clearing them to empty
+                    // when that company doesn't have them saved. Carrying
+                    // over the previous deal's company data would attach it
+                    // to a company it was never actually collected for.
                     const selectedDeal = deals.find((d) => d._id === o.value);
+                    const company = selectedDeal?.company;
+                    const nextBilling =
+                      company && !isAddressEmpty(company.billingAddress)
+                        ? { ...emptyAddress(), ...company.billingAddress }
+                        : emptyAddress();
+                    const nextShipping =
+                      company && !isAddressEmpty(company.shippingAddresses?.[0])
+                        ? { ...emptyAddress(), ...company.shippingAddresses[0] }
+                        : emptyAddress();
                     setForm((p) => ({
                       ...p,
                       deal: o.value,
-                      receiverGSTIN:
-                        supportsGSTIN && selectedDeal?.company?.gstin
-                          ? selectedDeal.company.gstin
-                          : p.receiverGSTIN,
+                      receiverGSTIN: supportsGSTIN ? company?.gstin || "" : p.receiverGSTIN,
+                      billingAddress: nextBilling,
+                      shippingAddress: p.sameAsBilling ? nextBilling : nextShipping,
                     }));
                   }}
                 />
@@ -1589,47 +1480,101 @@ const CreateInvoicePanel = ({
                 </div>
                 <div className="w-10 flex-shrink-0" aria-hidden="true" />
               </div>
-            </div>
-
-            {/* Quick set — sits in the empty grid cell to the RIGHT of Due Date.
-                justify-end bottom-aligns the control so it lines up exactly with
-                the Due Date input rather than its label. Fills Due Date from the
-                document date + N days; the document date must be picked first,
-                otherwise there is no base to add days to. */}
-            <div className="flex flex-col justify-end gap-1">
-              <div className="flex items-center h-10">
-                <select
-                  value=""
-                  disabled={!form.date}
-                  title={
-                    form.date
-                      ? `Set Due Date from the ${docName} date`
-                      : `Select the ${docName} date first`
-                  }
-                  onChange={(e) => {
-                    const days = Number(e.target.value);
-                    if (!days) return;
-                    if (!form.date) {
-                      toast.error(`Please select the ${docName} date first.`);
-                      return;
-                    }
-                    const d = new Date(form.date);
-                    d.setDate(d.getDate() + days);
-                    setField("dueDate", d.toISOString().split("T")[0]);
-                  }}
-                  className={`h-10 px-4 text-[13px] font-medium rounded-[25px] border-none focus:outline-none transition-colors ${
-                    form.date
-                      ? "text-blue-600 bg-blue-50 hover:bg-blue-100 cursor-pointer"
-                      : "text-gray-400 bg-gray-100 cursor-not-allowed"
-                  }`}
+              {/* Quick set, below the field rather than beside it so it reads
+                  as "options for this input" instead of a competing control.
+                  Always computed from the Invoice Date, never from whatever
+                  Due Date currently holds — so re-clicking the same button
+                  is idempotent, and it stays disabled (with an explanatory
+                  title) until an Invoice Date exists to add days to. Picking
+                  a Due Date this way never re-runs on its own afterwards: if
+                  the Invoice Date is edited later, the existing Due Date is
+                  left as-is unless a quick-set button is clicked again. */}
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span
+                  className={`text-[11px] font-medium ${form.date ? "text-[#99A0AE]" : "text-[#C9CFD8]"}`}
                 >
-                  <option value="" disabled>Quick set…</option>
-                  <option value="7">+7 Days</option>
-                  <option value="15">+15 Days</option>
-                  <option value="30">+30 Days</option>
-                </select>
+                  Quick set:
+                </span>
+                {[7, 15, 30].map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    disabled={!form.date}
+                    title={
+                      form.date
+                        ? `Set Due Date to ${days} days after the ${docName} date`
+                        : `Select the ${docName} date first`
+                    }
+                    onClick={() => {
+                      if (!form.date) {
+                        toast.error(`Please select the ${docName} date first.`);
+                        return;
+                      }
+                      const d = new Date(form.date);
+                      d.setDate(d.getDate() + days);
+                      setField("dueDate", d.toISOString().split("T")[0]);
+                    }}
+                    className={`h-6 px-2.5 text-[11px] font-medium rounded-full border-none focus:outline-none transition-colors ${
+                      form.date
+                        ? "text-[#525866] bg-[#F5F7FA] hover:bg-[#E1E4EA] cursor-pointer"
+                        : "text-[#C9CFD8] bg-[#F5F7FA] cursor-not-allowed"
+                    }`}
+                  >
+                    {days} days
+                  </button>
+                ))}
               </div>
             </div>
+          </div>
+
+          <SectionHeader number={sectionNo.address} title="Billing & Shipping Address" />
+          <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-2 w-full">
+            <AddressFieldsGroup
+              label="Billing address"
+              value={form.billingAddress}
+              onChange={(next) =>
+                setForm((p) => ({
+                  ...p,
+                  billingAddress: next,
+                  shippingAddress: p.sameAsBilling ? next : p.shippingAddress,
+                }))
+              }
+            />
+            <div className="flex items-center gap-2 @md:col-span-2 -mb-1">
+              <button
+                type="button"
+                onClick={() =>
+                  setForm((p) => {
+                    const nowSame = !p.sameAsBilling;
+                    return {
+                      ...p,
+                      sameAsBilling: nowSame,
+                      shippingAddress: nowSame ? p.billingAddress : p.shippingAddress,
+                    };
+                  })
+                }
+                className="flex-shrink-0"
+              >
+                <span
+                  className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${form.sameAsBilling ? "bg-[#0085FF]" : "bg-[#E1E4EA]"
+                    }`}
+                >
+                  <span
+                    className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.sameAsBilling ? "translate-x-4" : "translate-x-0"
+                      }`}
+                  />
+                </span>
+              </button>
+              <span className="text-[12px] font-medium text-[#1F2937]">
+                Shipping address same as billing
+              </span>
+            </div>
+            <AddressFieldsGroup
+              label="Shipping address"
+              value={form.shippingAddress}
+              disabled={!!form.sameAsBilling}
+              onChange={(next) => setField("shippingAddress", next)}
+            />
           </div>
 
           {supportsGSTIN && (
@@ -1679,6 +1624,48 @@ const CreateInvoicePanel = ({
                 </div>
               </div>
             </div>
+
+            {form.isTaxInvoice && (
+              <>
+                <div className="flex flex-col gap-1">
+                  <FieldLabel required>GST Rate</FieldLabel>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={form.gstRate}
+                      onChange={(e) => setField("gstRate", Number(e.target.value))}
+                      className={`${inputClass} flex-1 min-w-0`}
+                    >
+                      {GST_RATES.map((r) => (
+                        <option key={r} value={r}>
+                          {r}%
+                        </option>
+                      ))}
+                    </select>
+                    <div className="w-10 flex-shrink-0" aria-hidden="true" />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <FieldLabel required>Transaction Type</FieldLabel>
+                  {/* Decides whether GST splits as CGST + SGST (buyer in the
+                      same state) or is charged in full as IGST (buyer in a
+                      different state) — see splitGst() in
+                      shared/documentTemplates.js, the single place this
+                      split is calculated for both the preview and the PDF. */}
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={form.transactionType}
+                      onChange={(e) => setField("transactionType", e.target.value)}
+                      className={`${inputClass} flex-1 min-w-0`}
+                    >
+                      <option value="intra">Intra-state (CGST + SGST)</option>
+                      <option value="inter">Inter-state (IGST)</option>
+                    </select>
+                    <div className="w-10 flex-shrink-0" aria-hidden="true" />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           </>
           )}
@@ -1927,6 +1914,8 @@ const CreateInvoicePanel = ({
             <Plus className="w-4 h-4" />
             Add Another Item
           </button>
+          </>
+          )}
 
           {/* Notes and terms — free text printed in the document's footer.
               Left empty, that footer block simply doesn't appear. They sit
@@ -2115,12 +2104,29 @@ const CreateInvoicePanel = ({
                   <span>- {money(invoiceDiscountAmount)}</span>
                 </div>
                 {form.isTaxInvoice && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>GST ({form.gstRate}%)</span>
-                    <span className="font-medium text-[#1F2937]">
-                      {money(taxAmount)}
-                    </span>
-                  </div>
+                  gstSplit.isInterState ? (
+                    <div className="flex justify-between text-gray-600">
+                      <span>IGST ({form.gstRate}%)</span>
+                      <span className="font-medium text-[#1F2937]">
+                        {money(gstSplit.igst)}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-gray-600">
+                        <span>CGST ({form.gstRate / 2}%)</span>
+                        <span className="font-medium text-[#1F2937]">
+                          {money(gstSplit.cgst)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-gray-600">
+                        <span>SGST ({form.gstRate / 2}%)</span>
+                        <span className="font-medium text-[#1F2937]">
+                          {money(gstSplit.sgst)}
+                        </span>
+                      </div>
+                    </>
+                  )
                 )}
                 <div className="flex justify-between items-center px-2.5 py-1.5 rounded-lg bg-[#F0F6FF]">
                   <span className="font-bold text-[#0085FF]">Final Total</span>
@@ -3022,34 +3028,15 @@ const Accounting = () => {
     }
   };
 
+  // Repointed to the same two-pane CreateInvoicePanel the document number/
+  // title click and the "Add [Document]" button use, so the pencil icon no
+  // longer opens the legacy per-type *Form.jsx components. CreateInvoicePanel
+  // does its own item/date normalization from the raw doc, same as the
+  // number-click handler below.
   const handleEdit = (doc, type) => {
-    try {
-      setEditing({
-        ...doc,
-        items: doc.items.map((item) => ({
-          _id: item.itemId,
-          name: item.name,
-          description: item.description || "",
-          rate: item.rate,
-          quantity: item.quantity,
-          hsn: item.hsn || "",
-          isVariant: item.isVariant || false,
-          parentItemId: item.parentItemId || null,
-          discountType: item.discountType || "amount",
-          discount: item.discount || 0,
-        })),
-        date: doc.date ? new Date(doc.date).toISOString().slice(0, 10) : "",
-        dueDate: doc.dueDate
-          ? new Date(doc.dueDate).toISOString().slice(0, 10)
-          : "",
-        discount: doc.discount || { type: "fixed", value: 0 },
-      });
-      setEditingType(type);
-      setShowForm(true);
-    } catch (err) {
-      toast.error("Failed to prepare document for editing");
-      console.error("Edit error:", err);
-    }
+    if (activeTab !== type) setActiveTab(type);
+    setEditPanelDoc(doc);
+    setShowCreatePanel(true);
   };
 
   const handleDelete = (id, type) => {
@@ -4513,9 +4500,11 @@ const Accounting = () => {
           }}
           onComplete={() => {
             if (pendingInvoiceCreation) {
-              setEditing(null);
-              setEditingType(activeTab);
-              setShowForm(true);
+              // Same two-pane panel the "Add [Document]" button opens when
+              // branding is already complete — branding-gated tax invoices
+              // now land in the same place as every other create/edit flow.
+              setEditPanelDoc(null);
+              setShowCreatePanel(true);
               setPendingInvoiceCreation(false);
             }
           }}

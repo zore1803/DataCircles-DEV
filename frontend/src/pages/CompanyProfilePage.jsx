@@ -518,6 +518,19 @@ const CompanyProfilePage = () => {
     return { year, month, today: today.getDate(), days };
   })();
 
+  const futureEventDays = new Set(
+    [...tasks, ...meetings]
+      .map((item) => new Date(item.dueDate || item.scheduledAt))
+      .filter(
+        (d) =>
+          !isNaN(d) &&
+          d.getFullYear() === miniCalendar.year &&
+          d.getMonth() === miniCalendar.month &&
+          d.getDate() > miniCalendar.today
+      )
+      .map((d) => d.getDate())
+  );
+
   const upcomingItems = [...tasks, ...meetings]
     .map((item) => ({
       title: item.title,
@@ -1389,7 +1402,7 @@ const CompanyProfilePage = () => {
                         {miniCalendar.days.map((day, idx) => (
                           <div
                             key={idx}
-                            className={`text-[11px] text-center py-1 rounded-full ${day === miniCalendar.today
+                            className={`relative text-[11px] text-center py-1 rounded-full ${day === miniCalendar.today
                               ? "bg-blue-600 text-white font-semibold"
                               : day
                                 ? "text-gray-700"
@@ -1397,6 +1410,9 @@ const CompanyProfilePage = () => {
                               }`}
                           >
                             {day || ""}
+                            {day && futureEventDays.has(day) && (
+                              <span className="absolute top-[2px] left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#1E3A8A]"></span>
+                            )}
                           </div>
                         ))}
                       </div>
