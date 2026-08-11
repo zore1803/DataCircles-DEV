@@ -1,6 +1,7 @@
 const Organization = require('../models/Organization');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
+const { getAccessEntitlementEnd } = require('../utils/prorationMath');
 const SubscriptionPayment = require('../models/SubscriptionPayment.js');
 const Invoice = require('../models/Invoice');
 const Deal = require('../models/Deal');
@@ -1613,11 +1614,19 @@ const adminCancelSubscriptionForOrganization = async (req, res) => {
       const organization = await Organization.findById(organizationId);
       const updatedSubscription = await Subscription.findOne({ organization: organizationId });
 
+      // Hotfix (docs/audit/PHASE3_ENTITLEMENT_WINDOW_SCHEMA_TRACE.md finding
+      // #16-17): this used to read currentPeriodEnd directly for the "access
+      // until X" claim — the ROLLING invoice-cycle field, not the customer's
+      // actual paid-for entitlement. getAccessEntitlementEnd() returns
+      // currentPeriodEnd unchanged for monthly (identical wording to before)
+      // and the real anchor-relative entitlement window end for yearly.
+      const entitlementEnd = updatedSubscription ? getAccessEntitlementEnd(updatedSubscription) : null;
+
       if (updatedSubscription) {
         updatedSubscription.adminNotice = {
           message: wasTrial
             ? 'Your trial was cancelled by our support team.'
-            : `Your subscription was cancelled by our support team. You'll continue to have access until ${updatedSubscription.currentPeriodEnd ? new Date(updatedSubscription.currentPeriodEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : 'the end of your current billing period'}.`,
+            : `Your subscription was cancelled by our support team. You'll continue to have access until ${entitlementEnd ? new Date(entitlementEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : 'the end of your current billing period'}.`,
           createdAt: new Date(),
         };
         await updatedSubscription.save();
@@ -1627,7 +1636,7 @@ const adminCancelSubscriptionForOrganization = async (req, res) => {
         await sendSubscriptionCancelledByAdminEmail(
           adminUser,
           organization,
-          updatedSubscription?.currentPeriodEnd,
+          entitlementEnd,
           wasTrial
         );
       } catch (emailError) {

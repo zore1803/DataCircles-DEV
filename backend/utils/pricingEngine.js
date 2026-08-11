@@ -32,16 +32,42 @@ function resolveModifierAmount(modifier, runningSubtotal) {
   return Math.max(0, Math.min(amount, runningSubtotal));
 }
 
+// Phase 3 item 5b (BILLING_DOMAIN_SPECIFICATION.md §3.3 Stage 6/7 — Coupon
+// strictly before Referral, "mathematically required, not a preference"):
+// the engine derives ordering from each modifier's OWN `type`, never from a
+// caller-supplied `.priority` field or the array order it was handed in.
+//
+// This was previously enforced only by utils/modifierResolver.js's
+// resolveModifiers() sorting its own output by a `priority` field it
+// attaches — but that function was never actually called by any production
+// code path (confirmed by grep), and real modifier objects are inconsistently
+// shaped: some (built via modifierResolver.js's rewardToModifier()) carry
+// `priority`, others (built ad hoc inline, e.g. subscriptionController.js's
+// coupon literal at createSubscription) don't. Sorting by a caller-supplied
+// `.priority` field would silently break — `undefined - 20 = NaN` — the
+// moment a coupon and a referral modifier were ever combined in one array,
+// which is exactly what stopped being purely hypothetical once Phase 3 item
+// 5a's controller migrations started combining modifiers into the same
+// resolvedModifiers array. Deriving order from `type` here instead means
+// every modifier sorts correctly regardless of what metadata its builder did
+// or didn't attach — the engine no longer trusts anything about the caller.
+const MODIFIER_STAGE = { coupon: 6, referral: 7 }; // matches Chapter 3.3's own stage numbers
+
+function sortModifiersByStage(modifiers) {
+  return [...modifiers].sort((a, b) => (MODIFIER_STAGE[a.type] ?? 99) - (MODIFIER_STAGE[b.type] ?? 99));
+}
+
 // Applies an ordered Modifier[] to a raw rupee amount that ISN'T a full
 // plan+add-ons subtotal — e.g. a one-time prorated charge (add-on purchase,
 // upgrade proration) where there's no "plan" to build a full snapshot for.
 // Same modifier-application logic buildPricingSnapshot uses internally,
 // exposed standalone so callers don't need to fake a plan object just to
-// discount a bare amount.
+// discount a bare amount. Sorts by stage internally (see MODIFIER_STAGE
+// above) — the array's own input order no longer matters.
 function applyModifiers(amount, modifiers = []) {
   let runningTotal = amount;
   const modifierBreakdown = [];
-  for (const modifier of modifiers) {
+  for (const modifier of sortModifiersByStage(modifiers)) {
     const modifierAmount = resolveModifierAmount(modifier, runningTotal);
     runningTotal = Math.max(0, runningTotal - modifierAmount);
     modifierBreakdown.push({ type: modifier.type, referenceId: modifier.referenceId || null, amount: modifierAmount });
@@ -64,11 +90,13 @@ function applyModifiers(amount, modifiers = []) {
 //                         sites — internally normalized into the modifiers
 //                         pipeline below, so there's exactly one discount
 //                         code path, not two.
-// @param modifiers        an ordered Modifier[] from utils/modifierResolver.js
-//                         (see backend/docs/PRICING_MODIFIER_ARCHITECTURE.md
-//                         §3) — e.g. a referral reward. Applied in array
-//                         order (the resolver is responsible for sorting by
-//                         priority; this function trusts the order it's given).
+// @param modifiers        a Modifier[] — e.g. a coupon and/or a referral
+//                         reward (see backend/docs/PRICING_MODIFIER_ARCHITECTURE.md
+//                         §3). Order in the array does NOT matter — this
+//                         function sorts by stage internally (MODIFIER_STAGE
+//                         above), deriving Coupon-before-Referral from each
+//                         modifier's own `type`, never from caller-supplied
+//                         ordering or a `.priority` field (Phase 3 item 5b).
 // @param basePriceOverride  use instead of plan.monthlyPrice/yearlyPrice when
 //                         a prior step already computed/locked in the base
 //                         price (e.g. a scheduled plan change verified against
@@ -94,16 +122,21 @@ function buildPricingSnapshot({ plan, billingCycle, activeAddons = [], couponDis
   // identical, single-path discount handling.
   const allModifiers = [...modifiers];
   if (couponDiscount?.totalDiscount) {
-    allModifiers.unshift({
+    allModifiers.push({
       type: 'coupon',
       value: { kind: 'fixed', amount: couponDiscount.totalDiscount },
       appliesTo: 'entire_invoice',
     });
   }
 
+  // Phase 3 item 5b: sort by stage internally (MODIFIER_STAGE above) rather
+  // than trusting array order — the previous `.unshift()` above was itself a
+  // manual, caller-side attempt at "coupon first" that this sort now makes
+  // unnecessary (kept as `.push()` purely so the array's construction order
+  // doesn't matter either; the sort is what actually enforces correctness).
   let runningTotal = subtotal;
   const modifierBreakdown = [];
-  for (const modifier of allModifiers) {
+  for (const modifier of sortModifiersByStage(allModifiers)) {
     const amount = resolveModifierAmount(modifier, runningTotal);
     runningTotal = Math.max(0, runningTotal - amount);
     modifierBreakdown.push({ type: modifier.type, referenceId: modifier.referenceId || null, amount });

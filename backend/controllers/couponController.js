@@ -54,6 +54,23 @@ const getCouponById = async (req, res) => {
   }
 };
 
+// Super Admin org drilldown — the coupon-history counterpart to
+// referralAdminController.getOrganizationReferralOverview(). No such
+// per-organization query existed before (only per-coupon, in getCouponById
+// above); this is the first.
+const getOrganizationRedemptions = async (req, res) => {
+  try {
+    const redemptions = await CouponRedemption.find({ organization: req.params.organizationId })
+      .populate('coupon', 'code name duration')
+      .sort({ redeemedAt: -1 })
+      .limit(100);
+    res.json({ redemptions });
+  } catch (error) {
+    console.error('Get organization redemptions error:', error);
+    res.status(500).json({ error: 'Failed to fetch coupon redemptions for this organization' });
+  }
+};
+
 // Validates the per-product rules array: each entry must name a real
 // product (plan/addon), a discount type, and a sane value. Returns an error
 // string, or null if the rules are well-formed.
@@ -71,18 +88,24 @@ function validateRules(rules) {
   return null;
 }
 
-// Only 'lifetime' and 'until_cancelled' are actually enforceable today — the
-// discount is baked into a fixed-price recurring Razorpay Plan at signup and
-// never revisited. 'first_payment'/'fixed_cycles'/'until_date' would need an
-// auto-revert-after-N-cycles mechanism that doesn't exist yet (see the note
-// on Coupon.duration in the model). Rejecting these explicitly at creation
-// time is safer than silently treating them as 'lifetime' when the chosen
-// label promises something the system doesn't actually do.
-const ENFORCEABLE_DURATIONS = ['lifetime', 'until_cancelled'];
+// 'lifetime'/'until_cancelled' apply indefinitely — no revisiting needed
+// beyond the Renewal Engine's own R7 gate (utils/couponRenewalEligibility.js),
+// which reapplies the snapshot's discountAmount every renewal. 'first_payment'
+// is also now enforceable: R7's eligibility gate correctly excludes it from
+// every renewal (it only ever applies to the signup/first-purchase invoice,
+// where discountAmount is priced once via calculateInvoice() and never
+// revisited past that). 'fixed_cycles'/'until_date' remain rejected — both
+// need persistent state that doesn't exist yet (a cycles-consumed counter;
+// an expiry field on the appliedCoupon snapshot itself) — see
+// utils/couponRenewalEligibility.js's file header for the full trace.
+// Rejecting these explicitly at creation time is safer than silently
+// treating them as 'lifetime' when the chosen label promises something the
+// system doesn't actually do.
+const ENFORCEABLE_DURATIONS = ['lifetime', 'until_cancelled', 'first_payment'];
 function validateDuration(duration) {
   const type = duration?.type || 'lifetime';
   if (!ENFORCEABLE_DURATIONS.includes(type)) {
-    return `Duration "${type}" isn't supported yet — the system can't auto-revert a subscription's price after a set number of cycles or a specific date. Use "Lifetime" or "Until cancelled" for now.`;
+    return `Duration "${type}" isn't supported yet — the system can't auto-revert a subscription's price after a set number of cycles or a specific date. Use "Lifetime", "Until cancelled", or "First payment only" for now.`;
   }
   return null;
 }
@@ -258,7 +281,16 @@ const searchOrganizations = async (req, res) => {
   try {
     const { search } = req.query;
     const filter = search && search.trim() ? { name: new RegExp(search.trim(), 'i') } : {};
-    const organizations = await Organization.find(filter).select('_id name').sort({ name: 1 }).limit(50).lean();
+    // Found via live QA: sorting alphabetically by name meant fixture/test
+    // orgs (routinely capitalized — "Downgrade Gate Fixture") sorted ahead
+    // of real ones (often lowercase — "brand new") in byte-order comparison,
+    // silently crowding real orgs out of the visible/50-capped results as
+    // fixture count grows. With no search term, most-recently-created first
+    // is a better default — an admin browsing without a specific name in
+    // mind is almost always looking for something recent, not alphabetical.
+    // An explicit search still matches by name regardless of sort.
+    const sort = search && search.trim() ? { name: 1 } : { createdAt: -1 };
+    const organizations = await Organization.find(filter).select('_id name').sort(sort).limit(50).lean();
     res.json({ organizations });
   } catch (error) {
     res.status(500).json({ error: 'Failed to search organizations' });
@@ -346,6 +378,7 @@ const previewCoupon = async (req, res) => {
 module.exports = {
   getCoupons,
   getCouponById,
+  getOrganizationRedemptions,
   createCoupon,
   updateCoupon,
   toggleCouponStatus,

@@ -184,12 +184,30 @@ const Referrals = () => {
             <Tag className="w-4 h-4" />
           </div>
           <div className="flex-1">
-            <p className="text-xs font-semibold text-purple-600 uppercase tracking-wide">Your reward</p>
-            <p className="text-lg font-bold text-gray-900">{rewardValueLabel(topReward)} off your next purchase</p>
-            <p className="text-xs text-gray-400">
-              Earned {formatDate(topReward.createdAt)}
-              {topReward.expiresAt ? ` · Expires ${formatDate(topReward.expiresAt)}` : " · Never expires"}
+            <p className="text-xs font-semibold text-purple-600 uppercase tracking-wide">
+              {topReward.status === "available" ? "Available Reward" : "Your reward"}
             </p>
+            <p className="text-lg font-bold text-gray-900">{rewardValueLabel(topReward)}</p>
+            {topReward.status === "available" ? (
+              <>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Applies automatically to your next eligible purchase.
+                </p>
+                {/* BILLING_UX_SPEC.md §2.2 — mandatory eligibility statement,
+                    not just existence. Today every reward is usable on every
+                    commercial action (no per-reward restriction in the data
+                    model), so this list is the same regardless of which
+                    reward is shown. */}
+                <p className="text-xs text-gray-400 mt-1">
+                  Eligible for: Upgrade · Renewal · Add-ons · First payment (if on trial)
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-gray-400">
+                Earned {formatDate(topReward.createdAt)}
+                {topReward.expiresAt ? ` · Expires ${formatDate(topReward.expiresAt)}` : " · Never expires"}
+              </p>
+            )}
           </div>
           <StatusPill status={topReward.status} styles={REWARD_STATUS_STYLES} />
         </div>
@@ -229,9 +247,26 @@ const Referrals = () => {
             </button>
           </div>
 
+          {/* BILLING_UX_SPEC.md §3 — found via QA: a referee with no rewards
+              of their own (correctly, per the one-benefit-per-participant
+              design) saw a bare "Rewards Available: 0" below with nothing
+              explaining that they DID get something — a one-time discount,
+              not a Reward object. This banner is the fix: distinct copy for
+              "your discount is coming" (referral still pending) vs. "you
+              already got it" (qualified — payment settled), never referrer-
+              side language ("reward," "earn") per §3's own rule. */}
           {referredBy && (
-            <div className="mb-4 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5 text-xs text-blue-700">
-              You joined via a referral from <span className="font-semibold">{referredBy.referrerOrganization?.name || "another organization"}</span>.
+            <div className={`mb-4 rounded-lg px-3.5 py-3 text-xs border ${referredBy.status === "qualified" ? "bg-emerald-50 border-emerald-100 text-emerald-800" : "bg-blue-50 border-blue-100 text-blue-800"}`}>
+              <p className="font-semibold uppercase tracking-wide text-[10px] mb-0.5">
+                {referredBy.status === "qualified" ? "Referral Discount Applied" : "Upcoming Discount"}
+              </p>
+              <p>
+                You joined via a referral from <span className="font-semibold">{referredBy.referrerOrganization?.name || "another organization"}</span>.
+                {" "}
+                {referredBy.status === "qualified"
+                  ? "The discount was already applied to your first invoice."
+                  : "Your discount will be applied automatically to your first payment."}
+              </p>
             </div>
           )}
 
@@ -320,23 +355,55 @@ const Referrals = () => {
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">All rewards</h3>
           </div>
           <div className="divide-y divide-gray-100">
-            {rewards.map((r) => (
-              <div key={r._id} className="px-6 py-3.5 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 rounded-lg bg-purple-50 text-purple-600">
-                    <Tag className="w-3.5 h-3.5" />
+            {rewards.map((r) => {
+              const isConsumed = r.status === "consumed" && r.usedOn;
+              return (
+                <div key={r._id} className="px-6 py-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-1.5 rounded-lg bg-purple-50 text-purple-600">
+                        <Tag className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        {/* BILLING_UX_SPEC.md §4 — a consumed reward reads as
+                            a receipt (what it was used on, what it saved,
+                            when), never "X% off your next purchase" — that
+                            phrasing is only true while still available. */}
+                        <p className="text-sm font-semibold text-gray-900">
+                          {isConsumed ? "Reward Used" : `${rewardValueLabel(r)} off your next purchase`}
+                        </p>
+                        {!isConsumed && (
+                          <p className="text-xs text-gray-400">
+                            Earned {formatDate(r.createdAt)}
+                            {r.expiresAt ? ` · Expires ${formatDate(r.expiresAt)}` : " · Never expires"}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <StatusPill status={r.status} styles={REWARD_STATUS_STYLES} />
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{rewardValueLabel(r)} off your next purchase</p>
-                    <p className="text-xs text-gray-400">
-                      Earned {formatDate(r.createdAt)}
-                      {r.expiresAt ? ` · Expires ${formatDate(r.expiresAt)}` : " · Never expires"}
-                    </p>
-                  </div>
+                  {/* r.usedOn.label/amount are null for rows predating those
+                      fields — each row degrades gracefully rather than
+                      guessing or crashing. */}
+                  {isConsumed && (
+                    <div className="mt-2 ml-9 grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <p className="text-gray-400">Applied on</p>
+                        <p className="font-medium text-gray-800">{r.usedOn.label || "a purchase"}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400">Saved</p>
+                        <p className="font-medium text-gray-800">{r.usedOn.amount != null ? formatPrice(r.usedOn.amount) : "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400">Date</p>
+                        <p className="font-medium text-gray-800">{formatDate(r.usedOn.date)}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <StatusPill status={r.status} styles={REWARD_STATUS_STYLES} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

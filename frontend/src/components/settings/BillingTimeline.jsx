@@ -16,6 +16,11 @@ import { subscriptionAPI } from "../../services/subscriptionApi";
 
 const EVENT_ICONS = {
   SUBSCRIPTION_CREATED: Rocket,
+  // Found via live QA — the real activation moment, separate from the
+  // mandate-request event above (CheckCircle2, not Rocket: "requested" vs.
+  // "actually confirmed" should look visually distinct, not just read
+  // differently).
+  SUBSCRIPTION_ACTIVATED: CheckCircle2,
   TRIAL_STARTED: Gift,
   TRIAL_ENDED: Gift,
   PLAN_UPGRADE: ArrowUp,
@@ -32,6 +37,17 @@ const EVENT_ICONS = {
   PAYMENT_FAILED: XCircle,
   RENEWAL: RefreshCw,
   SUBSCRIPTION_CANCELLED: Ban,
+  // BILLING_UX_SPEC.md §5 — same gift glyph used by RewardAvailabilityBadge
+  // (dashboard/plan-card/Manage Subscription banners) and the Referrals
+  // page's own reward card: one icon, one meaning, everywhere a reward
+  // shows up. REFERRAL_REWARD_CONSUMED renders here as "Reward Used" (see
+  // backend's event summary text) — never "Applied," which is reserved for
+  // the in-checkout callout, a different moment in the same lifecycle.
+  REFERRAL_REWARD_EARNED: Gift,
+  REFERRAL_REWARD_CONSUMED: Gift,
+  // The referee's own entry (§3/§5) — same glyph, since it's still "a
+  // referral gave you something," just never a Reward object on this side.
+  REFERRAL_DISCOUNT_APPLIED: Gift,
 };
 
 const STATUS_STYLES = {

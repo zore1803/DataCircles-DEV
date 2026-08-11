@@ -74,7 +74,7 @@ async function releaseExpiredReservations(rewardIds = null) {
   for (const stale of expired) {
     const usage = await RewardUsage.findOneAndUpdate(
       { _id: stale._id, status: 'reserved' },
-      { $set: { status: 'released', releasedAt: now } },
+      { $set: { status: 'released', releasedAt: now, releaseReason: 'TIMEOUT' } },
       { new: true }
     );
     if (!usage) continue; // a concurrent caller already released/consumed it
@@ -93,7 +93,7 @@ async function releaseExpiredReservations(rewardIds = null) {
 //      against the next candidate. Bounded so a pathological race can't loop
 //      forever.
 // Returns { reward, usage } or null. Emits REFERRAL_REWARD_RESERVED on success.
-async function reserveNextAvailableReward(organizationId, { invoiceId = null, subscription = null, ttlMs = DEFAULT_RESERVATION_TTL_MS } = {}) {
+async function reserveNextAvailableReward(organizationId, { invoiceId = null, subscription = null, context = null, ttlMs = DEFAULT_RESERVATION_TTL_MS } = {}) {
   const orgRewards = await Reward.find({ organization: organizationId }).select('_id');
   await releaseExpiredReservations(orgRewards.map((r) => r._id));
 
@@ -106,6 +106,7 @@ async function reserveNextAvailableReward(organizationId, { invoiceId = null, su
         reward: reward._id,
         invoiceId,
         subscription,
+        context,
         status: 'reserved',
         expiresAt: new Date(Date.now() + ttlMs),
       });
@@ -139,11 +140,11 @@ async function consumeReservation(usageId) {
 
 // Atomically releases a reserved usage (e.g. the order it backed failed to
 // create, or was abandoned). Idempotent. Returns the released usage or null.
-async function releaseReservation(usageId) {
+async function releaseReservation(usageId, releaseReason = 'PAYMENT_FAILED') {
   if (!usageId) return null;
   const usage = await RewardUsage.findOneAndUpdate(
     { _id: usageId, status: 'reserved' },
-    { $set: { status: 'released', releasedAt: new Date() } },
+    { $set: { status: 'released', releasedAt: new Date(), releaseReason } },
     { new: true }
   );
   if (!usage) return null;
@@ -152,11 +153,28 @@ async function releaseReservation(usageId) {
   return usage;
 }
 
+// BILLING_UX_SPEC.md §4 — records the actual rupee amount a reservation
+// discounted, once pricing determines it (reservation happens BEFORE
+// pricing at the upgrade/add-on call sites' reserve-first pattern, so this
+// can't be known at reservation time itself). Called once, right after the
+// real amount is computed, at every call site — never re-derived later.
+// Non-fatal: a failure here only means the history card renders without the
+// "Saved ₹X" figure, never blocks the actual commercial flow.
+async function recordRewardUsageAmount(usageId, amount) {
+  if (!usageId || amount == null) return;
+  try {
+    await RewardUsage.updateOne({ _id: usageId }, { $set: { amount } });
+  } catch (err) {
+    console.error(`recordRewardUsageAmount failed for usage ${usageId}:`, err.message);
+  }
+}
+
 module.exports = {
   getNextAvailableReward,
   reserveNextAvailableReward,
   consumeReservation,
   releaseReservation,
   releaseExpiredReservations,
+  recordRewardUsageAmount,
   DEFAULT_RESERVATION_TTL_MS,
 };

@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   HelpCircle,
   Workflow,
+  Package,
   Mail,
   Crown,
   Settings as SettingsIcon,
@@ -34,6 +35,7 @@ import ContactFieldSettings from "../components/settings/ContactFieldSettings";
 import DealFieldSettings from "../components/settings/DealFieldSettings";
 import HelpCenter from "../components/settings/HelpCenter";
 import VendorFieldSettings from "../components/settings/VendorFieldSettings";
+import ItemFieldSettings from "../components/settings/ItemFieldSettings";
 import FormsList from "../components/settings/FormsList";
 import EmailNotifications from "../components/settings/EmailNotifications";
 import SubscriptionPlans from "../components/settings/SubscriptionPlans";
@@ -259,6 +261,18 @@ const Settings = () => {
       borderColor: "border-pink-200",
       hoverBg: "hover:bg-pink-50",
       component: <VendorFieldSettings />,
+      category: "Customization",
+    },
+    {
+      id: "item-fields",
+      icon: <Package className="w-5 h-5" />,
+      label: "Item Fields",
+      description: "Customize product and service fields",
+      color: "text-teal-600",
+      bgColor: "bg-teal-50",
+      borderColor: "border-teal-200",
+      hoverBg: "hover:bg-teal-50",
+      component: <ItemFieldSettings />,
       category: "Customization",
     },
     {

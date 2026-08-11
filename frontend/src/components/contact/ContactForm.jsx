@@ -646,16 +646,17 @@ const ContactForm = ({
               </div>
             </div>
 
-            {/* Additional Fields — flat list, matching QuickContactForm.jsx's
+            {/* Custom Fields — flat list, matching QuickContactForm.jsx's
                 treatment exactly (the "Add Contact" flow used from a
                 company/vendor page). No category accordion, no folder icon,
                 no per-field "(type)" annotation — those all read as
                 field-builder/admin UI, not something someone filling out a
-                contact form needs to see. */}
+                contact form needs to see. Sits directly after the basic info
+                above; this form has no trailing additional-info sections. */}
             {fieldDefinitions.length > 0 && (
               <div className="pt-4 space-y-6">
                 <h3 className="text-[16px] font-bold text-[#111216]">
-                  Additional Information
+                  Custom Fields
                 </h3>
                 <div className="space-y-3 sm:space-y-4">
                   {fieldDefinitions.map((fieldDef) => (
