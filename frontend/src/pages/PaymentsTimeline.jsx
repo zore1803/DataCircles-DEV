@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { 
-  Search, X, ChevronDown, MoreVertical, Pencil, Trash2, Eye, 
+  X, ChevronDown, ChevronUp, MoreVertical, Pencil, Trash2, Eye, EyeOff,
   SlidersHorizontal, Plus, Download, Share2, 
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Pin, PinOff, FileText
 } from "lucide-react";
 import SearchIcon from "../components/common/SearchIcon";
 import API from "../services/api";
@@ -10,10 +11,12 @@ import toast from "react-hot-toast";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import PaymentFormModal from "../components/payments/PaymentFormModal";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
+import { getAncestorZoom } from "../utils/domUtils";
 
+/* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
   selection: 60,
-  "payment-id": 140,
+  "payment-id": 160,
   party: 220,
   amount: 140,
   direction: 120,
@@ -22,282 +25,390 @@ const DEFAULT_COL_WIDTHS = {
 };
 const MIN_COL_WIDTH = 60;
 
-const INITIAL_COLUMN_DEFS = [
-  { id: "selection", label: "" },
+const ALL_COLUMNS = [
   { id: "payment-id", label: "Transaction ID" },
-  { id: "party", label: "Party / Entity" },
-  { id: "amount", label: "Amount" },
-  { id: "direction", label: "Direction" },
-  { id: "type", label: "Type" },
-  { id: "date", label: "Date" }
+  { id: "party",     label: "Party / Entity"  },
+  { id: "amount",    label: "Amount"           },
+  { id: "direction", label: "Direction"        },
+  { id: "type",      label: "Type"             },
+  { id: "date",      label: "Date"             },
 ];
 
+/* ─── Shared resize handle (same as Accounting.jsx pattern) ─────────── */
+const ColumnResizeHandle = React.memo(({ colId, onResizeStart }) => (
+  <div
+    data-resize-handle="true"
+    onMouseDown={(e) => onResizeStart(e, colId)}
+    onClick={(e) => e.stopPropagation()}
+    title="Drag to resize column"
+    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none z-30 hover:bg-[#0085FF]/40 active:bg-[#0085FF]"
+  />
+));
+ColumnResizeHandle.displayName = "ColumnResizeHandle";
+
+/* helper: plain-text preview for ghost */
+const cellTextFor = (colId, doc) => {
+  switch (colId) {
+    case "payment-id": return doc["payment-id"] || "";
+    case "party":      return doc.party || "";
+    case "amount":     return doc.amount != null ? `₹${Number(doc.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "";
+    case "direction":  return doc.direction === "IN" ? "Credit" : "Debit";
+    case "type":       return doc.type || "";
+    case "date":       return doc.date ? new Date(doc.date).toLocaleString() : "";
+    default:           return "";
+  }
+};
+
+/* ─── Component ─────────────────────────────────────────────────────── */
 export default function PaymentsTimeline() {
   const [documents, setDocuments] = useState([]);
   const [pagination, setPagination] = useState({
-    currentPage: 1, limit: 10, totalCount: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false
+    currentPage: 1, limit: 10, totalCount: 0, totalPages: 0,
+    hasNextPage: false, hasPrevPage: false
   });
   const [showLoadingSkeleton, setShowLoadingSkeleton] = useState(true);
   useTopLoadingSignal(showLoadingSkeleton);
-  
+
+  /* search */
   const [searchQuery, setSearchQuery] = useState("");
-  const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS);
-  
-  const [orderedColumns, setOrderedColumns] = useState(INITIAL_COLUMN_DEFS);
-  
-  // Drag State for Columns
-  const [draggedColId, setDraggedColId] = useState(null);
-  const [dragOverColId, setDragOverColId] = useState(null);
-
-  // Column Resizer State
-  const [draggedResizeColKey, setDraggedResizeColKey] = useState(null);
-
-  const [pinnedCols, setPinnedCols] = useState({
-    selection: "left",
-    "payment-id": "left"
-  });
-
-  const [selectedIds, setSelectedIds] = useState(new Set());
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const searchInputRef = useRef(null);
-  
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
-  const [filterStatus, setFilterStatus] = useState("");
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [openActionMenuId, setOpenActionMenuId] = useState(null);
 
-  // Close menus on outside click
+  /* columns */
+  const [columnOrder, setColumnOrder] = useState(ALL_COLUMNS.map(c => c.id));
+  const [colWidths, setColWidths]     = useState(DEFAULT_COL_WIDTHS);
+  const [pinnedCols, setPinnedCols]   = useState({});
+  const [hiddenCols, setHiddenCols]   = useState([]);
+  const [sortConfig, setSortConfig]   = useState({ key: null, direction: null });
+
+  /* Column header menu */
+  const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
+  const [columnMenuPos, setColumnMenuPos]         = useState(null);
+
+  /* Filter states */
+  const [companies, setCompanies]               = useState([]);
+  const [partyFilter, setPartyFilter]           = useState("");
+  const [directionFilter, setDirectionFilter]   = useState("");
+
+  /* drag-reorder state (mirror of Accounting.jsx) */
+  const [draggedColKey,  setDraggedColKey]  = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost,      setDragGhost]      = useState(null);
+  const dragOverRef = useRef(null);
+  const ghostElRef  = useRef(null);
+
+  /* row selection */
+  const [selectedIds, setSelectedIds] = useState([]);
+
+  /* misc UI */
+  const [showFilterMenu,    setShowFilterMenu]    = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [openActionMenuId,  setOpenActionMenuId]  = useState(null);
+
+  /* Fetch companies list for Party filter */
   useEffect(() => {
-    const handleClick = () => {
-      setShowFilterMenu(false);
-      setOpenActionMenuId(null);
-    };
-    document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
+    API.get("/companies")
+      .then(res => setCompanies(res.data?.companies || res.data || []))
+      .catch(err => console.error("Error fetching companies:", err));
   }, []);
 
-  const fetchData = async () => {
+  const openColumnMenu = (e, colId) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const z = getAncestorZoom(document.body);
+    setColumnMenuPos({
+      top: (rect.bottom + 4) / z,
+      left: Math.min(window.innerWidth - 186, rect.left) / z,
+    });
+    setOpenColumnMenuKey(colId);
+  };
+
+  const closeColumnMenu = () => {
+    setOpenColumnMenuKey(null);
+    setColumnMenuPos(null);
+  };
+
+  const setColumnPin = useCallback((colId, side) => {
+    setPinnedCols(prev => {
+      const next = { ...prev };
+      if (next[colId] === side) delete next[colId];
+      else next[colId] = side;
+      return next;
+    });
+  }, []);
+
+  /* ── orderedColumns (mirrors Accounting.jsx pattern) ─────────────── */
+  const orderedColumns = useMemo(
+    () => columnOrder
+      .map(id => ALL_COLUMNS.find(c => c.id === id))
+      .filter(c => c && !hiddenCols.includes(c.id))
+      .sort((a, b) => {
+        const rank = c => pinnedCols[c.id] === "left" ? 0 : pinnedCols[c.id] === "right" ? 2 : 1;
+        return rank(a) - rank(b);
+      }),
+    [columnOrder, pinnedCols, hiddenCols]
+  );
+
+  /* ── sticky offset map (same as Accounting.jsx) ─────────────────── */
+  const stickyStyles = useMemo(() => {
+    const map = {};
+    let leftOffset = colWidths.selection;
+    for (const c of orderedColumns) {
+      if (pinnedCols[c.id] === "left") {
+        map[c.id] = { position: "sticky", left: leftOffset, zIndex: 15 };
+        leftOffset += colWidths[c.id];
+      }
+    }
+    let rightOffset = 0;
+    for (const c of [...orderedColumns].reverse()) {
+      if (pinnedCols[c.id] === "right") {
+        map[c.id] = { position: "sticky", right: rightOffset, zIndex: 15 };
+        rightOffset += colWidths[c.id];
+      }
+    }
+    return map;
+  }, [orderedColumns, pinnedCols, colWidths]);
+
+  const stickyStyleFor = useCallback(colId => stickyStyles[colId] || {}, [stickyStyles]);
+
+  /* ── close menus on outside click ───────────────────────────────── */
+  useEffect(() => {
+    const handle = () => { setShowFilterMenu(false); setOpenActionMenuId(null); };
+    document.addEventListener("click", handle);
+    return () => document.removeEventListener("click", handle);
+  }, []);
+
+  /* ── data fetching ───────────────────────────────────────────────── */
+  const fetchData = useCallback(async () => {
     setShowLoadingSkeleton(true);
     try {
       const res = await API.get(`/payments-timeline?page=${pagination.currentPage}&limit=${pagination.limit}`);
       setDocuments(res.data.documents || []);
-      if (res.data.pagination) {
-        setPagination(res.data.pagination);
-      }
+      if (res.data.pagination) setPagination(res.data.pagination);
     } catch (err) {
       toast.error("Failed to load transactions timeline");
       console.error(err);
     } finally {
       setShowLoadingSkeleton(false);
     }
-  };
-
-  useEffect(() => {
-    fetchData();
   }, [pagination.currentPage, pagination.limit]);
 
-  const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      const allIds = new Set(filteredDocs.map((doc) => doc._id));
-      setSelectedIds(allIds);
-    } else {
-      setSelectedIds(new Set());
-    }
-  };
+  useEffect(() => { fetchData(); }, [pagination.currentPage, pagination.limit]);
 
-  const handleSelectRow = (id) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedIds(newSelected);
-  };
+  /* ── filtered and sorted docs ─────────────────────────────────────── */
+  const filteredDocs = useMemo(() => {
+    let list = documents.filter(doc => {
+      const term = searchQuery.toLowerCase();
+      const matchesSearch = (doc["payment-id"] || "").toLowerCase().includes(term) ||
+                            (doc.party || "").toLowerCase().includes(term);
+      if (!matchesSearch) return false;
 
-  const handlePageChange = (newPage) => {
-    if (newPage > 0 && newPage <= pagination.totalPages) {
-      setPagination(prev => ({ ...prev, currentPage: newPage }));
-    }
-  };
+      if (partyFilter && doc.party !== partyFilter) return false;
 
-  const handleLimitChange = (newLimit) => {
-    setPagination(prev => ({ ...prev, limit: newLimit, currentPage: 1 }));
-  };
+      if (directionFilter) {
+        if (directionFilter === "Credit" && doc.direction !== "IN") return false;
+        if (directionFilter === "Debit" && doc.direction !== "OUT") return false;
+      }
 
-  // --- Drag and Drop for Columns ---
-  const handleDragStart = (e, colId) => {
-    if (colId === "selection") {
-      e.preventDefault();
-      return;
-    }
-    setDraggedColId(colId);
-    e.dataTransfer.effectAllowed = "move";
-  };
-  
-  const handleDragOver = (e, colId) => {
-    e.preventDefault();
-    if (colId === "selection" || draggedColId === colId) return;
-    setDragOverColId(colId);
-  };
-  
-  const handleDrop = (e, colId) => {
-    e.preventDefault();
-    if (!draggedColId || draggedColId === colId || colId === "selection") {
-      setDraggedColId(null);
-      setDragOverColId(null);
-      return;
-    }
-    
-    const newOrder = [...orderedColumns];
-    const draggedIndex = newOrder.findIndex(c => c.id === draggedColId);
-    const dropIndex = newOrder.findIndex(c => c.id === colId);
-    
-    const [draggedCol] = newOrder.splice(draggedIndex, 1);
-    newOrder.splice(dropIndex, 0, draggedCol);
-    
-    setOrderedColumns(newOrder);
-    setDraggedColId(null);
-    setDragOverColId(null);
-  };
+      return true;
+    });
 
-  // --- Column Resizing ---
-  const startColumnDrag = (e, colId) => {
-    e.preventDefault();
+    if (sortConfig.key) {
+      list = [...list].sort((a, b) => {
+        let valA = a[sortConfig.key];
+        let valB = b[sortConfig.key];
+        if (sortConfig.key === "party") {
+          valA = a.party || "";
+          valB = b.party || "";
+        }
+        if (typeof valA === "string") valA = valA.toLowerCase();
+        if (typeof valB === "string") valB = valB.toLowerCase();
+        if (valA < valB) return sortConfig.direction === "asc" ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return list;
+  }, [documents, searchQuery, partyFilter, directionFilter, sortConfig]);
+
+  const handleSelectAll = e =>
+    setSelectedIds(e.target.checked ? filteredDocs.map(d => d._id) : []);
+
+  const handleSelectRow = id =>
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+
+  /* ── pagination ─────────────────────────────────────────────────── */
+  const handlePageChange  = newPage   => { if (newPage > 0 && newPage <= pagination.totalPages) setPagination(p => ({ ...p, currentPage: newPage })); };
+  const handleLimitChange = newLimit  => setPagination(p => ({ ...p, limit: newLimit, currentPage: 1 }));
+
+  /* ── Column resize (same pattern as Accounting.jsx) ─────────────── */
+  const startColumnResize = useCallback((e, colId) => {
+    if (e.button !== 0) return;
     e.stopPropagation();
-    setDraggedResizeColKey(colId);
-    const startX = e.clientX;
-    const startWidth = colWidths[colId] || MIN_COL_WIDTH;
-    const onMouseMove = (ev) => {
-      const delta = ev.clientX - startX;
-      const newWidth = Math.max(MIN_COL_WIDTH, startWidth + delta);
-      setColWidths((prev) => ({ ...prev, [colId]: newWidth }));
+    const startX   = e.clientX;
+    const startW   = colWidths[colId] ?? MIN_COL_WIDTH;
+    const onMove   = mv => setColWidths(prev => ({ ...prev, [colId]: Math.max(MIN_COL_WIDTH, startW + mv.clientX - startX) }));
+    const onUp     = () => {
+      document.body.style.cursor  = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup",   onUp);
     };
-    const onMouseUp = () => {
-      setDraggedResizeColKey(null);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
+    document.body.style.cursor    = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup",   onUp);
+  }, [colWidths]);
+
+  const ResizeHandle = useCallback(({ colId }) => (
+    <ColumnResizeHandle colId={colId} onResizeStart={startColumnResize} />
+  ), []);
+
+  /* ── Column drag-reorder (exact clone of Accounting.jsx) ─────────── */
+  const handleColumnReorder = useCallback((draggedKey, targetKey) => {
+    if (!draggedKey || draggedKey === targetKey) return;
+    setColumnOrder(prev => {
+      const next = [...prev];
+      const from = next.indexOf(draggedKey);
+      const to   = next.indexOf(targetKey);
+      if (from === -1 || to === -1) return prev;
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, []);
+
+  const startColumnDrag = (e, colId) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    const th      = e.currentTarget;
+    const startX  = e.clientX;
+    const startY  = e.clientY;
+    const THRESHOLD = 5;
+
+    const dragState = { started: false, offsetX: 0, offsetY: 0, zGhost: 1 };
+
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const visualTop  = clientY - dragState.offsetY;
+      const visualLeft = clientX - dragState.offsetX;
+      el.style.top     = `${visualTop  / dragState.zGhost}px`;
+      el.style.left    = `${visualLeft / dragState.zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / dragState.zGhost}px`;
     };
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+
+    const updateDragOver = (clientX, clientY) => {
+      const elAtPoint = document.elementFromPoint(clientX, clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey   = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+
+    const beginDrag = () => {
+      dragState.started = true;
+      window.getSelection?.()?.removeAllRanges();
+
+      const rect = th.getBoundingClientRect();
+      const col  = ALL_COLUMNS.find(c => c.id === colId);
+      const previewRows = documents.slice(0, 5).map(doc => cellTextFor(colId, doc));
+
+      dragState.zGhost  = getAncestorZoom(document.body);
+      dragState.offsetX = startX - rect.left;
+      dragState.offsetY = startY - rect.top;
+
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
+      setDragGhost({
+        label: col?.label || colId,
+        previewRows,
+        width:  rect.width  / dragState.zGhost,
+        height: rect.height / dragState.zGhost,
+      });
+
+      requestAnimationFrame(() => positionGhost(startX, startY));
+    };
+
+    const handleMouseMove = mv => {
+      if (!dragState.started) {
+        if (Math.hypot(mv.clientX - startX, mv.clientY - startY) < THRESHOLD) return;
+        e.preventDefault();
+        beginDrag();
+      }
+      positionGhost(mv.clientX, mv.clientY);
+      updateDragOver(mv.clientX, mv.clientY);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup",   handleMouseUp);
+      if (!dragState.started) return;
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) handleColumnReorder(colId, overKey);
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup",   handleMouseUp);
   };
 
-  const stickyStyleFor = (colId) => {
-    if (pinnedCols[colId] === "left") {
-      let leftPos = 0;
-      if (colId === "payment-id") leftPos = colWidths.selection;
-      return { position: "sticky", left: leftPos, zIndex: 10, background: "inherit" };
-    }
-    return {};
-  };
-
-  const filteredDocs = documents.filter(doc => {
-    const term = searchQuery.toLowerCase();
-    const matchSearch = 
-      (doc["payment-id"] || "").toLowerCase().includes(term) ||
-      (doc.party || "").toLowerCase().includes(term);
-    return matchSearch;
-  });
-
-  const renderCell = (colId, doc) => {
-    const value = doc[colId];
-    if (colId === "selection") {
-      const isSelected = selectedIds.has(doc._id);
-      return (
-        <div className="flex justify-center items-center h-full w-full">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => handleSelectRow(doc._id)}
-            className="w-4 h-4 text-[#0085FF] border-gray-300 rounded focus:ring-[#0085FF]"
-          />
-        </div>
-      );
-    }
-    if (colId === "amount") {
-      return `₹${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-    if (colId === "date") {
-      return value ? new Date(value).toLocaleString() : "";
-    }
-    if (colId === "party") {
-      return (
-        <div className="flex flex-col truncate">
-          <span className="text-sm font-semibold text-gray-900 truncate">{doc.party}</span>
-          {doc.source && (
-            <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 mt-0.5 truncate">
-              {doc.source}
-            </span>
-          )}
-        </div>
-      );
-    }
-    if (colId === "direction") {
-      const isCredit = doc.direction === "IN";
-      return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${isCredit ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-          {isCredit ? 'IN' : 'OUT'}
-        </span>
-      );
-    }
-    return <span className="font-medium text-gray-700 truncate block">{value ?? ""}</span>;
-  };
-
-  const renderActionMenu = (doc) => {
+  /* ── Action menu ─────────────────────────────────────────────────── */
+  const renderActionMenu = doc => {
     const isOpen = openActionMenuId === doc._id;
     return (
-      <div className="relative flex-shrink-0 flex items-center h-full">
+      <div className="relative flex-shrink-0 flex items-center">
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpenActionMenuId(isOpen ? null : doc._id);
-          }}
+          onClick={e => { e.stopPropagation(); setOpenActionMenuId(isOpen ? null : doc._id); }}
           className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
         >
-          <MoreVertical size={16} />
+          <MoreVertical size={15} />
         </button>
-        
         {isOpen && (
-          <div 
+          <div
             className="absolute right-8 top-1/2 -translate-y-1/2 w-40 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-[60] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
           >
-            <button 
-              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              onClick={() => { setOpenActionMenuId(null); toast.success("View details functionality coming soon!"); }}
-            >
+            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              onClick={() => { setOpenActionMenuId(null); toast.success("View details coming soon!"); }}>
               <Eye className="w-4 h-4 text-gray-400" /> View
             </button>
-            <button 
-              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              onClick={() => { setOpenActionMenuId(null); toast.success("Edit functionality coming soon!"); }}
-            >
+            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              onClick={() => { setOpenActionMenuId(null); toast.success("Edit coming soon!"); }}>
               <Pencil className="w-4 h-4 text-gray-400" /> Edit
             </button>
-            <button 
-              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              onClick={() => { setOpenActionMenuId(null); toast.success("Download coming soon!"); }}
-            >
+            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              onClick={() => { setOpenActionMenuId(null); toast.success("Download coming soon!"); }}>
               <Download className="w-4 h-4 text-gray-400" /> Download
             </button>
-            <button 
-              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              onClick={() => { setOpenActionMenuId(null); toast.success("Share coming soon!"); }}
-            >
+            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              onClick={() => { setOpenActionMenuId(null); toast.success("Share coming soon!"); }}>
               <Share2 className="w-4 h-4 text-gray-400" /> Share
             </button>
-            <div className="h-px bg-gray-100 my-1"></div>
-            <button 
-              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+            <div className="h-px bg-gray-100 my-1" />
+            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
               onClick={() => {
                 setOpenActionMenuId(null);
                 if (doc.source === "Payment") {
-                  API.delete(`/vendors/${doc.vendor}/payments/${doc._id}`).then(() => fetchData()).catch(err => toast.error("Failed to delete"));
+                  API.delete(`/vendors/${doc.vendor}/payments/${doc._id}`)
+                    .then(() => fetchData())
+                    .catch(() => toast.error("Failed to delete"));
                 } else {
                   toast.error(`Cannot delete ${doc.source} from timeline.`);
                 }
-              }}
-            >
+              }}>
               <Trash2 className="w-4 h-4 text-red-500" /> Delete
             </button>
           </div>
@@ -306,23 +417,64 @@ export default function PaymentsTimeline() {
     );
   };
 
+  /* ── Cell renderer ───────────────────────────────────────────────── */
+  const renderCell = (colId, doc, isRightmost) => {
+    let content;
+    switch (colId) {
+      case "amount":
+        content = `₹${Number(doc.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        break;
+      case "date":
+        content = doc.date ? new Date(doc.date).toLocaleString() : "";
+        break;
+      case "party":
+        content = (
+          <div className="flex flex-col truncate">
+            <span className="text-sm font-semibold text-gray-900 truncate">{doc.party}</span>
+            {doc.source && <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 mt-0.5 truncate">{doc.source}</span>}
+          </div>
+        );
+        break;
+      case "direction": {
+        const isCredit = doc.direction === "IN";
+        content = (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${isCredit ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+            {isCredit ? "Credit" : "Debit"}
+          </span>
+        );
+        break;
+      }
+      default:
+        content = <span className="font-medium text-gray-700 truncate block">{doc[colId] ?? ""}</span>;
+    }
+
+    return (
+      <div className="flex items-center justify-between gap-2 w-full min-w-0">
+        <div className="flex-1 min-w-0">{content}</div>
+        {isRightmost && renderActionMenu(doc)}
+      </div>
+    );
+  };
+
+  /* ── Pagination items ────────────────────────────────────────────── */
   const paginationItems = useMemo(() => {
     const items = [];
     const { currentPage, totalPages } = pagination;
     if (totalPages <= 1) return items;
-
-    if (totalPages > 1) items.push(1);
-    if (currentPage > 2) items.push("left-dots");
+    items.push(1);
+    if (currentPage > 2)             items.push("left-dots");
     if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
     if (currentPage < totalPages - 1) items.push("right-dots");
-    if (totalPages > 1) items.push(totalPages);
+    if (totalPages > 1)               items.push(totalPages);
     return items;
   }, [pagination]);
 
+  /* ─────────────────────────────────────────────────────────────────── */
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-[#FAFBFC]">
-      {/* Header section */}
-      <div 
+
+      {/* ── Fixed header bar (matches Accounting.jsx) ─────────────── */}
+      <div
         className="fixed right-0 h-[72px] px-6 flex items-center justify-between border-b border-[#E1E4EA] bg-white top-[54px] lg:top-16"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
       >
@@ -332,185 +484,248 @@ export default function PaymentsTimeline() {
             {pagination.totalCount} total
           </span>
         </div>
-        
-        <div className="flex items-center gap-3">
+
+        <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
+          {/* Search — expands in place from the icon, matching Accounting */}
           <div
-            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-lg bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:ring-1 focus-within:ring-[#0085FF] ${isSearchExpanded ? "w-[260px] sm:w-[320px]" : "w-10"} max-w-full`}
+            className={`relative h-11 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-11"} max-w-full flex-shrink-0`}
           >
             <SearchIcon
-              className="absolute left-3 text-gray-400 w-4 h-4 cursor-pointer z-10"
-              onClick={() => {
-                setIsSearchExpanded(true);
-                searchInputRef.current?.focus();
-              }}
+              className="absolute left-3.5 text-[#525866] w-4 h-4 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2"
+              onClick={() => { setIsSearchExpanded(true); searchInputRef.current?.focus(); }}
             />
             <input
               ref={searchInputRef}
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               onFocus={() => setIsSearchExpanded(true)}
-              onBlur={() => {
-                if (!searchQuery) setIsSearchExpanded(false);
-              }}
+              onBlur={() => { if (!searchQuery) setIsSearchExpanded(false); }}
               placeholder="Search by ID or party..."
-              className={`w-full h-full bg-transparent pl-9 pr-8 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+              className={`w-full h-full bg-transparent rounded-full pl-11 pr-9 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
             />
             {isSearchExpanded && searchQuery && (
               <button
                 type="button"
-                onMouseDown={(e) => e.preventDefault()}
+                onMouseDown={e => e.preventDefault()}
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100 text-gray-400"
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 rounded-full text-gray-900 hover:bg-gray-100 transition-colors"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" strokeWidth={2.5} />
               </button>
             )}
           </div>
 
-          <button
-            onClick={() => setShowFilterMenu((v) => !v)}
-            className={`flex items-center justify-center w-10 h-10 rounded-lg border transition-colors bg-white ${filterStatus ? "border-[#0085FF] text-[#0085FF] bg-blue-50" : "border-[#E1E4EA] text-gray-600 hover:bg-gray-50"}`}
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-          </button>
+          {/* Filter Button */}
+          <div className="relative flex-shrink-0">
+            <button
+              title="Filter"
+              onClick={e => { e.stopPropagation(); setShowFilterMenu(v => !v); }}
+              className={`flex items-center justify-center w-11 h-11 rounded-full border transition-colors bg-white ${showFilterMenu ? "border-[#0085FF] text-[#0085FF]" : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"}`}
+            >
+              <SlidersHorizontal size={18} strokeWidth={2} className={showFilterMenu ? "text-[#0085FF]" : "text-[#1F2937]"} />
+            </button>
+            {showFilterMenu && (
+              <div
+                onClick={e => e.stopPropagation()}
+                className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-50"
+              >
+                {["", "Credit", "Debit", "Invoice", "Purchase", "Subscription", "Payment"].map(opt => (
+                  <button
+                    key={opt || "all"}
+                    onClick={() => setShowFilterMenu(false)}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    {opt || "All Types"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
+          {/* Add Button — same style as Accounting (rounded-full, 44 h, 146 min-w) */}
           <button
             onClick={() => setIsPaymentModalOpen(true)}
-            className="h-10 px-4 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white font-medium text-sm shadow-sm transition-colors flex items-center gap-2"
+            style={{ minWidth: 146, height: 44, padding: 12, gap: 6, background: "#0085FF", borderRadius: 96 }}
+            className="flex flex-row justify-center items-center hover:bg-blue-600 transition-colors flex-shrink-0 ml-1"
           >
-            <Plus className="w-4 h-4" />
-            <span>Add Payment</span>
+            <Plus size={18} className="text-white flex-shrink-0" />
+            <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">Add Payment</span>
           </button>
         </div>
       </div>
 
-      {/* Main Content Area - edge to edge table */}
-      <div 
+      {/* ── Full-bleed table (matches Accounting.jsx layout) ──────── */}
+      <div
         className="fixed right-0 overflow-x-auto overflow-y-auto bg-white top-[126px] lg:top-[136px]"
         style={{ left: "var(--sidebar-width, 0px)", bottom: 64 }}
       >
-        <div className="inline-block min-w-full align-middle border-b border-[#E1E4EA]">
-          <table className="min-w-full divide-y divide-gray-200 table-fixed">
-            <thead className="bg-[#F9FAFB] sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-              <tr>
-                {orderedColumns.map((col) => {
-                  const style = stickyStyleFor(col.id);
-                  const isSelect = col.id === "selection";
-                  const isDragOver = dragOverColId === col.id;
-                  const isDragging = draggedColId === col.id;
-                  
-                  return (
-                    <th
-                      key={col.id}
-                      draggable={!isSelect}
-                      onDragStart={(e) => handleDragStart(e, col.id)}
-                      onDragOver={(e) => handleDragOver(e, col.id)}
-                      onDragLeave={() => setDragOverColId(null)}
-                      onDrop={(e) => handleDrop(e, col.id)}
-                      onDragEnd={() => { setDraggedColId(null); setDragOverColId(null); }}
-                      className={`relative px-4 py-3 text-left text-xs font-bold text-[#525866] uppercase tracking-wider select-none border-b border-r border-[#E1E4EA] transition-colors ${
-                        isDragOver ? "bg-blue-100" : pinnedCols[col.id] ? "bg-[#F9FAFB]" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"
-                      } ${!isSelect ? "cursor-grab active:cursor-grabbing" : ""} ${isDragging ? "opacity-30 border-blue-500 border-2" : ""}`}
-                      style={{ ...style, width: colWidths[col.id], minWidth: colWidths[col.id], maxWidth: colWidths[col.id] }}
-                    >
-                      <div className="flex items-center justify-between w-full group h-full">
-                        {isSelect ? (
-                          <div className="flex justify-center items-center w-full">
-                            <input
-                              type="checkbox"
-                              checked={filteredDocs.length > 0 && selectedIds.size === filteredDocs.length}
-                              onChange={handleSelectAll}
-                              className="w-4 h-4 text-[#0085FF] border-gray-300 rounded focus:ring-[#0085FF]"
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 flex-1 min-w-0 pointer-events-none">
-                            <span className="truncate">{col.label}</span>
-                            {!pinnedCols[col.id] && (
-                              <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-gray-200 rounded pointer-events-auto">
-                                <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                              </button>
-                            )}
-                          </div>
-                        )}
-                        {!isSelect && (
-                          <div
-                            onMouseDown={(e) => startColumnDrag(e, col.id)}
-                            className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize z-30 hover:bg-[#0085FF]/40 active:bg-[#0085FF]"
-                          />
-                        )}
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-[#E1E4EA]">
-              {showLoadingSkeleton ? (
-                <TableSkeletonRows 
-                  numRows={pagination.limit}
-                  columns={orderedColumns.map(c => colWidths[c.id])} 
-                  hasCheckbox={false} 
-                />
-              ) : filteredDocs.length === 0 ? (
-                <tr>
-                  <td colSpan={orderedColumns.length} className="px-4 py-12 text-center text-sm text-gray-500">
-                    No transactions found.
-                  </td>
-                </tr>
-              ) : (
-                filteredDocs.map((doc) => (
-                  <tr 
-                    key={doc._id} 
-                    className={`hover:bg-gray-50 transition-colors ${selectedIds.has(doc._id) ? 'bg-blue-50/30' : ''}`}
+        <table className="min-w-full divide-y divide-gray-200 table-fixed">
+          <thead className="bg-[#F5F7FA] sticky top-0 z-20">
+            <tr>
+              {/* Selection column */}
+              <th
+                style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 20 }}
+                className="relative px-4 py-3 bg-[#F5F7FA] border-b border-r border-[#E1E4EA]"
+              >
+                <div className="flex justify-center items-center">
+                  <input
+                    type="checkbox"
+                    checked={filteredDocs.length > 0 && selectedIds.length === filteredDocs.length}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                  />
+                </div>
+                <ResizeHandle colId="selection" />
+              </th>
+
+              {/* Data columns */}
+              {orderedColumns.map(col => {
+                const isDragging = draggedColKey === col.id;
+                const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
+
+                return (
+                  <th
+                    key={col.id}
+                    data-col-id={col.id}
+                    onMouseDown={e => startColumnDrag(e, col.id)}
+                    title="Drag to move this column"
+                    style={{
+                      width: colWidths[col.id],
+                      opacity: isDragging ? 0.35 : 1,
+                      ...stickyStyleFor(col.id),
+                    }}
+                    className={`relative px-4 py-3 text-left text-xs font-bold text-[#525866] uppercase tracking-wider whitespace-nowrap border-b border-r border-[#E1E4EA] transition-colors ${
+                      isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"
+                    } ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
                   >
-                    {orderedColumns.map((col, colIdx) => {
-                      const style = stickyStyleFor(col.id);
-                      const isRightmost = colIdx === orderedColumns.length - 1;
-                      return (
-                        <td
-                          key={col.id}
-                          className={`px-4 py-3 whitespace-nowrap text-sm text-gray-900 border-r border-[#E1E4EA] last:border-r-0 ${pinnedCols[col.id] ? "bg-inherit" : ""}`}
-                          style={{ ...style, width: colWidths[col.id], minWidth: colWidths[col.id], maxWidth: colWidths[col.id] }}
-                        >
-                          <div className={`flex items-center justify-between gap-2 h-full w-full ${isRightmost ? "pr-1" : ""}`}>
-                            <div className="flex-1 truncate">
-                              {renderCell(col.id, doc)}
-                            </div>
-                            {isRightmost && renderActionMenu(doc)}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="truncate flex-1">{col.label}</span>
+                      {pinnedCols[col.id] && <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />}
+                      <button
+                        onClick={e => openColumnMenu(e, col.id)}
+                        title="Column options"
+                        className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <ResizeHandle colId={col.id} />
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+
+          <tbody className="bg-white">
+            {showLoadingSkeleton ? (
+              <TableSkeletonRows
+                numRows={pagination.limit}
+                columns={orderedColumns.map(c => colWidths[c.id])}
+                hasCheckbox
+                checkboxWidth={colWidths.selection}
+              />
+            ) : filteredDocs.length === 0 ? (
+              <tr>
+                <td colSpan={orderedColumns.length + 1} className="px-6 py-20 text-center">
+                  <FileText className="w-10 h-10 mx-auto text-gray-300 mb-3" />
+                  <p className="text-sm font-medium text-gray-500">No transactions found.</p>
+                </td>
+              </tr>
+            ) : (
+              filteredDocs.map(doc => (
+                <tr
+                  key={doc._id}
+                  className={`bg-white hover:bg-blue-50 transition-colors ${selectedIds.includes(doc._id) ? "!bg-blue-50" : ""}`}
+                >
+                  {/* Selection cell */}
+                  <td
+                    style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 10 }}
+                    className="px-4 py-3 align-middle border-b border-r border-[#E1E4EA] bg-inherit"
+                  >
+                    <div className="flex justify-center items-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(doc._id)}
+                        onChange={() => handleSelectRow(doc._id)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                      />
+                    </div>
+                  </td>
+
+                  {/* Data cells */}
+                  {orderedColumns.map((col, colIdx) => {
+                    const isRightmost = colIdx === orderedColumns.length - 1;
+                    return (
+                      <td
+                        key={col.id}
+                        style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
+                        className="px-4 py-3 text-sm text-gray-900 border-b border-r border-[#E1E4EA] last:border-r-0 overflow-hidden bg-inherit whitespace-nowrap"
+                      >
+                        {renderCell(col.id, doc, isRightmost)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
-      {/* Pagination Bar */}
-      <div 
+      {/* ── Drag ghost portal (exact copy of Accounting.jsx) ──────── */}
+      {dragGhost && createPortal(
+        <div
+          ref={ghostElRef}
+          style={{
+            position: "fixed",
+            top: -9999,
+            left: -9999,
+            width: dragGhost.width,
+            zIndex: 10000,
+            pointerEvents: "none",
+          }}
+          className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+        >
+          <div
+            className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]"
+            style={{ height: dragGhost.height }}
+          >
+            <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+          </div>
+          {dragGhost.previewRows.map((rowVal, i) => (
+            <div key={i} className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0">
+              <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
+
+      {/* ── Pagination bar ────────────────────────────────────────── */}
+      <div
         className="fixed bottom-0 right-0 h-16 bg-white border-t border-[#E1E4EA] flex items-center justify-between px-6 z-40"
         style={{ left: "var(--sidebar-width, 0px)" }}
       >
-        <div className="flex items-center">
+        <div className="flex items-center gap-3">
           <p className="text-sm text-gray-700">
-            Showing <span className="font-semibold">{pagination.totalCount === 0 ? 0 : (pagination.currentPage - 1) * pagination.limit + 1}</span> to <span className="font-semibold">{Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)}</span> of <span className="font-semibold">{pagination.totalCount}</span> transactions
+            Showing{" "}
+            <span className="font-semibold">
+              {pagination.totalCount === 0 ? 0 : (pagination.currentPage - 1) * pagination.limit + 1}
+            </span>{" "}to{" "}
+            <span className="font-semibold">
+              {Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)}
+            </span>{" "}of{" "}
+            <span className="font-semibold">{pagination.totalCount}</span> transactions
           </p>
-          <div className="ml-4 flex items-center">
-            <select
-              value={pagination.limit}
-              onChange={(e) => handleLimitChange(parseInt(e.target.value))}
-              className="border border-gray-300 rounded-md text-sm py-1 pl-2 pr-6 focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
-            >
-              {[10, 25, 50, 100].map(val => (
-                <option key={val} value={val}>{val} / page</option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={pagination.limit}
+            onChange={e => handleLimitChange(parseInt(e.target.value))}
+            className="border border-gray-300 rounded-md text-sm py-1 pl-2 pr-6 focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
+          >
+            {[10, 25, 50, 100].map(val => <option key={val} value={val}>{val} / page</option>)}
+          </select>
         </div>
 
         <div className="flex items-center gap-2">
@@ -521,21 +736,20 @@ export default function PaymentsTimeline() {
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          
-          {paginationItems.map((item, idx) => {
-            if (item === "left-dots" || item === "right-dots") {
-              return <span key={`${item}-${idx}`} className="px-2 text-gray-400">...</span>;
-            }
-            return (
-              <button
-                key={item}
-                onClick={() => handlePageChange(item)}
-                className={`w-8 h-8 rounded-full text-sm font-medium transition-colors ${pagination.currentPage === item ? "bg-[#0085FF] text-white" : "text-gray-700 hover:bg-gray-100"}`}
-              >
-                {item}
-              </button>
-            );
-          })}
+
+          {paginationItems.map((item, idx) =>
+            item === "left-dots" || item === "right-dots"
+              ? <span key={`${item}-${idx}`} className="px-2 text-gray-400">…</span>
+              : (
+                <button
+                  key={item}
+                  onClick={() => handlePageChange(item)}
+                  className={`w-8 h-8 rounded-full text-sm font-medium transition-colors ${pagination.currentPage === item ? "bg-[#0085FF] text-white" : "text-gray-700 hover:bg-gray-100"}`}
+                >
+                  {item}
+                </button>
+              )
+          )}
 
           <button
             onClick={() => handlePageChange(pagination.currentPage + 1)}
@@ -547,10 +761,151 @@ export default function PaymentsTimeline() {
         </div>
       </div>
 
-      <PaymentFormModal 
-        isOpen={isPaymentModalOpen} 
-        onClose={() => setIsPaymentModalOpen(false)} 
-        onSuccess={() => fetchData()} 
+      {/* ── Shared Column Header Options Menu (Pin Left/Right, Sort, Filter, Hide) ── */}
+      {openColumnMenuKey &&
+        columnMenuPos &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={closeColumnMenu} />
+            <div
+              style={{
+                position: "fixed",
+                top: columnMenuPos.top,
+                left: columnMenuPos.left,
+              }}
+              className="w-[220px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
+            >
+              {(() => {
+                const col = ALL_COLUMNS.find(c => c.id === openColumnMenuKey);
+                if (!col) return null;
+                const side = pinnedCols[col.id];
+                const itemClass = "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap";
+
+                return (
+                  <>
+                    <button
+                      onClick={() => {
+                        closeColumnMenu();
+                        setColumnPin(col.id, "left");
+                      }}
+                      className={`${itemClass} ${side === "left" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
+                    >
+                      {side === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                      {side === "left" ? "Unpin" : "Pin to Left"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        closeColumnMenu();
+                        setColumnPin(col.id, "right");
+                      }}
+                      className={`${itemClass} ${side === "right" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
+                    >
+                      {side === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                      {side === "right" ? "Unpin" : "Pin to Right"}
+                    </button>
+
+                    <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+
+                    <button
+                      onClick={() => {
+                        closeColumnMenu();
+                        setSortConfig({ key: col.id, direction: "asc" });
+                      }}
+                      className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
+                    >
+                      <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                      Sort Ascending
+                    </button>
+                    <button
+                      onClick={() => {
+                        closeColumnMenu();
+                        setSortConfig({ key: col.id, direction: "desc" });
+                      }}
+                      className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
+                    >
+                      <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                      Sort Descending
+                    </button>
+
+                    {/* Party Company Filter list if Party column */}
+                    {col.id === "party" && (
+                      <>
+                        <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                        <div className="px-2 py-1 text-[11px] font-bold text-gray-400 uppercase">Filter by Company</div>
+                        <div className="max-h-36 overflow-y-auto flex flex-col gap-0.5 no-scrollbar">
+                          <button
+                            onClick={() => { closeColumnMenu(); setPartyFilter(""); }}
+                            className={`${itemClass} ${!partyFilter ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
+                          >
+                            All Companies
+                          </button>
+                          {companies.map(c => {
+                            const name = c.companyName || c.name || (typeof c === "string" ? c : "");
+                            if (!name) return null;
+                            return (
+                              <button
+                                key={c._id || name}
+                                onClick={() => { closeColumnMenu(); setPartyFilter(name); }}
+                                className={`${itemClass} ${partyFilter === name ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
+                              >
+                                {name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Direction Filter if Direction column */}
+                    {col.id === "direction" && (
+                      <>
+                        <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                        <div className="px-2 py-1 text-[11px] font-bold text-gray-400 uppercase">Filter Direction</div>
+                        <button
+                          onClick={() => { closeColumnMenu(); setDirectionFilter(""); }}
+                          className={`${itemClass} ${!directionFilter ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
+                        >
+                          All Directions
+                        </button>
+                        <button
+                          onClick={() => { closeColumnMenu(); setDirectionFilter("Credit"); }}
+                          className={`${itemClass} ${directionFilter === "Credit" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
+                        >
+                          Credit (IN)
+                        </button>
+                        <button
+                          onClick={() => { closeColumnMenu(); setDirectionFilter("Debit"); }}
+                          className={`${itemClass} ${directionFilter === "Debit" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
+                        >
+                          Debit (OUT)
+                        </button>
+                      </>
+                    )}
+
+                    <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+
+                    <button
+                      onClick={() => {
+                        closeColumnMenu();
+                        setHiddenCols(prev => [...prev, col.id]);
+                      }}
+                      className={`${itemClass} text-[#161618] hover:bg-gray-50`}
+                    >
+                      <EyeOff className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                      Hide Column
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+          </>,
+          document.body
+        )}
+
+      <PaymentFormModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        onSuccess={() => fetchData()}
       />
     </div>
   );
