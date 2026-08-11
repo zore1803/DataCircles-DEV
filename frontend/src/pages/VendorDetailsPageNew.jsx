@@ -600,7 +600,7 @@ const VendorDetailsPageNew = () => {
                 CompanyProfilePage.jsx rather than the tall bordered card
                 this used to be. The email/phone/address detail that used to
                 stack here now lives in the Overview tab's Vendor Details. */}
-            <div className="flex items-center justify-between gap-4 mb-2 lg:mb-3">
+            <div className="flex items-center justify-between gap-4 pb-4">
               <div className="flex items-center gap-3 min-w-0">
                 {/* Gated on showSkeleton, not just `vendor` — the vendor fetch
                   resolves well before payments/tasks/meetings/notes do, so
@@ -719,10 +719,13 @@ const VendorDetailsPageNew = () => {
         {/* ═══════════════════════════════════════════════════════════
             SECTION 3 & 5 — TABS & CONTENT
            ═══════════════════════════════════════════════════════════ */}
-        {/* TABS — no divider above them: the strip's own bottom margin
-            provides the separation, same as CompanyProfilePage.jsx, and the
-            extra rule here made the strip read as cramped against it. */}
-        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        {/* TABS — their own banded section, bounded by a rule above and
+            below and bled full-width with -mx, so the switcher reads as a
+            distinct strip rather than sitting flush under the vendor name.
+            py-4 (not mb-4) so the band has symmetric breathing room. */}
+        <div className="border-b border-gray-200 -mx-6 sm:-mx-8"></div>
+
+        <div className="flex items-center justify-between py-4 gap-3 flex-wrap">
           <div ref={tabTrackRef} className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
@@ -745,7 +748,7 @@ const VendorDetailsPageNew = () => {
           <div id="tab-actions-portal" className="flex items-center gap-2"></div>
         </div>
 
-        <div className="border-b border-gray-200 mb-4 -mx-6"></div>
+        <div className="border-b border-gray-200 mb-4 -mx-6 sm:-mx-8"></div>
 
         {/* ═══════════════════════════════════════════════════════════
             SECTION 2 — FINANCIAL SUMMARY KPI STRIP
