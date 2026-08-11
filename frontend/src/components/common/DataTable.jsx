@@ -233,7 +233,7 @@ export default function DataTable({
                     const isLeftSticky = colId === selectionColId || leftPinnedKeys.includes(colId);
                     const isRightSticky = rightPinnedKeys.includes(colId);
                     const isSticky = isLeftSticky || isRightSticky;
-                    const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === selectionColId;
+                    const isLeftBoundary = colId === lastLeftPinnedKey;
                     const isRightBoundary = colId === firstRightPinnedKey;
                     const isDraggable = colId !== selectionColId && !!onColumnReorder;
                     const isDragging = draggedColKey === colId;
@@ -252,14 +252,16 @@ export default function DataTable({
                           zIndex: isSticky ? 20 : 1,
                           opacity: isDragging ? 0.35 : 1,
                         }}
-                        className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
-                          ? "border-r-2 border-r-gray-300"
-                          : "last:border-r-0"
-                          } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] last:border-r-0 transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
                         <div className={`flex items-center justify-between w-full min-w-0 ${loading ? "[&_button]:invisible" : ""}`}>
                           <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden cursor-grab active:cursor-grabbing">
-                            {flexRender(header.column.columnDef.header, header.getContext())}
+                            <span className="truncate min-w-0">
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                            </span>
+                            {(leftPinnedKeys.includes(colId) || rightPinnedKeys.includes(colId)) && (
+                              <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0 ml-1" style={{ transform: "rotate(45deg)" }} />
+                            )}
                           </div>
                           
                           {colId !== selectionColId && (onPinColumn || onHideColumn || onSort) && (
@@ -287,6 +289,10 @@ export default function DataTable({
                             </button>
                           )}
                         </div>
+
+                        {(isLeftBoundary || isRightBoundary) && (
+                          <div style={getPinnedBoundaryOverlayStyle(isLeftBoundary ? "left" : "right")} />
+                        )}
 
                         {openColMenuKey === colId && colMenuPos && createPortal(
                           <>
@@ -382,7 +388,8 @@ export default function DataTable({
                               header.getResizeHandler()(e);
                             }}
                             onTouchStart={header.getResizeHandler()}
-                            className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
+                            className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-50 ${header.column.getIsResizing() ? "bg-blue-500" : "bg-transparent"
+                              }`}
                           />
                         )}
                       </th>
@@ -421,7 +428,7 @@ export default function DataTable({
                       const isLeftSticky = colId === selectionColId || leftPinnedKeys.includes(colId);
                       const isRightSticky = rightPinnedKeys.includes(colId);
                       const isSticky = isLeftSticky || isRightSticky;
-                      const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === selectionColId;
+                      const isLeftBoundary = colId === lastLeftPinnedKey;
                       const isRightBoundary = colId === firstRightPinnedKey;
                       const isColDragging = draggedColKey === colId;
 
@@ -436,12 +443,12 @@ export default function DataTable({
                             zIndex: isSticky ? 10 : 1,
                             opacity: isColDragging ? 0.35 : 1,
                           }}
-                          className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
-                            ? "border-r-2 border-r-gray-200"
-                            : "last:border-r-0"
-                            } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
+                          className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0`}
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          {(isLeftBoundary || isRightBoundary) && (
+                            <div style={getPinnedBoundaryOverlayStyle(isLeftBoundary ? "left" : "right")} />
+                          )}
                         </td>
                       );
                     })}

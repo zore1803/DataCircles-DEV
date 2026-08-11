@@ -15,6 +15,7 @@ import toast from "react-hot-toast";
 import HighlightText from "../common/HighlightText";
 import { useRef } from "react";
 import { exportToCSV } from "../../utils/exportToCSV";
+import { useLocalStorageState } from "../../hooks/useLocalStorageState";
 
 /* Columns offered in the filter panel. `options` seeds the dropdown with the
    schema's full enum so a value is still filterable when no row currently uses
@@ -72,14 +73,14 @@ const VendorTasksTable = ({ vendorId }) => {
   const [search, setSearch] = useState("");
   const [selectedFilters, setSelectedFilters] = useState({});
   const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [columnSizing, setColumnSizing] = useState({});
+  const [columnSizing, setColumnSizing] = useLocalStorageState("vendor-tasks-col-widths", {});
   const [isDeleting, setIsDeleting] = useState(false);
-  
-  const [columnOrder, setColumnOrder] = useState(() => [
+
+  const [columnOrder, setColumnOrder] = useLocalStorageState("vendor-tasks-col-order", () => [
     "selection", "title", "description", "assignedTo", "status", "priority", "dueDate", "actions"
   ]);
-  const [hiddenColumns, setHiddenColumns] = useState(new Set());
-  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const [hiddenColumns, setHiddenColumns] = useLocalStorageState("vendor-tasks-hidden-cols", new Set());
+  const [pinnedColumns, setPinnedColumns] = useLocalStorageState("vendor-tasks-pinned-cols", []);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
 
   const filterButtonRef = useRef(null);
@@ -519,7 +520,23 @@ const VendorTasksTable = ({ vendorId }) => {
   return (
     <div className="h-full mt-0">
       {/* Action Buttons are portaled from here into the Tab Header using ReactDOM.createPortal. */}
-      {stripVisible ? (
+      {!loading && tasks.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+          <Calendar className="w-10 h-10 text-gray-400" />
+          <p className="text-sm text-gray-600">No tasks yet</p>
+          <p className="text-xs text-gray-500">Tasks will appear here once created</p>
+          <button
+            onClick={() => {
+              setEditingTask(null);
+              setShowTaskForm(true);
+            }}
+            className="mt-2 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} />
+            Add new task
+          </button>
+        </div>
+      ) : stripVisible ? (
         <BulkActionBar
           selectedCount={selectedItems.length}
           entityName="task"
@@ -540,8 +557,7 @@ const VendorTasksTable = ({ vendorId }) => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search tasks..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              className="w-full h-full pl-10 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
           </div>
           <button
@@ -575,6 +591,7 @@ const VendorTasksTable = ({ vendorId }) => {
         </div>
       )}
 
+      {(loading || tasks.length > 0) && (
       <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
         <DataTable
           data={paginatedTasks}
@@ -618,6 +635,18 @@ const VendorTasksTable = ({ vendorId }) => {
                   ? "Try clearing the search or filters"
                   : "Tasks will appear here once created"}
               </p>
+              {!search && !activeFilterCount && (
+                <button
+                  onClick={() => {
+                    setEditingTask(null);
+                    setShowTaskForm(true);
+                  }}
+                  className="mt-2 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={16} />
+                  Add new task
+                </button>
+              )}
             </div>
           }
         />
@@ -636,6 +665,7 @@ const VendorTasksTable = ({ vendorId }) => {
           />
         </div>
       </div>
+      )}
 
       <CompanyFilterPanel
         isOpen={showFilterPanel}

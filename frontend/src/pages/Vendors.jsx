@@ -567,6 +567,7 @@ function Vendors() {
         return (
           <Link
             to={`/vendors/${vendor._id}`}
+            state={{ vendorIds: vendors.map((v) => v._id) }}
             className="text-blue-600 font-bold text-sm underline hover:text-blue-700 transition-colors truncate block"
           >
             <HighlightText text={vendor.name} query={searchTerm} />
@@ -1239,9 +1240,13 @@ function Vendors() {
           </div>
         ) : (
         <div className="flex flex-row items-center gap-2 h-[44px] flex-shrink-0">
-          <div className="relative flex items-center h-11 w-[220px] sm:w-[300px] lg:w-[380px] rounded-full border border-[#E1E4EA] bg-white focus-within:border-[#0085FF] transition-colors">
+          <div className={`relative flex items-center h-11 rounded-full border border-[#E1E4EA] bg-white focus-within:border-[#0085FF] transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-full sm:w-[300px] lg:w-[380px]" : "w-11"}`}>
             <SearchIcon
-              className="absolute left-3.5 text-[#1F2937] pointer-events-none top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
+              className="absolute left-3.5 cursor-pointer z-10 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
+              onClick={() => {
+                setIsSearchExpanded(true);
+                searchInputRef.current?.focus();
+              }}
             />
             <input
               ref={searchInputRef}

@@ -1750,8 +1750,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
               placeholder="Search folder by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-full pl-11 pr-10 border rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              className="w-full h-full pl-11 pr-10 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
             {searchTerm && (
               <button
@@ -1836,20 +1835,24 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
         )}
 
         {/* Folders List / Grid */}
-        {!isLoading && folderViewMode === "grid" && filteredFolders.length === 0 ? (
+        {!isLoading && folderViewMode === "grid" && folders.length === 0 ? (
           <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-            <FolderIcon className="w-7 h-7 mb-3 text-blue-500" />
+            <FolderIcon className="w-7 h-7 mb-3 text-gray-400" />
             <button
               type="button"
               onClick={() => {
                 setInlineEditingId("NEW");
                 setInlineEditingName("New Folder");
               }}
-              className="flex items-center gap-1.5 h-9 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus size={16} />
-              Add new
+              Add new folder
             </button>
+          </div>
+        ) : !isLoading && folderViewMode === "grid" && filteredFolders.length === 0 ? (
+          <div className="flex items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 text-sm font-medium">
+            No folders found.
           </div>
         ) : folderViewMode === "grid" ? (
           <div
@@ -1996,9 +1999,9 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
               </div>
             ))}
           </div>
-        ) : !isLoading && filteredFolders.length === 0 ? (
+        ) : !isLoading && folders.length === 0 ? (
           <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-            <FolderIcon className="w-7 h-7 mb-3 text-blue-500" />
+            <FolderIcon className="w-7 h-7 mb-3 text-gray-400" />
             <button
               type="button"
               onClick={() =>
@@ -2008,11 +2011,15 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                   initialName: "",
                 })
               }
-              className="flex items-center gap-1.5 h-9 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus size={16} />
-              Add new
+              Add new folder
             </button>
+          </div>
+        ) : !isLoading && filteredFolders.length === 0 ? (
+          <div className="flex items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 text-sm font-medium">
+            No folders found.
           </div>
         ) : (
           <div

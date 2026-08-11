@@ -14,6 +14,7 @@ import { useTopLoadingSignal } from "../common/TopLoadingBar";
 import toast from "react-hot-toast";
 import HighlightText from "../common/HighlightText";
 import { exportToCSV } from "../../utils/exportToCSV";
+import { useLocalStorageState } from "../../hooks/useLocalStorageState";
 
 const stripHtml = (html) => String(html || "").replace(/<[^>]*>/g, "").trim();
 
@@ -62,14 +63,14 @@ const VendorMeetingsTable = ({ vendorId }) => {
   const [search, setSearch] = useState("");
   const [selectedFilters, setSelectedFilters] = useState({});
   const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [columnSizing, setColumnSizing] = useState({});
+  const [columnSizing, setColumnSizing] = useLocalStorageState("vendor-meetings-col-widths", {});
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [columnOrder, setColumnOrder] = useState(() => [
+  const [columnOrder, setColumnOrder] = useLocalStorageState("vendor-meetings-col-order", () => [
     "selection", "title", "description", "status", "meetingType", "priority", "scheduledAt", "duration", "location", "actions"
   ]);
-  const [hiddenColumns, setHiddenColumns] = useState(new Set());
-  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const [hiddenColumns, setHiddenColumns] = useLocalStorageState("vendor-meetings-hidden-cols", new Set());
+  const [pinnedColumns, setPinnedColumns] = useLocalStorageState("vendor-meetings-pinned-cols", []);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
 
   const filterButtonRef = useRef(null);
@@ -500,7 +501,23 @@ const VendorMeetingsTable = ({ vendorId }) => {
     <div className="h-full mt-0">
       {/* Action Buttons (Portaled to Tab Header) removed */}
 
-      {stripVisible ? (
+      {!loading && meetings.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+          <Calendar className="w-10 h-10 text-gray-400" />
+          <p className="text-sm text-gray-600">No meetings yet</p>
+          <p className="text-xs text-gray-500">Meetings will appear here once created</p>
+          <button
+            onClick={() => {
+              setEditingMeeting(null);
+              setShowMeetingForm(true);
+            }}
+            className="mt-2 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} />
+            Add new meeting
+          </button>
+        </div>
+      ) : stripVisible ? (
         <BulkActionBar
           selectedCount={selectedItems.length}
           entityName="meeting"
@@ -521,8 +538,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search meetings..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              className="w-full h-full pl-10 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
           </div>
           <button
@@ -556,6 +572,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
         </div>
       )}
 
+      {(loading || meetings.length > 0) && (
       <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
         <DataTable
           data={paginatedMeetings}
@@ -599,6 +616,18 @@ const VendorMeetingsTable = ({ vendorId }) => {
                   ? "Try clearing the search or filters"
                   : "Meetings will appear here once created"}
               </p>
+              {!search && !activeFilterCount && (
+                <button
+                  onClick={() => {
+                    setEditingMeeting(null);
+                    setShowMeetingForm(true);
+                  }}
+                  className="mt-2 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={16} />
+                  Add new meeting
+                </button>
+              )}
             </div>
           }
         />
@@ -617,6 +646,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
           />
         </div>
       </div>
+      )}
 
       <CompanyFilterPanel
         isOpen={showFilterPanel}
