@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { 
   X, ChevronDown, ChevronUp, MoreVertical, Pencil, Trash2, Eye, EyeOff,
-  SlidersHorizontal, Plus, Download, Share2, 
+  SlidersHorizontal, Plus, Download, Share2, Edit2,
   ChevronLeft, ChevronRight, Pin, PinOff, FileText
 } from "lucide-react";
 import SearchIcon from "../components/common/SearchIcon";
@@ -12,6 +12,8 @@ import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import PaymentFormModal from "../components/payments/PaymentFormModal";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { getAncestorZoom } from "../utils/domUtils";
+import BulkActionBar from "../components/common/BulkActionBar";
+import { useBulkStrip } from "../hooks/useBulkSelection";
 
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
@@ -89,6 +91,7 @@ export default function PaymentsTimeline() {
   const [companies, setCompanies]               = useState([]);
   const [partyFilter, setPartyFilter]           = useState("");
   const [directionFilter, setDirectionFilter]   = useState("");
+  const [typeFilter, setTypeFilter]             = useState("");
 
   /* drag-reorder state (mirror of Accounting.jsx) */
   const [draggedColKey,  setDraggedColKey]  = useState(null);
@@ -99,11 +102,15 @@ export default function PaymentsTimeline() {
 
   /* row selection */
   const [selectedIds, setSelectedIds] = useState([]);
+  const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedIds.length);
 
   /* misc UI */
   const [showFilterMenu,    setShowFilterMenu]    = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [editingPaymentItem, setEditingPaymentItem] = useState(null);
   const [openActionMenuId,  setOpenActionMenuId]  = useState(null);
+  const [actionMenuPos,     setActionMenuPos]     = useState(null);
+  const [deleteConfirmState, setDeleteConfirmState] = useState({ isOpen: false, type: "single", target: null });
 
   /* Fetch companies list for Party filter */
   useEffect(() => {
@@ -206,6 +213,21 @@ export default function PaymentsTimeline() {
     }
   }, [pagination.currentPage, pagination.limit, partyFilter]);
 
+  /* ── fetch ALL record IDs from DB for global Select All ─────────── */
+  const fetchAllIds = useCallback(async () => {
+    const tid = toast.loading("Selecting all records...");
+    try {
+      const partyParam = partyFilter ? `&party=${encodeURIComponent(partyFilter)}` : "";
+      const res = await API.get(`/payments-timeline?page=1&limit=99999${partyParam}`);
+      const allDocs = res.data.documents || [];
+      setSelectedIds(allDocs.map(d => d._id));
+      toast.success(`Selected all ${allDocs.length} record(s).`, { id: tid });
+    } catch (err) {
+      toast.error("Failed to fetch all records", { id: tid });
+      console.error(err);
+    }
+  }, [partyFilter]);
+
   useEffect(() => { fetchData(); }, [pagination.currentPage, pagination.limit, partyFilter]);
 
   /* ── filtered and sorted docs ─────────────────────────────────────── */
@@ -221,6 +243,14 @@ export default function PaymentsTimeline() {
       if (directionFilter) {
         if (directionFilter === "Credit" && doc.direction !== "IN") return false;
         if (directionFilter === "Debit" && doc.direction !== "OUT") return false;
+      }
+
+      if (typeFilter) {
+        if (typeFilter === "Credit" && doc.direction !== "IN") return false;
+        if (typeFilter === "Debit" && doc.direction !== "OUT") return false;
+        if (["Invoice", "Purchase", "Subscription", "Payment"].includes(typeFilter)) {
+          if ((doc.source || "").toLowerCase() !== typeFilter.toLowerCase()) return false;
+        }
       }
 
       return true;
@@ -243,7 +273,7 @@ export default function PaymentsTimeline() {
     }
 
     return list;
-  }, [documents, searchQuery, partyFilter, directionFilter, sortConfig]);
+  }, [documents, searchQuery, partyFilter, directionFilter, typeFilter, sortConfig]);
 
   const handleSelectAll = e =>
     setSelectedIds(e.target.checked ? filteredDocs.map(d => d._id) : []);
@@ -384,47 +414,63 @@ export default function PaymentsTimeline() {
     return (
       <div className="relative flex-shrink-0 flex items-center">
         <button
-          onClick={e => { e.stopPropagation(); setOpenActionMenuId(isOpen ? null : doc._id); }}
+          onClick={e => {
+            e.stopPropagation();
+            if (isOpen) {
+              setOpenActionMenuId(null);
+              setActionMenuPos(null);
+            } else {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setActionMenuPos({ top: rect.top + rect.height / 2, right: window.innerWidth - rect.left + 4 });
+              setOpenActionMenuId(doc._id);
+            }
+          }}
           className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
         >
           <MoreVertical size={15} />
         </button>
-        {isOpen && (
-          <div
-            className="absolute right-8 top-1/2 -translate-y-1/2 w-40 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-[60] overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              onClick={() => { setOpenActionMenuId(null); toast.success("View details coming soon!"); }}>
-              <Eye className="w-4 h-4 text-gray-400" /> View
-            </button>
-            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              onClick={() => { setOpenActionMenuId(null); toast.success("Edit coming soon!"); }}>
-              <Pencil className="w-4 h-4 text-gray-400" /> Edit
-            </button>
-            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              onClick={() => { setOpenActionMenuId(null); toast.success("Download coming soon!"); }}>
-              <Download className="w-4 h-4 text-gray-400" /> Download
-            </button>
-            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              onClick={() => { setOpenActionMenuId(null); toast.success("Share coming soon!"); }}>
-              <Share2 className="w-4 h-4 text-gray-400" /> Share
-            </button>
-            <div className="h-px bg-gray-100 my-1" />
-            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-              onClick={() => {
-                setOpenActionMenuId(null);
-                if (doc.source === "Payment") {
-                  API.delete(`/vendors/${doc.vendor}/payments/${doc._id}`)
-                    .then(() => fetchData())
-                    .catch(() => toast.error("Failed to delete"));
-                } else {
-                  toast.error(`Cannot delete ${doc.source} from timeline.`);
-                }
-              }}>
-              <Trash2 className="w-4 h-4 text-red-500" /> Delete
-            </button>
-          </div>
+        {isOpen && actionMenuPos && createPortal(
+          <>
+            {/* Invisible backdrop to close menu on click-outside */}
+            <div className="fixed inset-0 z-[59]" onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); }} />
+            <div
+              className="fixed w-40 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-[60] overflow-hidden"
+              style={{ top: actionMenuPos.top, right: actionMenuPos.right, transform: "translateY(-50%)" }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); toast.success("View details coming soon!"); }}>
+                <Eye className="w-4 h-4 text-gray-400" /> View
+              </button>
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+                onClick={() => {
+                  setOpenActionMenuId(null);
+                  setActionMenuPos(null);
+                  setEditingPaymentItem(doc);
+                  setIsPaymentModalOpen(true);
+                }}>
+                <Pencil className="w-4 h-4 text-gray-400" /> Edit
+              </button>
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); toast.success("Download coming soon!"); }}>
+                <Download className="w-4 h-4 text-gray-400" /> Download
+              </button>
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); toast.success("Share coming soon!"); }}>
+                <Share2 className="w-4 h-4 text-gray-400" /> Share
+              </button>
+              <div className="h-px bg-gray-100 my-1" />
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+                onClick={() => {
+                  setOpenActionMenuId(null);
+                  setActionMenuPos(null);
+                  setDeleteConfirmState({ isOpen: true, type: "single", target: doc });
+                }}>
+                <Trash2 className="w-4 h-4 text-red-500" /> Delete
+              </button>
+            </div>
+          </>,
+          document.body
         )}
       </div>
     );
@@ -486,7 +532,7 @@ export default function PaymentsTimeline() {
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-[#FAFBFC]">
 
-      {/* ── Fixed header bar (matches Accounting.jsx) ─────────────── */}
+      {/* ── Fixed header bar ─────────────────────────────────────────────────────── */}
       <div
         className="fixed right-0 h-[72px] px-6 flex items-center justify-between border-b border-[#E1E4EA] bg-white top-[54px] lg:top-16"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
@@ -499,7 +545,7 @@ export default function PaymentsTimeline() {
         </div>
 
         <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
-          {/* Search — expands in place from the icon, matching Accounting */}
+          {/* Search — expands in place from the icon */}
           <div
             className={`relative h-11 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-11"} max-w-full flex-shrink-0`}
           >
@@ -535,33 +581,46 @@ export default function PaymentsTimeline() {
             <button
               title="Filter"
               onClick={e => { e.stopPropagation(); setShowFilterMenu(v => !v); }}
-              className={`flex items-center justify-center w-11 h-11 rounded-full border transition-colors bg-white ${showFilterMenu ? "border-[#0085FF] text-[#0085FF]" : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"}`}
+              className={`flex items-center justify-center w-11 h-11 rounded-full border transition-colors bg-white cursor-pointer ${showFilterMenu || typeFilter ? "border-[#0085FF] text-[#0085FF] bg-blue-50/50" : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"}`}
             >
-              <SlidersHorizontal size={18} strokeWidth={2} className={showFilterMenu ? "text-[#0085FF]" : "text-[#1F2937]"} />
+              <SlidersHorizontal size={18} strokeWidth={2} className={showFilterMenu || typeFilter ? "text-[#0085FF]" : "text-[#1F2937]"} />
             </button>
             {showFilterMenu && (
               <div
                 onClick={e => e.stopPropagation()}
-                className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-50"
+                className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-50 animate-in fade-in zoom-in-95 duration-100"
               >
-                {["", "Credit", "Debit", "Invoice", "Purchase", "Subscription", "Payment"].map(opt => (
-                  <button
-                    key={opt || "all"}
-                    onClick={() => setShowFilterMenu(false)}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    {opt || "All Types"}
-                  </button>
-                ))}
+                <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  Filter by Type
+                </div>
+                {["", "Credit", "Debit", "Invoice", "Purchase", "Subscription", "Payment"].map(opt => {
+                  const isSelected = typeFilter === opt;
+                  return (
+                    <button
+                      key={opt || "all"}
+                      onClick={() => {
+                        setTypeFilter(opt);
+                        setShowFilterMenu(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between transition-colors cursor-pointer ${isSelected ? "bg-blue-50 text-[#0085FF] font-medium" : "text-gray-700 hover:bg-gray-50"}`}
+                    >
+                      <span>{opt || "All Types"}</span>
+                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[#0085FF]" />}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
 
-          {/* Add Button — same style as Accounting (rounded-full, 44 h, 146 min-w) */}
+          {/* Add Button */}
           <button
-            onClick={() => setIsPaymentModalOpen(true)}
+            onClick={() => {
+              setEditingPaymentItem(null);
+              setIsPaymentModalOpen(true);
+            }}
             style={{ minWidth: 146, height: 44, padding: 12, gap: 6, background: "#0085FF", borderRadius: 96 }}
-            className="flex flex-row justify-center items-center hover:bg-blue-600 transition-colors flex-shrink-0 ml-1"
+            className="flex flex-row justify-center items-center hover:bg-blue-600 transition-colors flex-shrink-0 ml-1 cursor-pointer"
           >
             <Plus size={18} className="text-white flex-shrink-0" />
             <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">Add Payment</span>
@@ -569,10 +628,35 @@ export default function PaymentsTimeline() {
         </div>
       </div>
 
+      {/* ── BulkActionBar — floats between title bar and table when rows are selected ── */}
+      {stripVisible && (
+        <div
+          className="fixed right-0 px-6 z-[40]"
+          style={{ left: "var(--sidebar-width, 0px)", top: 134, paddingTop: 4, paddingBottom: 4 }}
+        >
+          <BulkActionBar
+            selectedCount={selectedIds.length}
+            entityName="payment"
+            isClosing={stripClosing}
+            onSelectAll={fetchAllIds}
+            onDeselectAll={() => setSelectedIds([])}
+            onExport={() => toast.success(`Exporting ${selectedIds.length} payment(s)...`)}
+            onDelete={() => {
+              setDeleteConfirmState({ isOpen: true, type: "bulk", target: selectedIds });
+            }}
+            onCancel={() => setSelectedIds([])}
+          />
+        </div>
+      )}
+
       {/* ── Full-bleed table (matches Accounting.jsx layout) ──────── */}
       <div
-        className="fixed right-0 overflow-x-auto overflow-y-auto bg-white top-[126px] lg:top-[136px]"
-        style={{ left: "var(--sidebar-width, 0px)", bottom: 64 }}
+        className="fixed right-0 overflow-x-auto overflow-y-auto bg-white"
+        style={{
+          left: "var(--sidebar-width, 0px)",
+          bottom: 64,
+          top: stripVisible ? 186 : 138,
+        }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-[#F5F7FA] sticky top-0 z-20">
@@ -917,9 +1001,85 @@ export default function PaymentsTimeline() {
 
       <PaymentFormModal
         isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
+        editItem={editingPaymentItem}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setEditingPaymentItem(null);
+        }}
         onSuccess={() => fetchData()}
       />
+
+      {/* ── Custom Delete Warning Modal ───────────────────────────── */}
+      {deleteConfirmState.isOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-red-600 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Confirm Deletion
+                </h3>
+                <p className="text-xs text-gray-500">This action cannot be undone.</p>
+              </div>
+            </div>
+            
+            <p className="text-sm text-gray-600 mb-6">
+              {deleteConfirmState.type === "single" ? (
+                <>Are you sure you want to delete this <strong className="text-gray-800">{deleteConfirmState.target?.source?.toLowerCase() || "payment"}</strong> entry?</>
+              ) : (
+                <>Are you sure you want to delete <strong className="text-gray-800">{deleteConfirmState.target?.length || 0}</strong> selected entry(ies) from the database?</>
+              )}
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmState({ isOpen: false, type: "single", target: null })}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const { type, target } = deleteConfirmState;
+                  setDeleteConfirmState({ isOpen: false, type: "single", target: null });
+                  if (type === "single" && target) {
+                    try {
+                      await API.delete(`/payments-timeline/${target._id}?source=${encodeURIComponent(target.source)}`);
+                      toast.success("Deleted successfully");
+                      fetchData();
+                    } catch (err) {
+                      toast.error("Failed to delete");
+                    }
+                  } else if (type === "bulk" && Array.isArray(target)) {
+                    try {
+                      let count = 0;
+                      for (const id of target) {
+                        const doc = documents.find(d => d._id === id);
+                        if (doc) {
+                          await API.delete(`/payments-timeline/${doc._id}?source=${encodeURIComponent(doc.source)}`);
+                          count++;
+                        }
+                      }
+                      toast.success(`Deleted ${count} entry(ies).`);
+                      setSelectedIds([]);
+                      fetchData();
+                    } catch {
+                      toast.error("Failed to delete selected items");
+                    }
+                  }
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors shadow-sm cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
