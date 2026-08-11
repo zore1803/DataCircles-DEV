@@ -101,6 +101,7 @@ router.delete('/addons/:addonId', superAdminAuth, superAdminController.deleteAdd
 
 // Coupon & discount engine management
 router.get('/coupons/organizations', superAdminAuth, couponController.searchOrganizations);
+router.get('/coupons/organizations/:organizationId/redemptions', superAdminAuth, couponController.getOrganizationRedemptions);
 router.get('/coupons', superAdminAuth, couponController.getCoupons);
 router.get('/coupons/:couponId', superAdminAuth, couponController.getCouponById);
 router.post('/coupons', superAdminAuth, couponController.createCoupon);

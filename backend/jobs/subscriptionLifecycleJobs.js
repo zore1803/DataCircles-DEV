@@ -18,6 +18,7 @@
 const cron = require('node-cron');
 const Subscription = require('../models/Subscription');
 const User = require('../models/User');
+const { getAccessEntitlementEnd } = require('../utils/prorationMath');
 const Organization = require('../models/Organization');
 const { setAppStatus } = require('../controllers/subscriptionController');
 const {
@@ -150,10 +151,26 @@ cron.schedule('* * * * *', async () => {
   try {
     const now = new Date();
 
-    const subscriptionsToFinalize = await Subscription.find({
+    // Hotfix (docs/audit/PHASE3_ENTITLEMENT_WINDOW_SCHEMA_TRACE.md finding
+    // #18): the Mongo query used to filter on currentPeriodEnd directly —
+    // the ROLLING invoice-cycle field, not the customer's actual paid-for
+    // entitlement. Correct only by coincidence for monthly plans. Since
+    // getAccessEntitlementEnd() branches on billingCycle (a per-document
+    // computed value, not expressible as a single Mongo query condition
+    // across mixed monthly/yearly subscriptions), the currentPeriodEnd
+    // filter here is widened to a candidate set (all cancelAtPeriodEnd,
+    // active/past_due subscriptions), then each candidate's real
+    // entitlement end is checked in application code below. For every
+    // existing monthly subscription this produces byte-for-byte the same
+    // finalize/don't-finalize decision as before, since
+    // getAccessEntitlementEnd() returns currentPeriodEnd unchanged for them.
+    const candidates = await Subscription.find({
       cancelAtPeriodEnd: true,
-      currentPeriodEnd: { $lt: now },
       appStatus: { $in: ['active', 'past_due'] },
+    });
+    const subscriptionsToFinalize = candidates.filter((s) => {
+      const entitlementEnd = getAccessEntitlementEnd(s);
+      return entitlementEnd && entitlementEnd < now;
     });
 
     console.log(`[subscriptionLifecycleJobs] Period-end check: found ${subscriptionsToFinalize.length} subscription(s) to finalize cancellation`);

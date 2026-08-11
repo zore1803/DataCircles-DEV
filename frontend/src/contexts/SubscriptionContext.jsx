@@ -23,6 +23,17 @@ export const SubscriptionProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [adminNotice, setAdminNotice] = useState(null);
   const [seatStatus, setSeatStatus] = useState(null);
+  // Canonical future-intent state (Ownership Law 5) — never derive "is a
+  // change scheduled?" from the legacy subscription.pendingUpdate/
+  // pendingAddonRemovals fields; this is the one source going forward.
+  const [scheduledChanges, setScheduledChanges] = useState([]);
+  const [keptAddons, setKeptAddons] = useState([]);
+  const [removedAddons, setRemovedAddons] = useState([]);
+  // null when nothing is scheduled (or a cancellation is pending) — never a
+  // duplicate of the current total. Priced via calculateInvoice() against
+  // the same buildEffectiveSubscription() the Renewal Engine itself uses, so
+  // this can never diverge from what actually gets charged at renewal.
+  const [effectiveRecurringTotal, setEffectiveRecurringTotal] = useState(null);
 
   // Check if user is authenticated via phone (localStorage token)
   const isPhoneAuthenticated = () => {
@@ -53,6 +64,21 @@ export const SubscriptionProvider = ({ children }) => {
 
       const response = await subscriptionAPI.getCurrentSubscription();
       setSubscription(response.data);
+
+      // fetchSubscription is the one canonical "billing state changed"
+      // entrypoint — every mutation (updateSubscription, cancelSubscription,
+      // addon purchase/removal in SubscriptionPlans.jsx) calls this and
+      // nothing else, so any state that can go stale after a billing
+      // mutation is refreshed HERE, not by sprinkling extra fetch calls at
+      // each call site. Keep ScheduledChange and seat status in lockstep
+      // with every subscription refresh — not just on isPaymentConfirmed
+      // *transitions* (the useEffect below only re-fires on that changing,
+      // which misses "still confirmed, but a new change was just
+      // scheduled/superseded/cancelled, or seat count just changed").
+      if (response.data?.subscription?.isPaymentConfirmed) {
+        fetchScheduledChanges();
+        fetchSeatStatus();
+      }
 
       // One-shot notice for super-admin-initiated changes (trial
       // adjusted/ended, subscription cancelled on the org's behalf). The
@@ -99,6 +125,25 @@ export const SubscriptionProvider = ({ children }) => {
     }
   };
 
+  // Same fetch-on-its-own-endpoint pattern as fetchSeatStatus above —
+  // ScheduledChange is its own domain concept (subscriptionController.js's
+  // established one-endpoint-per-concept shape), not folded into
+  // getCurrentSubscription.
+  const fetchScheduledChanges = async () => {
+    if (!isUserAuthenticated()) return null;
+    try {
+      const response = await subscriptionAPI.getScheduledChanges();
+      setScheduledChanges(response.data.scheduledChanges || []);
+      setKeptAddons(response.data.keptAddons || []);
+      setRemovedAddons(response.data.removedAddons || []);
+      setEffectiveRecurringTotal(response.data.effectiveRecurringTotal ?? null);
+      return response.data;
+    } catch (error) {
+      // Informational only — same discipline as fetchSeatStatus.
+      return null;
+    }
+  };
+
   const fetchPlans = async () => {
     try {
       setError(null);
@@ -133,7 +178,7 @@ export const SubscriptionProvider = ({ children }) => {
   const updateSubscription = async (planData) => {
     try {
       const response = await subscriptionAPI.updateSubscription(planData);
-      await fetchSubscription(); // Refresh subscription data
+      await fetchSubscription(); // Refreshes subscription AND scheduledChanges (see fetchSubscription)
       return response.data;
     } catch (error) {
       throw error;
@@ -143,7 +188,7 @@ export const SubscriptionProvider = ({ children }) => {
   const cancelSubscription = async (cancelData) => {
     try {
       const response = await subscriptionAPI.cancelSubscription(cancelData);
-      await fetchSubscription(); // Refresh subscription data
+      await fetchSubscription(); // Refreshes subscription AND scheduledChanges (see fetchSubscription)
       return response.data;
     } catch (error) {
       throw error;
@@ -184,6 +229,7 @@ export const SubscriptionProvider = ({ children }) => {
   useEffect(() => {
     if (subscription?.subscription?.isPaymentConfirmed) {
       fetchSeatStatus();
+      fetchScheduledChanges();
     }
   }, [subscription?.subscription?.isPaymentConfirmed]);
 
@@ -216,6 +262,11 @@ export const SubscriptionProvider = ({ children }) => {
         plans,
         seatStatus,
         fetchSeatStatus,
+        scheduledChanges,
+        keptAddons,
+        removedAddons,
+        effectiveRecurringTotal,
+        fetchScheduledChanges,
         loading: loading || (!isPhoneAuthenticated() && authLoading), // Include Auth0 loading only for Auth0 users
         error,
         startTrial,
