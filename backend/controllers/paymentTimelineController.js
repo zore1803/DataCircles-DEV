@@ -1,0 +1,172 @@
+const Payment = require("../models/Payment");
+const Vendor = require("../models/Vendor");
+const Invoice = require("../models/Invoice");
+const Purchase = require("../models/Purchase");
+const SubscriptionPayment = require("../models/SubscriptionPayment.js.js"); 
+
+exports.getPaymentsTimeline = async (req, res) => {
+  try {
+    const orgId = req.user.organization;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const partyFilter = req.query.party ? req.query.party.trim().toLowerCase() : "";
+
+    // Fetch from all relevant collections concurrently
+    const [payments, invoices, purchases, subPayments] = await Promise.all([
+      Payment.find({ organization: orgId }).populate("vendor", "name companyName"),
+      Invoice.find({ organization: orgId }).populate({
+        path: "deal",
+        populate: [
+          { path: "company", select: "name" },
+          { path: "contact", select: "name" }
+        ]
+      }),
+      Purchase.find({ organization: orgId }).populate("vendor", "name companyName"),
+      SubscriptionPayment.find({ organization: orgId })
+    ]);
+
+    const formattedPayments = payments.map((p) => ({
+      _id: p._id,
+      "payment-id": p._id.toString().substring(0, 8).toUpperCase(),
+      party: p.vendor ? p.vendor.companyName || p.vendor.name : "Unknown Vendor",
+      amount: p.amount,
+      direction: p.direction,
+      type: p.paymentType || "Payment",
+      date: p.paymentDate,
+      bank: p.bank || "",
+      notes: p.notes || "",
+      source: "Payment",
+      status: "Paid"
+    }));
+
+    const formattedInvoices = invoices.map((inv) => {
+      let party = "Unknown Client";
+      if (inv.deal) {
+        if (inv.deal.company && inv.deal.company.name) party = inv.deal.company.name;
+        else if (inv.deal.contact && inv.deal.contact.name) party = inv.deal.contact.name;
+      }
+      return {
+        _id: inv._id,
+        "payment-id": inv.invoiceNumber || inv._id.toString().substring(0, 8).toUpperCase(),
+        party,
+        amount: inv.amount,
+        direction: "IN",
+        type: "Invoice",
+        date: inv.date || inv.createdAt,
+        bank: "",
+        notes: inv.notes || "",
+        source: "Invoice",
+        status: inv.status
+      };
+    });
+
+    const formattedPurchases = purchases.map((pur) => ({
+      _id: pur._id,
+      "payment-id": pur.purchaseNumber || pur._id.toString().substring(0, 8).toUpperCase(),
+      party: pur.vendor ? pur.vendor.companyName || pur.vendor.name : "Unknown Vendor",
+      amount: pur.grandTotal || pur.subtotal,
+      direction: "OUT",
+      type: "Purchase",
+      date: pur.purchaseDate || pur.createdAt,
+      bank: "",
+      notes: pur.notes || "",
+      source: "Purchase",
+      status: pur.status
+    }));
+
+    const formattedSubs = subPayments.map((sub) => ({
+      _id: sub._id,
+      "payment-id": sub.razorpayPaymentId || sub._id.toString().substring(0, 8).toUpperCase(),
+      party: "DataCircles System",
+      amount: sub.amount,
+      direction: "OUT",
+      type: sub.method || "Subscription",
+      date: sub.createdAt,
+      bank: "",
+      notes: sub.paymentFor || "",
+      source: "Subscription",
+      status: sub.status
+    }));
+
+    let allTransactions = [
+      ...formattedPayments,
+      ...formattedInvoices,
+      ...formattedPurchases,
+      ...formattedSubs
+    ];
+
+    if (partyFilter) {
+      allTransactions = allTransactions.filter(t => (t.party || "").toLowerCase().includes(partyFilter));
+    }
+
+    allTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Manual Pagination
+    const totalCount = allTransactions.length;
+    const totalPages = Math.ceil(totalCount / limit);
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+    const paginatedTransactions = allTransactions.slice(startIndex, endIndex);
+
+    res.json({
+      documents: paginatedTransactions,
+      pagination: {
+        currentPage: page,
+        limit,
+        totalCount,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
+  } catch (err) {
+    console.error("Fetch payments timeline error:", err);
+    res.status(500).json({ error: "Failed to fetch unified payments timeline" });
+  }
+};
+
+exports.createPayment = async (req, res) => {
+  try {
+    const { vendor, vendorName, amount, paymentDate, direction, paymentType, bank, notes } = req.body;
+    const orgId = req.user.organization;
+    const userId = req.user._id;
+
+    if (!amount || !paymentDate || !direction || !paymentType) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    let vendorId = vendor;
+
+    if (!vendorId && vendorName) {
+      const newVendor = new Vendor({
+        name: vendorName,
+        organization: orgId,
+        user: userId,
+      });
+      await newVendor.save();
+      vendorId = newVendor._id;
+    }
+
+    if (!vendorId) {
+      return res.status(400).json({ error: "Vendor is required" });
+    }
+
+    const payment = new Payment({
+      vendor: vendorId,
+      amount: Number(amount),
+      paymentDate: new Date(paymentDate),
+      direction, // "IN" or "OUT"
+      paymentType,
+      bank,
+      notes,
+      organization: orgId,
+      user: userId,
+    });
+
+    await payment.save();
+    res.status(201).json(payment);
+  } catch (err) {
+    console.error("Create payment error:", err);
+    res.status(500).json({ error: "Failed to create payment" });
+  }
+};
