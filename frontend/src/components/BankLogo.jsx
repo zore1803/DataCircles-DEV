@@ -24,7 +24,7 @@ const colorPalette = [
 
 function hashString(str) {
   let hash = 0;
-  for (let i = 0; i < str.length; i++) {
+  for (let i = 0; i < (str || "").length; i++) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
   return Math.abs(hash);
@@ -35,20 +35,23 @@ function getColorForBank(bankName) {
   return colorPalette[idx];
 }
 
-const BankLogo = ({ bankName, size = 48 }) => {
+const BankLogo = ({ bankName = "", size = 48, className = "" }) => {
   const [error, setError] = useState(false);
-  const logoUrl = getBankLogoUrl(bankName);
+  const safeName = bankName || "";
+  const logoUrl = getBankLogoUrl(safeName);
 
   if (!logoUrl || error) {
-    const initials = bankName
+    const initials = safeName
       .split(/\s+/)
+      .filter(Boolean)
       .map((w) => w[0])
       .slice(0, 2)
       .join("")
-      .toUpperCase();
-    const bg = getColorForBank(bankName);
+      .toUpperCase() || "?";
+    const bg = getColorForBank(safeName);
     return (
       <div
+        className={className}
         style={{
           width: size,
           height: size,
@@ -61,7 +64,7 @@ const BankLogo = ({ bankName, size = 48 }) => {
           fontWeight: "600",
           fontSize: size / 2.5,
         }}
-        aria-label={`${bankName} logo placeholder`}
+        aria-label={`${safeName} logo placeholder`}
       >
         {initials}
       </div>
@@ -70,6 +73,7 @@ const BankLogo = ({ bankName, size = 48 }) => {
 
   return (
     <div
+      className={className}
       style={{
         width: size,
         height: size,
@@ -80,7 +84,7 @@ const BankLogo = ({ bankName, size = 48 }) => {
     >
       <img
         src={logoUrl}
-        alt={`${bankName} logo`}
+        alt={`${safeName} logo`}
         onError={() => setError(true)}
         style={{
           maxWidth: "100%",

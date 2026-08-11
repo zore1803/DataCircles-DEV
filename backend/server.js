@@ -109,6 +109,9 @@ app.use('/api/quotations', quotationRoutes);
 const deliveryChallanRoutes = require('./routes/deliveryChallanRoutes');
 app.use('/api/delivery-challans', deliveryChallanRoutes);
 
+const paymentTimelineRoutes = require('./routes/paymentTimelineRoutes');
+app.use('/api/payments-timeline', paymentTimelineRoutes);
+
 const invoiceConverter = require('./routes/converterRoutes');
 app.use('/api/converter', invoiceConverter);
 
