@@ -600,11 +600,12 @@ const VendorDetailsPageNew = () => {
                 CompanyProfilePage.jsx rather than the tall bordered card
                 this used to be. The email/phone/address detail that used to
                 stack here now lives in the Overview tab's Vendor Details. */}
-            {/* Sized to its content with symmetric py-3 rather than a fixed
-                h-16: forcing the 64px band height here left ~14px of dead
-                space above the 36px avatar, since items-center distributes
-                the slack evenly. */}
-            <div className="flex items-center justify-between gap-4 py-3">
+            {/* h-16 (64px) to match the header band on the list pages
+                exactly — pages/Companies.jsx renders that band as
+                `fixed ... h-16 px-4 lg:px-6 border-b`. The ~14px of slack
+                above/below the 36px avatar is inherent to centring content
+                in a 64px band and is present on those pages too. */}
+            <div className="flex items-center justify-between gap-4 h-16">
               <div className="flex items-center gap-3 min-w-0">
                 {/* Gated on showSkeleton, not just `vendor` — the vendor fetch
                   resolves well before payments/tasks/meetings/notes do, so
