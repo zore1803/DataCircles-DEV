@@ -9,6 +9,7 @@ exports.getPaymentsTimeline = async (req, res) => {
     const orgId = req.user.organization;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
+    const partyFilter = req.query.party ? req.query.party.trim().toLowerCase() : "";
 
     // Fetch from all relevant collections concurrently
     const [payments, invoices, purchases, subPayments] = await Promise.all([
@@ -87,12 +88,18 @@ exports.getPaymentsTimeline = async (req, res) => {
       status: sub.status
     }));
 
-    const allTransactions = [
+    let allTransactions = [
       ...formattedPayments,
       ...formattedInvoices,
       ...formattedPurchases,
       ...formattedSubs
-    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+    ];
+
+    if (partyFilter) {
+      allTransactions = allTransactions.filter(t => (t.party || "").toLowerCase().includes(partyFilter));
+    }
+
+    allTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     // Manual Pagination
     const totalCount = allTransactions.length;
