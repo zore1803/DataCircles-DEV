@@ -98,56 +98,75 @@ export default function DataTable({
     enableColumnResizing: true,
   });
 
+  // Deferred-start drag, same as the Companies list's own tables
+  // (CompanyContactsTab/CompanyTasksTab/CompanyMeetingsTab): a press plus
+  // DRAG_THRESHOLD px of movement starts the drag, at whatever speed the
+  // user moves. This replaced an `e.detail === 1` gate that required a
+  // double/triple click before a column would start moving — a plain
+  // single click+drag here now behaves identically to those pages.
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    if (e.detail === 1) return;
-
     if (!onColumnReorder) return;
 
-    e.preventDefault();
-    window.getSelection?.()?.removeAllRanges();
-
     const th = e.currentTarget;
-    const rect = th.getBoundingClientRect();
-    const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
-    const previewRows = getGhostPreview ? getGhostPreview(colId) : [];
-    // Grab offset is measured in visual space (rect + clientX both visual) — no
-    // correction. `zGhost` scales the values we SET on the body-portal ghost so
-    // they map back to visual space (the ghost is painted inside the <html> zoom).
-    const zGhost = getAncestorZoom(document.body);
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
+    let dragStarted = false;
+    let positionGhost = () => {};
 
-    dragOverRef.current = null;
-    setDraggedColKey(colId);
-    setDragOverColKey(null);
-    document.body.style.userSelect = "none";
-    // Only the label/previewRows/dimensions go through React state (set once).
-    // x/y position is mutated directly on the DOM node below so mousemove never
-    // triggers a re-render of the whole table.
-    setDragGhost({
-      label,
-      previewRows,
-      offsetX,
-      offsetY,
-      width: rect.width / zGhost,
-      height: rect.height / zGhost,
-    });
+    const beginDrag = () => {
+      dragStarted = true;
+      e.preventDefault();
+      window.getSelection?.()?.removeAllRanges();
 
-    const positionGhost = (clientX, clientY) => {
-      const el = ghostElRef.current;
-      if (!el) return;
-      const visualTop = clientY - offsetY;
-      const visualLeft = clientX - offsetX;
-      el.style.top = `${visualTop / zGhost}px`;
-      el.style.left = `${visualLeft / zGhost}px`;
-      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      const rect = th.getBoundingClientRect();
+      const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
+      const previewRows = getGhostPreview ? getGhostPreview(colId) : [];
+      // Grab offset is measured in visual space (rect + clientX both visual) — no
+      // correction. `zGhost` scales the values we SET on the body-portal ghost so
+      // they map back to visual space (the ghost is painted inside the <html> zoom).
+      const zGhost = getAncestorZoom(document.body);
+      const offsetX = startX - rect.left;
+      const offsetY = startY - rect.top;
+
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
+      // Only the label/previewRows/dimensions go through React state (set once).
+      // x/y position is mutated directly on the DOM node below so mousemove never
+      // triggers a re-render of the whole table.
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX,
+        offsetY,
+        width: rect.width / zGhost,
+        height: rect.height / zGhost,
+      });
+
+      positionGhost = (clientX, clientY) => {
+        const el = ghostElRef.current;
+        if (!el) return;
+        const visualTop = clientY - offsetY;
+        const visualLeft = clientX - offsetX;
+        el.style.top = `${visualTop / zGhost}px`;
+        el.style.left = `${visualLeft / zGhost}px`;
+        el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      };
+      requestAnimationFrame(() => positionGhost(startX, startY));
     };
-    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
 
     const handleMouseMove = (moveEvent) => {
+      if (!dragStarted) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        beginDrag();
+      }
       positionGhost(moveEvent.clientX, moveEvent.clientY);
 
       const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
@@ -162,6 +181,7 @@ export default function DataTable({
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragStarted) return;
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) {
@@ -233,7 +253,11 @@ export default function DataTable({
                     const isLeftSticky = colId === selectionColId || leftPinnedKeys.includes(colId);
                     const isRightSticky = rightPinnedKeys.includes(colId);
                     const isSticky = isLeftSticky || isRightSticky;
-                    const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === selectionColId;
+                    // Thick boundary border only marks an actual pinned edge — it
+                    // used to default to the selection column whenever nothing was
+                    // pinned, which permanently darkened the checkbox column's
+                    // border even with no pin in effect.
+                    const isLeftBoundary = colId === lastLeftPinnedKey;
                     const isRightBoundary = colId === firstRightPinnedKey;
                     const isDraggable = colId !== selectionColId && !!onColumnReorder;
                     const isDragging = draggedColKey === colId;
@@ -252,10 +276,7 @@ export default function DataTable({
                           zIndex: isSticky ? 20 : 1,
                           opacity: isDragging ? 0.35 : 1,
                         }}
-                        className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isLeftBoundary
-                          ? "border-r-2 border-r-gray-300"
-                          : "last:border-r-0"
-                          } ${isRightBoundary ? "border-l-2 border-l-gray-300" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        className={`px-4 py-3 text-sm font-bold text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
                         <div className={`flex items-center justify-between w-full min-w-0 ${loading ? "[&_button]:invisible" : ""}`}>
                           <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden cursor-grab active:cursor-grabbing">
@@ -385,6 +406,8 @@ export default function DataTable({
                             className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
                           />
                         )}
+                        {isLeftBoundary && <div style={getPinnedBoundaryOverlayStyle("left")} />}
+                        {isRightBoundary && <div style={getPinnedBoundaryOverlayStyle("right")} />}
                       </th>
                     );
                   })}
@@ -421,7 +444,11 @@ export default function DataTable({
                       const isLeftSticky = colId === selectionColId || leftPinnedKeys.includes(colId);
                       const isRightSticky = rightPinnedKeys.includes(colId);
                       const isSticky = isLeftSticky || isRightSticky;
-                      const isLeftBoundary = lastLeftPinnedKey ? colId === lastLeftPinnedKey : colId === selectionColId;
+                      // Thick boundary border only marks an actual pinned edge — it
+                    // used to default to the selection column whenever nothing was
+                    // pinned, which permanently darkened the checkbox column's
+                    // border even with no pin in effect.
+                    const isLeftBoundary = colId === lastLeftPinnedKey;
                       const isRightBoundary = colId === firstRightPinnedKey;
                       const isColDragging = draggedColKey === colId;
 
@@ -436,12 +463,11 @@ export default function DataTable({
                             zIndex: isSticky ? 10 : 1,
                             opacity: isColDragging ? 0.35 : 1,
                           }}
-                          className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] ${isLeftBoundary
-                            ? "border-r-2 border-r-gray-200"
-                            : "last:border-r-0"
-                            } ${isRightBoundary ? "border-l-2 border-l-gray-200" : ""}`}
+                          className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          {isLeftBoundary && <div style={getPinnedBoundaryOverlayStyle("left")} />}
+                          {isRightBoundary && <div style={getPinnedBoundaryOverlayStyle("right")} />}
                         </td>
                       );
                     })}

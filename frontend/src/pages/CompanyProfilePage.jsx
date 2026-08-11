@@ -715,7 +715,14 @@ const CompanyProfilePage = () => {
 
       <div className="mx-auto">
         {/* Header Section */}
-        <div className="flex items-center justify-between mb-2 lg:mb-3">
+        {/* 48px total (40px content + mb-2) so the strip's bottom edge lands
+            on y=128 — the same line as the bottom border of the sidebar's
+            switcher section (Navbar.jsx: a 64px logo block then a 64px
+            `h-16 ... border-b` switcher, both inside a `fixed top-0` rail).
+            Detail pages start at y=80 (<main> carries lg:pt-20), so they need
+            48px here, unlike the list pages whose band is `fixed top-16 h-16`
+            and therefore 64px. */}
+        <div className="flex items-center justify-between mb-2">
           {/* LEFT: Logo + Name + Address */}
           <div className="flex items-center gap-3 min-w-0">
             {/* Prev/next through whatever company list (search/filter results)
@@ -758,7 +765,11 @@ const CompanyProfilePage = () => {
               )}
               {company ? (
                 company.address && (
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">
+                  // No mt here: the 2px gap pushed this stacked block past
+                  // the bottom border of the sidebar's switcher section
+                  // (Navbar.jsx renders that as `h-16 ... border-b`), so the
+                  // strip sat a couple of pixels below that line.
+                  <p className="text-xs text-gray-500 truncate">
                     {company.address}
                   </p>
                 )

@@ -1,5 +1,8 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { getAncestorZoom } from "../../utils/domUtils";
 import Skeleton from "../common/Skeleton";
+import StatTileSkeleton from "../common/StatTileSkeleton";
 import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
 import API from "../../services/api";
@@ -21,6 +24,7 @@ import {
 } from "lucide-react";
 import AppToaster from "../AppToaster";
 import DataTable from "../common/DataTable";
+import RowActionsMenu from "../common/RowActionsMenu";
 import BulkActionBar from "../common/BulkActionBar";
 import { exportToCSV } from "../../utils/exportToCSV";
 import TablePaginationFooter from "../common/TablePaginationFooter";
@@ -35,42 +39,39 @@ const NOTE_FILTER_COLUMNS = [{ key: "author", label: "Author" }];
 
 const NoteGridSkeleton = () => {
   return (
-    <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
-      <div
-          className="p-5"
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(311px, 1fr))",
+        gap: 24,
+      }}
+    >
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="bg-white relative flex flex-col items-start overflow-hidden rounded-[12px] border border-gray-100"
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(311px, 1fr))",
-            gap: 24,
+            width: "100%",
+            height: "240px",
+            boxShadow: "0px 0px 6px rgba(0, 0, 0, 0.02), 0px 2px 4px rgba(0, 0, 0, 0.08)",
           }}
         >
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="bg-white relative flex flex-col items-start overflow-hidden rounded-[12px] border border-gray-100"
-              style={{
-                width: "100%",
-                height: "240px",
-                boxShadow: "0px 0px 6px rgba(0, 0, 0, 0.02), 0px 2px 4px rgba(0, 0, 0, 0.08)",
-              }}
-            >
-              <div className="w-full h-[70px] bg-gray-100 animate-pulse flex-shrink-0" />
-              <div className="flex flex-col p-4 gap-3 w-full flex-1">
-                <div className="w-3/4 h-4 bg-gray-200 rounded animate-pulse mt-1" />
-                <div className="w-1/3 h-3 bg-gray-200 rounded animate-pulse" />
-                <div className="flex flex-col gap-2 mt-2">
-                  <div className="w-full h-2.5 bg-gray-100 rounded animate-pulse" />
-                  <div className="w-5/6 h-2.5 bg-gray-100 rounded animate-pulse" />
-                  <div className="w-4/6 h-2.5 bg-gray-100 rounded animate-pulse" />
-                </div>
-                <div className="mt-auto flex items-center gap-2 pt-2">
-                  <div className="w-6 h-6 rounded-full bg-gray-200 animate-pulse" />
-                  <div className="w-24 h-3 bg-gray-200 rounded animate-pulse" />
-                </div>
-              </div>
+          <div className="w-full h-[70px] bg-gray-100 animate-pulse flex-shrink-0" />
+          <div className="flex flex-col p-4 gap-3 w-full flex-1">
+            <div className="w-3/4 h-4 bg-gray-200 rounded animate-pulse mt-1" />
+            <div className="w-1/3 h-3 bg-gray-200 rounded animate-pulse" />
+            <div className="flex flex-col gap-2 mt-2">
+              <div className="w-full h-2.5 bg-gray-100 rounded animate-pulse" />
+              <div className="w-5/6 h-2.5 bg-gray-100 rounded animate-pulse" />
+              <div className="w-4/6 h-2.5 bg-gray-100 rounded animate-pulse" />
             </div>
-          ))}
-      </div>
+            <div className="mt-auto flex items-center gap-2 pt-2">
+              <div className="w-6 h-6 rounded-full bg-gray-200 animate-pulse" />
+              <div className="w-24 h-3 bg-gray-200 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };
@@ -172,6 +173,9 @@ const NoteViewer = ({ isOpen, onClose, noteTitle, noteContent, vendorName, creat
 
 // Note Card Component
 const NoteCard = ({ note, onEdit, onDelete, onView, searchTerm }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null);
+  const menuBtnRef = useRef(null);
   const formatFullDate = (dateString) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleDateString([], {
@@ -242,29 +246,6 @@ const NoteCard = ({ note, onEdit, onDelete, onView, searchTerm }) => {
               >
                 {note.title ? <HighlightText text={note.title} query={searchTerm} /> : 'Untitled Note'}
               </h4>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                <button
-                  onClick={() => onView(note)}
-                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                  title="View"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onEdit(note)}
-                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                  title="Edit"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onDelete(note._id)}
-                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                  title="Delete"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
             </div>
 
             <div className="flex items-center" style={{ gap: 12 }}>
@@ -342,7 +323,73 @@ const NoteCard = ({ note, onEdit, onDelete, onView, searchTerm }) => {
               </span>
             </div>
           </div>
-          <MoreVertical style={{ width: 20, height: 20, color: "#1C1B1F" }} />
+          <div className="relative flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              ref={menuBtnRef}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (menuOpen) {
+                  setMenuOpen(false);
+                  setMenuPos(null);
+                  return;
+                }
+                const zMenu = getAncestorZoom(document.body);
+                const MENU_W = 160;
+                const MENU_H = 110;
+                const MARGIN = 8;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const viewportH = window.innerHeight / zMenu;
+                const viewportW = window.innerWidth / zMenu;
+                let calcTop = rect.bottom / zMenu + 4;
+                calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+                let calcLeft = rect.right / zMenu - MENU_W;
+                calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                calcLeft = Math.max(calcLeft, MARGIN);
+                setMenuPos({ top: calcTop, left: calcLeft });
+                setMenuOpen(true);
+              }}
+              className="p-1 rounded hover:bg-gray-100 transition-colors"
+              title="More options"
+            >
+              <MoreVertical style={{ width: 20, height: 20, color: "#1C1B1F" }} />
+            </button>
+
+            {menuOpen && menuPos && createPortal(
+              <>
+                <div className="fixed inset-0 z-[9998]" onClick={() => { setMenuOpen(false); setMenuPos(null); }} />
+                <div
+                  style={{ position: "fixed", top: menuPos.top, left: menuPos.left }}
+                  className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    onClick={() => { setMenuOpen(false); setMenuPos(null); onView(note); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    View Note
+                  </button>
+                  <button
+                    onClick={() => { setMenuOpen(false); setMenuPos(null); onEdit(note); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Edit Note
+                  </button>
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <button
+                    onClick={() => { setMenuOpen(false); setMenuPos(null); onDelete(note._id); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Note
+                  </button>
+                </div>
+              </>,
+              document.body
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -490,7 +537,7 @@ const NoteEditor = ({
 };
 
 // Main NoteSection Component
-const NoteSection = () => {
+const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreateConsumed }) => {
   const { id: vendorId } = useParams();
   const [notes, setNotes] = useState([]);
   const [vendor, setVendor] = useState(null);
@@ -509,6 +556,16 @@ const NoteSection = () => {
   const [columnSizing, setColumnSizing] = useState({});
   const [isDeleting, setIsDeleting] = useState(false);
   const filterButtonRef = useRef(null);
+
+  // "New Entry" menu on the vendor header (VendorDetailsPageNew.jsx) sets
+  // autoOpenCreate + switches to this tab in the same click — same
+  // pendingCreate pattern CompanyProfilePage.jsx uses for its tabs.
+  useEffect(() => {
+    if (autoOpenCreate) {
+      setIsEditorOpen(true);
+      onAutoOpenCreateConsumed?.();
+    }
+  }, [autoOpenCreate, onAutoOpenCreateConsumed]);
 
   const fetchNotes = useCallback(async () => {
     try {
@@ -613,7 +670,7 @@ const NoteSection = () => {
   };
 
   const [columnOrder, setColumnOrder] = useState(() => [
-    "selection", "title", "note", "author", "createdAt", "updatedAt", "actions"
+    "selection", "title", "note", "author", "createdAt", "updatedAt"
   ]);
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [pinnedColumns, setPinnedColumns] = useState([]);
@@ -723,14 +780,19 @@ const NoteSection = () => {
   });
   const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedItems.length);
 
+  // Confirmation is a styled modal (see showBulkDeleteModal below), matching
+  // CompanyContactsTab.jsx / PaymentsTable.jsx's bulk-delete flow, instead
+  // of the browser's window.confirm this used previously.
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+
   const handleBulkDelete = async () => {
     if (!selectedItems.length) return;
-    if (!window.confirm(`Delete ${selectedItems.length} note(s)? This cannot be undone.`)) return;
     setIsDeleting(true);
     try {
       await Promise.all(selectedItems.map((nid) => API.delete(`/vendor-notes/${nid}`)));
       await fetchNotes();
       clearSelection();
+      setShowBulkDeleteModal(false);
       toast.success("Notes deleted");
     } catch (err) {
       console.error("Bulk delete failed:", err);
@@ -839,63 +901,68 @@ const NoteSection = () => {
           <span className="text-gray-700">{formatNoteDate(row.original.updatedAt)}</span>
         ),
       },
-      {
-        id: "actions",
-        size: 120,
-        enableResizing: false,
-        header: "Actions",
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={(e) => { e.stopPropagation(); handleView(row.original); }}
-              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-              title="View"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleEdit(row.original); }}
-              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-              title="Edit"
-            >
-              <Edit3 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleDelete(row.original._id); }}
-              className="p-1 text-gray-500 hover:text-red-600 transition-colors"
-              title="Delete"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        ),
-      },
     ],
     [paginatedNotes, selectedItems, selectAll, clearSelection, toggleItem],
+  );
+
+  // No dedicated "Actions" column — a single ⋮ button (RowActionsMenu) that
+  // pops View/Edit/Delete as a small action card renders inside whichever
+  // column currently ends up last (see finalListColumns below), the same
+  // way CompanyContactsTab.jsx puts its "open contact" icon on the last
+  // visible column instead of a fixed Actions column.
+  const noteActionButtons = (note) => (
+    <RowActionsMenu
+      actions={[
+        { label: "View", icon: Eye, onClick: () => handleView(note) },
+        { label: "Edit", icon: Edit3, onClick: () => handleEdit(note) },
+        { label: "Delete", icon: Trash2, danger: true, onClick: () => handleDelete(note._id) },
+      ]}
+    />
   );
 
   const finalListColumns = useMemo(() => {
     const visibleBase = baseListColumns.filter(c => !hiddenColumns.has(c.id));
     const selectionCol = visibleBase.find(c => c.id === "selection");
-    const actionsCol = visibleBase.find(c => c.id === "actions");
-    const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
+    const otherCols = visibleBase.filter(c => c.id !== "selection");
 
     const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
     const rightPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'right').map(p => p.key));
-    
+
     const leftCols = otherCols.filter(c => leftPinnedKeys.has(c.id));
     const rightCols = otherCols.filter(c => rightPinnedKeys.has(c.id));
     const midCols = otherCols.filter(c => !leftPinnedKeys.has(c.id) && !rightPinnedKeys.has(c.id));
-    
+
     midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
-    
-    return [
+
+    const ordered = [
       ...(selectionCol ? [selectionCol] : []),
       ...leftCols,
       ...midCols,
       ...rightCols,
-      ...(actionsCol ? [actionsCol] : [])
     ];
+
+    let lastIdx = -1;
+    for (let i = ordered.length - 1; i >= 0; i--) {
+      if (ordered[i].id !== "selection") {
+        lastIdx = i;
+        break;
+      }
+    }
+    if (lastIdx !== -1) {
+      const original = ordered[lastIdx];
+      const originalCell = original.cell;
+      ordered[lastIdx] = {
+        ...original,
+        cell: (props) => (
+          <div className="flex items-center justify-between gap-2 w-full min-w-0">
+            <div className="min-w-0 flex-1">{originalCell(props)}</div>
+            {noteActionButtons(props.row.original)}
+          </div>
+        ),
+      };
+    }
+
+    return ordered;
   }, [baseListColumns, columnOrder, hiddenColumns, pinnedColumns]);
 
   const visibleColumnsForGhost = useMemo(() => finalListColumns.map(c => ({ key: c.id, label: c.header })), [finalListColumns]);
@@ -915,10 +982,85 @@ const NoteSection = () => {
     // Rely on DataTable's loading prop for list view, and we'll handle grid view manually below
   }
 
+  // KPI stats — same computations as CompanyNotesTab.jsx's KPI row.
+  const sevenDaysAgoForKpi = new Date();
+  sevenDaysAgoForKpi.setDate(sevenDaysAgoForKpi.getDate() - 7);
+  const recentNotesCount = notes.filter((n) => new Date(n.createdAt) >= sevenDaysAgoForKpi).length;
+  const noteContributors = new Set(notes.map((n) => (typeof n.user === "object" ? n.user?._id : n.user)));
+  noteContributors.delete(undefined);
+  noteContributors.delete(null);
+  const latestNote = [...notes].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+  const relativeDaysForKpi = (date) => {
+    if (!date) return "—";
+    const diff = Math.floor((Date.now() - new Date(date)) / (1000 * 60 * 60 * 24));
+    if (diff <= 0) return "today";
+    if (diff === 1) return "1 day ago";
+    return `${diff} days ago`;
+  };
+  const latestUpdatedKpiLabel = (() => {
+    if (!latestNote) return "—";
+    const diff = Math.floor((Date.now() - new Date(latestNote.createdAt)) / (1000 * 60 * 60 * 24));
+    return diff <= 0 ? "Today" : relativeDaysForKpi(latestNote.createdAt);
+  })();
+
+  const noteKpiTiles = [
+    { label: "Total Notes", value: notes.length, icon: StickyNote, subtitle: "All time" },
+    { label: "Recent Notes", value: recentNotesCount, icon: Clock, subtitle: latestNote ? `Latest update ${relativeDaysForKpi(latestNote.createdAt)}` : "Last 7 days", subtitleClass: "text-blue-500" },
+    { label: "Team Contributors", value: noteContributors.size, icon: User, subtitle: "Unique authors" },
+    { label: "Last Updated", value: latestUpdatedKpiLabel, icon: Calendar, subtitle: latestNote ? (typeof latestNote.user === "object" ? latestNote.user?.name || "Unknown" : "Unknown") : null },
+  ];
+
   return (
     <div className="h-full mt-0">
       <AppToaster />
 
+      {/* KPI Tiles — same statTiles markup as CompanyNotesTab.jsx's KPI row.
+          Visibility is driven by the parent page's own Financial Summary
+          strip toggle (VendorDetailsPageNew.jsx's ⋮ menu), same as PaymentsTable. */}
+      {showKPIs && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {initialLoading && !notes.length
+          ? Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
+          : noteKpiTiles.map((tile) => (
+              <div
+                key={tile.label}
+                className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
+              >
+                <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                  <tile.icon size={18} strokeWidth={1.5} />
+                </div>
+                <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
+                  <tile.icon size={20} strokeWidth={1.5} />
+                </div>
+                <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
+                    <p className="text-base font-semibold text-gray-900 truncate">{tile.value}</p>
+                  </div>
+                  {tile.subtitle && (
+                    <span className={`hidden sm:inline text-[11px] flex-shrink-0 truncate max-w-[90px] ${tile.subtitleClass || "text-gray-400"}`}>
+                      {tile.subtitle}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+      </div>
+      )}
+
+        {stripVisible ? (
+        <BulkActionBar
+          selectedCount={selectedItems.length}
+          entityName="note"
+          isClosing={stripClosing}
+          onSelectAll={() => selectAll(filteredNotes)}
+          onDeselectAll={clearSelection}
+          onExport={handleExportSelected}
+          onCancel={clearSelection}
+          onDelete={() => setShowBulkDeleteModal(true)}
+          isDeleting={isDeleting}
+        />
+        ) : (
         <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
             <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-900 opacity-50" />
@@ -985,6 +1127,7 @@ const NoteSection = () => {
             <Plus size={20} className="text-gray-700" />
           </button>
         </div>
+        )}
 
       {viewMode === "grid" ? (
         initialLoading ? (
@@ -1005,9 +1148,8 @@ const NoteSection = () => {
             )}
           </div>
         ) : (
-          <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
+          <div>
             <div
-              className="p-5"
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fill, minmax(311px, 1fr))",
@@ -1025,7 +1167,7 @@ const NoteSection = () => {
                 />
               ))}
             </div>
-            <div className="border-t border-[#E1E4EA] px-5">
+            <div className="border-t border-[#E1E4EA] px-5 mt-5">
               <TablePaginationFooter
                 currentPage={page}
                 totalPages={totalPages}
@@ -1057,7 +1199,7 @@ const NoteSection = () => {
             visibleColumns={visibleColumnsForGhost}
             getGhostPreview={getGhostPreview}
             variant="card"
-            maxHeight={290}
+            maxHeight={400}
             rowClassName={(n) => (selectedItems.includes(n._id) ? "!bg-blue-50" : "")}
             loadingContent={
               <div className="space-y-0">
@@ -1137,6 +1279,35 @@ const NoteSection = () => {
         vendorName={vendor?.name || 'Vendor'}
         createdAt={viewingNote?.createdAt}
       />
+
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Delete</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Delete {selectedItems.length} selected note{selectedItems.length !== 1 ? "s" : ""}? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={isDeleting}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={isDeleting}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {isDeleting ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx="true" global="true">{`
   /* Quill Editor Styles */
