@@ -22,9 +22,202 @@ import {
   PieChart,
   BarChart3,
   User,
+  Wallet as WalletIcon,
+  Gift,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import API, { configureAxios } from "../services/api";
+
+const WALLET_TYPE_META = {
+  CREDIT_PURCHASE: { label: "Purchase", style: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+  FREE_CREDIT: { label: "Free credit", style: "bg-sky-50 text-sky-700 ring-sky-200" },
+  ADMIN_CREDIT: { label: "Admin credit", style: "bg-violet-50 text-violet-700 ring-violet-200" },
+  USAGE_DEBIT: { label: "Usage", style: "bg-slate-100 text-slate-600 ring-slate-200" },
+  REFUND: { label: "Refund", style: "bg-amber-50 text-amber-700 ring-amber-200" },
+  ADJUSTMENT: { label: "Adjustment", style: "bg-amber-50 text-amber-700 ring-amber-200" },
+};
+
+const formatWalletDateTime = (d) =>
+  new Date(d).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+// Wallet is independent of subscription (see walletService.js) — this panel
+// is purely a read/grant view scoped to the organization on this page. It
+// never touches subscription state.
+const OrganizationWalletPanel = ({ organizationId }) => {
+  const [wallet, setWallet] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [grant, setGrant] = useState({ amount: "", reason: "" });
+  const [granting, setGranting] = useState(false);
+
+  const loadWallet = async () => {
+    try {
+      configureAxios();
+      const res = await API.get(`/super-admin/organizations/${organizationId}/wallet`, {
+        params: { limit: 10 },
+      });
+      setWallet(res.data);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to load wallet");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadWallet();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId]);
+
+  const handleGrant = async () => {
+    if (!(Number(grant.amount) > 0)) return toast.error("Enter a credit amount");
+    if (!grant.reason.trim()) return toast.error("A reason is required");
+
+    setGranting(true);
+    try {
+      configureAxios();
+      await API.post(`/super-admin/organizations/${organizationId}/wallet/grant`, {
+        amount: Number(grant.amount),
+        reason: grant.reason.trim(),
+      });
+      toast.success("Credits granted");
+      setGrant({ amount: "", reason: "" });
+      await loadWallet();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to grant credits");
+    } finally {
+      setGranting(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="flex items-center space-x-3 mb-6">
+        <div className="p-3 bg-emerald-100 rounded-lg">
+          <WalletIcon className="w-6 h-6 text-emerald-600" />
+        </div>
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Wallet</h2>
+          <p className="text-sm text-gray-500">Prepaid credits — independent of subscription</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="animate-pulse space-y-3">
+          <div className="h-20 bg-gray-100 rounded-lg" />
+          <div className="h-32 bg-gray-100 rounded-lg" />
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg p-4 text-white">
+              <p className="text-xs font-medium text-emerald-50 uppercase mb-2">Balance</p>
+              <p className="text-3xl font-bold">{wallet.balance.toFixed(2)}</p>
+              <p className="text-sm text-emerald-50 mt-1">credits</p>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4">
+              <p className="text-xs font-medium text-gray-500 uppercase mb-3 flex items-center gap-1.5">
+                <Gift className="w-3.5 h-3.5 text-violet-500" /> Grant credits
+              </p>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    value={grant.amount}
+                    onChange={(e) => setGrant({ ...grant, amount: e.target.value })}
+                    placeholder="Credits"
+                    className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                  />
+                  <input
+                    type="text"
+                    value={grant.reason}
+                    onChange={(e) => setGrant({ ...grant, reason: e.target.value })}
+                    placeholder="Reason"
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                  />
+                </div>
+                <button
+                  onClick={handleGrant}
+                  disabled={granting}
+                  className="self-start px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-semibold disabled:opacity-50 hover:bg-violet-700"
+                >
+                  {granting ? "Granting…" : "Grant Credits"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {wallet.transactions?.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">
+                    <th className="py-2 pr-4 font-medium">Credits</th>
+                    <th className="py-2 pr-4 font-medium">Type</th>
+                    <th className="py-2 pr-4 font-medium">Notes</th>
+                    <th className="py-2 pr-4 font-medium text-right">Balance After</th>
+                    <th className="py-2 font-medium text-right">Date &amp; Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {wallet.transactions.map((tx) => {
+                    const meta = WALLET_TYPE_META[tx.type] || {
+                      label: tx.type.replace(/_/g, " ").toLowerCase(),
+                      style: "bg-gray-100 text-gray-600 ring-gray-200",
+                    };
+                    const isDebit = tx.amount < 0;
+                    return (
+                      <tr key={tx._id} className="border-b border-gray-50 last:border-0">
+                        <td className="py-2.5 pr-4">
+                          <span
+                            className={`inline-flex items-center gap-1 font-semibold tabular-nums ${
+                              isDebit ? "text-rose-600" : "text-emerald-600"
+                            }`}
+                          >
+                            {isDebit ? (
+                              <ArrowDownRight className="w-3.5 h-3.5" />
+                            ) : (
+                              <ArrowUpRight className="w-3.5 h-3.5" />
+                            )}
+                            {tx.amount > 0 ? "+" : ""}
+                            {tx.amount.toFixed(2)}
+                          </span>
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${meta.style}`}>
+                            {meta.label}
+                          </span>
+                        </td>
+                        <td className="py-2.5 pr-4 text-gray-600">{tx.description}</td>
+                        <td className="py-2.5 pr-4 text-right font-medium text-gray-900 tabular-nums">
+                          {tx.balanceAfter.toFixed(2)}
+                        </td>
+                        <td className="py-2.5 text-right text-gray-500 whitespace-nowrap">
+                          {formatWalletDateTime(tx.createdAt)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-6">No wallet activity yet.</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
 
 const Shimmer = () => (
   <div className="animate-pulse space-y-6">
@@ -377,6 +570,9 @@ const TenantDetails = () => {
           )}
         </div>
       </div>
+
+      {/* Wallet — prepaid credits, independent of the subscription above */}
+      <OrganizationWalletPanel organizationId={organization._id || id} />
 
       {/* Financial Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
