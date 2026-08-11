@@ -19,6 +19,11 @@ export const subscriptionAPI = {
   // BILLING_UX_SPEC.md §2.2 — "Next Renewal" preview, read-only.
   getRenewalPreview: () => API.get('/subscription/renewal-preview'),
 
+  // Billing Calendar — canonical read-only projection (current + scheduled +
+  // upcoming), composed server-side from existing billing engines. Never
+  // cached — the Calendar re-fetches on every open.
+  getBillingProjection: () => API.get('/subscription/billing-projection'),
+
   // Read-only pricing preview — BILLING_UX_SPEC.md §0/Option A. Returns the
   // same pricingBreakdown shape createSubscription/updateSubscription return
   // on success, computed by the same calculateInvoice() call, but performs
@@ -39,6 +44,7 @@ export const subscriptionAPI = {
   // Cancel a scheduled downgrade — reverts pendingUpdate, restores any
   // carry-forward reduction it caused, unfreezes the subscription.
   cancelScheduledDowngrade: () => API.post('/subscription/downgrade/cancel'),
+  undoCancellation: () => API.post('/subscription/cancellation/undo'),
   
   // Retry payment for failed subscription
   retryPayment: (subscriptionId) => API.post(`/subscription/${subscriptionId}/retry-payment`),
@@ -82,6 +88,29 @@ export const subscriptionAPI = {
 
   // Initiate a prorated add-on purchase (returns Razorpay Order paymentDetails)
   initiateAddonPurchase: (data) => API.post('/subscription/addons/purchase', data),
+
+  // Task 4: read-only preview for the add-on purchase confirmation screen —
+  // the real backend-computed prorated amount, not a client-side estimate.
+  // Creates nothing (no Order, no reward reservation).
+  previewAddonPurchase: ({ addonKey, quantity, billingCycle }) =>
+    API.get('/subscription/addons/purchase/preview', { params: { addonKey, quantity, ...(billingCycle ? { billingCycle } : {}) } }),
+
+  // Phase 3: Monthly -> Annual base-plan cadence transition (returns Razorpay
+  // Order paymentDetails, same one-time-charge shape as initiateAddonPurchase).
+  // data: { targetPlanId, addonChoices } — both optional. addonChoices:
+  // {[addonKey]: 'monthly'|'yearly'} — Task 2, defaults to 'monthly' (no-op)
+  // for any add-on not listed.
+  initiateMonthlyToAnnualTransition: (data) => API.post('/subscription/cycle-transition/monthly-to-annual', data),
+
+  // Read-only preview for the pre-payment confirmation screen — explains the
+  // transition calculation before Razorpay checkout opens. Creates nothing.
+  previewMonthlyToAnnualTransition: (targetPlanId, addonChoices) =>
+    API.get('/subscription/cycle-transition/monthly-to-annual/preview', {
+      params: {
+        ...(targetPlanId ? { targetPlanId } : {}),
+        ...(addonChoices && Object.keys(addonChoices).length ? { addonChoices: JSON.stringify(addonChoices) } : {}),
+      },
+    }),
 
   // Schedule an add-on removal at end of current billing cycle
   scheduleAddonRemoval: (data) => API.post('/subscription/addons/remove', data),

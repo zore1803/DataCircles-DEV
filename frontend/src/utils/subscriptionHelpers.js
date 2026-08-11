@@ -90,3 +90,46 @@ export const hasValidPendingUpdate = (subscription) => {
   const pu = subscription?.pendingUpdate;
   return !!(pu && pu.planName && typeof pu.pricePerUser === "number" && !Number.isNaN(pu.pricePerUser) && pu.billingCycle);
 };
+
+// Base-plan billing-state matrix (Current cycle/tier x Selected cycle/tier ->
+// required action). Single source of truth for PlanCard.jsx's own CTA label
+// AND SubscriptionPlans.jsx's routing decision (whether to enter the
+// Monthly->Annual transition flow) — these used to be two independently
+// hand-written cycle comparisons that could silently drift apart. Pending-
+// change state (scheduled downgrade/cycle-change) and add-on state are
+// layered on top by the caller, never folded into this table:
+//
+//   Current          | Selected         | Result
+//   -----------------|------------------|------------------------------
+//   Monthly Tier X    | Monthly Tier X   | CURRENT
+//   Monthly Tier X    | Monthly Tier >X  | UPGRADE
+//   Monthly Tier X    | Monthly Tier <X  | DOWNGRADE
+//   Monthly (any)     | Annual (any)     | SWITCH_TO_ANNUAL (uniform — no
+//                     |                  | Upgrade/Downgrade label even
+//                     |                  | cross-tier; eligibility for a
+//                     |                  | downgrade-shaped cross-tier
+//                     |                  | transition is enforced
+//                     |                  | server-side, this table never
+//                     |                  | needs to know that distinction)
+//   Annual Tier X     | Annual Tier X    | CURRENT
+//   Annual Tier X     | Annual Tier >X   | UPGRADE
+//   Annual Tier X     | Annual Tier <X   | DOWNGRADE
+//   Annual (any)      | Monthly (any)    | AVAILABLE_AFTER_CANCELLING_ANNUAL
+//                     |                  | (NOT a live transition — settled
+//                     |                  | separately as cancel -> wait for
+//                     |                  | term end -> resubscribe fresh)
+export const PLAN_PRIORITY = { starter: 1, growth: 2, business: 3 };
+
+export const resolveBaseCardAction = (currentSub, selectedPlanId, selectedCycle) => {
+  const cycleChanged = currentSub.billingCycle !== selectedCycle;
+  if (cycleChanged) {
+    return currentSub.billingCycle === "monthly" && selectedCycle === "yearly"
+      ? "SWITCH_TO_ANNUAL"
+      : "AVAILABLE_AFTER_CANCELLING_ANNUAL"; // only remaining case: yearly -> monthly
+  }
+  const currentPriority = PLAN_PRIORITY[currentSub.planName] || 0;
+  const selectedPriority = PLAN_PRIORITY[selectedPlanId] || 0;
+  if (selectedPriority > currentPriority) return "UPGRADE";
+  if (selectedPriority < currentPriority) return "DOWNGRADE";
+  return "CURRENT";
+};

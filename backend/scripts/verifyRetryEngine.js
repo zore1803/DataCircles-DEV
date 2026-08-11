@@ -95,8 +95,8 @@ const HOUR = 60 * 60 * 1000;
 // itself (not hand-built), then backdates the resulting appStatusHistory
 // entry to `hoursAgo` so retry-window gating can be tested without waiting
 // real hours. Registers every doc it creates for cleanup.
-async function makePastDueSubscription(registry, organization, hoursAgo) {
-  const subscription = await trackedCreate(Subscription, 'Subscription', registry, baseSubscriptionFields(organization));
+async function makePastDueSubscription(registry, organization, hoursAgo, overrides = {}) {
+  const subscription = await trackedCreate(Subscription, 'Subscription', registry, baseSubscriptionFields(organization, overrides));
   const result = await renewSubscription(subscription, { chargeMandateFn: failCharge });
   assert.equal(result.outcome, 'PAST_DUE', 'fixture setup: expected renewSubscription() to produce PAST_DUE');
   registry.BillingInvoice.push(result.invoice);
@@ -206,6 +206,76 @@ async function main() {
 
     const reloaded = await Subscription.findById(subscription._id);
     assert.equal(reloaded.appStatus, 'active');
+
+    const ct = await CommercialTransaction.findOne({ subscription: subscription._id, type: 'RENEWAL' });
+    registry.BillingCycle.push((await BillingCycle.findOne({ subscription: subscription._id }))._id);
+    assert.equal(ct.status, 'COMPLETED');
+  });
+
+  // Gap #2 (docs/audit/PHASE3_ENTITLEMENT_WINDOW_SCHEMA_TRACE.md): every
+  // fixture above hardcodes billingCycle: 'monthly' via baseSubscriptionFields'
+  // default. retryEngine.js itself has no billingCycle branching (confirmed
+  // by grep before writing this), so it SHOULD be cadence-agnostic — but that
+  // was never actually driven end-to-end for a yearly subscription until now.
+  // Fixtures G/H mirror E/F exactly, with billingCycle: 'yearly' overridden.
+  await test('Fixture G (yearly cadence): three consecutive failing retries on an ANNUAL subscription — same pastDueSince-relative offsets as monthly (Fixture E)', async (registry) => {
+    const organization = new mongoose.Types.ObjectId();
+    const anchor = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
+    const subscription = await makePastDueSubscription(registry, organization, 200, {
+      billingCycle: 'yearly',
+      pricePerUser: 4800,
+      totalAmount: 4800,
+      billingAnchor: anchor,
+      currentPeriodStart: anchor,
+      currentPeriodEnd: new Date(anchor.getTime() + 365 * 24 * 60 * 60 * 1000),
+    });
+    const pastDueSince = subscription.appStatusHistory.find((h) => h.to === 'past_due').at.getTime();
+
+    const r1 = await retryRenewal({ subscription, chargeMandateFn: failCharge });
+    assert.equal(r1.outcome, 'PAST_DUE');
+    assert.equal(r1.attemptsMade, 1);
+    assert.equal(r1.retriesRemaining, 2);
+    assert.equal(r1.nextRetryAt.getTime(), pastDueSince + 72 * HOUR, 'yearly cadence must use the SAME retry-interval schedule as monthly — retry timing is not (and should not be) cycle-dependent');
+
+    const afterR1 = await Subscription.findById(subscription._id);
+    const gate2 = await retryRenewal({ subscription: afterR1, chargeMandateFn: failCharge });
+    assert.equal(gate2.outcome, 'PAST_DUE');
+    assert.equal(gate2.attemptsMade, 2);
+    assert.equal(gate2.nextRetryAt.getTime(), pastDueSince + 120 * HOUR);
+
+    const afterR2 = await Subscription.findById(subscription._id);
+    const gate3 = await retryRenewal({ subscription: afterR2, chargeMandateFn: failCharge });
+    assert.equal(gate3.outcome, 'PAST_DUE');
+    assert.equal(gate3.attemptsMade, 3);
+    assert.equal(gate3.retriesRemaining, 0);
+
+    const afterR3 = await Subscription.findById(subscription._id);
+    const gate4 = await retryRenewal({ subscription: afterR3, chargeMandateFn: failCharge });
+    assert.equal(gate4.outcome, 'RETRIES_EXHAUSTED');
+  });
+
+  await test('Fixture H (yearly cadence): retry succeeds on an ANNUAL subscription — appStatus -> active, RETRY_SUCCEEDED, and the renewed period is a full year (not a month)', async (registry) => {
+    const organization = new mongoose.Types.ObjectId();
+    const anchor = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
+    const subscription = await makePastDueSubscription(registry, organization, 200, {
+      billingCycle: 'yearly',
+      pricePerUser: 4800,
+      totalAmount: 4800,
+      billingAnchor: anchor,
+      currentPeriodStart: anchor,
+      currentPeriodEnd: new Date(anchor.getTime() + 365 * 24 * 60 * 60 * 1000),
+    });
+
+    const result = await retryRenewal({ subscription, chargeMandateFn: okCharge });
+    assert.equal(result.outcome, 'RETRY_SUCCEEDED');
+    assert.equal(result.attemptsMade, 1);
+
+    const reloaded = await Subscription.findById(subscription._id);
+    assert.equal(reloaded.appStatus, 'active');
+    assert.equal(reloaded.billingCycle, 'yearly', 'billingCycle must survive the renewal commit unchanged');
+
+    const newSpanDays = (reloaded.currentPeriodEnd - reloaded.currentPeriodStart) / (24 * 60 * 60 * 1000);
+    assert.ok(newSpanDays > 300, `the newly-committed period must span roughly a year (~365 days), got ${newSpanDays} days — confirms addBillingCycle/computeNextPeriodEnd correctly branched on billingCycle:'yearly' during this retry-driven renewal, not silently defaulting to a monthly span`);
 
     const ct = await CommercialTransaction.findOne({ subscription: subscription._id, type: 'RENEWAL' });
     registry.BillingCycle.push((await BillingCycle.findOne({ subscription: subscription._id }))._id);

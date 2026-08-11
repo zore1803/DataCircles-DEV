@@ -73,13 +73,21 @@ const CurrentSubscriptionInfo = ({ subscription, allPlanAddons }) => {
     }) || null;
   };
 
-  const getAddonRemovalState = (addonKey, quantity) => {
-    const scheduledRemoval = (removedAddons || []).find((r) => r.addonKey === addonKey);
+  // Task 3 (Aug 2026): confirmed display-mismatch trace — this used to match
+  // by addonKey ALONE, so a monthly + annual instance of the same key would
+  // cross-contaminate each other's removal/pending state (same class of bug
+  // already fixed in PlanCard.jsx earlier this session, but never propagated
+  // to this second, separate render location). addonCycle is optional so
+  // existing callers that don't pass it keep matching exactly as before.
+  const getAddonRemovalState = (addonKey, quantity, addonCycle) => {
+    const matchesCycle = (r) => addonCycle == null || (r.billingCycle || subscription.billingCycle) === addonCycle;
+    const scheduledRemoval = (removedAddons || []).find((r) => r.addonKey === addonKey && matchesCycle(r));
     const pendingQty = scheduledRemoval?.quantity || 0;
     const remainingQty = Math.max(0, quantity - pendingQty);
     const allPending = remainingQty <= 0;
     const removalChange = (scheduledChanges || []).find(
-      (change) => change.type === 'REMOVE_ADDON' && change.payload?.addonKey === addonKey
+      (change) => change.type === 'REMOVE_ADDON' && change.payload?.addonKey === addonKey &&
+        (addonCycle == null || (change.payload?.billingCycle || subscription.billingCycle) === addonCycle)
     );
     const removalDate = removalChange?.effectiveAt ? formatDate(removalChange.effectiveAt) : null;
     const carriedEquivalent = allPending ? findCarriedEquivalent(addonKey) : null;
@@ -254,14 +262,17 @@ const CurrentSubscriptionInfo = ({ subscription, allPlanAddons }) => {
                   <p className="text-xs font-semibold text-gray-500 mb-1">Active Add-ons</p>
                   <div className="flex flex-wrap gap-1.5">
                     {subscription.activeAddons.map((addon) => {
+                      const addonCycle = addon.billingCycle || subscription.billingCycle;
                       const { pendingQty, remainingQty, allPending, removalDate, carriedEquivalent, carriedDisplayName } = getAddonRemovalState(
                         addon.addonKey,
-                        addon.quantity
+                        addon.quantity,
+                        addonCycle
                       );
                       return (
-                        <span key={addon.addonKey} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium border ${allPending ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
+                        <span key={`${addon.addonKey}-${addonCycle}`} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium border ${allPending ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
                           <span className={allPending ? 'line-through' : undefined}>
                             {addon.addonKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}×{addon.quantity}
+                            <span className="text-[9px] uppercase tracking-wide text-gray-400 ml-1">{addonCycle === 'yearly' ? 'Annual' : 'Monthly'}</span>
                           </span>
                           {carriedEquivalent ? (
                             <span
@@ -454,13 +465,22 @@ const CurrentSubscriptionInfo = ({ subscription, allPlanAddons }) => {
               <p className="text-xs font-semibold text-gray-500 mb-1.5">Active Add-ons</p>
               <div className="flex flex-wrap gap-1.5">
                 {subscription.activeAddons.map((addon) => {
+                  // Task 3 (Aug 2026): confirmed bug — the price suffix below
+                  // used to read subscription.billingCycle (the BASE plan's
+                  // cycle) instead of this add-on's OWN billingCycle, so a
+                  // monthly add-on on an annual base displayed "/yr" next to
+                  // its actual monthly price. Not a fallback-for-missing-data
+                  // case — addon.billingCycle was present and correct the
+                  // whole time, this chip just never read it.
+                  const addonCycle = addon.billingCycle || subscription.billingCycle;
                   const { pendingQty, remainingQty, allPending, removalDate } = getAddonRemovalState(
                     addon.addonKey,
-                    addon.quantity
+                    addon.quantity,
+                    addonCycle
                   );
                   return (
                     <span
-                      key={addon.addonKey}
+                      key={`${addon.addonKey}-${addonCycle}`}
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${
                         allPending
                           ? 'bg-amber-50 text-amber-700 border-amber-200'
@@ -471,8 +491,9 @@ const CurrentSubscriptionInfo = ({ subscription, allPlanAddons }) => {
                         {addon.addonKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                         <span className="font-bold ml-0.5">×{addon.quantity}</span>
                         <span className={allPending ? 'text-amber-400 ml-0.5' : 'text-blue-400 ml-0.5'}>
-                          ({formatPrice(addon.pricePerUnit * addon.quantity)}/{subscription.billingCycle === 'monthly' ? 'mo' : 'yr'})
+                          ({formatPrice(addon.pricePerUnit * addon.quantity)}/{addonCycle === 'monthly' ? 'mo' : 'yr'})
                         </span>
+                        <span className="text-[9px] uppercase tracking-wide text-gray-400 ml-1">{addonCycle === 'yearly' ? 'Annual' : 'Monthly'}</span>
                       </span>
                       {!allPending && pendingQty > 0 && (
                         <span className="ml-0.5 text-[10px] font-normal text-amber-600">

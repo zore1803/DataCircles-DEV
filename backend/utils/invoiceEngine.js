@@ -39,7 +39,7 @@
 // that in a plain node -e test.
 
 const { buildPricingSnapshot } = require('./pricingEngine');
-const { calculatePlanUpgradeProration, calculateAddonProration } = require('./prorationMath');
+const { calculatePlanUpgradeProration, calculateAddonProration, calculateMonthlyToAnnualTransition } = require('./prorationMath');
 
 const SEAT_ADDON_KEY = 'extra_seat';
 
@@ -51,19 +51,29 @@ const SEAT_ADDON_KEY = 'extra_seat';
  * calculateAddonProration() exactly as they exist today.
  *
  * @param {Object} params
- * @param {'plan_upgrade'|'addon_purchase'} params.type
+ * @param {'plan_upgrade'|'addon_purchase'|'cycle_transition_monthly_to_annual'} params.type
  * @param {Number} [params.oldBasePrice] - required for type: 'plan_upgrade'
  * @param {Number} [params.newBasePrice] - required for type: 'plan_upgrade'
  * @param {Number} [params.quantity] - required for type: 'addon_purchase'
  * @param {Number} [params.pricePerUnit] - required for type: 'addon_purchase'
+ * @param {Number} [params.monthlyBasePrice] - required for type: 'cycle_transition_monthly_to_annual'
+ * @param {Number} [params.annualBasePrice] - required for type: 'cycle_transition_monthly_to_annual'
+ * @param {Date} [params.anchor] - required for type: 'cycle_transition_monthly_to_annual'
+ *   (subscription.billingAnchor — immutable, Phase 1)
  * @param {Date} params.currentPeriodStart
  * @param {Date} params.currentPeriodEnd
- * @returns {{amount: Number, lines: Array}} amount is always positive — the
- *   caller decides sign/meaning (a credit vs. an additional charge) via how
- *   it's folded into basePriceOverride; this function itself never guesses.
+ * @returns {{amount: Number, lines: Array, windowStart?: Date, windowEnd?: Date}}
+ *   amount is always positive — the caller decides sign/meaning (a credit vs.
+ *   an additional charge) via how it's folded into basePriceOverride; this
+ *   function itself never guesses. windowStart/windowEnd are only present for
+ *   type: 'cycle_transition_monthly_to_annual' — the anchor-relative
+ *   entitlement window this transition amount was quoted against (Phase 3 —
+ *   the caller must store these and re-verify them at commit, per
+ *   PHASE3_MONTHLY_TO_ANNUAL_PRORATION.md's boundary-mismatch decision; this
+ *   function does not know about "commit time," it only prices "now").
  */
 function calculateCommercialAdjustments(params = {}) {
-  const { type, oldBasePrice, newBasePrice, quantity, pricePerUnit, currentPeriodStart, currentPeriodEnd } = params;
+  const { type, oldBasePrice, newBasePrice, quantity, pricePerUnit, monthlyBasePrice, annualBasePrice, anchor, currentPeriodStart, currentPeriodEnd } = params;
 
   // Billing period is a fundamental invariant every proration calculation
   // depends on. Without this guard, a missing currentPeriodStart/End (e.g. a
@@ -79,12 +89,26 @@ function calculateCommercialAdjustments(params = {}) {
 
   let amount;
   let key;
+  let windowStart, windowEnd, newAnnualValue, unusedMonthlyValue, monthsCompleted, monthsIntoWindow;
   if (type === 'plan_upgrade') {
     amount = calculatePlanUpgradeProration(oldBasePrice, newBasePrice, currentPeriodStart, currentPeriodEnd);
     key = 'plan_upgrade_proration';
   } else if (type === 'addon_purchase') {
     amount = calculateAddonProration(quantity, pricePerUnit, currentPeriodStart, currentPeriodEnd);
     key = 'addon_purchase_proration';
+  } else if (type === 'cycle_transition_monthly_to_annual') {
+    if (!anchor) {
+      throw new Error('calculateCommercialAdjustments: anchor (billingAnchor) is required for cycle_transition_monthly_to_annual');
+    }
+    const result = calculateMonthlyToAnnualTransition(monthlyBasePrice, annualBasePrice, anchor, currentPeriodStart, currentPeriodEnd);
+    amount = result.amount;
+    windowStart = result.windowStart;
+    windowEnd = result.windowEnd;
+    newAnnualValue = result.newAnnualValue;
+    unusedMonthlyValue = result.unusedMonthlyValue;
+    monthsCompleted = result.monthsCompleted;
+    monthsIntoWindow = result.monthsIntoWindow;
+    key = 'cycle_transition_monthly_to_annual';
   } else {
     throw new Error(`calculateCommercialAdjustments: unknown type "${type}"`);
   }
@@ -92,6 +116,8 @@ function calculateCommercialAdjustments(params = {}) {
   return {
     amount,
     lines: [{ type: 'commercial_adjustment', key, amount }],
+    ...(newAnnualValue !== undefined ? { newAnnualValue, unusedMonthlyValue, monthsCompleted, monthsIntoWindow } : {}),
+    ...(windowStart ? { windowStart, windowEnd } : {}),
   };
 }
 

@@ -116,6 +116,15 @@ function buildEventSummary(event) {
         amountChange: amounts.recurringAfter != null ? `Becomes ${perCycle(amounts.recurringAfter, cycle)}` : undefined,
         detail: event.effectiveAt ? `Effective ${new Date(event.effectiveAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : undefined,
       };
+    case 'BILLING_CYCLE_CHANGE_COMPLETED':
+      // Phase 3 — the IMMEDIATE Monthly->Annual transition, distinct from
+      // BILLING_CYCLE_CHANGE_SCHEDULED above (the deferred non-UPI path).
+      return {
+        title: `Switched to Annual billing`,
+        subtitle: before?.billingCycle ? `${before.billingCycle} → ${after?.billingCycle}` : undefined,
+        amountChange: amounts.recurringAfter != null ? `Now ${perCycle(amounts.recurringAfter, cycle)}` : undefined,
+        detail: amounts.paid ? `${money(amounts.paid)} paid today (prorated transition)` : undefined,
+      };
     case 'ADDON_ADDED':
       return {
         title: `${prettyKey(event.metadata?.addonKey)} Added`,

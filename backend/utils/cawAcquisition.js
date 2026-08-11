@@ -14,14 +14,30 @@
 // sync with if Razorpay's request shape ever changes.
 const razorpay = require('../config/razorpay');
 
-// Mandate ceiling headroom policy — CONFIGURABLE business policy (see
-// CAW_BILLING_DESIGN.md §9 Billing Policy), not architecture. Same env var
-// and default as subscriptionController.js's own copy — kept as a separate
+// Mandate ceiling policy (docs/audit/MANDATE_STRATEGY_AND_ANNUAL_BILLING.md,
+// final) — CONFIGURABLE business policy, not architecture. Same env var and
+// default as subscriptionController.js's own copy — kept as a separate
 // constant here (not re-exported from the controller) so this module has no
 // dependency on the controller, only the other way around.
-const MANDATE_HEADROOM_MULTIPLIER = Number(process.env.CAW_MANDATE_HEADROOM_MULTIPLIER) || 2;
-function computeMandateMaxAmountRupees(firstInvoiceRupees) {
-  return firstInvoiceRupees * MANDATE_HEADROOM_MULTIPLIER;
+//
+// Registers at a FLAT ceiling, not firstInvoice × a multiplier (the
+// superseded formula). Rationale: Razorpay mandate tokens cannot be edited
+// post-registration (confirmed directly against Razorpay's own docs), so a
+// per-customer, invoice-scaled ceiling that might later prove too low can
+// never be resized — only replaced via a brand-new mandate requiring full
+// customer re-authorization. Registering every mandate at Razorpay's own
+// UPI/card AFA-free ceiling (₹15,000, confirmed against Razorpay's current
+// docs) from day one means a resize is essentially never needed: any charge
+// above it already requires Razorpay's own per-debit UPI-PIN confirmation
+// regardless of what this app's own ceiling says, so raising our own ceiling
+// further would not remove that friction anyway — ₹15,000 is the amount that
+// actually matters, not some multiple of the customer's first invoice.
+const MANDATE_CEILING_RUPEES = Number(process.env.CAW_MANDATE_CEILING_RUPEES) || 15000;
+// Signature unchanged (still accepts firstInvoiceRupees) so every existing
+// call site needs zero changes — the parameter is simply no longer used in
+// the calculation.
+function computeMandateMaxAmountRupees(_firstInvoiceRupees) {
+  return MANDATE_CEILING_RUPEES;
 }
 
 // Fix (found via live QA): the stored phone is always a bare 10-digit

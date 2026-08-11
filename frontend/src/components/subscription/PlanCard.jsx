@@ -3,7 +3,7 @@ import { Check, ArrowUp, ArrowDown, CreditCard, Gift, Sparkles, Eye, ChevronDown
 import FeaturesModal from "./FeaturesModal";
 import RewardAvailabilityBadge from "./RewardAvailabilityBadge";
 import { ruleForProduct, discountForItem, isCouponStillRecurring } from "../../utils/couponHelpers";
-import { deriveSubscriptionUIState, SUBSCRIPTION_UI_STATES } from "../../utils/subscriptionHelpers";
+import { deriveSubscriptionUIState, SUBSCRIPTION_UI_STATES, resolveBaseCardAction } from "../../utils/subscriptionHelpers";
 import { useSubscription } from "../../contexts/SubscriptionContext";
 
 const PlanCard = ({
@@ -21,6 +21,8 @@ const PlanCard = ({
   selectedAddons,
   onAddonChange,
   onRemoveAddon,
+  addonPurchaseCycle, // which cycle a NEW add-on purchase targets — only choosable on an annual base plan
+  onAddonCycleChange,
   couponRules, // per-product discount rules from a coupon applied on the plans page, or null
   allPlanAddons, // { [planId]: addon[] } — every plan's catalog already fetched this session, used to detect an addon carrying forward under a remapped key (e.g. "seat" -> "extra_seat") during a scheduled downgrade
 }) => {
@@ -62,6 +64,48 @@ const PlanCard = ({
     uiState === SUBSCRIPTION_UI_STATES.ACTIVE &&
     currentSubscription.trialUsed;
 
+  // Frontend billing-state matrix (Current cycle/tier x Selected cycle/tier
+  // -> required action), replacing what used to be a chain of if-statements
+  // that had grown a new special case every time a billing feature landed
+  // this session. This table is the base-plan slice ONLY — pending-change
+  // state (scheduled downgrade/cycle-change) and add-on state are layered on
+  // top by the caller (isScheduledTarget/locked props, computed in
+  // SubscriptionPlans.jsx), never folded into this table, so each layer can
+  // be reasoned about independently:
+  //
+  //   Current          | Selected         | Result
+  //   -----------------|------------------|------------------------------
+  //   Monthly Tier X    | Monthly Tier X   | CURRENT
+  //   Monthly Tier X    | Monthly Tier >X  | UPGRADE
+  //   Monthly Tier X    | Monthly Tier <X  | DOWNGRADE
+  //   Monthly (any)     | Annual (any)     | SWITCH_TO_ANNUAL (uniform — no
+  //                     |                  | Upgrade/Downgrade label even
+  //                     |                  | cross-tier; eligibility for a
+  //                     |                  | downgrade-shaped cross-tier
+  //                     |                  | transition is enforced
+  //                     |                  | server-side, this card never
+  //                     |                  | needs to know that distinction)
+  //   Annual Tier X     | Annual Tier X    | CURRENT
+  //   Annual Tier X     | Annual Tier >X   | UPGRADE
+  //   Annual Tier X     | Annual Tier <X   | DOWNGRADE
+  //   Annual (any)      | Monthly (any)    | AVAILABLE_AFTER_CANCELLING_ANNUAL
+  //                     |                  | (NOT a live transition — settled
+  //                     |                  | separately as cancel -> wait for
+  //                     |                  | term end -> resubscribe fresh)
+  //
+  // Cross-tier Annual<->Annual (upgrade/downgrade while already annual) DOES
+  // show Upgrade/Downgrade labels, unlike Monthly->Annual — because that's a
+  // same-cycle tier change with its own existing (pre-annual) upgrade/
+  // downgrade flow, not the Phase 3 transition. Only a CYCLE change
+  // (Monthly->Annual) gets the uniform "fresh purchase" treatment.
+  const BASE_ACTION_LABELS = {
+    CURRENT: "Current Plan",
+    UPGRADE: "Upgrade",
+    DOWNGRADE: "Downgrade",
+    SWITCH_TO_ANNUAL: "Switch to Annual",
+    AVAILABLE_AFTER_CANCELLING_ANNUAL: "Available After Cancelling Annual",
+  };
+
   const getActionType = () => {
     if (plan.trial) {
       // PENDING_MANDATE takes priority over the raw isTrialActive flag —
@@ -77,21 +121,7 @@ const PlanCard = ({
     if (!currentSubscription || uiState === SUBSCRIPTION_UI_STATES.TRIAL || uiState === SUBSCRIPTION_UI_STATES.PENDING_MANDATE || !currentSubscription.isPaymentConfirmed)
       return "Subscribe";
 
-    const planPriority = { starter: 1, growth: 2, business: 3 };
-    const currentPlanPriority = planPriority[currentSubscription.planName] || 0;
-    const selectedPlanPriority = planPriority[plan.id] || 0;
-    const now = new Date();
-    const isMidCycle = now < new Date(currentSubscription.currentPeriodEnd);
-
-    if (selectedPlanPriority > currentPlanPriority) return "Upgrade";
-    if (selectedPlanPriority < currentPlanPriority) return "Downgrade";
-    if (currentSubscription.billingCycle !== billingCycle)
-      return isMidCycle
-        ? "Cycle Change Not Available"
-        : billingCycle === "yearly"
-        ? "Switch to Annual"
-        : "Switch to Monthly";
-    return "Current Plan";
+    return BASE_ACTION_LABELS[resolveBaseCardAction(currentSubscription, plan.id, billingCycle)];
   };
 
   const getActionIcon = () => {
@@ -116,6 +146,18 @@ const PlanCard = ({
   const price = getCurrentPrice();
   const action = getActionType();
   const isCurrentActive = isCurrentPlan();
+
+  // Business contract: a monthly base plan may only hold monthly add-ons;
+  // an annual base plan may hold either (Phase 2d.1). The add-on section
+  // below has no cycle control of its own — it inherits whatever cycle the
+  // page-level toggle is on, which for THIS card (the user's own current
+  // plan) can differ from the subscription's actual billingCycle when
+  // they're browsing the other cycle to compare pricing. Without this gate,
+  // a monthly subscriber could fill out annual add-on quantities that get
+  // silently dropped (not purchased, not warned about) instead of being
+  // visibly blocked — must not rely on the backend's own rejection alone.
+  const addonCycleBlocked =
+    isCurrentActive && billingCycle === "yearly" && currentSubscription?.billingCycle === "monthly";
 
   const getCardStyles = () => {
     if (plan.popular) {
@@ -227,7 +269,7 @@ const PlanCard = ({
     (locked && !isCurrentActive) ||
     isScheduledTarget ||
     (isCurrentActive && !hasSelectedAddons) ||
-    action === "Cycle Change Not Available" ||
+    action === "Available After Cancelling Annual" ||
     action === "Free Trial Used" ||
     action === "Current Trial";
 
@@ -369,16 +411,29 @@ const PlanCard = ({
             <div className="flex flex-wrap gap-1.5">
               {currentSubscription.activeAddons.map((addon) => {
                 const displayName = addon.addonKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-                const removal = (removedAddons || []).find((r) => r.addonKey === addon.addonKey);
+                // Monthly and Annual are independent billable-item instances of the
+                // same addonKey (Phase 2d.1) — they coexist as separate array
+                // entries, so every match against removedAddons/scheduledChanges
+                // must also compare billingCycle, or a removal scheduled against
+                // one instance bleeds into the other's row.
+                const addonCycle = addon.billingCycle || currentSubscription.billingCycle;
+                const removal = (removedAddons || []).find(
+                  (r) => r.addonKey === addon.addonKey && (r.billingCycle || currentSubscription.billingCycle) === addonCycle
+                );
                 const pendingQty = removal?.quantity || 0;
                 const remainingQty = Math.max(0, addon.quantity - pendingQty);
                 const allPending = remainingQty <= 0;
                 const removalDateChange = (scheduledChanges || []).find(
-                  (change) => change.type === "REMOVE_ADDON" && change.payload?.addonKey === addon.addonKey
+                  (change) =>
+                    change.type === "REMOVE_ADDON" &&
+                    change.payload?.addonKey === addon.addonKey &&
+                    (change.payload?.billingCycle || currentSubscription.billingCycle) === addonCycle
                 );
                 const removalDate = removalDateChange?.effectiveAt
                   ? new Date(removalDateChange.effectiveAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-                  : null;
+                  : (addon.periodEnd
+                      ? new Date(addon.periodEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                      : null);
 
                 // "allPending" (per removedAddons) is computed by comparing
                 // addonKey strings — but a scheduled plan change can remap
@@ -412,7 +467,7 @@ const PlanCard = ({
 
                 return (
                   <span
-                    key={addon.addonKey}
+                    key={`${addon.addonKey}-${addonCycle}`}
                     title={
                       isTrulyEnding
                         ? `Removing on ${removalDate || 'cycle end'} — access until then`
@@ -427,6 +482,9 @@ const PlanCard = ({
                     }`}
                   >
                     {displayName}
+                    <span className={`ml-1 text-[9px] uppercase tracking-wide font-normal ${plan.popular ? "text-white/50" : "text-gray-400"}`}>
+                      {addonCycle === "yearly" ? "Annual" : "Monthly"}
+                    </span>
                     {addon.quantity > 1 && <span className="font-bold ml-0.5">×{addon.quantity}</span>}
                     {!allPending && pendingQty > 0 && (
                       <span className={`ml-1 text-[10px] font-normal ${plan.popular ? "text-white/70" : "text-amber-600"}`}>
@@ -443,7 +501,7 @@ const PlanCard = ({
                       </span>
                     ) : onRemoveAddon ? (
                       <button
-                        onClick={() => onRemoveAddon(addon.addonKey, displayName)}
+                        onClick={() => onRemoveAddon(addon.addonKey, displayName, addonCycle)}
                         title={`Remove 1 × ${displayName}`}
                         className={`ml-0.5 rounded-full p-0.5 transition-colors ${plan.popular ? "hover:bg-white/30 text-white/70 hover:text-white" : "hover:bg-red-100 text-blue-400 hover:text-red-600"}`}
                       >
@@ -465,6 +523,10 @@ const PlanCard = ({
           <div className={`mb-3 rounded-lg px-3 py-2 text-xs text-center ${plan.popular ? "bg-white/10 text-white/70" : "bg-gray-50 text-gray-500"}`}>
             Add-ons for this plan can be set once it becomes active.
           </div>
+        ) : addonCycleBlocked ? (
+          <div className={`mb-3 rounded-lg px-3 py-2 text-xs text-center ${plan.popular ? "bg-white/10 text-white/70" : "bg-gray-50 text-gray-500"}`}>
+            Annual add-ons need an annual plan. Switch to Annual first to add these.
+          </div>
         ) : (
           <>
             {/* Add-ons expander — only for paid plans */}
@@ -481,7 +543,7 @@ const PlanCard = ({
         )}
 
         {/* Expanded add-on section */}
-        {isExpanded && !plan.trial && !isScheduledTarget && (
+        {isExpanded && !plan.trial && !isScheduledTarget && !addonCycleBlocked && (
           <div className={`mb-4 rounded-lg p-3 ${styles.addonBg} border ${styles.addonBorder}`}>
             {addons === undefined ? (
               <div className="flex items-center justify-center py-3">
@@ -494,8 +556,41 @@ const PlanCard = ({
               </p>
             ) : (
               <div className="space-y-3">
+                {/* Live-QA architecture fix: this choice is governed by
+                    which MODE the catalog is browsing in (the page-level
+                    Monthly/Annual toggle), not by whether this happens to be
+                    the current plan's own card — Annual mode offers both
+                    add-on cadences on EVERY plan card (including a target
+                    you're configuring for an upgrade/downgrade); Monthly
+                    mode has only one cadence, no toggle at all. Single
+                    selector, not per-row, because only one add-on can be
+                    purchased per confirm (enforced in SubscriptionPlans.jsx). */}
+                {billingCycle === "yearly" && (
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className={`text-[10px] font-medium ${styles.addonSubtext}`}>New add-on cycle:</span>
+                    <div className={`inline-flex rounded-md p-0.5 ${plan.popular ? "bg-white/10" : "bg-gray-100"}`}>
+                      {["monthly", "yearly"].map((cyc) => (
+                        <button
+                          key={cyc}
+                          onClick={() => onAddonCycleChange && onAddonCycleChange(cyc)}
+                          className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                            (addonPurchaseCycle || "yearly") === cyc
+                              ? (plan.popular ? "bg-white text-gray-900" : "bg-white text-blue-700 shadow-sm")
+                              : (plan.popular ? "text-white/70" : "text-gray-500")
+                          }`}
+                        >
+                          {cyc === "monthly" ? "Monthly" : "Annual"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {addons.map((addon) => {
-                  const unitPrice = billingCycle === "yearly" ? addon.price?.yearly : addon.price?.monthly;
+                  const effectiveAddonCycle =
+                    billingCycle === "yearly"
+                      ? (addonPurchaseCycle || "yearly")
+                      : billingCycle;
+                  const unitPrice = effectiveAddonCycle === "yearly" ? addon.price?.yearly : addon.price?.monthly;
                   const qty = selectedAddons?.[addon.key] ?? 0;
                   const max = addon.maxQuantityPerOrg ?? 99;
                   const addonRule = couponRules ? ruleForProduct(couponRules, "addon", addon.key) : null;
@@ -511,7 +606,7 @@ const PlanCard = ({
                           )}
                         </p>
                         <p className={`text-xs ${styles.addonSubtext}`}>
-                          Add: {formatPrice(unitPrice)}/{billingCycle === "monthly" ? "mo" : "yr"} each
+                          Add: {formatPrice(unitPrice)}/{effectiveAddonCycle === "monthly" ? "mo" : "yr"} each
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">

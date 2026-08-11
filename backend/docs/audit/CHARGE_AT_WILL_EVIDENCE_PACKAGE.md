@@ -6,7 +6,7 @@
 > `4111 1111 1111 1111` (one-time payment card, not enrolled for recurring), which Razorpay's test
 > gateway rejects with the misleading message *"the seller does not support recurring payments."*
 > The correct **recurring test card `4718 6091 0820 4366`** completes the mandate successfully.
->
+>4718 6091 0820 4366
 > **Proven end-to-end (live webhooks):** Registration Link → hosted auth page → card + OTP →
 > `token.confirmed` (`token_TEAQs4ztj3WShU`, recurring, confirmed) → `payment.captured`
 > (`pay_TEAQrXu2tuVkW0`) → `order.paid` → `invoice.paid`. Combined with the already-proven
@@ -27,7 +27,8 @@ token charging was independently validated using `POST /v1/payments/create/recur
 
 Earlier failures were reproduced only when using an unsupported test card and attempting mandate
 registration through a different checkout flow. After using Razorpay's documented recurring test card
-(`4718 6091 0820 4366`) and the Registration Link flow, the complete lifecycle succeeded.
+(`
+`) and the Registration Link flow, the complete lifecycle succeeded.
 
 Supplementary: UPI Autopay mandate registration is not testable in test mode (test mode uses card;
 UPI Autopay works in live with real UPI apps). The Plans/Subscriptions 401s are real but irrelevant to

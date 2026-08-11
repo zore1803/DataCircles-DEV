@@ -32,6 +32,7 @@ const billingInvoiceSchema = new mongoose.Schema({
     enum: [
       'NEW_SUBSCRIPTION', 'RENEWAL', 'PLAN_UPGRADE', 'ADDON_PURCHASE',
       'BILLING_CYCLE_CHANGE', 'RETRY', 'ADMIN_ADJUSTMENT', 'CORRECTION',
+      'ADDON_RENEWAL', // Task 1 (Aug 2026) — independent per-add-on monthly renewal
     ],
     required: true,
   },

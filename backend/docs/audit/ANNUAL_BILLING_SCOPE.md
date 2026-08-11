@@ -23,13 +23,43 @@ application, dual-cycle add-on coexistence, and cycle-change proration are all g
 work, not extensions of something already built. Only the *concepts* (not the code) exist,
 in `docs/audit/CAW_BILLING_DESIGN.md` and related design docs.
 
-## Fixed this session
+## Phase 1 — Billing Anchor (landed, verified)
+
+Added `Subscription.billingAnchor` (Date, default null), written exactly once by
+`runFirstPaymentSettlement` — the single confirmed funnel point every first-payment path
+(fresh signup, trial conversion, legacy paths) already calls through, so no per-call-site
+duplication was needed.
+
+One real bug surfaced during verification, fixed before landing: plain `immutable: true`
+would have silently discarded the *first* real write in production, not just later
+overwrites — Mongoose's default immutable behavior blocks a path once `isNew` is false, and
+every real subscription is already persisted (non-new) by the time first payment settles.
+Fixed with the function form `immutable: function() { return this.billingAnchor != null }`,
+which is immutable only once actually set. Verified with a dedicated fixture script
+(`scripts/verifyBillingAnchorImmutable.js`, 4/4 passing): null before payment, set once on
+settlement, unchanged on a repeated settlement call (racing-path safety), and a direct
+overwrite attempt on an already-set value is rejected.
+
+Existing regression suites (`verifyScheduledChangeRenewal.js` 9/9,
+`verifyRetryEngine.js` 6/6, `verifyTrialConversionCAW.js`) all still pass — no behavior
+change for anything that doesn't touch this new field. `grep billingAnchor` returns only the
+schema, the one write site, and this doc — nothing reads it yet, as intended.
+
+Not done in this phase (explicitly deferred): backfilling `billingAnchor` on subscriptions
+created before this field existed. Scope that separately if/when Phase 3's proration logic
+needs every existing subscription to have one.
+
+## Fixed this session (mandate-ceiling gap, unrelated to annual billing)
 
 `renewalEngine.js` now checks `billingInvoice.total > subscription.mandateMaxAmount` before
 calling `chargeMandateFn`, returning the same clean `PAST_DUE` shape the code already uses
 for a Razorpay-declined charge (reason `MANDATE_CAPACITY_EXCEEDED`), instead of relying on
 Razorpay to reject the request. `retryRenewal()` calls `renewSubscription()` internally, so
 this covers the retry path too, no separate guard needed there.
+
+Verified: `scripts/verifyScheduledChangeRenewal.js` (9/9 passing) and `scripts/verifyRetryEngine.js`
+(6/6 passing) both still pass with the new guard in place — no regression to existing
+renewal/retry/repair-forward idempotency behavior.
 
 ## Data model gap blocking everything else
 

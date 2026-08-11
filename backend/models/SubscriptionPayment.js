@@ -27,10 +27,10 @@ const subscriptionPaymentSchema = new mongoose.Schema({
     default: 'created' 
   },
   method: { type: String }, // card, netbanking, wallet, upi
-  paymentFor: { 
-    type: String, 
-    enum: ['subscription', 'upgrade', 'additional_users','initial', 'upgrade_proration', 'seat_addition', 'addon_purchase', 'plan_upgrade'],
-    default: 'subscription' 
+  paymentFor: {
+    type: String,
+    enum: ['subscription', 'upgrade', 'additional_users','initial', 'upgrade_proration', 'seat_addition', 'addon_purchase', 'plan_upgrade', 'cycle_transition_monthly_to_annual', 'reactivation', 'addon_renewal'],
+    default: 'subscription'
   },
   metadata: { type: mongoose.Schema.Types.Mixed }
 }, { timestamps: true });
