@@ -704,78 +704,6 @@ const VendorDetailsPageNew = () => {
               </div>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════
-              SECTION 2 — FINANCIAL SUMMARY KPI STRIP
-              Toggleable via the ⋮ menu's "Hide/Show Financial Summary".
-             ═══════════════════════════════════════════════════════════ */}
-            {showKPI && (
-              <div className="pb-1">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {[
-                    {
-                      label: "Total Received",
-                      value: totalReceived,
-                      Icon: TotalReceivedIcon,
-                      badge: "High",
-                      badgeClass: "text-green-600 bg-green-50",
-                    },
-                    {
-                      label: "Total Paid",
-                      value: totalPaid,
-                      Icon: TotalPaidIcon,
-                      badge: "Medium",
-                      badgeClass: "text-orange-600 bg-orange-50",
-                    },
-                    {
-                      label: "Net Balance",
-                      value: netBalance,
-                      Icon: NetBalanceIcon,
-                      badge: netBalance >= 0 ? "Receivable" : "You Owe",
-                      badgeClass:
-                        netBalance >= 0
-                          ? "text-green-600 bg-green-50"
-                          : "text-red-600 bg-red-50",
-                    },
-                  ].map((kpi) =>
-                    /* Whole card skeletons while loading — not just the value.
-                       Showing the real "High"/"Medium"/"Receivable" badges
-                       against a fake value is misleading (it implies a
-                       computed assessment before any data has loaded). */
-                    showSkeleton ? (
-                      <div
-                        key={kpi.label}
-                        className="h-[56px] flex items-center gap-2.5 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
-                      >
-                        <Skeleton shape="rect" width={32} height={32} className="rounded-lg flex-shrink-0" />
-                        <div className="min-w-0 flex-1 flex flex-col gap-1.5">
-                          <Skeleton width="60%" height={10} />
-                          <Skeleton width={80} height={14} />
-                        </div>
-                        <Skeleton width={56} height={18} className="rounded-full flex-shrink-0" />
-                      </div>
-                    ) : (
-                      <div
-                        key={kpi.label}
-                        className="h-[56px] flex items-center gap-2.5 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
-                      >
-                        <kpi.Icon />
-                        <div className="min-w-0">
-                          <p className="text-[11px] text-gray-500 truncate">{kpi.label}</p>
-                          <p className="text-sm font-semibold text-gray-900 truncate">
-                            {fmtMoney(kpi.value)}
-                          </p>
-                        </div>
-                        <span
-                          className={`ml-auto flex-shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${kpi.badgeClass}`}
-                        >
-                          {kpi.badge}
-                        </span>
-                      </div>
-                    ),
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* The Relationship Health gauge used to occupy a second column
@@ -815,6 +743,81 @@ const VendorDetailsPageNew = () => {
         </div>
 
         <div className="border-b border-gray-200 mb-4 -mx-6"></div>
+
+        {/* ═══════════════════════════════════════════════════════════
+            SECTION 2 — FINANCIAL SUMMARY KPI STRIP
+            Sits below the tab switcher (not in the header strip), and
+            stays visible across tabs. Toggleable via the ⋮ menu's
+            "Hide/Show Financial Summary".
+           ═══════════════════════════════════════════════════════════ */}
+        {showKPI && (
+          <div className="mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  {
+                    label: "Total Received",
+                    value: totalReceived,
+                    Icon: TotalReceivedIcon,
+                    badge: "High",
+                    badgeClass: "text-green-600 bg-green-50",
+                  },
+                  {
+                    label: "Total Paid",
+                    value: totalPaid,
+                    Icon: TotalPaidIcon,
+                    badge: "Medium",
+                    badgeClass: "text-orange-600 bg-orange-50",
+                  },
+                  {
+                    label: "Net Balance",
+                    value: netBalance,
+                    Icon: NetBalanceIcon,
+                    badge: netBalance >= 0 ? "Receivable" : "You Owe",
+                    badgeClass:
+                      netBalance >= 0
+                        ? "text-green-600 bg-green-50"
+                        : "text-red-600 bg-red-50",
+                  },
+                ].map((kpi) =>
+                  /* Whole card skeletons while loading — not just the value.
+                     Showing the real "High"/"Medium"/"Receivable" badges
+                     against a fake value is misleading (it implies a
+                     computed assessment before any data has loaded). */
+                  showSkeleton ? (
+                    <div
+                      key={kpi.label}
+                      className="h-[56px] flex items-center gap-2.5 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
+                    >
+                      <Skeleton shape="rect" width={32} height={32} className="rounded-lg flex-shrink-0" />
+                      <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+                        <Skeleton width="60%" height={10} />
+                        <Skeleton width={80} height={14} />
+                      </div>
+                      <Skeleton width={56} height={18} className="rounded-full flex-shrink-0" />
+                    </div>
+                  ) : (
+                    <div
+                      key={kpi.label}
+                      className="h-[56px] flex items-center gap-2.5 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
+                    >
+                      <kpi.Icon />
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-gray-500 truncate">{kpi.label}</p>
+                        <p className="text-sm font-semibold text-gray-900 truncate">
+                          {fmtMoney(kpi.value)}
+                        </p>
+                      </div>
+                      <span
+                        className={`ml-auto flex-shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${kpi.badgeClass}`}
+                      >
+                        {kpi.badge}
+                      </span>
+                    </div>
+                  ),
+                )}
+              </div>
+            </div>
+          )}
 
         {/* Sidebar trimmed 272px -> 240px and the gap 6 -> 4, handing ~95px
             back to the table column so its right-most columns (Amount /
@@ -896,28 +899,11 @@ const VendorDetailsPageNew = () => {
                         </div>
                       </div>
 
-                      {/* Financial Summary — same numbers as the KPI strip
-                          above, repeated here so Overview stands alone when
-                          the KPI row is toggled off. */}
-                      <div className="bg-white border border-gray-200 rounded-lg p-5">
-                        <h3 className="text-sm font-semibold text-gray-900 mb-4">Financial Summary</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Total Received</p>
-                            <p className="text-lg font-bold text-gray-900">{fmtMoney(totalReceived)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Total Paid</p>
-                            <p className="text-lg font-bold text-gray-900">{fmtMoney(totalPaid)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Net Balance</p>
-                            <p className={`text-lg font-bold ${netBalance >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                              {fmtMoney(netBalance)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                      {/* No Financial Summary card here: the KPI strip now
+                          sits directly above the tab content, so repeating
+                          the same three figures inside Overview showed them
+                          twice in one viewport. Hidden along with the strip
+                          when KPIs are toggled off. */}
 
                       {/* Custom Fields — only rendered when the org has
                           defined some and this vendor has values for them. */}
