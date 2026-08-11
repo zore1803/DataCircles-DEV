@@ -600,7 +600,11 @@ const VendorDetailsPageNew = () => {
                 CompanyProfilePage.jsx rather than the tall bordered card
                 this used to be. The email/phone/address detail that used to
                 stack here now lives in the Overview tab's Vendor Details. */}
-            <div className="flex items-center justify-between gap-4 pb-4">
+            {/* h-16 to match the 64px header band on the list pages
+                (pages/Companies.jsx uses `fixed ... h-16 border-b`), so the
+                detail header lines up with the same rhythm instead of being
+                a shorter ad-hoc row. */}
+            <div className="flex items-center justify-between gap-4 h-16">
               <div className="flex items-center gap-3 min-w-0">
                 {/* Gated on showSkeleton, not just `vendor` — the vendor fetch
                   resolves well before payments/tasks/meetings/notes do, so
