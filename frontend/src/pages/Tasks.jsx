@@ -3015,7 +3015,7 @@ function Tasks() {
           </div>
           <button
             onClick={() => (activeTab === "tasks" ? toggleTaskForm() : toggleMeetingForm())}
-            title="New Activity"
+            title={activeTab === "tasks" ? "New Task" : "New Meeting"}
             className="flex flex-row justify-center items-center flex-shrink-0 w-10 lg:w-[138px]"
             style={{
               padding: 12,
@@ -3036,7 +3036,7 @@ function Tasks() {
                 color: "#FFFFFF",
               }}
             >
-              New Activity
+              {activeTab === "tasks" ? "New Task" : "New Meeting"}
             </span>
           </button>
         </div>
@@ -3660,14 +3660,23 @@ function Tasks() {
       {showMeetingForm && (
         <AdminMeetingForm
           open={showMeetingForm}
-          onClose={() => setShowMeetingForm(false)}
-          onSubmit={handleMeetingSave}
-          initialData={selectedMeeting || {}}
+          onClose={() => {
+            // In edit mode the form PUTs directly and only calls onClose, so
+            // refetch here or the list keeps showing the stale row.
+            const wasEditing = meetingModalMode === "view" && selectedMeeting;
+            setShowMeetingForm(false);
+            setSelectedMeeting(null);
+            setMeetingModalMode("create");
+            if (wasEditing) fetchMeetings();
+          }}
+          meetingData={selectedMeeting}
+          users={users}
           contacts={contacts}
           companies={companies}
           vendors={vendors}
           mode={meetingModalMode}
           onSave={handleMeetingSave}
+          onDelete={handleMeetingDelete}
         />
       )}
 

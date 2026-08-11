@@ -479,6 +479,11 @@ exports.createMeeting = async (req, res) => {
       linkedTo,
       createdBy: req.user.id,
       organization: req.user.organization,
+      // Internal team is your own staff and is meaningful for every linked
+      // type — a vendor or contact meeting can have staff attending just as
+      // a company one can. Kept out of the per-type branch below so it
+      // isn't silently dropped for non-company meetings.
+      internalParticipants: internalParticipants || [],
     };
 
     // Add the appropriate reference based on linkedTo type
@@ -487,7 +492,6 @@ exports.createMeeting = async (req, res) => {
     } else if (linkedTo === "company") {
       meetingData.company = companyId;
       meetingData.participants = participants;
-      meetingData.internalParticipants = internalParticipants || [];
     } else if (linkedTo === "vendor") {
       meetingData.vendor = vendorId;
     }
