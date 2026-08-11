@@ -333,7 +333,13 @@ const CompanyCalendar = ({ companyId }) => {
   for (let d = 1; d <= daysInMonth; d++) {
     calendarDays.push({ date: new Date(year, month, d), isCurrentMonth: true });
   }
-  const extraDays = 35 - calendarDays.length;
+  // Rounds up to the next full week (35 or 42 cells) instead of a hardcoded
+  // 35 — a month that needs 6 rows (e.g. a 31-day month starting on a
+  // Saturday) was 1 cell short of a full grid, leaving the last row's
+  // remaining columns with no cell rendered at all: no border, no fill,
+  // just the single populated cell's own right border standing alone.
+  const totalCells = Math.ceil(calendarDays.length / 7) * 7;
+  const extraDays = totalCells - calendarDays.length;
   for (let d = 1; d <= extraDays; d++) {
     calendarDays.push({
       date: new Date(year, month + 1, d),
