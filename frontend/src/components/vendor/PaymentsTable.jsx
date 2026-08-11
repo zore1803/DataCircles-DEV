@@ -27,6 +27,7 @@ import VendorForm from "../vendor/VendorForm";
 import VendorPaymentForm from "../vendor/VendorPaymentForm";
 import PaymentPreview from "../vendor/venerPaymentPreview";
 import DataTable from "../common/DataTable";
+import RowActionsMenu, { withRowActionsColumn } from "../common/RowActionsMenu";
 import BulkActionBar from "../common/BulkActionBar";
 import TablePaginationFooter from "../common/TablePaginationFooter";
 import CompanyFilterPanel from "../company/CompanyFilterPanel";
@@ -520,46 +521,6 @@ const PaymentsTable = ({ payments, vendor }) => {
           </span>
         ),
       },
-      {
-        id: "actions",
-        size: 120,
-        enableResizing: false,
-        header: "Actions",
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleEditPayment(row.original);
-              }}
-              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-              title="Edit"
-            >
-              <Edit className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleQuickDeletePayment(row.original);
-              }}
-              className="p-1 text-gray-500 hover:text-red-600 transition-colors"
-              title="Delete"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleViewReceipt(row.original);
-              }}
-              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-              title="View receipt"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-          </div>
-        ),
-      },
     ],
     [paginatedPayments, selectedItems, selectAll, clearSelection, toggleItem],
   );
@@ -567,7 +528,6 @@ const PaymentsTable = ({ payments, vendor }) => {
   const finalColumns = useMemo(() => {
     const visibleBase = baseColumns.filter(c => !hiddenColumns.has(c.id));
     const selectionCol = visibleBase.find(c => c.id === "selection");
-    const actionsCol = visibleBase.find(c => c.id === "actions");
     const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
 
     const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
@@ -579,13 +539,20 @@ const PaymentsTable = ({ payments, vendor }) => {
 
     midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
 
-    return [
+    const ordered = [
       ...(selectionCol ? [selectionCol] : []),
       ...leftCols,
       ...midCols,
       ...rightCols,
-      ...(actionsCol ? [actionsCol] : [])
     ];
+    return withRowActionsColumn(ordered, (payment) => (
+      <RowActionsMenu
+        viewLabel="View receipt"
+        onView={() => handleViewReceipt(payment)}
+        onEdit={() => handleEditPayment(payment)}
+        onDelete={() => handleQuickDeletePayment(payment)}
+      />
+    ));
   }, [baseColumns, columnOrder, hiddenColumns, pinnedColumns]);
 
   const visibleColumnsForGhost = useMemo(() => finalColumns.map(c => ({ key: c.id, label: c.header })), [finalColumns]);

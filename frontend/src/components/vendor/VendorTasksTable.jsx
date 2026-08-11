@@ -5,6 +5,7 @@ import API from "../../services/api";
 import VendorTaskForm from "./VendorTaskForm";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
 import DataTable from "../common/DataTable";
+import RowActionsMenu, { withRowActionsColumn } from "../common/RowActionsMenu";
 import BulkActionBar from "../common/BulkActionBar";
 import TablePaginationFooter from "../common/TablePaginationFooter";
 import CompanyFilterPanel from "../company/CompanyFilterPanel";
@@ -430,37 +431,6 @@ const VendorTasksTable = ({ vendorId }) => {
           );
         },
       },
-      {
-        id: "actions",
-        size: 100,
-        enableResizing: false,
-        header: "Actions",
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedTask(row.original);
-                setIsTaskModalOpen(true);
-              }}
-              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-              title="View"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (window.confirm("Delete this task?")) handleTaskDelete(row.original._id);
-              }}
-              className="p-1 text-gray-500 hover:text-red-600 transition-colors"
-              title="Delete"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        ),
-      },
     ],
     [paginatedTasks, selectedItems, selectAll, clearSelection, toggleItem],
   );
@@ -468,7 +438,6 @@ const VendorTasksTable = ({ vendorId }) => {
   const finalColumns = useMemo(() => {
     const visibleBase = baseColumns.filter(c => !hiddenColumns.has(c.id));
     const selectionCol = visibleBase.find(c => c.id === "selection");
-    const actionsCol = visibleBase.find(c => c.id === "actions");
     const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
 
     const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
@@ -480,13 +449,24 @@ const VendorTasksTable = ({ vendorId }) => {
     
     midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
     
-    return [
+    const ordered = [
       ...(selectionCol ? [selectionCol] : []),
       ...leftCols,
       ...midCols,
       ...rightCols,
-      ...(actionsCol ? [actionsCol] : [])
     ];
+    return withRowActionsColumn(ordered, (task) => (
+      <RowActionsMenu
+        onView={() => {
+          setSelectedTask(task);
+          setIsTaskModalOpen(true);
+        }}
+        onEdit={() => handleEditTask(task)}
+        onDelete={() => {
+          if (window.confirm("Delete this task?")) handleTaskDelete(task._id);
+        }}
+      />
+    ));
   }, [baseColumns, columnOrder, hiddenColumns, pinnedColumns]);
 
   const visibleColumnsForGhost = useMemo(() => finalColumns.map(c => ({ key: c.id, label: c.header })), [finalColumns]);
