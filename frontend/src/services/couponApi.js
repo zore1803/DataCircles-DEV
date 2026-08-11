@@ -9,4 +9,8 @@ export const couponAPI = {
   toggleCouponStatus: (couponId) => API.post(`/super-admin/coupons/${couponId}/toggle-status`),
   deleteCoupon: (couponId) => API.delete(`/super-admin/coupons/${couponId}`),
   searchOrganizations: (search) => API.get('/super-admin/coupons/organizations', { params: { search } }),
+
+  // Super Admin org drilldown — coupon-history counterpart to
+  // referralAdminAPI.getOrganizationOverview.
+  getOrganizationRedemptions: (organizationId) => API.get(`/super-admin/coupons/organizations/${organizationId}/redemptions`),
 };

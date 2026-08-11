@@ -5,10 +5,45 @@ const RazorpayPriceCache = require('../models/RazorpayPriceCache');
 const User = require('../models/User');
 const Invited = require('../models/Invited');
 const razorpay = require('../config/razorpay');
-const { buildPricingSnapshot } = require('./pricingEngine');
+const ScheduledChange = require('../models/ScheduledChange');
+const { calculateInvoice } = require('./invoiceEngine');
 
-function calculateTotalPrice(plan, billingCycle, activeAddons = []) {
-  return buildPricingSnapshot({ plan, billingCycle, activeAddons }).totalAmount;
+// Phase 7 cleanup: calculateTotalPrice() removed here — confirmed zero
+// remaining callers (its only caller, applyScheduledAddonRemovals below,
+// was migrated onto calculateInvoice() directly in Phase 3 item 5c).
+
+// Phase 2b (docs/audit/PHASE2_ADDON_CYCLE_TRACE.md): shared identity-key
+// helper for the Map/Object-keyed addon lookups that used to key on
+// `addonKey` alone (silently collapsing two cycle-variants of the same key
+// onto one entry). `fallbackCycle` (the subscription's own billingCycle) is
+// used when `addon.billingCycle` is absent — which is every addon-shaped
+// object today except real `activeAddons` entries backfilled in Phase 2a.2,
+// since no write path sets it on carry-forward/classification objects yet
+// (that's Phase 2c). Falling back this way keeps every current single-cycle
+// subscription's lookups matching exactly as before: both sides of any
+// comparison resolve to the same `${addonKey}::${subscription.billingCycle}`
+// key until a real second cycle-variant can actually be created.
+function addonIdentityKey(addon, fallbackCycle) {
+  return `${addon.remappedFrom || addon.addonKey}::${addon.billingCycle || fallbackCycle || ''}`;
+}
+
+function getAddonRemovalEffectiveAt(existingAddon, subscription) {
+  if (existingAddon?.periodEnd) {
+    return new Date(existingAddon.periodEnd);
+  }
+
+  const addedAt = existingAddon?.addedAt ? new Date(existingAddon.addedAt) : new Date();
+  const billingCycle = existingAddon?.billingCycle || subscription?.billingCycle || 'monthly';
+
+  if (billingCycle === 'yearly') {
+    const periodEnd = new Date(addedAt);
+    periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+    return periodEnd;
+  }
+
+  const monthlyPeriodEnd = new Date(addedAt);
+  monthlyPeriodEnd.setMonth(monthlyPeriodEnd.getMonth() + 1);
+  return monthlyPeriodEnd;
 }
 
 async function findOrCreateRazorpayPlan(amountRupees, billingCycle, planNameForLabel) {
@@ -91,11 +126,23 @@ async function classifyAddonsForPlanChange(activeAddons, targetPlanId, billingCy
       entry.availableOnPlans.length === 0 || entry.availableOnPlans.includes(targetPlanId);
     if (availableOnTarget) {
       // Same key works on the target plan — carry forward untouched.
+      // Live-QA correctness fix (Aug 2026): billingCycle/periodEnd were
+      // never preserved here — every plan upgrade/downgrade silently
+      // stripped them, leaving the addon to fall back to whatever the
+      // SUBSCRIPTION's cycle happens to be at every later read
+      // (addonIdentityKey/getAddonRemovalEffectiveAt's documented
+      // fallback). Confirmed as the real mechanism behind a live-reported
+      // incident: an upgrade dropped billingCycle, which then displayed as
+      // "Annual" (with no actual annual purchase) the moment the base plan
+      // later switched to yearly — same class of bug Task 1 already fixed
+      // at three OTHER creation sites, recurring here via this one.
       compatible.push({
         addonKey: addon.addonKey,
         quantity: addon.quantity,
         pricePerUnit: addon.pricePerUnit,
         addedAt: addon.addedAt || new Date(),
+        billingCycle: addon.billingCycle,
+        periodEnd: addon.periodEnd,
       });
       continue;
     }
@@ -112,13 +159,19 @@ async function classifyAddonsForPlanChange(activeAddons, targetPlanId, billingCy
       : null;
 
     if (equivalent) {
-      const price = equivalent.price?.[billingCycle] ?? addon.pricePerUnit;
+      // Price against the addon's OWN cycle, not blindly the target
+      // subscription's overall cycle param — the two can differ once
+      // monthly/annual add-ons coexist (Phase 2c).
+      const resolvedCycle = addon.billingCycle || billingCycle;
+      const price = equivalent.price?.[resolvedCycle] ?? addon.pricePerUnit;
       compatible.push({
         addonKey: equivalent.key,        // remap to the target plan's key
         quantity: addon.quantity,
         pricePerUnit: price,             // target plan's price for this add-on
         addedAt: addon.addedAt || new Date(),
         remappedFrom: addon.addonKey,    // provenance (informational)
+        billingCycle: addon.billingCycle,
+        periodEnd: addon.periodEnd,
       });
     } else {
       incompatible.push({
@@ -203,52 +256,23 @@ async function getSeatStatus(organizationId) {
 }
 
 /**
- * Calculates the prorated charge (in rupees) for adding addon units mid-cycle.
- * Pure calculation — does NOT call Razorpay or mutate anything.
- */
-function calculateAddonProration(quantity, pricePerUnit, currentPeriodStart, currentPeriodEnd) {
-  const now = new Date();
-  const periodStart = new Date(currentPeriodStart);
-  const periodEnd = new Date(currentPeriodEnd);
-  const totalPeriodMs = periodEnd - periodStart;
-  const remainingMs = periodEnd - now;
-  if (remainingMs <= 0) return 1; // period already ended — charge minimum
-  const prorationFactor = remainingMs / totalPeriodMs;
-  const fullCycleCharge = quantity * pricePerUnit;
-  return Math.max(1, Math.round(fullCycleCharge * prorationFactor));
-}
-
-/**
- * Calculates the prorated charge for the BASE PRICE DIFFERENCE when
- * upgrading plans mid-cycle. Only the difference between new and old
- * base price is prorated (add-ons are separate and untouched).
- * Returns rupees (not paise). Minimum ₹1.
- */
-function calculatePlanUpgradeProration(oldBasePrice, newBasePrice, currentPeriodStart, currentPeriodEnd) {
-  const now = new Date();
-  const periodStart = new Date(currentPeriodStart);
-  const periodEnd = new Date(currentPeriodEnd);
-
-  const totalMs = periodEnd - periodStart;
-  const remainingMs = periodEnd - now;
-  if (remainingMs <= 0 || totalMs <= 0) return Math.max(1, newBasePrice - oldBasePrice);
-
-  const factor = remainingMs / totalMs;
-  const diff = (newBasePrice - oldBasePrice) * factor;
-  return Math.max(1, Math.round(diff));
-}
-
-/**
  * Schedules an add-on removal for end of current billing cycle.
  * Does NOT call Razorpay. Does NOT immediately change activeAddons.
  */
-async function scheduleAddonRemoval(organizationId, addonKey, quantity) {
+async function scheduleAddonRemoval(organizationId, addonKey, quantity, billingCycle) {
   const subscription = await Subscription.findOne({ organization: organizationId });
   if (!subscription) throw new Error('No subscription found');
   if (!subscription.isPaymentConfirmed) throw new Error('No active paid subscription');
 
-  const existingAddon = (subscription.activeAddons || []).find((a) => a.addonKey === addonKey);
-  if (!existingAddon) throw new Error(`Organization does not have the "${addonKey}" add-on`);
+  // Phase 2c: identity is (addonKey, billingCycle). billingCycle defaults to
+  // the subscription's own cycle — every current caller omits it, and this
+  // fallback keeps their behavior identical (no route exposes this param yet,
+  // that's Phase 2d).
+  const resolvedCycle = billingCycle || subscription.billingCycle;
+  const existingAddon = (subscription.activeAddons || []).find(
+    (a) => addonIdentityKey(a, subscription.billingCycle) === addonIdentityKey({ addonKey, billingCycle: resolvedCycle }, subscription.billingCycle)
+  );
+  if (!existingAddon) throw new Error(`Organization does not have the "${addonKey}" add-on on the ${resolvedCycle} billing cycle`);
   if (quantity > existingAddon.quantity) {
     throw new Error(`Cannot remove ${quantity} units — only ${existingAddon.quantity} owned`);
   }
@@ -267,7 +291,15 @@ async function scheduleAddonRemoval(organizationId, addonKey, quantity) {
   const catalogEntry = await PlanAddon.findOne({ key: addonKey });
   const pendingRemovals = subscription.pendingAddonRemovals || [];
 
-  const existingPendingIdx = pendingRemovals.findIndex((r) => r.addonKey === addonKey);
+  // No refund, no immediate removal (business contract, confirmed): the
+  // instance stays active until the end of its OWN paid period. Annual
+  // add-ons use their own periodEnd; monthly add-ons now derive their own
+  // monthly cadence from addedAt, independent of the base plan's own cycle.
+  const effectiveAt = getAddonRemovalEffectiveAt(existingAddon, subscription);
+
+  const existingPendingIdx = pendingRemovals.findIndex(
+    (r) => addonIdentityKey(r, subscription.billingCycle) === addonIdentityKey({ addonKey, billingCycle: resolvedCycle }, subscription.billingCycle)
+  );
   if (existingPendingIdx >= 0) {
     pendingRemovals[existingPendingIdx].quantity += quantity;
   } else {
@@ -277,16 +309,66 @@ async function scheduleAddonRemoval(organizationId, addonKey, quantity) {
       quantity,
       pricePerUnit: existingAddon.pricePerUnit,
       scheduledAt: new Date(),
-      effectiveAt: subscription.currentPeriodEnd,
+      effectiveAt,
+      billingCycle: resolvedCycle,
     });
   }
 
   subscription.pendingAddonRemovals = pendingRemovals;
   await subscription.save();
 
+  // ScheduledChange — additive write-alongside. Unlike downgrade/cancellation's
+  // cancel-prior-then-create, pendingAddonRemovals MERGES quantity on a repeat
+  // request for the same add-on (line 236 above) rather than overwriting — so a
+  // repeat request here must increment the existing PENDING record's quantity,
+  // not cancel it and create a second one (that would violate "exactly one
+  // ScheduledChange per subscription+type+target"). Nothing reads this back yet.
+  //
+  // Phase 2c: match/create on (addonKey, billingCycle). The `$or` fallback on
+  // the query keeps this compatible with any PENDING record created before
+  // this change (payload had no billingCycle field at all) — those legacy
+  // records implicitly meant "the subscription's own cycle," which is
+  // exactly what resolvedCycle defaults to for every existing caller.
+  try {
+    const cycleMatch = resolvedCycle === subscription.billingCycle
+      ? { $or: [{ 'payload.billingCycle': resolvedCycle }, { 'payload.billingCycle': { $exists: false } }] }
+      : { 'payload.billingCycle': resolvedCycle };
+    const existingPending = await ScheduledChange.findOne({
+      organization: subscription.organization,
+      subscription: subscription._id,
+      type: 'REMOVE_ADDON',
+      status: 'PENDING',
+      'payload.addonKey': addonKey,
+      ...cycleMatch,
+    });
+    if (existingPending) {
+      existingPending.payload = {
+        ...existingPending.payload,
+        quantity: (existingPending.payload.quantity || 0) + quantity,
+        billingCycle: resolvedCycle,
+      };
+      existingPending.effectiveAt = effectiveAt;
+      await existingPending.save();
+    } else {
+      await ScheduledChange.create({
+        organization: subscription.organization,
+        subscription: subscription._id,
+        type: 'REMOVE_ADDON',
+        status: 'PENDING',
+        effectiveAt,
+        payload: { addonKey, quantity, billingCycle: resolvedCycle },
+      });
+    }
+  } catch (scErr) {
+    console.error(
+      `ScheduledChange creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
+      scErr.message
+    );
+  }
+
   return {
     subscription,
-    effectiveAt: subscription.currentPeriodEnd,
+    effectiveAt,
     displayName: catalogEntry?.displayName || addonKey,
   };
 }
@@ -309,10 +391,32 @@ async function applyScheduledAddonRemovals(subscription) {
     quantity: a.quantity,
     pricePerUnit: a.pricePerUnit,
     addedAt: a.addedAt,
+    billingCycle: a.billingCycle,
+    periodEnd: a.periodEnd,
   }));
 
+  // Phase 2c: this function runs on every subscription-cycle rollover
+  // (handleSubscriptionCharged), but a removal's own effectiveAt may now be
+  // an annual add-on's independent period end, which does NOT necessarily
+  // coincide with a (possibly monthly) subscription's renewal. Only removals
+  // actually due are applied here; the rest stay pending untouched — a
+  // scheduled removal must never execute before its own instance's period
+  // ends (business contract, confirmed).
+  const now = new Date();
+  const dueRemovals = [];
+  const stillPending = [];
   for (const removal of subscription.pendingAddonRemovals) {
-    const idx = activeAddons.findIndex((a) => a.addonKey === removal.addonKey);
+    if (removal.effectiveAt && removal.effectiveAt > now) {
+      stillPending.push(removal);
+    } else {
+      dueRemovals.push(removal);
+    }
+  }
+
+  for (const removal of dueRemovals) {
+    const idx = activeAddons.findIndex(
+      (a) => addonIdentityKey(a, subscription.billingCycle) === addonIdentityKey(removal, subscription.billingCycle)
+    );
     if (idx === -1) continue;
     const newQty = activeAddons[idx].quantity - removal.quantity;
     if (newQty <= 0) {
@@ -322,7 +426,26 @@ async function applyScheduledAddonRemovals(subscription) {
     }
   }
 
-  const newTotal = calculateTotalPrice(plan, subscription.billingCycle, activeAddons);
+  if (dueRemovals.length === 0) {
+    // Nothing to actually apply this rollover (every pending removal targets
+    // a later, addon-specific period end) — leave activeAddons/pendingAddonRemovals
+    // untouched rather than doing a no-op Razorpay plan sync below.
+    return false;
+  }
+
+  // Phase 3 item 5c (fourth live buildPricingSnapshot() path, found by a
+  // whole-backend grep after the controller-level migrations — this one was
+  // reached indirectly via calculateTotalPrice(), not a direct call, which is
+  // why the earlier per-file audits missed it). Same shape as the other
+  // Category C migration: no coupon/modifiers involved here today.
+  const newTotal = calculateInvoice({
+    subscription: {
+      planName: plan.planId,
+      billingCycle: subscription.billingCycle,
+      pricePerUser: subscription.billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice,
+      activeAddons,
+    },
+  }).taxable;
   const newPlanId = activeAddons.length > 0
     ? await findOrCreateRazorpayPlan(newTotal, subscription.billingCycle, plan.planId)
     : plan.razorpayPlanIds[subscription.billingCycle];
@@ -335,23 +458,22 @@ async function applyScheduledAddonRemovals(subscription) {
   subscription.activeAddons = activeAddons;
   subscription.razorpayPlanId = newPlanId;
   subscription.totalAmount = newTotal;
-  subscription.pendingAddonRemovals = [];
+  subscription.pendingAddonRemovals = stillPending;
   await subscription.save();
 
   return true;
 }
 
 module.exports = {
-  calculateTotalPrice,
   findOrCreateRazorpayPlan,
   calculateAddonBoost,
   getActiveCatalogEntries,
   classifyAddonsForPlanChange,
-  calculateAddonProration,
-  calculatePlanUpgradeProration,
   scheduleAddonRemoval,
   applyScheduledAddonRemovals,
   orgHasAddon,
   getAvailableAddonsForOrg,
   getSeatStatus,
+  addonIdentityKey,
+  getAddonRemovalEffectiveAt,
 };

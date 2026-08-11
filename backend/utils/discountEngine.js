@@ -154,10 +154,57 @@ async function recordRedemption({ coupon, organizationId, subscriptionId, contex
   );
 }
 
+// Builds a 'coupon' Modifier for ONE already-known line item (an add-on
+// being purchased, or — once Brief 2 lands — a plan being upgraded to),
+// reusing priceLineItems() exactly as signup does, just against a single
+// item instead of a full order. Not new matching logic — same primitive,
+// a new caller (same shape as R8's reservation reuse).
+//
+// `fullRulesSnapshot` is appliedCoupon.fullRulesSnapshot (Subscription.js) —
+// the coupon's complete rule set at application time, never the live Coupon
+// document (immutability principle, same as `duration`). priceLineItems()
+// only ever reads `.rules` off whatever's passed in — shape-agnostic,
+// confirmed by trace — so wrapping the snapshot array as `{ rules }` is
+// sufficient, no live Coupon lookup needed here at all.
+//
+// Returns a Modifier ({type:'coupon', value:{kind:'fixed', amount}, ...})
+// if the item matched a rule, or null if it didn't (CP3's "the discount
+// simply stops applying, no error" — a plain no-op, not a thrown error).
+function buildCouponModifierForItem(fullRulesSnapshot, item) {
+  if (!fullRulesSnapshot || fullRulesSnapshot.length === 0) return null;
+  const { lineItems, totalDiscount } = priceLineItems({ rules: fullRulesSnapshot }, [item]);
+  const matched = lineItems[0];
+  if (!matched.eligible || totalDiscount <= 0) return null;
+  return {
+    type: 'coupon',
+    value: { kind: 'fixed', amount: totalDiscount },
+    appliesTo: 'entire_invoice',
+  };
+}
+
+// Same as buildCouponModifierForItem, but against a LIST of line items —
+// used where the "invoice" being priced has more than one item (e.g. plan
+// upgrade: old/new plan + carried-forward add-ons). priceLineItems() always
+// accepted a list natively; this is just the modifier-shaping wrapper around
+// it for a multi-item caller, exactly the same relationship
+// buildCouponModifierForItem already has to priceLineItems() for one item.
+function buildCouponModifierForLineItems(fullRulesSnapshot, lineItems) {
+  if (!fullRulesSnapshot || fullRulesSnapshot.length === 0) return null;
+  const { totalDiscount } = priceLineItems({ rules: fullRulesSnapshot }, lineItems);
+  if (totalDiscount <= 0) return null;
+  return {
+    type: 'coupon',
+    value: { kind: 'fixed', amount: totalDiscount },
+    appliesTo: 'entire_invoice',
+  };
+}
+
 module.exports = {
   evaluateOrderEligibility,
   findRule,
   priceLineItems,
   validateAndPriceCoupon,
   recordRedemption,
+  buildCouponModifierForItem,
+  buildCouponModifierForLineItems,
 };

@@ -10,13 +10,31 @@ const { sendTrialStartedEmail } = require('../utils/trialEmails');
 const {
   findOrCreateRazorpayPlan,
   classifyAddonsForPlanChange,
-  calculateAddonProration,
-  calculatePlanUpgradeProration,
   scheduleAddonRemoval: scheduleAddonRemovalUtil,
   applyScheduledAddonRemovals,
+  addonIdentityKey,
 } = require('../utils/addonManagement');
-const { validateAndPriceCoupon, recordRedemption } = require('../utils/discountEngine');
-const { computeGST, buildPricingSnapshot, applyModifiers } = require('../utils/pricingEngine');
+const { getAccessEntitlementEnd, getEntitlementWindow, addCalendarMonths } = require('../utils/prorationMath');
+const { computeNextAddonRenewalDate } = require('../utils/addonRenewalEngine');
+const { validateAndPriceCoupon, recordRedemption, buildCouponModifierForLineItems } = require('../utils/discountEngine');
+// P0 CORRECTNESS FIX (found via live QA — "Coupon P0"): reused verbatim from
+// the renewal engine, not duplicated. Before this fix, only renewal ever
+// asked "is this coupon still eligible for a FUTURE commercial event" —
+// upgrade and add-on purchase unconditionally rebuilt a coupon modifier from
+// fullRulesSnapshot regardless of duration.type, so a first_payment coupon
+// (correctly excluded at renewal) kept discounting every upgrade/add-on
+// purchase forever. Despite the name, this function is a pure duration.type
+// switch with no renewal-specific logic — by the time an org can upgrade or
+// buy an add-on, its first payment has already settled (upgrade/add-on
+// endpoints require an existing paid subscription), so first_payment's
+// "redeemed" condition is always already true at these call sites too;
+// reusing this exact function needs no modification, just a second caller.
+const { isCouponStillEligibleForRenewal } = require('../utils/couponRenewalEligibility');
+const { createRegistrationLinkForOrg, formatContactForRazorpay } = require('../utils/cawAcquisition');
+const { calculateInvoice, toPricingBreakdown, calculateCommercialAdjustments } = require('../utils/invoiceEngine');
+const BillingInvoice = require('../models/BillingInvoice');
+const CommercialTransaction = require('../models/CommercialTransaction');
+const ScheduledChange = require('../models/ScheduledChange');
 const Coupon = require('../models/Coupon');
 const { emitBillingEvent } = require('../utils/billingEvents');
 const Invited = require('../models/Invited');
@@ -25,15 +43,583 @@ const { generateInviteEmailHTML, generateReferralEmailHTML } = require('../contr
 const Referral = require('../models/Referral');
 const Reward = require('../models/Reward');
 const RewardUsage = require('../models/RewardUsage');
-const { rewardToModifier } = require('../utils/modifierResolver');
-const { reserveNextAvailableReward, consumeReservation, releaseReservation } = require('../utils/referralRewards');
+const { startAddonPurchase } = require('../utils/addonPurchaseLifecycle');
+const { consumeReservation, releaseReservation, reserveNextAvailableReward, recordRewardUsageAmount } = require('../utils/referralRewards');
+const { rewardToModifier, referralModifierFromPendingProgram } = require('../utils/modifierResolver');
+const RazorpayWebhookEvent = require('../models/RazorpayWebhookEvent');
+
+// ============================================================
+// CHARGE-AT-WILL — Phase 2: Registration Link onboarding.
+// See backend/docs/audit/CAW_BILLING_DESIGN.md and PHASE2_ONBOARDING_AUDIT.md.
+// Additive only — does not modify createSubscription/verifyPayment (legacy
+// Subscriptions path, deprecated, removed in Phase 8). Activation (Phase 3)
+// is NOT implemented here; onboarding only creates the mandate + first
+// invoice and leaves the subscription in mandateStatus='pending'.
+// ============================================================
+
+// Mandate ceiling policy (docs/audit/MANDATE_STRATEGY_AND_ANNUAL_BILLING.md,
+// final) — CONFIGURABLE business policy, not architecture. Superseded from
+// firstInvoice × MANDATE_HEADROOM_MULTIPLIER to a flat ceiling: Razorpay
+// mandate tokens cannot be edited post-registration, so a per-customer,
+// invoice-scaled ceiling that later proves too low can never be resized —
+// only replaced via a brand-new mandate requiring full re-authorization.
+// Registering every mandate at Razorpay's own UPI/card AFA-free ceiling
+// (₹15,000) from day one means a resize is essentially never needed: any
+// charge above it already requires Razorpay's own per-debit UPI-PIN
+// confirmation regardless of this app's own ceiling, so a higher self-imposed
+// ceiling wouldn't remove that friction anyway. Keep in sync with the
+// identical copy in utils/cawAcquisition.js if this ever changes.
+const MANDATE_CEILING_RUPEES = Number(process.env.CAW_MANDATE_CEILING_RUPEES) || 15000;
+// Signature unchanged (still accepts firstInvoiceRupees) so every existing
+// call site needs zero changes — the parameter is simply no longer used.
+function computeMandateMaxAmountRupees(_firstInvoiceRupees) {
+  return MANDATE_CEILING_RUPEES;
+}
+
+// Create subscription — Charge-at-Will (Registration Link onboarding, Phase 2).
+// This IS the public createSubscription implementation; there is no separate
+// public name. See CAW_BILLING_DESIGN.md.
+// Preview-only pricing — "if the customer paid right now, this is exactly
+// what they'd pay." Read-only: no Registration Link created, no Subscription
+// written, no reward reserved (uses getNextAvailableReward, the same
+// read used to SELECT a reservation candidate elsewhere, never the
+// reserving call itself). Mirrors createSubscription's and updateSubscription's
+// trial-conversion branch's own pricing construction exactly, so the number
+// this returns is never allowed to diverge from what those endpoints later
+// actually charge — same calculateInvoice() call, same modifier construction,
+// just never persisted. See backend/docs/audit/BILLING_UX_SPEC.md §0: the
+// frontend's checkout preview must come from this engine, not client math.
+exports.previewSubscription = async (req, res) => {
+  try {
+    const { planId, billingCycle, addons = [], couponCode } = req.body;
+
+    if (!planId || !billingCycle) {
+      return res.status(400).json({ error: "Plan ID and billing cycle are required" });
+    }
+
+    const plan = await PlanConfig.findOne({ planId, isActive: true });
+    if (!plan) {
+      return res.status(404).json({ error: "Plan not found" });
+    }
+    const basePrice = billingCycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
+
+    let activeAddons = [];
+    if (addons.length > 0) {
+      const addonKeys = addons.map((a) => a.addonKey);
+      const addonEntries = await PlanAddon.find({ key: { $in: addonKeys }, isActive: true });
+      for (const requested of addons) {
+        const entry = addonEntries.find((e) => e.key === requested.addonKey);
+        if (!entry) continue; // preview is best-effort — invalid addon just omitted, real validation happens at create time
+        const planAllowed = entry.availableOnPlans.length === 0 || entry.availableOnPlans.includes(planId);
+        const unitPrice = entry.price[billingCycle];
+        if (!planAllowed || !unitPrice) continue;
+        const qty = Number(requested.quantity) || 1;
+        // Task 1 (Aug 2026) — confirmed live-data bug: an activeAddons entry
+        // created without billingCycle silently re-interprets itself as
+        // whatever the SUBSCRIPTION's CURRENT cycle is at every later read
+        // (addonIdentityKey/getAddonRemovalEffectiveAt's documented
+        // fallback), forever — not just "at signup," as Phase 2b's fallback
+        // comment assumed. Stamping it explicitly here closes that gap at
+        // its actual source for a fresh signup with add-ons.
+        activeAddons.push({ addonKey: requested.addonKey, quantity: qty, pricePerUnit: unitPrice, addedAt: new Date(), billingCycle });
+      }
+    }
+
+    let couponResult = null;
+    if (couponCode) {
+      const lineItems = [
+        { key: planId, type: 'plan', amount: basePrice },
+        ...activeAddons.map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
+      ];
+      couponResult = await validateAndPriceCoupon(couponCode, {
+        organizationId: req.user.organization,
+        planId,
+        billingCycle,
+        lineItems,
+      });
+      if (!couponResult.valid) couponResult = null; // preview silently omits an invalid/inapplicable code rather than erroring — the real create call is what enforces validity
+    }
+
+    // Same two referral sources createSubscription/trial-conversion check —
+    // read-only versions of both (no reservation write).
+    const { findPendingReferralForSignup } = require('../utils/referralUtils');
+    const { getNextAvailableReward } = require('../utils/referralRewards');
+    const pendingReferral = await findPendingReferralForSignup(req.user.organization);
+    const availableReward = await getNextAvailableReward(req.user.organization);
+
+    const resolvedModifiers = couponResult
+      ? [{ type: 'coupon', value: { kind: 'fixed', amount: couponResult.discountAmount }, appliesTo: 'entire_invoice' }]
+      : [];
+    if (pendingReferral) {
+      resolvedModifiers.push(referralModifierFromPendingProgram(pendingReferral.program));
+    }
+    if (availableReward) {
+      resolvedModifiers.push(rewardToModifier(availableReward));
+    }
+
+    const invoice = calculateInvoice({
+      subscription: { planName: planId, billingCycle, pricePerUser: basePrice, activeAddons },
+      resolvedModifiers,
+    });
+
+    res.json({
+      pricingBreakdown: toPricingBreakdown(invoice, {
+        couponCode: couponResult?.coupon?.code,
+        referralPercent: pendingReferral
+          ? pendingReferral.program.rewardValue
+          : (availableReward?.rewardType === 'percentage' ? availableReward.rewardValue : undefined),
+      }),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.createSubscription = async (req, res) => {
+  try {
+    const { planId, billingCycle, addons = [], couponCode } = req.body;
+
+    const existingSubscription = await Subscription.findOne({
+      organization: req.user.organization,
+    });
+    if (existingSubscription) {
+      return res.status(409).json({ error: "Organization already has a subscription" });
+    }
+
+    if (!planId || !billingCycle) {
+      return res.status(400).json({ error: "Plan ID and billing cycle are required" });
+    }
+
+    // Razorpay requires `contact` for recurring Registration Links (confirmed
+    // live: "The contact field is required for recurring links",
+    // BAD_REQUEST_ERROR/input_validation_failed) — unlike a plain one-time
+    // order. OAuth signups don't always capture a phone number, so this must
+    // be validated here with an actionable message rather than surfacing
+    // Razorpay's raw error to the customer.
+    if (!req.user.phone) {
+      return res.status(400).json({ error: "A contact phone number is required to set up recurring billing. Please add one to your profile before subscribing." });
+    }
+
+    const plan = await PlanConfig.findOne({ planId, isActive: true });
+    if (!plan) {
+      return res.status(404).json({ error: "Plan not found" });
+    }
+
+    const basePrice = billingCycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
+
+    // Add-on validation/pricing — same logic as the legacy createSubscription,
+    // reused as-is (Phase 2 does not touch pricing; that's Phase 4's job).
+    let activeAddons = [];
+    if (addons.length > 0) {
+      const addonKeys = addons.map((a) => a.addonKey);
+      const addonEntries = await PlanAddon.find({ key: { $in: addonKeys }, isActive: true });
+      for (const requested of addons) {
+        const entry = addonEntries.find((e) => e.key === requested.addonKey);
+        if (!entry) {
+          return res.status(400).json({ error: `Add-on "${requested.addonKey}" does not exist or is not available.` });
+        }
+        const planAllowed = entry.availableOnPlans.length === 0 || entry.availableOnPlans.includes(planId);
+        if (!planAllowed) {
+          return res.status(400).json({ error: `Add-on "${entry.displayName}" is not available on the ${planId} plan.` });
+        }
+        const unitPrice = entry.price[billingCycle];
+        if (!unitPrice) {
+          return res.status(400).json({ error: `Add-on "${entry.displayName}" has no price configured for the ${billingCycle} cycle.` });
+        }
+        const qty = Number(requested.quantity) || 1;
+        // Task 1 (Aug 2026) — confirmed live-data bug (createSubscription):
+        // an activeAddons entry created without billingCycle silently
+        // re-interprets itself as whatever the SUBSCRIPTION's CURRENT cycle
+        // is at every later read (addonIdentityKey/getAddonRemovalEffectiveAt's
+        // documented fallback), forever — including long after any later
+        // base-plan cycle change. Stamping it explicitly at creation closes
+        // that gap at its actual source.
+        activeAddons.push({ addonKey: requested.addonKey, quantity: qty, pricePerUnit: unitPrice, addedAt: new Date(), billingCycle });
+      }
+    }
+
+    let appliedCoupon = null;
+    let couponResult = null;
+    if (couponCode) {
+      const lineItems = [
+        { key: planId, type: 'plan', amount: basePrice },
+        ...activeAddons.map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
+      ];
+      couponResult = await validateAndPriceCoupon(couponCode, {
+        organizationId: req.user.organization,
+        planId,
+        billingCycle,
+        lineItems,
+      });
+      if (!couponResult.valid) {
+        return res.status(400).json({ error: couponResult.reason });
+      }
+    }
+
+    // Referee's immediate first-invoice discount (§3.6b) — corrects an
+    // earlier design conclusion. Previously, BOTH sides of a qualifying
+    // referral got a deferred Reward for their own next purchase, because
+    // pre-CAW, a fresh signup was a fixed recurring Razorpay Plan with no way
+    // to discount it (see maybeQualifyReferral's own comment, now stale).
+    // Post-CAW, createSubscription prices through calculateInvoice() with
+    // real resolvedModifiers — so the referee's benefit is applied directly,
+    // right here, once, to the invoice that's actually being priced. Built
+    // from the pending Referral's program config directly, NOT a Reward/
+    // RewardUsage reservation (none exists yet — that mechanism stays
+    // exclusive to the referrer's side, unchanged, at settlement).
+    const { findPendingReferralForSignup } = require('../utils/referralUtils');
+    const pendingReferral = await findPendingReferralForSignup(req.user.organization);
+
+    // This org may ALSO already hold an earned referral Reward of its own
+    // (as a referrer — someone they invited already paid, before this org
+    // ever created a subscription itself). Reserve-first, same pattern as
+    // the upgrade path (line ~1110) — never spend a Reward that hasn't been
+    // atomically claimed. Non-fatal on failure: proceed at full price rather
+    // than block signup over a reservation race.
+    let signupRewardReservation = null;
+    try {
+      signupRewardReservation = await reserveNextAvailableReward(req.user.organization, { context: 'SIGNUP' });
+    } catch (reserveErr) {
+      console.error('Referral reservation failed at signup (proceeding at full price):', reserveErr.message);
+    }
+
+    // Phase 4: calculateInvoice() is now the pricing authority for this call
+    // site (CAW_BILLING_DESIGN.md §4) — the first production caller. Every
+    // other billing path (upgrades, add-ons, legacy) still uses
+    // buildPricingSnapshot directly until migrated in a later phase.
+    // calculateInvoice() takes a subscription-shaped object, not a `plan`
+    // doc — pricePerUser here is the plan's base price since the
+    // Subscription doesn't exist yet at this point in signup.
+    const signupResolvedModifiers = couponResult
+      ? [{ type: 'coupon', value: { kind: 'fixed', amount: couponResult.discountAmount }, appliesTo: 'entire_invoice' }]
+      : [];
+    // Coupon before referral — Stage 6 -> Stage 7 (§3.3), same as every other
+    // modifier-construction site tonight; the actual sort is enforced inside
+    // calculateInvoice()/buildPricingSnapshot() regardless of push order.
+    // A pendingReferral (this org as REFEREE) and an earned Reward (this org
+    // as REFERRER) are not mutually exclusive — an org can be both at once —
+    // so both are pushed independently; calculateInvoice sums same-type
+    // modifiers rather than one clobbering the other.
+    if (pendingReferral) {
+      signupResolvedModifiers.push(referralModifierFromPendingProgram(pendingReferral.program));
+    }
+    if (signupRewardReservation) {
+      signupResolvedModifiers.push(rewardToModifier(signupRewardReservation.reward));
+    }
+    const invoice = calculateInvoice({
+      subscription: { planName: planId, billingCycle, pricePerUser: basePrice, activeAddons },
+      resolvedModifiers: signupResolvedModifiers,
+    });
+    const totalAmount = invoice.taxable; // pre-GST, post-discount (rupees) — first invoice's own taxable amount, charged today only
+    const firstInvoiceRupees = invoice.total; // GST-inclusive (rupees) — what the customer is actually charged
+
+    // Recurring-price-corruption fix (found via live QA): `invoice.taxable`
+    // above includes EVERY modifier applied to this first invoice, including
+    // one-time-only ones (a first_payment coupon, the referee's first-invoice
+    // referral discount) — neither should ever appear in the ongoing
+    // recurring price. Subscription.totalAmount is read by every other
+    // surface (Manage Subscription, Billing dashboard, PlanCard) as THE
+    // recurring amount, so it must be computed separately, excluding any
+    // modifier that doesn't survive past this first invoice. Reuses the same
+    // eligibility question renewal already asks (isCouponStillEligibleForRenewal)
+    // — a durable coupon (lifetime/until_cancelled) still counts; referral is
+    // never durable, so it's never included here regardless of type.
+    const recurringResolvedModifiers = (couponResult && isCouponStillEligibleForRenewal({ duration: { type: couponResult.coupon.duration?.type || 'lifetime' } }))
+      ? [{ type: 'coupon', value: { kind: 'fixed', amount: couponResult.discountAmount }, appliesTo: 'entire_invoice' }]
+      : [];
+    const recurringInvoice = calculateInvoice({
+      subscription: { planName: planId, billingCycle, pricePerUser: basePrice, activeAddons },
+      resolvedModifiers: recurringResolvedModifiers,
+    });
+    const recurringBaseline = recurringInvoice.taxable; // what THIS subscription actually recurs at, from the next cycle onward
+
+    // BILLING_UX_SPEC.md §4 — record the real amount for the org's OWN
+    // earned-reward reservation, now that pricing knows it. Skipped when a
+    // pendingReferral ALSO applied (this org is simultaneously a fresh
+    // referee and an existing referrer, a rare edge case) — both push a
+    // type:'referral' modifier, so modifierBreakdown can't be unambiguously
+    // attributed to just this reservation in that combination; the history
+    // card simply renders without the "Saved ₹X" figure there rather than
+    // risk showing the wrong number.
+    if (signupRewardReservation && !pendingReferral) {
+      const earnedRewardAmount = (invoice.modifierBreakdown || []).filter((m) => m.type === 'referral').reduce((s, m) => s + m.amount, 0);
+      if (earnedRewardAmount > 0) {
+        await recordRewardUsageAmount(signupRewardReservation.usage._id, earnedRewardAmount);
+      }
+    }
+
+    if (couponResult) {
+      appliedCoupon = {
+        couponId: couponResult.coupon._id,
+        code: couponResult.coupon.code,
+        name: couponResult.coupon.name,
+        duration: {
+          type: couponResult.coupon.duration?.type || 'lifetime',
+          cycles: couponResult.coupon.duration?.cycles ?? null,
+        },
+        discountAmount: couponResult.discountAmount,
+        baseSubtotal: invoice.subtotal,
+        recurringSubtotal: recurringBaseline,
+        rulesApplied: couponResult.lineItems
+          .filter((li) => li.discount > 0)
+          .map((li) => ({
+            productType: li.type,
+            productKey: li.key,
+            discountType: li.discountType,
+            discountValue: li.discountValue,
+            discountAmount: li.discount,
+          })),
+        // Complete rule set at application time (not just what matched this
+        // order) — see the Subscription.js model comment for why.
+        fullRulesSnapshot: (couponResult.coupon.rules || []).map((r) => ({
+          productType: r.productType,
+          productKey: r.productKey,
+          discountType: r.discountType,
+          discountValue: r.discountValue,
+        })),
+      };
+    }
+
+    // Model 2 (DECIDED — CAW_BILLING_DESIGN.md §6/§7): the Registration Link's
+    // authorization transaction charges the real first invoice; the mandate
+    // confirms in the background via the token.confirmed webhook (Phase 3).
+    const amountPaise = Math.round(firstInvoiceRupees * 100);
+    const mandateMaxAmountRupees = computeMandateMaxAmountRupees(firstInvoiceRupees);
+    const mandateMaxAmountPaise = Math.round(mandateMaxAmountRupees * 100);
+
+    // `method` and `expire_at` on subscription_registration are both OPTIONAL
+    // per the Razorpay SDK's own type definitions (RazorpaySubscriptionRegistrationUpi
+    // extends the base request body with nothing extra — confirmed by reading
+    // node_modules/razorpay/dist/types/subscriptions.d.ts, not assumed):
+    //   - method: omitted here entirely, on purpose. The backend must not
+    //     decide the payment instrument — Razorpay's hosted Registration Link
+    //     page presents every method enabled on the account (UPI Autopay,
+    //     card, etc.) and the customer picks. If a specific frontend flow ever
+    //     needs to pre-constrain this, pass req.body.mandateMethod through
+    //     explicitly rather than defaulting/guessing here.
+    //   - expire_at: also omitted — no documented default exists to override,
+    //     and there is no product requirement yet for a specific mandate
+    //     validity horizon. Only max_amount has a documented Razorpay default
+    //     (₹99,000 flat) that we deliberately override below, because a flat
+    //     cap independent of the actual invoice size is the wrong default for
+    //     a product with variable plan pricing — that's a real engineering
+    //     reason, not an invented number.
+    const registrationLinkParams = {
+      customer: {
+        name: req.user.name,
+        email: req.user.email,
+        // Fix (found via live QA): a bare 10-digit contact with no country
+        // code made Razorpay's own hosted page re-prompt for a mobile number
+        // it had already been given. Same fix/reasoning as
+        // cawAcquisition.js's createRegistrationLinkForOrg — India-only
+        // today, prefix only at this Razorpay-request boundary.
+        contact: formatContactForRazorpay(req.user.phone), // guaranteed present — validated above
+      },
+      type: 'link',
+      amount: amountPaise,
+      currency: 'INR',
+      // NOTE: PlanConfig has no `name` field (only `planId`, e.g. "starter") —
+      // `plan.name` was always undefined here (confirmed live: "PURPOSE:
+      // undefined Plan - monthly" on the actual Razorpay page). Pre-existing
+      // bug inherited from the legacy createSubscription's identical line;
+      // only fixed here since it's this function's own code — two other
+      // occurrences remain in legacy/out-of-scope code (Phase 5's problem).
+      description: `${planId.charAt(0).toUpperCase() + planId.slice(1)} Plan - ${billingCycle}`,
+      subscription_registration: {
+        max_amount: mandateMaxAmountPaise,
+        ...(req.body.mandateMethod ? { method: req.body.mandateMethod } : {}),
+      },
+      // Razorpay caps `receipt` at 40 chars (confirmed live: "The receipt may
+      // not be greater than 40 characters."). A full org ObjectId (24 chars)
+      // + prefix + timestamp exceeded that — shortened to fit with margin.
+      receipt: `caw-${req.user.organization.toString().slice(-12)}-${Date.now().toString(36)}`,
+      email_notify: true,
+      sms_notify: false,
+      notes: {
+        organization_id: req.user.organization.toString(),
+        plan_name: planId,
+        billing_cycle: billingCycle,
+      },
+    };
+    // expire_by (how long the customer has to complete the link) is optional
+    // per Razorpay's API — omitted unless explicitly configured, so Razorpay's
+    // own default applies rather than an invented number.
+    if (process.env.CAW_REGISTRATION_LINK_EXPIRY_SECONDS) {
+      registrationLinkParams.expire_by = Math.floor(Date.now() / 1000) + Number(process.env.CAW_REGISTRATION_LINK_EXPIRY_SECONDS);
+    }
+
+    const registrationLink = await razorpay.subscriptions.createRegistrationLink(registrationLinkParams);
+
+    // Subscription created in a pending-mandate state. mandateStatus stays
+    // 'pending' until the Phase 3 token.confirmed webhook fires (idempotent
+    // AND-gate with payment.captured — see CAW_BILLING_DESIGN.md §7a).
+    // NOT activated here; Phase 3 owns activation.
+    //
+    // WEBHOOK CORRELATION (verified against real captured payloads, not
+    // guessed — see webhook-log.jsonl from the validation session):
+    //   - registrationLinkId (registrationLink.id, an inv_… id — the
+    //     Registration Link IS a Razorpay Invoice) matches
+    //     payload.payment.entity.invoice_id on payment.captured. CONFIRMED
+    //     exact match on our own test payload. This is the primary key
+    //     Phase 3 uses to find this Subscription from a payment.captured
+    //     webhook, and that SAME payment.captured payload also carries
+    //     payload.payment.entity.token_id — so this one event both identifies
+    //     the subscription AND reveals which token belongs to it.
+    //   - IMPORTANT, discovered while writing this (not assumed): the
+    //     token.confirmed webhook payload has NO correlating field at all —
+    //     no customer_id, and entity_id was null on our real payload. It
+    //     cannot be matched to a Subscription by itself. Combined with §7a
+    //     (order not guaranteed — token.confirmed arrived BEFORE
+    //     payment.captured in our own test), Phase 3 will need one of:
+    //       (a) buffer token.confirmed events by token id until a later
+    //           payment.captured reveals which subscription that token_id
+    //           belongs to, then reconcile, or
+    //       (b) on payment.captured, actively Fetch Token by the revealed
+    //           token_id to read its current status, rather than relying on
+    //           matching a separately-arrived token.confirmed event.
+    //     This is a real open design question for Phase 3, not solved here —
+    //     Phase 2 only needs to persist registrationLinkId, which it does.
+    //   - notes.organization_id below is a secondary signal IF Razorpay
+    //     propagates registration-link notes down to the resulting
+    //     payment/order (NOT verified live — do not rely on it as a sole
+    //     mechanism; the invoice_id/token_id keys above are confirmed).
+    // mandateExpiresAt is intentionally left unset here (we no longer send
+    // expire_at at creation) — Phase 3 sets it from the confirmed token's own
+    // expired_at field once token.confirmed arrives (a real value from
+    // Razorpay, not one we invented up front).
+    const subscription = new Subscription({
+      organization: req.user.organization,
+      razorpayCustomerId: registrationLink.customer_id,
+      registrationLinkId: registrationLink.id,
+      mandateStatus: 'pending',
+      mandateInitiatedAt: new Date(),
+      mandateMaxAmount: mandateMaxAmountRupees,
+      planName: planId,
+      status: "created",
+      paymentStatus: "pending_payment",
+      isPaymentConfirmed: false,
+      billingCycle,
+      pricePerUser: basePrice,
+      userCount: 1,
+      totalAmount: recurringBaseline,
+      activeAddons,
+      appliedCoupon,
+      pendingReferralRewardUsageId: signupRewardReservation?.usage._id || undefined,
+    });
+
+    await subscription.save();
+
+    // Phase 2 (IMPLEMENTATION_PLAN_V1.md §Part 3): additive-only persistence of
+    // the invoice already computed above by calculateInvoice() — the smallest,
+    // most self-contained caller, per the Phase 2 plan. This write is purely
+    // observational: it does not feed back into amountPaise, totalAmount, or
+    // anything already charged/persisted above. A failure here must never
+    // break signup (mirrors emitBillingEvent's own fire-and-forget discipline,
+    // utils/billingEvents.js) — old behavior remains fully authoritative until
+    // a later phase actually reads this collection back.
+    //
+    // ⚠ MIGRATION CONCESSION, NOT FINAL DESIGN: this try/catch is only correct
+    // while Subscription remains the sole authoritative commercial record
+    // (Phase 2). Once BillingInvoice/CommercialTransaction become authoritative
+    // (Phase 4/5, per the write-boundary table), a failed invoice write must
+    // become fatal to the request, not silently swallowed — remove this
+    // try/catch at that point rather than carrying it forward unexamined.
+    try {
+      await BillingInvoice.create({
+        organization: subscription.organization,
+        subscription: subscription._id,
+        reason: 'NEW_SUBSCRIPTION',
+        // Only identifier available at creation time — the mandate hasn't
+        // confirmed yet (Phase 3), so no orderId/paymentId exists. Stored now,
+        // cheaply, so Phase 3 never has to backfill/migrate historical
+        // invoices to add it later.
+        razorpay: { registrationLinkId: registrationLink.id },
+        lineItems: invoice.lines,
+        subtotal: invoice.subtotal,
+        discount: invoice.discount,
+        taxable: invoice.taxable,
+        gst: invoice.gst,
+        total: invoice.total,
+        generatedAt: invoice.generatedAt,
+      });
+    } catch (err) {
+      console.error(
+        `BillingInvoice persistence failed (non-fatal, Phase 2 observational write) — organization=${subscription.organization} subscription=${subscription._id}:`,
+        err.message
+      );
+    }
+
+    await emitBillingEvent({
+      organization: subscription.organization,
+      subscription: subscription._id,
+      eventType: 'SUBSCRIPTION_CREATED',
+      status: 'completed',
+      after: subscription,
+      amounts: {
+        base: invoice.subtotal,
+        discount: appliedCoupon?.discountAmount || 0,
+        recurringAfter: recurringBaseline,
+      },
+      razorpay: { registrationLinkId: registrationLink.id },
+      metadata: { planId, billingCycle, couponCode: appliedCoupon?.code || null, onboarding: 'charge_at_will' },
+    });
+
+    // BILLING_UX_SPEC.md §5 — the referee's own timeline entry, only emitted
+    // when their pending-referral discount actually applied to this invoice
+    // (never emitted to the referrer — see the model enum comment).
+    if (pendingReferral) {
+      const referralDiscountAmount = (invoice.modifierBreakdown || []).filter((m) => m.type === 'referral').reduce((s, m) => s + m.amount, 0);
+      if (referralDiscountAmount > 0) {
+        await emitBillingEvent({
+          organization: subscription.organization,
+          subscription: subscription._id,
+          eventType: 'REFERRAL_DISCOUNT_APPLIED',
+          status: 'completed',
+          amounts: { discount: referralDiscountAmount },
+          metadata: { referralPercent: pendingReferral.program.rewardType === 'percentage' ? pendingReferral.program.rewardValue : null },
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      subscription,
+      registrationLink: {
+        shortUrl: registrationLink.short_url,
+        id: registrationLink.id,
+        expireBy: registrationLink.expire_by,
+      },
+      // BILLING_UX_SPEC.md §1.2 — canonical pricing-breakdown shape, so the
+      // frontend's shared Order Summary component renders signup exactly
+      // like every other checkout, from this one field.
+      pricingBreakdown: toPricingBreakdown(invoice, {
+        couponCode: appliedCoupon?.code,
+        referralPercent: pendingReferral ? pendingReferral.program.rewardValue : (signupRewardReservation?.reward.rewardType === 'percentage' ? signupRewardReservation.reward.rewardValue : undefined),
+      }),
+    });
+  } catch (error) {
+    console.error("CAW onboarding error:", error);
+    if (typeof signupRewardReservation !== 'undefined' && signupRewardReservation) {
+      try {
+        await releaseReservation(signupRewardReservation.usage._id, 'SIGNUP_FAILED');
+      } catch (relErr) {
+        console.error('Failed to release signup reward reservation after signup error:', relErr.message);
+      }
+    }
+    const razorpayError = error.error?.description || error.error?.reason;
+    res.status(500).json({
+      error: razorpayError || error.message,
+      code: 'RAZORPAY_ERROR',
+    });
+  }
+};
 
 // Redemption must only be counted once payment actually clears, and must be
 // idempotent — both the client-side verifyPayment call AND the Razorpay
 // webhook can race to confirm the same subscription. Guarded by
 // appliedCoupon.redeemed so whichever path runs first "wins" and the second
 // is a no-op.
-async function maybeRecordCouponRedemption(subscription) {
+async function maybeRecordCouponRedemption(subscription, checkoutType = 'new_subscription') {
   if (!subscription.appliedCoupon?.couponId || subscription.appliedCoupon.redeemed) return;
   const coupon = await Coupon.findById(subscription.appliedCoupon.couponId);
   if (!coupon) return;
@@ -41,7 +627,7 @@ async function maybeRecordCouponRedemption(subscription) {
     coupon,
     organizationId: subscription.organization,
     subscriptionId: subscription._id,
-    context: { planId: subscription.planName, billingCycle: subscription.billingCycle, checkoutType: 'new_subscription' },
+    context: { planId: subscription.planName, billingCycle: subscription.billingCycle, checkoutType },
     baseAmount: subscription.totalAmount + subscription.appliedCoupon.discountAmount,
     discountAmount: subscription.appliedCoupon.discountAmount,
   });
@@ -49,18 +635,277 @@ async function maybeRecordCouponRedemption(subscription) {
   await subscription.save();
 }
 
-// Qualifies a pending Referral into TWO immutable Rewards the moment the
-// REFERRED organization's first payment is confirmed — one for the
-// referrer (Alice, the one who shared the code) and one for the referred
-// org itself (Bob, the one who entered it). Both sides use the same
-// program config/value — this is the ONLY place a Reward may be created
-// for source: 'REFERRAL' (settlement owns this, never the signup
-// code-entry step — see backend/docs/REFERRAL_SYSTEM_DESIGN.md §3/§16).
+// C1 — Coupon replacement (found via live QA: a subscriber whose first_payment
+// coupon already fired, or who simply wants a different coupon, had no way to
+// detach it and attach another; appliedCoupon was write-once). Two
+// deliberately separate endpoints rather than one "PATCH" verb, matching the
+// distinct actions a Manage Subscription UI would expose (Remove vs. Replace).
 //
-// Bob's reward can't apply to the signup payment that just happened (new
-// subscriptions are a fixed recurring Razorpay Plan, not a discountable
-// one-time Order — see PROJECT_STATE.md §11) but IS usable on Bob's own
-// next add-on purchase or upgrade, same as any referrer's reward.
+// CRITICAL INVARIANT, per the explicit trace done before building this:
+// Subscription.appliedCoupon is a mutable, swappable POINTER to "what
+// currently affects this subscription's future pricing" — CouponRedemption
+// (backend/models/CouponRedemption.js) is the SEPARATE, permanent audit
+// record of "this org used this coupon once." Neither function here ever
+// deletes/decrements a CouponRedemption row or a Coupon's analytics counters
+// — removing/replacing the pointer can never un-redeem history or free up a
+// redemption slot. Confirmed structurally safe by trace: evaluateOrderEligibility's
+// maxRedemptions/maxRedemptionsPerOrganization checks read Coupon.analytics
+// and CouponRedemption.countDocuments(...) exclusively, never Subscription.appliedCoupon.
+//
+// Both require an already-PAID subscription — this is explicitly the
+// post-purchase replacement scenario, not a substitute for the
+// signup/trial-conversion coupon-application path.
+// Shared pricing helpers — used by BOTH the mutating endpoints below AND
+// their preview-only counterparts, so there is exactly one place that
+// computes "what would the recurring baseline become," never a second
+// frontend-side reimplementation (the explicit architectural requirement
+// this round: backend remains the sole pricing authority; previews call the
+// same code the real mutation calls, just without persisting).
+function computeRecurringWithoutCoupon(subscription) {
+  const invoice = calculateInvoice({
+    subscription: {
+      planName: subscription.planName,
+      billingCycle: subscription.billingCycle,
+      pricePerUser: subscription.pricePerUser,
+      activeAddons: subscription.activeAddons,
+    },
+    resolvedModifiers: [],
+  });
+  return invoice.taxable;
+}
+
+// Validates couponCode against this subscription's org/plan/add-ons, builds
+// the full replacement appliedCoupon snapshot, and computes what the
+// recurring baseline would become — without persisting anything. Returns
+// { valid, reason } on failure, or { valid: true, newAppliedCoupon,
+// recurringAfter } on success.
+async function resolveCouponReplacement(subscription, couponCode, organizationId) {
+  const lineItems = [
+    { key: subscription.planName, type: 'plan', amount: subscription.pricePerUser },
+    ...(subscription.activeAddons || []).map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
+  ];
+  const couponResult = await validateAndPriceCoupon(couponCode, {
+    organizationId,
+    planId: subscription.planName,
+    billingCycle: subscription.billingCycle,
+    lineItems,
+  });
+  if (!couponResult.valid) return { valid: false, reason: couponResult.reason };
+
+  const newAppliedCoupon = {
+    couponId: couponResult.coupon._id,
+    code: couponResult.coupon.code,
+    name: couponResult.coupon.name,
+    duration: {
+      type: couponResult.coupon.duration?.type || 'lifetime',
+      cycles: couponResult.coupon.duration?.cycles ?? null,
+    },
+    discountAmount: couponResult.discountAmount,
+    baseSubtotal: lineItems.reduce((s, i) => s + i.amount, 0),
+    rulesApplied: couponResult.lineItems
+      .filter((li) => li.discount > 0)
+      .map((li) => ({
+        productType: li.type,
+        productKey: li.key,
+        discountType: li.discountType,
+        discountValue: li.discountValue,
+        discountAmount: li.discount,
+      })),
+    // Complete rule set at application time — same reason every other
+    // application site stores this (Subscription.js model comment):
+    // renewal/upgrade/add-on pricing must re-derive from the FULL rule
+    // set, never just the line items this one order happened to touch.
+    fullRulesSnapshot: (couponResult.coupon.rules || []).map((r) => ({
+      productType: r.productType,
+      productKey: r.productKey,
+      discountType: r.discountType,
+      discountValue: r.discountValue,
+    })),
+    redeemed: false,
+  };
+
+  // Recurring-price-corruption discipline (Bug 1) applies here too: a
+  // first_payment coupon attached via this endpoint has no future invoice
+  // left to discount (there's no "first payment" left to happen), so it
+  // must NOT affect the recurring baseline — isCouponStillEligibleForRenewal
+  // is the same eligibility question renewal/upgrade/add-on already ask.
+  const recurringEligible = isCouponStillEligibleForRenewal(newAppliedCoupon);
+  const recurringModifiers = recurringEligible
+    ? [{ type: 'coupon', value: { kind: 'fixed', amount: couponResult.discountAmount }, appliesTo: 'entire_invoice' }]
+    : [];
+  const recurringInvoice = calculateInvoice({
+    subscription: {
+      planName: subscription.planName,
+      billingCycle: subscription.billingCycle,
+      pricePerUser: subscription.pricePerUser,
+      activeAddons: subscription.activeAddons,
+    },
+    resolvedModifiers: recurringModifiers,
+  });
+  newAppliedCoupon.recurringSubtotal = recurringInvoice.taxable;
+
+  return { valid: true, newAppliedCoupon, recurringAfter: recurringInvoice.taxable, recurringEligible };
+}
+
+exports.removeAppliedCoupon = async (req, res) => {
+  try {
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription) return res.status(404).json({ error: 'Subscription not found' });
+    if (!subscription.isPaymentConfirmed) return res.status(400).json({ error: 'Complete your first payment before managing coupons.' });
+    if (!subscription.appliedCoupon?.code) return res.status(400).json({ error: 'No coupon is currently applied.' });
+
+    const beforeSnapshot = subscription.toObject();
+    const removedCode = subscription.appliedCoupon.code;
+    const recurringAfter = computeRecurringWithoutCoupon(subscription);
+
+    // Mongoose quirk: assigning `null` directly to a single-nested-subdocument
+    // path (appliedCoupon is a plain nested object, not Schema.Types.Mixed)
+    // doesn't reliably clear it on save — `undefined` + markModified does.
+    subscription.appliedCoupon = undefined;
+    subscription.markModified('appliedCoupon');
+    subscription.totalAmount = recurringAfter;
+    await subscription.save();
+
+    await emitBillingEvent({
+      organization: subscription.organization,
+      subscription: subscription._id,
+      eventType: 'COUPON_REMOVED',
+      status: 'completed',
+      before: beforeSnapshot,
+      after: subscription,
+      amounts: { recurringBefore: beforeSnapshot.totalAmount, recurringAfter: subscription.totalAmount },
+      metadata: { couponCode: removedCode },
+    });
+
+    res.json({ success: true, subscription });
+  } catch (error) {
+    console.error('Remove coupon error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Preview-only twin of removeAppliedCoupon — same computeRecurringWithoutCoupon
+// call, no persistence, no BillingEvent. Lets the frontend show an honest
+// "removing this will change your recurring amount from X to Y" confirmation
+// without running any pricing math of its own.
+exports.previewRemoveCoupon = async (req, res) => {
+  try {
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription) return res.status(404).json({ error: 'Subscription not found' });
+    if (!subscription.appliedCoupon?.code) return res.status(400).json({ error: 'No coupon is currently applied.' });
+
+    const recurringBefore = subscription.totalAmount;
+    const recurringAfter = computeRecurringWithoutCoupon(subscription);
+    res.json({
+      couponCode: subscription.appliedCoupon.code,
+      recurringBefore,
+      recurringAfter,
+      willChangeRecurring: recurringAfter !== recurringBefore,
+    });
+  } catch (error) {
+    console.error('Preview remove coupon error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.replaceAppliedCoupon = async (req, res) => {
+  try {
+    const { couponCode } = req.body;
+    if (!couponCode) return res.status(400).json({ error: 'Coupon code is required' });
+
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription) return res.status(404).json({ error: 'Subscription not found' });
+    if (!subscription.isPaymentConfirmed) return res.status(400).json({ error: 'Complete your first payment before managing coupons.' });
+
+    const beforeSnapshot = subscription.toObject();
+    const resolved = await resolveCouponReplacement(subscription, couponCode, req.user.organization);
+    if (!resolved.valid) return res.status(400).json({ error: resolved.reason });
+
+    const previousCouponCode = subscription.appliedCoupon?.code || null;
+    subscription.appliedCoupon = resolved.newAppliedCoupon;
+    subscription.totalAmount = resolved.recurringAfter;
+    await subscription.save();
+
+    // Redemption recorded immediately — unlike a signup/upgrade coupon
+    // (settled later, at first-payment-captured time), there is no future
+    // "payment" event this action is waiting on; the coupon takes effect on
+    // future recurring billing the instant it's attached. Never touches the
+    // PREVIOUS coupon's own CouponRedemption row.
+    await maybeRecordCouponRedemption(subscription, 'coupon_replace');
+
+    await emitBillingEvent({
+      organization: subscription.organization,
+      subscription: subscription._id,
+      eventType: 'COUPON_CHANGED',
+      status: 'completed',
+      before: beforeSnapshot,
+      after: subscription,
+      amounts: { recurringBefore: beforeSnapshot.totalAmount, recurringAfter: subscription.totalAmount, discount: resolved.newAppliedCoupon.discountAmount },
+      metadata: { previousCouponCode, newCouponCode: resolved.newAppliedCoupon.code },
+    });
+
+    res.json({ success: true, subscription });
+  } catch (error) {
+    console.error('Replace coupon error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Preview-only twin of replaceAppliedCoupon — validates the new coupon and
+// computes the would-be recurring amount via the exact same
+// resolveCouponReplacement() helper, no persistence, no redemption record,
+// no BillingEvent. Also reports whether the new coupon would even affect
+// recurring billing at all (a first_payment coupon attached post-purchase
+// correctly reports recurringEligible: false), so the frontend can show the
+// right confirmation copy before committing.
+exports.previewReplaceCoupon = async (req, res) => {
+  try {
+    const { couponCode } = req.body;
+    if (!couponCode) return res.status(400).json({ error: 'Coupon code is required' });
+
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription) return res.status(404).json({ error: 'Subscription not found' });
+    if (!subscription.isPaymentConfirmed) return res.status(400).json({ error: 'Complete your first payment before managing coupons.' });
+
+    const resolved = await resolveCouponReplacement(subscription, couponCode, req.user.organization);
+    if (!resolved.valid) return res.status(400).json({ error: resolved.reason });
+
+    res.json({
+      couponCode: resolved.newAppliedCoupon.code,
+      couponName: resolved.newAppliedCoupon.name,
+      recurringBefore: subscription.totalAmount,
+      recurringAfter: resolved.recurringAfter,
+      recurringEligible: resolved.recurringEligible,
+      discountAmount: resolved.newAppliedCoupon.discountAmount,
+    });
+  } catch (error) {
+    console.error('Preview replace coupon error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Qualifies a pending Referral the moment the REFERRED organization's first
+// payment is confirmed, and creates ONE immutable Reward — for the referrer
+// (Alice, the one who shared the code) only. This is the ONLY place a Reward
+// may be created for source: 'REFERRAL' (settlement owns this, never the
+// signup code-entry step — see backend/docs/REFERRAL_SYSTEM_DESIGN.md §3/§16).
+//
+// CORRECTED (previously created a second Reward here for the referred org,
+// Bob, deferred to Bob's own next purchase — a workaround from when a fresh
+// signup was a fixed recurring Razorpay Plan with no way to discount it, per
+// the old PROJECT_STATE.md §11 comment this replaced). Post-CAW, Bob's
+// benefit is applied directly to his own first invoice at signup pricing
+// time (createSubscription, via utils/referralUtils.js's
+// findPendingReferralForSignup() + utils/modifierResolver.js's
+// referralModifierFromPendingProgram()) — a real discount on real money he
+// pays, not a free unlock. Creating a second deferred Reward for Bob here
+// would double his benefit (immediate signup discount AND a future-purchase
+// reward from the same referral) — one benefit per participant: the
+// referrer gets a deferred Reward, the referee's immediate signup discount
+// IS their reward. Confirmed by grep: no other backend/frontend code
+// assumes exactly two Reward rows per qualified referral — admin
+// grant/revoke and the org-facing dashboard both operate generically over
+// however many Reward documents exist.
 //
 // Mirrors maybeRecordCouponRedemption's idempotency: called from all three
 // racing payment-confirmation paths (verifyPayment, subscription.authenticated,
@@ -86,7 +931,6 @@ async function maybeQualifyReferral(subscription) {
 
   const rewardRecipients = [
     { organization: referral.referrerOrganization, role: 'referrer' },
-    { organization: referral.referredOrganization, role: 'referee' },
   ];
 
   for (const recipient of rewardRecipients) {
@@ -133,6 +977,22 @@ async function maybeQualifyReferral(subscription) {
 // post-first-payment effects (loyalty credits, welcome gifts, affiliate
 // payouts) HERE, in one place, not scattered across five handlers.
 async function runFirstPaymentSettlement(subscription) {
+  // Phase 1 of annual-billing groundwork (docs/audit/ANNUAL_BILLING_SCOPE.md).
+  // This function is the one confirmed funnel point every first-payment path
+  // (fresh signup, trial conversion, legacy paths) already calls through, so
+  // it's the correct single write site for billingAnchor rather than adding
+  // it at each of the ~6 isPaymentConfirmed=true call sites individually.
+  // Guarded by "only if not already set" as defense in depth alongside the
+  // schema's own `immutable: true` — this function is deliberately called
+  // from multiple racing paths, so it must never assume it's the first call.
+  if (!subscription.billingAnchor) {
+    subscription.billingAnchor = new Date();
+    try {
+      await subscription.save();
+    } catch (err) {
+      console.error(`runFirstPaymentSettlement: billingAnchor save failed for ${subscription._id}:`, err.message);
+    }
+  }
   try {
     await maybeRecordCouponRedemption(subscription);
   } catch (err) {
@@ -143,6 +1003,20 @@ async function runFirstPaymentSettlement(subscription) {
   } catch (err) {
     console.error(`runFirstPaymentSettlement: referral qualification failed for ${subscription._id}:`, err.message);
   }
+  // Consumes this org's OWN earned-reward reservation (reserved as referrer,
+  // at createSubscription or trial-conversion pricing time — see
+  // pendingReferralRewardUsageId's model comment). Idempotent via
+  // consumeReservation's own guard, so safe across the same racing
+  // confirmation paths as the two settlement steps above.
+  if (subscription.pendingReferralRewardUsageId) {
+    try {
+      await consumeReservation(subscription.pendingReferralRewardUsageId);
+      subscription.pendingReferralRewardUsageId = undefined;
+      await subscription.save();
+    } catch (err) {
+      console.error(`runFirstPaymentSettlement: reward consumption failed for ${subscription._id}:`, err.message);
+    }
+  }
 }
 // ============================================================
 // 1. Add this helper near the top of subscriptionController.js
@@ -152,6 +1026,10 @@ async function runFirstPaymentSettlement(subscription) {
 // which qualifies referrals stranded by the pre-fix settlement race. Not a
 // route handler — kept internal to the settlement flow otherwise.
 exports.maybeQualifyReferral = maybeQualifyReferral;
+// Exported for the same reason — fixture verification of settlement
+// (coupon redemption + referral qualification + earned-reward consumption)
+// without needing a live Razorpay webhook round-trip.
+exports.runFirstPaymentSettlement = runFirstPaymentSettlement;
 
 /**
  * Single source of truth for app-level subscription status.
@@ -463,206 +1341,10 @@ exports.startFreeTrial = async (req, res) => {
   }
 };
 
-// Create subscription
-exports.createSubscription = async (req, res) => {
-  try {
-    const { planId, billingCycle, addons = [], couponCode } = req.body;
-    console.log(req.body);
-    // Check if organization already has a subscription
-    const existingSubscription = await Subscription.findOne({
-      organization: req.user.organization,
-    });
-
-    if (existingSubscription) {
-      // Update existing subscription instead of creating new one
-      return exports.updateSubscription(req, res);
-    }
-
-    if (!planId || !billingCycle) {
-      return res.status(400).json({
-        error: "Plan ID and billing cycle are required",
-      });
-    }
-
-    const plan = await PlanConfig.findOne({ planId, isActive: true });
-    if (!plan) {
-      return res.status(404).json({ error: "Plan not found" });
-    }
-
-    const basePrice = billingCycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
-
-    // Validate and price add-ons selected at signup
-    let addonEntries = [];
-    let activeAddons = [];
-
-    if (addons.length > 0) {
-      const addonKeys = addons.map((a) => a.addonKey);
-      addonEntries = await PlanAddon.find({ key: { $in: addonKeys }, isActive: true });
-
-      for (const requested of addons) {
-        const entry = addonEntries.find((e) => e.key === requested.addonKey);
-        if (!entry) {
-          return res.status(400).json({ error: `Add-on "${requested.addonKey}" does not exist or is not available.` });
-        }
-        const planAllowed = entry.availableOnPlans.length === 0 || entry.availableOnPlans.includes(planId);
-        if (!planAllowed) {
-          return res.status(400).json({ error: `Add-on "${entry.displayName}" is not available on the ${planId} plan.` });
-        }
-        const unitPrice = entry.price[billingCycle];
-        if (!unitPrice) {
-          return res.status(400).json({ error: `Add-on "${entry.displayName}" has no price configured for the ${billingCycle} cycle.` });
-        }
-        const qty = Number(requested.quantity) || 1;
-        activeAddons.push({ addonKey: requested.addonKey, quantity: qty, pricePerUnit: unitPrice, addedAt: new Date() });
-      }
-    }
-
-    // Coupon is applied per line item — a coupon scoped to specific add-ons
-    // must only discount those add-ons, not the whole order. Eligibility
-    // (a DB usage-limit check) happens here, before the pricing engine —
-    // the engine itself only prices an already-resolved discount, it never
-    // does I/O (see utils/pricingEngine.js).
-    let appliedCoupon = null;
-    let couponResult = null;
-    if (couponCode) {
-      const lineItems = [
-        { key: planId, type: 'plan', amount: basePrice },
-        ...activeAddons.map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
-      ];
-      couponResult = await validateAndPriceCoupon(couponCode, {
-        organizationId: req.user.organization,
-        planId,
-        billingCycle,
-        lineItems,
-      });
-      if (!couponResult.valid) {
-        return res.status(400).json({ error: couponResult.reason });
-      }
-    }
-
-    // NOTE: referral intent is NOT recorded here. A code entered via a
-    // shared link is recorded at organization REGISTRATION (authController
-    // completeRegistration) — the business event "we know this org was
-    // referred," independent of whether it ever reaches checkout. A code
-    // typed in manually on this page is applied immediately via its own
-    // Apply button (exports.applyReferralCode below), not folded into
-    // checkout submission — trial/payment must never gate Pending
-    // visibility. See backend/docs/REFERRAL_SYSTEM_DESIGN.md §3/§24.
-
-    const snapshot = buildPricingSnapshot({
-      plan,
-      billingCycle,
-      activeAddons,
-      couponDiscount: couponResult ? { totalDiscount: couponResult.discountAmount } : null,
-    });
-    const totalAmount = snapshot.totalAmount;
-
-    if (couponResult) {
-      appliedCoupon = {
-        couponId: couponResult.coupon._id,
-        code: couponResult.coupon.code,
-        name: couponResult.coupon.name,
-        duration: {
-          type: couponResult.coupon.duration?.type || 'lifetime',
-          cycles: couponResult.coupon.duration?.cycles ?? null,
-        },
-        discountAmount: couponResult.discountAmount,
-        baseSubtotal: snapshot.subtotal,
-        recurringSubtotal: totalAmount,
-        rulesApplied: couponResult.lineItems
-          .filter((li) => li.discount > 0)
-          .map((li) => ({
-            productType: li.type,
-            productKey: li.key,
-            discountType: li.discountType,
-            discountValue: li.discountValue,
-            discountAmount: li.discount,
-          })),
-      };
-    }
-
-    // Always create/find a GST-inclusive Razorpay plan for the total amount
-    const razorpayPlanId = await findOrCreateRazorpayPlan(totalAmount, billingCycle, planId);
-
-    // Create Razorpay subscription
-    const razorpaySubscription = await razorpay.subscriptions.create({
-      plan_id: razorpayPlanId,
-      customer_notify: 1,
-      quantity: 1,
-      total_count: billingCycle === "monthly" ? 12 : 1,
-      notes: {
-        organization_id: req.user.organization.toString(),
-        plan_name: planId,
-        billing_cycle: billingCycle,
-      },
-    });
-
-    // Create subscription with PENDING payment status
-    const subscription = new Subscription({
-      organization: req.user.organization,
-      razorpaySubscriptionId: razorpaySubscription.id,
-      razorpayPlanId,
-      planName: planId,
-      status: "created",
-      paymentStatus: "pending_payment",
-      isPaymentConfirmed: false,
-      billingCycle,
-      pricePerUser: basePrice,
-      userCount: 1,
-      totalAmount,
-      activeAddons,
-      appliedCoupon,
-      currentPeriodStart: new Date(razorpaySubscription.current_start * 1000),
-      currentPeriodEnd: new Date(razorpaySubscription.current_end * 1000),
-      nextBillingDate: new Date(razorpaySubscription.charge_at * 1000),
-    });
-
-    await subscription.save();
-
-    // Timeline: subscription created (pending payment). The PAYMENT_SUCCESS
-    // event is emitted separately when the charge actually clears.
-    await emitBillingEvent({
-      organization: subscription.organization,
-      subscription: subscription._id,
-      eventType: 'SUBSCRIPTION_CREATED',
-      status: 'completed',
-      after: subscription,
-      amounts: {
-        base: snapshot.subtotal,
-        discount: appliedCoupon?.discountAmount || 0,
-        recurringAfter: totalAmount,
-      },
-      razorpay: { subscriptionId: razorpaySubscription.id },
-      metadata: { planId, billingCycle, couponCode: appliedCoupon?.code || null },
-    });
-
-    res.json({
-      success: true,
-      subscription,
-      paymentDetails: {
-        key: process.env.RAZORPAY_KEY_ID,
-        subscription_id: razorpaySubscription.id,
-        name: req.user.name,
-        description: `${plan.name} Plan - ${billingCycle}`,
-        prefill: {
-          name: req.user.name,
-          email: req.user.email,
-          contact: req.user.phone || "",
-        },
-        theme: { color: "#3399cc" },
-        callback_url: `${process.env.FRONTEND_URL}/subscription/payment-success`,
-      },
-    });
-  } catch (error) {
-    console.error("Subscription creation error:", error);
-    const razorpayError = error.error?.description || error.error?.reason;
-    res.status(500).json({
-      error: razorpayError || error.message,
-      code: 'RAZORPAY_ERROR',
-      hint: razorpayError ? 'Razorpay rejected the request. Run scripts/createRazorpayPlans.js to create valid plan IDs.' : undefined,
-    });
-  }
-};
+// Phase 7 cleanup: legacyCreateSubscription_DEPRECATED removed here —
+// confirmed zero callers anywhere in the codebase (it was unexported,
+// unrouted, and explicitly marked for Phase 8 deletion; removed now as part
+// of the Phase 7 dead-code cleanup pass rather than waiting further).
 
 // Enhanced updateSubscription method
 exports.updateSubscription = async (req, res) => {
@@ -677,9 +1359,33 @@ exports.updateSubscription = async (req, res) => {
     }
 
     if (subscription.cancelAtPeriodEnd) {
-      return res.status(400).json({
-        error: 'Your subscription is scheduled to cancel at the end of the billing period. Reactivate your subscription before making changes.',
-      });
+      // Task B (Aug 2026): picking a new plan while a cancellation is
+      // scheduled implicitly cancels that cancellation and proceeds — same
+      // precedent as the Monthly->Annual transition superseding a pending
+      // PLAN_CHANGE/BILLING_CYCLE_CHANGE. Opt-in via reactivateAndProceed so
+      // this remains a hard block by default (every existing caller that
+      // doesn't know about this flag keeps the old, safer behavior).
+      if (!req.body.reactivateAndProceed) {
+        return res.status(400).json({
+          error: 'Your subscription is scheduled to cancel at the end of the billing period. Reactivate your subscription before making changes.',
+          code: 'CANCELLATION_PENDING',
+        });
+      }
+      subscription.cancelAtPeriodEnd = false;
+      await ScheduledChange.updateMany(
+        { subscription: subscription._id, type: 'CANCELLATION', status: 'PENDING' },
+        { $set: { status: 'CANCELLED' } }
+      );
+    }
+
+    // Freeze rule: no plan change (upgrade or downgrade) while a downgrade is
+    // already scheduled. Cancelling the scheduled downgrade (a separate
+    // endpoint) or cancelling the subscription outright remain the only
+    // escape hatches — neither goes through this function.
+    try {
+      require('../utils/downgradeValidator').assertNotFrozen(subscription);
+    } catch (freezeErr) {
+      return res.status(400).json({ error: freezeErr.message, code: freezeErr.code });
     }
 
     // Fetch current subscription details from Razorpay to check payment mode
@@ -712,26 +1418,103 @@ exports.updateSubscription = async (req, res) => {
       // Only intercept true tier upgrades on the SAME billing cycle. Billing-cycle
       // changes and downgrades continue to the existing (unchanged) logic below.
       if (isTierUpgrade && !isBillingCycleChangeUpg) {
-        // oldTotal = what the org currently pays in full (base + existing add-ons)
-        const oldTotal = subscription.totalAmount || (subscription.billingCycle === 'monthly'
-          ? (currentPlanUpg?.monthlyPrice ?? subscription.pricePerUser)
-          : (currentPlanUpg?.yearlyPrice ?? subscription.pricePerUser));
+        // Plan Upgrade Stage 5 per-item pricing — oldTotal/newTotal were both
+        // already computed via calculateInvoice() (which already supports
+        // resolvedModifiers, proven at signup/renewal/add-on purchase); the
+        // only gap was that neither call was ever given a coupon modifier.
+        // Built here from each side's own REAL line items against the frozen
+        // appliedCoupon.fullRulesSnapshot (never the live Coupon — same
+        // immutability principle as duration/R7) via the same priceLineItems()
+        // primitive already proven correct at signup and add-on purchase (Brief 1)
+        // — no new matching logic, calculateCommercialAdjustments()/
+        // calculatePlanUpgradeProration() themselves need zero changes.
+        // CP3 falls out for free: if the coupon doesn't cover the OLD plan,
+        // oldModifiers is null/no-op; if it doesn't cover the NEW plan,
+        // newModifiers is null/no-op — no special "does this still apply"
+        // branch anywhere, the same per-item pricing call already answers it.
+        const oldLineItems = [
+          { key: subscription.planName, type: 'plan', amount: subscription.pricePerUser },
+          ...(subscription.activeAddons || []).map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
+        ];
+        const oldCouponModifier = (subscription.appliedCoupon?.fullRulesSnapshot && isCouponStillEligibleForRenewal(subscription.appliedCoupon))
+          ? buildCouponModifierForLineItems(subscription.appliedCoupon.fullRulesSnapshot, oldLineItems)
+          : null;
+
+        // oldTotal = what the org has ALREADY PAID FOR and is still entitled to
+        // THIS CYCLE. Any scheduled removals have not executed yet, so this must
+        // come from the current (raw) subscription, never the future-effective
+        // snapshot — the org is still using and paying for those seats today.
+        const oldTotal = calculateInvoice({
+          subscription,
+          resolvedModifiers: oldCouponModifier ? [oldCouponModifier] : [],
+        }).taxable;
         const newBasePrice = billingCycle === 'monthly'
           ? newPlanUpg.monthlyPrice
           : newPlanUpg.yearlyPrice;
 
-        // Exclude add-ons the org has already scheduled for full removal — they
-        // shouldn't carry forward to the new plan (user already cancelled them).
-        const pendingRemovals = subscription.pendingAddonRemovals || [];
-        const addonsToClassify = (subscription.activeAddons || []).filter((a) => {
-          const removal = pendingRemovals.find((r) => r.addonKey === a.addonKey);
-          return !(removal && removal.quantity >= a.quantity);
-        });
+        // upgradeTargetSubscription — the ONE object this checkout prices.
+        // Built as: current subscription -> surviving scheduled removals
+        // carried forward (via buildEffectiveSubscription's future-horizon
+        // projection -> classified against the new plan -> user's
+        // newly-selected add-ons layered on top. Every downstream value
+        // (targetRecurringTotal, carriedForwardAddons, proration) is derived
+        // from THIS object — never mixed with oldTotal's current-cycle
+        // snapshot. (buildEffectiveSubscription's future-horizon projection
+        // is deliberately NOT used to compute carry-forward quantity here
+        // anymore — see the fix note below on `compatible`.)
 
-        // Classify remaining add-ons against the NEW plan
-        const { compatible, incompatible } = await classifyAddonsForPlanChange(
-          addonsToClassify, planId, billingCycle
+        // Classify against the RAW current add-ons (full quantity the org is
+        // actually using and has paid for today), NOT the future-effective
+        // (already-reduced) snapshot. Using the effective snapshot here was a
+        // real bug: an addon becoming incompatible would only ever be seen at
+        // its POST-pending-removal quantity, so e.g. Seat x2 with 1 already
+        // scheduled for removal would classify as incompatible x1 instead of
+        // x2 — silently shrinking real, already-paid-for entitlement.
+        const rawActiveAddons = subscription.activeAddons || [];
+        const { compatible: rawCompatible, incompatible } = await classifyAddonsForPlanChange(
+          rawActiveAddons, planId, billingCycle
         );
+        // Live-QA correctness fix (Aug 2026), confirmed via a real reported
+        // incident (Seat×2, 1 scheduled for removal, upgrading Starter->Growth
+        // silently landed on Seat×1 immediately — a full unit of already-paid
+        // entitlement vanished before its scheduled date). This block used to
+        // remap `compatible`'s quantity through effectiveQuantityByKey (the
+        // POST-scheduled-removal snapshot), on the theory that "carry-forward
+        // should already reflect the pending removal." That's wrong: a
+        // scheduled removal is FUTURE state — the org keeps its full current
+        // entitlement (rawCompatible's own quantity, already correct) right
+        // up until the removal's effective date, exactly like `oldTotal`
+        // above already treats it, and regardless of what the base plan is
+        // doing in between. The existing ScheduledChange/pendingAddonRemovals
+        // record for this addonKey is untouched by this change and continues
+        // ticking down independently after the upgrade commits — same
+        // "a base-plan change never touches an add-on's own scheduled
+        // removal" rule this session settled for the annual cycle-transition
+        // case, now applied consistently to upgrade too.
+        const compatible = rawCompatible;
+
+        // Editable carry-forward: the user may reduce (down to 0) how much of
+        // each compatible add-on continues after the upgrade. req.body.carryForward
+        // is keyed by the post-remap addonKey (i.e. compatible[].addonKey — the
+        // same key the checkout UI displays as carriedForwardAddons), matching
+        // what the user actually sees. Quantity is clamped to [0, survived
+        // quantity] — this can only REDUCE what would otherwise carry forward,
+        // never add new units (that's the separate newAddonPurchases flow).
+        // Defaults to the full surviving quantity when the caller sends no
+        // override, so existing (non-editing) callers are unaffected.
+        const carryForwardOverrides = req.body.carryForward || [];
+        const carryForwardResolved = compatible.map((c) => {
+          const override = carryForwardOverrides.find((o) => o.addonKey === c.addonKey);
+          const desiredQuantity = override
+            ? Math.max(0, Math.min(override.quantity, c.quantity))
+            : c.quantity;
+          return { ...c, quantity: desiredQuantity, reducedBy: c.quantity - desiredQuantity };
+        });
+        const carriedForward = carryForwardResolved.filter((c) => c.quantity > 0);
+        // Any reduction becomes a REMOVE_ADDON scheduled for renewal, created
+        // at settlement (only once the upgrade actually commits) — mirrors the
+        // incompatibleAddons scheduling pattern later in this same flow.
+        const reducedAddons = carryForwardResolved.filter((c) => c.reducedBy > 0);
 
         // Resolve prices for any NEW add-ons the user selected on the plan card
         const requestedNewAddons = (req.body.addons || []).filter((a) => a.quantity > 0);
@@ -748,16 +1531,71 @@ exports.updateSubscription = async (req, res) => {
             .filter((a) => a.pricePerUnit > 0);
         }
 
-        // newTotal = new plan base + carried-forward add-ons + newly purchased add-ons
-        const carriedTotal = compatible.reduce((sum, a) => sum + a.quantity * a.pricePerUnit, 0);
-        const newAddonsTotal = newAddonPurchases.reduce((sum, a) => sum + a.quantity * a.pricePerUnit, 0);
-        const newTotal = newBasePrice + carriedTotal + newAddonsTotal;
+        const upgradeTargetSubscription = {
+          planName: planId,
+          billingCycle,
+          pricePerUser: newBasePrice,
+          activeAddons: [
+            ...carriedForward.map((a) => ({ addonKey: a.addonKey, quantity: a.quantity, pricePerUnit: a.pricePerUnit })),
+            ...newAddonPurchases,
+          ],
+        };
+        // Same treatment for the new side — its OWN line items (target plan +
+        // carried-forward add-ons) against the SAME frozen fullRulesSnapshot.
+        // If the coupon doesn't cover the new plan, this is a no-op (CP3) —
+        // computed independently of the old side, never blended or assumed
+        // to inherit the old side's discount.
+        const newLineItems = [
+          { key: upgradeTargetSubscription.planName, type: 'plan', amount: upgradeTargetSubscription.pricePerUser },
+          ...upgradeTargetSubscription.activeAddons.map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
+        ];
+        const newCouponModifier = (subscription.appliedCoupon?.fullRulesSnapshot && isCouponStillEligibleForRenewal(subscription.appliedCoupon))
+          ? buildCouponModifierForLineItems(subscription.appliedCoupon.fullRulesSnapshot, newLineItems)
+          : null;
 
-        // Prorated charge = (newTotal − oldTotal) × remaining fraction of cycle
-        const proratedDiff = calculatePlanUpgradeProration(
-          oldTotal, newTotal,
-          subscription.currentPeriodStart, subscription.currentPeriodEnd
-        );
+        // newTotal = target subscription's full recurring value (new plan base +
+        // carried-forward add-ons + newly purchased add-ons), priced once
+        // through calculateInvoice() rather than hand-summed twice.
+        const newTotal = calculateInvoice({
+          subscription: upgradeTargetSubscription,
+          resolvedModifiers: newCouponModifier ? [newCouponModifier] : [],
+        }).taxable;
+
+        // RF6 (§3.6b Chapter 19) — an upgrade requested mid-cycle supersedes
+        // any pending RENEWAL invoice for this subscription (Law 11: a newer
+        // commercial action voids an older, not-yet-settled one). If that
+        // voided renewal had already reserved a referral reward for itself
+        // (R8, utils/renewalEngine.js), that reservation must be released
+        // BEFORE this upgrade's own RESERVE-FIRST step below runs — otherwise
+        // the reward still reads as occupied and this upgrade reserves
+        // nothing, even though the renewal that was holding it just got
+        // voided. Released with releaseReason:'REPLACED_BY_NEW_INVOICE'
+        // (not left to its 30-min TTL) so it's immediately available again;
+        // no special "re-reserve the same one" branch needed — the normal
+        // reserveNextAvailableReward() selection below picks it up like any
+        // other available reward. Non-fatal: never blocks the upgrade if
+        // this write fails.
+        try {
+          const pendingRenewal = await CommercialTransaction.findOne({
+            organization: req.user.organization,
+            subscription: subscription._id,
+            type: 'RENEWAL',
+            status: { $in: ['CREATED', 'PRICED', 'AWAITING_PAYMENT', 'FAILED'] },
+          });
+          if (pendingRenewal) {
+            const voidedRewardUsageId = pendingRenewal.target?.rewardUsageId;
+            pendingRenewal.status = 'VOID';
+            await pendingRenewal.save();
+            if (voidedRewardUsageId) {
+              await releaseReservation(voidedRewardUsageId, 'REPLACED_BY_NEW_INVOICE');
+            }
+          }
+        } catch (renewalVoidErr) {
+          console.error(
+            `Failed to void superseded RENEWAL transaction / release its reward (non-fatal) — organization=${req.user.organization} subscription=${subscription._id}:`,
+            renewalVoidErr.message
+          );
+        }
 
         // SAME-FLOW RECYCLE: if a PREVIOUS upgrade checkout for this org left a
         // reward reserved (opened but never paid), release it before reserving
@@ -783,22 +1621,116 @@ exports.updateSubscription = async (req, res) => {
         try {
           upgradeReservation = await reserveNextAvailableReward(req.user.organization, {
             subscription: subscription._id,
+            context: 'UPGRADE',
           });
         } catch (reserveErr) {
           console.error('Referral reservation failed (proceeding at full price):', reserveErr.message);
         }
 
-        let discountedProratedDiff = proratedDiff;
         let upgradeReferralRewardUsageId = null;
+        const resolvedModifiers = [];
         if (upgradeReservation) {
-          const referralModifier = rewardToModifier(upgradeReservation.reward);
-          const applied = applyModifiers(proratedDiff, [referralModifier]);
-          discountedProratedDiff = applied.totalAmount;
+          resolvedModifiers.push(rewardToModifier(upgradeReservation.reward));
           upgradeReferralRewardUsageId = upgradeReservation.usage._id;
         }
 
-        // GST is collected on the prorated charge; Razorpay order carries the inclusive amount
-        const proratedDiffWithGST = discountedProratedDiff + computeGST(discountedProratedDiff);
+        // Phase 3 item 5a: proration is now priced through calculateInvoice()'s
+        // Stage 5 (PHASE3_DESIGN_NOTE_INVOICE_ENGINE.md), not a standalone
+        // calculatePlanUpgradeProration()+applyModifiers()+computeGST() chain.
+        // pricePerUser: 0 / activeAddons: [] — this invoice call represents ONLY
+        // the one-time upgrade charge, not a full plan invoice; oldTotal/newTotal
+        // (full totals including add-ons, exactly as passed to
+        // calculatePlanUpgradeProration before this migration) go in as
+        // oldBasePrice/newBasePrice — calculateCommercialAdjustments() only
+        // forwards them positionally, it doesn't interpret their meaning.
+        const upgradeInvoice = calculateInvoice({
+          subscription: { planName: planId, billingCycle, pricePerUser: 0, activeAddons: [] },
+          changeset: { pricePerUser: 0 },
+          adjustmentContext: {
+            type: 'plan_upgrade',
+            oldBasePrice: oldTotal,
+            newBasePrice: newTotal,
+            currentPeriodStart: subscription.currentPeriodStart,
+            currentPeriodEnd: subscription.currentPeriodEnd,
+          },
+          resolvedModifiers,
+        });
+        const proratedDiff = upgradeInvoice.adjustment; // Stage 5 amount, pre-discount — same meaning as before
+        const discountedProratedDiff = upgradeInvoice.taxable; // post-discount, pre-GST — same meaning as before
+        const proratedDiffWithGST = upgradeInvoice.total; // GST-inclusive — same meaning as before, what Razorpay actually charges
+
+        // BILLING_UX_SPEC.md §1.2 — the coupon's effect on THIS charge is
+        // already baked into oldTotal/newTotal above (both computed WITH the
+        // coupon modifier), so it isn't a separate line in upgradeInvoice's
+        // own modifierBreakdown (only referral is — adding the coupon there
+        // too would double-discount, since the Stage 5 baseline is already
+        // coupon-net). To display it as its own row without inventing a
+        // number, run the SAME existing, pure calculateCommercialAdjustments()
+        // once more against the RAW (undiscounted) plan totals — a genuine
+        // second engine computation, not frontend arithmetic — and the
+        // difference from the actual (coupon-net) adjustment is exactly the
+        // coupon's contribution to this specific charge.
+        let couponContributionToUpgrade = 0;
+        try {
+          const rawOldTotal = calculateInvoice({ subscription, resolvedModifiers: [] }).taxable;
+          const rawNewTotal = calculateInvoice({ subscription: upgradeTargetSubscription, resolvedModifiers: [] }).taxable;
+          const rawAdjustment = calculateCommercialAdjustments({
+            type: 'plan_upgrade',
+            oldBasePrice: rawOldTotal,
+            newBasePrice: rawNewTotal,
+            currentPeriodStart: subscription.currentPeriodStart,
+            currentPeriodEnd: subscription.currentPeriodEnd,
+          }).amount;
+          couponContributionToUpgrade = Math.max(0, rawAdjustment - proratedDiff);
+        } catch (rawErr) {
+          console.error('Could not compute raw (undiscounted) upgrade adjustment for display purposes (non-fatal):', rawErr.message);
+        }
+        const referralAmountInUpgrade = (upgradeInvoice.modifierBreakdown || []).filter((m) => m.type === 'referral').reduce((s, m) => s + m.amount, 0);
+        // BILLING_UX_SPEC.md §4 — record the real amount now that pricing
+        // knows it (reservation happened before pricing, reserve-first).
+        if (upgradeReservation && referralAmountInUpgrade > 0) {
+          await recordRewardUsageAmount(upgradeReservation.usage._id, referralAmountInUpgrade);
+        }
+        const upgradePricingBreakdown = {
+          pricingLineItems: [{ label: 'Prorated Upgrade', amount: proratedDiff + couponContributionToUpgrade }],
+          subtotal: proratedDiff + couponContributionToUpgrade,
+          couponDiscount: couponContributionToUpgrade > 0 ? { amount: couponContributionToUpgrade, code: subscription.appliedCoupon?.code || null } : null,
+          referralDiscount: referralAmountInUpgrade > 0 ? { amount: referralAmountInUpgrade, percent: upgradeReservation?.reward.rewardType === 'percentage' ? upgradeReservation.reward.rewardValue : null } : null,
+          taxableAmount: upgradeInvoice.taxable,
+          gst: upgradeInvoice.gst,
+          total: upgradeInvoice.total,
+        };
+
+        // CommercialTransaction: same VOID-on-recycle + create pattern as
+        // startAddonPurchase (utils/addonPurchaseLifecycle.js) — the same-flow
+        // recycle above already releases any orphaned referral reservation, so
+        // this VOIDs the matching orphaned transaction record too. Non-fatal:
+        // never blocks the upgrade if CommercialTransaction write fails.
+        let upgradeCommercialTransaction = null;
+        try {
+          await CommercialTransaction.updateMany(
+            {
+              organization: req.user.organization,
+              subscription: subscription._id,
+              type: 'UPGRADE',
+              status: { $in: ['CREATED', 'PRICED', 'AWAITING_PAYMENT', 'FAILED'] },
+            },
+            { $set: { status: 'VOID' } }
+          );
+          upgradeCommercialTransaction = await CommercialTransaction.create({
+            organization: req.user.organization,
+            subscription: subscription._id,
+            type: 'UPGRADE',
+            status: 'PRICED',
+            createdBy: req.user._id,
+            target: { newPlanName: planId, newBasePrice, oldTotal, newTotal },
+          });
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction creation failed (non-fatal) — organization=${req.user.organization} subscription=${subscription._id}:`,
+            ctErr.message
+          );
+        }
 
         // Create a one-time Order for the prorated difference + GST (UPI-compatible)
         let razorpayOrder;
@@ -825,6 +1757,21 @@ exports.updateSubscription = async (req, res) => {
           await RewardUsage.updateOne({ _id: upgradeReferralRewardUsageId }, { $set: { invoiceId: razorpayOrder.id } });
         }
 
+        if (upgradeCommercialTransaction) {
+          try {
+            upgradeCommercialTransaction.status = 'AWAITING_PAYMENT';
+            upgradeCommercialTransaction.target = { ...upgradeCommercialTransaction.target, orderId: razorpayOrder.id };
+            upgradeCommercialTransaction.attemptCount = 1;
+            upgradeCommercialTransaction.lastAttemptAt = new Date();
+            await upgradeCommercialTransaction.save();
+          } catch (ctErr) {
+            console.error(
+              `CommercialTransaction AWAITING_PAYMENT update failed (non-fatal) — organization=${req.user.organization} subscription=${subscription._id} transaction=${upgradeCommercialTransaction._id}:`,
+              ctErr.message
+            );
+          }
+        }
+
         // Store pending change — everything below is applied on webhook confirmation
         // (payment success). We do NOT schedule removals or change planName here, so
         // an abandoned checkout leaves the current plan/add-ons fully intact.
@@ -833,17 +1780,44 @@ exports.updateSubscription = async (req, res) => {
           newBasePrice,
           proratedDiffCharged: proratedDiffWithGST, // GST-inclusive — matches actual order amount
           orderId: razorpayOrder.id,
-          compatibleAddons: compatible.map((a) => ({
+          // Live-QA correctness fix (Aug 2026): billingCycle/periodEnd now
+          // carried through explicitly — these used to be silently dropped
+          // here, which is the confirmed real mechanism behind a live-
+          // reported incident (an addon mislabeled "Annual" with no actual
+          // annual purchase, the moment the base plan later switched to
+          // yearly and the missing field fell back to the NEW subscription
+          // cycle). Same class of bug Task 1 fixed at three other creation
+          // sites, recurring here via this one.
+          compatibleAddons: carriedForward.map((a) => ({
             addonKey: a.addonKey, quantity: a.quantity, pricePerUnit: a.pricePerUnit,
+            remappedFrom: a.remappedFrom || null,
+            billingCycle: a.billingCycle, periodEnd: a.periodEnd,
+          })),
+          // User-reduced carry-forward quantities — settlement schedules a
+          // REMOVE_ADDON for each of these at commit time (only once the
+          // upgrade actually happens), same shape as incompatibleAddons below.
+          // remappedFrom is carried through so settlement can recognize the
+          // OLD (pre-upgrade) addonKey and avoid resurrecting it via the
+          // "restore pending removals" loop below.
+          reducedAddons: reducedAddons.map((a) => ({
+            addonKey: a.addonKey,
+            displayName: a.displayName || a.addonKey,
+            quantity: a.reducedBy,
+            pricePerUnit: a.pricePerUnit,
+            remappedFrom: a.remappedFrom || null,
+            billingCycle: a.billingCycle,
           })),
           incompatibleAddons: incompatible.map((a) => ({
             addonKey: a.addonKey,
             displayName: a.displayName || a.addonKey,
             quantity: a.quantity,
             pricePerUnit: a.pricePerUnit,
+            remappedFrom: a.remappedFrom || null,
+            billingCycle: a.billingCycle,
           })),
           newAddonPurchases: newAddonPurchases.map((a) => ({
             addonKey: a.addonKey, quantity: a.quantity, pricePerUnit: a.pricePerUnit,
+            billingCycle,
           })),
           createdAt: new Date(),
           referralRewardUsageId: upgradeReferralRewardUsageId,
@@ -855,9 +1829,13 @@ exports.updateSubscription = async (req, res) => {
           success: true,
           proratedAmount: discountedProratedDiff,
           referralDiscountApplied: proratedDiff - discountedProratedDiff || undefined,
+          couponDiscountApplied: couponContributionToUpgrade || undefined,
+          totalDiscountApplied: (couponContributionToUpgrade + (proratedDiff - discountedProratedDiff)) || undefined,
+          pricingBreakdown: upgradePricingBreakdown,
+          oldRecurringTotal: oldTotal,
           newRecurringTotal: newTotal,
           newBasePrice,
-          carriedForwardAddons: compatible.map((a) => ({
+          carriedForwardAddons: carriedForward.map((a) => ({
             addonKey: a.addonKey,
             quantity: a.quantity,
             pricePerUnit: a.pricePerUnit,
@@ -986,7 +1964,12 @@ exports.updateSubscription = async (req, res) => {
             return res.status(400).json({ error: `Add-on "${entry.displayName}" has no price configured for the ${billingCycle} cycle.` });
           }
           const qty = Number(requested.quantity) || 1;
-          activeAddons.push({ addonKey: requested.addonKey, quantity: qty, pricePerUnit: unitPrice, addedAt: new Date() });
+          // Task 1 (Aug 2026) — same confirmed live-data bug as
+          // createSubscription's addon push above: this trial-conversion
+          // branch is exactly the code path that produced a real corrupted
+          // record found in the dev DB (annual conversion, extra_seat with
+          // no billingCycle stored at all).
+          activeAddons.push({ addonKey: requested.addonKey, quantity: qty, pricePerUnit: unitPrice, addedAt: new Date(), billingCycle });
         }
       }
 
@@ -1017,13 +2000,99 @@ exports.updateSubscription = async (req, res) => {
       // the checkout page's own Apply button (manual entry) are the only
       // two creation points now.
 
-      const snapshot = buildPricingSnapshot({
-        plan,
-        billingCycle,
-        activeAddons,
-        couponDiscount: couponResult ? { totalDiscount: couponResult.discountAmount } : null,
+      // CORRECTION: this branch — not createSubscription — is what actually
+      // runs for "the most common 'new subscriber' moment" (every org starts
+      // on a trial; see the SUBSCRIPTION_CREATED comment a few lines below,
+      // which already said so). The referee-immediate-discount and
+      // earned-reward-reservation wiring were originally built only into
+      // createSubscription, which most real signups never call — added here
+      // too, mirroring both createSubscription's referee-discount construction
+      // and the upgrade path's reserve-first pattern (line ~1110) for an
+      // already-earned Reward.
+      const { findPendingReferralForSignup: findPendingReferralForTrialConversion } = require('../utils/referralUtils');
+      const pendingReferralAtConversion = await findPendingReferralForTrialConversion(req.user.organization);
+
+      // RETRY/BACK-BUTTON FIX (found via live QA — see the P0 trace): unlike
+      // the upgrade path a few hundred lines above (its own "SAME-FLOW
+      // RECYCLE" block), this branch had NO release-before-reserve guard.
+      // Because a trial subscription's Subscription document is reused
+      // (never re-created) across retries, calling this branch a second time
+      // — abandon checkout, come back, hit "Complete Payment" again — used to
+      // call reserveNextAvailableReward() again while the FIRST attempt's
+      // reservation was still 'reserved' (unexpired). getNextAvailableReward
+      // would then skip the occupied reward, find nothing, and this branch
+      // would overwrite subscription.pendingReferralRewardUsageId to
+      // undefined — orphaning the first reservation (still occupying the
+      // reward, now unreferenced by anything) until its 30-min TTL
+      // self-healed. That produced exactly the observed pattern: discount
+      // present on attempt 1, absent on the immediate retry, reappearing
+      // ~30 minutes later. Releasing the prior reservation FIRST (same
+      // pattern, same reasoning as the upgrade path) closes this.
+      if (subscription.pendingReferralRewardUsageId) {
+        try {
+          await releaseReservation(subscription.pendingReferralRewardUsageId, 'REPLACED_BY_RETRY');
+        } catch (relErr) {
+          console.error('Failed to release prior trial-conversion reservation:', relErr.message);
+        }
+      }
+
+      let conversionRewardReservation = null;
+      try {
+        conversionRewardReservation = await reserveNextAvailableReward(req.user.organization, {
+          subscription: subscription._id,
+          context: 'TRIAL_CONVERSION',
+        });
+      } catch (reserveErr) {
+        console.error('Referral reservation failed at trial conversion (proceeding at full price):', reserveErr.message);
+      }
+
+      // Phase 3 item 5c (Category A consolidation): this branch prices a
+      // fresh commercial state — no old-vs-new comparison, no period math —
+      // structurally identical to createSubscription's own calculateInvoice()
+      // call (same modifier construction, same coupon-only shape, now also
+      // the same referral wiring). Migrated onto the canonical engine for the
+      // same reason createSubscription was: one authoritative pricing
+      // computation, not a parallel buildPricingSnapshot() call for what is
+      // the same kind of event.
+      const conversionResolvedModifiers = couponResult
+        ? [{ type: 'coupon', value: { kind: 'fixed', amount: couponResult.discountAmount }, appliesTo: 'entire_invoice' }]
+        : [];
+      if (pendingReferralAtConversion) {
+        conversionResolvedModifiers.push(referralModifierFromPendingProgram(pendingReferralAtConversion.program));
+      }
+      if (conversionRewardReservation) {
+        conversionResolvedModifiers.push(rewardToModifier(conversionRewardReservation.reward));
+      }
+      const snapshot = calculateInvoice({
+        subscription: { planName: planId, billingCycle, pricePerUser, activeAddons },
+        resolvedModifiers: conversionResolvedModifiers,
       });
-      const totalAmount = snapshot.totalAmount;
+      const totalAmount = snapshot.taxable; // pre-GST, post-discount — this first invoice's own taxable amount, charged today only
+
+      // Recurring-price-corruption fix — same reasoning as createSubscription's
+      // identical block above: `snapshot.taxable` includes one-time-only
+      // modifiers (first_payment coupon, referee's first-invoice referral
+      // discount), neither of which may ever appear in the stored recurring
+      // baseline. Computed separately, durable-modifiers-only.
+      const recurringResolvedModifiers = (couponResult && isCouponStillEligibleForRenewal({ duration: { type: couponResult.coupon.duration?.type || 'lifetime' } }))
+        ? [{ type: 'coupon', value: { kind: 'fixed', amount: couponResult.discountAmount }, appliesTo: 'entire_invoice' }]
+        : [];
+      const recurringSnapshot = calculateInvoice({
+        subscription: { planName: planId, billingCycle, pricePerUser, activeAddons },
+        resolvedModifiers: recurringResolvedModifiers,
+      });
+      const recurringBaseline = recurringSnapshot.taxable; // what THIS subscription actually recurs at, from the next cycle onward
+
+      // BILLING_UX_SPEC.md §4 — same reasoning as createSubscription's
+      // identical block: record the earned-reward reservation's real
+      // amount, skipped when a pendingReferral ALSO applied (ambiguous
+      // dual-referral-modifier edge case — see that block's comment).
+      if (conversionRewardReservation && !pendingReferralAtConversion) {
+        const earnedRewardAmountAtConversion = (snapshot.modifierBreakdown || []).filter((m) => m.type === 'referral').reduce((s, m) => s + m.amount, 0);
+        if (earnedRewardAmountAtConversion > 0) {
+          await recordRewardUsageAmount(conversionRewardReservation.usage._id, earnedRewardAmountAtConversion);
+        }
+      }
 
       if (couponResult) {
         appliedCoupon = {
@@ -1036,7 +2105,7 @@ exports.updateSubscription = async (req, res) => {
           },
           discountAmount: couponResult.discountAmount,
           baseSubtotal: snapshot.subtotal,
-          recurringSubtotal: totalAmount,
+          recurringSubtotal: recurringBaseline,
           rulesApplied: couponResult.lineItems
             .filter((li) => li.discount > 0)
             .map((li) => ({
@@ -1046,36 +2115,55 @@ exports.updateSubscription = async (req, res) => {
               discountValue: li.discountValue,
               discountAmount: li.discount,
             })),
+          // Complete rule set at application time — see createSubscription's
+          // identical addition and the Subscription.js model comment.
+          fullRulesSnapshot: (couponResult.coupon.rules || []).map((r) => ({
+            productType: r.productType,
+            productKey: r.productKey,
+            discountType: r.discountType,
+            discountValue: r.discountValue,
+          })),
         };
       }
 
-      const razorpayPlanId = await findOrCreateRazorpayPlan(totalAmount, billingCycle, planId);
-
-      // Cancel existing Razorpay subscription if exists (since pending)
-      if (subscription.razorpaySubscriptionId) {
-        try {
-          await razorpay.subscriptions.cancel(subscription.razorpaySubscriptionId);
-        } catch (cancelError) {
-          console.warn("Failed to cancel pending Razorpay subscription:", cancelError);
-        }
-      }
-
-      // Create new Razorpay subscription
-      const razorpaySubscription = await razorpay.subscriptions.create({
-        plan_id: razorpayPlanId,
-        customer_notify: 1,
-        quantity: 1,
-        total_count: billingCycle === "monthly" ? 12 : 1,
-        notes: {
-          organization_id: req.user.organization.toString(),
-          plan_name: planId,
-          billing_cycle: billingCycle,
-        },
+      // Phase 4D-5 (IMPLEMENTATION_PLAN_V1.md) — trial->paid conversion
+      // acquires a real CAW mandate (Registration Link) exactly as a fresh
+      // signup does, via the same utils/cawAcquisition.js helper
+      // createSubscription's own Registration Link logic was extracted from.
+      // Replaces the legacy findOrCreateRazorpayPlan()/razorpay.subscriptions.create()
+      // pair (the classic Razorpay Subscriptions product, which requires
+      // separate account activation and is not what this account has enabled —
+      // confirmed live, a real 401 from subscriptions.create() specifically,
+      // not createRegistrationLink()). Restores work that was previously
+      // built and fixture-verified (scripts/verifyTrialConversionCAW.js) but
+      // never actually landed in this file.
+      // Bug A fix (found via live QA — Resume Payment invoice showing ₹336
+      // instead of ₹396): `totalAmount` a few lines above is `snapshot.taxable`
+      // — pre-GST — deliberately used for baseSubtotal/recurringSubtotal
+      // display fields. The actual amount charged via Razorpay must be the
+      // GST-inclusive total, exactly like createSubscription's own
+      // `firstInvoiceRupees = invoice.total` a few hundred lines above.
+      // This branch had been silently passing the pre-GST figure instead —
+      // undercharging every trial-conversion / plan-change-while-pending /
+      // Resume Payment invoice by exactly the GST amount.
+      const { registrationLink, mandateMaxAmountRupees } = await createRegistrationLinkForOrg({
+        user: req.user,
+        planId,
+        billingCycle,
+        firstInvoiceRupees: snapshot.total,
       });
 
-      // Update fields directly
-      subscription.razorpaySubscriptionId = razorpaySubscription.id;
-      subscription.razorpayPlanId = razorpayPlanId;
+      // Pending-mandate fields, mirroring createSubscription's own write
+      // exactly — legacy fields explicitly cleared, not populated, since
+      // this subscription no longer has a classic Razorpay Subscription.
+      subscription.razorpayCustomerId = registrationLink.customer_id;
+      subscription.registrationLinkId = registrationLink.id;
+      subscription.mandateStatus = 'pending';
+      // Same field, reset on every re-entry to this branch — including a
+      // Resume Payment call or a plan change while pending — so "recent vs.
+      // stale" copy always reflects THIS attempt, not a much older one.
+      subscription.mandateInitiatedAt = new Date();
+      subscription.mandateMaxAmount = mandateMaxAmountRupees;
       subscription.planName = planId;
       subscription.status = "created";
       subscription.paymentStatus = "pending_payment";
@@ -1083,52 +2171,111 @@ exports.updateSubscription = async (req, res) => {
       subscription.billingCycle = billingCycle;
       subscription.pricePerUser = pricePerUser;
       subscription.userCount = 1;
-      subscription.totalAmount = totalAmount;
+      subscription.totalAmount = recurringBaseline;
       subscription.activeAddons = activeAddons;
       subscription.appliedCoupon = appliedCoupon;
-      subscription.currentPeriodStart = new Date(razorpaySubscription.current_start * 1000);
-      subscription.currentPeriodEnd = new Date(razorpaySubscription.current_end * 1000);
-      subscription.nextBillingDate = new Date(razorpaySubscription.charge_at * 1000);
+      subscription.pendingReferralRewardUsageId = conversionRewardReservation?.usage._id || undefined;
+      subscription.razorpaySubscriptionId = undefined;
+      subscription.razorpayPlanId = undefined;
+      subscription.currentPeriodStart = undefined;
+      subscription.currentPeriodEnd = undefined;
+      subscription.nextBillingDate = undefined;
       subscription.pendingUpdate = null;
       subscription.pendingUpgrade = null;
       await subscription.save();
 
-      // This is the code path that actually runs for the most common
-      // "new subscriber" moment — every org starts on a trial, so converting
-      // to paid goes through here, not exports.createSubscription. No prior
-      // BillingEvent existed for it. Pure org-initiated action (not the
-      // renewal webhook), so safe to instrument.
-      await emitBillingEvent({
-        organization: subscription.organization,
-        subscription: subscription._id,
-        eventType: 'SUBSCRIPTION_CREATED',
-        status: 'completed',
-        after: subscription,
-        amounts: {
-          base: snapshot.subtotal,
-          discount: appliedCoupon?.discountAmount || 0,
-          recurringAfter: totalAmount,
-        },
-        razorpay: { subscriptionId: razorpaySubscription.id },
-        metadata: { planId, billingCycle, couponCode: appliedCoupon?.code || null },
-      });
+      // Phase 2-shape observational write (see createSubscription's identical
+      // try/catch) — no orderId/paymentId exists yet, mandate hasn't
+      // confirmed (Phase 3 owns that). Non-fatal by design.
+      try {
+        await BillingInvoice.create({
+          organization: subscription.organization,
+          subscription: subscription._id,
+          reason: 'NEW_SUBSCRIPTION',
+          razorpay: { registrationLinkId: registrationLink.id },
+          lineItems: snapshot.lines,
+          subtotal: snapshot.subtotal,
+          discount: snapshot.discount,
+          taxable: snapshot.taxable,
+          gst: snapshot.gst,
+          total: snapshot.total,
+          generatedAt: snapshot.generatedAt,
+        });
+      } catch (err) {
+        console.error(
+          `BillingInvoice persistence failed (non-fatal, Phase 2 observational write) — organization=${subscription.organization} subscription=${subscription._id}:`,
+          err.message
+        );
+      }
+
+      // RETRY FIX (found via live QA — see the P0 trace): this branch is
+      // re-entered on every retry/back-button return (a fresh Registration
+      // Link is intentionally created each time — that part is correct,
+      // an abandoned mandate needs a new link to retry). But nothing
+      // previously gated the two emitBillingEvent calls below on "has this
+      // already been recorded" — so every retry re-emitted a FULL duplicate
+      // SUBSCRIPTION_CREATED + REFERRAL_DISCOUNT_APPLIED pair, with whatever
+      // (possibly different, if add-ons/coupon changed) amount that retry
+      // happened to price. That's exactly the observed "two Subscribed to
+      // Starter entries, two different discount amounts" pattern. Guard:
+      // only ever emit once per subscription document — a retry of the same
+      // still-unpaid conversion is not a second "new subscriber" moment.
+      const BillingEvent = require('../models/BillingEvent');
+      const alreadyRecorded = await BillingEvent.exists({ subscription: subscription._id, eventType: 'SUBSCRIPTION_CREATED' });
+
+      if (!alreadyRecorded) {
+        await emitBillingEvent({
+          organization: subscription.organization,
+          subscription: subscription._id,
+          eventType: 'SUBSCRIPTION_CREATED',
+          status: 'completed',
+          after: subscription,
+          amounts: {
+            base: snapshot.subtotal,
+            discount: appliedCoupon?.discountAmount || 0,
+            recurringAfter: recurringBaseline,
+          },
+          razorpay: { registrationLinkId: registrationLink.id },
+          metadata: { planId, billingCycle, couponCode: appliedCoupon?.code || null, onboarding: 'charge_at_will' },
+        });
+
+        // BILLING_UX_SPEC.md §5 — same referee-side timeline entry as
+        // createSubscription's identical block above, for the (more common)
+        // trial-conversion path. Nested under the same retry guard —
+        // otherwise a retry with a referral present would still double-emit
+        // this one even with SUBSCRIPTION_CREATED itself correctly guarded.
+        if (pendingReferralAtConversion) {
+          const referralDiscountAmountAtConversion = (snapshot.modifierBreakdown || []).filter((m) => m.type === 'referral').reduce((s, m) => s + m.amount, 0);
+          if (referralDiscountAmountAtConversion > 0) {
+            await emitBillingEvent({
+              organization: subscription.organization,
+              subscription: subscription._id,
+              eventType: 'REFERRAL_DISCOUNT_APPLIED',
+              status: 'completed',
+              amounts: { discount: referralDiscountAmountAtConversion },
+              metadata: { referralPercent: pendingReferralAtConversion.program.rewardType === 'percentage' ? pendingReferralAtConversion.program.rewardValue : null },
+            });
+          }
+        }
+      }
 
       return res.json({
         success: true,
         subscription,
-        paymentDetails: {
-          key: process.env.RAZORPAY_KEY_ID,
-          subscription_id: razorpaySubscription.id,
-          name: req.user.name,
-          description: `${plan.name} Plan - ${billingCycle}`,
-          prefill: {
-            name: req.user.name,
-            email: req.user.email,
-            contact: req.user.phone || "",
-          },
-          theme: { color: "#3399cc" },
-          callback_url: `${process.env.FRONTEND_URL}/subscription/payment-success`,
+        registrationLink: {
+          shortUrl: registrationLink.short_url,
+          id: registrationLink.id,
+          expireBy: registrationLink.expire_by,
         },
+        // BILLING_UX_SPEC.md §1.2 — same canonical shape as createSubscription,
+        // so Trial → Paid renders through the identical Order Summary
+        // component rather than inventing its own totals display.
+        pricingBreakdown: toPricingBreakdown(snapshot, {
+          couponCode: appliedCoupon?.code,
+          referralPercent: pendingReferralAtConversion
+            ? pendingReferralAtConversion.program.rewardValue
+            : (conversionRewardReservation?.reward.rewardType === 'percentage' ? conversionRewardReservation.reward.rewardValue : undefined),
+        }),
       });
     }
 
@@ -1149,23 +2296,83 @@ exports.updateSubscription = async (req, res) => {
       billingCycle === "monthly" ? newPlan.monthlyPrice : newPlan.yearlyPrice;
 
     // Classify active add-ons against the target plan for compatibility.
-    // Exclude add-ons already scheduled for removal — they shouldn't be
-    // resurrected into the new plan's carry-forward snapshot.
-    const pendingRemovalsForClassify = subscription.pendingAddonRemovals || [];
-    const addonsForClassify = (subscription.activeAddons || []).filter((a) => {
-      const removal = pendingRemovalsForClassify.find((r) => r.addonKey === a.addonKey);
-      return !(removal && removal.quantity >= a.quantity);
+    // Classification runs against the RAW current add-ons (full quantity
+    // actually in use/paid for today), not the future-effective snapshot —
+    // using the effective snapshot here was a real bug: an addon becoming
+    // INCOMPATIBLE would only ever be seen at its already-reduced quantity
+    // (e.g. Seat x2 with 1 already scheduled for removal would classify as
+    // incompatible x1 instead of x2), silently shrinking real entitlement the
+    // org already paid for. Compatible add-ons still need the effective
+    // (surviving-after-existing-removals) quantity for their carry-forward
+    // default — incompatible ones don't, since the whole quantity drops at
+    // renewal regardless of any smaller partial removal already scheduled.
+    const { buildEffectiveSubscription: buildEffectiveForDowngrade } = require('../utils/renewalEngine');
+    const downgradePreviewHorizon = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000);
+    const { effective: effectiveForDowngrade } = await buildEffectiveForDowngrade(subscription, downgradePreviewHorizon);
+    const rawAddonsForClassify = subscription.activeAddons || [];
+    const { compatible: rawCompatibleAddons, incompatible: droppedAddons } =
+      rawAddonsForClassify.length > 0
+        ? await classifyAddonsForPlanChange(rawAddonsForClassify, planId, billingCycle)
+        : { compatible: [], incompatible: [] };
+    // Keyed by the OLD (pre-plan-change) addonKey — see the identical note in
+    // the upgrade branch above. rawCompatibleAddons entries may carry a NEW
+    // (remapped) addonKey, so the lookup must use c.remappedFrom when present.
+    // Phase 2b: key on (addonKey, billingCycle), not addonKey alone — see
+    // addonManagement.addonIdentityKey's comment.
+    const effectiveQuantityByKeyDowngrade = new Map(
+      (effectiveForDowngrade.activeAddons || []).map((a) => [addonIdentityKey(a, subscription.billingCycle), a.quantity])
+    );
+    // Falling back to 0 (not c.quantity) — see the identical note in the
+    // upgrade branch: absence from the effective map means fully consumed by
+    // an existing scheduled removal, not "no reduction applies."
+    const survivingCompatibleAddons = rawCompatibleAddons
+      .map((c) => ({ ...c, quantity: effectiveQuantityByKeyDowngrade.get(addonIdentityKey(c, subscription.billingCycle)) ?? 0 }))
+      .filter((c) => c.quantity > 0);
+
+    // Editable carry-forward — same UX and clamping as the upgrade branch:
+    // the user may reduce (down to 0) how much of each surviving compatible
+    // add-on continues after the downgrade. Since a downgrade never charges
+    // anything today (it only takes effect at renewal), the reduction is
+    // applied directly here rather than deferred to a settlement step.
+    const downgradeCarryForwardOverrides = req.body.carryForward || [];
+    const downgradeCarryForwardResolved = survivingCompatibleAddons.map((c) => {
+      const override = downgradeCarryForwardOverrides.find((o) => o.addonKey === c.addonKey);
+      const desiredQuantity = override
+        ? Math.max(0, Math.min(override.quantity, c.quantity))
+        : c.quantity;
+      return { ...c, quantity: desiredQuantity, reducedBy: c.quantity - desiredQuantity };
     });
-    const { compatible: compatibleAddons, incompatible: droppedAddons, newAddonsTotal } =
-      addonsForClassify.length > 0
-        ? await classifyAddonsForPlanChange(addonsForClassify, planId, billingCycle)
-        : { compatible: [], incompatible: [], newAddonsTotal: 0 };
+    const compatibleAddons = downgradeCarryForwardResolved.filter((c) => c.quantity > 0);
+    const downgradeReducedAddons = downgradeCarryForwardResolved.filter((c) => c.reducedBy > 0);
+
+    // New add-ons the customer is buying AS PART OF THIS SAME downgrade
+    // request — critically, this is how an AUTO_FIXABLE validator result
+    // (e.g. "add 2 more seats") actually gets resolved in one round trip,
+    // rather than being reported and then rejected with no way to act on it.
+    // Priced against the TARGET plan's catalog (not the current plan's),
+    // same resolution pattern as the upgrade branch's newAddonPurchases.
+    const requestedNewAddonsDowngrade = (addons || []).filter((a) => a.quantity > 0);
+    let newAddonPurchasesDowngrade = [];
+    if (requestedNewAddonsDowngrade.length > 0) {
+      const newAddonKeysDowngrade = requestedNewAddonsDowngrade.map((a) => a.key);
+      const newAddonCatalogDowngrade = await PlanAddon.find({ key: { $in: newAddonKeysDowngrade }, isActive: true });
+      newAddonPurchasesDowngrade = requestedNewAddonsDowngrade
+        .map(({ key, quantity }) => {
+          const entry = newAddonCatalogDowngrade.find((e) => e.key === key);
+          const price = billingCycle === 'monthly' ? entry?.price?.monthly : entry?.price?.yearly;
+          return { addonKey: key, quantity, pricePerUnit: price || 0 };
+        })
+        .filter((a) => a.pricePerUnit > 0);
+    }
+
+    const newAddonsTotal = compatibleAddons.reduce((sum, a) => sum + a.quantity * a.pricePerUnit, 0)
+      + newAddonPurchasesDowngrade.reduce((sum, a) => sum + a.quantity * a.pricePerUnit, 0);
 
     const newTotalAmount = newPricePerUser + newAddonsTotal;
     const newRazorpayPlanId = newPlan.razorpayPlanIds[billingCycle];
 
     const isBillingCycleChange = subscription.billingCycle !== billingCycle;
-    const oldTotalAmount = subscription.totalAmount;
+    const oldTotalAmount = calculateInvoice({ subscription: effectiveForDowngrade }).taxable;
     const planPriority = { starter: 1, growth: 2, business: 3 };
     const currentPlanPriority = planPriority[subscription.planName] || 0;
     const newPlanPriority = planPriority[planId] || 0;
@@ -1173,6 +2380,43 @@ exports.updateSubscription = async (req, res) => {
       newPlanPriority > currentPlanPriority ||
       (newPlanPriority === currentPlanPriority &&
         newTotalAmount > oldTotalAmount);
+    // A genuine tier downgrade, distinct from a same-tier billing-cycle-only
+    // change and from an upgrade-combined-with-a-cycle-change (both of which
+    // also fall into the `isBillingCycleChange || !isUpgrade` branch below).
+    // CommercialTransaction{type:'DOWNGRADE'} is only written for this exact
+    // case — see IMPLEMENTATION_PLAN_V1.md item 6 for why the other two cases
+    // in this branch are deliberately left unwired this pass.
+    const isGenuineDowngrade = newPlanPriority < currentPlanPriority;
+
+    // Downgrade eligibility gate (BILLING_DOMAIN business contract, agreed
+    // 2026-07-24): a genuine tier downgrade can only be scheduled once
+    // validateDowngrade() reports eligible === true. A billing-cycle-only
+    // change (same tier) never reduces plan limits, so it's exempt.
+    //
+    // Passes the customer's requested new add-on purchases (already resolved
+    // above) as plannedNewAddons — critical: AUTO_FIXABLE must be resolvable
+    // in the SAME request, not a dead end that reports "buy 2 seats" and then
+    // rejects anyway with no way to act on it in one round trip.
+    //
+    // ALSO passes `compatibleAddons` — the ACTUAL resolved carry-forward
+    // state after applying the customer's own carryForward overrides
+    // (computed above). This is critical: without it, the validator falls
+    // back to assuming full survival of every carried addon, completely
+    // blind to a customer reducing a carried seat down to 0 — which is
+    // exactly the bug that let an invalid downgrade (2 users, 1 seat
+    // capacity) get scheduled.
+    if (isGenuineDowngrade) {
+      const { validateDowngrade } = require('../utils/downgradeValidator');
+      const plannedNewAddonsForValidation = newAddonPurchasesDowngrade.map((a) => ({ addonKey: a.addonKey, quantity: a.quantity }));
+      const resolvedCarryForwardForValidation = compatibleAddons.map((a) => ({ addonKey: a.addonKey, quantity: a.quantity }));
+      const validation = await validateDowngrade(subscription, planId, plannedNewAddonsForValidation, resolvedCarryForwardForValidation);
+      if (!validation.eligible) {
+        return res.status(400).json({
+          error: 'This downgrade is not yet possible — resolve the issues below first.',
+          downgradeValidation: validation,
+        });
+      }
+    }
 
     let message = "Subscription updated successfully!";
     let paymentDetails = null;
@@ -1201,18 +2445,194 @@ exports.updateSubscription = async (req, res) => {
         // subscription afterwards must NOT retroactively appear here — the
         // scheduled subscription is an explicit future state the user chose,
         // not something that silently tracks the active plan's add-ons.
-        carriedAddons: compatibleAddons.map((a) => ({
+        // Includes both surviving carry-forward add-ons AND newly-purchased
+        // ones (e.g. seats bought to resolve an AUTO_FIXABLE validator
+        // result) — both are simply "what's active on the future
+        // subscription," billed starting at renewal, nothing charged today.
+        // Live-QA correctness fix (Aug 2026): billingCycle/periodEnd now
+        // carried through — same class of bug Task 1 fixed elsewhere,
+        // recurring here (a scheduled downgrade's carried-forward add-ons
+        // would lose their cycle label at renewal, falling back to
+        // whatever the subscription's cycle is by THEN).
+        carriedAddons: [...compatibleAddons, ...newAddonPurchasesDowngrade].map((a) => ({
           addonKey: a.addonKey,
           quantity: a.quantity,
           pricePerUnit: a.pricePerUnit,
+          billingCycle: a.billingCycle,
+          periodEnd: a.periodEnd,
         })),
         removedAddons: droppedAddons.map((a) => ({
           addonKey: a.addonKey,
           quantity: a.quantity,
           pricePerUnit: a.pricePerUnit,
         })),
+        // Precisely how much THIS downgrade added to pendingAddonRemovals —
+        // not the resulting total, the DELTA. cancelScheduledDowngrade
+        // subtracts this back out, which correctly handles the case where
+        // the carry-forward reduction updated a PRE-EXISTING partial removal
+        // in place (the total afterwards isn't "what it was before this
+        // downgrade", it's "what it was before, plus this downgrade's own
+        // contribution" — only the delta is safe to reverse).
+        reducedAddonDeltas: downgradeReducedAddons.map((a) => ({
+          addonKey: a.addonKey, quantity: a.reducedBy,
+        })),
       };
       // Do NOT set cancelAtPeriodEnd — the subscription continues; only the amount changes.
+
+      // ScheduledChange — additive write-alongside, per IMPLEMENTATION_PLAN_V1.md's Phase 4
+      // design. Covers both genuine downgrade (PLAN_CHANGE) and non-UPI billing-cycle-change,
+      // bare or upgrade-combined (BILLING_CYCLE_CHANGE) — both reach this branch, and both are
+      // in ScheduledChange's scope (the UPI bypass never reaches here at all, per Step 0a).
+      // Not written for the remaining lateral edge case (same tier, same cycle, not an
+      // upgrade — a true no-op re-submission): that case isn't one of the four scoped action
+      // types and wasn't in the design table's rows — deliberately not invented here.
+      // Nothing reads this back yet — pendingUpdate above remains fully authoritative.
+      // Cancel any prior PENDING ScheduledChange of the same type first — pendingUpdate's own
+      // write above is a plain overwrite (no merge), so a repeated request here must not leave
+      // two PENDING ScheduledChange documents describing the same slot; see this session's
+      // structural-backstop note below for why an index isn't also added for this yet.
+      if (isGenuineDowngrade || isBillingCycleChange) {
+        try {
+          await ScheduledChange.updateMany(
+            {
+              organization: subscription.organization,
+              subscription: subscription._id,
+              type: isGenuineDowngrade ? 'PLAN_CHANGE' : 'BILLING_CYCLE_CHANGE',
+              status: 'PENDING',
+            },
+            { $set: { status: 'CANCELLED', reason: 'Superseded' } }
+          );
+          await ScheduledChange.create({
+            organization: subscription.organization,
+            subscription: subscription._id,
+            type: isGenuineDowngrade ? 'PLAN_CHANGE' : 'BILLING_CYCLE_CHANGE',
+            status: 'PENDING',
+            effectiveAt: subscription.currentPeriodEnd,
+            payload: {
+              planId,
+              pricePerUser: newPricePerUser,
+              billingCycle,
+              isBillingCycleChange,
+              isGenuineDowngrade,
+              // Carried through so applyScheduledChange (renewalEngine.js) can
+              // correctly project activeAddons for this scheduled change —
+              // without this, the PLAN_CHANGE case only updates planName/
+              // pricePerUser and silently leaves activeAddons at whatever the
+              // CURRENT (pre-downgrade) addons are, ignoring whatever
+              // carry-forward/removal choice the customer actually made.
+              carriedAddons: compatibleAddons.map((a) => ({
+                addonKey: a.addonKey, quantity: a.quantity, pricePerUnit: a.pricePerUnit,
+                billingCycle: a.billingCycle, periodEnd: a.periodEnd,
+              })),
+              removedAddons: droppedAddons.map((a) => ({
+                addonKey: a.addonKey, quantity: a.quantity, pricePerUnit: a.pricePerUnit,
+              })),
+            },
+          });
+        } catch (scErr) {
+          console.error(
+            `ScheduledChange creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
+            scErr.message
+          );
+        }
+      }
+
+      // User-reduced carry-forward quantities (editable carry-forward at
+      // downgrade) — schedule immediately, since nothing about a downgrade
+      // takes effect before renewal anyway. Same update-in-place pattern as
+      // the upgrade settlement path: a smaller/absent existing removal must
+      // be bumped to the correct full reduction, not skipped.
+      if (downgradeReducedAddons.length > 0) {
+        const pendingRemovals = subscription.pendingAddonRemovals || [];
+        for (const red of downgradeReducedAddons) {
+          const existing = pendingRemovals.find((r) => r.addonKey === red.addonKey);
+          if (existing) {
+            // red.reducedBy is the ADDITIONAL amount beyond whatever is
+            // already scheduled (existing.quantity) — total removal is the
+            // sum, not a replacement.
+            existing.quantity = existing.quantity + red.reducedBy;
+            existing.pricePerUnit = red.pricePerUnit;
+            existing.effectiveAt = subscription.currentPeriodEnd;
+          } else {
+            pendingRemovals.push({
+              addonKey: red.addonKey,
+              displayName: red.displayName || red.addonKey,
+              quantity: red.reducedBy,
+              pricePerUnit: red.pricePerUnit,
+              scheduledAt: new Date(),
+              effectiveAt: subscription.currentPeriodEnd,
+            });
+          }
+        }
+        subscription.pendingAddonRemovals = pendingRemovals;
+
+        for (const red of downgradeReducedAddons) {
+          try {
+            const existingPending = await ScheduledChange.findOne({
+              organization: subscription.organization,
+              subscription: subscription._id,
+              type: 'REMOVE_ADDON',
+              status: 'PENDING',
+              'payload.addonKey': red.addonKey,
+            });
+            const updatedRemoval = subscription.pendingAddonRemovals.find((r) => r.addonKey === red.addonKey);
+            if (existingPending) {
+              existingPending.payload = { addonKey: red.addonKey, quantity: updatedRemoval.quantity, reason: 'user_reduced_carry_forward_at_downgrade' };
+              await existingPending.save();
+            } else {
+              await ScheduledChange.create({
+                organization: subscription.organization,
+                subscription: subscription._id,
+                type: 'REMOVE_ADDON',
+                status: 'PENDING',
+                effectiveAt: subscription.currentPeriodEnd,
+                payload: { addonKey: red.addonKey, quantity: updatedRemoval.quantity, reason: 'user_reduced_carry_forward_at_downgrade' },
+              });
+            }
+          } catch (scErr) {
+            console.error(
+              `ScheduledChange creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id} addonKey=${red.addonKey}:`,
+              scErr.message
+            );
+          }
+        }
+      }
+
+      // CommercialTransaction — downgrade only (Chapter 18: a no-payment action
+      // still creates a transaction, but never enters AWAITING_PAYMENT since
+      // there is no payment step). CREATED->PRICED right here, once the target
+      // plan/effective date are known and pendingUpdate is about to be written.
+      // No existing recycle/release step for a re-submitted pendingUpdate to
+      // piggyback on (unlike upgrade's referral-reservation recycle) — the
+      // VOID-then-create here exists purely for CommercialTransaction
+      // consistency, not because a recycle mechanism already existed.
+      let downgradeCommercialTransaction = null;
+      if (isGenuineDowngrade) {
+        try {
+          await CommercialTransaction.updateMany(
+            {
+              organization: subscription.organization,
+              subscription: subscription._id,
+              type: 'DOWNGRADE',
+              status: { $in: ['CREATED', 'PRICED', 'AWAITING_PAYMENT', 'FAILED'] },
+            },
+            { $set: { status: 'VOID' } }
+          );
+          downgradeCommercialTransaction = await CommercialTransaction.create({
+            organization: subscription.organization,
+            subscription: subscription._id,
+            type: 'DOWNGRADE',
+            status: 'PRICED',
+            createdBy: req.user._id,
+            target: { newPlanName: planId, newPricePerUser, newTotalAmount, effectiveAt: subscription.currentPeriodEnd },
+          });
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
+            ctErr.message
+          );
+        }
+      }
 
       if (subscription.razorpaySubscriptionId) {
         try {
@@ -1237,6 +2657,28 @@ exports.updateSubscription = async (req, res) => {
       scheduled = true;
 
       await subscription.save();
+
+      // CommercialTransaction: PRICED -> COMMITTED, immediately -> COMPLETED.
+      // No AWAITING_PAYMENT for this flow (no payment step, per Chapter 18) —
+      // COMMITTED fires the moment pendingUpdate is durably saved (the line
+      // above); COMPLETED fires immediately after, in the same request,
+      // since "completed" here means "the customer's decision was recorded
+      // and accepted," not "the downgrade has taken effect" (that's a future
+      // renewal-time event, out of scope for this wiring).
+      if (downgradeCommercialTransaction) {
+        try {
+          downgradeCommercialTransaction.status = 'COMMITTED';
+          downgradeCommercialTransaction.lastAttemptAt = new Date();
+          await downgradeCommercialTransaction.save();
+          downgradeCommercialTransaction.status = 'COMPLETED';
+          await downgradeCommercialTransaction.save();
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction COMMITTED/COMPLETED update failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id} transaction=${downgradeCommercialTransaction._id}:`,
+            ctErr.message
+          );
+        }
+      }
 
       // Timeline: scheduled, not yet in effect — top-level subscription
       // fields are still the CURRENT plan until cycle end, so `subscription`
@@ -1267,13 +2709,9 @@ exports.updateSubscription = async (req, res) => {
       if (!isBillingCycleChange && !isUpgrade) {
         try {
           const pendingRemovals = subscription.pendingAddonRemovals || [];
-          const addonsToCheck = (subscription.activeAddons || []).filter((a) => {
-            const removal = pendingRemovals.find((r) => r.addonKey === a.addonKey);
-            return !(removal && removal.quantity >= a.quantity);
-          });
-          const { incompatible } = await classifyAddonsForPlanChange(
-            addonsToCheck, planId, billingCycle
-          );
+          // Reuse the already-computed droppedAddons (from effectiveForDowngrade)
+          // instead of re-deriving incompatibility from the raw activeAddons filter.
+          const incompatible = droppedAddons;
           incompatibleAddons = incompatible;
           if (incompatible.length > 0) {
             for (const inc of incompatible) {
@@ -1290,6 +2728,40 @@ exports.updateSubscription = async (req, res) => {
             }
             subscription.pendingAddonRemovals = pendingRemovals;
             await subscription.save();
+
+            // ScheduledChange — additive write-alongside, found by Step 5's whole-backend
+            // grep in the prior session (this site wasn't in the original Step 2 table).
+            // Matches this block's own skip-if-exists behavior (line ~1595 above), NOT
+            // scheduleAddonRemoval's merge/increment behavior — those are different
+            // shapes, confirmed by re-reading this block before wiring, not assumed
+            // identical. Only creates a record for an addonKey with no existing PENDING
+            // one; an addonKey already pending removal is left untouched here too.
+            for (const inc of incompatible) {
+              try {
+                const existingPending = await ScheduledChange.findOne({
+                  organization: subscription.organization,
+                  subscription: subscription._id,
+                  type: 'REMOVE_ADDON',
+                  status: 'PENDING',
+                  'payload.addonKey': inc.addonKey,
+                });
+                if (!existingPending) {
+                  await ScheduledChange.create({
+                    organization: subscription.organization,
+                    subscription: subscription._id,
+                    type: 'REMOVE_ADDON',
+                    status: 'PENDING',
+                    effectiveAt: subscription.currentPeriodEnd,
+                    payload: { addonKey: inc.addonKey, quantity: inc.quantity, reason: 'incompatible_with_downgrade_target_plan' },
+                  });
+                }
+              } catch (scErr) {
+                console.error(
+                  `ScheduledChange creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id} addonKey=${inc.addonKey}:`,
+                  scErr.message
+                );
+              }
+            }
           }
         } catch (err) {
           console.warn('Could not schedule incompatible add-on removals on downgrade:', err.message);
@@ -1302,6 +2774,32 @@ exports.updateSubscription = async (req, res) => {
         subscription,
         scheduled,
         paymentDetails,
+        newRecurringTotal: newTotalAmount,
+        carriedForwardAddons: compatibleAddons.map((a) => ({
+          addonKey: a.addonKey,
+          quantity: a.quantity,
+          pricePerUnit: a.pricePerUnit,
+          remappedFrom: a.remappedFrom || null,
+        })),
+        // Ceiling for the editable carry-forward stepper — the FULL surviving
+        // quantity before any user override, so the frontend never lets the
+        // user drag it back above what's actually available.
+        // Phase 2b note: NOT converted to an (addonKey, billingCycle) key
+        // here, unlike the internal Maps above — this object is the actual
+        // wire response the frontend parses as {[addonKey]: quantity}, so
+        // changing its key shape is an API-surface change (Phase 2d), not a
+        // safe internal fix. survivingCompatibleAddons itself is already
+        // correct (fixed above); this stays a no-op collision risk only
+        // until a real dual-cycle entry can exist, which 2d must resolve
+        // before that becomes reachable.
+        maxCarryForward: Object.fromEntries(survivingCompatibleAddons.map((a) => [a.addonKey, a.quantity])),
+        // New add-ons purchased in THIS request to resolve an AUTO_FIXABLE
+        // validator result (e.g. seats bought to fit the target plan).
+        newAddonsList: newAddonPurchasesDowngrade.map((a) => ({
+          addonKey: a.addonKey,
+          quantity: a.quantity,
+          pricePerUnit: a.pricePerUnit,
+        })),
         incompatibleAddons: incompatibleAddons.map((a) => ({
           addonKey: a.addonKey,
           displayName: a.displayName || a.addonKey,
@@ -1342,25 +2840,136 @@ exports.cancelSubscription = async (req, res) => {
       return res.status(404).json({ error: "No active subscription found" });
     }
 
+    // CommercialTransaction — cancellation, both branches below (trial and
+    // paid). No payment step either way, so no AWAITING_PAYMENT (Chapter 18,
+    // same reasoning as downgrade). No existing reactivate/undo-cancel
+    // endpoint was found in this file (only a message pointing the user
+    // elsewhere), so there is no existing recycle point to piggyback on —
+    // VOID-then-create exists purely for CommercialTransaction consistency.
+    let cancellationCommercialTransaction = null;
+    try {
+      await CommercialTransaction.updateMany(
+        {
+          organization: subscription.organization,
+          subscription: subscription._id,
+          type: 'CANCELLATION',
+          status: { $in: ['CREATED', 'PRICED', 'AWAITING_PAYMENT', 'FAILED'] },
+        },
+        { $set: { status: 'VOID' } }
+      );
+      cancellationCommercialTransaction = await CommercialTransaction.create({
+        organization: subscription.organization,
+        subscription: subscription._id,
+        type: 'CANCELLATION',
+        status: 'PRICED',
+        createdBy: req.user._id,
+        target: { cancelAtPeriodEnd, trial: !!subscription.isTrialActive },
+      });
+    } catch (ctErr) {
+      console.error(
+        `CommercialTransaction creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
+        ctErr.message
+      );
+    }
+
     // Trial cancellation — no Razorpay subscription exists to cancel
     if (subscription.isTrialActive) {
       subscription.isTrialActive = false;
       subscription.trialEnd = new Date();
       setAppStatus(subscription, "cancelled", "user cancelled during trial");
       await subscription.save();
+      if (cancellationCommercialTransaction) {
+        try {
+          cancellationCommercialTransaction.status = 'COMMITTED';
+          cancellationCommercialTransaction.lastAttemptAt = new Date();
+          await cancellationCommercialTransaction.save();
+          cancellationCommercialTransaction.status = 'COMPLETED';
+          await cancellationCommercialTransaction.save();
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction COMMITTED/COMPLETED update failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id} transaction=${cancellationCommercialTransaction._id}:`,
+            ctErr.message
+          );
+        }
+      }
       return res.json({
         success: true,
         message: "Trial cancelled successfully",
       });
     }
 
-    // Existing Razorpay path for paid subscriptions — unchanged
-    await razorpay.subscriptions.cancel(subscription.razorpaySubscriptionId, {
-      cancel_at_cycle_end: true,
-    });
+    // Bug found via live QA (Aug 2026): this call was unconditional and
+    // assumed every paid subscription has a real legacy Razorpay Subscription
+    // object to cancel. A CAW (Charge-at-Will) subscription has no such
+    // object at all — it's a reusable mandate token + one-time Orders, never
+    // a razorpay.subscriptions.* resource — confirmed directly against a real
+    // CAW subscription's data (mandateTokenId present, razorpaySubscriptionId
+    // absent entirely). Calling this unconditionally threw on every CAW
+    // cancellation attempt, surfacing as the generic "Failed to cancel
+    // subscription" with no useful detail. There is nothing to cancel on
+    // Razorpay's side for CAW — the mandate token itself stays valid (it's
+    // reusable infrastructure, not a per-cycle commitment); what actually
+    // stops future billing is the ScheduledChange{type:'CANCELLATION'}
+    // record created below, already correctly read back and short-circuited
+    // by renewSubscription() (renewalEngine.js:188-206, confirmed by reading
+    // it directly — this half of the mechanism was already built and working,
+    // just unreachable because the code above it crashed first).
+    if (subscription.razorpaySubscriptionId) {
+      await razorpay.subscriptions.cancel(subscription.razorpaySubscriptionId, {
+        cancel_at_cycle_end: true,
+      });
+    }
 
     subscription.cancelAtPeriodEnd = true;
     await subscription.save();
+
+    // ScheduledChange — additive write-alongside, paid path only. Not written for
+    // the trial-cancellation branch above: that path is immediate (trialEnd set to
+    // now, appStatus flipped to cancelled in the same request) — no future window
+    // exists for it to represent, same reasoning as the UPI bypass (Step 0a). Only
+    // this path is genuinely deferred (effective at currentPeriodEnd). Cancel any
+    // prior PENDING CANCELLATION/PLAN_CHANGE/BILLING_CYCLE_CHANGE ScheduledChange
+    // first — per Chapter 9's cancellation-precedence rule (Cancellation supersedes
+    // a pending downgrade/cycle-change), reflected here as bookkeeping only; no
+    // reader acts on this yet.
+    try {
+      await ScheduledChange.updateMany(
+        {
+          organization: subscription.organization,
+          subscription: subscription._id,
+          status: 'PENDING',
+        },
+        { $set: { status: 'CANCELLED', reason: 'Subscription Cancelled' } }
+      );
+      await ScheduledChange.create({
+        organization: subscription.organization,
+        subscription: subscription._id,
+        type: 'CANCELLATION',
+        status: 'PENDING',
+        effectiveAt: subscription.currentPeriodEnd,
+        payload: { cancelAtPeriodEnd },
+      });
+    } catch (scErr) {
+      console.error(
+        `ScheduledChange creation failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
+        scErr.message
+      );
+    }
+
+    if (cancellationCommercialTransaction) {
+      try {
+        cancellationCommercialTransaction.status = 'COMMITTED';
+        cancellationCommercialTransaction.lastAttemptAt = new Date();
+        await cancellationCommercialTransaction.save();
+        cancellationCommercialTransaction.status = 'COMPLETED';
+        await cancellationCommercialTransaction.save();
+      } catch (ctErr) {
+        console.error(
+          `CommercialTransaction COMMITTED/COMPLETED update failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id} transaction=${cancellationCommercialTransaction._id}:`,
+          ctErr.message
+        );
+      }
+    }
 
     await emitBillingEvent({
       organization: subscription.organization,
@@ -1380,6 +2989,311 @@ exports.cancelSubscription = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// ============================================================
+// CHARGE-AT-WILL — Phase 3A: webhook plumbing only.
+// See CAW_BILLING_DESIGN.md "Implementation Notes".
+//
+// Scope, deliberately narrow (per review — do NOT expand without a phase
+// boundary change):
+//   - verify signature (done once, at the top of handleWebhook, unchanged)
+//   - dedupe via x-razorpay-event-id (RazorpayWebhookEvent, unique index)
+//   - persist the raw vendor fact the event carries
+//   - correlate ONLY where it's a direct, single-field DB lookup — never an
+//     inference across multiple facts
+//   - NOT in scope here: activation, runFirstPaymentSettlement(), retries,
+//     interpreting "payment paid AND mandate confirmed" as a combined
+//     state — that is Phase 3B.
+//
+// Correlation keys, verified against real payloads (not assumed — see
+// CAW_BILLING_DESIGN.md Implementation Notes / CHARGE_AT_WILL_VALIDATION.md):
+//   - payment.captured / payment.failed → payload.payment.entity.invoice_id
+//     matches Subscription.registrationLinkId (the Registration Link IS an
+//     Invoice). That same payment payload also carries token_id, so a
+//     matched payment.captured is also how mandateTokenId gets recorded.
+//   - token.confirmed / token.paused / token.cancelled / token.rejected →
+//     Subscription.mandateTokenId matches payload.token.entity.id. This can
+//     legitimately find nothing (if payment.captured hasn't arrived yet to
+//     populate mandateTokenId, or arrives out of order — confirmed possible,
+//     §7a). When nothing matches, the event is stored unattached
+//     (subscription: null) and left for Phase 3B; Phase 3A does not invent a
+//     reconciliation mechanism for this case.
+// ============================================================
+
+// Records the webhook for dedup, unless already seen. Returns null if this
+// razorpayEventId was already processed (caller should skip and return 200).
+async function recordWebhookEventOnce(razorpayEventId, eventName, payload, subscriptionId) {
+  try {
+    return await RazorpayWebhookEvent.create({
+      razorpayEventId,
+      event: eventName,
+      payload,
+      subscription: subscriptionId || null,
+    });
+  } catch (err) {
+    if (err.code === 11000) return null; // duplicate delivery (at-least-once) — already recorded
+    throw err;
+  }
+}
+
+// ============================================================
+// Phase 3B — reconciliation + activation. ONE shared helper, called by BOTH
+// the payment and token handlers after each persists its own fact. Not
+// embedded in either handler specifically — Razorpay's delivery order is not
+// guaranteed (§7a) and must not be baked into which handler "owns" this.
+// See CAW_BILLING_DESIGN.md "Phase 3B Planning".
+// ============================================================
+async function reconcileMandate(subscription) {
+  // Claim any orphaned token.* event that arrived before we knew mandateTokenId
+  // (the out-of-order case observed live — token.confirmed before payment.captured).
+  if (subscription.mandateTokenId) {
+    const orphaned = await RazorpayWebhookEvent.findOne({
+      subscription: null,
+      'payload.id': subscription.mandateTokenId,
+    }).sort({ receivedAt: -1 });
+    if (orphaned) {
+      orphaned.subscription = subscription._id;
+      await orphaned.save();
+      const tokenMandateStatus = { 'token.confirmed': 'confirmed', 'token.paused': 'paused', 'token.cancelled': 'cancelled', 'token.rejected': 'rejected' }[orphaned.event];
+      if (tokenMandateStatus) {
+        subscription.mandateStatus = tokenMandateStatus;
+        if (tokenMandateStatus === 'confirmed') {
+          if (orphaned.payload.max_amount) subscription.mandateMaxAmount = orphaned.payload.max_amount / 100;
+          if (orphaned.payload.expired_at) subscription.mandateExpiresAt = new Date(orphaned.payload.expired_at * 1000);
+        }
+      }
+    }
+  }
+
+  // Activation AND-gate (§7a). setAppStatus and runFirstPaymentSettlement are
+  // both already idempotent (no-op on repeat) — this is safe to call every
+  // time reconcileMandate runs, from either handler, any number of times.
+  const wasAlreadyActive = subscription.appStatus === 'active';
+  if (subscription.paymentStatus === 'payment_completed' && subscription.mandateStatus === 'confirmed') {
+    subscription.isPaymentConfirmed = true;
+    // Regression fix (found via live QA — real money-affecting bug): this
+    // AND-gate is THE activation moment for every CAW (Registration-Link)
+    // subscription — trial-conversion's own write site never clears
+    // isTrialActive (that responsibility was assumed to belong to one of
+    // the legacy Razorpay-Subscription confirmation paths — handleSubscriptionAuthenticated/
+    // Activated/Charged, verifyPayment — but NONE of those ever run for a
+    // CAW subscription, since they all key off razorpaySubscriptionId,
+    // which trial-conversion explicitly clears to undefined). Left
+    // unclear, isTrialActive stayed true indefinitely after a real trial
+    // ->paid CAW conversion, which broke
+    // frontend/src/components/settings/SubscriptionPlans.jsx's
+    // `isExistingActiveSub = isPaymentConfirmed && !isTrialActive` check —
+    // silently routing every subsequent upgrade/downgrade through the
+    // generic new-subscription checkout branch (flat plan price, no
+    // proration breakdown, no add-on compatibility/carry-forward prompt)
+    // instead of the real upgrade/downgrade UI, even though the backend
+    // itself (gated only on isPaymentConfirmed, never isTrialActive) still
+    // charged the correct prorated amount underneath. Setting it here,
+    // atomically with isPaymentConfirmed, closes the gap at its actual
+    // source rather than relying on some other function to eventually
+    // self-heal it on a later, unrelated call.
+    subscription.isTrialActive = false;
+    setAppStatus(subscription, 'active', 'Charge-at-Will mandate confirmed and first payment captured');
+
+    // CAW has no Razorpay-managed recurring subscription object to read
+    // current_start/current_end/charge_at from (unlike the legacy path —
+    // see the other currentPeriodStart/End write sites in this file) — the
+    // billing period is a homegrown invariant this system owns itself, so it
+    // must be initialized HERE, at first activation. Guarded so a repeat
+    // call (setAppStatus is idempotent and this can run more than once)
+    // never resets an already-running cycle.
+    if (!subscription.currentPeriodStart) {
+      const { addBillingCycle } = require('../utils/renewalEngine');
+      const activatedAt = new Date();
+      subscription.currentPeriodStart = activatedAt;
+      subscription.currentPeriodEnd = addBillingCycle(activatedAt, subscription.billingCycle);
+      subscription.nextBillingDate = subscription.currentPeriodEnd;
+    }
+  }
+
+  await subscription.save();
+
+  // Found via live QA: this was the missing event — the timeline used to go
+  // straight from "Subscribed" (at mandate REQUEST time, now renamed "Plan
+  // Selected") to nothing, ever, for the moment payment actually confirms.
+  // Guarded on the wasAlreadyActive->now-active TRANSITION specifically
+  // (not "is appStatus active", which reconcileMandate can true on every
+  // repeat call) — fires exactly once, the instant real activation happens.
+  if (!wasAlreadyActive && subscription.appStatus === 'active') {
+    await emitBillingEvent({
+      organization: subscription.organization,
+      subscription: subscription._id,
+      eventType: 'SUBSCRIPTION_ACTIVATED',
+      status: 'completed',
+      after: subscription,
+      amounts: { recurringAfter: subscription.totalAmount },
+    });
+  }
+
+  if (subscription.appStatus === 'active') {
+    await runFirstPaymentSettlement(subscription);
+  }
+}
+
+async function handleCAWPaymentCaptured(paymentEntity, razorpayEventId) {
+  // Same guard as handleCAWPaymentFailed below, and more dangerous here: a
+  // null invoice_id (true for every renewal/add-on/upgrade Order charge, not
+  // just registration-link payments) previously matched an ARBITRARY
+  // unrelated subscription and could have called runFirstPaymentSettlement /
+  // emitted SUBSCRIPTION_ACTIVATED against it.
+  const subscription = paymentEntity.invoice_id
+    ? await Subscription.findOne({ registrationLinkId: paymentEntity.invoice_id })
+    : null;
+  const recorded = await recordWebhookEventOnce(razorpayEventId, 'payment.captured', paymentEntity, subscription?._id);
+  if (!recorded) return; // duplicate delivery, already processed
+  if (!subscription) return; // not a CAW subscription (or legacy payment) — legacy handler already ran separately
+
+  // Persist the fact.
+  subscription.paymentStatus = 'payment_completed';
+  subscription.lastPaymentAttempt = {
+    razorpayPaymentId: paymentEntity.id,
+    amount: paymentEntity.amount / 100,
+    attemptedAt: new Date(),
+    status: paymentEntity.status,
+  };
+  if (paymentEntity.token_id && !subscription.mandateTokenId) {
+    subscription.mandateTokenId = paymentEntity.token_id;
+  }
+  await reconcileMandate(subscription);
+}
+
+async function handleCAWPaymentFailed(paymentEntity, razorpayEventId) {
+  // Found while building Task 1 (Aug 2026): querying registrationLinkId with
+  // a null/absent invoice_id — true for EVERY payment.failed that isn't a
+  // mandate-registration invoice, including every renewal charge — matched
+  // an ARBITRARY unrelated subscription with no registrationLinkId set
+  // (Mongo's `{field: null}` matches both explicitly-null AND missing
+  // fields), and then mutated that unrelated subscription's paymentStatus.
+  // Confirmed live against the test database: it was silently corrupting a
+  // leftover, unrelated subscription document on every run. Guard against
+  // querying at all when there's no real invoice_id to correlate against.
+  const subscription = paymentEntity.invoice_id
+    ? await Subscription.findOne({ registrationLinkId: paymentEntity.invoice_id })
+    : null;
+  const recorded = await recordWebhookEventOnce(razorpayEventId, 'payment.failed', paymentEntity, subscription?._id);
+  if (!recorded) return;
+  if (!subscription) return;
+
+  // Persist the fact only — no retry logic (Phase 7 owns retries), and no
+  // activation (a failed auth payment must never activate anything).
+  subscription.paymentStatus = 'payment_failed';
+  subscription.lastPaymentAttempt = {
+    razorpayPaymentId: paymentEntity.id,
+    amount: paymentEntity.amount / 100,
+    attemptedAt: new Date(),
+    status: paymentEntity.status,
+  };
+  // Release rather than leave occupied for the full 30-min TTL — a failed
+  // first-payment attempt (as opposed to one still awaiting confirmation)
+  // frees the reward back up immediately, mirroring RF6's release pattern.
+  if (subscription.pendingReferralRewardUsageId) {
+    try {
+      await releaseReservation(subscription.pendingReferralRewardUsageId, 'PAYMENT_FAILED');
+      subscription.pendingReferralRewardUsageId = undefined;
+    } catch (err) {
+      console.error(`handleCAWPaymentFailed: reward release failed for ${subscription._id}:`, err.message);
+    }
+  }
+  await subscription.save();
+}
+
+// Task 1 (Aug 2026) — closes a real gap found while auditing webhook
+// reconciliation: handleCAWPaymentFailed above only matches by
+// registrationLinkId, which is a mandate-ACQUISITION concept (used once,
+// during onboarding) — it's absent/stale on an already-active, renewing
+// subscription. A CAW RENEWAL charge (razorpayChargeMandate.js) creates its
+// own Order via orders.create(), so an async payment.failed for that order
+// (e.g. the bank declines after Razorpay accepted the recurring-payment
+// request synchronously) previously matched NEITHER this file's payment.failed
+// handler NOR the legacy razorpaySubscriptionId one — it was silently
+// unhandled, not just untested. Correlates by order_id against the RENEWAL
+// CommercialTransaction (target.orderId, persisted by renewalEngine.js's own
+// failure/success branches as of this same fix) and reuses the EXACT same
+// past_due transition renewSubscription() already performs for a
+// synchronously-detected failure — no new failure-state path invented.
+async function handleCAWRenewalPaymentFailed(paymentEntity, razorpayEventId) {
+  const orderId = paymentEntity.order_id;
+  if (!orderId) return;
+
+  const commercialTransaction = await CommercialTransaction.findOne({
+    type: 'RENEWAL',
+    'target.orderId': orderId,
+  });
+  if (!commercialTransaction) return; // not a renewal charge — some other order type's payment.failed
+
+  const subscription = await Subscription.findById(commercialTransaction.subscription);
+  if (!subscription) return;
+
+  // NOT recordWebhookEventOnce() here — handleCAWPaymentFailed above already
+  // claims this same razorpayEventId via that helper's unique-index dedup
+  // (uncorrelated, subscription: null, since its own registrationLinkId
+  // lookup never matches a renewal). A second create() for the identical
+  // eventId would collide against that same index and always report "already
+  // processed," which would make this branch's own correlation permanently
+  // unreachable. Instead: best-effort attach this handler's real correlation
+  // onto that already-written row, and proceed unconditionally — every
+  // mutation below (setAppStatus, failureReason) is naturally idempotent on
+  // Razorpay's own at-least-once redelivery (setAppStatus is a documented
+  // no-op when the target status already matches), so no separate dedup
+  // guard is needed for correctness here.
+  await RazorpayWebhookEvent.updateOne(
+    { razorpayEventId, subscription: null },
+    { $set: { subscription: subscription._id } }
+  );
+
+  // A payment.failed for an already-COMMITTED (succeeded) transaction is a
+  // genuine anomaly, not a normal race — the synchronous charge path already
+  // recorded success, so this must never silently undo it or re-fail the
+  // subscription. Flag it for manual review only, same shape as this
+  // codebase's existing RECONCILIATION_NEEDED convention (cycle-transition's
+  // own boundary-mismatch branch uses the same string tag) — nothing
+  // financial changes.
+  if (['COMMITTED', 'COMPLETED'].includes(commercialTransaction.status)) {
+    commercialTransaction.failureReason =
+      `RECONCILIATION_NEEDED: payment.failed received for order ${orderId} after this RENEWAL transaction was already COMMITTED — verify with Razorpay before taking any action.`;
+    await commercialTransaction.save();
+    return;
+  }
+
+  // Only act while the transaction is still non-terminal (PRICED) — matches
+  // renewSubscription()'s own invariant (Step 7 of Phase 4C design): a
+  // COMMITTED transaction means the charge already succeeded through the
+  // synchronous path, and this async webhook must never undo that. Also
+  // covers the ordinary race where the synchronous chargeMandateFn call in
+  // renewSubscription() ALREADY marked this same failure past_due before
+  // this webhook even arrived — re-applying the identical transition is
+  // harmless, but skip it if appStatus already reflects a worse/different
+  // state than 'active'/'past_due' (e.g. already fully 'cancelled').
+  if (commercialTransaction.status !== 'PRICED') return;
+  if (!['active', 'past_due'].includes(subscription.appStatus)) return;
+
+  setAppStatus(subscription, 'past_due', 'Renewal charge failed (webhook-detected)');
+  await subscription.save();
+}
+
+async function handleCAWTokenEvent(tokenEntity, mandateStatus, razorpayEventId, eventName) {
+  const subscription = await Subscription.findOne({ mandateTokenId: tokenEntity.id });
+  const recorded = await recordWebhookEventOnce(razorpayEventId, eventName, tokenEntity, subscription?._id);
+  if (!recorded) return;
+  if (!subscription) return; // no direct correlation available yet — see file-header note; not an error
+
+  subscription.mandateStatus = mandateStatus;
+  if (mandateStatus === 'confirmed') {
+    if (tokenEntity.max_amount) subscription.mandateMaxAmount = tokenEntity.max_amount / 100;
+    if (tokenEntity.expired_at) subscription.mandateExpiresAt = new Date(tokenEntity.expired_at * 1000);
+  }
+  await reconcileMandate(subscription);
+}
+
+// Exported so the future timeout-based reconciliation job (CAW_BILLING_DESIGN.md
+// "Phase 3B Planning" — the one sweep job, not a family of crons) can call the
+// exact same logic a webhook would have triggered.
+exports.reconcileMandate = reconcileMandate;
 
 // Webhook handler
 exports.handleWebhook = async (req, res) => {
@@ -1428,9 +3342,13 @@ exports.handleWebhook = async (req, res) => {
     }
 
     const event = req.body;
+    const razorpayEventId = req.headers['x-razorpay-event-id'];
     switch (event.event) {
       case "payment.captured":
         await handlePaymentCaptured(event.payload.payment.entity);
+        // CAW (Phase 3A) — additive, independent of the legacy handler above.
+        // No-ops if this payment isn't tied to a CAW subscription.
+        await handleCAWPaymentCaptured(event.payload.payment.entity, razorpayEventId);
         break;
       case "subscription.authenticated":
         await handleSubscriptionAuthenticated(event.payload.subscription.entity);
@@ -1446,12 +3364,30 @@ exports.handleWebhook = async (req, res) => {
         break;
       case "payment.failed":
         await handlePaymentFailed(event.payload.payment.entity);
+        // CAW (Phase 3A) — additive, see payment.captured above.
+        await handleCAWPaymentFailed(event.payload.payment.entity, razorpayEventId);
+        // Task 1 (Aug 2026) — additive, closes the renewal-charge-failure
+        // correlation gap (order_id, not registrationLinkId/subscriptionId).
+        await handleCAWRenewalPaymentFailed(event.payload.payment.entity, razorpayEventId);
         break;
       case "subscription.cancelled":
         await handleSubscriptionCancelled(event.payload.subscription.entity);
         break;
       case "subscription.halted":
         await handleSubscriptionHalted(event.payload.subscription.entity);
+        break;
+      // CAW (Phase 3A) — new event types, no legacy equivalent.
+      case "token.confirmed":
+        await handleCAWTokenEvent(event.payload.token.entity, 'confirmed', razorpayEventId, event.event);
+        break;
+      case "token.paused":
+        await handleCAWTokenEvent(event.payload.token.entity, 'paused', razorpayEventId, event.event);
+        break;
+      case "token.cancelled":
+        await handleCAWTokenEvent(event.payload.token.entity, 'cancelled', razorpayEventId, event.event);
+        break;
+      case "token.rejected":
+        await handleCAWTokenEvent(event.payload.token.entity, 'rejected', razorpayEventId, event.event);
         break;
       default:
         console.log("Unhandled webhook event:", event.event);
@@ -1475,108 +3411,16 @@ async function handlePaymentCaptured(razorpayPayment) {
     notes: razorpayPayment.notes,
   });
 
-  // Handle order-based payment (upgrades)
-  const subscription = await Subscription.findOne({
-    "pendingUpgrade.orderId": razorpayPayment.order_id,
-  });
-
-  if (subscription && subscription.pendingUpgrade) {
-    try {
-      const pending = subscription.pendingUpgrade;
-
-      // Verify payment amount
-      if (razorpayPayment.amount / 100 !== pending.prorationAmount) {
-        console.error(`Payment amount mismatch for order ${razorpayPayment.order_id}`, {
-          expected: pending.prorationAmount,
-          received: razorpayPayment.amount / 100,
-        });
-        return;
-      }
-
-      // Preserve original billing cycle dates
-      const originalPeriodStart = subscription.currentPeriodStart;
-      const originalPeriodEnd = subscription.currentPeriodEnd;
-      const originalNextBillingDate = subscription.nextBillingDate;
-
-      // Fetch new plan_id
-      const newPlan = await PlanConfig.findOne({ planId: pending.planName });
-      if (!newPlan || !newPlan.razorpayPlanIds[pending.billingCycle]) {
-        console.error(`Invalid plan or razorpayPlanId for ${pending.planName}, billingCycle: ${pending.billingCycle}`);
-        throw new Error('Invalid plan configuration');
-      }
-
-      // Carry forward add-ons at their grandfathered pricePerUnit
-      const carryForwardAddons = pending.activeAddons && pending.activeAddons.length > 0
-        ? pending.activeAddons
-        : (subscription.activeAddons || []);
-
-      const newBasePlanPrice = pending.billingCycle === 'monthly'
-        ? newPlan.monthlyPrice
-        : newPlan.yearlyPrice;
-
-      const combinedTotal = carryForwardAddons.reduce(
-        (sum, addon) => sum + addon.quantity * addon.pricePerUnit,
-        newBasePlanPrice
-      );
-
-      // Use a combined Razorpay Plan when add-ons are present, otherwise use the base plan directly
-      const newRazorpayPlanId = carryForwardAddons.length > 0
-        ? await findOrCreateRazorpayPlan(combinedTotal, pending.billingCycle, pending.planName)
-        : newPlan.razorpayPlanIds[pending.billingCycle];
-
-      // Update existing Razorpay subscription to the new plan
-      const updatedRazorpaySubscription = await razorpay.subscriptions.update(subscription.razorpaySubscriptionId, {
-        plan_id: newRazorpayPlanId,
-        quantity: 1,
-        schedule_change_at: 'now',
-      });
-
-      // Update local subscription (preserve original dates, carry forward add-ons)
-      subscription.razorpaySubscriptionId = updatedRazorpaySubscription.id;
-      subscription.razorpayPlanId = newRazorpayPlanId;
-      subscription.planName = pending.planName;
-      subscription.pricePerUser = newBasePlanPrice;
-      subscription.userCount = 1;
-      subscription.totalAmount = combinedTotal;
-      subscription.activeAddons = carryForwardAddons;
-      subscription.billingCycle = pending.billingCycle;
-      subscription.status = updatedRazorpaySubscription.status;
-      subscription.currentPeriodStart = originalPeriodStart; // Preserve original
-      subscription.currentPeriodEnd = originalPeriodEnd; // Preserve original
-      subscription.nextBillingDate = originalNextBillingDate; // Preserve original
-      subscription.pendingUpgrade = null;
-      subscription.isPaymentConfirmed = true;
-      subscription.paymentStatus = "payment_completed";
-      setAppStatus(subscription, "active", "upgrade payment captured");
-
-      await subscription.save();
-
-      // Record payment
-      try {
-        const payment = new SubscriptionPayment({
-          organization: subscription.organization,
-          subscription: subscription._id,
-          razorpayPaymentId: razorpayPayment.id,
-          amount: razorpayPayment.amount / 100,
-          status: razorpayPayment.status,
-          method: razorpayPayment.method,
-          paymentFor: "upgrade_proration",
-        });
-
-        await payment.save();
-        console.log(`Payment recorded for order ${razorpayPayment.order_id}`);
-      } catch (paymentError) {
-        console.error(`Failed to record payment for order ${razorpayPayment.order_id}:`, paymentError.message);
-        // Continue even if payment recording fails
-      }
-
-      console.log(`Subscription ${subscription._id} upgraded to ${pending.planName} after payment ${razorpayPayment.id}, retained billing cycle: ${originalNextBillingDate}`);
-    } catch (error) {
-      console.error(`Failed to process payment.captured for order ${razorpayPayment.order_id}:`, error);
-      throw error;
-    }
-    return;
-  }
+  // Dead legacy branch removed here (confirmed via live QA follow-up):
+  // this used to handle upgrades via `subscription.pendingUpgrade` and the
+  // classic razorpay.subscriptions.update() API. Confirmed by grep across
+  // the whole codebase that nothing ever writes real data into
+  // `pendingUpgrade` — every reference either read it defensively or set it
+  // to null. It's a pre-CAW artifact from before this project's real upgrade
+  // path (pendingPlanChange, handled elsewhere in this same file) replaced
+  // it. Removing it here, not just leaving it dead, since it also never
+  // applied a coupon modifier at all — a real gap were it ever reachable,
+  // moot now that it's gone.
 
   // Handle add-on purchase payment (Order-based)
   const addonSubscription = await Subscription.findOne({
@@ -1612,48 +3456,131 @@ async function handlePaymentCaptured(razorpayPayment) {
         return;
       }
 
-      // Apply add-on to activeAddons
+      // Phase 3 item 6: PRICED/AWAITING_PAYMENT -> COMMITTED. Correlated via
+      // the orderId stored in `target` at request time — this lookup is
+      // purely additive (observational write), never a dependency: settlement
+      // above/below is still driven entirely by `pending` (pendingAddonAddition).
+      // Payment confirmation is the commit point (BILLING_DOMAIN_SPECIFICATION.md
+      // Chapter 15) — right here, since the amount check above already passed.
+      let commercialTransaction = null;
+      try {
+        commercialTransaction = await CommercialTransaction.findOne({
+          organization: addonSubscription.organization,
+          subscription: addonSubscription._id,
+          type: 'ADDON_PURCHASE',
+          'target.orderId': razorpayPayment.order_id,
+          status: 'AWAITING_PAYMENT',
+        });
+        if (commercialTransaction) {
+          commercialTransaction.status = 'COMMITTED';
+          commercialTransaction.lastAttemptAt = new Date();
+          await commercialTransaction.save();
+        }
+      } catch (ctErr) {
+        console.error(
+          `CommercialTransaction COMMITTED update failed (non-fatal) — organization=${addonSubscription.organization} subscription=${addonSubscription._id} order=${razorpayPayment.order_id}:`,
+          ctErr.message
+        );
+      }
+
+      // Apply add-on to activeAddons.
+      // Phase 2c: identity is (addonKey, billingCycle), not addonKey alone —
+      // preserve billingCycle/periodEnd through the rebuild (previously
+      // stripped here) and match/merge via addonIdentityKey, so a monthly
+      // and annual instance of the same addonKey are never combined.
       const activeAddons = (addonSubscription.activeAddons || []).map((a) => ({
         addonKey: a.addonKey,
         quantity: a.quantity,
         pricePerUnit: a.pricePerUnit,
         addedAt: a.addedAt,
+        billingCycle: a.billingCycle,
+        periodEnd: a.periodEnd,
+        // Task 1 (Aug 2026) — preserve through the rebuild, same reasoning
+        // as billingCycle/periodEnd's own comment above: this independent
+        // renewal clock must never silently reset just because a DIFFERENT
+        // add-on purchase happened to touch this array.
+        nextRenewalAt: a.nextRenewalAt,
+        lastRenewalAt: a.lastRenewalAt,
       }));
-      const existingIdx = activeAddons.findIndex((a) => a.addonKey === pending.addonKey);
+      const pendingCycle = pending.billingCycle || addonSubscription.billingCycle;
+      const existingIdx = activeAddons.findIndex(
+        (a) => addonIdentityKey(a, addonSubscription.billingCycle) === addonIdentityKey({ addonKey: pending.addonKey, billingCycle: pendingCycle }, addonSubscription.billingCycle)
+      );
       if (existingIdx >= 0) {
+        // Adding units to an existing instance never resets its own anchor —
+        // periodEnd (if any) is left untouched.
         activeAddons[existingIdx] = {
           ...activeAddons[existingIdx],
           quantity: activeAddons[existingIdx].quantity + pending.quantity,
         };
       } else {
+        const addedAt = new Date();
+        const periodEnd = pendingCycle === 'yearly'
+          ? new Date(addedAt.getFullYear() + 1, addedAt.getMonth(), addedAt.getDate(), addedAt.getHours(), addedAt.getMinutes(), addedAt.getSeconds())
+          : null;
+        // Task 1 (Aug 2026): a monthly add-on landing on an ALREADY-annual
+        // subscription needs its own independent renewal clock from day
+        // one — this is exactly the mismatch addonRenewalEngine.js exists
+        // for. An addon matching the subscription's own cycle leaves this
+        // null (rides the base renewal, unchanged, no double-charge risk).
         activeAddons.push({
           addonKey: pending.addonKey,
           quantity: pending.quantity,
           pricePerUnit: pending.pricePerUnit,
-          addedAt: new Date(),
+          addedAt,
+          billingCycle: pendingCycle,
+          periodEnd,
+          nextRenewalAt: (pendingCycle === 'monthly' && addonSubscription.billingCycle === 'yearly')
+            ? computeNextAddonRenewalDate(addedAt)
+            : null,
         });
       }
 
       // Compute new combined recurring total (base + all addons)
-      const newTotal = buildPricingSnapshot({
-        plan,
-        billingCycle: addonSubscription.billingCycle,
-        activeAddons,
-      }).totalAmount;
+      // Phase 3 item 5c (Category C harmonization): matches the upgrade
+      // settlement branch above, which already prices its recurring baseline
+      // via calculateInvoice() — this add-on branch was the one asymmetry
+      // left (BUG report / IMPLEMENTATION_PLAN_V1.md), now closed the same way.
+      const newTotal = calculateInvoice({
+        subscription: {
+          planName: plan.planId,
+          billingCycle: addonSubscription.billingCycle,
+          pricePerUser: addonSubscription.billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice,
+          activeAddons,
+        },
+      }).taxable;
 
-      // Update Razorpay subscription plan — takes effect NEXT billing cycle
-      const newPlanId = await findOrCreateRazorpayPlan(newTotal, addonSubscription.billingCycle, plan.planId);
-      try {
-        await razorpay.subscriptions.update(addonSubscription.razorpaySubscriptionId, {
-          plan_id: newPlanId,
-          schedule_change_at: 'cycle_end',
-        });
-        console.log(`Razorpay subscription updated to new plan ${newPlanId}`);
-      } catch (razorpayUpdateError) {
-        console.warn(
-          `Could not update Razorpay subscription plan (likely UPI — will sync at next renewal): ${razorpayUpdateError?.error?.description || razorpayUpdateError.message}`
-        );
-        // Do NOT re-throw — payment succeeded, addon must be activated regardless.
+      // Update Razorpay subscription plan — takes effect NEXT billing cycle.
+      // Task 0 (Aug 2026) — CONFIRMED LIVE CRASH: this whole block is legacy
+      // Razorpay-Subscriptions-API-specific (updates the OLD recurring
+      // "Subscription" object's plan for its next cycle) and was being run
+      // UNCONDITIONALLY, including for CAW subscriptions that have no
+      // razorpaySubscriptionId and no such object to update at all. For
+      // those, findOrCreateRazorpayPlan()'s razorpay.plans.create() call
+      // (utils/addonManagement.js) threw a real, uncaught 401 Unauthorized
+      // from Razorpay (this account isn't provisioned for the legacy
+      // Plans/Subscriptions product — same 401 already documented elsewhere
+      // in this codebase, e.g. cycleTransitionLifecycle.js's own file-header
+      // note) — reproduced directly against a disposable clone of the real
+      // stuck record (order_TNzKWCQ2iaVPY1) before this fix, confirmed gone
+      // after. That crash propagated straight out of the webhook handler,
+      // Razorpay retried delivery repeatedly (the six 500s), and the add-on
+      // purchase never committed — pendingAddonAddition stuck forever.
+      let newPlanId; // stays undefined for CAW subscriptions — no legacy Razorpay Plan object involved
+      if (addonSubscription.razorpaySubscriptionId) {
+        try {
+          newPlanId = await findOrCreateRazorpayPlan(newTotal, addonSubscription.billingCycle, plan.planId);
+          await razorpay.subscriptions.update(addonSubscription.razorpaySubscriptionId, {
+            plan_id: newPlanId,
+            schedule_change_at: 'cycle_end',
+          });
+          console.log(`Razorpay subscription updated to new plan ${newPlanId}`);
+        } catch (razorpayUpdateError) {
+          console.warn(
+            `Could not update Razorpay subscription plan (likely UPI — will sync at next renewal): ${razorpayUpdateError?.error?.description || razorpayUpdateError.message}`
+          );
+          // Do NOT re-throw — payment succeeded, addon must be activated regardless.
+        }
       }
 
       const referralRewardUsageId = pending.referralRewardUsageId;
@@ -1663,6 +3590,20 @@ async function handlePaymentCaptured(razorpayPayment) {
       addonSubscription.totalAmount = newTotal;
       addonSubscription.pendingAddonAddition = undefined;
       await addonSubscription.save();
+
+      // Phase 3 item 6: COMMITTED -> COMPLETED, now that the commercial
+      // change has actually been applied and persisted.
+      if (commercialTransaction) {
+        try {
+          commercialTransaction.status = 'COMPLETED';
+          await commercialTransaction.save();
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction COMPLETED update failed (non-fatal) — organization=${addonSubscription.organization} subscription=${addonSubscription._id} transaction=${commercialTransaction._id}:`,
+            ctErr.message
+          );
+        }
+      }
 
       // Consume the reserved referral reward, if this checkout used one —
       // settlement is the only place a RewardUsage moves to 'consumed'
@@ -1746,6 +3687,446 @@ async function handlePaymentCaptured(razorpayPayment) {
     return;
   }
 
+  // Handle Monthly -> Annual cycle-transition payment (Phase 3,
+  // docs/audit/PHASE3_MONTHLY_TO_ANNUAL_PRORATION.md). Same Order-based
+  // settlement shape as add-on purchases above — see this session's four
+  // stated decisions before touching this block:
+  //   1. Recompute the entitlement window fresh at commit (getEntitlementWindow
+  //      with a fresh `now`), never trust the initiation-time stored window as
+  //      the new currentPeriodEnd — that was the original stale-window flaw.
+  //   2. CommercialTransaction.type: 'BILLING_CYCLE_CHANGE' — independent of
+  //      ScheduledChange's own (unrelated, deferred-path) use of the same word.
+  //   3. Boundary-mismatch fail-safe: if the recomputed windowStart differs
+  //      from the QUOTED windowStart (a 12-month anchor boundary was crossed
+  //      between initiation and settlement), do NOT commit billingCycle/
+  //      currentPeriodStart/End — leave the subscription exactly as it is
+  //      (still monthly, fully safe) and log loudly for manual reconciliation,
+  //      reusing this codebase's existing RECONCILIATION_NEEDED shape rather
+  //      than inventing a new stored state.
+  //   4. No self-service/admin clear-path for a stuck pendingCycleTransition
+  //      exists yet (inherited limitation, matches pendingAddonAddition's
+  //      existing gap) — if RECONCILIATION_NEEDED is ever actually observed
+  //      in production, building a clear-path becomes the immediate next
+  //      task, not something to defer further at that point.
+  const cycleTransitionSubscription = await Subscription.findOne({
+    'pendingCycleTransition.orderId': razorpayPayment.order_id,
+  });
+
+  if (cycleTransitionSubscription && cycleTransitionSubscription.pendingCycleTransition) {
+    try {
+      const pending = cycleTransitionSubscription.pendingCycleTransition;
+
+      // Task 2: the Order covers the base transition PLUS every itemized
+      // add-on conversion — the mismatch check must verify against that
+      // combined total, not just the base amount alone.
+      const addonConversionTotal = (pending.addonConversions || []).reduce((sum, c) => sum + (c.amount || 0), 0);
+      const expectedPaise = (pending.amount + addonConversionTotal) * 100;
+      if (Math.abs(razorpayPayment.amount - expectedPaise) > 100) {
+        console.error(`Cycle-transition payment amount mismatch for order ${razorpayPayment.order_id}`, {
+          expected: expectedPaise,
+          received: razorpayPayment.amount,
+        });
+        return;
+      }
+
+      // Decision 1 — recompute fresh at commit, never trust the stored window.
+      const nowAtCommit = new Date();
+      const { windowStart: recomputedStart, windowEnd: recomputedEnd } = getEntitlementWindow(
+        cycleTransitionSubscription.billingAnchor,
+        nowAtCommit
+      );
+
+      // Decision 3 — boundary-mismatch detection. Compare the anchor-relative
+      // window START (the window's identity), not the end — two computations
+      // of the SAME window always agree on both start and end, so a mismatch
+      // in start alone is sufficient and unambiguous evidence a boundary was
+      // crossed between initiation and settlement.
+      const quotedStart = pending.windowStart ? new Date(pending.windowStart).getTime() : null;
+      if (quotedStart !== recomputedStart.getTime()) {
+        console.error(
+          `RECONCILIATION_NEEDED: cycle-transition window boundary crossed between initiation and settlement — ` +
+          `organization=${cycleTransitionSubscription.organization} subscription=${cycleTransitionSubscription._id} ` +
+          `order=${razorpayPayment.order_id} payment=${razorpayPayment.id} amountCharged=${pending.amount} ` +
+          `quotedWindowStart=${pending.windowStart} quotedWindowEnd=${pending.windowEnd} ` +
+          `recomputedWindowStart=${recomputedStart.toISOString()} recomputedWindowEnd=${recomputedEnd.toISOString()}. ` +
+          `Payment WAS captured — subscription intentionally left unchanged (still ${cycleTransitionSubscription.billingCycle}), ` +
+          `pendingCycleTransition intentionally left set to block a competing retry. Requires manual review — ` +
+          `no automated clear-path exists yet (Decision 4).`
+        );
+        return;
+      }
+
+      const beforeSnapshot = {
+        planName: cycleTransitionSubscription.planName,
+        billingCycle: cycleTransitionSubscription.billingCycle,
+        pricePerUser: cycleTransitionSubscription.pricePerUser,
+        currentPeriodStart: cycleTransitionSubscription.currentPeriodStart,
+        currentPeriodEnd: cycleTransitionSubscription.currentPeriodEnd,
+        totalAmount: cycleTransitionSubscription.totalAmount,
+      };
+
+      let commercialTransaction = null;
+      try {
+        commercialTransaction = await CommercialTransaction.findOne({
+          organization: cycleTransitionSubscription.organization,
+          subscription: cycleTransitionSubscription._id,
+          type: 'BILLING_CYCLE_CHANGE',
+          'target.orderId': razorpayPayment.order_id,
+          status: 'AWAITING_PAYMENT',
+        });
+        if (commercialTransaction) {
+          commercialTransaction.status = 'COMMITTED';
+          commercialTransaction.lastAttemptAt = new Date();
+          await commercialTransaction.save();
+        }
+      } catch (ctErr) {
+        console.error(
+          `CommercialTransaction COMMITTED update failed (non-fatal) — organization=${cycleTransitionSubscription.organization} subscription=${cycleTransitionSubscription._id} order=${razorpayPayment.order_id}:`,
+          ctErr.message
+        );
+      }
+
+      // Cross-tier: targetPlanId defaults to the subscription's own current
+      // plan at initiation time (see initiateMonthlyToAnnualTransition), so
+      // this is a same-tier no-op assignment for every existing/same-tier
+      // caller and a real plan change only when a different target was
+      // explicitly requested.
+      cycleTransitionSubscription.planName = pending.targetPlanId || cycleTransitionSubscription.planName;
+      cycleTransitionSubscription.billingCycle = pending.targetBillingCycle;
+      cycleTransitionSubscription.pricePerUser = pending.targetPricePerUser;
+      cycleTransitionSubscription.totalAmount = pending.targetPricePerUser; // add-ons priced separately, unaffected by this transition
+      cycleTransitionSubscription.currentPeriodStart = recomputedStart;
+      cycleTransitionSubscription.currentPeriodEnd = recomputedEnd;
+      // Bug found via live QA (Aug 2026): nextBillingDate was left stale at
+      // this commit site — every other CAW write site keeps it in sync with
+      // currentPeriodEnd (e.g. :3049's first-activation write), this one
+      // didn't, so "Next Renewal" on the Billing page kept showing the old
+      // monthly subscription's date after an annual transition.
+      cycleTransitionSubscription.nextBillingDate = recomputedEnd;
+      // billingAnchor is NEVER touched — Phase 1 invariant, immutable once set.
+      // Assigning undefined here correctly unsets the field in the stored
+      // document (confirmed directly against the raw Mongo collection, not
+      // assumed) — a reloaded Mongoose document will still show `{}` for this
+      // path (single-nested-subdocument types always hydrate as an object on
+      // read), which is normal and harmless; every real guard in this
+      // codebase already checks `.orderId` specifically, never equality to
+      // undefined, for exactly this reason.
+      cycleTransitionSubscription.pendingCycleTransition = undefined;
+
+      // Business contract (this session, matrix item 12): a deliberate
+      // annual base-plan purchase supersedes any pending BASE-PLAN scheduled
+      // change. Add-on-scoped ScheduledChange/pendingAddonRemovals records
+      // are explicitly NOT touched here — independent concern.
+      await ScheduledChange.updateMany(
+        {
+          organization: cycleTransitionSubscription.organization,
+          subscription: cycleTransitionSubscription._id,
+          type: { $in: ['PLAN_CHANGE', 'BILLING_CYCLE_CHANGE'] },
+          status: 'PENDING',
+        },
+        { $set: { status: 'CANCELLED', reason: 'Superseded by immediate Monthly->Annual transition' } }
+      );
+
+      // Task 2 (Aug 2026): apply the user's explicit per-add-on choices —
+      // computed and priced at initiation (pending.addonConversions),
+      // re-applied here unconditionally at commit (no re-verification
+      // needed the way the base window has one, since an add-on's own
+      // catalog price doesn't drift the way an anchor-relative window
+      // boundary can). Every add-on NOT in this list is a 'monthly' (no
+      // choice made) or already-incompatible add-on — untouched here,
+      // exactly matching Task 1's fix: no add-on's billingCycle/pricePerUnit
+      // changes automatically, full stop.
+      // Live-QA correctness fix (Aug 2026): conversion.quantity is the
+      // SURVIVING quantity (computeAddonConversionPricing now excludes
+      // whatever's already scheduled for removal) — NOT necessarily the
+      // instance's full raw quantity. Converting the whole raw quantity here
+      // would have silently swallowed a pending partial removal (e.g. Seat
+      // ×2 with 1 already scheduled to go — the surviving 1 converts to
+      // Annual, the other 1 stays Monthly with its removal untouched, never
+      // both collapsed into one annual instance).
+      for (const conversion of pending.addonConversions || []) {
+        const idx = (cycleTransitionSubscription.activeAddons || []).findIndex(
+          (a) => a.addonKey === conversion.addonKey && (a.billingCycle || 'monthly') !== 'yearly'
+        );
+        if (idx < 0) continue; // already converted/removed by a concurrent action — skip rather than duplicate
+        const existing = cycleTransitionSubscription.activeAddons[idx];
+        const existingPlain = existing.toObject ? existing.toObject() : existing;
+        const remainingMonthlyQty = existingPlain.quantity - conversion.quantity;
+
+        if (remainingMonthlyQty > 0) {
+          // Partial: shrink the monthly instance to whatever's left (still
+          // carrying its own pending removal, if any — untouched), and add a
+          // NEW, separate annual instance for the converted portion.
+          cycleTransitionSubscription.activeAddons[idx] = { ...existingPlain, quantity: remainingMonthlyQty };
+          cycleTransitionSubscription.activeAddons.push({
+            addonKey: conversion.addonKey,
+            quantity: conversion.quantity,
+            pricePerUnit: conversion.toPricePerUnit,
+            billingCycle: 'yearly',
+            addedAt: new Date(),
+            periodEnd: recomputedEnd,
+          });
+        } else {
+          // Whole (surviving) quantity converts — no leftover monthly
+          // portion to keep separate, safe to convert this instance in place.
+          cycleTransitionSubscription.activeAddons[idx] = {
+            ...existingPlain,
+            billingCycle: 'yearly',
+            pricePerUnit: conversion.toPricePerUnit,
+            // Align to the SAME annual window the base plan just entered —
+            // the natural choice once this add-on is genuinely annual too.
+            periodEnd: recomputedEnd,
+          };
+        }
+      }
+
+      // Task 1 (Aug 2026): every OTHER compatible add-on — "keep Monthly"
+      // (no choice made, or explicitly kept) — needs its own independent
+      // renewal clock started now that the BASE plan just became annual.
+      // Before this, "keep Monthly" silently meant "never charged again
+      // except once a year alongside the base" (the exact undercharging bug
+      // Task 1 exists to close). billingCycle/pricePerUnit stay completely
+      // untouched here — only the renewal clock is being started.
+      const incompatibleKeys = new Set((pending.incompatibleAddons || []).map((a) => a.addonKey));
+      const convertedKeys = new Set((pending.addonConversions || []).map((a) => a.addonKey));
+      for (const addon of cycleTransitionSubscription.activeAddons || []) {
+        if (incompatibleKeys.has(addon.addonKey) || convertedKeys.has(addon.addonKey)) continue;
+        if ((addon.billingCycle || 'monthly') !== 'monthly') continue; // already yearly — rides its own periodEnd, not this engine
+        if (addon.nextRenewalAt) continue; // already independently clocked (e.g. purchased after an earlier transition)
+        addon.nextRenewalAt = computeNextAddonRenewalDate(new Date());
+      }
+
+      // Existing add-ons the target plan doesn't support at all — access
+      // continues on the current (monthly) term; scheduled for removal at
+      // that term's own natural end (computed at initiation), never forced
+      // early. Mirrors the plan-downgrade incompatible-addon pattern.
+      for (const incompatible of pending.incompatibleAddons || []) {
+        const already = (cycleTransitionSubscription.pendingAddonRemovals || [])
+          .find((r) => r.addonKey === incompatible.addonKey);
+        if (already) continue;
+        cycleTransitionSubscription.pendingAddonRemovals = [
+          ...(cycleTransitionSubscription.pendingAddonRemovals || []),
+          {
+            addonKey: incompatible.addonKey,
+            displayName: incompatible.addonKey,
+            quantity: incompatible.quantity,
+            pricePerUnit: incompatible.pricePerUnit,
+            scheduledAt: new Date(),
+            effectiveAt: incompatible.effectiveAt,
+          },
+        ];
+        try {
+          await ScheduledChange.create({
+            organization: cycleTransitionSubscription.organization,
+            subscription: cycleTransitionSubscription._id,
+            type: 'REMOVE_ADDON',
+            status: 'PENDING',
+            effectiveAt: incompatible.effectiveAt,
+            payload: { addonKey: incompatible.addonKey, quantity: incompatible.quantity },
+          });
+        } catch (scErr) {
+          console.error(
+            `Scheduling incompatible-addon removal failed (non-fatal) — organization=${cycleTransitionSubscription.organization} subscription=${cycleTransitionSubscription._id} addonKey=${incompatible.addonKey}:`,
+            scErr.message
+          );
+        }
+      }
+
+      await cycleTransitionSubscription.save();
+
+      if (commercialTransaction) {
+        try {
+          commercialTransaction.status = 'COMPLETED';
+          await commercialTransaction.save();
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction COMPLETED update failed (non-fatal) — organization=${cycleTransitionSubscription.organization} subscription=${cycleTransitionSubscription._id} transaction=${commercialTransaction._id}:`,
+            ctErr.message
+          );
+        }
+      }
+
+      try {
+        await new SubscriptionPayment({
+          organization: cycleTransitionSubscription.organization,
+          subscription: cycleTransitionSubscription._id,
+          razorpayPaymentId: razorpayPayment.id,
+          amount: razorpayPayment.amount / 100,
+          status: razorpayPayment.status,
+          method: razorpayPayment.method,
+          paymentFor: 'cycle_transition_monthly_to_annual',
+        }).save();
+      } catch (paymentError) {
+        console.error('Failed to record cycle-transition payment:', paymentError.message);
+      }
+
+      await emitBillingEvent({
+        organization: cycleTransitionSubscription.organization,
+        subscription: cycleTransitionSubscription._id,
+        eventType: 'BILLING_CYCLE_CHANGE_COMPLETED',
+        status: 'completed',
+        before: beforeSnapshot,
+        after: cycleTransitionSubscription,
+        amounts: {
+          paid: razorpayPayment.amount / 100,
+          recurringBefore: beforeSnapshot.totalAmount,
+          recurringAfter: cycleTransitionSubscription.totalAmount,
+        },
+        razorpay: { orderId: pending.orderId, paymentId: razorpayPayment.id },
+        metadata: { windowStart: recomputedStart, windowEnd: recomputedEnd },
+      });
+
+      console.log(`Subscription ${cycleTransitionSubscription._id} transitioned Monthly -> Annual. New period: ${recomputedStart.toISOString()} -> ${recomputedEnd.toISOString()}`);
+    } catch (error) {
+      console.error(`Failed to process cycle-transition payment for order ${razorpayPayment.order_id}:`, error);
+      throw error;
+    }
+    return;
+  }
+
+  // Task 3 (Aug 2026) — reactivating a LAPSED subscription. Same Order-based
+  // settlement shape as the cycle-transition block above, and the SAME
+  // boundary-mismatch recompute-at-commit discipline for the yearly case
+  // (billingAnchor never moves; the window is recomputed fresh here, never
+  // trusted from initiation time). billingAnchor is NEVER written — the
+  // entire point of this flow (BILLING_DOMAIN_SPECIFICATION.md's "AMENDED
+  // (Aug 2026, Task D)" policy) is reusing the SAME Subscription document
+  // and its original anchor, not creating a fresh one.
+  const reactivationSubscription = await Subscription.findOne({
+    'pendingReactivation.orderId': razorpayPayment.order_id,
+  });
+
+  if (reactivationSubscription && reactivationSubscription.pendingReactivation) {
+    try {
+      const pending = reactivationSubscription.pendingReactivation;
+
+      const expectedPaise = pending.amount * 100;
+      if (Math.abs(razorpayPayment.amount - expectedPaise) > 100) {
+        console.error(`Reactivation payment amount mismatch for order ${razorpayPayment.order_id}`, {
+          expected: expectedPaise,
+          received: razorpayPayment.amount,
+        });
+        return;
+      }
+
+      let recomputedStart;
+      let recomputedEnd;
+      if (pending.targetBillingCycle === 'yearly') {
+        const nowAtCommit = new Date();
+        const recomputed = getEntitlementWindow(reactivationSubscription.billingAnchor, nowAtCommit);
+        // Same boundary-mismatch fail-safe as the cycle-transition commit
+        // above: a window boundary crossed between initiation and
+        // settlement must never silently commit a mismatched window.
+        const quotedStart = pending.windowStart ? new Date(pending.windowStart).getTime() : null;
+        if (quotedStart !== recomputed.windowStart.getTime()) {
+          console.error(
+            `RECONCILIATION_NEEDED: reactivation window boundary crossed between initiation and settlement — ` +
+            `organization=${reactivationSubscription.organization} subscription=${reactivationSubscription._id} ` +
+            `order=${razorpayPayment.order_id} payment=${razorpayPayment.id} amountCharged=${pending.amount}. ` +
+            `Payment WAS captured — subscription intentionally left unchanged (still cancelled), ` +
+            `pendingReactivation intentionally left set to block a competing retry. Requires manual review.`
+          );
+          return;
+        }
+        recomputedStart = recomputed.windowStart;
+        recomputedEnd = recomputed.windowEnd;
+      } else {
+        // Monthly has no anchor-relative window to re-verify — a fresh
+        // period simply starts now, same as any other new monthly period.
+        recomputedStart = new Date();
+        recomputedEnd = addCalendarMonths(recomputedStart, 1);
+      }
+
+      const beforeSnapshot = {
+        appStatus: reactivationSubscription.appStatus,
+        planName: reactivationSubscription.planName,
+        billingCycle: reactivationSubscription.billingCycle,
+        cancelAtPeriodEnd: reactivationSubscription.cancelAtPeriodEnd,
+      };
+
+      let commercialTransaction = null;
+      try {
+        commercialTransaction = await CommercialTransaction.findOne({
+          organization: reactivationSubscription.organization,
+          subscription: reactivationSubscription._id,
+          type: 'RENEWAL',
+          'target.orderId': razorpayPayment.order_id,
+          status: 'AWAITING_PAYMENT',
+        });
+        if (commercialTransaction) {
+          commercialTransaction.status = 'COMMITTED';
+          commercialTransaction.lastAttemptAt = new Date();
+          await commercialTransaction.save();
+        }
+      } catch (ctErr) {
+        console.error(
+          `CommercialTransaction COMMITTED update failed (non-fatal) — organization=${reactivationSubscription.organization} subscription=${reactivationSubscription._id} order=${razorpayPayment.order_id}:`,
+          ctErr.message
+        );
+      }
+
+      reactivationSubscription.planName = pending.targetPlanId;
+      reactivationSubscription.billingCycle = pending.targetBillingCycle;
+      reactivationSubscription.pricePerUser = pending.targetPricePerUser;
+      reactivationSubscription.totalAmount = pending.targetPricePerUser; // add-ons don't survive a lapse — org resumes bare, same as a fresh subscribe
+      reactivationSubscription.currentPeriodStart = recomputedStart;
+      reactivationSubscription.currentPeriodEnd = recomputedEnd;
+      reactivationSubscription.nextBillingDate = recomputedEnd;
+      reactivationSubscription.cancelAtPeriodEnd = false;
+      reactivationSubscription.isPaymentConfirmed = true;
+      reactivationSubscription.paymentStatus = 'payment_completed';
+      setAppStatus(reactivationSubscription, 'active', 'Subscription reactivated after lapse');
+      // billingAnchor is NEVER touched — the whole point of this flow.
+      reactivationSubscription.pendingReactivation = undefined;
+
+      await reactivationSubscription.save();
+
+      if (commercialTransaction) {
+        try {
+          commercialTransaction.status = 'COMPLETED';
+          await commercialTransaction.save();
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction COMPLETED update failed (non-fatal) — organization=${reactivationSubscription.organization} subscription=${reactivationSubscription._id} transaction=${commercialTransaction._id}:`,
+            ctErr.message
+          );
+        }
+      }
+
+      try {
+        await new SubscriptionPayment({
+          organization: reactivationSubscription.organization,
+          subscription: reactivationSubscription._id,
+          razorpayPaymentId: razorpayPayment.id,
+          amount: razorpayPayment.amount / 100,
+          status: razorpayPayment.status,
+          method: razorpayPayment.method,
+          paymentFor: 'reactivation',
+        }).save();
+      } catch (paymentError) {
+        console.error('Failed to record reactivation payment:', paymentError.message);
+      }
+
+      await emitBillingEvent({
+        organization: reactivationSubscription.organization,
+        subscription: reactivationSubscription._id,
+        eventType: 'SUBSCRIPTION_REACTIVATED',
+        status: 'completed',
+        before: beforeSnapshot,
+        after: reactivationSubscription,
+        amounts: { paid: razorpayPayment.amount / 100, recurringAfter: reactivationSubscription.totalAmount },
+        razorpay: { orderId: pending.orderId, paymentId: razorpayPayment.id },
+        metadata: { windowStart: recomputedStart, windowEnd: recomputedEnd },
+      });
+
+      console.log(`Subscription ${reactivationSubscription._id} reactivated. New period: ${recomputedStart.toISOString()} -> ${recomputedEnd.toISOString()}`);
+    } catch (error) {
+      console.error(`Failed to process reactivation payment for order ${razorpayPayment.order_id}:`, error);
+      throw error;
+    }
+    return;
+  }
+
   // Handle plan upgrade payment confirmation (Order-based, UPI-compatible)
   const upgradeSubscription = await Subscription.findOne({
     'pendingPlanChange.orderId': razorpayPayment.order_id,
@@ -1778,6 +4159,33 @@ async function handlePaymentCaptured(razorpayPayment) {
       const newPlan = await PlanConfig.findOne({ planId: pending.newPlanName, isActive: true });
       if (!newPlan) { console.error(`New plan ${pending.newPlanName} not found`); return; }
 
+      // Phase 3 continued (upgrade): PRICED/AWAITING_PAYMENT -> COMMITTED.
+      // Correlated via the orderId stored in `target` at request time — this
+      // lookup is purely additive (observational write), never a dependency:
+      // settlement below is still driven entirely by `pending` (pendingPlanChange).
+      // Payment confirmation is the commit point (BILLING_DOMAIN_SPECIFICATION.md
+      // Chapter 15) — right here, since the amount check above already passed.
+      let upgradeCommercialTransaction = null;
+      try {
+        upgradeCommercialTransaction = await CommercialTransaction.findOne({
+          organization: upgradeSubscription.organization,
+          subscription: upgradeSubscription._id,
+          type: 'UPGRADE',
+          'target.orderId': razorpayPayment.order_id,
+          status: 'AWAITING_PAYMENT',
+        });
+        if (upgradeCommercialTransaction) {
+          upgradeCommercialTransaction.status = 'COMMITTED';
+          upgradeCommercialTransaction.lastAttemptAt = new Date();
+          await upgradeCommercialTransaction.save();
+        }
+      } catch (ctErr) {
+        console.error(
+          `CommercialTransaction COMMITTED update failed (non-fatal) — organization=${upgradeSubscription.organization} subscription=${upgradeSubscription._id} order=${razorpayPayment.order_id}:`,
+          ctErr.message
+        );
+      }
+
       // ENTITLEMENTS CHANGE NOW — planName drives restrictByPlan limits/modules
       upgradeSubscription.planName = pending.newPlanName;
       upgradeSubscription.pricePerUser = pending.newBasePrice;
@@ -1790,37 +4198,137 @@ async function handlePaymentCaptured(razorpayPayment) {
       // add-ons. incompatibleAddons are deliberately excluded from billing —
       // they're kept in activeAddons below only until pendingAddonRemovals
       // removes them at cycle end, not billed again this cycle.
-      const snapshot = buildPricingSnapshot({
-        plan: newPlan,
-        billingCycle: upgradeSubscription.billingCycle,
-        activeAddons: [...compatibleAddons, ...newAddonPurchases],
-        basePriceOverride: pending.newBasePrice,
+      // P0 CORRECTNESS FIX (found via live QA): this commit-time recompute
+      // was missing the coupon modifier entirely — the PREVIEW step earlier
+      // in this same upgrade flow (updateSubscription's newCouponModifier,
+      // built from the identical fullRulesSnapshot/line-items shape) DID
+      // include it, so the customer was quoted a discounted total, but the
+      // webhook that actually commits the new RECURRING totalAmount silently
+      // dropped it. This wasn't specific to first_payment coupons — ANY
+      // coupon (including lifetime/until_cancelled, which should keep
+      // discounting every renewal) would have lost its discount the instant
+      // an upgrade committed, while appliedCoupon itself stayed on the
+      // document unchanged — exactly why the UI kept showing "Coupon
+      // Applied" against an undiscounted total. Rebuilt here identically to
+      // the preview step.
+      //
+      // CORRECTION (Coupon P0, found one trace later): this comment
+      // previously claimed "duration.type only gates RENEWAL re-eligibility,
+      // never upgrade re-application" — that was wrong, discovered while
+      // tracing why a first_payment coupon kept discounting after its first
+      // payment. Upgrade re-application must respect the SAME eligibility
+      // question renewal already asks correctly; it just wasn't asking it
+      // anywhere in this file until now.
+      const newLineItemsAtCommit = [...compatibleAddons, ...newAddonPurchases].map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit }));
+      newLineItemsAtCommit.unshift({ key: pending.newPlanName, type: 'plan', amount: pending.newBasePrice });
+      const commitCouponModifier = (upgradeSubscription.appliedCoupon?.fullRulesSnapshot && isCouponStillEligibleForRenewal(upgradeSubscription.appliedCoupon))
+        ? buildCouponModifierForLineItems(upgradeSubscription.appliedCoupon.fullRulesSnapshot, newLineItemsAtCommit)
+        : null;
+
+      // Phase 5: calculateInvoice() is now the pricing authority here (same
+      // equivalence guarantee as the Phase 4 createSubscription integration —
+      // it's still buildPricingSnapshot underneath, just via the single
+      // designated call path). No other call site in this function changed.
+      const invoice = calculateInvoice({
+        subscription: {
+          planName: pending.newPlanName,
+          billingCycle: upgradeSubscription.billingCycle,
+          pricePerUser: pending.newBasePrice,
+          activeAddons: [...compatibleAddons, ...newAddonPurchases],
+        },
+        resolvedModifiers: commitCouponModifier ? [commitCouponModifier] : [],
       });
-      const newRecurringTotal = snapshot.totalAmount;
+      const newRecurringTotal = invoice.taxable; // pre-GST, post-discount — same meaning as the old snapshot.totalAmount
       upgradeSubscription.totalAmount = newRecurringTotal;
+
+      // Regression fix (found via live QA — the "stale coupon snapshot"
+      // bug): appliedCoupon.baseSubtotal/discountAmount/recurringSubtotal
+      // were written ONCE, at whatever moment the coupon was first applied
+      // or replaced, and NEVER refreshed on a later upgrade — so a plan
+      // card correctly gated on `isCurrentActive` (this IS the live current
+      // plan) would still read frozen figures from an entirely different,
+      // earlier plan tier (e.g. Starter's ₹350/₹8/₹342 leaking onto the
+      // Business card after two upgrades). totalAmount itself was already
+      // correctly recomputed above; these three sibling fields on the SAME
+      // appliedCoupon object were the one part of this commit that stayed
+      // stale. fullRulesSnapshot/duration/code/couponId are left untouched —
+      // those are the coupon's own immutable identity/rules, not a pricing
+      // snapshot, and must never change here.
+      if (upgradeSubscription.appliedCoupon?.code) {
+        upgradeSubscription.appliedCoupon.baseSubtotal = invoice.subtotal;
+        upgradeSubscription.appliedCoupon.discountAmount = invoice.discount;
+        upgradeSubscription.appliedCoupon.recurringSubtotal = invoice.taxable;
+      }
 
       // Rebuild activeAddons: compatible (possibly remapped), incompatible kept
       // until cycle end, and newly purchased add-ons from this upgrade order.
+      // Live-QA correctness fix (Aug 2026): billingCycle/periodEnd now
+      // carried through from pending.*Addons (populated at initiation,
+      // above) into the actual rebuilt activeAddons — this rebuild used to
+      // silently drop both fields on every upgrade, which is the confirmed
+      // real mechanism behind a live-reported "phantom annual seat"
+      // incident. Same class of bug Task 1 fixed at three other creation
+      // sites, recurring here via this one.
       upgradeSubscription.activeAddons = [
         ...compatibleAddons.map((a) => ({
           addonKey: a.addonKey,
           quantity: a.quantity,
           pricePerUnit: a.pricePerUnit,
           addedAt: new Date(),
+          billingCycle: a.billingCycle,
+          periodEnd: a.periodEnd,
         })),
         ...incompatibleAddons.map((a) => ({
           addonKey: a.addonKey,
           quantity: a.quantity,
           pricePerUnit: a.pricePerUnit,
           addedAt: new Date(),
+          billingCycle: a.billingCycle,
         })),
         ...newAddonPurchases.map((a) => ({
           addonKey: a.addonKey,
           quantity: a.quantity,
           pricePerUnit: a.pricePerUnit,
           addedAt: new Date(),
+          billingCycle: a.billingCycle,
         })),
       ];
+
+      // Old (pre-upgrade) addonKeys already accounted for via this upgrade's
+      // own compatible/reduced/incompatible classification (e.g. 'extra_seat'
+      // remapped to 'seat' on the new plan). A stale pendingAddonRemovals
+      // entry under one of these OLD keys must NOT be blindly restored below —
+      // that addon's fate (carried at a reduced quantity, fully dropped,
+      // whatever) is already fully represented under its NEW key in the
+      // rebuilt activeAddons above; restoring it separately under the old key
+      // would resurrect entitlement for a key that isn't even offered on the
+      // new plan, on top of pricing that never billed for it.
+      const handledOldAddonKeys = new Set([
+        ...compatibleAddons.map((a) => a.remappedFrom).filter(Boolean),
+        ...incompatibleAddons.map((a) => a.remappedFrom).filter(Boolean),
+        ...(pending.reducedAddons || []).map((a) => a.remappedFrom).filter(Boolean),
+      ]);
+      if (handledOldAddonKeys.size > 0) {
+        upgradeSubscription.pendingAddonRemovals = (upgradeSubscription.pendingAddonRemovals || [])
+          .filter((r) => !handledOldAddonKeys.has(r.addonKey));
+        try {
+          await ScheduledChange.updateMany(
+            {
+              organization: upgradeSubscription.organization,
+              subscription: upgradeSubscription._id,
+              type: 'REMOVE_ADDON',
+              status: 'PENDING',
+              'payload.addonKey': { $in: [...handledOldAddonKeys] },
+            },
+            { $set: { status: 'CANCELLED' } }
+          );
+        } catch (scErr) {
+          console.error(
+            `Cancelling stale pre-upgrade ScheduledChange failed (non-fatal) — organization=${upgradeSubscription.organization} subscription=${upgradeSubscription._id}:`,
+            scErr.message
+          );
+        }
+      }
 
       // Restore addons that were already pending removal before the upgrade —
       // the user paid for them this cycle and keeps access until effectiveAt.
@@ -1831,11 +4339,16 @@ async function handlePaymentCaptured(razorpayPayment) {
           (a) => a.addonKey === removal.addonKey
         );
         if (!alreadyPresent) {
+          // Task 1 (Aug 2026): preserve billingCycle from the pending
+          // removal record it's being restored from — same corruption
+          // pattern as the other push sites this fix addresses, just via a
+          // restore instead of a fresh creation.
           upgradeSubscription.activeAddons.push({
             addonKey: removal.addonKey,
             quantity: removal.quantity,
             pricePerUnit: removal.pricePerUnit,
             addedAt: new Date(),
+            billingCycle: removal.billingCycle,
           });
         }
       }
@@ -1844,9 +4357,23 @@ async function handlePaymentCaptured(razorpayPayment) {
       // removal at cycle end (org keeps access & keeps paying for them this
       // cycle; they drop at the next renewal via applyScheduledAddonRemovals).
       if (incompatibleAddons.length > 0) {
+        // inc.quantity is now the FULL current quantity (post-fix — classified
+        // against raw activeAddons, not the future-effective snapshot). Any
+        // pre-existing pendingAddonRemovals/ScheduledChange entry for this
+        // addonKey was scheduled BEFORE it became incompatible and may only
+        // cover a SMALLER partial quantity — it must be UPDATED to the full
+        // amount, not skipped as "already exists" (that would under-schedule
+        // the removal, leaving the difference stranded as phantom
+        // entitlement forever).
         const pendingRemovals = upgradeSubscription.pendingAddonRemovals || [];
         for (const inc of incompatibleAddons) {
-          if (!pendingRemovals.find((r) => r.addonKey === inc.addonKey)) {
+          const existing = pendingRemovals.find((r) => r.addonKey === inc.addonKey);
+          if (existing) {
+            existing.quantity = inc.quantity;
+            existing.pricePerUnit = inc.pricePerUnit;
+            existing.displayName = inc.displayName || inc.addonKey;
+            existing.effectiveAt = upgradeSubscription.currentPeriodEnd;
+          } else {
             pendingRemovals.push({
               addonKey: inc.addonKey,
               displayName: inc.displayName || inc.addonKey,
@@ -1858,43 +4385,152 @@ async function handlePaymentCaptured(razorpayPayment) {
           }
         }
         upgradeSubscription.pendingAddonRemovals = pendingRemovals;
+
+        // ScheduledChange — same update-in-place reasoning as above, not the
+        // skip-if-exists shape this replaced.
+        for (const inc of incompatibleAddons) {
+          try {
+            const existingPending = await ScheduledChange.findOne({
+              organization: upgradeSubscription.organization,
+              subscription: upgradeSubscription._id,
+              type: 'REMOVE_ADDON',
+              status: 'PENDING',
+              'payload.addonKey': inc.addonKey,
+            });
+            if (existingPending) {
+              existingPending.effectiveAt = upgradeSubscription.currentPeriodEnd;
+              existingPending.payload = { addonKey: inc.addonKey, quantity: inc.quantity, reason: 'incompatible_with_upgrade_target_plan' };
+              await existingPending.save();
+            } else {
+              await ScheduledChange.create({
+                organization: upgradeSubscription.organization,
+                subscription: upgradeSubscription._id,
+                type: 'REMOVE_ADDON',
+                status: 'PENDING',
+                effectiveAt: upgradeSubscription.currentPeriodEnd,
+                payload: { addonKey: inc.addonKey, quantity: inc.quantity, reason: 'incompatible_with_upgrade_target_plan' },
+              });
+            }
+          } catch (scErr) {
+            console.error(
+              `ScheduledChange creation failed (non-fatal) — organization=${upgradeSubscription.organization} subscription=${upgradeSubscription._id} addonKey=${inc.addonKey}:`,
+              scErr.message
+            );
+          }
+        }
       }
 
-      // Try to update the Razorpay recurring plan (works on card, fails on UPI)
-      let syncedToRazorpay = false;
-      try {
-        const newPlanId = compatibleAddons.length > 0
-          ? await findOrCreateRazorpayPlan(newRecurringTotal, upgradeSubscription.billingCycle, pending.newPlanName)
-          : newPlan.razorpayPlanIds[upgradeSubscription.billingCycle];
+      // User-reduced carry-forward quantities (editable carry-forward at
+      // checkout) — schedule the same way incompatibleAddons above are: org
+      // keeps the reduced-away units for the rest of THIS cycle (already paid
+      // for), they drop at renewal. Same skip-if-exists shape, same
+      // pendingAddonRemovals write-alongside.
+      const reducedAddons = pending.reducedAddons || [];
+      if (reducedAddons.length > 0) {
+        const pendingRemovals = upgradeSubscription.pendingAddonRemovals || [];
+        for (const red of reducedAddons) {
+          if (!pendingRemovals.find((r) => r.addonKey === red.addonKey)) {
+            pendingRemovals.push({
+              addonKey: red.addonKey,
+              displayName: red.displayName || red.addonKey,
+              quantity: red.quantity,
+              pricePerUnit: red.pricePerUnit,
+              scheduledAt: new Date(),
+              effectiveAt: upgradeSubscription.currentPeriodEnd,
+            });
+          }
+        }
+        upgradeSubscription.pendingAddonRemovals = pendingRemovals;
 
-        await razorpay.subscriptions.update(upgradeSubscription.razorpaySubscriptionId, {
-          plan_id: newPlanId,
-          schedule_change_at: 'cycle_end',
-        });
-        upgradeSubscription.razorpayPlanId = newPlanId;
-        syncedToRazorpay = true;
-        console.log(`Razorpay subscription updated to ${newPlanId} at cycle_end`);
-      } catch (err) {
-        console.warn(`Could not update Razorpay recurring plan (likely UPI — syncs at renewal): ${err?.error?.description || err.message}`);
+        for (const red of reducedAddons) {
+          try {
+            const existingPending = await ScheduledChange.findOne({
+              organization: upgradeSubscription.organization,
+              subscription: upgradeSubscription._id,
+              type: 'REMOVE_ADDON',
+              status: 'PENDING',
+              'payload.addonKey': red.addonKey,
+            });
+            if (!existingPending) {
+              await ScheduledChange.create({
+                organization: upgradeSubscription.organization,
+                subscription: upgradeSubscription._id,
+                type: 'REMOVE_ADDON',
+                status: 'PENDING',
+                effectiveAt: upgradeSubscription.currentPeriodEnd,
+                payload: { addonKey: red.addonKey, quantity: red.quantity, reason: 'user_reduced_carry_forward_at_upgrade' },
+              });
+            }
+          } catch (scErr) {
+            console.error(
+              `ScheduledChange creation failed (non-fatal) — organization=${upgradeSubscription.organization} subscription=${upgradeSubscription._id} addonKey=${red.addonKey}:`,
+              scErr.message
+            );
+          }
+        }
       }
 
-      // Clear pending if synced; otherwise flag it for renewal-time reconciliation
-      if (syncedToRazorpay) {
+      // Phase 5: CAW subscriptions (mandateTokenId present) have no Razorpay-
+      // side "recurring plan" to sync at all — the persisted fields set above
+      // (planName/pricePerUser/totalAmount/activeAddons) ARE the source of
+      // truth the renewal engine (Phase 6) reads via calculateInvoice() each
+      // cycle. So there is nothing to call, nothing that can fail, and no
+      // needsRazorpaySync reconciliation ever needed for these subscriptions.
+      // Legacy (non-CAW) subscriptions keep the EXACT previous behavior,
+      // completely untouched, since they may still have a live Razorpay
+      // Subscription object to sync.
+      if (upgradeSubscription.mandateTokenId) {
         upgradeSubscription.pendingPlanChange = undefined;
       } else {
-        upgradeSubscription.pendingPlanChange = {
-          newPlanName: pending.newPlanName,
-          newBasePrice: pending.newBasePrice,
-          proratedDiffCharged: pending.proratedDiffCharged,
-          orderId: pending.orderId,
-          compatibleAddons: compatibleAddons,
-          newAddonPurchases: newAddonPurchases,
-          createdAt: pending.createdAt,
-          needsRazorpaySync: true,
-        };
+        // --- unchanged legacy path ---
+        let syncedToRazorpay = false;
+        try {
+          const newPlanId = compatibleAddons.length > 0
+            ? await findOrCreateRazorpayPlan(newRecurringTotal, upgradeSubscription.billingCycle, pending.newPlanName)
+            : newPlan.razorpayPlanIds[upgradeSubscription.billingCycle];
+
+          await razorpay.subscriptions.update(upgradeSubscription.razorpaySubscriptionId, {
+            plan_id: newPlanId,
+            schedule_change_at: 'cycle_end',
+          });
+          upgradeSubscription.razorpayPlanId = newPlanId;
+          syncedToRazorpay = true;
+          console.log(`Razorpay subscription updated to ${newPlanId} at cycle_end`);
+        } catch (err) {
+          console.warn(`Could not update Razorpay recurring plan (likely UPI — syncs at renewal): ${err?.error?.description || err.message}`);
+        }
+
+        if (syncedToRazorpay) {
+          upgradeSubscription.pendingPlanChange = undefined;
+        } else {
+          upgradeSubscription.pendingPlanChange = {
+            newPlanName: pending.newPlanName,
+            newBasePrice: pending.newBasePrice,
+            proratedDiffCharged: pending.proratedDiffCharged,
+            orderId: pending.orderId,
+            compatibleAddons: compatibleAddons,
+            newAddonPurchases: newAddonPurchases,
+            createdAt: pending.createdAt,
+            needsRazorpaySync: true,
+          };
+        }
       }
 
       await upgradeSubscription.save();
+
+      // Phase 3 continued (upgrade): COMMITTED -> COMPLETED, now that the
+      // commercial change has actually been applied and persisted.
+      if (upgradeCommercialTransaction) {
+        try {
+          upgradeCommercialTransaction.status = 'COMPLETED';
+          await upgradeCommercialTransaction.save();
+        } catch (ctErr) {
+          console.error(
+            `CommercialTransaction COMPLETED update failed (non-fatal) — organization=${upgradeSubscription.organization} subscription=${upgradeSubscription._id} transaction=${upgradeCommercialTransaction._id}:`,
+            ctErr.message
+          );
+        }
+      }
 
       // Consume the reserved referral reward, if this upgrade used one —
       // atomic conditional update, idempotent against duplicate webhooks
@@ -2358,18 +4994,28 @@ exports.getPaymentHistory = async (req, res) => {
 
 // Billing Center timeline — reads BillingEvent, never reconstructs history
 // from Subscription/SubscriptionPayment/CouponRedemption.
+// BILLING_UX_SPEC.md §5 — REFERRAL_REWARD_RESERVED/RELEASED are excluded
+// from the customer-facing timeline. Reservation is a transient in-progress
+// state (§2.1), not a durable event worth a permanent row — the timeline
+// records outcomes (Earned/Consumed), not intermediate lock states. Still
+// written to BillingEvent (unfiltered) for the admin auditing bucket (§Admin,
+// "why was this released — payment failed, cancelled, etc."); only this
+// customer-facing read excludes them.
+const TIMELINE_EXCLUDED_EVENT_TYPES = ['REFERRAL_REWARD_RESERVED', 'REFERRAL_REWARD_RELEASED'];
+
 exports.getBillingTimeline = async (req, res) => {
   try {
     const { page = 1, limit = 25 } = req.query;
     const BillingEvent = require('../models/BillingEvent');
 
-    const events = await BillingEvent.find({ organization: req.user.organization })
+    const filter = { organization: req.user.organization, eventType: { $nin: TIMELINE_EXCLUDED_EVENT_TYPES } };
+    const events = await BillingEvent.find(filter)
       .populate('payment')
       .sort({ occurredAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
-    const total = await BillingEvent.countDocuments({ organization: req.user.organization });
+    const total = await BillingEvent.countDocuments(filter);
 
     res.json({
       events,
@@ -2379,6 +5025,127 @@ exports.getBillingTimeline = async (req, res) => {
     });
   } catch (error) {
     console.error('Billing timeline error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ScheduledChange — the only representation of future commercial intent the
+// frontend should read (never legacy pendingUpdate/pendingAddonRemovals).
+// Returns raw ScheduledChange records plus a derived keptAddons/removedAddons
+// view, computed by reusing renewalEngine.js's own buildEffectiveSubscription
+// (never a second, hand-rolled approximation).
+exports.getScheduledChanges = async (req, res) => {
+  try {
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription) {
+      return res.json({ scheduledChanges: [] });
+    }
+
+    const scheduledChanges = await ScheduledChange.find({
+      subscription: subscription._id,
+      status: 'PENDING',
+    }).sort({ effectiveAt: 1 });
+
+    // Lazy require — renewalEngine.js requires this controller (for
+    // setAppStatus), so a top-level require here would create a circular
+    // dependency with unpredictable resolution order.
+    const { buildEffectiveSubscription } = require('../utils/renewalEngine');
+    const previewHorizon = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000);
+    const { effective, cancellation } = await buildEffectiveSubscription(subscription, previewHorizon);
+
+    const originalActiveAddons = (subscription.activeAddons || []).map((a) =>
+      typeof a.toObject === 'function' ? a.toObject() : { ...a }
+    );
+    const keptAddons = effective.activeAddons;
+    const removedAddons = [];
+    originalActiveAddons.forEach((orig) => {
+      // Match by (addonKey, billingCycle), not addonKey alone — Phase 2d.1
+      // lets a monthly and annual instance of the same addonKey coexist as
+      // separate array entries, so an addonKey-only match here would
+      // misattribute a removal scheduled against one instance to whichever
+      // instance happens to appear first.
+      const kept = keptAddons.find(
+        (k) => addonIdentityKey(k, subscription.billingCycle) === addonIdentityKey(orig, subscription.billingCycle)
+      );
+      const keptQty = kept ? kept.quantity : 0;
+      const removedQty = orig.quantity - keptQty;
+      if (removedQty > 0) {
+        removedAddons.push({ ...orig, quantity: removedQty });
+      }
+    });
+
+    let effectiveRecurringTotal = null;
+    if (!cancellation && scheduledChanges.length > 0) {
+      // Scheduled-change preview coupon-scope fix (found while tracing C1):
+      // this used to reuse subscription.appliedCoupon.discountAmount — a flat
+      // amount frozen from whenever the coupon was first applied — as an
+      // 'entire_invoice' modifier, completely unconditionally (no duration
+      // eligibility check, no per-plan rule lookup). That's the exact same bug
+      // class as Bug 2 (renewalEngine.js R7/previewRenewal), but this is a
+      // DIFFERENT, older call site that never got that fix — a coupon with no
+      // rule for the scheduled TARGET plan would still show a discount here.
+      // Now rebuilds fresh from fullRulesSnapshot against the actual EFFECTIVE
+      // (post-scheduled-change) line items, gated by the same
+      // isCouponStillEligibleForRenewal question renewal already asks —
+      // never a second, hand-rolled approximation.
+      const resolvedModifiers = [];
+      if (subscription.appliedCoupon?.fullRulesSnapshot && isCouponStillEligibleForRenewal(subscription.appliedCoupon)) {
+        const effectiveLineItems = [
+          { key: effective.planName, type: 'plan', amount: effective.pricePerUser },
+          ...effective.activeAddons.map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
+        ];
+        const couponModifier = buildCouponModifierForLineItems(subscription.appliedCoupon.fullRulesSnapshot, effectiveLineItems);
+        if (couponModifier) resolvedModifiers.push(couponModifier);
+      }
+      const previewInvoice = calculateInvoice({ subscription: effective, resolvedModifiers });
+      effectiveRecurringTotal = previewInvoice.taxable;
+    }
+
+    res.json({ scheduledChanges, keptAddons, removedAddons, effectiveRecurringTotal });
+  } catch (error) {
+    console.error('Scheduled changes error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Billing Calendar — GET /subscription/billing-projection. Single canonical
+// read-model composing existing engines only (utils/billingProjection.js) —
+// no billing math lives in this controller function or in the frontend
+// component that renders it. Lazy require, same circular-dependency reason
+// as getScheduledChanges/getRenewalPreview above (billingProjection.js pulls
+// in renewalEngine.js, which requires this controller for setAppStatus).
+exports.getBillingProjection = async (req, res) => {
+  try {
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription) {
+      return res.json({ hasSubscription: false });
+    }
+    const { buildBillingProjection } = require('../utils/billingProjection');
+    const projection = await buildBillingProjection(subscription);
+    res.json({ hasSubscription: true, ...projection });
+  } catch (error) {
+    console.error('Billing projection error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// BILLING_UX_SPEC.md §2.2 — "Next Renewal" preview on the billing dashboard.
+// Read-only: renewalEngine.js's previewRenewal() uses getNextAvailableReward
+// (a plain read), never reserveNextAvailableReward, so this never occupies a
+// reward or writes anything. Lazy require of renewalEngine — see
+// getScheduledChanges just above for why (circular dependency: renewalEngine
+// requires this controller for setAppStatus).
+exports.getRenewalPreview = async (req, res) => {
+  try {
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription || !subscription.isPaymentConfirmed || !subscription.currentPeriodEnd) {
+      return res.json({ pricingBreakdown: null });
+    }
+    const { previewRenewal } = require('../utils/renewalEngine');
+    const pricingBreakdown = await previewRenewal(subscription);
+    res.json({ pricingBreakdown, nextRenewalDate: subscription.currentPeriodEnd });
+  } catch (error) {
+    console.error('Renewal preview error:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -2550,6 +5317,12 @@ exports.verifyPayment = async (req, res) => {
         payment_id: razorpay_payment_id
       });
 
+      // Hotfix (docs/audit/PHASE3_ENTITLEMENT_WINDOW_SCHEMA_TRACE.md §6.3, b4):
+      // currentPeriodEnd here is bundled with nextBillingDate, but a client
+      // reading this as "when does my access end" would get the ROLLING
+      // field, not the real entitlement boundary for a yearly subscription.
+      // currentPeriodStart is left unchanged — no entitlement-boundary claim
+      // was ever attached to a period START, only the END.
       return res.json({
         success: true,
         message: "Payment verified successfully",
@@ -2562,7 +5335,7 @@ exports.verifyPayment = async (req, res) => {
           totalAmount: subscription.totalAmount,
           isPaymentConfirmed: subscription.isPaymentConfirmed,
           currentPeriodStart: subscription.currentPeriodStart,
-          currentPeriodEnd: subscription.currentPeriodEnd,
+          currentPeriodEnd: getAccessEntitlementEnd(subscription),
           nextBillingDate: subscription.nextBillingDate
         }
       });
@@ -2773,6 +5546,42 @@ exports.getOrgReferralCode = async (req, res) => {
 // buildReferralOverview) rather than duplicating the logic. See
 // REFERRAL_SYSTEM_DESIGN.md §22 (dashboard) — this is the data endpoint a
 // future dashboard UI would call; no UI built yet.
+// BILLING_UX_SPEC.md §2.2 — the single "do I have an available reward"
+// read every visibility surface (billing dashboard, plan cards, Manage
+// Subscription) shares — deliberately lighter than getMyReferralOverview
+// (which returns full referral/reward history for the Referrals page
+// itself). Read-only: getNextAvailableReward never reserves.
+//
+// eligibleFor is returned by the backend, not hardcoded per surface (§2.2)
+// — today every reward is usable on every commercial action (no per-reward
+// restriction exists in the data model), so the list is simply every action
+// currently wired to consume a reward, plus "First Payment" only when this
+// org is still on trial (that action doesn't exist for an already-paying org).
+exports.getRewardAvailability = async (req, res) => {
+  try {
+    const { getNextAvailableReward } = require('../utils/referralRewards');
+    const reward = await getNextAvailableReward(req.user.organization);
+    if (!reward) {
+      return res.json({ available: false });
+    }
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    const eligibleFor = ['Upgrade', 'Renewal', 'Add-ons'];
+    if (subscription && !subscription.isPaymentConfirmed) {
+      eligibleFor.push('First Payment');
+    }
+    res.json({
+      available: true,
+      rewardType: reward.rewardType,
+      rewardValue: reward.rewardValue,
+      maxRewardAmount: reward.maxRewardAmount,
+      eligibleFor,
+    });
+  } catch (error) {
+    console.error('getRewardAvailability error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.getMyReferralOverview = async (req, res) => {
   try {
     const { buildReferralOverview } = require('../utils/referralUtils');
@@ -2900,28 +5709,500 @@ exports.checkAddonCompatibility = async (req, res) => {
     const subscription = await Subscription.findOne({ organization: req.user.organization });
     if (!subscription) return res.status(404).json({ error: 'No subscription found.' });
 
-    const activeAddons = subscription.activeAddons || [];
-    if (activeAddons.length === 0) {
-      return res.json({ compatibleCarryForward: [], incompatibleDropped: [] });
+    // Optional live carryForward overrides — sent as the customer adjusts the
+    // carry-forward stepper in the downgrade modal, so this preview can
+    // RE-VALIDATE against their actual current choice instead of only the
+    // initial full-survival recommendation. JSON-encoded query param since
+    // this is a GET endpoint: ?carryForward=[{"addonKey":"seat","quantity":0}]
+    let carryForwardOverrides = [];
+    if (req.query.carryForward) {
+      try {
+        carryForwardOverrides = JSON.parse(req.query.carryForward);
+      } catch (parseErr) {
+        return res.status(400).json({ error: 'carryForward must be valid JSON.' });
+      }
     }
 
-    const { compatible, incompatible } = await classifyAddonsForPlanChange(activeAddons, targetPlanId, billingCycle);
-    res.json({ compatibleCarryForward: compatible, incompatibleDropped: incompatible });
+    const { buildEffectiveSubscription } = require('../utils/renewalEngine');
+    const { validateDowngrade } = require('../utils/downgradeValidator');
+    const previewHorizon = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000);
+    const { effective } = await buildEffectiveSubscription(subscription, previewHorizon);
+    // Phase 2b: key on (addonKey, billingCycle), not addonKey alone — see
+    // addonManagement.addonIdentityKey's comment.
+    const effectiveQuantityByKey = new Map(
+      (effective.activeAddons || []).map((a) => [addonIdentityKey(a, subscription.billingCycle), a.quantity])
+    );
+
+    const activeAddons = subscription.activeAddons || [];
+    const { compatible: rawCompatible, incompatible } = activeAddons.length > 0
+      ? await classifyAddonsForPlanChange(activeAddons, targetPlanId, billingCycle)
+      : { compatible: [], incompatible: [] };
+
+    // Survived quantity (falls back to 0, not raw quantity: absence from the
+    // effective map means already fully consumed by an existing scheduled
+    // removal), THEN apply the customer's own carryForward override on top —
+    // same clamp-to-[0, survived] logic as updateSubscription's downgrade
+    // branch, so this preview can never show a number the commit path
+    // wouldn't also allow.
+    const compatible = rawCompatible
+      .map((c) => {
+        const survives = effectiveQuantityByKey.get(addonIdentityKey(c, subscription.billingCycle)) ?? 0;
+        const override = carryForwardOverrides.find((o) => o.addonKey === c.addonKey);
+        const quantity = override ? Math.max(0, Math.min(override.quantity, survives)) : survives;
+        return { ...c, quantity };
+      })
+      .filter((c) => c.quantity > 0);
+
+    // Downgrade eligibility — same validator updateSubscription's downgrade
+    // branch gates on, run here with the SAME resolved carry-forward state
+    // (not an independent full-survival assumption) so the preview always
+    // agrees with what will actually be allowed at confirm time. This is
+    // what makes live re-validation on every stepper change possible.
+    const resolvedCarryForwardForValidation = compatible.map((c) => ({ addonKey: c.addonKey, quantity: c.quantity }));
+    const downgradeValidation = await validateDowngrade(subscription, targetPlanId, [], resolvedCarryForwardForValidation);
+
+    res.json({ compatibleCarryForward: compatible, incompatibleDropped: incompatible, downgradeValidation });
   } catch (error) {
     console.error('checkAddonCompatibility error:', error);
     res.status(500).json({ error: error.message });
   }
 };
 
-exports.initiateAddonPurchase = async (req, res) => {
+// Escape hatch for the freeze rule (business contract, agreed 2026-07-24):
+// once a downgrade is scheduled, this — or cancelling the subscription
+// outright — is the only allowed action until it's resolved. No "edit"
+// endpoint exists (also per that contract) — cancel and re-run the
+// validate-then-schedule flow from scratch instead.
+exports.cancelScheduledDowngrade = async (req, res) => {
   try {
-    const { addonKey, quantity } = req.body;
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription) return res.status(404).json({ error: 'No subscription found.' });
+    // planName presence, not object truthiness — pendingUpdate is a nested
+    // schema object Mongoose auto-instantiates as {} even when nothing was
+    // ever scheduled (same class of bug fixed in assertNotFrozen earlier).
+    if (!subscription.pendingUpdate?.planName) {
+      return res.status(400).json({ error: 'No scheduled downgrade to cancel.' });
+    }
+
+    const cancelledPlanName = subscription.pendingUpdate.planName;
+    const beforeSnapshot = {
+      planName: subscription.planName,
+      billingCycle: subscription.billingCycle,
+      pricePerUser: subscription.pricePerUser,
+      userCount: subscription.userCount,
+      totalAmount: subscription.totalAmount,
+      activeAddons: subscription.activeAddons,
+    };
+
+    // Reverse the carry-forward reduction THIS downgrade caused — precisely
+    // the delta it added, not the resulting total, since that total may
+    // have been an update to a pre-existing partial removal (subtracting
+    // the full total would wipe out a removal the customer scheduled
+    // separately, before this downgrade ever existed).
+    const reducedAddonDeltas = subscription.pendingUpdate.reducedAddonDeltas || [];
+    if (reducedAddonDeltas.length > 0) {
+      const pendingRemovals = subscription.pendingAddonRemovals || [];
+      for (const delta of reducedAddonDeltas) {
+        const existing = pendingRemovals.find((r) => r.addonKey === delta.addonKey);
+        if (!existing) continue;
+        const restoredQuantity = existing.quantity - delta.quantity;
+        if (restoredQuantity <= 0) {
+          // This downgrade created the entry fresh — remove it entirely.
+          subscription.pendingAddonRemovals = pendingRemovals.filter((r) => r.addonKey !== delta.addonKey);
+          try {
+            await ScheduledChange.updateMany(
+              {
+                organization: subscription.organization,
+                subscription: subscription._id,
+                type: 'REMOVE_ADDON',
+                status: 'PENDING',
+                'payload.addonKey': delta.addonKey,
+              },
+              { $set: { status: 'CANCELLED', reason: 'Cancelled by user (downgrade cancelled)' } }
+            );
+          } catch (scErr) {
+            console.error(`Cancelling REMOVE_ADDON ScheduledChange failed (non-fatal) for addonKey=${delta.addonKey}:`, scErr.message);
+          }
+        } else {
+          // This downgrade updated a pre-existing partial removal — restore
+          // it to what it was before, keep it PENDING.
+          existing.quantity = restoredQuantity;
+          try {
+            await ScheduledChange.updateOne(
+              {
+                organization: subscription.organization,
+                subscription: subscription._id,
+                type: 'REMOVE_ADDON',
+                status: 'PENDING',
+                'payload.addonKey': delta.addonKey,
+              },
+              { $set: { 'payload.quantity': restoredQuantity } }
+            );
+          } catch (scErr) {
+            console.error(`Restoring REMOVE_ADDON ScheduledChange quantity failed (non-fatal) for addonKey=${delta.addonKey}:`, scErr.message);
+          }
+        }
+      }
+    }
+
+    subscription.pendingUpdate = null;
+    await subscription.save();
+
+    try {
+      await ScheduledChange.updateMany(
+        {
+          organization: subscription.organization,
+          subscription: subscription._id,
+          type: { $in: ['PLAN_CHANGE', 'BILLING_CYCLE_CHANGE'] },
+          status: 'PENDING',
+        },
+        { $set: { status: 'CANCELLED', reason: 'Cancelled by user' } }
+      );
+    } catch (scErr) {
+      console.error(
+        `Cancelling PLAN_CHANGE ScheduledChange failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
+        scErr.message
+      );
+    }
+
+    // Timeline entry for the reversal — never delete the original "scheduled"
+    // event (that's real audit history of what happened), add a new one
+    // documenting the cancellation instead.
+    try {
+      await emitBillingEvent({
+        organization: subscription.organization,
+        subscription: subscription._id,
+        eventType: 'SCHEDULE_CANCELLED',
+        status: 'cancelled',
+        before: beforeSnapshot,
+        after: subscription,
+        amounts: { recurringAfter: subscription.totalAmount },
+        metadata: { targetPlanId: cancelledPlanName },
+      });
+    } catch (evErr) {
+      console.error('Timeline event for downgrade cancellation failed (non-fatal):', evErr.message);
+    }
+
+    res.json({ success: true, message: `Scheduled downgrade to ${cancelledPlanName} has been cancelled. Your current plan continues unchanged.` });
+  } catch (error) {
+    console.error('cancelScheduledDowngrade error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Task 2 (Aug 2026) — the gap found while auditing cancellation states: the
+// only existing way to clear a scheduled cancellation was reactivateAndProceed
+// (Task B), which requires picking a DIFFERENT plan. A user who scheduled
+// cancellation by mistake and wants to simply stay on their current plan had
+// no path back at all. Mirrors cancelScheduledDowngrade's shape immediately
+// above — same plan, same cycle, just the CANCELLATION ScheduledChange
+// reversed. Much simpler than that function: cancellation never touches
+// addons/pricing, so there's no carry-forward delta to reverse.
+exports.undoCancellation = async (req, res) => {
+  try {
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription) return res.status(404).json({ error: 'No subscription found.' });
+    if (!subscription.cancelAtPeriodEnd) {
+      return res.status(400).json({ error: 'No scheduled cancellation to undo.' });
+    }
+
+    const beforeSnapshot = { cancelAtPeriodEnd: subscription.cancelAtPeriodEnd };
+    subscription.cancelAtPeriodEnd = false;
+    await subscription.save();
+
+    try {
+      await ScheduledChange.updateMany(
+        { organization: subscription.organization, subscription: subscription._id, type: 'CANCELLATION', status: 'PENDING' },
+        { $set: { status: 'CANCELLED', reason: 'Cancelled by user (undo cancellation)' } }
+      );
+    } catch (scErr) {
+      console.error(
+        `Cancelling CANCELLATION ScheduledChange failed (non-fatal) — organization=${subscription.organization} subscription=${subscription._id}:`,
+        scErr.message
+      );
+    }
+
+    try {
+      // Task 3 (Aug 2026) — the "Staying on undefined" bug: SCHEDULE_CANCELLED's
+      // subtitle template reads `after?.planName` (billingEvents.js), but this
+      // call originally passed a bespoke `{ cancelAtPeriodEnd: false }` object
+      // with no planName at all. cancelScheduledDowngrade's own equivalent call
+      // (above) passes the full subscription document — matching that pattern.
+      await emitBillingEvent({
+        organization: subscription.organization,
+        subscription: subscription._id,
+        eventType: 'SCHEDULE_CANCELLED',
+        status: 'cancelled',
+        before: beforeSnapshot,
+        after: subscription,
+        metadata: { reason: 'undo_cancellation' },
+      });
+    } catch (evErr) {
+      console.error('Timeline event for undo-cancellation failed (non-fatal):', evErr.message);
+    }
+
+    res.json({ success: true, message: 'Cancellation undone. Your subscription remains active on your current plan.' });
+  } catch (error) {
+    console.error('undoCancellation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Read-only preview for the confirmation screen that must appear BEFORE
+// Razorpay checkout (missing frontend requirement found via live QA, Aug
+// 2026) — explains the transition calculation without creating any Order,
+// CommercialTransaction, or pendingCycleTransition. Same guard checks as
+// the real endpoint below (shares assertTransitionAllowed internally), so a
+// preview never shows a price/eligibility result the real commit would
+// then disagree with.
+exports.previewMonthlyToAnnualTransition = async (req, res) => {
+  try {
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription || !subscription.isPaymentConfirmed) {
+      return res.status(400).json({ error: 'No active paid subscription found.' });
+    }
+    if (subscription.billingCycle !== 'monthly') {
+      return res.status(400).json({ error: 'Only a monthly base plan can transition to annual through this flow.' });
+    }
+
+    const targetPlanId = req.query?.targetPlanId || subscription.planName;
+    const plan = await PlanConfig.findOne({ planId: targetPlanId, isActive: true });
+    if (!plan) return res.status(404).json({ error: `Plan "${targetPlanId}" not found or not active.` });
+    if (!plan.yearlyPrice) {
+      return res.status(400).json({ error: `No annual price configured for the "${plan.planId}" plan.` });
+    }
+
+    // Task 2: optional, JSON-encoded since this is a GET —
+    // ?addonChoices={"seat":"yearly"}. Any addonKey omitted defaults to
+    // 'monthly' (no-op) inside computeAddonConversionPricing.
+    let addonChoices = {};
+    if (req.query.addonChoices) {
+      try {
+        addonChoices = JSON.parse(req.query.addonChoices);
+      } catch (parseErr) {
+        return res.status(400).json({ error: 'addonChoices must be valid JSON.' });
+      }
+    }
+
+    const { previewMonthlyToAnnualTransition: previewFn } = require('../utils/cycleTransitionLifecycle');
+    try {
+      const preview = await previewFn({ subscription, plan, addonChoices });
+      res.json({ success: true, ...preview });
+    } catch (previewErr) {
+      if (previewErr.code === 'DOWNGRADE_INELIGIBLE') {
+        return res.status(400).json({ error: previewErr.message, code: previewErr.code, validation: previewErr.validation });
+      }
+      throw previewErr;
+    }
+  } catch (error) {
+    console.error('previewMonthlyToAnnualTransition error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Phase 3 (docs/audit/PHASE3_MONTHLY_TO_ANNUAL_PRORATION.md): Monthly -> Annual
+// base-plan cadence transition. See utils/cycleTransitionLifecycle.js for the
+// pricing/order logic; this endpoint is guard checks + response shaping only.
+exports.initiateMonthlyToAnnualTransition = async (req, res) => {
+  try {
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription || !subscription.isPaymentConfirmed) {
+      return res.status(400).json({ error: 'No active paid subscription found.' });
+    }
+    if (subscription.billingCycle !== 'monthly') {
+      return res.status(400).json({ error: 'Only a monthly base plan can transition to annual through this flow.' });
+    }
+    if (subscription.cancelAtPeriodEnd) {
+      return res.status(400).json({ error: 'Cannot change billing cycle when subscription is pending cancellation.' });
+    }
+    if (subscription.pendingCycleTransition?.orderId) {
+      return res.status(400).json({ error: 'A previous cycle-transition purchase is still pending payment. Complete it first.' });
+    }
+    try {
+      require('../utils/downgradeValidator').assertNotFrozen(subscription);
+    } catch (freezeErr) {
+      return res.status(400).json({ error: freezeErr.message, code: freezeErr.code });
+    }
+
+    // Cross-tier support: targetPlanId is optional, defaults to the
+    // subscription's own current plan (a pure same-tier cycle change) when
+    // omitted — every existing caller that doesn't send it keeps working
+    // unchanged.
+    const targetPlanId = req.body?.targetPlanId || subscription.planName;
+    const plan = await PlanConfig.findOne({ planId: targetPlanId, isActive: true });
+    if (!plan) return res.status(404).json({ error: `Plan "${targetPlanId}" not found or not active.` });
+    if (!plan.yearlyPrice) {
+      return res.status(400).json({ error: `No annual price configured for the "${plan.planId}" plan.` });
+    }
+
+    // Task 2: optional, defaults to 'monthly' (no-op) for every add-on when
+    // omitted — every existing caller that doesn't send this keeps working
+    // exactly as before.
+    const addonChoices = req.body?.addonChoices || {};
+
+    const { startMonthlyToAnnualTransition } = require('../utils/cycleTransitionLifecycle');
+    let result;
+    try {
+      result = await startMonthlyToAnnualTransition({
+        user: req.user,
+        organizationId: req.user.organization,
+        subscription,
+        plan,
+        addonChoices,
+      });
+    } catch (transitionErr) {
+      if (transitionErr.code === 'DOWNGRADE_INELIGIBLE') {
+        return res.status(400).json({ error: transitionErr.message, code: transitionErr.code, validation: transitionErr.validation });
+      }
+      throw transitionErr;
+    }
+
+    res.json({
+      success: true,
+      amount: result.amount,
+      windowStart: result.windowStart,
+      windowEnd: result.windowEnd,
+      pricingBreakdown: result.pricingBreakdown,
+      addonConversions: result.addonConversions,
+      incompatibleAddons: result.incompatibleAddons,
+      totalAddonConversionAmount: result.totalAddonConversionAmount,
+      paymentDetails: result.paymentDetails,
+    });
+  } catch (error) {
+    console.error('initiateMonthlyToAnnualTransition error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Task 3 (Aug 2026): resuming a LAPSED subscription. See
+// utils/reactivationLifecycle.js for the pricing/order logic and the
+// explicit lapse-handling assumption — this endpoint is guard checks +
+// response shaping only, same division of labor as the cycle-transition
+// endpoints immediately above.
+exports.previewReactivation = async (req, res) => {
+  try {
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription) return res.status(404).json({ error: 'No subscription found.' });
+    if (subscription.appStatus !== 'cancelled') {
+      return res.status(400).json({ error: 'Subscription has not lapsed — use the standard plan-change flow instead.' });
+    }
+
+    const targetPlanId = req.query?.targetPlanId || subscription.planName;
+    const billingCycle = req.query?.billingCycle || subscription.billingCycle;
+    if (billingCycle !== 'monthly' && billingCycle !== 'yearly') {
+      return res.status(400).json({ error: 'billingCycle must be "monthly" or "yearly".' });
+    }
+    const plan = await PlanConfig.findOne({ planId: targetPlanId, isActive: true });
+    if (!plan) return res.status(404).json({ error: `Plan "${targetPlanId}" not found or not active.` });
+
+    const { previewReactivation: previewFn } = require('../utils/reactivationLifecycle');
+    const preview = await previewFn({ subscription, plan, billingCycle });
+    res.json({ success: true, ...preview });
+  } catch (error) {
+    console.error('previewReactivation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.initiateReactivation = async (req, res) => {
+  try {
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription) return res.status(404).json({ error: 'No subscription found.' });
+    if (subscription.appStatus !== 'cancelled') {
+      return res.status(400).json({ error: 'Subscription has not lapsed — use the standard plan-change flow instead.' });
+    }
+    if (subscription.pendingReactivation?.orderId) {
+      return res.status(400).json({ error: 'A previous reactivation purchase is still pending payment. Complete it first.' });
+    }
+
+    const targetPlanId = req.body?.targetPlanId || subscription.planName;
+    const billingCycle = req.body?.billingCycle || subscription.billingCycle;
+    if (billingCycle !== 'monthly' && billingCycle !== 'yearly') {
+      return res.status(400).json({ error: 'billingCycle must be "monthly" or "yearly".' });
+    }
+    const plan = await PlanConfig.findOne({ planId: targetPlanId, isActive: true });
+    if (!plan) return res.status(404).json({ error: `Plan "${targetPlanId}" not found or not active.` });
+
+    const { startReactivation } = require('../utils/reactivationLifecycle');
+    const result = await startReactivation({
+      user: req.user,
+      organizationId: req.user.organization,
+      subscription,
+      plan,
+      billingCycle,
+    });
+
+    res.json({
+      success: true,
+      amount: result.amount,
+      windowStart: result.windowStart,
+      windowEnd: result.windowEnd,
+      pricingBreakdown: result.pricingBreakdown,
+      paymentDetails: result.paymentDetails,
+    });
+  } catch (error) {
+    console.error('initiateReactivation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Task 4 (Aug 2026): read-only preview — no Order, no CommercialTransaction,
+// no reward reservation. See utils/addonPurchaseLifecycle.js's
+// previewAddonPurchase for the pricing logic; this endpoint is guard checks
+// + response shaping only, mirroring initiateAddonPurchase immediately below
+// (query params instead of body, since this is a GET).
+exports.previewAddonPurchase = async (req, res) => {
+  try {
+    const { addonKey, billingCycle } = req.query;
+    const quantity = Number(req.query.quantity);
 
     if (!addonKey || typeof addonKey !== 'string') {
       return res.status(400).json({ error: 'addonKey is required.' });
     }
     if (!Number.isInteger(quantity) || quantity <= 0) {
       return res.status(400).json({ error: 'quantity must be a positive integer.' });
+    }
+    if (billingCycle !== undefined && billingCycle !== 'monthly' && billingCycle !== 'yearly') {
+      return res.status(400).json({ error: 'billingCycle must be "monthly" or "yearly" when provided.' });
+    }
+
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription || !subscription.isPaymentConfirmed) {
+      return res.status(400).json({ error: 'No active paid subscription found.' });
+    }
+
+    const plan = await PlanConfig.findOne({ planId: subscription.planName, isActive: true });
+    if (!plan) return res.status(404).json({ error: 'Plan configuration not found.' });
+
+    const catalogEntry = await PlanAddon.findOne({ key: addonKey, isActive: true });
+    if (!catalogEntry) return res.status(404).json({ error: `Add-on "${addonKey}" not found.` });
+
+    const { previewAddonPurchase: previewFn } = require('../utils/addonPurchaseLifecycle');
+    const preview = await previewFn({ subscription, plan, catalogEntry, addonKey, quantity, billingCycle });
+    res.json({ success: true, addonKey, quantity, ...preview });
+  } catch (error) {
+    console.error('previewAddonPurchase error:', error);
+    res.status(400).json({ error: error.message });
+  }
+};
+
+exports.initiateAddonPurchase = async (req, res) => {
+  try {
+    const { addonKey, quantity, billingCycle } = req.body;
+
+    if (!addonKey || typeof addonKey !== 'string') {
+      return res.status(400).json({ error: 'addonKey is required.' });
+    }
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      return res.status(400).json({ error: 'quantity must be a positive integer.' });
+    }
+    // Phase 2d.1 (docs/audit/PHASE2_ADDON_CYCLE_TRACE.md): optional, defaults
+    // to the subscription's own cycle if omitted — every pre-2d caller keeps
+    // working unchanged. Validated here (not just left to startAddonPurchase)
+    // so an invalid value gets the same clean 400 treatment as every other
+    // input check on this endpoint.
+    if (billingCycle !== undefined && billingCycle !== 'monthly' && billingCycle !== 'yearly') {
+      return res.status(400).json({ error: 'billingCycle must be "monthly" or "yearly" when provided.' });
     }
 
     const subscription = await Subscription.findOne({ organization: req.user.organization });
@@ -2933,6 +6214,11 @@ exports.initiateAddonPurchase = async (req, res) => {
     }
     if (subscription.pendingAddonAddition?.orderId) {
       return res.status(400).json({ error: 'A previous add-on purchase is still pending payment. Complete or cancel it first.' });
+    }
+    try {
+      require('../utils/downgradeValidator').assertNotFrozen(subscription);
+    } catch (freezeErr) {
+      return res.status(400).json({ error: freezeErr.message, code: freezeErr.code });
     }
 
     const plan = await PlanConfig.findOne({ planId: subscription.planName, isActive: true });
@@ -2948,125 +6234,50 @@ exports.initiateAddonPurchase = async (req, res) => {
       return res.status(400).json({ error: `Add-on "${catalogEntry.displayName}" is not available on the "${plan.planId}" plan.` });
     }
 
-    const pricePerUnit = catalogEntry.price[subscription.billingCycle];
+    // Business contract (confirmed): a monthly base plan may only hold
+    // monthly add-ons; an annual base plan may hold either. Checked here for
+    // a clean 400 — startAddonPurchase re-checks the same rule internally as
+    // its own guarantee, not because this check is skippable.
+    const resolvedBillingCycle = billingCycle || subscription.billingCycle;
+    if (resolvedBillingCycle === 'yearly' && subscription.billingCycle !== 'yearly') {
+      return res.status(400).json({ error: 'An annual add-on can only be purchased on an annual base plan.' });
+    }
+
+    const pricePerUnit = catalogEntry.price[resolvedBillingCycle];
     if (!pricePerUnit) {
-      return res.status(400).json({ error: `No price configured for "${catalogEntry.displayName}" on the ${subscription.billingCycle} billing cycle.` });
+      return res.status(400).json({ error: `No price configured for "${catalogEntry.displayName}" on the ${resolvedBillingCycle} billing cycle.` });
     }
 
-    const prorationAmount = calculateAddonProration(
-      quantity,
-      pricePerUnit,
-      subscription.currentPeriodStart,
-      subscription.currentPeriodEnd
-    );
-
-    // RESERVE-FIRST: atomically reserve an available referral reward BEFORE
-    // creating the discounted order. This ordering is deliberate and load-
-    // bearing — if we created the order first and reserved after, a reward
-    // consumed by a concurrent checkout in between would leave us charging a
-    // discounted amount with no reward actually spent (a free discount). By
-    // reserving first, the discount is only ever applied to an order backed
-    // by a reward we hold. reserveNextAvailableReward is race-safe via the
-    // partial unique index (see utils/referralRewards.js). Referral
-    // resolution must never break add-on purchase, so it's best-effort.
-    // Coupons don't apply to add-on purchases yet (known gap, §4.E).
-    //
-    // SAME-FLOW RECYCLE: release any reward reserved by a PREVIOUS, unpaid
-    // add-on checkout for this org before reserving again — we overwrite
-    // subscription.pendingAddonAddition below, making that old order
-    // unsettleable, so its reservation would otherwise stay locked for its
-    // 30-min TTL. Idempotent + guarded on status:'reserved', so a
-    // since-consumed reservation is untouched. Only this flow's own prior
-    // reservation, never an upgrade's — no cross-flow double-spend.
-    if (subscription.pendingAddonAddition?.referralRewardUsageId) {
-      try {
-        await releaseReservation(subscription.pendingAddonAddition.referralRewardUsageId);
-      } catch (relErr) {
-        console.error('Failed to release prior add-on reservation:', relErr.message);
-      }
-    }
-
-    let reservation = null;
-    try {
-      reservation = await reserveNextAvailableReward(req.user.organization, {
-        subscription: subscription._id,
-      });
-    } catch (reserveErr) {
-      console.error('Referral reservation failed (proceeding at full price):', reserveErr.message);
-    }
-
-    let discountedProrationAmount = prorationAmount;
-    let referralDiscountAmount = 0;
-    let referralRewardUsageId = null;
-    if (reservation) {
-      const referralModifier = rewardToModifier(reservation.reward);
-      const applied = applyModifiers(prorationAmount, [referralModifier]);
-      referralDiscountAmount = applied.discount;
-      discountedProrationAmount = applied.totalAmount;
-      referralRewardUsageId = reservation.usage._id;
-    }
-
-    // GST-inclusive amount for the actual Razorpay charge
-    const prorationAmountWithGST = discountedProrationAmount + computeGST(discountedProrationAmount);
-
-    let razorpayOrder;
-    try {
-      razorpayOrder = await razorpay.orders.create({
-        amount: prorationAmountWithGST * 100,
-        currency: 'INR',
-        receipt: `adn_${subscription._id.toString().slice(-8)}_${Date.now().toString().slice(-6)}`,
-        notes: {
-          organization_id: req.user.organization.toString(),
-          subscription_id: subscription._id.toString(),
-          addon_key: addonKey,
-          quantity: quantity.toString(),
-          price_per_unit: pricePerUnit.toString(),
-          type: 'addon_purchase',
-        },
-      });
-    } catch (orderErr) {
-      // The order we reserved the reward for was never created — release the
-      // reservation immediately so the reward is usable again, rather than
-      // waiting for it to expire.
-      if (referralRewardUsageId) await releaseReservation(referralRewardUsageId);
-      throw orderErr;
-    }
-
-    // Backfill the order id onto the reservation for traceability (reserved
-    // before the order existed, so invoiceId was null at reserve time).
-    if (referralRewardUsageId) {
-      await RewardUsage.updateOne({ _id: referralRewardUsageId }, { $set: { invoiceId: razorpayOrder.id } });
-    }
-
-    subscription.pendingAddonAddition = {
+    const result = await startAddonPurchase({
+      user: req.user,
+      organizationId: req.user.organization,
+      subscription,
+      plan,
+      catalogEntry,
       addonKey,
       quantity,
-      pricePerUnit,
-      prorationAmount: prorationAmountWithGST, // GST-inclusive — matches actual order amount
-      orderId: razorpayOrder.id,
-      createdAt: new Date(),
-      referralRewardUsageId,
-    };
-    await subscription.save();
+      billingCycle: resolvedBillingCycle,
+    });
+
+    subscription.pendingAddonAddition = result.subscription.pendingAddonAddition;
 
     res.json({
       success: true,
-      prorationAmount: discountedProrationAmount,
-      referralDiscountApplied: referralDiscountAmount || undefined,
-      paymentDetails: {
-        key: process.env.RAZORPAY_KEY_ID,
-        order_id: razorpayOrder.id,
-        amount: razorpayOrder.amount,
-        currency: 'INR',
-        name: req.user.name,
-        description: `${catalogEntry.displayName} ×${quantity} — pro-rated for remaining cycle`,
-        prefill: {
-          name: req.user.name,
-          email: req.user.email,
-          contact: req.user.phone || '',
-        },
-        theme: { color: '#3399cc' },
-      },
+      prorationAmount: result.discountedProrationAmount,
+      // Split by source (fixes a real UI bug: this field used to be a
+      // combined coupon+referral total under a referral-only name) —
+      // couponDiscountApplied is new, referralDiscountApplied is now
+      // correctly referral-only, totalDiscountApplied is the combined
+      // figure for callers that just want one number.
+      couponDiscountApplied: result.couponDiscountAmount || undefined,
+      referralDiscountApplied: result.referralDiscountAmount || undefined,
+      totalDiscountApplied: result.totalDiscountAmount || undefined,
+      pricingBreakdown: result.pricingBreakdown,
+      paymentDetails: result.paymentDetails,
+      // Phase 2d.1: echo back what will actually be purchased once payment
+      // settles, so the frontend doesn't need a second fetch to know which
+      // instance this checkout targets.
+      billingCycle: resolvedBillingCycle,
     });
   } catch (error) {
     console.error('initiateAddonPurchase error:', error);
@@ -3076,19 +6287,60 @@ exports.initiateAddonPurchase = async (req, res) => {
 
 exports.scheduleAddonRemovalEndpoint = async (req, res) => {
   try {
-    const { addonKey, quantity } = req.body;
+    const { addonKey, quantity, billingCycle } = req.body;
 
     if (!addonKey) return res.status(400).json({ error: 'addonKey is required.' });
     if (!Number.isInteger(quantity) || quantity <= 0) {
       return res.status(400).json({ error: 'quantity must be a positive integer.' });
+    }
+    // Phase 2d.1: optional, defaults to the subscription's own cycle — every
+    // pre-2d caller keeps working unchanged.
+    if (billingCycle !== undefined && billingCycle !== 'monthly' && billingCycle !== 'yearly') {
+      return res.status(400).json({ error: 'billingCycle must be "monthly" or "yearly" when provided.' });
     }
 
     const subscription = await Subscription.findOne({ organization: req.user.organization });
     if (!subscription || !subscription.isPaymentConfirmed) {
       return res.status(400).json({ error: 'No active paid subscription found.' });
     }
+    try {
+      require('../utils/downgradeValidator').assertNotFrozen(subscription);
+    } catch (freezeErr) {
+      return res.status(400).json({ error: freezeErr.message, code: freezeErr.code });
+    }
 
-    const result = await scheduleAddonRemovalUtil(req.user.organization, addonKey, quantity);
+    const result = await scheduleAddonRemovalUtil(req.user.organization, addonKey, quantity, billingCycle);
+    const resolvedBillingCycle = billingCycle || subscription.billingCycle;
+
+    // Scheduling a removal doesn't touch activeAddons immediately (only
+    // pendingAddonRemovals) — the org keeps full access until effectiveAt.
+    // So result.subscription's activeAddons is identical to `subscription`'s,
+    // making a literal before/after snapshot show no change at all, even
+    // though something real WAS scheduled. Build a projected "after" instead:
+    // what activeAddons (and thus recurring total) will look like once THIS
+    // removal actually executes, so Timeline shows the real before -> after
+    // quantity drop instead of two identical snapshots.
+    // Phase 2d.1: matched via addonIdentityKey — the pre-2d `a.addonKey ===
+    // addonKey` match would have projected the wrong cycle-variant's
+    // quantity drop once dual-cycle entries can actually exist.
+    const projectedActiveAddons = (subscription.activeAddons || [])
+      .map((a) => {
+        const plain = a.toObject ? a.toObject() : a;
+        return addonIdentityKey(plain, subscription.billingCycle) === addonIdentityKey({ addonKey, billingCycle: resolvedBillingCycle }, subscription.billingCycle)
+          ? { ...plain, quantity: plain.quantity - quantity }
+          : plain;
+      })
+      .filter((a) => a.quantity > 0);
+    const projectedAfter = {
+      planName: subscription.planName,
+      billingCycle: subscription.billingCycle,
+      pricePerUser: subscription.pricePerUser,
+      userCount: subscription.userCount,
+      activeAddons: projectedActiveAddons,
+      totalAmount: calculateInvoice({
+        subscription: { planName: subscription.planName, billingCycle: subscription.billingCycle, pricePerUser: subscription.pricePerUser, activeAddons: projectedActiveAddons },
+      }).taxable,
+    };
 
     await emitBillingEvent({
       organization: req.user.organization,
@@ -3097,17 +6349,69 @@ exports.scheduleAddonRemovalEndpoint = async (req, res) => {
       status: 'scheduled',
       effectiveAt: result.effectiveAt,
       before: subscription,
-      after: result.subscription,
-      metadata: { addonKey, quantity, displayName: result.displayName },
+      after: projectedAfter,
+      amounts: { recurringBefore: subscription.totalAmount, recurringAfter: projectedAfter.totalAmount },
+      metadata: { addonKey, quantity, displayName: result.displayName, billingCycle: resolvedBillingCycle },
     });
 
     res.json({
       success: true,
       message: `${result.displayName} ×${quantity} will be removed at the end of your current billing period (${new Date(result.effectiveAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}).`,
       effectiveAt: result.effectiveAt,
+      billingCycle: resolvedBillingCycle,
     });
   } catch (error) {
     console.error('scheduleAddonRemoval error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Phase 2d.1 — read-only preview, mirrors scheduleAddonRemovalEndpoint's
+// effectiveAt computation exactly (same existingAddon lookup, same
+// periodEnd-or-currentPeriodEnd rule) without writing anything. Lets the
+// frontend show "this removes on <date>" before the user commits.
+exports.previewAddonRemoval = async (req, res) => {
+  try {
+    const { addonKey, quantity: quantityRaw, billingCycle } = req.query;
+    const quantity = Number(quantityRaw);
+
+    if (!addonKey) return res.status(400).json({ error: 'addonKey is required.' });
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      return res.status(400).json({ error: 'quantity must be a positive integer.' });
+    }
+    if (billingCycle !== undefined && billingCycle !== 'monthly' && billingCycle !== 'yearly') {
+      return res.status(400).json({ error: 'billingCycle must be "monthly" or "yearly" when provided.' });
+    }
+
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription || !subscription.isPaymentConfirmed) {
+      return res.status(400).json({ error: 'No active paid subscription found.' });
+    }
+
+    const resolvedBillingCycle = billingCycle || subscription.billingCycle;
+    const existingAddon = (subscription.activeAddons || []).find(
+      (a) => addonIdentityKey(a, subscription.billingCycle) === addonIdentityKey({ addonKey, billingCycle: resolvedBillingCycle }, subscription.billingCycle)
+    );
+    if (!existingAddon) {
+      return res.status(404).json({ error: `Organization does not have the "${addonKey}" add-on on the ${resolvedBillingCycle} billing cycle.` });
+    }
+    if (quantity > existingAddon.quantity) {
+      return res.status(400).json({ error: `Cannot remove ${quantity} units — only ${existingAddon.quantity} owned.` });
+    }
+
+    const catalogEntry = await PlanAddon.findOne({ key: addonKey });
+    const effectiveAt = existingAddon.periodEnd || subscription.currentPeriodEnd;
+
+    res.json({
+      addonKey,
+      billingCycle: resolvedBillingCycle,
+      quantity,
+      remainingQuantity: existingAddon.quantity - quantity,
+      effectiveAt,
+      displayName: catalogEntry?.displayName || addonKey,
+    });
+  } catch (error) {
+    console.error('previewAddonRemoval error:', error);
     res.status(500).json({ error: error.message });
   }
 };

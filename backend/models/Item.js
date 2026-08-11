@@ -17,6 +17,22 @@ const variantSchema = new mongoose.Schema({
   gstRate: { type: Number, default: 0 } // GST rate for this variant
 }, { _id: false }); // prevents auto _id for each variant
 
+// Values for the org-defined custom fields configured in ItemFields.
+// Same shape the other modules use for their additionalFields.
+const additionalFieldSchema = new mongoose.Schema({
+  key: { type: String, required: true },
+  value: mongoose.Schema.Types.Mixed, // Can store string, number, or any value
+  type: {
+    type: String,
+    enum: ['string', 'number', 'dropdown', 'text', 'url', 'date', 'multiselect'],
+    default: 'text'
+  },
+  category: {
+    type: String,
+    default: 'Uncategorized'
+  }
+});
+
 const itemSchema = new mongoose.Schema({
   type: {
     type: String,
@@ -48,6 +64,9 @@ const itemSchema = new mongoose.Schema({
 
   // Variants
   variants: [variantSchema],
+
+  // Org-defined custom field values (definitions live in ItemFields)
+  additionalFields: [additionalFieldSchema],
 
   // System fields
   isActive: { type: Boolean, default: true },

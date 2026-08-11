@@ -16,6 +16,7 @@ import {
 import toast from "react-hot-toast";
 import { configureAxios } from "../services/api";
 import { referralAdminAPI } from "../services/referralAdminApi";
+import { couponAPI } from "../services/couponApi";
 
 import SearchIcon from "../components/common/SearchIcon";
 const REFERRAL_STATUS_BADGE = {
@@ -55,6 +56,11 @@ const ReferralProgramAdmin = () => {
 
   const [program, setProgram] = useState(null);
   const [overview, setOverview] = useState(null);
+  // Coupon-side counterpart to `overview` — this page is the natural place
+  // for it since the org selector/search is already built here; a Super
+  // Admin drilling into one organization's commercial history shouldn't
+  // need a second page for the coupon half of it.
+  const [couponRedemptions, setCouponRedemptions] = useState(null);
   const [loading, setLoading] = useState(false);
   const [savingProgram, setSavingProgram] = useState(false);
   const [showGrant, setShowGrant] = useState(false);
@@ -83,12 +89,14 @@ const ReferralProgramAdmin = () => {
     try {
       setLoading(true);
       configureAxios();
-      const [progRes, ovRes] = await Promise.all([
+      const [progRes, ovRes, redemptionsRes] = await Promise.all([
         referralAdminAPI.getProgram(orgId),
         referralAdminAPI.getOrganizationOverview(orgId),
+        couponAPI.getOrganizationRedemptions(orgId).catch(() => ({ data: { redemptions: [] } })),
       ]);
       setProgram(progRes.data.program);
       setOverview(ovRes.data);
+      setCouponRedemptions(redemptionsRes.data.redemptions || []);
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to load referral data");
     } finally {
@@ -174,7 +182,7 @@ const ReferralProgramAdmin = () => {
               <Building2 className="w-4 h-4 text-purple-600" />
               <span className="font-semibold text-gray-900">{selectedOrg.name}</span>
             </div>
-            <button onClick={() => { setSelectedOrg(null); setProgram(null); setOverview(null); }} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1">
+            <button onClick={() => { setSelectedOrg(null); setProgram(null); setOverview(null); setCouponRedemptions(null); }} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1">
               <X className="w-3.5 h-3.5" /> Change
             </button>
           </div>
@@ -188,7 +196,15 @@ const ReferralProgramAdmin = () => {
               className="w-full pl-11 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
             {orgResults.length > 0 && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+              // Found via live QA: max-h-56 (~6 rows) with no visible scroll
+              // affordance made it look like only 6 organizations existed,
+              // when in fact the rest were just below the fold. Taller list
+              // (fits ~11 rows before scrolling) plus an explicit count, so
+              // "there are more below" is never ambiguous.
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-[26rem] overflow-y-auto">
+                <div className="px-3 py-1.5 text-[11px] text-gray-400 border-b border-gray-100 sticky top-0 bg-white">
+                  {orgResults.length} organization{orgResults.length === 1 ? "" : "s"}{orgResults.length >= 50 ? " (showing first 50 — refine your search)" : ""}
+                </div>
                 {orgResults.map((org) => (
                   <button key={org._id} onClick={() => selectOrg(org)} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">
                     {org.name}
@@ -338,6 +354,25 @@ const ReferralProgramAdmin = () => {
             )}
           </div>
 
+          {/* Referred by — the "who referred THIS org" direction, distinct
+              from "Referrals made" below (who this org referred). Support
+              needs both directions to answer "who referred whom" without
+              guessing which table to check. */}
+          {overview?.referredBy && (
+            <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-2"><Users className="w-4 h-4 text-purple-600" /> Referred by</h3>
+              <p className="text-sm text-gray-700">
+                <span className="font-semibold">{overview.referredBy.referrerOrganization?.name || "Another organization"}</span>
+                {" · "}
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${REFERRAL_STATUS_BADGE[overview.referredBy.status] || "bg-gray-100 text-gray-500"}`}>{overview.referredBy.status}</span>
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Joined {fmtDate(overview.referredBy.createdAt)}
+                {overview.referredBy.qualifiedAt && ` · Qualified ${fmtDate(overview.referredBy.qualifiedAt)}`}
+              </p>
+            </div>
+          )}
+
           {/* Referrals */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100">
@@ -364,6 +399,45 @@ const ReferralProgramAdmin = () => {
                       <td className="px-4 py-2.5">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${REFERRAL_STATUS_BADGE[r.status] || "bg-gray-100 text-gray-500"}`}>{r.status}</span>
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Coupon redemptions — the coupon-side counterpart to the two
+              referral tables above. Coupons and referrals are separate
+              backend engines (see this page's header note), but a Super
+              Admin drilling into one org's commercial history shouldn't
+              need to leave this page to see coupon usage too. */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2"><Tag className="w-4 h-4 text-purple-600" /> Coupon redemptions</h3>
+            </div>
+            {(couponRedemptions || []).length === 0 ? (
+              <p className="px-5 py-6 text-sm text-gray-400">No coupon redemptions for this organization yet.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-2.5">Coupon</th>
+                    <th className="text-left px-4 py-2.5">Context</th>
+                    <th className="text-left px-4 py-2.5">Base</th>
+                    <th className="text-left px-4 py-2.5">Discount</th>
+                    <th className="text-left px-4 py-2.5">Final</th>
+                    <th className="text-left px-4 py-2.5">Redeemed</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {couponRedemptions.map((r) => (
+                    <tr key={r._id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2.5 font-semibold text-gray-900">{r.coupon?.code || r.couponCode || "—"}</td>
+                      <td className="px-4 py-2.5 text-gray-500 capitalize">{r.context?.checkoutType?.replace(/_/g, " ") || "—"}</td>
+                      <td className="px-4 py-2.5 text-gray-500">₹{r.baseAmount}</td>
+                      <td className="px-4 py-2.5 text-emerald-600">− ₹{r.discountAmount}</td>
+                      <td className="px-4 py-2.5 text-gray-900 font-medium">₹{r.finalAmount}</td>
+                      <td className="px-4 py-2.5 text-gray-500 flex items-center gap-1"><Clock className="w-3 h-3" /> {fmtDate(r.redeemedAt)}</td>
                     </tr>
                   ))}
                 </tbody>

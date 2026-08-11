@@ -17,8 +17,6 @@ import PageSkeleton from "../components/common/PageSkeleton";
 import toast from "react-hot-toast";
 import {
   Mail,
-  Phone,
-  MapPin,
   Globe,
   Edit2,
   MoreVertical,
@@ -35,7 +33,6 @@ import {
   PhoneCall,
   Video,
   FolderOpen,
-  Building2,
   FilePlus,
   BadgeCheck,
   ChevronLeft,
@@ -44,7 +41,7 @@ import {
 import { FaWhatsapp } from "react-icons/fa";
 
 /* ─── Tab Configuration ─── */
-const tabs = ["Payments", "Notes", "Tasks", "Meetings", "Calendar"];
+const tabs = ["Overview", "Payments", "Notes", "Tasks", "Meetings", "Calendar"];
 
 /* ─── Financial Summary Icons ─── */
 const TotalReceivedIcon = () => (
@@ -224,7 +221,7 @@ const VendorDetailsPageNew = () => {
   // Tab management (synced to URL)
   const tabFromUrl = searchParams.get("tab");
   const [activeTab, setActiveTabState] = useState(
-    tabs.includes(tabFromUrl) ? tabFromUrl : "Payments"
+    tabs.includes(tabFromUrl) ? tabFromUrl : "Overview"
   );
   const setActiveTab = (tab) => {
     setActiveTabState(tab);
@@ -245,21 +242,40 @@ const VendorDetailsPageNew = () => {
   useLayoutEffect(() => {
     const measure = () => {
       const el = tabRefs.current[activeTab];
-      if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+      // Ignore zero-width reads: the button can be measured before the web
+      // font lands or while an ancestor is still laying out, and writing a 0
+      // here leaves the pill invisible with no later event to correct it.
+      if (el && el.offsetWidth > 0) {
+        setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+      }
     };
     measure();
+    // Re-measure after paint too — the first synchronous pass can land
+    // before layout has settled, which is what left the pill missing on the
+    // active tab at load.
+    const raf = requestAnimationFrame(measure);
+
     // Same fix as CompanyProfilePage: a refresh landing directly on a
     // non-default tab mounts this row while the header is still showing
-    // loading skeletons, so a ResizeObserver on the whole track re-measures
-    // whenever any tab's width shifts, not just when activeTab changes.
+    // loading skeletons. Observe every tab button, not just the track — a
+    // tab's own width can change (font swap) without the track resizing.
     const ro = new ResizeObserver(measure);
     if (tabTrackRef.current) ro.observe(tabTrackRef.current);
+    Object.values(tabRefs.current).forEach((el) => el && ro.observe(el));
+
+    // Fonts finishing load reflows the labels after every observer above has
+    // already settled.
+    if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
+
     window.addEventListener("resize", measure);
     return () => {
+      cancelAnimationFrame(raf);
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [activeTab]);
+    // `dataLoaded` (not showSkeleton) — showSkeleton is declared further
+    // down and referencing it here is a temporal dead zone error.
+  }, [activeTab, dataLoaded]);
 
   // Actions menu
   const [showActionsMenu, setShowActionsMenu] = useState(false);
@@ -594,10 +610,12 @@ const VendorDetailsPageNew = () => {
           the tab bar below never forces the page to scroll before the
           table is visible.
          ═══════════════════════════════════════════════════════════ */}
-      <div className="px-6 sm:px-8 pt-1">
-        <div className="bg-white border border-[#DCEBFC] rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_260px]">
+      {/* No extra top padding here — the page root already carries pt-6, so
+          the strip sits at the same height off the navbar as the one on
+          CompanyProfilePage.jsx. */}
+      <div className="px-6 sm:px-8">
+        <div>
 
-          {/* LEFT COLUMN: info row (top) + KPI strip (bottom) */}
           <div className="flex flex-col min-w-0">
             {/* Info row */}
             <div className="flex items-start justify-between gap-4 py-4 pl-5 sm:pl-6 pr-4">
@@ -615,31 +633,36 @@ const VendorDetailsPageNew = () => {
                   </button>
                 )}
 
-                {vendor ? (
+                {/* Gated on showSkeleton, not just `vendor` — the vendor fetch
+                  resolves well before payments/tasks/meetings/notes do, so
+                  gating on `vendor` alone made the header pop in with real
+                  data while the KPI strip/table/timeline below it were still
+                  skeletons. */}
+                {!showSkeleton && vendor ? (
                   <ProfilePicture
                     contact={{ name: vendor.name, avatar: vendor.avatar || vendor.logo }}
-                    size="w-[56px] h-[56px]"
-                    textSize="text-xl"
+                    size="w-9 h-9"
+                    textSize="text-sm"
                   />
                 ) : (
-                  <div className="w-[56px] h-[56px] rounded-full bg-gray-200 animate-pulse flex-shrink-0" />
+                  <div className="w-9 h-9 rounded-full bg-gray-200 animate-pulse flex-shrink-0" />
                 )}
 
                 <div className="flex flex-col gap-1 mt-0.5 min-w-0">
-                  {vendor ? (
+                  {!showSkeleton && vendor ? (
                     <div className="flex items-center gap-3">
                       <h1 className="text-[22px] font-bold text-gray-900 leading-none">
                         {vendor.name}
                       </h1>
-                      <span className="px-2 py-0.5 text-[10px] font-medium bg-green-50 text-green-700 rounded-full">
+                      <span className="flex-shrink-0 px-2 py-0.5 text-[10px] font-medium bg-green-50 text-green-700 rounded-full">
                         Active
                       </span>
                     </div>
                   ) : (
-                    <Skeleton width={180} height={28} className="mb-1" />
+                    <Skeleton width={140} height={16} className="mb-1" />
                   )}
 
-                  {vendor ? (
+                  {!showSkeleton && vendor ? (
                     <div className="flex flex-col gap-1.5 mt-1">
                       {/* Stacked contact block: one row per field (Company, Email, Phone, Address). */}
                       {vendor.company && (
@@ -668,11 +691,7 @@ const VendorDetailsPageNew = () => {
                       )}
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-2 mt-2">
-                      <Skeleton width={150} height={14} />
-                      <Skeleton width={200} height={14} />
-                      <Skeleton width={120} height={14} />
-                    </div>
+                    <Skeleton width={100} height={11} />
                   )}
                 </div>
 
@@ -690,9 +709,8 @@ const VendorDetailsPageNew = () => {
                 )}
               </div>
 
-              {/* Action Toolbar — moved up next to vendor info now that the
-                gauge owns the whole right column. */}
-              <div className="flex items-start justify-center gap-2 sm:gap-3 flex-shrink-0">
+              {/* Action Toolbar — sits at the right end of the strip. */}
+              <div className="flex items-center justify-center gap-2 sm:gap-3 flex-shrink-0">
                 <ActionIconButton icon={PhoneCall} colorClass="text-blue-500" title="Call" />
                 <ActionIconButton icon={Mail} colorClass="text-blue-500" title="Email" />
                 <ActionIconButton icon={Video} colorClass="text-purple-500" title="Video Meeting" />
@@ -754,105 +772,25 @@ const VendorDetailsPageNew = () => {
               </div>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════
-              SECTION 2 — FINANCIAL SUMMARY KPI STRIP
-              Toggleable via the ⋮ menu's "Hide/Show Financial Summary".
-             ═══════════════════════════════════════════════════════════ */}
-            {showKPI && (
-              <div className="px-5 py-3.5 mt-auto">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {[
-                    {
-                      label: "Total Received",
-                      value: totalReceived,
-                      Icon: TotalReceivedIcon,
-                      badge: "High",
-                      badgeClass: "text-green-600 bg-green-50",
-                    },
-                    {
-                      label: "Total Paid",
-                      value: totalPaid,
-                      Icon: TotalPaidIcon,
-                      badge: "Medium",
-                      badgeClass: "text-orange-600 bg-orange-50",
-                    },
-                    {
-                      label: "Net Balance",
-                      value: netBalance,
-                      Icon: NetBalanceIcon,
-                      badge: netBalance >= 0 ? "Receivable" : "You Owe",
-                      badgeClass:
-                        netBalance >= 0
-                          ? "text-green-600 bg-green-50"
-                          : "text-red-600 bg-red-50",
-                    },
-                  ].map((kpi) =>
-                    /* Whole card skeletons while loading — not just the value.
-                       Showing the real "High"/"Medium"/"Receivable" badges
-                       against a fake value is misleading (it implies a
-                       computed assessment before any data has loaded). */
-                    showSkeleton ? (
-                      <div
-                        key={kpi.label}
-                        className="h-[56px] flex items-center gap-2.5 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
-                      >
-                        <Skeleton shape="rect" width={32} height={32} className="rounded-lg flex-shrink-0" />
-                        <div className="min-w-0 flex-1 flex flex-col gap-1.5">
-                          <Skeleton width="60%" height={10} />
-                          <Skeleton width={80} height={14} />
-                        </div>
-                        <Skeleton width={56} height={18} className="rounded-full flex-shrink-0" />
-                      </div>
-                    ) : (
-                      <div
-                        key={kpi.label}
-                        className="h-[56px] flex items-center gap-2.5 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
-                      >
-                        <kpi.Icon />
-                        <div className="min-w-0">
-                          <p className="text-[11px] text-gray-500 truncate">{kpi.label}</p>
-                          <p className="text-sm font-semibold text-gray-900 truncate">
-                            {fmtMoney(kpi.value)}
-                          </p>
-                        </div>
-                        <span
-                          className={`ml-auto flex-shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${kpi.badgeClass}`}
-                        >
-                          {kpi.badge}
-                        </span>
-                      </div>
-                    ),
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* RIGHT COLUMN: Relationship Health Gauge — spans the full card
-            height (a single grid item stretches to match the left
-            column's height by default) and gets its own tinted
-            background so it reads as the highlighted focal point. */}
-          <div className="hidden sm:flex flex-col items-center justify-center bg-gradient-to-b from-[#EAF4FF] to-[#F6FAFF] py-6 px-6">
-            {showSkeleton ? (
-              <div className="flex flex-col items-center gap-3">
-                <Skeleton width={130} height={13} />
-                <Skeleton width={152} height={76} shape="rect" className="rounded-t-full" />
-              </div>
-            ) : (
-              <RelationshipGauge score={82} label="Excellent" radius={76} stroke={16} />
-            )}
-          </div>
+          {/* The Relationship Health gauge used to occupy a second column
+              here. It now lives in the right sidebar above the Activity
+              Timeline instead — see SECTION 3 & 5 below. */}
         </div>
       </div>
 
-      <div className="mx-auto px-6 sm:px-8 mt-3">
+      <div className="mx-auto px-6 sm:px-8">
         {/* ═══════════════════════════════════════════════════════════
             SECTION 3 & 5 — TABS & CONTENT
            ═══════════════════════════════════════════════════════════ */}
-        {/* TABS */}
-        <div className="border-b border-gray-200 mb-4 -mx-6"></div>
+        {/* TABS — their own banded section, bounded by a rule above and
+            below and bled full-width with -mx, so the switcher reads as a
+            distinct strip rather than sitting flush under the vendor name.
+            py-4 (not mb-4) so the band has symmetric breathing room. */}
+        <div className="border-b border-gray-200 -mx-6 sm:-mx-8"></div>
 
-        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <div className="flex items-center justify-between py-4 gap-3 flex-wrap">
           <div ref={tabTrackRef} className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
@@ -875,7 +813,82 @@ const VendorDetailsPageNew = () => {
           <div id="tab-actions-portal" className="flex items-center gap-2"></div>
         </div>
 
-        <div className="border-b border-gray-200 mb-4 -mx-6"></div>
+        <div className="border-b border-gray-200 mb-4 -mx-6 sm:-mx-8"></div>
+
+        {/* ═══════════════════════════════════════════════════════════
+            SECTION 2 — FINANCIAL SUMMARY KPI STRIP
+            Sits below the tab switcher (not in the header strip), and
+            stays visible across tabs. Toggleable via the ⋮ menu's
+            "Hide/Show Financial Summary".
+           ═══════════════════════════════════════════════════════════ */}
+        {showKPI && (
+          <div className="mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  {
+                    label: "Total Received",
+                    value: totalReceived,
+                    Icon: TotalReceivedIcon,
+                    badge: "High",
+                    badgeClass: "text-green-600 bg-green-50",
+                  },
+                  {
+                    label: "Total Paid",
+                    value: totalPaid,
+                    Icon: TotalPaidIcon,
+                    badge: "Medium",
+                    badgeClass: "text-orange-600 bg-orange-50",
+                  },
+                  {
+                    label: "Net Balance",
+                    value: netBalance,
+                    Icon: NetBalanceIcon,
+                    badge: netBalance >= 0 ? "Receivable" : "You Owe",
+                    badgeClass:
+                      netBalance >= 0
+                        ? "text-green-600 bg-green-50"
+                        : "text-red-600 bg-red-50",
+                  },
+                ].map((kpi) =>
+                  /* Whole card skeletons while loading — not just the value.
+                     Showing the real "High"/"Medium"/"Receivable" badges
+                     against a fake value is misleading (it implies a
+                     computed assessment before any data has loaded). */
+                  showSkeleton ? (
+                    <div
+                      key={kpi.label}
+                      className="h-[56px] flex items-center gap-2.5 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
+                    >
+                      <Skeleton shape="rect" width={32} height={32} className="rounded-lg flex-shrink-0" />
+                      <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+                        <Skeleton width="60%" height={10} />
+                        <Skeleton width={80} height={14} />
+                      </div>
+                      <Skeleton width={56} height={18} className="rounded-full flex-shrink-0" />
+                    </div>
+                  ) : (
+                    <div
+                      key={kpi.label}
+                      className="h-[56px] flex items-center gap-2.5 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
+                    >
+                      <kpi.Icon />
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-gray-500 truncate">{kpi.label}</p>
+                        <p className="text-sm font-semibold text-gray-900 truncate">
+                          {fmtMoney(kpi.value)}
+                        </p>
+                      </div>
+                      <span
+                        className={`ml-auto flex-shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${kpi.badgeClass}`}
+                      >
+                        {kpi.badge}
+                      </span>
+                    </div>
+                  ),
+                )}
+              </div>
+            </div>
+          )}
 
         {/* Sidebar trimmed 272px -> 240px and the gap 6 -> 4, handing ~95px
             back to the table column so its right-most columns (Amount /
@@ -896,6 +909,92 @@ const VendorDetailsPageNew = () => {
                 <TabTableSkeleton />
               ) : (
                 <>
+                  {activeTab === "Overview" && (
+                    <div className="space-y-4">
+                      {/* Record counts — each tile jumps to its own tab so the
+                          overview works as navigation, not just a readout. */}
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        {[
+                          { label: "Payments", count: payments?.length || 0, icon: Receipt, tab: "Payments", color: "text-blue-600", bg: "bg-blue-50" },
+                          { label: "Tasks", count: tasks?.length || 0, icon: CheckSquare, tab: "Tasks", color: "text-indigo-600", bg: "bg-indigo-50" },
+                          { label: "Meetings", count: meetings?.length || 0, icon: Video, tab: "Meetings", color: "text-purple-600", bg: "bg-purple-50" },
+                          { label: "Notes", count: notes?.length || 0, icon: FolderOpen, tab: "Notes", color: "text-emerald-600", bg: "bg-emerald-50" },
+                        ].map((tile) => (
+                          <button
+                            key={tile.label}
+                            type="button"
+                            onClick={() => setActiveTab(tile.tab)}
+                            className="bg-white border border-gray-200 rounded-lg p-4 text-left hover:border-blue-300 hover:shadow-sm transition-all"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className={`${tile.bg} p-2 rounded-lg`}>
+                                <tile.icon className={`w-4 h-4 ${tile.color}`} />
+                              </div>
+                            </div>
+                            <p className="text-2xl font-bold text-gray-900 leading-tight">{tile.count}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{tile.label}</p>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Vendor Details */}
+                      <div className="bg-white border border-gray-200 rounded-lg p-5">
+                        <h3 className="text-sm font-semibold text-gray-900 mb-4">Vendor Details</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+                          {[
+                            { label: "Vendor Name", value: vendor?.name },
+                            { label: "Email", value: vendor?.email },
+                            { label: "Phone", value: vendor?.phone },
+                            { label: "GSTIN", value: vendor?.gstin },
+                            { label: "Website", value: vendor?.website },
+                            { label: "Status", value: vendor?.status },
+                            {
+                              label: "Address",
+                              value: [
+                                vendor?.address?.line1,
+                                vendor?.address?.line2,
+                                vendor?.address?.city,
+                                vendor?.address?.state,
+                                vendor?.address?.pincode,
+                                vendor?.address?.country,
+                              ].filter(Boolean).join(", "),
+                            },
+                          ].map((row) => (
+                            <div key={row.label} className="flex items-start justify-between gap-4 py-1.5 border-b border-gray-50 last:border-b-0">
+                              <span className="text-xs text-gray-500 flex-shrink-0">{row.label}</span>
+                              <span className="text-xs font-medium text-gray-900 text-right break-words">
+                                {row.value || "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* No Financial Summary card here: the KPI strip now
+                          sits directly above the tab content, so repeating
+                          the same three figures inside Overview showed them
+                          twice in one viewport. Hidden along with the strip
+                          when KPIs are toggled off. */}
+
+                      {/* Custom Fields — only rendered when the org has
+                          defined some and this vendor has values for them. */}
+                      {vendor?.additionalFields?.length > 0 && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-5">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-4">Custom Fields</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+                            {vendor.additionalFields.map((field) => (
+                              <div key={field.key} className="flex items-start justify-between gap-4 py-1.5 border-b border-gray-50 last:border-b-0">
+                                <span className="text-xs text-gray-500 flex-shrink-0">{field.key}</span>
+                                <span className="text-xs font-medium text-gray-900 text-right break-words">
+                                  {field.value || "—"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {activeTab === "Payments" && (
                     <PaymentsTable payments={payments} vendor={vendor} />
                   )}
@@ -908,8 +1007,24 @@ const VendorDetailsPageNew = () => {
             </div>
           </div>
 
-          {/* ── Right Column: Activity Timeline Sidebar ── */}
-          <div className="hidden lg:block">
+          {/* ── Right Column: Relationship Health + Activity Timeline ── */}
+          <div className="hidden lg:block space-y-3">
+            {/* Relationship Health — moved out of the header card so the
+                header can use its full width for vendor details. Radius is
+                smaller here than it was in the header (the sidebar card is
+                240px wide, 216px inside its padding) so the gauge fits
+                without overflowing. */}
+            <div className="bg-gradient-to-b from-[#EAF4FF] to-[#F6FAFF] border border-[#DCEBFC] rounded-xl py-5 px-3 flex flex-col items-center justify-center">
+              {showSkeleton ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Skeleton width={120} height={13} />
+                  <Skeleton width={144} height={72} shape="rect" className="rounded-t-full" />
+                </div>
+              ) : (
+                <RelationshipGauge score={82} label="Excellent" radius={72} stroke={15} />
+              )}
+            </div>
+
             <div className="bg-white border border-gray-200 rounded-xl p-3 sticky top-6">
               {showSkeleton ? (
                 <Skeleton width={110} height={14} className="mb-5" />
