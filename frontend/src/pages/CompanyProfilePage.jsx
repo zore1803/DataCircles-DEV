@@ -13,6 +13,7 @@ import CompanyFolderTab from "../components/company/CompanyFolderTab";
 import CompanyCalendar from "../components/company/CompanyCalendar";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import toast from "react-hot-toast";
+import AppToaster from "../components/AppToaster";
 import logo from "/DataCircles.png";
 import {
   MapPin,
@@ -1861,6 +1862,7 @@ const CompanyProfilePage = () => {
           fetchCompanyDetails();
         }}
       />
+      <AppToaster />
     </div>
   );
 };
