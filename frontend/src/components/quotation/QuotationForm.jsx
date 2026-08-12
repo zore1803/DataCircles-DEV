@@ -1110,82 +1110,80 @@ const QuotationForm = ({
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
+            {/* ── Quotation Items ── edge-to-edge table ── */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
                 <IndianRupeeIcon className="w-5 h-5 text-slate-600" />
-                <label className="block font-semibold text-slate-700">
-                  Quotation Items
-                </label>
+                <span className="font-semibold text-slate-700">Quotation Items</span>
               </div>
 
-              <div className="space-y-4">
-                {form.items.map((item, index) => (
-                  <div
-                    key={index}
-                    className="bg-white p-4 rounded-lg border border-slate-200 space-y-4"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Item
-                        </label>
-                        <ItemSearchSelect
-                          value={item}
-                          onSelect={(itemData) =>
-                            handleItemSelect(index, itemData)
-                          }
-                          onAddNew={handleOpenItemForm}
-                          fetchItems={fetchItems}
-                          items={items}
-                          setItems={setItems}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Description
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Item description"
-                          value={item.description}
-                          onChange={(e) => {
-                            handleItemChange(
-                              index,
-                              "description",
-                              e.target.value
-                            );
-                            setHasUnsavedChanges(true);
-                          }}
-                          className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                          aria-label="Item description"
-                        />
-                      </div>
-                    </div>
+              {/* Bleed to panel edges by undoing the form's p-6 */}
+              <div className="mx-[-1.5rem] border-t border-slate-200">
+                {/* Column headers */}
+                <div
+                  className="grid items-center bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider"
+                  style={{ gridTemplateColumns: "40px 1fr 52px 76px 108px 76px 80px", padding: "8px 24px" }}
+                >
+                  <span>#</span>
+                  <span>Item / Description</span>
+                  <span className="text-center">Qty</span>
+                  <span className="text-right">Rate (₹)</span>
+                  <span className="text-center">Discount</span>
+                  <span className="text-right">Amount (₹)</span>
+                  <span className="text-right">Total (₹)</span>
+                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Rate (₹)
-                        </label>
-                        <input
-                          type="number"
-                          placeholder="0"
-                          min="0"
-                          step="1"
-                          value={item.rate}
-                          onChange={(e) => {
-                            handleItemChange(index, "rate", e.target.value);
-                            setHasUnsavedChanges(true);
-                          }}
-                          className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                          required
-                          aria-label="Item rate"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Quantity
-                        </label>
+                {/* Item rows */}
+                {form.items.map((item, index) => {
+                  const rowAmount = (parseFloat(item.rate) || 0) * (parseInt(item.quantity) || 0);
+                  const rowTotal = calculateItemAmount(item);
+                  return (
+                    <div key={index} className="border-b border-slate-100">
+                      <div
+                        className="grid items-start gap-x-2"
+                        style={{ gridTemplateColumns: "40px 1fr 52px 76px 108px 76px 80px", padding: "10px 24px" }}
+                      >
+                        {/* # */}
+                        <span className="text-sm text-slate-400 pt-2 select-none">{index + 1}</span>
+
+                        {/* Item name + description */}
+                        <div className="flex flex-col gap-1 min-w-0">
+                          <ItemSearchSelect
+                            value={item}
+                            onSelect={(itemData) => handleItemSelect(index, itemData)}
+                            onAddNew={handleOpenItemForm}
+                            fetchItems={fetchItems}
+                            items={items}
+                            setItems={setItems}
+                          />
+                          <textarea
+                            placeholder="+ Add description"
+                            value={item.description}
+                            rows={1}
+                            onChange={(e) => {
+                              handleItemChange(index, "description", e.target.value);
+                              setHasUnsavedChanges(true);
+                            }}
+                            className="w-full resize-none text-xs text-slate-500 placeholder-slate-400 border border-transparent rounded px-1 py-0.5 focus:outline-none focus:border-slate-300 focus:ring-0 transition-colors"
+                            aria-label="Item description"
+                          />
+                          {form.isTaxQuotation && (
+                            <input
+                              type="text"
+                              placeholder="HSN/SAC code"
+                              value={item.hsn}
+                              onChange={(e) => {
+                                handleItemChange(index, "hsn", e.target.value);
+                                setHasUnsavedChanges(true);
+                              }}
+                              className="w-full text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
+                              required
+                              aria-label="HSN/SAC code"
+                            />
+                          )}
+                        </div>
+
+                        {/* Qty */}
                         <input
                           type="number"
                           placeholder="1"
@@ -1195,148 +1193,85 @@ const QuotationForm = ({
                             handleItemChange(index, "quantity", e.target.value);
                             setHasUnsavedChanges(true);
                           }}
-                          className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                          className="w-full text-center text-sm border border-slate-200 rounded-lg px-1 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
                           required
                           aria-label="Item quantity"
                         />
-                      </div>
-                      {form.isTaxQuotation && (
-                        <>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-600">
-                              Discount
-                            </label>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                placeholder="0"
-                                min="0"
-                                step={
-                                  item.discountType === "percentage" ? "1" : "1"
-                                }
-                                value={item.discount}
-                                onChange={(e) => {
-                                  handleItemChange(
-                                    index,
-                                    "discount",
-                                    e.target.value
-                                  );
-                                  setHasUnsavedChanges(true);
-                                }}
-                                className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                                aria-label="Item discount"
-                              />
-                              <select
-                                value={item.discountType}
-                                onChange={(e) => {
-                                  handleItemChange(
-                                    index,
-                                    "discountType",
-                                    e.target.value
-                                  );
-                                  setHasUnsavedChanges(true);
-                                }}
-                                className="border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                                aria-label="Discount type"
-                              >
-                                <option value="amount">₹</option>
-                                <option value="percentage">%</option>
-                              </select>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-600">
-                              HSN/SAC
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="HSN/SAC code"
-                              value={item.hsn}
-                              onChange={(e) => {
-                                handleItemChange(index, "hsn", e.target.value);
-                                setHasUnsavedChanges(true);
-                              }}
-                              className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                              required
-                              aria-label="HSN/SAC code"
-                            />
-                          </div>
-                        </>
-                      )}
-                      {!form.isTaxQuotation && (
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-600">
-                            Discount
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              placeholder="0"
-                              min="0"
-                              step={
-                                item.discountType === "percentage" ? "1" : "1"
-                              }
-                              value={item.discount}
-                              onChange={(e) => {
-                                handleItemChange(
-                                  index,
-                                  "discount",
-                                  e.target.value
-                                );
-                                setHasUnsavedChanges(true);
-                              }}
-                              className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                              aria-label="Item discount"
-                            />
-                            <select
-                              value={item.discountType}
-                              onChange={(e) => {
-                                handleItemChange(
-                                  index,
-                                  "discountType",
-                                  e.target.value
-                                );
-                                setHasUnsavedChanges(true);
-                              }}
-                              className="border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                              aria-label="Discount type"
-                            >
-                              <option value="amount">₹</option>
-                              <option value="percentage">%</option>
-                            </select>
-                          </div>
+
+                        {/* Rate */}
+                        <input
+                          type="number"
+                          placeholder="0.00"
+                          min="0"
+                          step="1"
+                          value={item.rate}
+                          onChange={(e) => {
+                            handleItemChange(index, "rate", e.target.value);
+                            setHasUnsavedChanges(true);
+                          }}
+                          className="w-full text-right text-sm border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                          required
+                          aria-label="Item rate"
+                        />
+
+                        {/* Discount */}
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            placeholder="0"
+                            min="0"
+                            step="1"
+                            value={item.discount}
+                            onChange={(e) => {
+                              handleItemChange(index, "discount", e.target.value);
+                              setHasUnsavedChanges(true);
+                            }}
+                            className="min-w-0 flex-1 text-sm border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                            aria-label="Item discount"
+                          />
+                          <select
+                            value={item.discountType}
+                            onChange={(e) => {
+                              handleItemChange(index, "discountType", e.target.value);
+                              setHasUnsavedChanges(true);
+                            }}
+                            className="flex-shrink-0 text-sm border border-slate-200 rounded-lg px-1 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-white"
+                            aria-label="Discount type"
+                          >
+                            <option value="amount">₹</option>
+                            <option value="percentage">%</option>
+                          </select>
                         </div>
-                      )}
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Amount
-                        </label>
-                        <div className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-medium">
-                          ₹{calculateItemAmount(item).toFixed(2)}
+
+                        {/* Amount (rate × qty) */}
+                        <div className="text-right text-sm text-slate-600 pt-2 tabular-nums">
+                          ₹{formatNumberToIndian(rowAmount)}
+                        </div>
+
+                        {/* Total (after discount) + delete */}
+                        <div className="flex items-center justify-end gap-1 pt-1">
+                          <span className="text-sm font-semibold text-slate-800 tabular-nums">
+                            ₹{formatNumberToIndian(rowTotal)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItem(index)}
+                            className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
+                            aria-label="Remove item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
                     </div>
+                  );
+                })}
 
-                    {form.items.length > 1 && (
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveItem(index)}
-                          className="flex items-center gap-2 text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-all duration-200"
-                          aria-label="Remove item"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Remove Item
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
+                {/* Add Another Item */}
                 <button
                   type="button"
                   onClick={handleAddItem}
-                  className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium p-2 rounded-lg hover:bg-blue-50 transition-all duration-200"
+                  className="w-full flex items-center justify-center gap-2 py-3 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors border-b border-slate-100"
                   aria-label="Add another item"
                 >
                   <Plus className="w-4 h-4" />
@@ -1488,3 +1423,13 @@ const QuotationForm = ({
 };
 
 export default QuotationForm;
+
+// Thin wrapper around the shared CreateInvoicePanel for quotation type.
+// Used by Accounting.jsx when opening the two-pane create/edit form.
+import { CreateInvoicePanel } from "../invoice/InvoiceForm";
+
+const CreateQuotationPanel = (props) => (
+  <CreateInvoicePanel {...props} type="quotation" />
+);
+
+export { CreateQuotationPanel };

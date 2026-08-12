@@ -1489,9 +1489,15 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                 {cells.map((day, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center justify-center"
-                    style={{ width: 24, height: 24, justifySelf: "center" }}
+                    className="flex flex-col items-center justify-center"
+                    style={{ width: 24, justifySelf: "center" }}
                   >
+                    {day && meetingDays.has(day) && (
+                      <span
+                        className="flex-shrink-0"
+                        style={{ width: 6, height: 6, borderRadius: 99, background: "#0085FF", marginBottom: 2 }}
+                      />
+                    )}
                     {day && (
                       <span
                         className="flex items-center justify-center"
@@ -1504,7 +1510,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                           fontSize: 14,
                           lineHeight: "17px",
                           background: day === now.getDate() ? "#0085FF" : "transparent",
-                          color: day === now.getDate() ? "#FFFFFF" : meetingDays.has(day) ? "#0085FF" : "#333333",
+                          color: day === now.getDate() ? "#FFFFFF" : "#333333",
                         }}
                       >
                         {day}

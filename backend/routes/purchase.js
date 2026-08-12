@@ -36,6 +36,15 @@ router.get("/pagination",
   purchaseController.getAllPurchasesWithPagination
 );
 
+// Export Selected Purchases
+router.post("/export-selected",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'read'),
+  checkPermission("purchases", "readonly"),
+  purchaseController.exportSelectedPurchases
+);
+
 // Get Purchases for a Vendor (specific route before generic /:id)
 router.get("/vendor/:vendorId",
   requireAuth,

@@ -27,7 +27,6 @@ import {
   Filter,
   CheckSquare,
   Eye,
-  Upload,
   Download,
   Clock,
   CheckCircle2,
@@ -39,6 +38,7 @@ import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import VideoTutorialButton from "../components/VideoTutorialButton";
 import AppToaster from "../components/AppToaster";
+import ExportModal from "../components/common/ExportModal";
 
 import SearchIcon from "../components/common/SearchIcon";
 const SingleSelectDropdown = ({ options, value, onChange, disabled, variant = "pill" }) => {
@@ -120,7 +120,7 @@ const PurchaseOrderPage = () => {
   const [filterStatus, setFilterStatus] = useState("");
   const [selectedPO, setSelectedPO] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [showImport, setShowImport] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Bulk Selection
   const [selectedPurchaseOrders, setSelectedPurchaseOrders] = useState([]);
@@ -167,6 +167,18 @@ const PurchaseOrderPage = () => {
   const filterOptions = [
     { value: "", label: "All Status", icon: Filter, className: "bg-gray-50 text-gray-700 border-gray-200" },
     ...statusOptions
+  ];
+
+  // Column list handed to the shared ExportModal — same shape Vendors/Companies use.
+  const exportColumns = [
+    { key: "poNumber", label: "PO Number" },
+    { key: "vendor", label: "Vendor" },
+    { key: "orderDate", label: "Order Date" },
+    { key: "items", label: "Items" },
+    { key: "totalAmount", label: "Total Amount" },
+    { key: "paymentTerms", label: "Payment Terms" },
+    { key: "status", label: "Status" },
+    { key: "notes", label: "Notes" },
   ];
 
   // Click outside for dropdown
@@ -594,6 +606,15 @@ const PurchaseOrderPage = () => {
         loading={bulkLoading}
       />
 
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        columns={exportColumns}
+        selectedIds={selectedPurchaseOrders}
+        exportUrl="/purchase-orders/export-selected"
+        fileName="Exported_PurchaseOrders.csv"
+      />
+
       <div className="">
         {/* Header - Simplified */}
         <div className="mb-6">
@@ -671,11 +692,13 @@ const PurchaseOrderPage = () => {
 
             <div className="flex items-center gap-3 w-full md:w-auto flex-wrap pb-2 md:pb-0">
               <button
-                onClick={() => setShowImport(!showImport)}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium text-sm px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+                onClick={() => setShowExportModal(true)}
+                disabled={selectedPurchaseOrders.length === 0}
+                title={selectedPurchaseOrders.length === 0 ? "Select purchase orders to export" : "Export selected purchase orders"}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium text-sm px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <Upload className="w-4 h-4" />
-                Import/Export
+                <Download className="w-4 h-4" />
+                Export
               </button>
 
               <SingleSelectDropdown
