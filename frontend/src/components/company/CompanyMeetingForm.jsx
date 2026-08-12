@@ -42,7 +42,7 @@ const ParticipantChip = ({ user, onRemove, isRemovable = false }) => (
     <User className="w-3 h-3" />
     <span>{user?.name || "Unknown"}</span>
     {isRemovable && onRemove && (
-      <button onClick={onRemove} className="hover:bg-blue-100 rounded-full p-0.5">
+      <button type="button" onClick={onRemove} className="hover:bg-blue-100 rounded-full p-0.5">
         <X className="w-3 h-3" />
       </button>
     )}
@@ -898,6 +898,7 @@ const CompanyMeetingForm = ({
               </button>
               {(!isEditMode && mode === "view") ? (
                 <button
+                  type="button"
                   onClick={() => setIsEditMode(true)}
                   className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-200 transition-all flex items-center gap-2"
                 >
@@ -906,6 +907,7 @@ const CompanyMeetingForm = ({
                 </button>
               ) : (
                 <button
+                  type="button"
                   onClick={handleSubmit}
                   disabled={loading || timeConflict}
                   className={`px-6 py-2 rounded-xl text-xs font-bold shadow-lg transition-all flex items-center gap-2 ${loading || timeConflict

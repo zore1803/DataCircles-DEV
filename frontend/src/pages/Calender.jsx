@@ -27,6 +27,7 @@ import Skeleton from "../components/common/Skeleton";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 
 import SearchIcon from "../components/common/SearchIcon";
+import HighlightText from "../components/common/HighlightText";
 // --- Components ---
 
 const CustomMonthIcon = (props) => (
@@ -1068,7 +1069,7 @@ const AdminCalendar = () => {
                               color: "#0952E7",
                             }}
                           >
-                            {m.title || "Meeting"}
+                            <HighlightText text={m.title || "Meeting"} query={searchTerm} />
                           </span>
                           <span
                             className="whitespace-nowrap flex-shrink-0"
@@ -1106,7 +1107,7 @@ const AdminCalendar = () => {
                               color: "#00913D",
                             }}
                           >
-                            {t.title || "Task"}
+                            <HighlightText text={t.title || "Task"} query={searchTerm} />
                           </span>
                         </div>
                       ))}
