@@ -825,6 +825,11 @@ const Accounting = () => {
   const searchInputRef = useRef(null);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  // Quotations open in the shared split view (form + live preview) by default;
+  // the header's expand button swaps to the dedicated full-width QuotationForm,
+  // which carries the extended field set. Reset whenever the panel closes so a
+  // later quotation always starts back in split view.
+  const [quotationFullWidth, setQuotationFullWidth] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editingType, setEditingType] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -2407,6 +2412,7 @@ const Accounting = () => {
               setShowCreatePanel(false);
               setEditPanelDoc(null);
               setConversionData(null);
+              setQuotationFullWidth(false);
             },
             onCreated: () => fetchData(activeTab),
             onAddDeal: async () => {
@@ -2427,7 +2433,33 @@ const Accounting = () => {
           };
           switch (activeTab) {
             case "tax":        return <CreateInvoicePanel {...panelProps} type="tax" />;
-            case "quotation":  return <CreateQuotationPanel {...panelProps} />;
+            // Split view by default; the panel's expand button flips
+            // quotationFullWidth, swapping in the full-width QuotationForm
+            // (its own fixed overlay), which flips back via onExitFullWidth.
+            case "quotation":  return quotationFullWidth ? (
+              <QuotationForm
+                deals={deals}
+                isOpen={true}
+                onClose={panelProps.onClose}
+                onExitFullWidth={() => setQuotationFullWidth(false)}
+                fetchData={() => fetchData("quotation")}
+                editingQuotation={panelProps.initialDoc}
+                onPreview={(formData) => {
+                  if (!formData.style) {
+                    toast.error("Please select a Quotation style to preview.");
+                    return;
+                  }
+                  setPreviewStyle(formData.style);
+                  setPreviewType("quotation");
+                  setShowPreview(true);
+                }}
+              />
+            ) : (
+              <CreateQuotationPanel
+                {...panelProps}
+                onRequestFullWidth={() => setQuotationFullWidth(true)}
+              />
+            );
             case "performa":   return <CreatePerformaPanel {...panelProps} />;
             case "deliveryChallan": return <CreateChallanPanel {...panelProps} />;
             default:           return null;
