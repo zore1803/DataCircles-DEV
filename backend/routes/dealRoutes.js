@@ -151,6 +151,8 @@ router.post(
         deal.amount = parseFloat(deal.amount) || 0;
         deal.status = deal.status || "Open";
         deal.user = req.user._id;
+        deal.createdBy = req.user._id;
+        deal.lastUpdatedBy = req.user._id;
         deal.organization = req.user.organization;
 
         validDeals.push(deal);

@@ -221,11 +221,12 @@ const SortableItem = ({ item, itemIdKey, renderItemWrapper, isDragging, selected
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isSortableDragging ? 0.4 : 1,
+    cursor: isSortableDragging ? "grabbing" : "grab",
   };
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      {renderItemWrapper(item, isSortableDragging || isDragging, selected, onToggleSelect)}
+      {renderItemWrapper(item, isSortableDragging, selected, onToggleSelect)}
     </div>
   );
 };
@@ -414,10 +415,10 @@ const TaskKanbanBoard = ({
         </div>
       </div>
 
-      <DragOverlay>
+      <DragOverlay dropAnimation={null}>
         {activeItem ? (
-          <div style={{ width: "340px" }}>
-            {renderWrapper(activeItem, true)}
+          <div style={{ width: "340px", cursor: "grabbing" }}>
+            {renderWrapper(activeItem, false)}
           </div>
         ) : null}
       </DragOverlay>

@@ -15,7 +15,8 @@ import {
 import AppToaster from "../AppToaster";
 
 import SearchIcon from "../common/SearchIcon";
-const CompactEventCard = ({ item, type, onClick }) => (
+import HighlightText from "../common/HighlightText";
+const CompactEventCard = ({ item, type, onClick, searchTerm }) => (
   <div
     className={`
       text-[10px] px-1 py-0.5 rounded cursor-pointer truncate mb-0.5 transition-all
@@ -37,7 +38,9 @@ const CompactEventCard = ({ item, type, onClick }) => (
       ) : (
         <CheckSquare className="w-2 h-2 flex-shrink-0" />
       )}
-      <span className="truncate">{item.title}</span>
+      <span className="truncate">
+        <HighlightText text={item.title} query={searchTerm} />
+      </span>
     </div>
   </div>
 );
@@ -104,6 +107,7 @@ const ActivityListPopup = ({
   onMeetingClick,
   onTaskClick,
   onClose,
+  searchTerm,
 }) => {
   if (!isOpen) return null;
 
@@ -142,7 +146,9 @@ const ActivityListPopup = ({
                       onClick={() => onMeetingClick(meeting)}
                     >
                       <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                      <span className="truncate">{meeting.title}</span>
+                      <span className="truncate">
+                        <HighlightText text={meeting.title} query={searchTerm} />
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -159,7 +165,9 @@ const ActivityListPopup = ({
                       onClick={() => onTaskClick(task)}
                     >
                       <CheckSquare className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                      <span className="truncate">{task.title}</span>
+                      <span className="truncate">
+                        <HighlightText text={task.title} query={searchTerm} />
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -507,6 +515,7 @@ const ContactCalendar = ({ contactId }) => {
                       item={meeting}
                       type="meeting"
                       onClick={handleMeetingClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
                   {filteredTasks
@@ -517,6 +526,7 @@ const ContactCalendar = ({ contactId }) => {
                         item={task}
                         type="task"
                         onClick={handleTaskClick}
+                        searchTerm={searchTerm}
                       />
                     ))}
                   {hasMore && (
