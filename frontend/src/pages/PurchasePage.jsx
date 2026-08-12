@@ -21,7 +21,7 @@ import {
   X,
   Plus,
   Eye,
-  Upload,
+  Download,
   ChevronDown as SelectChevron,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -30,6 +30,7 @@ import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import VideoTutorialButton from "../components/VideoTutorialButton";
 import AppToaster from "../components/AppToaster";
+import ExportModal from "../components/common/ExportModal";
 
 import SearchIcon from "../components/common/SearchIcon";
 const PurchasePage = () => {
@@ -43,7 +44,7 @@ const PurchasePage = () => {
   const [filterStatus, setFilterStatus] = useState("");
   const [selectedPurchase, setSelectedPurchase] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [showImport, setShowImport] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Bulk Selection
   const [selectedPurchases, setSelectedPurchases] = useState([]);
@@ -81,6 +82,19 @@ const PurchasePage = () => {
   });
 
   const statusOptions = ["Draft", "Pending", "Paid", "Cancelled"];
+
+  // Column list handed to the shared ExportModal — same shape Vendors/Companies use.
+  const exportColumns = [
+    { key: "purchaseNumber", label: "Purchase Number" },
+    { key: "vendor", label: "Vendor" },
+    { key: "purchaseDate", label: "Purchase Date" },
+    { key: "items", label: "Items" },
+    { key: "subtotal", label: "Subtotal" },
+    { key: "totalTax", label: "Total Tax" },
+    { key: "grandTotal", label: "Grand Total" },
+    { key: "status", label: "Status" },
+    { key: "notes", label: "Notes" },
+  ];
 
   // Click outside for action dropdown
   useEffect(() => {
@@ -495,6 +509,15 @@ const PurchasePage = () => {
         loading={bulkLoading}
       />
 
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        columns={exportColumns}
+        selectedIds={selectedPurchases}
+        exportUrl="/purchases/export-selected"
+        fileName="Exported_Purchases.csv"
+      />
+
       <div className="">
         {/* Header - Simplified */}
         <div className="mb-6">
@@ -573,11 +596,13 @@ const PurchasePage = () => {
 
             <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
               <button
-                onClick={() => setShowImport(!showImport)}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium text-sm px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+                onClick={() => setShowExportModal(true)}
+                disabled={selectedPurchases.length === 0}
+                title={selectedPurchases.length === 0 ? "Select purchases to export" : "Export selected purchases"}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium text-sm px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <Upload className="w-4 h-4" />
-                Import/Export
+                <Download className="w-4 h-4" />
+                Export
               </button>
 
               <div className="relative">

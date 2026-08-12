@@ -275,3 +275,58 @@ exports.deletePurchaseOrder = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+// Export Selected Purchase Orders
+exports.exportSelectedPurchaseOrders = async (req, res) => {
+  try {
+    const { selectedIds, columns } = req.body;
+
+    if (!selectedIds || selectedIds.length === 0) {
+      return res.status(400).json({ error: "No purchase orders selected for export" });
+    }
+
+    // Fetch every selected purchase order regardless of pagination, scoped to
+    // the org so one tenant can never export another's rows.
+    const purchaseOrders = await PurchaseOrder.find({
+      _id: { $in: selectedIds },
+      organization: req.user.organization,
+    })
+      .populate("vendor", "name")
+      .lean();
+
+    const headerRow = columns.map((c) => `"${c.label}"`).join(",");
+
+    const dataRows = purchaseOrders.map((po) =>
+      columns
+        .map((c) => {
+          let val = "";
+
+          if (c.key === "vendor") {
+            val = po.vendor?.name || "";
+          } else if (c.key === "items") {
+            // Line items are a subdocument array; flatten to one readable cell.
+            val = (po.items || [])
+              .map((i) => `${i.name} x${i.quantity}`)
+              .join("; ");
+          } else {
+            val = po[c.key] ?? "";
+          }
+
+          if (typeof val === "object" && val !== null) val = JSON.stringify(val);
+          val = String(val).replace(/"/g, '""');
+
+          return `"${val}"`;
+        })
+        .join(","),
+    );
+
+    const csvContent = [headerRow, ...dataRows].join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="Exported_PurchaseOrders.csv"');
+    res.status(200).send(csvContent);
+  } catch (error) {
+    console.error("Purchase order export error:", error);
+    res.status(500).json({ error: "Failed to export purchase orders" });
+  }
+};

@@ -427,6 +427,7 @@ const MergedInvoiceManager = () => {
   const [previewStyle, setPreviewStyle] = useState(null);
   const [previewType, setPreviewType] = useState(null);
   const [showViewer, setShowViewer] = useState(false);
+  const [conversionData, setConversionData] = useState(null);
   const [viewerId, setViewerId] = useState(null);
   const [viewerType, setViewerType] = useState(null);
   const [viewerDoc, setViewerDoc] = useState(null);
@@ -1085,6 +1086,32 @@ const MergedInvoiceManager = () => {
         : convertTargetType === "quotation"
         ? "quotation"
         : "delivery-challan";
+
+    // NEW PREVIEW & EDIT FLOW:
+    // If converting Quotation to Tax Invoice or Proforma Invoice,
+    // open the form in creation mode pre-filled with quotation data.
+    if (
+      convertDocType === "quotation" &&
+      (convertTargetType === "tax" || convertTargetType === "performa")
+    ) {
+      const sourceDoc = deals.find((d) => d._id === convertDocId);
+      if (!sourceDoc) {
+        toast.error("Source document not found. Please refresh.");
+        return;
+      }
+      setShowConvertModal(false);
+      setOpenConvertMenu(null);
+
+      setConversionData(sourceDoc);
+      setEditingType(convertTargetType);
+      setShowForm(true);
+
+      setConvertDocId(null);
+      setConvertDocType(null);
+      setConvertTargetType(null);
+      return;
+    }
+
     try {
       setLoading((prev) => ({ ...prev, [convertDocType]: true }));
       await API.post(`/${sourcePath}-${targetPath}/${convertDocId}`);
@@ -1452,10 +1479,12 @@ const MergedInvoiceManager = () => {
             onClose={() => {
               setShowForm(false);
               setEditing(null);
+              setConversionData(null);
               setEditingType(null);
             }}
             fetchData={() => fetchData("tax")}
             editingInvoice={editing}
+            conversionData={conversionData}
             onPreview={(formData) => {
               if (!formData.style) {
                 toast.error("Please select an invoice style to preview.");
@@ -1474,10 +1503,12 @@ const MergedInvoiceManager = () => {
             onClose={() => {
               setShowForm(false);
               setEditing(null);
+              setConversionData(null);
               setEditingType(null);
             }}
             fetchData={() => fetchData("performa")}
             editingPerformaInvoice={editing}
+            conversionData={conversionData}
             onPreview={(formData) => {
               if (!formData.style) {
                 toast.error(

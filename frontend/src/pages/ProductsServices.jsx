@@ -13,6 +13,7 @@ import {
   Trash2,
   Boxes,
   Upload,
+  Download,
   Filter,
   ChevronDown as SelectChevron,
   CheckSquare,
@@ -27,6 +28,7 @@ import toast from "react-hot-toast";
 import BulkActions from "../components/BulkActions";
 import ItemForm from "../components/item/ItemForm";
 import ImportItems from "../components/item/ImportItems";
+import ExportModal from "../components/common/ExportModal";
 import { useLocation } from "react-router-dom";
 import "react-quill/dist/quill.snow.css";
 import logo from "/DataCircles.png";
@@ -310,6 +312,7 @@ function ProductsServices() {
   const [showDropdown, setShowDropdown] = useState(null);
   const dropdownRef = useRef(null);
   const [showImport, setShowImport] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -380,6 +383,22 @@ function ProductsServices() {
     setSelectedItems([]);
     setShowBulkActions(false);
   };
+
+  // Column list handed to the shared ExportModal — same shape Vendors/Companies use.
+  const exportColumns = [
+    { key: "name", label: "Name" },
+    { key: "type", label: "Type" },
+    { key: "description", label: "Description" },
+    { key: "category", label: "Category" },
+    { key: "purchasePrice", label: "Purchase Price" },
+    { key: "sellingPrice", label: "Selling Price" },
+    { key: "gstRate", label: "GST Rate" },
+    { key: "hsnSac", label: "HSN/SAC" },
+    { key: "barcode", label: "Barcode" },
+    { key: "primaryUnit", label: "Unit" },
+    { key: "variants", label: "Variants" },
+    { key: "isActive", label: "Status" },
+  ];
 
   // Reset to page 1 when search/filter changes
   useEffect(() => {
@@ -734,6 +753,15 @@ function ProductsServices() {
         />
       )}
 
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        columns={exportColumns}
+        selectedIds={selectedItems}
+        exportUrl="/items/export-selected"
+        fileName="Exported_Items.csv"
+      />
+
       {showDetails && selectedItem && (
         <ViewDetails
           item={selectedItem}
@@ -853,6 +881,13 @@ function ProductsServices() {
               </span>
             </div>
             <div className="flex gap-3">
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Download className="w-4 h-4 text-green-600" />
+                Export
+              </button>
               <button
                 onClick={() => setShowBulkActions(true)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
