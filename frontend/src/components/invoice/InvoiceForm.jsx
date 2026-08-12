@@ -1943,6 +1943,10 @@ const CreateInvoicePanel = ({
   initialDoc = null,
   conversionData = null,
   onFullView,
+  // Optional. When provided, the header's expand button switches to a
+  // dedicated full-width screen owned by the parent instead of hiding the
+  // preview pane in place. Quotations use this; other types leave it unset.
+  onRequestFullWidth,
   type = "tax",
 }) => {
   const isEditing = !!initialDoc;
@@ -2670,14 +2674,28 @@ const CreateInvoicePanel = ({
               )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
+              {/* When the parent supplies onRequestFullWidth (quotations), this
+                  button hands off to that dedicated full-width screen instead
+                  of just collapsing the preview pane in place. Every other
+                  document type keeps the original in-place toggle. */}
               <button
                 type="button"
-                onClick={() => setHidePreview((v) => !v)}
-                title={hidePreview ? "Show preview" : "Hide preview — full width form"}
-                aria-pressed={hidePreview}
+                onClick={() =>
+                  onRequestFullWidth
+                    ? onRequestFullWidth()
+                    : setHidePreview((v) => !v)
+                }
+                title={
+                  onRequestFullWidth
+                    ? `Open full width ${docName.toLowerCase()} form`
+                    : hidePreview
+                      ? "Show preview"
+                      : "Hide preview — full width form"
+                }
+                aria-pressed={onRequestFullWidth ? undefined : hidePreview}
                 className="h-8 w-8 flex items-center justify-center bg-white border border-[#E1E4EA] rounded-full text-[#525866] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
               >
-                {hidePreview ? (
+                {hidePreview && !onRequestFullWidth ? (
                   <Minimize2 className="w-3.5 h-3.5" />
                 ) : (
                   <Maximize2 className="w-3.5 h-3.5" />
