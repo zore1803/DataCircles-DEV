@@ -61,6 +61,16 @@ router.get(
   taskController.getAllTasksPaginated
 );
 
+// Get every org task, unpaginated — for the calendar view
+router.get(
+  "/all-tasks",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("tasks", "read"),
+  checkPermission("tasks", "readonly"),
+  taskController.getAllTasksForCalendar
+);
+
 // Toggle star on a task
 router.post(
   "/:id/star",

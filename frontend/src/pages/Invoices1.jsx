@@ -23,6 +23,7 @@ import {
   Mail,
   IndianRupee,
   MoreVertical,
+  Video,
 } from "lucide-react";
 import API from "../services/api";
 import InvoiceForm from "../components/invoice/InvoiceForm";
@@ -1423,15 +1424,25 @@ const MergedInvoiceManager = () => {
           <div className="flex items-center text-sm font-medium text-gray-500 bg-white px-4 py-3 rounded-t-xl border-b border-gray-200">
             <span>Sales</span>
             <ChevronRight className="w-4 h-4 mx-2 text-gray-400 flex-shrink-0" />
-            <span className="text-blue-600 font-semibold">
-              {activeTab === "tax"
-                ? "Invoices"
-                : activeTab === "performa"
-                ? "Pro Forma Invoices"
-                : activeTab === "quotation"
-                ? "Quotations"
-                : "Delivery Challans"}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-blue-600 font-semibold">
+                {activeTab === "tax"
+                  ? "Invoices"
+                  : activeTab === "performa"
+                  ? "Pro Forma Invoices"
+                  : activeTab === "quotation"
+                  ? "Quotations"
+                  : "Delivery Challans"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowVideoTutorial(true)}
+                className="w-6 h-6 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 transition-all flex-shrink-0 shadow-sm"
+                title="Watch Invoices Module Video Guide"
+              >
+                <Video className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
         {showForm && editingType === "tax" && (
