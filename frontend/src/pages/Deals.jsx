@@ -66,6 +66,7 @@ import {
   Handshake,
   ClipboardList,
   Eye,
+  Video,
 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -2338,14 +2339,24 @@ function Deals() {
         ) : (
           <>
             <div
-              className={`flex flex-col gap-1.5 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
+              className={`flex flex-col gap-1 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
             >
-              <h2
-                className="m-0 font-medium truncate text-sm sm:text-base"
-                style={{ lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
-              >
-                Deals
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2
+                  className="m-0 font-medium truncate text-sm sm:text-base"
+                  style={{ lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
+                >
+                  Deals
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowVideoTutorial(true)}
+                  className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 transition-all flex-shrink-0 shadow-sm"
+                  title="Watch Deals Module Video Guide"
+                >
+                  <Video className="w-3.5 h-3.5" />
+                </button>
+              </div>
               <p className="text-[#5B5A64] text-[10px] sm:text-sm m-0 leading-tight truncate">
                 Manage Your Sales Pipeline
               </p>

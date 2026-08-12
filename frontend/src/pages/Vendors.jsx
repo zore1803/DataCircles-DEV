@@ -28,7 +28,9 @@ import {
   Pin,
   PinOff,
   EyeOff,
+  Video,
 } from "lucide-react";
+import VideoTutorialModal from "../components/VideoTutorialModal";
 import BulkActions from "../components/BulkActions";
 import VendorForm from "../components/vendor/VendorForm";
 import QuickVendorForm from "../components/vendor/QuickVendorForm";
@@ -1124,11 +1126,16 @@ function Vendors() {
   // `loading` toggles around every fetchVendors() call, including page/limit
   // changes — same source Companies.jsx feeds its top-edge bar from, so
   // paging here now gets the identical progress flash Companies.jsx shows.
-  useTopLoadingSignal(loading);
+  const [showVideoTutorial, setShowVideoTutorial] = useState(false);
 
   return (
     <>
       <AppToaster />
+      <VideoTutorialModal
+        isOpen={showVideoTutorial}
+        onClose={() => setShowVideoTutorial(false)}
+        title="Vendors Module Guide"
+      />
 
       {/* Fixed toolbar — same positioning Companies.jsx uses (pinned right
           below the app header, not part of the scrolling page), and the
@@ -1221,7 +1228,17 @@ function Vendors() {
                 </>
               ) : (
                 <>
-                  <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Vendors</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Vendors</h1>
+                    <button
+                      type="button"
+                      onClick={() => setShowVideoTutorial(true)}
+                      className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 transition-all flex-shrink-0 shadow-sm"
+                      title="Watch Vendors Module Video Guide"
+                    >
+                      <Video className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
                     Manage your vendors.
                   </p>
