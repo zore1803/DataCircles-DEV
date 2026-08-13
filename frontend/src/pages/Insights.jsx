@@ -296,7 +296,7 @@ const Insights = () => {
 
     if (filters.dealStage !== "all") {
       filteredDeals = filteredDeals.filter(
-        (deal) => deal.stage === filters.dealStage
+        (deal) => deal.status === filters.dealStage
       );
     }
 
@@ -593,7 +593,7 @@ const Insights = () => {
     const dealValues = filteredDeals.map((deal) => ({
       name: deal.title,
       value: deal.amount || 0,
-      stage: deal.stage,
+      stage: deal.status,
     }));
 
     // Purchase values
@@ -680,7 +680,7 @@ const Insights = () => {
         data = filteredDeals.map((deal) => [
           deal.title,
           `₹${deal.amount || 0}`,
-          deal.stage || "",
+          deal.status || "",
           deal.company?.name || "",
           deal.closeDate ? new Date(deal.closeDate).toLocaleDateString() : "",
         ]);
@@ -917,7 +917,7 @@ const Insights = () => {
         type: "deals",
         icon: <Briefcase className="w-4 h-4" />,
         iconBg: "bg-blue-100 text-blue-600",
-        title: `Deal Moved to ${deal.stage || "Update"}`,
+        title: `Deal Moved to ${deal.status || "Update"}`,
         subtitle: [deal.title, deal.company?.name].filter(Boolean).join(" • "),
         at,
       });
@@ -1028,7 +1028,11 @@ const Insights = () => {
   useEffect(() => {
     const el = trendsScrollRef.current;
     if (el) el.scrollLeft = el.scrollWidth;
-  }, [chartData.dailyTrends.length]);
+    // Re-run whenever the Overview tab becomes active again — the scroll
+    // container unmounts/remounts on tab switch (losing its scroll
+    // position), so scrolling only on data-length change isn't enough to
+    // land back on today after navigating away and back.
+  }, [chartData.dailyTrends.length, activeTab]);
 
   const renderOverview = () => (
     <div className="space-y-6">
@@ -1334,8 +1338,8 @@ const Insights = () => {
         {(() => {
           const dealsForStats = filteredData.filteredDeals;
           const totalDeals = dealsForStats.length;
-          const wonDeals = dealsForStats.filter((d) => d.stage === "Won").length;
-          const lostDeals = dealsForStats.filter((d) => d.stage === "Lost").length;
+          const wonDeals = dealsForStats.filter((d) => d.status === "Won").length;
+          const lostDeals = dealsForStats.filter((d) => d.status === "Lost").length;
           const decidedDeals = wonDeals + lostDeals;
           const winRate = decidedDeals > 0 ? Math.round((wonDeals / decidedDeals) * 100) : 0;
           const totalDealValue = dealsForStats.reduce((sum, d) => sum + (d.amount || 0), 0);
@@ -1351,7 +1355,7 @@ const Insights = () => {
 
           const stageCounts = {};
           dealsForStats.forEach((d) => {
-            const stage = d.stage || "Unknown";
+            const stage = d.status || "Unknown";
             stageCounts[stage] = (stageCounts[stage] || 0) + 1;
           });
           const stageEntries = Object.entries(stageCounts).sort((a, b) => b[1] - a[1]);
@@ -1834,7 +1838,7 @@ const Insights = () => {
           // colored by outcome.
           const dealsWithContact = filteredData.filteredDeals.filter((d) => d.contact);
           const pipelineInfluenced = dealsWithContact.reduce((sum, d) => sum + (d.amount || 0), 0);
-          const wonDealsWithContact = dealsWithContact.filter((d) => d.stage === "Won");
+          const wonDealsWithContact = dealsWithContact.filter((d) => d.status === "Won");
           const revenueWon = wonDealsWithContact.reduce((sum, d) => sum + (d.amount || 0), 0);
           const avgDealInfluenced =
             dealsWithContact.length > 0 ? pipelineInfluenced / dealsWithContact.length : 0;
@@ -1867,7 +1871,7 @@ const Insights = () => {
             return {
               month: createdDate.getMonth() + monthFraction,
               amount: d.amount || 0,
-              stage: d.stage,
+              stage: d.status,
               title: d.title,
               fill,
               tier,
@@ -1947,10 +1951,14 @@ const Insights = () => {
                         data={scatterPoints}
                         shape={(props) => {
                           const { cx, cy, payload } = props;
+                          // Anchor the square's bottom edge at the data point
+                          // instead of centering on it — with a ₹0 y-axis
+                          // floor, a centered square for a near-zero amount
+                          // would render half below the x-axis line.
                           return (
                             <rect
                               x={cx - 8}
-                              y={cy - 8}
+                              y={cy - 16}
                               width={16}
                               height={16}
                               rx={4}
@@ -2217,7 +2225,7 @@ const Insights = () => {
                 iconBg: "#CCE7FF",
                 iconColor: "#0085FF",
                 title: d.title || "Deal",
-                subtitle: `${d.stage || "Update"} • ${formatCrAlert(d.amount || 0)}`,
+                subtitle: `${d.status || "Update"} • ${formatCrAlert(d.amount || 0)}`,
                 at,
               });
             });
@@ -2243,9 +2251,15 @@ const Insights = () => {
           return (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
               {/* Contact Alerts */}
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[420px] flex flex-col">
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[320px] flex flex-col">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-[#1C1C1D]">Contact Alerts</h3>
+                  <button
+                    onClick={() => (window.location.href = "/contacts")}
+                    className="text-xs font-semibold text-[#0085FF] hover:underline flex-shrink-0"
+                  >
+                    View All
+                  </button>
                 </div>
                 <div className="flex flex-col gap-0 flex-1">
                   {alertRows.map((row, idx) => (
@@ -2275,8 +2289,16 @@ const Insights = () => {
               </div>
 
               {/* Contacts by Industry */}
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[420px] flex flex-col">
-                <h3 className="text-sm font-semibold text-[#1C1C1D] mb-3">Contacts by Industry</h3>
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[320px] flex flex-col">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-[#1C1C1D]">Contacts by Industry</h3>
+                  <button
+                    onClick={() => (window.location.href = "/companies")}
+                    className="text-xs font-semibold text-[#0085FF] hover:underline flex-shrink-0"
+                  >
+                    View All
+                  </button>
+                </div>
                 {industryEntries.length === 0 ? (
                   <p className="text-sm text-gray-400 py-10 text-center">No contacts yet</p>
                 ) : (
@@ -2318,7 +2340,7 @@ const Insights = () => {
               </div>
 
               {/* Recent Contact Activity */}
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[420px] flex flex-col">
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[320px] flex flex-col">
                 <h3 className="text-sm font-semibold text-[#1C1C1D] mb-3">Recent Contact Activity</h3>
                 {recentContactActivity.length === 0 ? (
                   <p className="text-sm text-gray-400 py-10 text-center">No recent activity</p>
@@ -2405,226 +2427,433 @@ const Insights = () => {
         100
     );
 
+    // KPI row — same StatCard pattern used on the Contacts tab.
+    const companyIdsWithDeals = new Set(
+      filteredData.filteredDeals.filter((d) => d.company).map((d) => d.company._id || d.company),
+    );
+    const activeCompanies = filteredData.filteredCompanies.filter((c) =>
+      companyIdsWithDeals.has(c._id),
+    ).length;
+    const dealsWithCompany = filteredData.filteredDeals.filter((d) => d.company);
+    const avgDealSizeCompanies =
+      dealsWithCompany.length > 0
+        ? dealsWithCompany.reduce((sum, d) => sum + (d.amount || 0), 0) / dealsWithCompany.length
+        : 0;
+    const wonDealsWithCompany = dealsWithCompany.filter((d) => d.status === "Won");
+    const avgSalesCycleDays =
+      wonDealsWithCompany.length > 0
+        ? Math.round(
+            wonDealsWithCompany.reduce((sum, d) => {
+              const created = new Date(d.createdAt).getTime();
+              const closed = new Date(d.updatedAt || d.createdAt).getTime();
+              return sum + Math.max(0, (closed - created) / (24 * 60 * 60 * 1000));
+            }, 0) / wonDealsWithCompany.length,
+          )
+        : 0;
+
+    // Month-over-month trends for each KPI card, mirroring the Contacts tab.
+    const lastMonthDateCo = new Date(currentYear, currentMonth - 1, 1);
+    const lastMonthCo = lastMonthDateCo.getMonth();
+    const lastMonthYearCo = lastMonthDateCo.getFullYear();
+    const companiesBeforeThisMonth = filteredData.filteredCompanies.filter(
+      (c) => new Date(c.createdAt) < new Date(currentYear, currentMonth, 1),
+    ).length;
+    const totalCompaniesChange =
+      companiesBeforeThisMonth > 0
+        ? Math.round((companiesThisMonth / companiesBeforeThisMonth) * 100)
+        : totalCompanies > 0
+        ? 100
+        : 0;
+
+    const dealsWithCompanyThisMonth = dealsWithCompany.filter((d) => {
+      const created = new Date(d.createdAt);
+      return created.getMonth() === currentMonth && created.getFullYear() === currentYear;
+    });
+    const dealsWithCompanyLastMonth = dealsWithCompany.filter((d) => {
+      const created = new Date(d.createdAt);
+      return created.getMonth() === lastMonthCo && created.getFullYear() === lastMonthYearCo;
+    });
+    const activeCompaniesChange =
+      dealsWithCompanyLastMonth.length > 0
+        ? Math.round(
+            ((dealsWithCompanyThisMonth.length - dealsWithCompanyLastMonth.length) /
+              dealsWithCompanyLastMonth.length) *
+              100,
+          )
+        : dealsWithCompanyThisMonth.length > 0
+        ? 100
+        : 0;
+
+    const companiesLastMonth = filteredData.filteredCompanies.filter((c) => {
+      const created = new Date(c.createdAt);
+      return created.getMonth() === lastMonthCo && created.getFullYear() === lastMonthYearCo;
+    }).length;
+    const newCompaniesChange =
+      companiesLastMonth > 0
+        ? Math.round(((companiesThisMonth - companiesLastMonth) / companiesLastMonth) * 100)
+        : companiesThisMonth > 0
+        ? 100
+        : 0;
+
+    const avgDealSizeThisMonth =
+      dealsWithCompanyThisMonth.length > 0
+        ? dealsWithCompanyThisMonth.reduce((sum, d) => sum + (d.amount || 0), 0) /
+          dealsWithCompanyThisMonth.length
+        : 0;
+    const avgDealSizeLastMonth =
+      dealsWithCompanyLastMonth.length > 0
+        ? dealsWithCompanyLastMonth.reduce((sum, d) => sum + (d.amount || 0), 0) /
+          dealsWithCompanyLastMonth.length
+        : 0;
+    const avgDealSizeChange =
+      avgDealSizeLastMonth > 0
+        ? Math.round(((avgDealSizeThisMonth - avgDealSizeLastMonth) / avgDealSizeLastMonth) * 100)
+        : avgDealSizeThisMonth > 0
+        ? 100
+        : 0;
+
+    const wonThisMonth = wonDealsWithCompany.filter((d) => {
+      const closed = new Date(d.updatedAt || d.createdAt);
+      return closed.getMonth() === currentMonth && closed.getFullYear() === currentYear;
+    });
+    const wonLastMonth = wonDealsWithCompany.filter((d) => {
+      const closed = new Date(d.updatedAt || d.createdAt);
+      return closed.getMonth() === lastMonthCo && closed.getFullYear() === lastMonthYearCo;
+    });
+    const cycleFor = (deals) =>
+      deals.length > 0
+        ? deals.reduce((sum, d) => {
+            const created = new Date(d.createdAt).getTime();
+            const closed = new Date(d.updatedAt || d.createdAt).getTime();
+            return sum + Math.max(0, (closed - created) / (24 * 60 * 60 * 1000));
+          }, 0) / deals.length
+        : 0;
+    const cycleThisMonth = cycleFor(wonThisMonth);
+    const cycleLastMonth = cycleFor(wonLastMonth);
+    // Shorter sales cycle is an improvement, so invert the sign.
+    const salesCycleChange =
+      cycleLastMonth > 0
+        ? Math.round(((cycleLastMonth - cycleThisMonth) / cycleLastMonth) * 100)
+        : 0;
+
+    const companySourceColors = ["#0085FF", "#34C759", "#8E62EF", "#2A2726", "#D97706", "#EC4899"];
+    const companySourceData = topIndustries.map(([industry, count], idx) => ({
+      name: industry,
+      value: count,
+      color: companySourceColors[idx % companySourceColors.length],
+    }));
+    // "Other" covers every industry outside the top 5 (plus companies with
+    // no industry set at all), so the chart reflects every company instead
+    // of silently dropping the long tail.
+    const topIndustriesSum = topIndustries.reduce((sum, [, count]) => sum + count, 0);
+    const otherIndustriesCount = totalCompanies - topIndustriesSum;
+    if (otherIndustriesCount > 0) {
+      companySourceData.push({
+        name: "Other",
+        value: otherIndustriesCount,
+        color: "#E7E4E3",
+      });
+    }
+    // Percentages are relative to the shown segments (top-5 + Other), which
+    // now cover every company, so they sum to a true 100%.
+    const companySourceTotal = Math.max(
+      1,
+      companySourceData.reduce((sum, entry) => sum + entry.value, 0),
+    );
+
+    // Deal Velocity by Company — one bubble per company: X = avg deal
+    // size, Y = avg deal age in days (time since each deal was opened —
+    // using every deal rather than only Won ones, since Won-only cycle
+    // time is mostly same-day in this dataset and wouldn't show any real
+    // spread), bubble size = total Won revenue generated by that company.
+    const dealsByCompanyId = {};
+    filteredData.filteredDeals.forEach((d) => {
+      const cid = d.company?._id || d.company;
+      if (!cid) return;
+      if (!dealsByCompanyId[cid]) dealsByCompanyId[cid] = [];
+      dealsByCompanyId[cid].push(d);
+    });
+    const velocityNow = Date.now();
+    const velocityPoints = Object.entries(dealsByCompanyId)
+      .map(([companyId, deals]) => {
+        const company = filteredData.filteredCompanies.find((c) => c._id === companyId);
+        const avgDealSize =
+          deals.reduce((sum, d) => sum + (d.amount || 0), 0) / deals.length;
+        const avgAgeDays =
+          deals.reduce((sum, d) => {
+            const created = new Date(d.createdAt).getTime();
+            return sum + Math.max(0, (velocityNow - created) / (24 * 60 * 60 * 1000));
+          }, 0) / deals.length;
+        const wonForCompany = deals.filter((d) => d.status === "Won");
+        const revenue = wonForCompany.reduce((sum, d) => sum + (d.amount || 0), 0);
+        return {
+          name: company?.name || "Unknown",
+          cycle: Math.round(avgAgeDays),
+          dealSize: Math.round(avgDealSize),
+          revenue,
+        };
+      })
+      .filter((p) => p.dealSize > 0)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 15);
+    // Give every bubble a visible minimum size, then scale up by revenue
+    // share — a company with zero Won revenue still renders as a small
+    // dot instead of disappearing or looking identical to the rest.
+    const velocityRevenueMax = Math.max(1, ...velocityPoints.map((p) => p.revenue));
+    velocityPoints.forEach((p) => {
+      p.bubbleSize = 50 + Math.round((p.revenue / velocityRevenueMax) * 1800);
+    });
+
+    // Top Revenue Generating Companies — total revenue per company across
+    // Won deals + invoiced amounts, ranked descending.
+    const revenueByCompanyId = {};
+    filteredData.filteredDeals.forEach((d) => {
+      if (d.status !== "Won") return;
+      const cid = d.company?._id || d.company;
+      if (!cid) return;
+      revenueByCompanyId[cid] = (revenueByCompanyId[cid] || 0) + (d.amount || 0);
+    });
+    filteredData.filteredInvoices.forEach((inv) => {
+      // Invoices don't carry a company reference directly — only their deal,
+      // whose `company` field is an unpopulated ObjectId string.
+      const dealCompany = inv.deal?.company;
+      const cid = dealCompany?._id || dealCompany;
+      if (!cid) return;
+      revenueByCompanyId[cid] = (revenueByCompanyId[cid] || 0) + (inv.amount || 0);
+    });
+    // Pipeline Contribution by Company — Open pipeline value (blue) vs Won
+    // pipeline value (green) per company, ranked by combined total.
+    const pipelineByCompanyId = {};
+    Object.entries(dealsByCompanyId).forEach(([companyId, deals]) => {
+      const open = deals
+        .filter((d) => d.status !== "Won" && d.status !== "Lost")
+        .reduce((sum, d) => sum + (d.amount || 0), 0);
+      const won = deals
+        .filter((d) => d.status === "Won")
+        .reduce((sum, d) => sum + (d.amount || 0), 0);
+      pipelineByCompanyId[companyId] = { open, won };
+    });
+    const pipelineContributionData = Object.entries(pipelineByCompanyId)
+      .map(([companyId, { open, won }]) => {
+        const company =
+          filteredData.filteredCompanies.find((c) => String(c._id) === String(companyId)) ||
+          companies.find((c) => String(c._id) === String(companyId));
+        return { name: company?.name || "Unknown", open, won, total: open + won };
+      })
+      .filter((c) => c.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+    const pipelineContributionMax = Math.max(1, ...pipelineContributionData.map((c) => c.total));
+
+    const topRevenueColors = ["#0085FF", "#34C759", "#8E62EF", "#2A2726", "#D97706", "#FC9C32"];
+    const topRevenueCompaniesAll = Object.entries(revenueByCompanyId)
+      .map(([companyId, revenue]) => {
+        // Fall back to the unfiltered `companies` list — a company can be
+        // excluded from `filteredCompanies` by the date-range filter while
+        // still having deals/invoices in range, which would otherwise show
+        // as "Unknown".
+        const company =
+          filteredData.filteredCompanies.find((c) => String(c._id) === String(companyId)) ||
+          companies.find((c) => String(c._id) === String(companyId));
+        // "Last active" = most recent deal touch for this company, not the
+        // company record's own updatedAt (which barely changes).
+        const companyDeals = dealsByCompanyId[companyId] || [];
+        const lastActiveTime = Math.max(
+          0,
+          ...companyDeals.map((d) => new Date(d.updatedAt || d.createdAt).getTime()),
+        );
+        const activeDeals = companyDeals.filter(
+          (d) => d.status !== "Won" && d.status !== "Lost",
+        ).length;
+        return {
+          name: company?.name || "Unknown",
+          industry: company?.industry || "—",
+          lastActive: lastActiveTime > 0 ? new Date(lastActiveTime) : null,
+          activeDeals,
+          revenue,
+        };
+      })
+      .filter((c) => c.revenue > 0)
+      .sort((a, b) => b.revenue - a.revenue)
+      .map((c, idx) => ({ ...c, color: topRevenueColors[idx % topRevenueColors.length] }));
+
     return (
       <div className="space-y-6">
-        {/* Header with Actions */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-gray-900">
-            Companies Insights
-          </h2>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => (window.location.href = "/companies")}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-            >
-              <Building className="w-4 h-4" />
-              View All Companies
-            </button>
-            <button
-              onClick={() => exportToPDF("Companies")}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Export Report
-            </button>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard
+            title="Total Companies"
+            value={totalCompanies}
+            icon={<Building className="w-6 h-6" />}
+            color="text-blue-600"
+            change={totalCompaniesChange}
+            changeLabel="growth this month"
+          />
+          <StatCard
+            title="Active Companies"
+            value={activeCompanies}
+            icon={<Briefcase className="w-6 h-6" />}
+            color="text-green-600"
+            change={activeCompaniesChange}
+            changeLabel="active deals vs last month"
+          />
+          <StatCard
+            title="New This Month"
+            value={companiesThisMonth}
+            icon={<TrendingUp className="w-6 h-6" />}
+            color="text-purple-600"
+            change={newCompaniesChange}
+            changeLabel="vs last month"
+          />
+          <StatCard
+            title="Avg. Deal Size"
+            value={`₹${formatNumberToIndian(Math.round(avgDealSizeCompanies))}`}
+            icon={<IndianRupee className="w-6 h-6" />}
+            color="text-emerald-600"
+            change={avgDealSizeChange}
+            changeLabel="vs last month"
+          />
+          <StatCard
+            title="Avg. Sales Cycle"
+            value={`${avgSalesCycleDays}d`}
+            icon={<Clock className="w-6 h-6" />}
+            color="text-orange-600"
+            change={salesCycleChange}
+            changeLabel="faster vs last month"
+          />
         </div>
 
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Total Companies */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Total Companies
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {totalCompanies}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Building className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-          </div>
-
-          {/* New This Month */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  New This Month
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {companiesThisMonth}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          {/* With Website */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  With Website
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {companiesWithWebsite}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {((companiesWithWebsite / totalCompanies) * 100).toFixed(1)}%
-                  of total
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Globe className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </div>
-
-          {/* Data Completeness */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Data Completeness
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {completenessScore}%
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Based on key fields
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-orange-600" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Additional Metrics Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* With Industry */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-                <Briefcase className="w-5 h-5 text-indigo-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  With Industry
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {companiesWithIndustry}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* With Address */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center">
-                <MapPin className="w-5 h-5 text-pink-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  With Address
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {companiesWithAddress}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Industries Covered */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
-                <BarChart className="w-5 h-5 text-teal-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Industries Covered
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {Object.keys(industryDistribution).length}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Top Industries */}
-          {topIndustries.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Top Industries
-              </h3>
-              <div className="space-y-3">
-                {topIndustries.map(([industry, count], index) => (
-                  <div key={industry} className="flex items-center gap-4">
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">
-                        {industry}
-                      </p>
-                      <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden mt-2">
-                        <div
-                          className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full transition-all duration-300"
-                          style={{
-                            width: `${(count / totalCompanies) * 100}%`,
-                          }}
-                        />
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 items-stretch">
+        {/* Deal Velocity by Company */}
+        <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+          <h3 className="text-sm font-semibold text-[#0E121B]">Deal Velocity by Company</h3>
+          <p className="text-xs text-[#525866] mt-1">Analyse average deal size vs sales cycle</p>
+          <p className="text-[10px] text-[#525866] text-center mt-1">
+            Bubble Size = Revenue Generated
+          </p>
+          {velocityPoints.length === 0 ? (
+            <p className="text-sm text-gray-400 py-16 text-center">No won deals with companies yet</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <ScatterChart margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(31,41,55,0.1)" />
+                <XAxis
+                  dataKey="dealSize"
+                  type="number"
+                  name="Deal Size"
+                  tickFormatter={(v) => (v === 0 ? "₹0" : `₹${(v / 1000).toFixed(0)}k`)}
+                  tick={{ fontSize: 10, fill: "#1F2937" }}
+                  tickLine={false}
+                  axisLine={{ stroke: "rgba(31,41,55,0.3)" }}
+                />
+                <YAxis
+                  dataKey="cycle"
+                  type="number"
+                  name="Sales Cycle"
+                  unit=" Days"
+                  tick={{ fontSize: 10, fill: "#1F2937" }}
+                  tickLine={false}
+                  axisLine={{ stroke: "rgba(31,41,55,0.3)" }}
+                  width={50}
+                />
+                <Tooltip
+                  cursor={{ strokeDasharray: "3 3" }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload || payload.length === 0) return null;
+                    const p = payload[0].payload;
+                    return (
+                      <div className="bg-white border border-gray-200 rounded-md shadow-lg p-2 text-xs">
+                        <p className="font-medium text-gray-900">{p.name}</p>
+                        <p className="text-gray-500">
+                          {p.cycle}d avg age • ₹{formatNumberToIndian(p.dealSize)} avg deal
+                        </p>
+                        <p className="text-gray-500">₹{formatNumberToIndian(p.revenue)} revenue</p>
                       </div>
-                    </div>
-                    <span className="text-sm font-semibold text-gray-900 min-w-[80px] text-right">
-                      {count} companies
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+                    );
+                  }}
+                />
+                <Scatter
+                  data={velocityPoints}
+                  shape={(props) => {
+                    const { cx, cy, payload } = props;
+                    const radius = Math.sqrt((payload.bubbleSize || 60) / Math.PI);
+                    return (
+                      <circle cx={cx} cy={cy} r={radius} fill="#0085FF" fillOpacity={0.75} />
+                    );
+                  }}
+                />
+              </ScatterChart>
+            </ResponsiveContainer>
           )}
+        </div>
 
-          {/* Top Locations */}
-          {topLocations.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Top Locations
-              </h3>
-              <div className="space-y-3">
-                {topLocations.map(([location, count], index) => (
-                  <div key={location} className="flex items-center gap-4">
-                    <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">
-                        {location}
-                      </p>
-                      <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden mt-2">
-                        <div
-                          className="bg-gradient-to-r from-green-500 to-green-600 h-full rounded-full transition-all duration-300"
-                          style={{
-                            width: `${(count / totalCompanies) * 100}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-gray-900 min-w-[80px] text-right">
-                      {count} companies
+        {/* Companies by Industry — same size/style/proportion as the
+            Contacts tab's Contact Acquisition Sources donut (1fr of a
+            2fr_1fr grid). */}
+        <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+          <h3 className="text-sm font-semibold text-[#0E121B]">Companies by Industry</h3>
+          <p className="text-xs text-[#525866] mt-1">Where your companies are concentrated</p>
+          {totalCompanies === 0 || companySourceData.length === 0 ? (
+            <p className="text-sm text-gray-400 py-10 text-center">No companies yet</p>
+          ) : (
+            <div className="flex items-center justify-between gap-4 mt-4 flex-wrap">
+              <div className="relative flex-shrink-0" style={{ width: 220, height: 220 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={companySourceData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={68}
+                      outerRadius={108}
+                      cornerRadius={8}
+                      paddingAngle={companySourceData.length > 1 ? 4 : 0}
+                      dataKey="value"
+                      stroke="none"
+                      label={({ cx, cy, midAngle, innerRadius, outerRadius, value }) => {
+                        const RADIAN = Math.PI / 180;
+                        const r = (innerRadius + outerRadius) / 2;
+                        const x = cx + r * Math.cos(-midAngle * RADIAN);
+                        const y = cy + r * Math.sin(-midAngle * RADIAN);
+                        const pct = Math.round((value / companySourceTotal) * 100);
+                        const text = `${pct}%`;
+                        const w = text.length * 6 + 10;
+                        return (
+                          <g>
+                            <rect x={x - w / 2} y={y - 8} width={w} height={16} rx={6} fill="#FFFFFF" />
+                            <text
+                              x={x}
+                              y={y}
+                              textAnchor="middle"
+                              dominantBaseline="central"
+                              fontSize={11}
+                              fontWeight={500}
+                              fill="#21201F"
+                            >
+                              {text}
+                            </text>
+                          </g>
+                        );
+                      }}
+                      labelLine={false}
+                    >
+                      {companySourceData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-col gap-1.5 flex-shrink-0">
+                {companySourceData.map((entry) => (
+                  <div key={entry.name} className="flex items-center gap-1.5">
+                    <span
+                      className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                      style={{ background: entry.color }}
+                    />
+                    <span className="text-xs text-[#21201F]/70 truncate min-w-[90px]">{entry.name}</span>
+                    <span className="text-[11px] text-[#525866] text-right flex-shrink-0 w-8">
+                      {Math.round((entry.value / companySourceTotal) * 100)}%
                     </span>
                   </div>
                 ))}
@@ -2632,80 +2861,140 @@ const Insights = () => {
             </div>
           )}
         </div>
+        </div>
 
-        {/* Data Quality Overview */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Data Quality Overview
-          </h3>
-          <div className="space-y-4">
-            {/* Website Coverage */}
+        {/* Placeholder row — content TBD */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-4 items-stretch">
+          {/* Pipeline Contribution by Company */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[400px] flex flex-col">
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-gray-400" />
-                  Website Information
-                </span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {companiesWithWebsite} / {totalCompanies} (
-                  {((companiesWithWebsite / totalCompanies) * 100).toFixed(1)}%)
-                </span>
+              <h3 className="text-sm font-semibold text-[#0E121B]">Pipeline Contribution by Company</h3>
+              <p className="text-xs text-[#525866] mt-1">Open and Won deal value by company</p>
+            </div>
+            <div className="flex items-center gap-4 mt-3">
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-2 rounded-full" style={{ background: "#0085FF" }} />
+                <span className="text-xs text-[#21201F]/70">Open</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-purple-600 h-full rounded-full transition-all duration-300"
-                  style={{
-                    width: `${(companiesWithWebsite / totalCompanies) * 100}%`,
-                  }}
-                />
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-2 rounded-full" style={{ background: "#34C759" }} />
+                <span className="text-xs text-[#21201F]/70">Won</span>
               </div>
             </div>
-
-            {/* Industry Coverage */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 text-gray-400" />
-                  Industry Information
-                </span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {companiesWithIndustry} / {totalCompanies} (
-                  {((companiesWithIndustry / totalCompanies) * 100).toFixed(1)}
-                  %)
-                </span>
+            {pipelineContributionData.length === 0 ? (
+              <p className="text-sm text-gray-400 py-16 text-center">No pipeline data yet</p>
+            ) : (
+              <div className="flex flex-col flex-1 justify-around mt-2">
+                {pipelineContributionData.map((c, idx) => {
+                  const openPct = Math.max(c.open > 0 ? 8 : 0, Math.round((c.open / pipelineContributionMax) * 100));
+                  const wonPct = Math.max(c.won > 0 ? 8 : 0, Math.round((c.won / pipelineContributionMax) * 100));
+                  return (
+                    <div
+                      key={c.name + idx}
+                      className="flex items-center justify-between gap-3 py-2.5 border-b border-[#E7E7E9] last:border-b-0"
+                    >
+                      <span className="text-xs text-[#1F1F21] w-28 truncate flex-shrink-0">{c.name}</span>
+                      <div className="flex items-center flex-1">
+                        {c.open > 0 && (
+                          <div
+                            className="h-[15px] rounded-lg flex items-center justify-center overflow-hidden"
+                            style={{ width: `${openPct}%`, background: "#0085FF" }}
+                          >
+                            <span className="text-[8px] font-medium text-white px-1 truncate">
+                              ₹{formatNumberToIndian(c.open)}
+                            </span>
+                          </div>
+                        )}
+                        {c.won > 0 && (
+                          <div
+                            className="h-[15px] rounded-lg flex items-center justify-center overflow-hidden ml-1"
+                            style={{ width: `${wonPct}%`, background: "#34C759" }}
+                          >
+                            <span className="text-[8px] font-medium text-white px-1 truncate">
+                              ₹{formatNumberToIndian(c.won)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-xs font-medium text-[#1F1F21] w-20 text-right flex-shrink-0">
+                        ₹{formatNumberToIndian(c.total)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-indigo-600 h-full rounded-full transition-all duration-300"
-                  style={{
-                    width: `${(companiesWithIndustry / totalCompanies) * 100}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Address Coverage */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-gray-400" />
-                  Address Information
-                </span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {companiesWithAddress} / {totalCompanies} (
-                  {((companiesWithAddress / totalCompanies) * 100).toFixed(1)}%)
-                </span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-pink-600 h-full rounded-full transition-all duration-300"
-                  style={{
-                    width: `${(companiesWithAddress / totalCompanies) * 100}%`,
-                  }}
-                />
-              </div>
-            </div>
+            )}
           </div>
+
+          {/* Top Revenue Generating Companies */}
+          {(() => {
+            const pageRows = topRevenueCompaniesAll.slice(0, 5);
+            return (
+              <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[400px] flex flex-col">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#0E121B]">Top Revenue Generating Companies</h3>
+                    <p className="text-xs text-[#525866] mt-1">Companies ranked by total revenue (Won + Invoiced)</p>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab("companies")}
+                    className="text-[10px] text-[#0085FF] underline flex-shrink-0"
+                  >
+                    View All Companies
+                  </button>
+                </div>
+                {topRevenueCompaniesAll.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-16 text-center">No revenue data yet</p>
+                ) : (
+                  <>
+                    <div
+                      className="grid items-center mt-4 pb-2 border-b border-[#E7E7E9] text-[11px] font-medium text-[#525866]"
+                      style={{ gridTemplateColumns: "24px minmax(0,220px) minmax(30px,1fr) 160px 32px 90px 32px 80px 32px 110px" }}
+                    >
+                      <span>#</span>
+                      <span>Company</span>
+                      <span />
+                      <span>Industry</span>
+                      <span />
+                      <span>Last Active</span>
+                      <span />
+                      <span>Active Deals</span>
+                      <span />
+                      <span className="text-right">Revenue</span>
+                    </div>
+                    <div className="flex flex-col flex-1 justify-around">
+                      {pageRows.map((c, idx) => (
+                        <div
+                          key={c.name + idx}
+                          className="grid items-center py-5 border-b border-[#E7E7E9] last:border-b-0"
+                          style={{ gridTemplateColumns: "24px minmax(0,220px) minmax(30px,1fr) 160px 32px 90px 32px 80px 32px 110px" }}
+                        >
+                          <span className="text-xs text-[#525866]">{idx + 1}</span>
+                          <span className="flex items-center min-w-0">
+                            <span className="text-xs text-[#1F1F21] truncate">{c.name}</span>
+                          </span>
+                          <span />
+                          <span className="text-xs text-[#525866] pr-2">{c.industry}</span>
+                          <span />
+                          <span className="text-xs text-[#525866]">
+                            {c.lastActive
+                              ? c.lastActive.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })
+                              : "—"}
+                          </span>
+                          <span />
+                          <span className="text-xs text-[#525866]">{c.activeDeals}</span>
+                          <span />
+                          <span className="text-xs font-medium text-[#1F1F21] text-right">
+                            ₹{formatNumberToIndian(c.revenue)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
     );
