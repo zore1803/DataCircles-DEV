@@ -45,6 +45,15 @@ router.post("/export-selected",
   purchaseOrderController.exportSelectedPurchaseOrders
 );
 
+// Bulk Import Purchase Orders (specific route before generic /:id)
+router.post("/bulk-import",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'write'),
+  checkPermission("purchase-orders", "read-write"),
+  purchaseOrderController.bulkImportPurchaseOrders
+);
+
 // Get All Purchase Orders for a Vendor (specific route before generic /:id)
 router.get("/vendor/:vendorId",
   requireAuth,
@@ -52,6 +61,15 @@ router.get("/vendor/:vendorId",
   restrictByPlan('purchases', 'read'),
   checkPermission("purchase-orders", "readonly"),
   purchaseOrderController.getPurchaseOrdersByVendor
+);
+
+// Download Purchase Order as PDF (specific route before generic /:id)
+router.get("/download/:id",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'read'),
+  checkPermission("purchase-orders", "readonly"),
+  purchaseOrderController.downloadPurchaseOrder
 );
 
 // Get Single Purchase Order by ID

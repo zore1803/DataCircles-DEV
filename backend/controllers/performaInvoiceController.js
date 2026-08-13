@@ -298,7 +298,10 @@ const downloadPerformaInvoice = async (req, res) => {
         // The template comes from the document's own `style` when it has one,
     // otherwise from the organization's document settings — resolved inside
     // htmlDocumentPdf, which renders the same markup as the live preview.
-    const pdfBuffer = await htmlDocumentPdf(performaInvoice, bankDetails, OrgDetails, "performa");
+    const copyType = ["original", "duplicate", "triplicate"].includes(req.query.copyType)
+      ? req.query.copyType
+      : "original";
+    const pdfBuffer = await htmlDocumentPdf(performaInvoice, bankDetails, OrgDetails, "performa", copyType);
 
     res.set({
       "Content-Type": "application/pdf",

@@ -415,55 +415,78 @@ const PurchaseOrderForm = ({
   });
 
   return (
-    <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 transition-opacity duration-300"
-      style={{ opacity: isOpen ? 1 : 0 }}
-      onClick={handleClose}
-    >
+    <>
+      {/* Backdrop */}
       <div
-        className="bg-white w-full max-w-4xl rounded-xl shadow-2xl max-h-[95vh] flex flex-col transition-transform duration-300 transform"
-        style={{ transform: isOpen ? "scale(100%)" : "scale(95%)" }}
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
+        style={{ opacity: isOpen ? 1 : 0 }}
+        onClick={handleClose}
+      />
+
+      {/* Compact card — narrow single-column layout instead of the old wide
+          two/three-column drawer, matched to the reference design. */}
+      <div
+        className={`
+          fixed top-6 bottom-6 right-6 rounded-[24px] z-[10001]
+          w-full sm:w-[600px]
+          bg-white shadow-2xl flex flex-col overflow-hidden
+          transform transition-transform duration-300 ease-in-out
+          ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
+        `}
       >
         {/* Header */}
-        <div className="px-8 py-5 border-b border-gray-100 flex justify-between items-start">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              {editingPO ? "Edit Purchase Order" : "Create New Purchase Order"}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {dateStr} at {timeStr}
-            </p>
+        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
+          <h2 className="text-sm text-gray-500 font-medium uppercase tracking-wide">
+            {editingPO ? "EDIT PURCHASE ORDER" : "CREATE NEW PURCHASE ORDER"}
+          </h2>
+          <div className="flex items-center gap-4">
+            {editingPO && (
+              <>
+                <button type="button" className="text-[#0085FF] hover:text-blue-600 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                </button>
+                <button type="button" className="text-red-500 hover:text-red-600 transition-colors">
+                  <Trash2 className="w-[18px] h-[18px]" />
+                </button>
+                <div className="w-px h-4 bg-gray-300"></div>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={handleClose}
+              className="text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            onClick={handleClose}
-            className="p-1 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8">
+        {/* Content — single column throughout, tightened spacing to suit
+            the narrower card. */}
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
           {/* Vendor Section */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
               Select Vendor <span className="text-red-500">*</span>
             </label>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <SearchableDropdown
                 options={localVendors}
                 value={vendorId}
                 onChange={setVendorId}
-                placeholder="Select Vendor"
+                placeholder="Choose Vendor"
                 displayKey="name"
                 valueKey="_id"
                 className="flex-1 w-full"
                 required={true}
               />
+              {/* Matched to the dropdown's own h-12 / rounded-[25px] pill
+                  shape — was a mismatched rounded-lg square before. */}
               <button
+                type="button"
                 onClick={() => setShowQuickVendorForm(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg transition-colors"
+                className="w-12 h-12 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-colors flex-shrink-0"
+                aria-label="Add new vendor"
               >
                 <Plus className="w-5 h-5" />
               </button>
@@ -472,62 +495,68 @@ const PurchaseOrderForm = ({
 
           {/* Items Section */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Add Items
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900">Items</h3>
+              <button
+                type="button"
+                onClick={addItem}
+                className="flex items-center gap-1 text-[#0085FF] hover:text-blue-700 font-medium text-xs transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Another Item
+              </button>
+            </div>
 
-            <div className="space-y-6">
+            <div className="space-y-4">
               {items.map((item, index) => (
                 <div
                   key={index}
-                  className="bg-gray-50/50 rounded-xl border border-gray-200 p-5 relative group"
+                  className="bg-gray-50/50 rounded-xl border border-gray-200 p-4 relative group space-y-3"
                 >
                   {/* Remove Button for Item */}
                   {items.length > 1 && (
                     <button
                       onClick={() => removeItem(index)}
-                      className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                      className="absolute top-3 right-3 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                    {/* Item Search */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Select Item <span className="text-red-500">*</span>
-                      </label>
-                      <ItemSearchSelect
-                        value={item}
-                        onSelect={(data) => {
-                          const newItems = [...items];
-                          newItems[index] = { ...newItems[index], ...data };
-                          setItems(newItems);
-                        }}
-                      />
-                    </div>
-                    {/* Description */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Description <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Add Item Description"
-                        value={item.description}
-                        onChange={(e) =>
-                          updateItem(index, "description", e.target.value)
-                        }
-                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
+                  {/* Item Search */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Item <span className="text-red-500">*</span>
+                    </label>
+                    <ItemSearchSelect
+                      value={item}
+                      onSelect={(data) => {
+                        const newItems = [...items];
+                        newItems[index] = { ...newItems[index], ...data };
+                        setItems(newItems);
+                      }}
+                    />
+                  </div>
+                  {/* Description */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Description <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Add Item Description"
+                      value={item.description}
+                      onChange={(e) =>
+                        updateItem(index, "description", e.target.value)
+                      }
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-2 gap-3">
                     {/* Quantity */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">
                         Quantity
                       </label>
                       <div className="relative">
@@ -537,17 +566,17 @@ const PurchaseOrderForm = ({
                           onChange={(e) =>
                             updateItem(index, "quantity", e.target.value)
                           }
-                          className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="01"
                         />
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
                           <ListFilter className="w-4 h-4" />
                         </div>
                       </div>
                     </div>
                     {/* Unit Price */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">
                         Unit Price <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
@@ -557,72 +586,113 @@ const PurchaseOrderForm = ({
                           onChange={(e) =>
                             updateItem(index, "unitPrice", e.target.value)
                           }
-                          className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full pl-7 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="0"
                         />
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-sm">
                           ₹
                         </span>
                       </div>
                     </div>
-                    {/* Amount */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Amount
-                      </label>
-                      <div className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-sm font-semibold text-gray-800">
-                        ₹
-                        {(
-                          (parseFloat(item.quantity) || 0) *
-                          (parseFloat(item.unitPrice) || 0)
-                        ).toFixed(2)}
-                      </div>
+                  </div>
+
+                  {/* Amount */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Amount
+                    </label>
+                    <div className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm font-semibold text-gray-800">
+                      ₹
+                      {(
+                        (parseFloat(item.quantity) || 0) *
+                        (parseFloat(item.unitPrice) || 0)
+                      ).toFixed(2)}
                     </div>
+                  </div>
+
+                  {/* Purchase Price & Selling Price */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Purchase Price <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Enter Purchase Price"
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Selling Price <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Enter Selling Price"
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
                 </div>
               ))}
             </div>
-
-            <button
-              type="button"
-              onClick={addItem}
-              className="mt-4 flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Another Item
-            </button>
           </div>
 
           {/* Terms and Notes */}
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                 Payment Terms <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={paymentTerms}
                 onChange={(e) => setPaymentTerms(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Additional Notes <span className="text-red-500">*</span>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                Notes
               </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add Additional Notes"
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] resize-none"
-              />
+              <div className="w-full bg-white border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
+                {/* Rich Text Editor Mock Toolbar */}
+                <div className="px-2 py-1.5 border-b border-gray-100 flex items-center gap-1.5 overflow-x-auto bg-gray-50/50">
+                  <div className="flex items-center gap-0.5">
+                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 text-xs font-medium font-serif shadow-sm border border-transparent hover:border-gray-200">H₁</button>
+                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 text-xs font-medium font-serif shadow-sm border border-transparent hover:border-gray-200">H₂</button>
+                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 text-xs font-medium font-serif shadow-sm border border-transparent hover:border-gray-200">H₃</button>
+                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 text-xs font-medium font-serif shadow-sm border border-transparent hover:border-gray-200">H₄</button>
+                  </div>
+                  <div className="w-px h-5 bg-gray-200 flex-shrink-0"></div>
+                  <div className="flex items-center gap-0.5">
+                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 font-serif font-bold text-sm shadow-sm border border-transparent hover:border-gray-200">B</button>
+                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 font-serif italic text-sm shadow-sm border border-transparent hover:border-gray-200">I</button>
+                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 font-serif underline text-sm shadow-sm border border-transparent hover:border-gray-200">U</button>
+                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 font-serif line-through text-sm shadow-sm border border-transparent hover:border-gray-200">S</button>
+                  </div>
+                  <div className="w-px h-5 bg-gray-200 flex-shrink-0"></div>
+                  <div className="flex items-center gap-0.5">
+                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 shadow-sm border border-transparent hover:border-gray-200">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                    </button>
+                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 shadow-sm border border-transparent hover:border-gray-200">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><path d="M4 6h1v4"></path><path d="M4 10h2"></path><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Additional Notes"
+                  className="w-full px-3 py-2.5 text-sm focus:outline-none min-h-[100px] resize-none"
+                />
+              </div>
             </div>
           </div>
 
           {/* Status */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
               Status
             </label>
             <SingleSelectDropdown
@@ -633,22 +703,22 @@ const PurchaseOrderForm = ({
           </div>
 
           {/* Total Amount Banner */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg px-6 py-4 flex justify-between items-center">
-            <span className="text-blue-800 font-medium text-sm">
+          <div className="bg-blue-50 rounded-full px-5 py-2.5 flex justify-between items-center">
+            <span className="text-gray-900 font-medium text-sm">
               Total Amount
             </span>
-            <span className="text-blue-700 font-bold text-xl">
+            <span className="text-[#0085FF] font-medium text-base">
               ₹{totalAmount.toFixed(2)}
             </span>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-5 border-t border-gray-100 flex justify-between gap-4 bg-gray-50 rounded-b-xl">
+        <div className="px-5 py-4 border-t border-dashed border-gray-300 flex gap-3 items-center bg-white flex-shrink-0">
           <button
             type="button"
             onClick={handleClose}
-            className="flex-1 px-4 py-2.5 border border-gray-200 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 text-sm transition-colors shadow-sm"
+            className="flex-1 px-4 py-2.5 border border-red-200 text-red-500 font-medium rounded-full hover:bg-red-50 text-sm transition-colors"
           >
             Cancel
           </button>
@@ -656,7 +726,7 @@ const PurchaseOrderForm = ({
             type="button"
             onClick={handleSubmit}
             disabled={loading}
-            className="flex-1 px-4 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 text-sm transition-colors shadow-sm disabled:opacity-70"
+            className="flex-1 px-4 py-2.5 bg-[#0085FF] text-white font-medium rounded-full hover:bg-blue-600 text-sm transition-colors disabled:opacity-70"
           >
             {loading
               ? "Creating..."
@@ -677,7 +747,7 @@ const PurchaseOrderForm = ({
           onRequestClose={() => setShowQuickVendorForm(false)}
         />
       )}
-    </div>
+    </>
   );
 };
 

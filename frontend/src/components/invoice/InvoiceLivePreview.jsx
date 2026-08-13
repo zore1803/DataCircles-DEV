@@ -28,6 +28,7 @@ const InvoiceLivePreview = ({
   type = "tax",
   template = DEFAULT_TEMPLATE,
   supportsTax = true,
+  copyType = "original",
 }) => {
   const html = useMemo(() => {
     // The edit form keeps a single `isTaxInvoice` flag regardless of document
@@ -64,6 +65,7 @@ const InvoiceLivePreview = ({
       documentNumber: invoiceNumber,
       upiQrSvg,
       upiId: bankDetails?.upi,
+      copyType,
     });
   }, [
     form,
@@ -74,6 +76,7 @@ const InvoiceLivePreview = ({
     type,
     template,
     supportsTax,
+    copyType,
   ]);
 
   return (

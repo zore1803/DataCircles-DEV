@@ -1,18 +1,31 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   Wand2,
   Plus,
-  ChevronDown,
   ChevronRight,
-  UploadCloud,
-  Headset,
+  Lock,
 } from "lucide-react";
 import ReactQuill from "react-quill-new";
+import toast from "react-hot-toast";
+import API from "../../services/api";
 
-export default function QuickItemDrawer({ isOpen, onClose, onSave }) {
+// onSaved(item) fires after the item is actually created in the backend —
+// callers use it to refresh their item list / picker, same as ItemForm's
+// fetchItems callback.
+export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
   const [type, setType] = useState("Product");
   const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState([]);
+
+  // Same source the full ItemForm's category picker would use.
+  useEffect(() => {
+    if (!isOpen) return;
+    API.get("/items/categories")
+      .then((res) => setCategories(res.data || []))
+      .catch((err) => console.error("Failed to load item categories:", err));
+  }, [isOpen]);
 
   // Form State
   const [form, setForm] = useState({
@@ -28,14 +41,57 @@ export default function QuickItemDrawer({ isOpen, onClose, onSave }) {
     barcode: "",
     category: "",
     description: "",
+    // Opening Stock and More Details fields below aren't in the Item
+    // backend schema yet — they're UI-only for now (matched to the
+    // reference layout) and don't go into the create payload.
+    openingQuantity: "0",
+    openingPurchasePrice: "0",
+    openingStockValue: "0",
+    discountValue: "0",
+    discountType: "percentage",
+    lowStockAlert: "0",
+    showInOnlineStore: true,
+    notForSale: false,
   });
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSave = () => {
-    if (onSave) onSave(form);
+  // Maps this drawer's fields onto the Item model's shape (see ItemForm.jsx),
+  // then actually creates it via the same /items endpoint.
+  const handleSave = async () => {
+    if (!form.name.trim()) {
+      toast.error("Product name is required");
+      return;
+    }
+    try {
+      setSaving(true);
+      const payload = {
+        type: type === "Service" ? "service" : "product",
+        name: form.name,
+        description: form.description,
+        purchasePrice: parseFloat(form.purchasePrice) || 0,
+        sellingPrice: parseFloat(form.sellingPrice) || 0,
+        taxInclusive: form.sellingPriceTax === "with Tax",
+        gstRate: parseFloat(form.taxPercent) || 0,
+        hsnSac: form.hsnSac,
+        barcode: form.barcode,
+        category: form.category,
+        primaryUnit: form.primaryUnit || "OTH OTHERS",
+        images: [],
+        isActive: true,
+      };
+      const res = await API.post("/items", payload);
+      toast.success("Item added successfully!");
+      if (onSaved) onSaved(res.data);
+      onClose();
+    } catch (err) {
+      console.error("Failed to add item:", err);
+      toast.error(err.response?.data?.error || "Failed to add item");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -49,7 +105,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSave }) {
       />
 
       {/* Drawer */}
-      <div className="relative w-full max-w-[700px] bg-[#F9FAFB] h-full flex flex-col shadow-2xl animate-slide-in-right transform transition-transform duration-300">
+      <div className="relative w-full max-w-[900px] bg-[#F9FAFB] h-full flex flex-col shadow-2xl animate-slide-in-right transform transition-transform duration-300">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -63,9 +119,10 @@ export default function QuickItemDrawer({ isOpen, onClose, onSave }) {
           </div>
           <button
             onClick={handleSave}
-            className="px-5 py-2 bg-[#2563EB] text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors shadow-sm"
+            disabled={saving}
+            className="px-5 py-2 bg-[#2563EB] text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Add Item
+            {saving ? "Adding..." : "Add Item"}
           </button>
         </div>
 
@@ -193,48 +250,12 @@ export default function QuickItemDrawer({ isOpen, onClose, onSave }) {
             </div>
           </div>
 
-          {/* Promo Block */}
-          <div className="bg-[#F0F7FF] border border-[#BFDBFE] rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between shadow-sm">
-            <div>
-              <h4 className="text-[14px] font-bold text-gray-900 mb-1">
-                Add custom fields
-              </h4>
-              <p className="text-[12px] text-gray-600">
-                Personalize it to perfectly suit your style.
-              </p>
-              <div className="flex items-center gap-2 mt-3">
-                <div className="flex -space-x-2">
-                  <div className="w-6 h-6 rounded-full bg-gray-300 border-2 border-white overflow-hidden">
-                    <img src="https://ui-avatars.com/api/?name=User+1" alt="u1" className="w-full h-full object-cover" />
-                  </div>
-                  <div className="w-6 h-6 rounded-full bg-gray-300 border-2 border-white overflow-hidden">
-                    <img src="https://ui-avatars.com/api/?name=User+2" alt="u2" className="w-full h-full object-cover" />
-                  </div>
-                  <div className="w-6 h-6 rounded-full bg-gray-300 border-2 border-white overflow-hidden">
-                    <img src="https://ui-avatars.com/api/?name=User+3" alt="u3" className="w-full h-full object-cover" />
-                  </div>
-                </div>
-                <p className="text-[11px] text-gray-500">
-                  Saurabh Sarswat and lakhs of businesses use premium
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 mt-4 sm:mt-0 flex-shrink-0">
-              <button className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-700 hover:text-gray-900">
-                <Headset className="w-4 h-4" /> Talk to a specialist
-              </button>
-              <button className="px-4 py-2 bg-[#FFD700] text-yellow-900 text-[13px] font-bold rounded-md shadow-sm hover:bg-yellow-400 transition-colors flex items-center gap-1">
-                Upgrade 🚀
-              </button>
-            </div>
-          </div>
-
           {/* Additional Information */}
           <div>
             <h3 className="text-[13px] font-bold text-gray-600 uppercase tracking-wider mb-3">
               Additional Information <span className="font-normal text-gray-400">OPTIONAL</span>
             </h3>
-            
+
             <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-5">
               {/* Row 1 */}
               <div className="grid grid-cols-2 gap-5">
@@ -299,13 +320,22 @@ export default function QuickItemDrawer({ isOpen, onClose, onSave }) {
                   <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
                     Category
                   </label>
-                  <select
+                  {/* Text input + datalist so an existing category (fetched
+                      from GET /items/categories) can be picked, or a new one
+                      typed in — a plain <select> can't offer both. */}
+                  <input
+                    type="text"
+                    list="quick-item-categories"
                     value={form.category}
                     onChange={(e) => handleChange("category", e.target.value)}
-                    className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] text-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-                  >
-                    <option value="">Select Category</option>
-                  </select>
+                    placeholder="Select or type a category"
+                    className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white placeholder:text-gray-400"
+                  />
+                  <datalist id="quick-item-categories">
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat} />
+                    ))}
+                  </datalist>
                 </div>
               </div>
 
@@ -329,7 +359,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSave }) {
                 <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
                   Description
                 </label>
-                <div className="border border-gray-300 rounded-md bg-white overflow-hidden relative">
+                <div className="border border-gray-300 rounded-md bg-white overflow-hidden">
                   <ReactQuill
                     theme="snow"
                     value={form.description}
@@ -337,32 +367,193 @@ export default function QuickItemDrawer({ isOpen, onClose, onSave }) {
                     placeholder="Add product description here..."
                     className="h-28 [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-200 [&_.ql-container]:border-none text-[13px]"
                   />
-                  <div className="absolute bottom-2 left-2">
-                    <button className="flex items-center gap-1.5 px-2 py-1 bg-purple-50 text-purple-700 text-[11px] font-bold rounded hover:bg-purple-100 transition-colors">
-                      <Wand2 className="w-3 h-3" /> AI
-                    </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Opening Stock */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[13px] font-bold text-gray-600 uppercase tracking-wider">
+                Opening Stock <span className="font-normal text-gray-400">OPTIONAL</span>
+              </h3>
+              <button
+                type="button"
+                disabled
+                title="Upgrade to track batches"
+                className="flex items-center gap-1.5 text-[12px] font-medium text-gray-400 cursor-not-allowed"
+              >
+                <Lock className="w-3.5 h-3.5" /> Add batches
+              </button>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
+                    Opening Quantity
+                  </label>
+                  <input
+                    type="number"
+                    value={form.openingQuantity}
+                    onChange={(e) => handleChange("openingQuantity", e.target.value)}
+                    className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                  <div className="mt-1.5 text-[11px] text-gray-500">
+                    *Quantity of the product available in your existing inventory
                   </div>
+                </div>
+                <div>
+                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
+                    Opening Purchase Price (with tax)
+                  </label>
+                  <input
+                    type="number"
+                    value={form.openingPurchasePrice}
+                    onChange={(e) => handleChange("openingPurchasePrice", e.target.value)}
+                    className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
                 </div>
               </div>
 
-              {/* More Details */}
-              <div className="mt-6 border border-[#FDE3CC] bg-[#FFF8F1] rounded-xl overflow-hidden cursor-pointer" onClick={() => setShowMoreDetails(!showMoreDetails)}>
-                <div className="p-4 flex items-start gap-2">
-                  <ChevronRight className={`w-5 h-5 text-gray-600 transition-transform ${showMoreDetails ? "rotate-90" : ""}`} />
-                  <div>
-                    <h4 className="text-[14px] font-bold text-gray-900 mb-1">More Details?</h4>
-                    <p className="text-[12px] text-gray-700">
-                      Cess, Show OnlineDiscount, Inventory tracking, Low stock alerts etc..
-                    </p>
-                  </div>
-                </div>
-                {showMoreDetails && (
-                  <div className="p-4 border-t border-[#FDE3CC] bg-white">
-                    <p className="text-[13px] text-gray-500">More details fields will go here.</p>
-                  </div>
-                )}
+              <div className="mt-5 w-1/2 pr-2.5">
+                <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
+                  Opening Stock Value (with tax)
+                </label>
+                <input
+                  type="number"
+                  value={form.openingStockValue}
+                  onChange={(e) => handleChange("openingStockValue", e.target.value)}
+                  className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
               </div>
             </div>
+          </div>
+
+          {/* More Details */}
+          <div className="border border-[#FDE3CC] bg-[#FFF8F1] rounded-xl overflow-hidden">
+            <div
+              className="p-4 flex items-start gap-2 cursor-pointer"
+              onClick={() => setShowMoreDetails(!showMoreDetails)}
+            >
+              <ChevronRight className={`w-5 h-5 text-gray-600 transition-transform flex-shrink-0 mt-0.5 ${showMoreDetails ? "rotate-90" : ""}`} />
+              <div>
+                <h4 className="text-[14px] font-bold text-gray-900 mb-1">More Details?</h4>
+                <p className="text-[12px] text-gray-700">
+                  Cess, Show Online Discount, Inventory tracking, Low stock alerts etc..
+                </p>
+              </div>
+            </div>
+            {showMoreDetails && (
+              <div className="p-5 border-t border-[#FDE3CC] bg-white grid grid-cols-2 gap-x-5 gap-y-5">
+                {/* Discount */}
+                <div>
+                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
+                    Discount
+                  </label>
+                  <div className="flex border border-gray-300 rounded-md focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden bg-white">
+                    <input
+                      type="number"
+                      min="0"
+                      value={form.discountValue}
+                      onChange={(e) => handleChange("discountValue", e.target.value)}
+                      className="flex-1 h-10 px-3 text-[13px] focus:outline-none min-w-0"
+                    />
+                    <select
+                      value={form.discountType}
+                      onChange={(e) => handleChange("discountType", e.target.value)}
+                      className="h-10 px-2 bg-gray-50 border-l border-gray-300 text-[13px] text-gray-600 focus:outline-none"
+                    >
+                      <option value="percentage">Percentage (%)</option>
+                      <option value="amount">Amount</option>
+                    </select>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-gray-500 leading-snug">
+                    Discount will be calculated based on the selected option. In Online Store, discount will be shown as per the selected option.
+                  </p>
+                </div>
+
+                {/* Max Discount % Allowed — premium/locked */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-700 mb-1.5">
+                    Max Discount % Allowed <Lock className="w-3 h-3 text-gray-400" />
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    placeholder="eg. 10"
+                    className="w-full h-10 px-3 border border-gray-200 rounded-md text-[13px] bg-gray-100 text-gray-400 placeholder:text-gray-400 cursor-not-allowed"
+                  />
+                  <p className="mt-1.5 text-[11px] text-gray-500 leading-snug">
+                    Upgrade to set a per-product discount limit. You can configure the company-level setting <span className="text-blue-600 hover:underline cursor-pointer">here</span>.
+                  </p>
+                </div>
+
+                {/* Low Stock Alert */}
+                <div>
+                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
+                    Low Stock Alert at
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.lowStockAlert}
+                    onChange={(e) => handleChange("lowStockAlert", e.target.value)}
+                    className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                  <p className="mt-1.5 text-[11px] text-gray-500 leading-snug">
+                    You will be notified once the stock reaches the minimum stock qty. (BETA)
+                  </p>
+                </div>
+
+                {/* Show in Online Store */}
+                <div>
+                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
+                    Show in Online Store
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleChange("showInOnlineStore", !form.showInOnlineStore)}
+                    className="flex-shrink-0"
+                  >
+                    <span
+                      className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${form.showInOnlineStore ? "bg-green-500" : "bg-gray-300"}`}
+                    >
+                      <span
+                        className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.showInOnlineStore ? "translate-x-4" : "translate-x-0"}`}
+                      />
+                    </span>
+                  </button>
+                  <p className="mt-1.5 text-[11px] text-gray-500 leading-snug">
+                    Show or hide the product in catalogue/ online store
+                  </p>
+                </div>
+
+                {/* Not For Sale */}
+                <div className="col-span-2">
+                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
+                    Not For Sale
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleChange("notForSale", !form.notForSale)}
+                    className="flex-shrink-0"
+                  >
+                    <span
+                      className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${form.notForSale ? "bg-green-500" : "bg-gray-300"}`}
+                    >
+                      <span
+                        className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.notForSale ? "translate-x-4" : "translate-x-0"}`}
+                      />
+                    </span>
+                  </button>
+                  <p className="mt-1.5 text-[11px] text-gray-500 leading-snug">
+                    Hides the item for sale and shows only while making a purchase. eg. Office equipment
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="pb-10" />
@@ -372,9 +563,10 @@ export default function QuickItemDrawer({ isOpen, onClose, onSave }) {
         <div className="px-6 py-4 bg-white border-t border-gray-200 flex-shrink-0">
           <button
             onClick={handleSave}
-            className="px-6 py-2.5 bg-[#2563EB] text-white text-[13px] font-semibold rounded-md hover:bg-blue-700 transition-colors shadow-sm"
+            disabled={saving}
+            className="px-6 py-2.5 bg-[#2563EB] text-white text-[13px] font-semibold rounded-md hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Add Item
+            {saving ? "Adding..." : "Add Item"}
           </button>
         </div>
       </div>

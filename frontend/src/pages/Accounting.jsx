@@ -35,6 +35,11 @@ import {
   LayoutTemplate,
   Settings,
   Search,
+  Share2,
+  MessageCircle,
+  Mail,
+  Copy,
+  MessageSquare,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
@@ -332,6 +337,12 @@ const InvoiceViewer = ({
 }) => {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [openConvertMenu, setOpenConvertMenu] = useState(null);
+  // Standard Indian GST invoice practice: the same document is printed as
+  // three otherwise-identical copies, distinguished only by this label —
+  // "ORIGINAL FOR RECIPIENT" for the customer, "DUPLICATE FOR TRANSPORTER"
+  // for the goods carrier, "TRIPLICATE FOR SUPPLIER" for the seller's own
+  // records. Re-fetches the PDF with the chosen label baked in.
+  const [copyType, setCopyType] = useState("original");
 
   useEffect(() => {
     if (isOpen && id && type) {
@@ -341,12 +352,13 @@ const InvoiceViewer = ({
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, id, type]);
+  }, [isOpen, id, type, copyType]);
 
   const fetchPdf = async () => {
     try {
       const response = await API.get(`/${apiPathFor(type)}/download/${id}`, {
         responseType: "blob",
+        params: { copyType },
       });
       const blob = new Blob([response.data], { type: "application/pdf" });
       setPdfUrl(URL.createObjectURL(blob));
@@ -355,6 +367,16 @@ const InvoiceViewer = ({
       console.error("PDF fetch error:", error);
       onClose();
     }
+  };
+
+  const handleDownloadCurrentCopy = () => {
+    if (!pdfUrl) return;
+    const link = document.createElement("a");
+    link.href = pdfUrl;
+    link.setAttribute("download", `${apiPathFor(type)}-${docNumber || id}-${copyType}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
   const isTax =
@@ -382,6 +404,16 @@ const InvoiceViewer = ({
             </div>
           </div>
           <div className="flex gap-3 items-center">
+            <select
+              title="Copy type"
+              value={copyType}
+              onChange={(e) => setCopyType(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 bg-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="original">Original for Recipient</option>
+              <option value="duplicate">Duplicate for Transporter</option>
+              <option value="triplicate">Triplicate for Supplier</option>
+            </select>
             <div className="flex gap-2">
               <button
                 title="Edit"
@@ -392,7 +424,7 @@ const InvoiceViewer = ({
               </button>
               <button
                 title="Download"
-                onClick={onDownload}
+                onClick={handleDownloadCurrentCopy}
                 className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
               >
                 <Download className="w-4 h-4" />
@@ -404,6 +436,88 @@ const InvoiceViewer = ({
               >
                 <Send className="w-4 h-4" />
               </button>
+              <div className="relative">
+                <button
+                  title="Share"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenConvertMenu(openConvertMenu === "share" ? null : "share");
+                  }}
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+                {openConvertMenu === "share" && (
+                  <div className="absolute right-0 mt-1 w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div className="py-1">
+                      {[
+                        {
+                          label: "WhatsApp",
+                          icon: MessageCircle,
+                          iconClass: "text-green-600",
+                          onClick: () => {
+                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
+                            const text = `${title} #${docNumber || ""}\n${url}`;
+                            window.open(
+                              `https://wa.me/?text=${encodeURIComponent(text)}`,
+                              "_blank",
+                              "noopener,noreferrer"
+                            );
+                          },
+                        },
+                        {
+                          label: "Email",
+                          icon: Mail,
+                          iconClass: "text-blue-600",
+                          onClick: () => {
+                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
+                            const subject = `${title} #${docNumber || ""}`;
+                            window.location.href = `mailto:?subject=${encodeURIComponent(
+                              subject
+                            )}&body=${encodeURIComponent(url)}`;
+                          },
+                        },
+                        {
+                          label: "SMS",
+                          icon: MessageSquare,
+                          iconClass: "text-indigo-600",
+                          onClick: () => {
+                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
+                            const text = `${title} #${docNumber || ""} - ${url}`;
+                            window.location.href = `sms:?body=${encodeURIComponent(text)}`;
+                          },
+                        },
+                        {
+                          label: "Copy Link",
+                          icon: Copy,
+                          iconClass: "text-gray-600",
+                          onClick: async () => {
+                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              toast.success("Link copied to clipboard");
+                            } catch {
+                              toast.error("Failed to copy link");
+                            }
+                          },
+                        },
+                      ].map((option) => (
+                        <button
+                          key={option.label}
+                          onClick={() => {
+                            option.onClick();
+                            setOpenConvertMenu(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                        >
+                          <option.icon className={`w-4 h-4 ${option.iconClass}`} />
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="relative">
                 <button
                   title="Convert"
@@ -815,7 +929,6 @@ const Accounting = () => {
   // UI state
   const [selectedIds, setSelectedIds] = useState([]);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
-  const [showTestDrawer, setShowTestDrawer] = useState(false);
   const [editPanelDoc, setEditPanelDoc] = useState(null);
   const [conversionData, setConversionData] = useState(null);
   const [showQuickDealForm, setShowQuickDealForm] = useState(false);
@@ -1846,14 +1959,6 @@ const Accounting = () => {
                 )}
               </div>
 
-              {/* Temp Test Button */}
-              <button
-                onClick={() => setShowTestDrawer(true)}
-                className="flex items-center justify-center bg-purple-600 text-white rounded-full font-medium transition-colors hover:bg-purple-700"
-                style={{ height: 44, padding: "0 16px", gap: 6 }}
-              >
-                Test Product Drawer
-              </button>
 
               {/* Add Button */}
               <button
