@@ -80,6 +80,9 @@ app.use('/api/companies', companyRoutes);
 const contactRoutes = require('./routes/contactRoutes');
 app.use('/api/contacts', contactRoutes);
 
+const walletRoutes = require('./routes/walletRoutes');
+app.use('/api/wallet', walletRoutes);
+
 // PUBLIC, unauthenticated form-submission surface (FORMS_ARCHITECTURE.md §2.9) — org resolved from the
 // URL slug inside the service, never from req.user (there is none here). Kept as its own router so the
 // absence of requireAuth is intentional and obvious, not an oversight.
