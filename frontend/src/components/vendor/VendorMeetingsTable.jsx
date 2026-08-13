@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Skeleton from "../common/Skeleton";
-import { Plus, Calendar, Search, Trash2, Eye } from "lucide-react";
+import StatTileSkeleton from "../common/StatTileSkeleton";
+import { Plus, Calendar, Search, Trash2, Eye, Edit3, CalendarClock, CalendarCheck, Clock3 } from "lucide-react";
 import API from "../../services/api";
 import VendorMeetingForm from "./VendorMeetingForm";
 import MeetingDetailsModal from "../company/MeetingDetailsModal";
 import DataTable from "../common/DataTable";
-import RowActionsMenu, { withRowActionsColumn } from "../common/RowActionsMenu";
+import RowActionsMenu from "../common/RowActionsMenu";
 import BulkActionBar from "../common/BulkActionBar";
 import TablePaginationFooter from "../common/TablePaginationFooter";
 import CompanyFilterPanel from "../company/CompanyFilterPanel";
@@ -15,7 +16,6 @@ import { useTopLoadingSignal } from "../common/TopLoadingBar";
 import toast from "react-hot-toast";
 import HighlightText from "../common/HighlightText";
 import { exportToCSV } from "../../utils/exportToCSV";
-import { useLocalStorageState } from "../../hooks/useLocalStorageState";
 
 const stripHtml = (html) => String(html || "").replace(/<[^>]*>/g, "").trim();
 
@@ -51,7 +51,7 @@ const formatDateTime = (iso) => {
   };
 };
 
-const VendorMeetingsTable = ({ vendorId }) => {
+const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, onAutoOpenCreateConsumed }) => {
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -64,14 +64,25 @@ const VendorMeetingsTable = ({ vendorId }) => {
   const [search, setSearch] = useState("");
   const [selectedFilters, setSelectedFilters] = useState({});
   const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [columnSizing, setColumnSizing] = useLocalStorageState("vendor-meetings-col-widths", {});
+  const [columnSizing, setColumnSizing] = useState({});
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [columnOrder, setColumnOrder] = useLocalStorageState("vendor-meetings-col-order", () => [
-    "selection", "title", "description", "status", "meetingType", "priority", "scheduledAt", "duration", "location", "actions"
+  const [columnOrder, setColumnOrder] = useState(() => [
+    "selection", "title", "description", "status", "meetingType", "priority", "scheduledAt", "duration", "location"
   ]);
-  const [hiddenColumns, setHiddenColumns] = useLocalStorageState("vendor-meetings-hidden-cols", new Set());
-  const [pinnedColumns, setPinnedColumns] = useLocalStorageState("vendor-meetings-pinned-cols", []);
+
+  // "New Entry" menu on the vendor header (VendorDetailsPageNew.jsx) sets
+  // autoOpenCreate + switches to this tab in the same click — same
+  // pendingCreate pattern CompanyProfilePage.jsx uses for its tabs.
+  useEffect(() => {
+    if (autoOpenCreate) {
+      setEditingMeeting(null);
+      setShowMeetingForm(true);
+      onAutoOpenCreateConsumed?.();
+    }
+  }, [autoOpenCreate, onAutoOpenCreateConsumed]);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [pinnedColumns, setPinnedColumns] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
 
   const filterButtonRef = useRef(null);
@@ -419,10 +430,25 @@ const VendorMeetingsTable = ({ vendorId }) => {
     [paginatedMeetings, selectedItems, selectAll, clearSelection, toggleItem, search],
   );
 
+  // No dedicated "Actions" column — a single ⋮ button (RowActionsMenu) that
+  // pops View/Edit/Delete as a small action card renders inside whichever
+  // column currently ends up last (see finalColumns below), the same way
+  // CompanyContactsTab.jsx puts its "open contact" icon on the last
+  // visible column instead of a fixed Actions column.
+  const meetingActionButtons = (meeting) => (
+    <RowActionsMenu
+      actions={[
+        { label: "View", icon: Eye, onClick: () => { setSelectedMeeting(meeting); setIsMeetingModalOpen(true); } },
+        { label: "Edit", icon: Edit3, onClick: () => handleEditMeeting(meeting) },
+        { label: "Delete", icon: Trash2, danger: true, onClick: () => { if (window.confirm("Delete this meeting?")) handleMeetingDelete(meeting._id); } },
+      ]}
+    />
+  );
+
   const finalColumns = useMemo(() => {
     const visibleBase = baseColumns.filter(c => !hiddenColumns.has(c.id));
     const selectionCol = visibleBase.find(c => c.id === "selection");
-    const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
+    const otherCols = visibleBase.filter(c => c.id !== "selection");
 
     const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
     const rightPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'right').map(p => p.key));
@@ -439,18 +465,29 @@ const VendorMeetingsTable = ({ vendorId }) => {
       ...midCols,
       ...rightCols,
     ];
-    return withRowActionsColumn(ordered, (meeting) => (
-      <RowActionsMenu
-        onView={() => {
-          setSelectedMeeting(meeting);
-          setIsMeetingModalOpen(true);
-        }}
-        onEdit={() => handleEditMeeting(meeting)}
-        onDelete={() => {
-          if (window.confirm("Delete this meeting?")) handleMeetingDelete(meeting._id);
-        }}
-      />
-    ));
+
+    let lastIdx = -1;
+    for (let i = ordered.length - 1; i >= 0; i--) {
+      if (ordered[i].id !== "selection") {
+        lastIdx = i;
+        break;
+      }
+    }
+    if (lastIdx !== -1) {
+      const original = ordered[lastIdx];
+      const originalCell = original.cell;
+      ordered[lastIdx] = {
+        ...original,
+        cell: (props) => (
+          <div className="flex items-center justify-between gap-2 w-full min-w-0">
+            <div className="min-w-0 flex-1">{originalCell(props)}</div>
+            {meetingActionButtons(props.row.original)}
+          </div>
+        ),
+      };
+    }
+
+    return ordered;
   }, [baseColumns, columnOrder, hiddenColumns, pinnedColumns]);
 
   const visibleColumnsForGhost = useMemo(() => finalColumns.map(c => ({ key: c.id, label: c.header })), [finalColumns]);
@@ -477,27 +514,73 @@ const VendorMeetingsTable = ({ vendorId }) => {
     );
   }
 
+  const nowForKpi = new Date();
+  const in15DaysForKpi = new Date();
+  in15DaysForKpi.setDate(in15DaysForKpi.getDate() + 15);
+  const totalMeetingsCount = meetings.length;
+  const upcomingMeetingsList = meetings.filter((m) => m.scheduledAt && new Date(m.scheduledAt) >= nowForKpi);
+  const upcomingIn15Count = upcomingMeetingsList.filter((m) => new Date(m.scheduledAt) <= in15DaysForKpi).length;
+  const completedMeetingsCount = meetings.filter((m) => m.scheduledAt && new Date(m.scheduledAt) < nowForKpi).length;
+  const meetingCompletionRate = totalMeetingsCount > 0 ? Math.round((completedMeetingsCount / totalMeetingsCount) * 100) : 0;
+  const nextMeetingForKpi = [...upcomingMeetingsList].sort(
+    (a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt),
+  )[0];
+  const nextMeetingKpiLabel = (() => {
+    if (!nextMeetingForKpi) return "—";
+    const d = new Date(nextMeetingForKpi.scheduledAt);
+    const isTomorrow = d.toDateString() === new Date(nowForKpi.getTime() + 24 * 60 * 60 * 1000).toDateString();
+    const isToday = d.toDateString() === nowForKpi.toDateString();
+    const dayLabel = isToday ? "Today" : isTomorrow ? "Tomorrow" : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    return `${dayLabel} • ${time}`;
+  })();
+
+  const meetingKpiTiles = [
+    { label: "Total Meetings", value: totalMeetingsCount, icon: Calendar, subtitle: "Since Onboarding" },
+    { label: "Upcoming", value: upcomingIn15Count, icon: CalendarClock, subtitle: "Next 15 Days", subtitleClass: "text-blue-500" },
+    { label: "Completed", value: completedMeetingsCount, icon: CalendarCheck, subtitle: `${meetingCompletionRate}% Completion Rate`, subtitleClass: "text-green-600" },
+    { label: "Next Meeting", value: nextMeetingKpiLabel, icon: Clock3, subtitle: nextMeetingForKpi ? "Scheduled" : "None Scheduled" },
+  ];
+
   return (
     <div className="h-full mt-0">
+      {/* KPI Tiles — same statTiles markup as CompanyMeetingsTab.jsx's KPI row.
+          Visibility is driven by the parent page's own Financial Summary
+          strip toggle (VendorDetailsPageNew.jsx's ⋮ menu), same as PaymentsTable. */}
+      {showKPIs && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {loading && !meetings.length
+          ? Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
+          : meetingKpiTiles.map((tile) => (
+              <div
+                key={tile.label}
+                className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
+              >
+                <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                  <tile.icon size={18} strokeWidth={1.5} />
+                </div>
+                <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
+                  <tile.icon size={20} strokeWidth={1.5} />
+                </div>
+                <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
+                    <p className="text-base font-semibold text-gray-900 truncate">{tile.value}</p>
+                  </div>
+                  {tile.subtitle && (
+                    <span className={`hidden sm:inline text-[11px] flex-shrink-0 ${tile.subtitleClass || "text-gray-400"}`}>
+                      {tile.subtitle}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+      </div>
+      )}
+
       {/* Action Buttons (Portaled to Tab Header) removed */}
 
-      {!loading && meetings.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <Calendar className="w-10 h-10 text-gray-400" />
-          <p className="text-sm text-gray-600">No meetings yet</p>
-          <p className="text-xs text-gray-500">Meetings will appear here once created</p>
-          <button
-            onClick={() => {
-              setEditingMeeting(null);
-              setShowMeetingForm(true);
-            }}
-            className="mt-2 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={16} />
-            Add new meeting
-          </button>
-        </div>
-      ) : stripVisible ? (
+      {stripVisible ? (
         <BulkActionBar
           selectedCount={selectedItems.length}
           entityName="meeting"
@@ -518,7 +601,8 @@ const VendorMeetingsTable = ({ vendorId }) => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search meetings..."
-              className="w-full h-full pl-10 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
+              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
             />
           </div>
           <button
@@ -552,7 +636,6 @@ const VendorMeetingsTable = ({ vendorId }) => {
         </div>
       )}
 
-      {(loading || meetings.length > 0) && (
       <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
         <DataTable
           data={paginatedMeetings}
@@ -568,7 +651,7 @@ const VendorMeetingsTable = ({ vendorId }) => {
           visibleColumns={visibleColumnsForGhost}
           getGhostPreview={getGhostPreview}
           variant="card"
-          maxHeight={290}
+          maxHeight={400}
           loading={loading}
           rowClassName={(m) => (selectedItems.includes(m._id) ? "!bg-blue-50" : "")}
           loadingContent={
@@ -596,18 +679,6 @@ const VendorMeetingsTable = ({ vendorId }) => {
                   ? "Try clearing the search or filters"
                   : "Meetings will appear here once created"}
               </p>
-              {!search && !activeFilterCount && (
-                <button
-                  onClick={() => {
-                    setEditingMeeting(null);
-                    setShowMeetingForm(true);
-                  }}
-                  className="mt-2 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus size={16} />
-                  Add new meeting
-                </button>
-              )}
             </div>
           }
         />
@@ -626,7 +697,6 @@ const VendorMeetingsTable = ({ vendorId }) => {
           />
         </div>
       </div>
-      )}
 
       <CompanyFilterPanel
         isOpen={showFilterPanel}

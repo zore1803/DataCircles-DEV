@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Skeleton from "../common/Skeleton";
-import { Plus, Calendar, Search, Trash2, Eye } from "lucide-react";
+import StatTileSkeleton from "../common/StatTileSkeleton";
+import { Plus, Calendar, Search, Trash2, Eye, Edit3, ListChecks, Clock, AlertCircle, CheckCircle } from "lucide-react";
 import API from "../../services/api";
 import VendorTaskForm from "./VendorTaskForm";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
 import DataTable from "../common/DataTable";
-import RowActionsMenu, { withRowActionsColumn } from "../common/RowActionsMenu";
+import RowActionsMenu from "../common/RowActionsMenu";
 import BulkActionBar from "../common/BulkActionBar";
 import TablePaginationFooter from "../common/TablePaginationFooter";
 import CompanyFilterPanel from "../company/CompanyFilterPanel";
@@ -16,7 +17,6 @@ import toast from "react-hot-toast";
 import HighlightText from "../common/HighlightText";
 import { useRef } from "react";
 import { exportToCSV } from "../../utils/exportToCSV";
-import { useLocalStorageState } from "../../hooks/useLocalStorageState";
 
 /* Columns offered in the filter panel. `options` seeds the dropdown with the
    schema's full enum so a value is still filterable when no row currently uses
@@ -60,7 +60,7 @@ const formatDate = (iso) =>
     ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "—";
 
-const VendorTasksTable = ({ vendorId }) => {
+const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, onAutoOpenCreateConsumed }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -74,14 +74,25 @@ const VendorTasksTable = ({ vendorId }) => {
   const [search, setSearch] = useState("");
   const [selectedFilters, setSelectedFilters] = useState({});
   const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [columnSizing, setColumnSizing] = useLocalStorageState("vendor-tasks-col-widths", {});
+  const [columnSizing, setColumnSizing] = useState({});
   const [isDeleting, setIsDeleting] = useState(false);
-
-  const [columnOrder, setColumnOrder] = useLocalStorageState("vendor-tasks-col-order", () => [
-    "selection", "title", "description", "assignedTo", "status", "priority", "dueDate", "actions"
+  
+  const [columnOrder, setColumnOrder] = useState(() => [
+    "selection", "title", "description", "assignedTo", "status", "priority", "dueDate"
   ]);
-  const [hiddenColumns, setHiddenColumns] = useLocalStorageState("vendor-tasks-hidden-cols", new Set());
-  const [pinnedColumns, setPinnedColumns] = useLocalStorageState("vendor-tasks-pinned-cols", []);
+
+  // "New Entry" menu on the vendor header (VendorDetailsPageNew.jsx) sets
+  // autoOpenCreate + switches to this tab in the same click — same
+  // pendingCreate pattern CompanyProfilePage.jsx uses for its tabs.
+  useEffect(() => {
+    if (autoOpenCreate) {
+      setEditingTask(null);
+      setShowTaskForm(true);
+      onAutoOpenCreateConsumed?.();
+    }
+  }, [autoOpenCreate, onAutoOpenCreateConsumed]);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set());
+  const [pinnedColumns, setPinnedColumns] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
 
   const filterButtonRef = useRef(null);
@@ -435,38 +446,64 @@ const VendorTasksTable = ({ vendorId }) => {
     [paginatedTasks, selectedItems, selectAll, clearSelection, toggleItem],
   );
 
+  // No dedicated "Actions" column — a single ⋮ button (RowActionsMenu) that
+  // pops View/Delete as a small action card renders inside whichever
+  // column currently ends up last (see finalColumns below), the same way
+  // CompanyContactsTab.jsx puts its "open contact" icon on the last
+  // visible column instead of a fixed Actions column.
+  const taskActionButtons = (task) => (
+    <RowActionsMenu
+      actions={[
+        { label: "View", icon: Eye, onClick: () => { setSelectedTask(task); setIsTaskModalOpen(true); } },
+        { label: "Edit", icon: Edit3, onClick: () => handleEditTask(task) },
+        { label: "Delete", icon: Trash2, danger: true, onClick: () => { if (window.confirm("Delete this task?")) handleTaskDelete(task._id); } },
+      ]}
+    />
+  );
+
   const finalColumns = useMemo(() => {
     const visibleBase = baseColumns.filter(c => !hiddenColumns.has(c.id));
     const selectionCol = visibleBase.find(c => c.id === "selection");
-    const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
+    const otherCols = visibleBase.filter(c => c.id !== "selection");
 
     const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
     const rightPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'right').map(p => p.key));
-    
+
     const leftCols = otherCols.filter(c => leftPinnedKeys.has(c.id));
     const rightCols = otherCols.filter(c => rightPinnedKeys.has(c.id));
     const midCols = otherCols.filter(c => !leftPinnedKeys.has(c.id) && !rightPinnedKeys.has(c.id));
-    
+
     midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
-    
+
     const ordered = [
       ...(selectionCol ? [selectionCol] : []),
       ...leftCols,
       ...midCols,
       ...rightCols,
     ];
-    return withRowActionsColumn(ordered, (task) => (
-      <RowActionsMenu
-        onView={() => {
-          setSelectedTask(task);
-          setIsTaskModalOpen(true);
-        }}
-        onEdit={() => handleEditTask(task)}
-        onDelete={() => {
-          if (window.confirm("Delete this task?")) handleTaskDelete(task._id);
-        }}
-      />
-    ));
+
+    let lastIdx = -1;
+    for (let i = ordered.length - 1; i >= 0; i--) {
+      if (ordered[i].id !== "selection") {
+        lastIdx = i;
+        break;
+      }
+    }
+    if (lastIdx !== -1) {
+      const original = ordered[lastIdx];
+      const originalCell = original.cell;
+      ordered[lastIdx] = {
+        ...original,
+        cell: (props) => (
+          <div className="flex items-center justify-between gap-2 w-full min-w-0">
+            <div className="min-w-0 flex-1">{originalCell(props)}</div>
+            {taskActionButtons(props.row.original)}
+          </div>
+        ),
+      };
+    }
+
+    return ordered;
   }, [baseColumns, columnOrder, hiddenColumns, pinnedColumns]);
 
   const visibleColumnsForGhost = useMemo(() => finalColumns.map(c => ({ key: c.id, label: c.header })), [finalColumns]);
@@ -497,26 +534,59 @@ const VendorTasksTable = ({ vendorId }) => {
     // The skeleton is handled by DataTable's loading prop now.
   }
 
+  const totalTasksCount = tasks.length;
+  const pendingTasksCount = tasks.filter((t) => t.status !== "Completed").length;
+  const overdueTasksCount = tasks.filter(
+    (t) => t.status !== "Completed" && t.dueDate && new Date(t.dueDate) < new Date(),
+  ).length;
+  const completedTasksCount = tasks.filter((t) => t.status === "Completed").length;
+  const taskCompletionRate = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+
+  const taskKpiTiles = [
+    { label: "Total Tasks", value: totalTasksCount, icon: ListChecks, subtitle: "All time" },
+    { label: "Pending Tasks", value: pendingTasksCount, icon: Clock, subtitle: "Awaiting action", subtitleClass: "text-amber-600" },
+    { label: "Overdue Tasks", value: overdueTasksCount, icon: AlertCircle, subtitle: "Action Required", subtitleClass: "text-red-600" },
+    { label: "Completed Tasks", value: completedTasksCount, icon: CheckCircle, subtitle: `${taskCompletionRate}% Completion Rate`, subtitleClass: "text-green-600" },
+  ];
+
   return (
     <div className="h-full mt-0">
+      {/* KPI Tiles — same statTiles markup as CompanyTasksTab.jsx's KPI row.
+          Visibility is driven by the parent page's own Financial Summary
+          strip toggle (VendorDetailsPageNew.jsx's ⋮ menu), same as PaymentsTable. */}
+      {showKPIs && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {loading && !tasks.length
+          ? Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
+          : taskKpiTiles.map((tile) => (
+              <div
+                key={tile.label}
+                className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
+              >
+                <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                  <tile.icon size={18} strokeWidth={1.5} />
+                </div>
+                <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
+                  <tile.icon size={20} strokeWidth={1.5} />
+                </div>
+                <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
+                    <p className="text-base font-semibold text-gray-900 truncate">{tile.value}</p>
+                  </div>
+                  {tile.subtitle && (
+                    <span className={`hidden sm:inline text-[11px] flex-shrink-0 ${tile.subtitleClass || "text-gray-400"}`}>
+                      {tile.subtitle}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+      </div>
+      )}
+
       {/* Action Buttons are portaled from here into the Tab Header using ReactDOM.createPortal. */}
-      {!loading && tasks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <Calendar className="w-10 h-10 text-gray-400" />
-          <p className="text-sm text-gray-600">No tasks yet</p>
-          <p className="text-xs text-gray-500">Tasks will appear here once created</p>
-          <button
-            onClick={() => {
-              setEditingTask(null);
-              setShowTaskForm(true);
-            }}
-            className="mt-2 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={16} />
-            Add new task
-          </button>
-        </div>
-      ) : stripVisible ? (
+      {stripVisible ? (
         <BulkActionBar
           selectedCount={selectedItems.length}
           entityName="task"
@@ -537,7 +607,8 @@ const VendorTasksTable = ({ vendorId }) => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search tasks..."
-              className="w-full h-full pl-10 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
+              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
+              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
             />
           </div>
           <button
@@ -571,7 +642,6 @@ const VendorTasksTable = ({ vendorId }) => {
         </div>
       )}
 
-      {(loading || tasks.length > 0) && (
       <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
         <DataTable
           data={paginatedTasks}
@@ -587,7 +657,7 @@ const VendorTasksTable = ({ vendorId }) => {
           visibleColumns={visibleColumnsForGhost}
           getGhostPreview={getGhostPreview}
           variant="card"
-          maxHeight={290}
+          maxHeight={400}
           loading={loading}
           rowClassName={(t) => (selectedItems.includes(t._id) ? "!bg-blue-50" : "")}
           loadingContent={
@@ -615,18 +685,6 @@ const VendorTasksTable = ({ vendorId }) => {
                   ? "Try clearing the search or filters"
                   : "Tasks will appear here once created"}
               </p>
-              {!search && !activeFilterCount && (
-                <button
-                  onClick={() => {
-                    setEditingTask(null);
-                    setShowTaskForm(true);
-                  }}
-                  className="mt-2 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus size={16} />
-                  Add new task
-                </button>
-              )}
             </div>
           }
         />
@@ -645,7 +703,6 @@ const VendorTasksTable = ({ vendorId }) => {
           />
         </div>
       </div>
-      )}
 
       <CompanyFilterPanel
         isOpen={showFilterPanel}
