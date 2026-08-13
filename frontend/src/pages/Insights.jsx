@@ -2201,6 +2201,7 @@ const Insights = () => {
             .sort((a, b) => b[1].count - a[1].count)
             .slice(0, 4);
           const industryMaxCount = Math.max(1, ...industryEntries.map(([, v]) => v.count));
+          const industryColors = ["#0085FF", "#0C4FCD", "#2E7D32", "#D97706", "#E82222", "#00C950"];
 
           // Card 3: Recent Contact Activity — deals-with-contact events and
           // their invoices, merged into one timeline.
@@ -2242,7 +2243,7 @@ const Insights = () => {
           return (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
               {/* Contact Alerts */}
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[340px] flex flex-col">
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[420px] flex flex-col">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-[#1C1C1D]">Contact Alerts</h3>
                 </div>
@@ -2274,7 +2275,7 @@ const Insights = () => {
               </div>
 
               {/* Contacts by Industry */}
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[340px] flex flex-col">
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[420px] flex flex-col">
                 <h3 className="text-sm font-semibold text-[#1C1C1D] mb-3">Contacts by Industry</h3>
                 {industryEntries.length === 0 ? (
                   <p className="text-sm text-gray-400 py-10 text-center">No contacts yet</p>
@@ -2284,11 +2285,11 @@ const Insights = () => {
                       <div key={industry} className="flex items-center gap-3">
                         <span
                           className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                          style={{ background: pipelineStageColors[idx % pipelineStageColors.length] + "22" }}
+                          style={{ background: industryColors[idx % industryColors.length] + "22" }}
                         >
                           <Building
                             className="w-4 h-4"
-                            style={{ color: pipelineStageColors[idx % pipelineStageColors.length] }}
+                            style={{ color: industryColors[idx % industryColors.length] }}
                           />
                         </span>
                         <div className="flex-1 min-w-0">
@@ -2299,7 +2300,7 @@ const Insights = () => {
                               className="h-full rounded-full"
                               style={{
                                 width: `${(data.count / industryMaxCount) * 100}%`,
-                                background: pipelineStageColors[idx % pipelineStageColors.length],
+                                background: industryColors[idx % industryColors.length],
                               }}
                             />
                           </div>
@@ -2317,7 +2318,7 @@ const Insights = () => {
               </div>
 
               {/* Recent Contact Activity */}
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[340px] flex flex-col">
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[420px] flex flex-col">
                 <h3 className="text-sm font-semibold text-[#1C1C1D] mb-3">Recent Contact Activity</h3>
                 {recentContactActivity.length === 0 ? (
                   <p className="text-sm text-gray-400 py-10 text-center">No recent activity</p>
