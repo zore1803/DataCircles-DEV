@@ -130,6 +130,14 @@ const getAllItemsPaginated = async (req, res) => {
     const sortObj = {};
     sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
 
+    // "Select All" support: return every matching item's _id (ignoring
+    // pagination) so the frontend can select all rows across every page, not
+    // just the current page.
+    if (req.query.allIds === "true") {
+      const allItems = await Item.find(query).select("_id").lean();
+      return res.json({ ids: allItems.map((i) => i._id) });
+    }
+
     // Execute queries in parallel for better performance
     const [items, totalCount] = await Promise.all([
       Item.find(query)

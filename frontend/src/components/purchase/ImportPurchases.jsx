@@ -8,9 +8,14 @@ import {
 } from "lucide-react";
 import Papa from "papaparse";
 import API from "../../services/api";
-import ItemFieldMappingModal from "./ItemFieldMappingModal";
+import PurchaseFieldMappingModal from "./PurchaseFieldMappingModal";
 
-function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
+// Same shape/flow as ImportItems.jsx (Products & Services),
+// ImportClients.jsx (Companies) and ImportPurchaseOrders.jsx: drag/drop or
+// pick a CSV, download a basic template with the required columns, map
+// columns in a follow-up modal, then POST the mapped rows to the
+// bulk-import endpoint.
+function ImportPurchases({ isOpen: propIsOpen, onClose, onImportSuccess }) {
   const [file, setFile] = useState(null);
   const [csvData, setCsvData] = useState([]);
   const [csvHeaders, setCsvHeaders] = useState([]);
@@ -23,7 +28,6 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
   const [isOpen, setIsOpen] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
 
-  // Handle modal opening/closing animation
   useEffect(() => {
     if (propIsOpen) {
       setShouldRender(true);
@@ -37,7 +41,6 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
     }
   }, [propIsOpen]);
 
-  // Cleanup progress simulation on component unmount
   useEffect(() => {
     return () => {
       clearInterval(window.progressInterval);
@@ -141,64 +144,38 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
     }
   };
 
-  const handleImport = async ({ fieldMapping, includeFirstRow }) => {
+  const handleImport = async ({ fieldMapping }) => {
     setLoading(true);
     setError("");
     setSuccess("");
     setProgress(0);
 
     try {
-      const mappedData = [];
+      const rows = [];
       const totalRows = csvData.length;
 
       for (let index = 0; index < csvData.length; index++) {
         const row = csvData[index];
         const mappedRow = {};
-        let hasValidData = false;
 
-        Object.entries(fieldMapping).forEach(([csvHeader, crmField]) => {
+        Object.entries(fieldMapping).forEach(([csvHeader, purchaseField]) => {
           const value = row[csvHeader];
-
-          if (
-            value !== undefined &&
-            value !== null &&
-            String(value).trim() !== ""
-          ) {
-            hasValidData = true;
-
-            if (crmField === "purchasePrice" || crmField === "sellingPrice") {
-              mappedRow[crmField] = parseFloat(value) || 0;
-            } else if (crmField === "taxInclusive" || crmField === "isActive") {
-              const boolValue = String(value).toLowerCase();
-              mappedRow[crmField] =
-                boolValue === "true" ||
-                boolValue === "1" ||
-                boolValue === "yes";
-            } else if (crmField === "type") {
-              const typeValue = String(value).toLowerCase();
-              mappedRow[crmField] = ["product", "service"].includes(typeValue)
-                ? typeValue
-                : "product";
-            } else {
-              mappedRow[crmField] = String(value).trim();
-            }
+          if (value !== undefined && value !== null && String(value).trim() !== "") {
+            mappedRow[purchaseField] = String(value).trim();
           }
         });
 
-        if (hasValidData && mappedRow.name && mappedRow.name.trim()) {
-          mappedData.push(mappedRow);
+        if (mappedRow.vendorName && mappedRow.itemName) {
+          rows.push(mappedRow);
         }
 
-        const progressPercentage = Math.min(
-          50,
-          Math.round(((index + 1) / totalRows) * 50),
-        );
+        const progressPercentage = Math.min(50, Math.round(((index + 1) / totalRows) * 50));
         setProgress(Math.max(progressPercentage, 20));
       }
 
-      if (mappedData.length === 0) {
+      if (rows.length === 0) {
         setError(
-          "No valid items found. Please ensure the 'Name' field is properly mapped and contains data.",
+          "No valid rows found. Please ensure Vendor Name and Item Name are mapped and contain data.",
         );
         setLoading(false);
         setProgress(0);
@@ -208,8 +185,6 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
         return;
       }
 
-      const payload = { items: mappedData };
-
       setProgress(50);
       let simulatedProgress = 50;
       window.progressInterval = setInterval(() => {
@@ -217,7 +192,7 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
         setProgress(simulatedProgress);
       }, 500);
 
-      const response = await API.post("/items/bulk-import", payload);
+      const response = await API.post("/purchases/bulk-import", { rows });
 
       clearInterval(window.progressInterval);
       setProgress(100);
@@ -226,10 +201,10 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
 
       if (errors && errors.length > 0) {
         setSuccess(
-          `Successfully imported ${imported} out of ${total} items. ${errors.length} failed.`,
+          `Successfully imported ${imported} out of ${total} purchases. ${errors.length} failed.`,
         );
       } else {
-        setSuccess(`Successfully imported ${imported} items`);
+        setSuccess(`Successfully imported ${imported} purchase${imported !== 1 ? "s" : ""}`);
       }
 
       setShowMapping(false);
@@ -259,24 +234,15 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
     }
   };
 
-  // Function to download sample CSV
-  const downloadSampleCSV = (type) => {
-    let csvContent;
-    let fileName;
-
-    if (type === "basic") {
-      csvContent = `Name,Type,Purchase Price,Selling Price,Tax Inclusive,Is Active
-"Widget A",product,50.00,100.00,true,true
-"Service B",service,0.00,200.00,false,true
-"Widget C",product,75.00,150.00,true,false`;
-      fileName = "basic_item_import_template.csv";
-    } else {
-      csvContent = `Name,Type,Purchase Price,Selling Price,Tax Inclusive,Is Active,SKU,Category,Description
-"Widget A",product,50.00,100.00,true,true,SKU123,Electronics,"High-quality widget for industrial use"
-"Service B",service,0.00,200.00,false,true,SVC456,Consulting,"Professional consulting service"
-"Widget C",product,75.00,150.00,true,false,SKU789,Hardware,"Durable hardware component"`;
-      fileName = "extended_item_import_template.csv";
-    }
+  // Single basic template — same "one template with the required columns"
+  // pattern as Companies' ImportClients.jsx. Two rows share PUR-001 to
+  // demonstrate a multi-item purchase grouping into one record.
+  const downloadSampleCSV = () => {
+    const csvContent = `Purchase Number,Vendor Name,Item Name,Quantity,Unit Price,Status,Notes
+PUR-001,ABC Suppliers,Laptop,10,50000,Received,"Delivered in full"
+PUR-001,ABC Suppliers,Mouse,10,1000,Received,"Delivered in full"
+PUR-002,XYZ Traders,Office Chair,5,3500,Draft,`;
+    const fileName = "purchase_import_template.csv";
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
@@ -308,10 +274,9 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="p-6 overflow-y-auto">
-            {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold font-sf text-gray-900">
-                Import Items from CSV
+                Import Purchases from CSV
               </h2>
               <button
                 onClick={handleClose}
@@ -322,7 +287,6 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
               </button>
             </div>
 
-            {/* Loading Indicator */}
             {loading && (
               <div className="mb-6">
                 <div className="bg-gray-200 rounded-full h-3 w-full overflow-hidden">
@@ -341,7 +305,6 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
               </div>
             )}
 
-            {/* File Upload Area */}
             <div
               className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors mb-6 font-inter ${
                 dragActive
@@ -383,11 +346,11 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
                   onChange={(e) => handleFileChange(e.target.files[0])}
                   accept=".csv,.xlsx,.xls"
                   className="hidden"
-                  id="file-upload-import"
+                  id="file-upload-purchase-import"
                   disabled={loading}
                 />
                 <label
-                  htmlFor="file-upload-import"
+                  htmlFor="file-upload-purchase-import"
                   className={`bg-blue-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 cursor-pointer transition-colors shadow-sm ${
                     loading ? "opacity-50 cursor-not-allowed" : ""
                   }`}
@@ -397,14 +360,13 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
               </div>
             </div>
 
-            {/* Download Sample CSV Links */}
             <div className="mb-6 font-inter">
               <h4 className="text-sm font-semibold text-gray-900 mb-3">
                 Download Sample Templates
               </h4>
               <div className="flex space-x-4">
                 <button
-                  onClick={() => downloadSampleCSV("basic")}
+                  onClick={downloadSampleCSV}
                   className="flex items-center text-sm text-blue-600 hover:text-blue-800 transition-colors cursor-pointer bg-blue-50 px-3 py-2 rounded-lg"
                   disabled={loading}
                 >
@@ -414,7 +376,6 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
               </div>
             </div>
 
-            {/* Instructions */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 font-inter">
               <h4 className="text-sm font-semibold text-gray-900 mb-2">
                 Import Instructions:
@@ -423,20 +384,20 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
                 <li>
                   • Your CSV should include column headers in the first row
                 </li>
-                <li>• Required field: Name</li>
+                <li>• Required fields: Vendor Name, Item Name</li>
                 <li>
-                  • Type should be "product" or "service" (defaults to
-                  "product")
+                  • Rows with the same Purchase Number and Vendor Name are
+                  grouped into one purchase with multiple line items
                 </li>
-                <li>• Prices should be numeric values</li>
+                <li>• Leave Purchase Number blank to auto-generate one per row</li>
+                <li>• Quantity and Unit Price should be numeric values</li>
                 <li>
-                  • Boolean fields (Tax Inclusive, Is Active) accept:
-                  true/false, 1/0, yes/no
+                  • Status should be one of: Draft, Pending, Received,
+                  Partial, Cancelled (defaults to Draft)
                 </li>
               </ul>
             </div>
 
-            {/* Alerts */}
             {error && (
               <div className="mb-4 p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg flex items-center font-inter">
                 <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
@@ -450,7 +411,6 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
               </div>
             )}
 
-            {/* Action Buttons */}
             <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-100 mt-2 font-inter">
               <button
                 onClick={handleClose}
@@ -465,8 +425,7 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
           </div>
         </div>
 
-        {/* Field Mapping Modal */}
-        <ItemFieldMappingModal
+        <PurchaseFieldMappingModal
           isOpen={showMapping}
           onClose={() => setShowMapping(false)}
           csvHeaders={csvHeaders}
@@ -478,4 +437,4 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
   );
 }
 
-export default ImportItems;
+export default ImportPurchases;

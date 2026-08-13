@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import API from "../services/api";
 import PurchaseForm from "../components/purchase/PurchaseForm";
 import PurchasePreview from "../components/purchase/PurchasePreview";
+import ImportPurchases from "../components/purchase/ImportPurchases";
 import BulkActions from "../components/BulkActions";
-import { useNavigate } from "react-router-dom";
 import {
   ChevronUp,
   ChevronDown,
@@ -12,28 +13,61 @@ import {
   ShoppingCart,
   Edit2,
   Trash2,
-  Truck,
-  IndianRupee,
-  Filter,
-  Calendar,
   MoreVertical,
   CheckSquare,
   X,
   Plus,
   Eye,
+  EyeOff,
   Download,
-  ChevronDown as SelectChevron,
+  Filter,
+  Pin,
+  PinOff,
+  Settings,
+  Upload,
+  Video,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import logo from "/DataCircles.png";
+import TableSkeletonRows from "../components/common/TableSkeletonRows";
+import Skeleton from "../components/common/Skeleton";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
-import VideoTutorialButton from "../components/VideoTutorialButton";
 import AppToaster from "../components/AppToaster";
 import ExportModal from "../components/common/ExportModal";
+import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
+import { useColumnSettings } from "../hooks/useColumnSettings";
+import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
+import HighlightText from "../components/common/HighlightText";
+import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+  createColumnHelper,
+} from "@tanstack/react-table";
 
 import SearchIcon from "../components/common/SearchIcon";
+
+// The app is rendered inside #root which carries a CSS `zoom` (0.75 on desktop).
+// getBoundingClientRect() returns UNSCALED layout coordinates, while portal overlays
+// mounted on document.body render in visual (un-zoomed) space and mouse clientX/Y are
+// visual too. So any rect-derived position/size fed to a body-portal must be divided
+// by this ancestor zoom factor to line up on screen. (Same helper as Companies.jsx /
+// PurchaseOrderPage.jsx.)
+const getAncestorZoom = (el) => {
+  let z = 1;
+  let node = el;
+  while (node && node.nodeType === 1) {
+    const cz = parseFloat(getComputedStyle(node).zoom);
+    if (cz && !Number.isNaN(cz)) z *= cz;
+    node = node.parentElement;
+  }
+  return z || 1;
+};
+
 const PurchasePage = () => {
+  const isSearchOverlayOpen = useSearchOverlayOpen();
   const [vendors, setVendors] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -45,12 +79,54 @@ const PurchasePage = () => {
   const [selectedPurchase, setSelectedPurchase] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef(null);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const filterMenuRef = useRef(null);
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const tableScrollRef = useRef(null);
+
+  // First-load skeleton only, same reasoning as Companies.jsx / PurchaseOrderPage.jsx:
+  // once the page has loaded once, a search/filter that narrows results to zero must
+  // NOT re-skeleton the toolbar.
+  const hasLoadedOnceRef = useRef(false);
+  const showLoadingSkeleton = loading && purchases.length === 0 && !hasLoadedOnceRef.current;
+  // Signal the top progress bar on EVERY fetch, not just the skeleton case —
+  // same as Companies.jsx.
+  useTopLoadingSignal(loading);
 
   // Bulk Selection
   const [selectedPurchases, setSelectedPurchases] = useState([]);
-  const [selectionMode, setSelectionMode] = useState(false);
+  const selectedPurchasesSet = useMemo(() => new Set(selectedPurchases), [selectedPurchases]);
+  const [selectionMode, setSelectionMode] = useState(true);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
+
+  // Double-click-to-type a page number in the pagination bar (mirrors Companies.jsx).
+  const [editingPage, setEditingPage] = useState(false);
+  const [pageInput, setPageInput] = useState("");
+
+  // Delays the bulk-strip's unmount so it can play the slide-out-right exit
+  // animation on deselect (mirrors Companies.jsx / PurchaseOrderPage.jsx).
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    const active = selectionMode && selectedPurchases.length > 0;
+    if (active) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [selectionMode, selectedPurchases.length]);
 
   // Delete Modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -59,18 +135,41 @@ const PurchasePage = () => {
   // Video Tutorial
   const [showVideoTutorial, setShowVideoTutorial] = useState(false);
 
-  // Dropdown
-  const [showDropdown, setShowDropdown] = useState(null);
-  const dropdownRef = useRef(null);
+  // Row actions (⋮) menu — portaled to document.body, viewport-aware, same
+  // pattern as Companies.jsx / PurchaseOrderPage.jsx.
+  const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const [rowActionsPos, setRowActionsPos] = useState(null);
+  const rowActionsRef = useRef(null);
 
-  const navigate = useNavigate();
+  // Column header menu (Pin/Sort/Hide) — also portaled.
+  const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
+  const [columnMenuPos, setColumnMenuPos] = useState(null);
+  const columnMenuRef = useRef(null);
+
+  // Pinned columns: [{ key, side: 'left' | 'right' }]
+  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const pinColumnToSide = (colKey, side) => {
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colKey), { key: colKey, side }]);
+  };
+  const unpinColumn = (colKey) => {
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colKey));
+  };
+  const getColumnPinSide = (colKey) => pinnedColumns.find((p) => p.key === colKey)?.side || null;
+
+  // Column drag-to-reorder state.
+  const [columnSizing, setColumnSizing] = useState({});
+  const [draggedColKey, setDraggedColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
+  const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
 
   // Pagination
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 0,
     totalCount: 0,
-    limit: 10,
+    limit: 50,
     hasNextPage: false,
     hasPrevPage: false,
   });
@@ -96,24 +195,12 @@ const PurchasePage = () => {
     { key: "notes", label: "Notes" },
   ];
 
-  // Click outside for action dropdown
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setShowDropdown(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   const handleSelectPurchase = (purchaseId) => {
     setSelectedPurchases((prev) =>
       prev.includes(purchaseId)
         ? prev.filter((id) => id !== purchaseId)
         : [...prev, purchaseId],
     );
-    setSelectionMode(true);
   };
 
   const handleSelectAll = () => {
@@ -122,13 +209,33 @@ const PurchasePage = () => {
     } else {
       setSelectedPurchases(purchases.map((p) => p._id));
     }
-    setSelectionMode(true);
   };
 
   const exitSelectionMode = () => {
-    setSelectionMode(false);
+    setSelectionMode(true);
     setSelectedPurchases([]);
     setShowBulkActions(false);
+  };
+
+  // "Select All" grabs every purchase ID matching the current search/filter
+  // straight from the database (not just the loaded page). "Deselect All" is
+  // its counterpart: it doesn't clear the selection outright (that's what
+  // "Cancel" does) — it steps back down to only the rows on the current
+  // page. Same pattern as Companies.jsx.
+  const handleSelectAllAcrossPages = async () => {
+    try {
+      const params = new URLSearchParams({ allIds: "true" });
+      if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
+      if (filterStatus) params.append("status", filterStatus);
+      const res = await API.get(`/purchases/pagination?${params.toString()}`);
+      setSelectedPurchases(res.data.ids || []);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to select all rows");
+    }
+  };
+
+  const handleDeselectAllExtra = () => {
+    setSelectedPurchases(purchases.map((p) => p._id));
   };
 
   // Debounce search
@@ -137,8 +244,13 @@ const PurchasePage = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Reset selection on filter/search/page change
+  // Reset selection + page on filter/search change
+  const skipInitialReset = useRef(true);
   useEffect(() => {
+    if (skipInitialReset.current) {
+      skipInitialReset.current = false;
+      return;
+    }
     exitSelectionMode();
     setPagination((prev) => ({ ...prev, currentPage: 1 }));
   }, [debouncedSearchTerm, filterStatus]);
@@ -146,6 +258,7 @@ const PurchasePage = () => {
   // Fetch purchases
   useEffect(() => {
     fetchPurchases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     pagination.currentPage,
     pagination.limit,
@@ -162,7 +275,7 @@ const PurchasePage = () => {
     try {
       const res = await API.get("/vendors");
       setVendors(res.data.vendors || res.data || []);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load vendors");
     }
   };
@@ -185,6 +298,7 @@ const PurchasePage = () => {
         ...prev,
         ...res.data.pagination,
       }));
+      hasLoadedOnceRef.current = true;
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to load purchases");
       setPurchases([]);
@@ -229,20 +343,6 @@ const PurchasePage = () => {
     } finally {
       setShowDeleteModal(false);
       setPurchaseToDelete(null);
-    }
-  };
-
-  const handleStatusChange = async (id, status) => {
-    try {
-      await API.put(`/purchases/${id}/status`, { status });
-      fetchPurchases();
-      toast.success("Status updated");
-    } catch (err) {
-      if (err.response?.status === 402) {
-        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
-      } else {
-        toast.error(err.response?.data?.error || "Failed to update status");
-      }
     }
   };
 
@@ -311,40 +411,613 @@ const PurchasePage = () => {
     }
   };
 
-  const handleSort = (key) => {
-    setSortConfig((prev) => ({
-      key,
-      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
-    }));
-    setPagination((prev) => ({ ...prev, currentPage: 1 }));
+  const handlePageChange = (page) => {
+    if (
+      page >= 1 &&
+      page <= pagination.totalPages &&
+      page !== pagination.currentPage
+    ) {
+      setPagination((prev) => ({ ...prev, currentPage: page }));
+    }
   };
 
-  const SortableHeader = ({ field, children, className = "" }) => (
-    <th
-      onClick={() => handleSort(field)}
-      className={`px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border border-gray-200 cursor-pointer hover:bg-gray-100 select-none transition-colors ${className}`}
-    >
-      <div className="flex items-center gap-2">
-        {children}
-        <div className="flex flex-col">
-          <ChevronUp
-            className={`w-3 h-3 ${
-              sortConfig.key === field && sortConfig.direction === "asc"
-                ? "text-blue-600"
-                : "text-gray-400"
-            }`}
-          />
-          <ChevronDown
-            className={`w-3 h-3 -mt-1 ${
-              sortConfig.key === field && sortConfig.direction === "desc"
-                ? "text-blue-600"
-                : "text-gray-400"
-            }`}
-          />
-        </div>
-      </div>
-    </th>
+  const handleLimitChange = (limit) => {
+    setPagination((prev) => ({ ...prev, limit, currentPage: 1 }));
+  };
+
+  // ---------------------------------------------------------------------
+  // Column model — same generic pin/reorder/visibility system as Companies.jsx
+  // and PurchaseOrderPage.jsx, persisted per-module under the "purchases" key.
+  // ---------------------------------------------------------------------
+  const defaultColumns = useMemo(
+    () => [
+      {
+        key: "purchaseNumber",
+        label: "Purchase Number",
+        visible: true,
+        order: 0,
+        required: true,
+        sortable: true,
+        sortKey: "purchaseNumber",
+      },
+      {
+        key: "vendor",
+        label: "Vendor",
+        visible: true,
+        order: 1,
+        sortable: true,
+        sortKey: "vendor.name",
+      },
+      {
+        key: "grandTotal",
+        label: "Amount",
+        visible: true,
+        order: 2,
+        sortable: true,
+        sortKey: "totalAmount",
+      },
+      {
+        key: "status",
+        label: "Status",
+        visible: true,
+        order: 3,
+        sortable: true,
+        sortKey: "status",
+      },
+      {
+        key: "createdAt",
+        label: "Date",
+        visible: true,
+        order: 4,
+        sortable: true,
+        sortKey: "createdAt",
+      },
+    ],
+    [],
   );
+
+  const { columns, saveColumns, getVisibleColumns } = useColumnSettings(
+    "purchases",
+    defaultColumns,
+  );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const visibleColumns = useMemo(() => getVisibleColumns(), [columns]);
+
+  const getFieldValue = (p, key) => {
+    if (key === "purchaseNumber") return p.purchaseNumber || "";
+    if (key === "vendor") return p.vendor?.name || "";
+    if (key === "grandTotal")
+      return `₹${(p.grandTotal ?? 0).toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+    if (key === "status") return p.status || "";
+    if (key === "createdAt")
+      return p.createdAt ? new Date(p.createdAt).toLocaleDateString("en-IN") : "";
+    return "";
+  };
+
+  const startColumnDrag = (e, colId) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+
+    const th = e.currentTarget;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
+
+    const dragState = { started: false, offsetX: 0, offsetY: 0, zGhost: 1 };
+
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const visualTop = clientY - dragState.offsetY;
+      const visualLeft = clientX - dragState.offsetX;
+      el.style.top = `${visualTop / dragState.zGhost}px`;
+      el.style.left = `${visualLeft / dragState.zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / dragState.zGhost}px`;
+    };
+
+    const updateDragOver = (clientX, clientY) => {
+      const elAtPoint = document.elementFromPoint(clientX, clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+
+    const beginDrag = () => {
+      dragState.started = true;
+      window.getSelection?.()?.removeAllRanges();
+
+      const rect = th.getBoundingClientRect();
+      const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
+      const previewRows = purchases.map((p) => getFieldValue(p, colId) || "—");
+      dragState.zGhost = getAncestorZoom(document.body);
+      dragState.offsetX = startX - rect.left;
+      dragState.offsetY = startY - rect.top;
+
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX: dragState.offsetX,
+        offsetY: dragState.offsetY,
+        width: rect.width / dragState.zGhost,
+        height: rect.height / dragState.zGhost,
+      });
+
+      requestAnimationFrame(() => positionGhost(startX, startY));
+    };
+
+    const handleMouseMove = (moveEvent) => {
+      if (!dragState.started) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        e.preventDefault();
+        beginDrag();
+      }
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      updateDragOver(moveEvent.clientX, moveEvent.clientY);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragState.started) return;
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) {
+        handleColumnReorder(colId, overKey);
+      }
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    if (!draggedKey || draggedKey === targetKey) return;
+    const sorted = [...columns].sort((a, b) => a.order - b.order);
+    const visibleSorted = sorted.filter((c) => c.visible);
+    const draggedIdx = visibleSorted.findIndex((c) => c.key === draggedKey);
+    const targetIdx = visibleSorted.findIndex((c) => c.key === targetKey);
+    if (draggedIdx === -1 || targetIdx === -1) return;
+
+    const reorderedVisible = [...visibleSorted];
+    const [moved] = reorderedVisible.splice(draggedIdx, 1);
+    reorderedVisible.splice(targetIdx, 0, moved);
+
+    let visibleCursor = 0;
+    const newColumns = sorted
+      .map((c) => (c.visible ? reorderedVisible[visibleCursor++] : c))
+      .map((c, idx) => ({ ...c, order: idx }));
+
+    saveColumns(newColumns);
+  };
+
+  const columnHelper = createColumnHelper();
+
+  const renderRowActionsMenu = (p) => {
+    const isOpen = openRowActionsId === p._id;
+    return (
+      <div
+        className="relative flex-shrink-0"
+        ref={isOpen ? rowActionsRef : null}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isOpen) {
+              setOpenRowActionsId(null);
+              setRowActionsPos(null);
+              return;
+            }
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 160;
+            const MARGIN = 8;
+            // 3 items (View, Edit, Delete) + one divider + container padding.
+            const MENU_H = 148;
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const viewportH = window.innerHeight / zMenu;
+            const viewportW = window.innerWidth / zMenu;
+            const top = rect.bottom / zMenu + 4;
+            const bottomAnchor = rect.top / zMenu - 4;
+
+            const openUp = viewportH - top < MENU_H + MARGIN;
+            let calcTop = openUp ? bottomAnchor - MENU_H : top;
+            calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+            calcLeft = Math.max(calcLeft, MARGIN);
+
+            setRowActionsPos({ top: calcTop, left: calcLeft });
+            setOpenRowActionsId(p._id);
+          }}
+          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+          title="More actions"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+        {isOpen && rowActionsPos && createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[9998]"
+              onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }}
+            />
+            <div
+              style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+              className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                  handleView(p);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                View
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                  handleEdit(p);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                Edit
+              </button>
+              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                  handleDelete(p._id);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
+                Delete
+              </button>
+            </div>
+          </>,
+          document.body,
+        )}
+      </div>
+    );
+  };
+
+  const tableColumns = useMemo(() => {
+    const cols = [];
+
+    // 1. Checkbox column
+    cols.push(
+      columnHelper.display({
+        id: "selection",
+        size: 60,
+        enableResizing: false,
+        header: () => (
+          <div className="flex justify-center items-center w-full">
+            <input
+              type="checkbox"
+              checked={
+                selectedPurchases.length === purchases.length &&
+                purchases.length > 0
+              }
+              onChange={handleSelectAll}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-center items-center gap-1 w-full">
+            <input
+              type="checkbox"
+              checked={selectedPurchasesSet.has(row.original._id)}
+              onChange={() => handleSelectPurchase(row.original._id)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
+      }),
+    );
+
+    // 2. Dynamic data columns, ordered pinned-left -> unpinned -> pinned-right.
+    const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+    const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+    const leftPinnedFields = visibleColumns.filter((vc) => leftPinnedKeys.includes(vc.key));
+    const rightPinnedFields = visibleColumns.filter((vc) => rightPinnedKeys.includes(vc.key));
+    const unpinnedFields = visibleColumns.filter(
+      (vc) => !leftPinnedKeys.includes(vc.key) && !rightPinnedKeys.includes(vc.key),
+    );
+    const orderedFields = [...leftPinnedFields, ...unpinnedFields, ...rightPinnedFields];
+    const lastColumnKey = orderedFields[orderedFields.length - 1]?.key;
+
+    orderedFields.forEach((vc) => {
+      cols.push(
+        columnHelper.accessor((row) => getFieldValue(row, vc.key), {
+          id: vc.key,
+          size: vc.key === "purchaseNumber" ? 220 : vc.key === "vendor" ? 220 : 150,
+          header: () => {
+            const isSortable = vc.sortable !== false;
+            const pinSide = getColumnPinSide(vc.key);
+            const isMenuOpen = openColumnMenuKey === vc.key;
+
+            return (
+              <div className="flex items-center justify-between w-full group">
+                <span className="truncate flex-1 min-w-0 flex items-center gap-1.5" title={vc.label}>
+                  <span className="truncate">{vc.label}</span>
+                  {pinSide && (
+                    <Pin
+                      size={12}
+                      className="text-blue-500 fill-blue-500 flex-shrink-0"
+                      style={{ transform: "rotate(45deg)" }}
+                    />
+                  )}
+                </span>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isMenuOpen) {
+                      setOpenColumnMenuKey(null);
+                      setColumnMenuPos(null);
+                      return;
+                    }
+                    const zMenu = getAncestorZoom(document.body);
+                    const MENU_W = 160;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const boundsRight = tableScrollRef.current?.getBoundingClientRect().right ?? window.innerWidth;
+                    let calcLeft = rect.right / zMenu - MENU_W;
+                    calcLeft = Math.min(calcLeft, boundsRight / zMenu - MENU_W - 8);
+                    calcLeft = Math.max(calcLeft, 8);
+                    setColumnMenuPos({ top: rect.bottom / zMenu + 4, left: calcLeft });
+                    setOpenColumnMenuKey(vc.key);
+                  }}
+                  className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                  title="Column options"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+
+                {isMenuOpen && columnMenuPos && createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColumnMenuKey(null); setColumnMenuPos(null); }} />
+                    <div
+                      ref={columnMenuRef}
+                      style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
+                      className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                    >
+                      <button
+                        onClick={() => {
+                          setOpenColumnMenuKey(null);
+                          setColumnMenuPos(null);
+                          pinSide === "left" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "left");
+                        }}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                      >
+                        {pinSide === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                        Pin to Left
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOpenColumnMenuKey(null);
+                          setColumnMenuPos(null);
+                          pinSide === "right" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "right");
+                        }}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                      >
+                        {pinSide === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                        Pin to Right
+                      </button>
+
+                      {isSortable && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setOpenColumnMenuKey(null);
+                              setColumnMenuPos(null);
+                              setSortConfig({ key: vc.sortKey || vc.key, direction: "asc" });
+                              setPagination((prev) => ({ ...prev, currentPage: 1 }));
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                            Sort Ascending
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpenColumnMenuKey(null);
+                              setColumnMenuPos(null);
+                              setSortConfig({ key: vc.sortKey || vc.key, direction: "desc" });
+                              setPagination((prev) => ({ ...prev, currentPage: 1 }));
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                            Sort Descending
+                          </button>
+                        </>
+                      )}
+
+                      <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+
+                      <button
+                        disabled={vc.required}
+                        onClick={() => {
+                          if (vc.required) return;
+                          setOpenColumnMenuKey(null);
+                          setColumnMenuPos(null);
+                          saveColumns(
+                            columns.map((c) => (c.key === vc.key ? { ...c, visible: false } : c)),
+                          );
+                        }}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${vc.required
+                          ? "text-gray-300 cursor-not-allowed"
+                          : "text-[#161618] hover:bg-gray-50"
+                          }`}
+                      >
+                        <EyeOff className={`w-3.5 h-3.5 ${vc.required ? "text-gray-300" : "text-[#1C1B1F]"}`} />
+                        Hide Column
+                      </button>
+                    </div>
+                  </>,
+                  document.body,
+                )}
+              </div>
+            );
+          },
+          cell: ({ row }) => {
+            const p = row.original;
+            let baseContent;
+
+            if (vc.key === "purchaseNumber") {
+              baseContent = (
+                <div className="flex items-center min-w-0 flex-1 pr-4">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleView(p);
+                    }}
+                    className="text-[#0085FF] font-semibold hover:underline truncate transition-all duration-150 ease-out group-hover:text-[#004CFF] min-w-0 text-left"
+                    title={p.purchaseNumber}
+                  >
+                    <HighlightText text={p.purchaseNumber || "N/A"} query={searchTerm} />
+                  </button>
+                </div>
+              );
+            } else if (vc.key === "vendor") {
+              baseContent = (
+                <div className="truncate text-sm font-semibold text-gray-900" title={p.vendor?.name}>
+                  {p.vendor?.name ? <HighlightText text={p.vendor.name} query={searchTerm} /> : "—"}
+                </div>
+              );
+            } else if (vc.key === "grandTotal") {
+              baseContent = (
+                <div className="truncate text-sm font-medium text-gray-700">
+                  ₹{(p.grandTotal ?? 0).toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </div>
+              );
+            } else if (vc.key === "status") {
+              baseContent = (
+                <span
+                  className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeColor(p.status)}`}
+                >
+                  {p.status}
+                </span>
+              );
+            } else if (vc.key === "createdAt") {
+              baseContent = (
+                <div className="truncate text-sm text-gray-600">
+                  {p.createdAt ? new Date(p.createdAt).toLocaleDateString("en-IN") : "—"}
+                </div>
+              );
+            }
+
+            // Hover quick-actions (Eye/Edit/Trash) live only on the primary
+            // (purchaseNumber) column; the row's ⋮ menu is appended to
+            // whichever column currently sits last — pin/drag can move that
+            // around, same as Companies.jsx — instead of a separate fixed
+            // column.
+            const withHoverActions = vc.key === "purchaseNumber" ? (
+              <div className="flex items-center justify-between w-full group relative">
+                {baseContent}
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-150 ease-out pointer-events-none group-hover:pointer-events-auto bg-white/80 backdrop-blur-[2px] rounded-lg">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleView(p);
+                    }}
+                    className="p-1.5 rounded-md bg-white shadow-sm border border-gray-200 hover:bg-blue-50 text-blue-600 transition-colors"
+                    title="Quick view"
+                  >
+                    <Eye size={15} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEdit(p);
+                    }}
+                    className="p-1.5 rounded-md hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
+                    title="Edit Purchase"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(p._id);
+                    }}
+                    className="p-1.5 rounded-md hover:bg-red-50 text-gray-500 hover:text-red-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
+                    title="Delete Purchase"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ) : baseContent;
+
+            if (vc.key === lastColumnKey) {
+              return (
+                <div className="flex items-center justify-between w-full gap-2">
+                  <div className="min-w-0 flex-1">{withHoverActions}</div>
+                  {renderRowActionsMenu(p)}
+                </div>
+              );
+            }
+            return withHoverActions;
+          },
+        }),
+      );
+    });
+
+    return cols;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    visibleColumns,
+    selectedPurchases,
+    selectedPurchasesSet,
+    purchases,
+    sortConfig,
+    pinnedColumns,
+    openRowActionsId,
+    openColumnMenuKey,
+    columnMenuPos,
+    searchTerm,
+  ]);
+
+  const table = useReactTable({
+    data: purchases,
+    columns: tableColumns,
+    state: { columnSizing },
+    onColumnSizingChange: setColumnSizing,
+    getCoreRowModel: getCoreRowModel(),
+    columnResizeMode: "onChange",
+    enableColumnResizing: true,
+  });
 
   const PaginationControls = () => {
     const {
@@ -360,52 +1033,20 @@ const PurchasePage = () => {
     const startItem = (currentPage - 1) * limit + 1;
     const endItem = Math.min(currentPage * limit, totalCount);
 
-    const getPageNumbers = () => {
-      const delta = 2;
-      const range = [];
-      const rangeWithDots = [];
-
-      for (
-        let i = Math.max(2, currentPage - delta);
-        i <= Math.min(totalPages - 1, currentPage + delta);
-        i++
-      ) {
-        range.push(i);
-      }
-
-      if (currentPage - delta > 2) {
-        rangeWithDots.push(1, "...");
-      } else {
-        rangeWithDots.push(1);
-      }
-
-      rangeWithDots.push(...range);
-
-      if (currentPage + delta < totalPages - 1) {
-        rangeWithDots.push("...", totalPages);
-      } else {
-        rangeWithDots.push(totalPages);
-      }
-
-      return rangeWithDots.filter(
-        (item, index, arr) => index === 0 || arr[index - 1] !== item,
-      );
-    };
-
     return (
-      <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200">
+      <div className="flex items-center justify-between w-full px-4 lg:px-6">
         <div className="flex-1 flex justify-between sm:hidden">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={!hasPrevPage}
-            className="btn-pagination"
+            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Previous
           </button>
           <button
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={!hasNextPage}
-            className="btn-pagination ml-3"
+            className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Next
           </button>
@@ -413,22 +1054,25 @@ const PurchasePage = () => {
 
         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
           <div className="flex items-center space-x-2">
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-gray-700 font-inter">
               Showing <span className="font-semibold">{startItem}</span> to{" "}
               <span className="font-semibold">{endItem}</span> of{" "}
               <span className="font-semibold">{totalCount}</span> results
             </p>
-            <select
-              value={limit}
-              onChange={(e) => handleLimitChange(parseInt(e.target.value))}
-              className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
-            >
-              {[10, 20, 50, 100].map((v) => (
-                <option key={v} value={v}>
-                  {v} per page
-                </option>
-              ))}
-            </select>
+            <div className="relative ml-2">
+              <select
+                value={limit}
+                onChange={(e) => handleLimitChange(parseInt(e.target.value))}
+                className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
+              >
+                <option value={10}>10 per page</option>
+                <option value={20}>20 per page</option>
+                <option value={50}>50 per page</option>
+                <option value={100}>100 per page</option>
+                <option value={150}>150 per page</option>
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -439,23 +1083,74 @@ const PurchasePage = () => {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            {getPageNumbers().map((num, i) =>
-              num === "..." ? (
-                <span key={i} className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none">
-                  ....
-                </span>
-              ) : (
-                <button
-                  key={num}
-                  onClick={() => handlePageChange(num)}
-                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
-                    num === currentPage ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {num}
-                </button>
-              ),
-            )}
+
+            {/* first ... current ... last — same pattern as Companies.jsx, with
+                double-click-to-type a page number on the current-page pill. */}
+            {(() => {
+              const commitPage = () => {
+                const n = parseInt(pageInput, 10);
+                if (!Number.isNaN(n)) handlePageChange(Math.min(Math.max(n, 1), totalPages));
+                setEditingPage(false);
+              };
+              const items = [1];
+              if (currentPage > 2) items.push("left-dots");
+              if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
+              if (currentPage < totalPages - 1) items.push("right-dots");
+              if (totalPages > 1) items.push(totalPages);
+
+              return items.map((item, index) => {
+                if (item === "left-dots" || item === "right-dots") {
+                  return (
+                    <span
+                      key={`${item}-${index}`}
+                      className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none"
+                    >
+                      ....
+                    </span>
+                  );
+                }
+                const isCurrent = item === currentPage;
+                if (isCurrent && editingPage) {
+                  return (
+                    <input
+                      key="page-edit"
+                      autoFocus
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      value={pageInput}
+                      onChange={(e) => setPageInput(e.target.value)}
+                      onBlur={commitPage}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitPage();
+                        if (e.key === "Escape") setEditingPage(false);
+                      }}
+                      className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                  );
+                }
+                return (
+                  <button
+                    key={`page-${item}`}
+                    onClick={() => handlePageChange(item)}
+                    onDoubleClick={() => {
+                      if (isCurrent) {
+                        setPageInput(String(currentPage));
+                        setEditingPage(true);
+                      }
+                    }}
+                    title={isCurrent ? "Double-click to type a page number" : undefined}
+                    className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${isCurrent
+                      ? "bg-blue-600 text-white"
+                      : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                      }`}
+                  >
+                    {item}
+                  </button>
+                );
+              });
+            })()}
+
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={!hasNextPage}
@@ -469,24 +1164,8 @@ const PurchasePage = () => {
     );
   };
 
-  const handlePageChange = (page) => {
-    if (
-      page >= 1 &&
-      page <= pagination.totalPages &&
-      page !== pagination.currentPage
-    ) {
-      setPagination((prev) => ({ ...prev, currentPage: page }));
-      exitSelectionMode();
-    }
-  };
-
-  const handleLimitChange = (limit) => {
-    setPagination((prev) => ({ ...prev, limit, currentPage: 1 }));
-    exitSelectionMode();
-  };
-
   return (
-    <>
+    <div className="-mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-4">
       <AppToaster />
 
       <VideoTutorialModal
@@ -495,6 +1174,596 @@ const PurchasePage = () => {
         videoId={getVideoTutorial("purchases")?.videoId}
         title={getVideoTutorial("purchases")?.title}
       />
+
+      <ColumnSettingsPanel
+        isOpen={showColumnSettings}
+        onClose={() => setShowColumnSettings(false)}
+        columns={columns}
+        onSave={saveColumns}
+        moduleName="Purchases"
+      />
+
+      <ImportPurchases
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        onImportSuccess={() => {
+          fetchPurchases();
+          toast.success("Purchases imported successfully");
+        }}
+      />
+
+      {/* Form & Preview */}
+      {showForm && (
+        <PurchaseForm
+          editingPurchase={editingPurchase}
+          vendors={vendors}
+          onRequestClose={() => {
+            setShowForm(false);
+            setEditingPurchase(null);
+          }}
+          onSuccess={handleSuccess}
+          onError={(msg) => toast.error(msg)}
+        />
+      )}
+
+      {showPreview && (
+        <PurchasePreview
+          purchase={selectedPurchase}
+          isOpen={showPreview}
+          onClose={() => setShowPreview(false)}
+          onEdit={() => {
+            setShowPreview(false);
+            handleEdit(selectedPurchase);
+          }}
+          onDelete={() => {
+            setShowPreview(false);
+            handleDelete(selectedPurchase._id);
+          }}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
+                Delete Purchase
+              </h3>
+              <p className="text-sm text-gray-500 font-inter mb-6">
+                Are you sure you want to delete this purchase? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setPurchaseToDelete(null);
+                  }}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content Card */}
+      <div className="bg-white overflow-visible">
+        {/* Toolbar (Title + Search + Buttons) */}
+        <div
+          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          style={{
+            left: "var(--sidebar-width, 0px)",
+            zIndex: 40,
+            minHeight: "64px",
+            maxHeight: "64px",
+            boxSizing: "border-box",
+          }}
+        >
+          {showBulkStrip ? (
+            <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
+              <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  <Download className="w-4 h-4 text-green-600" />
+                  Export
+                </button>
+                <button
+                  onClick={() => setShowBulkActions(true)}
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  <Edit2 className="w-4 h-4 text-blue-600" />
+                  Bulk Update
+                </button>
+                <button
+                  onClick={() => handleBulkDelete(selectedPurchases)}
+                  disabled={bulkLoading}
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+                >
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                  Delete
+                </button>
+                <button
+                  onClick={exitSelectionMode}
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  <X className="w-4 h-4" />
+                  Cancel
+                </button>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
+                  {selectedPurchases.length} purchase{selectedPurchases.length !== 1 ? "s" : ""} selected
+                </span>
+                <button
+                  onClick={handleSelectAllAcrossPages}
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  Select All
+                </button>
+                <button
+                  onClick={handleDeselectAllExtra}
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  <X className="w-4 h-4" />
+                  Deselect All
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 lg:gap-4 w-full h-full">
+              <div
+                className={`flex-shrink-0 flex flex-col justify-center gap-1.5 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[190px] opacity-100"}`}
+              >
+                {showLoadingSkeleton ? (
+                  <>
+                    <Skeleton width={110} height={18} />
+                    <Skeleton width={170} height={12} />
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Purchases</h1>
+                      <button
+                        type="button"
+                        onClick={() => setShowVideoTutorial(true)}
+                        className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 transition-all flex-shrink-0 shadow-sm"
+                        title="Watch Purchases Module Video Guide"
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
+                      Manage bills received from vendors
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {showLoadingSkeleton ? (
+                <div className="relative flex-1 flex items-center justify-end gap-3">
+                  <Skeleton width={40} height={40} shape="circle" />
+                  <Skeleton width={40} height={40} shape="circle" />
+                  <Skeleton width={150} height={40} shape="circle" />
+                </div>
+              ) : (
+                <>
+                  <div className="relative flex-1 min-w-0 flex items-center justify-end">
+                    <div
+                      className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
+                    >
+                      <SearchIcon
+                        className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
+                        onClick={() => {
+                          setIsSearchExpanded(true);
+                          searchInputRef.current?.focus();
+                        }}
+                      />
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onFocus={() => setIsSearchExpanded(true)}
+                        onBlur={() => {
+                          if (!searchTerm) setIsSearchExpanded(false);
+                        }}
+                        className={`w-full h-full pl-9 pr-9 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                        placeholder="Search by vendor or purchase number..."
+                      />
+                      {isSearchExpanded && searchTerm && (
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => setSearchTerm("")}
+                          aria-label="Clear search"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 rounded-full text-gray-900 hover:bg-gray-100 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions Group */}
+                  <div className="relative flex items-center gap-2 lg:gap-4 flex-shrink-0">
+                    {/* Status filter */}
+                <div className="hidden lg:block relative" ref={filterMenuRef}>
+                  <button
+                    title="Filter by status"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowFilterMenu((v) => !v);
+                    }}
+                    className={`relative flex items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${filterStatus
+                      ? "border-[#0085FF] text-[#0085FF]"
+                      : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
+                      }`}
+                  >
+                    <Filter className={`w-4 h-4 ${filterStatus ? "text-[#0085FF]" : "text-gray-800"}`} />
+                  </button>
+                  {showFilterMenu && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-0 mt-2 w-48 max-h-72 overflow-auto bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 animate-in fade-in zoom-in duration-200 origin-top-right"
+                    >
+                      <button
+                        onClick={() => {
+                          setFilterStatus("");
+                          setShowFilterMenu(false);
+                        }}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${!filterStatus ? "text-[#0085FF] font-medium" : "text-gray-700"
+                          }`}
+                      >
+                        All Status
+                      </button>
+                      {statusOptions.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => {
+                            setFilterStatus(s);
+                            setShowFilterMenu(false);
+                          }}
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 truncate ${filterStatus === s ? "text-[#0085FF] font-medium" : "text-gray-700"
+                            }`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Overflow menu: filter on mobile, Import, Export, Columns, Video Tutorial */}
+                <div className="relative" ref={moreMenuRef}>
+                  <button
+                    onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                    className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
+                    title="More options"
+                  >
+                    <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
+                    {filterStatus && (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
+                    )}
+                  </button>
+                  {isMoreMenuOpen && (
+                    <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
+                      <div className="lg:hidden px-3 py-2 space-y-1">
+                        <button
+                          onClick={() => {
+                            setFilterStatus("");
+                            setIsMoreMenuOpen(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-gray-50 ${!filterStatus ? "text-[#0085FF] font-medium" : "text-gray-700"}`}
+                        >
+                          All Status
+                        </button>
+                        {statusOptions.map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => {
+                              setFilterStatus(s);
+                              setIsMoreMenuOpen(false);
+                            }}
+                            className={`w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-gray-50 ${filterStatus === s ? "text-[#0085FF] font-medium" : "text-gray-700"}`}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                        <div className="border-t border-gray-100 my-1" />
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowImport(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <Upload className="w-4 h-4 text-gray-400" />
+                        Import
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowExportModal(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        disabled={selectedPurchases.length === 0}
+                        title={selectedPurchases.length === 0 ? "Select purchases to export" : "Export selected purchases"}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <Download className="w-4 h-4 text-gray-400" />
+                        Export
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowColumnSettings(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <Settings className="w-4 h-4 text-gray-400" />
+                        Columns
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowVideoTutorial(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <ShoppingCart className="w-4 h-4 text-gray-400" />
+                        Video Tutorial
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => {
+                    setEditingPurchase(null);
+                    setShowForm(true);
+                  }}
+                  className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
+                  title="New Purchase"
+                >
+                  <Plus className="w-4 h-4 flex-shrink-0" />
+                  <span className="hidden lg:inline">New Purchase</span>
+                </button>
+              </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div
+          ref={tableScrollRef}
+          className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
+          style={{
+            position: "fixed",
+            left: "var(--sidebar-width, 0px)",
+            right: 0,
+            bottom: !showLoadingSkeleton ? 64 : 0,
+          }}
+        >
+          <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || purchases.length > 0 ? "border-b" : ""}`}>
+            <table
+              className="w-full border-separate border-spacing-0 text-left"
+              style={{
+                minWidth: `${table.getTotalSize()}px`,
+                tableLayout: "fixed",
+              }}
+            >
+              {(() => {
+                const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+                const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+                const allHeaders = table.getHeaderGroups()[0]?.headers || [];
+                const leftPinnedInOrder = allHeaders
+                  .map((h) => h.column.id)
+                  .filter((id) => leftPinnedKeys.includes(id));
+                const rightPinnedInOrder = allHeaders
+                  .map((h) => h.column.id)
+                  .filter((id) => rightPinnedKeys.includes(id));
+                const lastLeftPinnedKey = leftPinnedInOrder.length > 0 ? leftPinnedInOrder[leftPinnedInOrder.length - 1] : null;
+                const firstRightPinnedKey = rightPinnedInOrder.length > 0 ? rightPinnedInOrder[0] : null;
+
+                const pinnedLeftOffsets = {};
+                let cumulativeLeft = 0;
+                allHeaders.forEach((h) => {
+                  const isLeftStickyCol = h.column.id === "selection" || leftPinnedKeys.includes(h.column.id);
+                  if (isLeftStickyCol) {
+                    pinnedLeftOffsets[h.column.id] = cumulativeLeft;
+                    cumulativeLeft += h.getSize();
+                  }
+                });
+
+                const pinnedRightOffsets = {};
+                let cumulativeRight = 0;
+                [...allHeaders].reverse().forEach((h) => {
+                  const isRightStickyCol = rightPinnedKeys.includes(h.column.id);
+                  if (isRightStickyCol) {
+                    pinnedRightOffsets[h.column.id] = cumulativeRight;
+                    cumulativeRight += h.getSize();
+                  }
+                });
+
+                return (
+                  <>
+                    <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
+                      {table.getHeaderGroups().map((headerGroup) => (
+                        <tr key={headerGroup.id}>
+                          {headerGroup.headers.map((header) => {
+                            const colId = header.column.id;
+                            const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                            const isRightSticky = rightPinnedKeys.includes(colId);
+                            const isSticky = isLeftSticky || isRightSticky;
+                            const isLeftBoundary = colId === lastLeftPinnedKey;
+                            const isRightBoundary = colId === firstRightPinnedKey;
+                            const boundaryShadowSide = isLeftBoundary ? "left" : isRightBoundary ? "right" : null;
+                            const isDraggable = colId !== "selection";
+                            const isDragging = draggedColKey === colId;
+                            const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+
+                            return (
+                              <th
+                                key={header.id}
+                                data-col-id={colId}
+                                onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
+                                style={{
+                                  width: header.getSize(),
+                                  position: isSticky ? "sticky" : "relative",
+                                  left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                  right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                  zIndex: isSticky ? 20 : 1,
+                                }}
+                                className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] last:border-r-0 transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                              >
+                                <div className="w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
+                                  {flexRender(
+                                    header.column.columnDef.header,
+                                    header.getContext(),
+                                  )}
+                                </div>
+                                {boundaryShadowSide && (
+                                  <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSide)} />
+                                )}
+
+                                {colId !== "selection" && header.column.getCanResize() && (
+                                  <div
+                                    data-resize-handle="true"
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                      header.getResizeHandler()(e);
+                                    }}
+                                    onTouchStart={header.getResizeHandler()}
+                                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
+                                  />
+                                )}
+                              </th>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </thead>
+
+                    <tbody className="bg-white">
+                      {showLoadingSkeleton ? (
+                        <TableSkeletonRows
+                          numRows={pagination.limit}
+                          columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")}
+                          hasCheckbox
+                        />
+                      ) : purchases.length === 0 ? (
+                        <tr>
+                          <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
+                            <ShoppingCart className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                            <p className="font-medium">No purchases found</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        table.getRowModel().rows.map((row) => (
+                          <tr
+                            key={row.id}
+                            className={`bg-white hover:bg-blue-50 transition-colors ${selectedPurchasesSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                          >
+                            {row.getVisibleCells().map((cell) => {
+                              const colId = cell.column.id;
+                              const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                              const isRightSticky = rightPinnedKeys.includes(colId);
+                              const isSticky = isLeftSticky || isRightSticky;
+                              const isLeftBoundary = colId === lastLeftPinnedKey;
+                              const isRightBoundary = colId === firstRightPinnedKey;
+                              const cellBoundaryShadowSide = isLeftBoundary ? "left" : isRightBoundary ? "right" : null;
+                              const isColDragging = draggedColKey === colId;
+
+                              return (
+                                <td
+                                  key={cell.id}
+                                  style={{
+                                    width: cell.column.getSize(),
+                                    position: isSticky ? "sticky" : "static",
+                                    left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                    right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                    zIndex: isSticky ? 10 : 1,
+                                  }}
+                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                                >
+                                  <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
+                                    {flexRender(
+                                      cell.column.columnDef.cell,
+                                      cell.getContext(),
+                                    )}
+                                  </div>
+                                  {cellBoundaryShadowSide && (
+                                    <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </>
+                );
+              })()}
+            </table>
+          </div>
+        </div>
+
+        {dragGhost && createPortal(
+          <div
+            ref={ghostElRef}
+            style={{
+              position: "fixed",
+              top: -9999,
+              left: -9999,
+              width: dragGhost.width,
+              zIndex: 10000,
+              pointerEvents: "none",
+            }}
+            className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+          >
+            <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+              <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+            </div>
+            {dragGhost.previewRows.map((rowVal, i) => (
+              <div key={i} className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0">
+                <span className="text-sm text-gray-700 truncate block">{rowVal}</span>
+              </div>
+            ))}
+          </div>,
+          document.body,
+        )}
+
+        {!showLoadingSkeleton && (
+          <div
+            className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
+            style={{
+              left: "var(--sidebar-width, 0px)",
+              height: 64,
+              filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
+            }}
+          >
+            <PaginationControls />
+          </div>
+        )}
+      </div>
 
       <BulkActions
         isOpen={showBulkActions}
@@ -517,337 +1786,7 @@ const PurchasePage = () => {
         exportUrl="/purchases/export-selected"
         fileName="Exported_Purchases.csv"
       />
-
-      <div className="">
-        {/* Header - Simplified */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold font-sf text-gray-900">
-            Purchases
-          </h1>
-          <p className="text-sm text-gray-500 font-inter">
-            Manage your purchases
-          </p>
-        </div>
-
-        {/* Form & Preview */}
-        {showForm && (
-          <PurchaseForm
-            editingPurchase={editingPurchase}
-            vendors={vendors}
-            onRequestClose={() => {
-              setShowForm(false);
-              setEditingPurchase(null);
-            }}
-            onSuccess={handleSuccess}
-            onError={(msg) => toast.error(msg)}
-          />
-        )}
-
-        {showPreview && (
-          <PurchasePreview
-            purchase={selectedPurchase}
-            isOpen={showPreview}
-            onClose={() => setShowPreview(false)}
-          />
-        )}
-
-        {/* Selection Banner */}
-        {selectionMode && selectedPurchases.length > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 flex items-center justify-between shadow-sm">
-            <div className="flex items-center gap-3">
-              <CheckSquare className="w-5 h-5 text-blue-600" />
-              <span className="text-blue-800 font-semibold font-inter">
-                {selectedPurchases.length} purchase
-                {selectedPurchases.length > 1 ? "s" : ""} selected
-              </span>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowBulkActions(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
-              >
-                <Edit2 className="w-4 h-4" />
-                Bulk Actions
-              </button>
-              <button
-                onClick={exitSelectionMode}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm flex items-center gap-2 hover:bg-gray-50"
-              >
-                <X className="w-4 h-4" />
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Search & Filter */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 font-inter shadow-sm">
-          <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
-            <div className="relative flex-1 w-full">
-              <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
-              <input
-                type="text"
-                placeholder="Search Purchases Order by Number or Vendor..."
-                className="font-inter w-full pl-10 pr-4 py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-
-            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-              <button
-                onClick={() => setShowExportModal(true)}
-                disabled={selectedPurchases.length === 0}
-                title={selectedPurchases.length === 0 ? "Select purchases to export" : "Export selected purchases"}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium text-sm px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <Download className="w-4 h-4" />
-                Export
-              </button>
-
-              <div className="relative">
-                <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium text-sm px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap">
-                  <Filter className="w-4 h-4" />
-                  All Status
-                  <SelectChevron className="w-3 h-3 ml-1" />
-                </button>
-                <div className="absolute inset-0 opacity-0 cursor-pointer">
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="w-full h-full cursor-pointer"
-                  >
-                    <option value="">All Status</option>
-                    {statusOptions.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  setEditingPurchase(null);
-                  setShowForm(true);
-                }}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg font-medium font-sf text-sm hover:bg-blue-700 transition shadow-sm whitespace-nowrap"
-              >
-                <Plus className="w-4 h-4" />
-                New Purchase
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Table */}
-        <div className="bg-white rounded-xl border border-gray-200 font-inter shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-collapse border border-gray-200">
-              <thead className="bg-white">
-                <tr>
-                  <th className="px-4 py-4 text-left w-12 border border-gray-200">
-                    <input
-                      type="checkbox"
-                      checked={
-                        selectedPurchases.length === purchases.length &&
-                        purchases.length > 0
-                      }
-                      onChange={handleSelectAll}
-                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    />
-                  </th>
-                  <SortableHeader field="purchaseNumber">
-                    # Purchase Number
-                  </SortableHeader>
-                  <SortableHeader field="vendor.name">Vendor</SortableHeader>
-                  <SortableHeader field="totalAmount">Amount</SortableHeader>
-                  <SortableHeader field="status">Status</SortableHeader>
-                  <SortableHeader field="createdAt">Date</SortableHeader>
-                  <th className="px-6 py-4 text-center w-20 text-xs font-semibold text-gray-600 uppercase border border-gray-200">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                {loading ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="text-center py-12 border border-gray-200"
-                    >
-                      <div className="flex flex-col items-center">
-                        <img
-                          src={logo}
-                          alt="Loading"
-                          className="animate-spin-slow w-12 h-12"
-                        />
-                        <p className="mt-3 text-gray-600 font-medium">
-                          Loading purchases...
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : purchases.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="text-center py-12 text-gray-500 border border-gray-200"
-                    >
-                      <ShoppingCart className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                      <p className="font-medium">No purchases found</p>
-                    </td>
-                  </tr>
-                ) : (
-                  purchases.map((p) => (
-                    <tr
-                      key={p._id}
-                      className={`hover:bg-gray-50 transition-colors ${
-                        selectedPurchases.includes(p._id) ? "bg-blue-50" : ""
-                      }`}
-                    >
-                      <td className="px-4 py-4 border border-gray-200">
-                        <input
-                          type="checkbox"
-                          checked={selectedPurchases.includes(p._id)}
-                          onChange={() => handleSelectPurchase(p._id)}
-                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                        />
-                      </td>
-                      <td className="px-6 py-4 border border-gray-200">
-                        <span className="text-sm font-semibold text-blue-600 block">
-                          {p.purchaseNumber || "N/A"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 border border-gray-200">
-                        <span className="text-sm font-bold text-gray-900 block">
-                          {p.vendor?.name || "N/A"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 border border-gray-200">
-                        <span className="text-sm font-medium text-gray-700 block">
-                          ₹
-                          {p.grandTotal?.toLocaleString("en-IN", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          }) || "0.00"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 border border-gray-200">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeColor(
-                            p.status,
-                          )}`}
-                        >
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 border border-gray-200">
-                        <span className="text-sm text-gray-600 block">
-                          {new Date(p.createdAt).toLocaleDateString("en-IN")}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 border border-gray-200 text-center relative">
-                        <div className="flex justify-center">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowDropdown(
-                                showDropdown === p._id ? null : p._id,
-                              );
-                            }}
-                            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
-
-                          {showDropdown === p._id && (
-                            <div
-                              ref={dropdownRef}
-                              className="absolute right-8 mt-2 top-0 flex flex-col w-40 bg-white border border-gray-200 rounded-lg shadow-xl z-50 text-left py-1 overflow-hidden"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <button
-                                onClick={() => {
-                                  handleView(p);
-                                  setShowDropdown(null);
-                                }}
-                                className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-                              >
-                                <Eye className="w-4 h-4 text-gray-500" /> View
-                              </button>
-                              <button
-                                onClick={() => {
-                                  handleEdit(p);
-                                  setShowDropdown(null);
-                                }}
-                                className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-                              >
-                                <Edit2 className="w-4 h-4 text-gray-500" /> Edit
-                              </button>
-                              <button
-                                onClick={() => {
-                                  handleDelete(p._id);
-                                  setShowDropdown(null);
-                                }}
-                                className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors border-t border-gray-100"
-                              >
-                                <Trash2 className="w-4 h-4" /> Delete
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {!loading && <PaginationControls />}
-        </div>
-
-        {/* Delete Confirmation Modal */}
-        {showDeleteModal && (
-          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[10003]">
-            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="bg-red-100 p-2 rounded-lg">
-                  <Trash2 className="w-5 h-5 text-red-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-800 font-sf">
-                  Delete Purchase
-                </h2>
-              </div>
-              <p className="text-gray-600 mb-6 font-inter">
-                Are you sure you want to delete this purchase? This action
-                cannot be undone.
-              </p>
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    setPurchaseToDelete(null);
-                  }}
-                  className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors font-inter font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium font-inter flex items-center gap-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </>
+    </div>
   );
 };
 

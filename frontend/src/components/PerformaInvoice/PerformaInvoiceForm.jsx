@@ -129,7 +129,7 @@ const ItemSearchSelect = ({
     (search) => {
       clearTimeout(debounceTimeout.current);
       debounceTimeout.current = setTimeout(() => {
-        fetchItems(search);
+        Promise.resolve(fetchItems(search)).finally(() => setLoading(false));
       }, 300);
     },
     [fetchItems]
@@ -165,7 +165,7 @@ const ItemSearchSelect = ({
     setIsOpen(true);
     if (items.length === 0) {
       setLoading(true);
-      fetchItems();
+      Promise.resolve(fetchItems()).finally(() => setLoading(false));
     }
   };
 
@@ -379,21 +379,12 @@ const PerformaInvoiceForm = ({
       const itemsWithVariants = res.data
         .filter((item) => item.isActive)
         .flatMap((item) => {
-          const baseItem = {
-            _id: item._id,
-            displayName: item.name,
-            name: item.name,
-            description: item.description || "",
-            sellingPrice: item.sellingPrice,
-            hsnSac: item.hsnSac || "",
-            type: item.type,
-            category: item.category || "",
-            primaryUnit: item.primaryUnit || "OTH OTHERS",
-            isVariant: false,
-            parentItemId: null,
-          };
-          const variants =
-            item.variants?.map((variant) => ({
+          // Same variant-only logic as PurchaseForm.jsx/PurchaseOrderForm.jsx:
+          // if the item has variants, only the variants are selectable (the
+          // parent is just a grouping, not something you'd actually bill);
+          // otherwise fall back to the item itself.
+          if (item.variants && item.variants.length > 0) {
+            return item.variants.map((variant) => ({
               _id: variant._id,
               displayName: `${item.name} - ${variant.name}`,
               name: variant.name,
@@ -406,8 +397,23 @@ const PerformaInvoiceForm = ({
                 variant.primaryUnit || item.primaryUnit || "OTH OTHERS",
               isVariant: true,
               parentItemId: item._id,
-            })) || [];
-          return [baseItem, ...variants];
+            }));
+          }
+          return [
+            {
+              _id: item._id,
+              displayName: item.name,
+              name: item.name,
+              description: item.description || "",
+              sellingPrice: item.sellingPrice,
+              hsnSac: item.hsnSac || "",
+              type: item.type,
+              category: item.category || "",
+              primaryUnit: item.primaryUnit || "OTH OTHERS",
+              isVariant: false,
+              parentItemId: null,
+            },
+          ];
         });
       setItems(itemsWithVariants);
     } catch (error) {
@@ -1205,7 +1211,7 @@ const PerformaInvoiceForm = ({
                           type="number"
                           placeholder="0"
                           min="0"
-                          step="1"
+                          step="0.01"
                           value={item.rate}
                           onChange={(e) => {
                             handleItemChange(index, "rate", e.target.value);
@@ -1246,7 +1252,7 @@ const PerformaInvoiceForm = ({
                                 placeholder="0"
                                 min="0"
                                 step={
-                                  item.discountType === "percentage" ? "1" : "1"
+                                  item.discountType === "percentage" ? "0.1" : "0.01"
                                 }
                                 value={item.discount}
                                 onChange={(e) => {
@@ -1308,7 +1314,7 @@ const PerformaInvoiceForm = ({
                               placeholder="0"
                               min="0"
                               step={
-                                item.discountType === "percentage" ? "1" : "1"
+                                item.discountType === "percentage" ? "0.1" : "0.01"
                               }
                               value={item.discount}
                               onChange={(e) => {
@@ -1388,7 +1394,7 @@ const PerformaInvoiceForm = ({
                   type="number"
                   placeholder="0"
                   min="0"
-                  step={form.discount.type === "percentage" ? "1" : "1"}
+                  step={form.discount.type === "percentage" ? "0.1" : "0.01"}
                   value={form.discount.value}
                   onChange={(e) => {
                     handleDiscountChange("value", e.target.value);

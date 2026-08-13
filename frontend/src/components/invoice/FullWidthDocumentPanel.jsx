@@ -424,6 +424,7 @@ const FullWidthDocumentPanel = ({
                       <input
                         type="number"
                         min="0"
+                        step="0.01"
                         value={item.rate}
                         onChange={(e) => updateItem(index, { rate: e.target.value })}
                         placeholder="0.00"
@@ -435,6 +436,7 @@ const FullWidthDocumentPanel = ({
                         <input
                           type="number"
                           min="0"
+                          step={item.discountType === "percentage" ? "0.1" : "0.01"}
                           value={item.discount}
                           onChange={(e) => {
                             const rawValue = e.target.value;

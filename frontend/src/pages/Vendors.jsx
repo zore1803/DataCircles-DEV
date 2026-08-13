@@ -37,7 +37,6 @@ import QuickVendorForm from "../components/vendor/QuickVendorForm";
 import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
 import { useLocation } from "react-router-dom";
 import ImportVendors from "../components/vendor/ImportVendors";
-import QuickItemDrawer from "../components/item/QuickItemDrawer";
 import toast from "react-hot-toast";
 import AppToaster from "../components/AppToaster";
 import HighlightText from "../components/common/HighlightText";
@@ -117,7 +116,6 @@ function Vendors() {
   const [debouncedFilterCompany, setDebouncedFilterCompany] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
-  const [showTestDrawer, setShowTestDrawer] = useState(false);
   const [editVendor, setEditVendor] = useState(null);
   const [selectedVendors, setSelectedVendors] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
@@ -1391,15 +1389,6 @@ function Vendors() {
           </div>
 
           <button
-            onClick={() => setShowTestDrawer(true)}
-            className="h-11 px-4 flex items-center justify-center gap-1.5 bg-purple-600 hover:bg-purple-700 rounded-full transition-colors flex-shrink-0 ml-1"
-          >
-            <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">
-              Test Item Drawer
-            </span>
-          </button>
-
-          <button
             onClick={() => {
               setEditVendor(null);
               setShowQuickAdd((v) => !v);
@@ -1438,15 +1427,6 @@ function Vendors() {
           }}
         />
       )}
-
-      <QuickItemDrawer
-        isOpen={showTestDrawer}
-        onClose={() => setShowTestDrawer(false)}
-        onSave={(data) => {
-          console.log("Saved Item Data:", data);
-          setShowTestDrawer(false);
-        }}
-      />
 
       {showImport && (
         <ImportVendors

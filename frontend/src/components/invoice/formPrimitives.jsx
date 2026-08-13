@@ -56,7 +56,7 @@ export const isAddressEmpty = (addr) =>
 export const AddressFieldsGroup = ({ label, value, onChange, disabled = false }) => {
   const safeValue = value || emptyAddress();
   return (
-    <div className="flex flex-col gap-3 p-4 rounded-2xl border border-slate-200 bg-[#FAFAFA] transition-all hover:bg-slate-50 hover:border-slate-300 w-full shadow-sm @md:col-span-2">
+    <div className="flex flex-col gap-3 w-full @md:col-span-2">
       <div className="flex items-center gap-2 mb-1">
         <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[#0085FF]">
           <MapPin className="w-3.5 h-3.5" />
