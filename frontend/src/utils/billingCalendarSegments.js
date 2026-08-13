@@ -1,7 +1,18 @@
 // utils/billingCalendarSegments.js
 
-const ZOOM_DAYS = { 3: 90, 6: 182, 12: 365 };
+// 24 added so the Annual branch's own renewal date has somewhere to land —
+// at 12M zoom, a handle dragged anywhere past early in the trial pushes the
+// Annual branch's +1-year end past the visible range, so it always shows
+// clipped with no renewal date. 2Y exists specifically to show that limit.
+const ZOOM_DAYS = { 1: 30, 3: 90, 6: 182, 12: 365, 24: 730 };
 
+// No content-based cap on `end` here — the 3M/6M/1Y control must always do
+// what it says, for every org, trial or not (a previous version capped the
+// range at a trial's end date regardless of the selected zoom, which fixed
+// one complaint — too much empty space by default — by silently breaking
+// another: the zoom buttons stopped doing anything at all). The fix for
+// "too much empty space for a short trial" belongs at the DEFAULT zoom
+// level the caller picks, not by overriding the user's explicit choice.
 export function computeCalendarRange(zoomMonths, now, earliestStart) {
   const horizonDays = ZOOM_DAYS[zoomMonths] || 90;
   const fallbackStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
@@ -27,6 +38,12 @@ const BASE_PLAN_MARKER_TYPES = [
   'BILLING_CYCLE_CHANGE_COMPLETED',
   'SUBSCRIPTION_CANCELLED',
   'SCHEDULE_CANCELLED',
+  // Super-admin trial actions (extend/shorten/end-early) now emit these —
+  // without listing them here they'd have a real BillingEvent but never
+  // show up as a marker on the Plan track, exactly the "invisible admin
+  // change" gap that was flagged and just fixed on the backend.
+  'TRIAL_ENDED',
+  'TRIAL_ADJUSTED',
 ];
 
 export function buildBasePlanSegments(history, projection) {
@@ -137,8 +154,21 @@ export function buildBasePlanSegments(history, projection) {
     });
   }
 
+  // Only a GENUINE lapse — no paid plan ever committed AND the trial isn't
+  // currently active — earns the "Action required" terminal segment.
+  // `veryLast.end != null` alone is NOT enough: the trial segment always
+  // carries a defined `end` (trial.endsAt), even while still active, so
+  // checking only for a defined end fires this the instant a trial starts
+  // (found live — screenshot showed "No active subscription" appearing
+  // immediately next to "Free Trial", both marked "you are here", on day
+  // one of a 7-day trial). A super admin can also start/extend/end a trial
+  // at any time (superAdminController.js) — none of that writes
+  // BillingEvent history, it mutates the Subscription document directly,
+  // so `projection.trial.active`/`endsAt` (read fresh on every fetch) is
+  // already correct for any such change without special-casing it here.
   const veryLast = segments[segments.length - 1];
-  if (veryLast && veryLast.end != null && !scheduledPlanChange) {
+  const genuinelyLapsed = !isCommittedPaid && !projection?.trial?.active;
+  if (veryLast && veryLast.end != null && !scheduledPlanChange && genuinelyLapsed) {
       segments.push({
         tone: 'none',
         start: new Date(veryLast.end),
@@ -161,6 +191,13 @@ export function buildBasePlanMarkers(history, projection) {
       subtitle: e.summary?.subtitle,
       detail: e.summary?.detail,
       amount: e.amounts?.paid ?? null,
+      // Passed through so the renderer can give admin trial actions a
+      // visually distinct treatment (a +/-N day badge) instead of the
+      // same plain dot every other marker gets — these change a boundary
+      // date, not a one-off event, and reading like "just another dot" is
+      // exactly what made a real trial-shortening easy to miss.
+      eventType: e.eventType,
+      metadata: e.metadata,
     }));
 
   const isCommittedPaid = !!(projection?.basePlan?.entitlementWindow || (projection?.basePlan?.nextRenewal && !projection?.trial?.active));
