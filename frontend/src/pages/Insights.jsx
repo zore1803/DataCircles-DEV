@@ -17,6 +17,9 @@ import {
   Area,
   AreaChart,
   Legend,
+  ScatterChart,
+  Scatter,
+  ZAxis,
 } from "recharts";
 import {
   Calendar,
@@ -1781,11 +1784,565 @@ const Insights = () => {
           />
         </div>
 
-        {/* Placeholder row — content TBD */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-          <div className="lg:col-span-3 bg-white p-6 rounded-xl border border-gray-200 shadow-sm min-h-[560px]" />
-          <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm min-h-[560px]" />
-        </div>
+        {(() => {
+          // No true "lead source" field exists on Contact yet, so this
+          // reuses stageStatus as the closest available breakdown of "where
+          // contacts stand" until a real acquisition-source field is added.
+          const sourceColors = ["#0085FF", "#34C759", "#8E62EF", "#2A2726", "#E7E4E3", "#D97706", "#EC4899"];
+          const sourceEntries = Object.entries(statusDistribution).sort((a, b) => b[1] - a[1]);
+          const sourceData = sourceEntries.map(([status, count], idx) => ({
+            name: status,
+            value: count,
+            color: sourceColors[idx % sourceColors.length],
+          }));
+
+          // Contact Commercial Impact heatmap — deal value tied to contacts,
+          // bucketed by day-of-week x the last 6 weeks, using each deal's
+          // amount as the "impact" intensity for the day it was created.
+          const impactWeeks = 6;
+          const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+          const todayForHeatmap = new Date();
+          todayForHeatmap.setHours(0, 0, 0, 0);
+          const mondayOffset = (todayForHeatmap.getDay() + 6) % 7; // days since this week's Monday
+          const currentWeekMonday = new Date(todayForHeatmap.getTime() - mondayOffset * 24 * 60 * 60 * 1000);
+          const impactGrid = Array.from({ length: impactWeeks }, () => Array(7).fill(0));
+          filteredData.filteredDeals
+            .filter((d) => d.contact && d.createdAt)
+            .forEach((d) => {
+              const createdAt = new Date(d.createdAt);
+              createdAt.setHours(0, 0, 0, 0);
+              const daysAgo = Math.round((currentWeekMonday.getTime() - createdAt.getTime()) / (24 * 60 * 60 * 1000));
+              const weeksAgo = Math.floor(daysAgo / 7);
+              const rowFromBottom = impactWeeks - 1 - weeksAgo;
+              if (rowFromBottom < 0 || rowFromBottom >= impactWeeks) return;
+              const dayCol = 6 - (daysAgo - weeksAgo * 7);
+              if (dayCol < 0 || dayCol > 6) return;
+              impactGrid[rowFromBottom][dayCol] += d.amount || 0;
+            });
+          const impactMax = Math.max(1, ...impactGrid.flat());
+          const impactOpacity = (value) => {
+            if (value === 0) return 0.1;
+            const ratio = value / impactMax;
+            if (ratio > 0.6) return 1;
+            if (ratio > 0.35) return 0.75;
+            if (ratio > 0.15) return 0.5;
+            return 0.25;
+          };
+
+          // Contact Commercial Impact: deals tied to a contact, their KPI
+          // rollups, and a scatter of each deal (month created x amount)
+          // colored by outcome.
+          const dealsWithContact = filteredData.filteredDeals.filter((d) => d.contact);
+          const pipelineInfluenced = dealsWithContact.reduce((sum, d) => sum + (d.amount || 0), 0);
+          const wonDealsWithContact = dealsWithContact.filter((d) => d.stage === "Won");
+          const revenueWon = wonDealsWithContact.reduce((sum, d) => sum + (d.amount || 0), 0);
+          const avgDealInfluenced =
+            dealsWithContact.length > 0 ? pipelineInfluenced / dealsWithContact.length : 0;
+          const formatCr = (v) => {
+            if (v >= 1e7) return `₹${(v / 1e7).toFixed(1)} Cr`;
+            if (v >= 1e5) return `₹${(v / 1e5).toFixed(1)} L`;
+            if (v >= 1e3) return `₹${(v / 1e3).toFixed(1)}k`;
+            return `₹${Math.round(v)}`;
+          };
+          const dealsForScatter = dealsWithContact.filter((d) => d.createdAt);
+          const scatterAmountMax = Math.max(1, ...dealsForScatter.map((d) => d.amount || 0));
+          const valueTierColor = (amount) => {
+            const ratio = amount / scatterAmountMax;
+            if (ratio > 0.66) return { fill: "#148FFF", tier: "High Value" };
+            if (ratio > 0.33) return { fill: "#FFA908", tier: "Medium Value" };
+            return { fill: "#8E62EF", tier: "Low Value" };
+          };
+          const scatterPoints = dealsForScatter.map((d) => {
+            const { fill, tier } = valueTierColor(d.amount || 0);
+            const createdDate = new Date(d.createdAt);
+            const daysInMonth = new Date(
+              createdDate.getFullYear(),
+              createdDate.getMonth() + 1,
+              0,
+            ).getDate();
+            // Spread points across each month based on the actual day of
+            // the deal's creation, instead of stacking every deal from the
+            // same month on one exact X position.
+            const monthFraction = (createdDate.getDate() - 1) / daysInMonth;
+            return {
+              month: createdDate.getMonth() + monthFraction,
+              amount: d.amount || 0,
+              stage: d.stage,
+              title: d.title,
+              fill,
+              tier,
+            };
+          });
+
+          return (
+            <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm min-h-[560px]">
+                <h3 className="text-sm font-semibold text-[#0E121B]">Contact Commercial Impact</h3>
+                <p className="text-xs text-[#525866] mt-1">
+                  Connect relationship activity with pipeline and revenue outcomes.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5 pb-5 border-b border-[#E1E4EA]">
+                  <StatCard
+                    title="Pipeline Influenced"
+                    value={formatCr(pipelineInfluenced)}
+                    icon={<Briefcase className="w-6 h-6" />}
+                    color="text-blue-600"
+                  />
+                  <StatCard
+                    title="Revenue Won"
+                    value={formatCr(revenueWon)}
+                    icon={<CheckSquare className="w-6 h-6" />}
+                    color="text-emerald-600"
+                  />
+                  <StatCard
+                    title="Avg. Deal Influenced"
+                    value={formatCr(avgDealInfluenced)}
+                    icon={<IndianRupee className="w-6 h-6" />}
+                    color="text-purple-600"
+                  />
+                </div>
+
+                {scatterPoints.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-16 text-center">No deals tied to contacts yet</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={340}>
+                    <ScatterChart margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E7E7E7" />
+                      <XAxis
+                        dataKey="month"
+                        type="number"
+                        domain={[0, 12]}
+                        ticks={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]}
+                        tickFormatter={(m) =>
+                          ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m]
+                        }
+                        tick={{ fontSize: 11, fill: "rgba(31, 31, 33, 0.56)" }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        dataKey="amount"
+                        tickFormatter={(v) => formatCr(v)}
+                        tick={{ fontSize: 10, fill: "rgba(31, 31, 33, 0.56)" }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={56}
+                      />
+                      <Tooltip
+                        cursor={{ strokeDasharray: "3 3" }}
+                        formatter={(value, name) => (name === "amount" ? formatCr(value) : value)}
+                        content={({ active, payload }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const p = payload[0].payload;
+                          return (
+                            <div className="bg-white border border-gray-200 rounded-md shadow-lg p-2 text-xs">
+                              <p className="font-medium text-gray-900">{p.title || "Deal"}</p>
+                              <p className="text-gray-500">{formatCr(p.amount)} • {p.tier} • {p.stage}</p>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Scatter
+                        data={scatterPoints}
+                        shape={(props) => {
+                          const { cx, cy, payload } = props;
+                          return (
+                            <rect
+                              x={cx - 8}
+                              y={cy - 8}
+                              width={16}
+                              height={16}
+                              rx={4}
+                              fill={payload.fill}
+                              fillOpacity={0.9}
+                            />
+                          );
+                        }}
+                      />
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                )}
+                {scatterPoints.length > 0 && (
+                  <div className="flex flex-row flex-wrap justify-center items-center gap-4 mt-2">
+                    {[
+                      { color: "#148FFF", label: "High Value" },
+                      { color: "#FFA908", label: "Medium Value" },
+                      { color: "#8E62EF", label: "Low Value" },
+                    ].map((legend) => (
+                      <div key={legend.label} className="flex items-center gap-2">
+                        <span
+                          className="w-4 h-4 rounded flex-shrink-0"
+                          style={{ background: legend.color }}
+                        />
+                        <span
+                          className="text-sm"
+                          style={{ color: "rgba(31, 31, 33, 0.56)" }}
+                        >
+                          {legend.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col gap-4">
+                <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[272px]">
+                  <h3 className="text-sm font-semibold text-[#0E121B]">Contact Commercial Impact</h3>
+                  <p className="text-xs text-[#525866] mt-1">
+                    Deal value tied to contacts, by day of week
+                  </p>
+                  <div className="mt-4 flex flex-col gap-1">
+                    <div className="flex items-center justify-between gap-1">
+                      {dayLabels.map((d) => (
+                        <span
+                          key={d}
+                          className="flex-1 text-center text-[10px]"
+                          style={{ color: "rgba(33, 32, 31, 0.56)" }}
+                        >
+                          {d}
+                        </span>
+                      ))}
+                    </div>
+                    {impactGrid.map((row, rowIdx) => (
+                      <div key={rowIdx} className="flex items-center gap-1">
+                        {row.map((value, colIdx) => (
+                          <div
+                            key={colIdx}
+                            title={`₹${formatNumberToIndian(Math.round(value))}`}
+                            className="flex-1 rounded"
+                            style={{
+                              height: 20,
+                              background: `rgba(0, 133, 255, ${impactOpacity(value)})`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-end gap-2 mt-3">
+                    <span className="text-[10px]" style={{ color: "rgba(33, 32, 31, 0.56)" }}>
+                      Low
+                    </span>
+                    {[0.1, 0.25, 0.5, 0.75, 1].map((op) => (
+                      <span
+                        key={op}
+                        className="rounded-sm"
+                        style={{ width: 16, height: 12, background: `rgba(0, 133, 255, ${op})` }}
+                      />
+                    ))}
+                    <span className="text-[10px]" style={{ color: "rgba(33, 32, 31, 0.56)" }}>
+                      High
+                    </span>
+                  </div>
+                </div>
+                <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[272px]">
+                  <h3 className="text-sm font-semibold text-[#0E121B]">Contact Acquisition Sources</h3>
+                  <p className="text-xs text-[#525866] mt-1">Where your contacts are coming from</p>
+                  {totalContacts === 0 ? (
+                    <p className="text-sm text-gray-400 py-10 text-center">No contacts yet</p>
+                  ) : (
+                    <div className="flex items-center justify-between gap-4 mt-4 flex-wrap">
+                      <div className="relative flex-shrink-0" style={{ width: 160, height: 160 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={sourceData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={50}
+                              outerRadius={80}
+                              cornerRadius={8}
+                              paddingAngle={sourceData.length > 1 ? 4 : 0}
+                              dataKey="value"
+                              stroke="none"
+                              label={({ cx, cy, midAngle, innerRadius, outerRadius, value }) => {
+                                const RADIAN = Math.PI / 180;
+                                const r = (innerRadius + outerRadius) / 2;
+                                const x = cx + r * Math.cos(-midAngle * RADIAN);
+                                const y = cy + r * Math.sin(-midAngle * RADIAN);
+                                const pct = Math.round((value / totalContacts) * 100);
+                                const text = `${pct}%`;
+                                const w = text.length * 6 + 10;
+                                return (
+                                  <g>
+                                    <rect
+                                      x={x - w / 2}
+                                      y={y - 8}
+                                      width={w}
+                                      height={16}
+                                      rx={6}
+                                      fill="#FFFFFF"
+                                    />
+                                    <text
+                                      x={x}
+                                      y={y}
+                                      textAnchor="middle"
+                                      dominantBaseline="central"
+                                      fontSize={11}
+                                      fontWeight={500}
+                                      fill="#21201F"
+                                    >
+                                      {text}
+                                    </text>
+                                  </g>
+                                );
+                              }}
+                              labelLine={false}
+                            >
+                              {sourceData.map((entry) => (
+                                <Cell key={entry.name} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex flex-col gap-1.5 max-w-[220px] flex-shrink-0">
+                        {sourceData.map((entry) => (
+                          <div key={entry.name} className="flex items-center gap-1.5">
+                            <span
+                              className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                              style={{ background: entry.color }}
+                            />
+                            <span className="text-xs text-[#21201F]/70 truncate min-w-[80px]">{entry.name}</span>
+                            <span className="text-[11px] text-[#525866] text-right flex-shrink-0 ml-4">
+                              {Math.round((entry.value / totalContacts) * 100)}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {(() => {
+          const dayMs = 24 * 60 * 60 * 1000;
+          const nowTs = Date.now();
+          const dealsByContactId = {};
+          filteredData.filteredDeals.forEach((d) => {
+            const cid = d.contact?._id || d.contact;
+            if (!cid) return;
+            if (!dealsByContactId[cid]) dealsByContactId[cid] = [];
+            dealsByContactId[cid].push(d);
+          });
+
+          // Card 1: Contact Alerts — real, computed from contacts + their deals.
+          const contactsWithAnyDeal = filteredData.filteredContacts.filter(
+            (c) => dealsByContactId[c._id]?.length > 0,
+          );
+          const coldContacts = contactsWithAnyDeal.filter((c) =>
+            dealsByContactId[c._id].every(
+              (d) => nowTs - new Date(d.updatedAt || d.createdAt).getTime() > 30 * dayMs,
+            ),
+          );
+          const coldPipeline = coldContacts.reduce(
+            (sum, c) => sum + dealsByContactId[c._id].reduce((s, d) => s + (d.amount || 0), 0),
+            0,
+          );
+          const followUpContacts = filteredData.filteredContacts.filter(
+            (c) => c.stageStatus === "Contacted" || c.stageStatus === "New",
+          );
+          const followUpPipeline = followUpContacts.reduce(
+            (sum, c) => sum + (dealsByContactId[c._id] || []).reduce((s, d) => s + (d.amount || 0), 0),
+            0,
+          );
+          const noOwnerContacts = filteredData.filteredContacts.filter((c) => !c.user);
+          const noOwnerPipeline = noOwnerContacts.reduce(
+            (sum, c) => sum + (dealsByContactId[c._id] || []).reduce((s, d) => s + (d.amount || 0), 0),
+            0,
+          );
+          const formatCrAlert = (v) => {
+            if (v >= 1e7) return `₹${(v / 1e7).toFixed(1)} Cr`;
+            if (v >= 1e5) return `₹${(v / 1e5).toFixed(1)} L`;
+            if (v >= 1e3) return `₹${(v / 1e3).toFixed(1)}k`;
+            return `₹${Math.round(v)}`;
+          };
+          const alertRows = [
+            {
+              icon: <AlertCircle className="w-4 h-4" />,
+              iconBg: "#FCCCCD",
+              iconColor: "#DF120B",
+              title: `${coldContacts.length} Contacts going cold`,
+              subtitle: `${formatCrAlert(coldPipeline)} associated pipeline has had no activity for 30+ days`,
+            },
+            {
+              icon: <Clock className="w-4 h-4" />,
+              iconBg: "rgba(255, 204, 0, 0.15)",
+              iconColor: "#D4BF00",
+              title: `${followUpContacts.length} Contacts awaiting follow-up`,
+              subtitle: `${formatCrAlert(followUpPipeline)} associated pipeline still in early stages`,
+            },
+            {
+              icon: <Users className="w-4 h-4" />,
+              iconBg: "rgba(0, 133, 255, 0.1)",
+              iconColor: "#0085FF",
+              title: `${noOwnerContacts.length} Contacts with no owner`,
+              subtitle: `${formatCrAlert(noOwnerPipeline)} associated pipeline is unassigned`,
+            },
+          ];
+
+          // Card 2: Contacts by Industry (via linked company), with pipeline value.
+          const industryGroups = {};
+          filteredData.filteredContacts.forEach((c) => {
+            const industry = c.company?.industry || "Unspecified";
+            if (!industryGroups[industry]) industryGroups[industry] = { count: 0, pipeline: 0 };
+            industryGroups[industry].count += 1;
+            industryGroups[industry].pipeline += (dealsByContactId[c._id] || []).reduce(
+              (s, d) => s + (d.amount || 0),
+              0,
+            );
+          });
+          const industryEntries = Object.entries(industryGroups)
+            .sort((a, b) => b[1].count - a[1].count)
+            .slice(0, 4);
+          const industryMaxCount = Math.max(1, ...industryEntries.map(([, v]) => v.count));
+
+          // Card 3: Recent Contact Activity — deals-with-contact events and
+          // their invoices, merged into one timeline.
+          const contactActivity = [];
+          filteredData.filteredDeals
+            .filter((d) => d.contact)
+            .forEach((d) => {
+              const at = d.updatedAt || d.createdAt;
+              if (!at) return;
+              contactActivity.push({
+                id: `deal-${d._id}`,
+                icon: <Briefcase className="w-4 h-4" />,
+                iconBg: "#CCE7FF",
+                iconColor: "#0085FF",
+                title: d.title || "Deal",
+                subtitle: `${d.stage || "Update"} • ${formatCrAlert(d.amount || 0)}`,
+                at,
+              });
+            });
+          filteredData.filteredInvoices
+            .filter((inv) => inv.deal?.contact)
+            .forEach((inv) => {
+              const at = inv.updatedAt || inv.date || inv.createdAt;
+              if (!at) return;
+              contactActivity.push({
+                id: `invoice-${inv._id}`,
+                icon: <FileText className="w-4 h-4" />,
+                iconBg: "#FCCCCD",
+                iconColor: "#EF0004",
+                title: `Invoice #${inv.invoiceNumber}`,
+                subtitle: `${inv.status} • ${formatCrAlert(inv.amount || 0)}`,
+                at,
+              });
+            });
+          const recentContactActivity = contactActivity
+            .sort((a, b) => new Date(b.at) - new Date(a.at))
+            .slice(0, 6);
+
+          return (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+              {/* Contact Alerts */}
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[340px] flex flex-col">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-[#1C1C1D]">Contact Alerts</h3>
+                </div>
+                <div className="flex flex-col gap-0 flex-1">
+                  {alertRows.map((row, idx) => (
+                    <div
+                      key={row.title}
+                      className={`flex items-center justify-between gap-3 py-3 ${
+                        idx < alertRows.length - 1 ? "border-b border-[#E1E4EA]" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span
+                          className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                          style={{ background: row.iconBg }}
+                        >
+                          <span style={{ color: row.iconColor }}>{row.icon}</span>
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-[#525252] truncate">{row.title}</p>
+                          <p className="text-[10px] text-[rgba(107,114,128,0.7)] truncate">
+                            {row.subtitle}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Contacts by Industry */}
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[340px] flex flex-col">
+                <h3 className="text-sm font-semibold text-[#1C1C1D] mb-3">Contacts by Industry</h3>
+                {industryEntries.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-10 text-center">No contacts yet</p>
+                ) : (
+                  <div className="flex flex-col gap-4 flex-1">
+                    {industryEntries.map(([industry, data], idx) => (
+                      <div key={industry} className="flex items-center gap-3">
+                        <span
+                          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                          style={{ background: pipelineStageColors[idx % pipelineStageColors.length] + "22" }}
+                        >
+                          <Building
+                            className="w-4 h-4"
+                            style={{ color: pipelineStageColors[idx % pipelineStageColors.length] }}
+                          />
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-[#525252] truncate">{industry}</p>
+                          <p className="text-[10px] text-[rgba(107,114,128,0.7)]">{data.count} Contacts</p>
+                          <div className="h-1.5 bg-[rgba(0,133,255,0.2)] rounded-full mt-1.5 overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${(data.count / industryMaxCount) * 100}%`,
+                                background: pipelineStageColors[idx % pipelineStageColors.length],
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-[10px] font-medium text-[#404040]">
+                            {formatCrAlert(data.pipeline)}
+                          </p>
+                          <p className="text-[10px] text-[rgba(107,114,128,0.7)]">Pipeline Value</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Recent Contact Activity */}
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm min-h-[340px] flex flex-col">
+                <h3 className="text-sm font-semibold text-[#1C1C1D] mb-3">Recent Contact Activity</h3>
+                {recentContactActivity.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-10 text-center">No recent activity</p>
+                ) : (
+                  <div className="flex flex-col gap-3 flex-1 overflow-y-auto dc-scroll-visible">
+                    {recentContactActivity.map((item) => (
+                      <div key={item.id} className="flex items-center gap-3">
+                        <span
+                          className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                          style={{ background: item.iconBg }}
+                        >
+                          <span style={{ color: item.iconColor }}>{item.icon}</span>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-[#1C1C1D] truncate">{item.title}</p>
+                          <p className="text-[10px] text-[#78788D] truncate">{item.subtitle}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     );
   };
