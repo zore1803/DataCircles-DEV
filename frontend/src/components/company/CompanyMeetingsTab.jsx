@@ -592,7 +592,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     });
   }, [filteredMeetings, sortConfig]);
 
-  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+  const { selectedItems, toggleItem, clearSelection, selectAll, upgradeModal } = useBulkSelection({
     items: filteredMeetings,
     onDelete: () => setShowBulkDeleteModal(true)
   });
@@ -2253,6 +2253,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           </div>
         </div>
       )}
+      {upgradeModal}
     </div>
   );
 }

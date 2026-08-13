@@ -40,6 +40,9 @@ import { createPortal } from "react-dom";
 import API from "../services/api";
 import toast from "react-hot-toast";
 import AppToaster from "../components/AppToaster";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 import HighlightText from "../components/common/HighlightText";
 import InvoiceForm, { CreateInvoicePanel } from "../components/invoice/InvoiceForm";
 import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceForm";
@@ -814,6 +817,9 @@ const Accounting = () => {
 
   // UI state
   const [selectedIds, setSelectedIds] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [showTestDrawer, setShowTestDrawer] = useState(false);
   const [editPanelDoc, setEditPanelDoc] = useState(null);
@@ -1063,6 +1069,10 @@ const Accounting = () => {
   };
 
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedIds((prev) =>
       prev.length === currentDocuments.length && currentDocuments.length > 0
         ? []
@@ -1071,6 +1081,10 @@ const Accounting = () => {
   };
 
   const handleSelectOne = (id) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
@@ -2739,6 +2753,13 @@ const Accounting = () => {
           }}
         />
       </div>
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </>
   );
 };

@@ -223,7 +223,7 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
     [sortedPayments, page, limit],
   );
 
-  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+  const { selectedItems, toggleItem, clearSelection, selectAll, upgradeModal } = useBulkSelection({
     items: filteredPayments,
   });
   const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedItems.length);
@@ -932,6 +932,7 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
           </div>
         </div>
       )}
+      {upgradeModal}
     </div>
   );
 };

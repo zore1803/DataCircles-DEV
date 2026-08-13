@@ -1357,8 +1357,11 @@ const Header = () => {
 
   if (isSuperAdmin || isSuperAdminRoute) {
     return (
-      <header className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-[9992] h-16">
-        <div className="flex items-center justify-start h-full px-4 lg:pl-10">
+      <header
+        className="fixed top-0 right-0 bg-white border-b border-gray-200 shadow-sm z-[9992] h-16 transition-all duration-300 ease-in-out"
+        style={{ left: "var(--sidebar-width, 0px)" }}
+      >
+        <div className="flex items-center justify-start h-full px-4 lg:pl-6">
           {/* Branding Section */}
           {isLoadingData ? (
             <BrandingShimmer />
@@ -1446,6 +1449,10 @@ const Header = () => {
                 Create, manage, and track all your documents
               </p>
             </div>
+          ) : location.pathname.startsWith("/insights") ? (
+            <span className="text-base font-semibold text-gray-900">
+              Insights & Analytics
+            </span>
           ) : (
             <div className="flex items-center gap-2">
               {getBreadcrumb().map((crumb, idx, arr) => {

@@ -14,6 +14,9 @@ import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { getAncestorZoom } from "../utils/domUtils";
 import BulkActionBar from "../components/common/BulkActionBar";
 import { useBulkStrip } from "../hooks/useBulkSelection";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
@@ -102,6 +105,12 @@ export default function PaymentsTimeline() {
 
   /* row selection */
   const [selectedIds, setSelectedIds] = useState([]);
+  // Bulk row selection requires Growth+ — same gate as the shared
+  // useBulkSelection hook used elsewhere, reimplemented here because this
+  // page manages its own selection state instead of that hook.
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedIds.length);
 
   /* misc UI */
@@ -275,13 +284,23 @@ export default function PaymentsTimeline() {
     return list;
   }, [documents, searchQuery, partyFilter, directionFilter, typeFilter, sortConfig]);
 
-  const handleSelectAll = e =>
+  const handleSelectAll = e => {
+    if (e.target.checked && !hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedIds(e.target.checked ? filteredDocs.map(d => d._id) : []);
+  };
 
-  const handleSelectRow = id =>
+  const handleSelectRow = id => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
+  };
 
   /* ── pagination ─────────────────────────────────────────────────── */
   const handlePageChange  = newPage   => { if (newPage > 0 && newPage <= pagination.totalPages) setPagination(p => ({ ...p, currentPage: newPage })); };
@@ -1080,6 +1099,13 @@ export default function PaymentsTimeline() {
           </div>
         </div>
       )}
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </div>
   );
 }

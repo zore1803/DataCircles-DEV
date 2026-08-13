@@ -84,6 +84,9 @@ import {
 } from "@tanstack/react-table";
 import ContactQuickView from "../components/contact/ContactQuickView";
 import AppToaster from "../components/AppToaster";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 
 import SearchIcon from "../components/common/SearchIcon";
 // Custom hook to detect mobile screen
@@ -183,6 +186,9 @@ function Contacts() {
   const [additionalValues, setAdditionalValues] = useState({});
   const [permission, setPermission] = useState("");
   const [selectedContacts, setSelectedContacts] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
   const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
@@ -2036,6 +2042,10 @@ function Contacts() {
   );
 
   const handleSelectContact = (contactId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedContacts((prev) =>
       prev.includes(contactId)
         ? prev.filter((id) => id !== contactId)
@@ -2044,6 +2054,10 @@ function Contacts() {
   };
 
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     if (selectedContacts.length === contacts.length) {
       setSelectedContacts([]);
       setSelectionMode(true);
@@ -3530,6 +3544,13 @@ function Contacts() {
           </div>
         </div>
       )}
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </div>
   );
 }

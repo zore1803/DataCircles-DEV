@@ -5,6 +5,9 @@ import { createPortal } from "react-dom";
 import API from "../../services/api";
 import BulkActionBar from "../common/BulkActionBar";
 import { useBulkStrip } from "../../hooks/useBulkSelection";
+import { useSubscription } from "../../contexts/SubscriptionContext";
+import { hasMinPlan } from "../../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../subscription/UpgradeRequiredModal";
 import folderIconImg from "../../assets/Folder-icon.png";
 import pdfIconImg from "../../assets/pdf-icon.png";
 import { useParams } from "react-router-dom";
@@ -1082,6 +1085,12 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   const [folderPickerSearch, setFolderPickerSearch] = useState("");
   const [selectedFileNames, setSelectedFileNames] = useState([]);
   const { visible: fileBulkVisible, closing: fileBulkClosing } = useBulkStrip(selectedFileNames.length);
+  // Bulk file selection requires Growth+ — same gate as the shared
+  // useBulkSelection hook used elsewhere, reimplemented here because this
+  // component manages its own selection state instead of that hook.
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [fileSearchTerm, setFileSearchTerm] = useState("");
   const [openFolderId, setOpenFolderId] = useState("");
   const [newFiles, setNewFiles] = useState([]);
@@ -1646,6 +1655,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                     }}
                     onClick={() => {
                       if (!selectedFileNames.includes(file.fileName)) {
+                        if (!hasBulkAccess) {
+                          setShowUpgradeModal(true);
+                          return;
+                        }
                         setSelectedFileNames((prev) => [...prev, file.fileName]);
                         return;
                       }
@@ -1663,6 +1676,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                       style={{ top: 8, right: 8 }}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (!hasBulkAccess) {
+                          setShowUpgradeModal(true);
+                          return;
+                        }
                         setSelectedFileNames((prev) =>
                           prev.includes(file.fileName)
                             ? prev.filter((n) => n !== file.fileName)
@@ -2580,6 +2597,13 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
           isOpen={linkModalOpen}
           onClose={() => setLinkModalOpen(false)}
           onSubmit={handleAddLink}
+        />
+
+        <UpgradeRequiredModal
+          open={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          minPlan="growth"
+          feature="Selecting multiple files"
         />
       </div>
     </DragDropZone>

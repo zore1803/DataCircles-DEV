@@ -649,7 +649,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
     });
   }, [filteredNotes, sortConfig]);
 
-  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+  const { selectedItems, toggleItem, clearSelection, selectAll, upgradeModal } = useBulkSelection({
     items: filteredNotes,
     onDelete: () => setShowBulkDeleteModal(true)
   });
@@ -1644,6 +1644,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
           </div>
         </div>
       )}
+      {upgradeModal}
     </div>
   );
 }

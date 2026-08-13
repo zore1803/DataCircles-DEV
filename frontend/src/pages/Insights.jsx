@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import logo from "/DataCircles.png";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import {
@@ -53,6 +53,8 @@ import {
   Trophy,
   XCircle,
   PieChartIcon,
+  CheckSquare,
+  Video,
   IndianRupeeIcon,
 } from "lucide-react";
 import API from "../services/api";
@@ -84,6 +86,7 @@ const randomMessage =
 
 const Insights = () => {
   const [activeTab, setActiveTab] = useState("overview");
+  const [showFiltersPanel, setShowFiltersPanel] = useState(false);
   const [dateRange, setDateRange] = useState({
     startDate: "",
     endDate: "",
@@ -106,6 +109,8 @@ const Insights = () => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [meetings, setMeetings] = useState([]);
+  const [activityTab, setActivityTab] = useState("all");
   const [loading, setLoading] = useState(false);
   const [expandedRows, setExpandedRows] = useState([]);
   const [selectedUser, setSelectedUser] = React.useState("all");
@@ -199,6 +204,7 @@ const Insights = () => {
         purchaseOrdersRes,
         purchasesRes,
         invoicesRes,
+        meetingsRes,
       ] = await Promise.all([
         API.get("/contacts"),
         API.get("/companies"),
@@ -208,6 +214,7 @@ const Insights = () => {
         API.get("/purchase-orders"),
         API.get("/purchases"),
         API.get("/invoices"),
+        API.get("/meetings").catch(() => ({ data: { meetings: [] } })),
       ]);
 
       setContacts(contactsRes.data);
@@ -218,6 +225,7 @@ const Insights = () => {
       setPurchaseOrders(purchaseOrdersRes.data);
       setPurchases(purchasesRes.data);
       setInvoices(invoicesRes.data);
+      setMeetings(meetingsRes.data?.meetings || meetingsRes.data || []);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -261,18 +269,18 @@ const Insights = () => {
       });
 
       filteredPurchaseOrders = purchaseOrders.filter((item) => {
-        const createdAt = new Date(item.createdAt);
-        return createdAt >= startDate && createdAt <= endDate;
+        const orderDate = new Date(item.orderDate || item.createdAt);
+        return orderDate >= startDate && orderDate <= endDate;
       });
 
       filteredPurchases = purchases.filter((item) => {
-        const createdAt = new Date(item.createdAt);
-        return createdAt >= startDate && createdAt <= endDate;
+        const purchaseDate = new Date(item.purchaseDate || item.createdAt);
+        return purchaseDate >= startDate && purchaseDate <= endDate;
       });
 
       filteredInvoices = invoices.filter((item) => {
-        const createdAt = new Date(item.createdAt);
-        return createdAt >= startDate && createdAt <= endDate;
+        const invoiceDate = new Date(item.date || item.createdAt);
+        return invoiceDate >= startDate && invoiceDate <= endDate;
       });
     }
 
@@ -391,6 +399,78 @@ const Insights = () => {
         invoices: invoicesCount,
       });
     });
+
+    // Daily trends — one bucket per calendar day, spanning from the
+    // earliest record on file up to today (used by the "Revenue vs Business
+    // Spends" chart, which scrolls horizontally across the whole range
+    // instead of being capped at a fixed window).
+    const dailyTrends = [];
+    const dayMs = 24 * 60 * 60 * 1000;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    let rangeStart;
+    let rangeEnd;
+    if (dateRange.startDate && dateRange.endDate) {
+      // A date filter is active on the strip — the chart's window should
+      // match it exactly instead of silently expanding to today.
+      rangeStart = new Date(dateRange.startDate);
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd = new Date(dateRange.endDate);
+      rangeEnd.setHours(0, 0, 0, 0);
+    } else {
+      const allDatedRecords = [
+        ...filteredInvoices.map((item) => item.date || item.createdAt),
+        ...filteredPurchases.map((item) => item.purchaseDate || item.createdAt),
+        ...filteredPurchaseOrders.map((item) => item.orderDate || item.createdAt),
+      ]
+        .map((d) => (d ? new Date(d) : null))
+        .filter(Boolean);
+      let earliestStart = todayStart;
+      if (allDatedRecords.length > 0) {
+        earliestStart = new Date(Math.min(...allDatedRecords.map((d) => d.getTime())));
+        earliestStart.setHours(0, 0, 0, 0);
+      }
+      // Always show at least a 30-day window, even with no/recent-only data.
+      const minStart = new Date(todayStart.getTime() - 29 * dayMs);
+      rangeStart = earliestStart < minStart ? earliestStart : minStart;
+      rangeEnd = todayStart;
+    }
+    const totalDays = Math.round((rangeEnd.getTime() - rangeStart.getTime()) / dayMs) + 1;
+
+    for (let i = 0; i < totalDays; i++) {
+      const day = new Date(rangeStart.getTime() + i * dayMs);
+      const dayKey = day.toDateString();
+
+      const revenue = filteredInvoices
+        .filter((item) => {
+          const d = item.date || item.createdAt;
+          return d && new Date(d).toDateString() === dayKey;
+        })
+        .reduce((sum, item) => sum + (item.amount || 0), 0);
+
+      const purchases = filteredPurchases
+        .filter((item) => {
+          const d = item.purchaseDate || item.createdAt;
+          return d && new Date(d).toDateString() === dayKey;
+        })
+        .reduce((sum, item) => sum + (item.totalAmount || 0), 0);
+
+      const vendorSpends = filteredPurchaseOrders
+        .filter((item) => {
+          const d = item.orderDate || item.createdAt;
+          return d && new Date(d).toDateString() === dayKey;
+        })
+        .reduce((sum, item) => sum + (item.totalAmount || 0), 0);
+
+      dailyTrends.push({
+        date: day.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+        fullDate: day.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+        revenue,
+        purchases,
+        vendorSpends,
+      });
+    }
 
     // Contact status distribution
     const contactStatusData = [
@@ -529,6 +609,7 @@ const Insights = () => {
 
     return {
       monthlyTrends,
+      dailyTrends,
       contactStatusData,
       dealValues,
       poStatusData,
@@ -681,40 +762,32 @@ const Insights = () => {
     );
   };
 
-  const StatCard = ({ title, value, icon, color, bgColor, change, trend }) => (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden">
-      <div className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
-            <h6 className="text-2xl font-bold text-gray-900 mb-2">{value}</h6>
-            {change !== undefined && (
-              <div className="flex items-center gap-1">
-                <TrendingUp
-                  className={`w-4 h-4 ${
-                    change >= 0 ? "text-green-600" : "text-red-600 rotate-180"
-                  }`}
-                />
-                <span
-                  className={`text-sm font-semibold ${
-                    change >= 0 ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  {change >= 0 ? "+" : ""}
-                  {change}%
-                </span>
-                <span className="text-xs text-gray-500 ml-1">
-                  vs last month
-                </span>
-              </div>
-            )}
-          </div>
-          <div className={`p-3 rounded-xl ${bgColor}`}>
-            <div className={color}>{icon}</div>
-          </div>
-        </div>
+  const StatCard = ({ title, value, icon, color, bgColor, change, changeLabel = "vs last month", trend }) => (
+    <div className="relative min-h-[72px] flex items-center gap-3 px-4 py-2.5 bg-white border border-gray-200 rounded-xl min-w-0">
+      <div className="w-10 h-10 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+        <div className={color}>{React.cloneElement(icon, { className: "w-5 h-5" })}</div>
       </div>
-      <div className={`h-1 ${bgColor}`}></div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate w-full text-[11px] text-gray-500">{title}</p>
+        <p className="truncate w-full text-base font-bold text-gray-900">{value}</p>
+      </div>
+      {change !== undefined && (
+        <div className="absolute bottom-2 right-3 flex items-center gap-1">
+          <TrendingUp
+            className={`w-3 h-3 flex-shrink-0 ${
+              change >= 0 ? "text-green-600" : "text-red-600 rotate-180"
+            }`}
+          />
+          <span
+            className={`text-[11px] font-semibold whitespace-nowrap ${
+              change >= 0 ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            {change >= 0 ? "+" : ""}
+            {change}% {changeLabel}
+          </span>
+        </div>
+      )}
     </div>
   );
 
@@ -826,14 +899,138 @@ const Insights = () => {
     );
   };
 
+  // Business Activity feed: recent deal stage changes, completed tasks,
+  // meetings, and invoice/payment events, merged into one timeline and
+  // sorted newest-first. Notes aren't included since notes are only
+  // fetched per-company/contact, not org-wide.
+  const businessActivity = useMemo(() => {
+    const items = [];
+
+    deals.forEach((deal) => {
+      const at = deal.updatedAt || deal.createdAt;
+      if (!at) return;
+      items.push({
+        id: `deal-${deal._id}`,
+        type: "deals",
+        icon: <Briefcase className="w-4 h-4" />,
+        iconBg: "bg-blue-100 text-blue-600",
+        title: `Deal Moved to ${deal.stage || "Update"}`,
+        subtitle: [deal.title, deal.company?.name].filter(Boolean).join(" • "),
+        at,
+      });
+    });
+
+    tasks
+      .filter((task) => task.status === "Completed")
+      .forEach((task) => {
+        const at = task.updatedAt || task.createdAt;
+        if (!at) return;
+        items.push({
+          id: `task-${task._id}`,
+          type: "tasks",
+          icon: <CheckSquare className="w-4 h-4" />,
+          iconBg: "bg-green-100 text-green-600",
+          title: "Task Completed",
+          subtitle: task.title || "Untitled task",
+          at,
+        });
+      });
+
+    meetings.forEach((meeting) => {
+      const at = meeting.updatedAt || meeting.scheduledAt || meeting.createdAt;
+      if (!at) return;
+      const isCompleted = meeting.status === "Completed";
+      items.push({
+        id: `meeting-${meeting._id}`,
+        type: "meetings",
+        icon: <Video className="w-4 h-4" />,
+        iconBg: "bg-purple-100 text-purple-600",
+        title: isCompleted ? "Meeting Completed" : "Meeting Scheduled",
+        subtitle: meeting.title || "Untitled meeting",
+        at,
+      });
+    });
+
+    invoices.forEach((invoice) => {
+      const isOverdue =
+        invoice.status !== "Paid" &&
+        invoice.dueDate &&
+        new Date(invoice.dueDate) < new Date();
+      const at = invoice.updatedAt || invoice.dueDate || invoice.createdAt;
+      if (!at) return;
+      items.push({
+        id: `invoice-${invoice._id}`,
+        type: "invoices",
+        icon: <FileText className="w-4 h-4" />,
+        iconBg: isOverdue ? "bg-red-100 text-red-600" : "bg-teal-100 text-teal-600",
+        title: isOverdue
+          ? `Invoice #${invoice.invoiceNumber} is overdue`
+          : `Invoice #${invoice.invoiceNumber} — ${invoice.status}`,
+        subtitle: `₹${formatNumberToIndian(invoice.amount || 0)}`,
+        at,
+      });
+    });
+
+    return items
+      .filter((item) => item.at)
+      .sort((a, b) => new Date(b.at) - new Date(a.at))
+      .slice(0, 20);
+  }, [deals, tasks, meetings, invoices]);
+
+  const filteredActivity =
+    activityTab === "all"
+      ? businessActivity
+      : businessActivity.filter((item) => item.type === activityTab);
+
+  const formatActivityDate = (at) => {
+    const d = new Date(at);
+    const datePart = d.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    const timePart = d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    return `${datePart} • ${timePart}`;
+  };
+
+  const dailyTrendsRawMax = Math.max(
+    1000,
+    ...chartData.dailyTrends.map((d) => (d.revenue || 0) + (d.purchases || 0) + (d.vendorSpends || 0)),
+  );
+  // Round up to a "nice" step (multiple of 1000) so 5 evenly-spaced ticks
+  // (0, step, 2*step, ...) land on clean numbers AND each one rounds to a
+  // distinct "Xk" label — a step below 1000 made adjacent ticks (e.g. 500 &
+  // 1000) collapse onto the same displayed "1k".
+  const dailyTrendsStep = Math.ceil(dailyTrendsRawMax / 4 / 1000) * 1000 || 1000;
+  const dailyTrendsYMax = dailyTrendsStep * 4;
+  const dailyTrendsTicks = [0, 1, 2, 3, 4].map((i) => i * dailyTrendsStep);
+  const formatDailyTrendsTick = (v) => (v === 0 ? "₹0" : `₹${Math.round(v / 1000)}k`);
+  // Every 5th day's date label, but always force the last entry (today) in
+  // too, so the active/current date is never skipped off the right edge.
+  const dailyTrendsDateTicks = chartData.dailyTrends
+    .map((d) => d.date)
+    .filter((_, i, arr) => i % 5 === 0 || i === arr.length - 1);
+
+  // Scrolls the trends chart to the right edge (today) on load, instead of
+  // defaulting to the leftmost/earliest date.
+  const trendsScrollRef = useRef(null);
+  const scrollTrendsToToday = () => {
+    const el = trendsScrollRef.current;
+    if (el) el.scrollTo({ left: el.scrollWidth, behavior: "smooth" });
+  };
+  useEffect(() => {
+    const el = trendsScrollRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [chartData.dailyTrends.length]);
+
   const renderOverview = () => (
     <div className="space-y-6">
       {/* Stats Cards */}
       <div>
-        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <div className="w-1 h-6 bg-blue-600 rounded-full"></div>
-          Key Metrics
-        </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Total Contacts"
@@ -867,324 +1064,522 @@ const Insights = () => {
             bgColor="bg-indigo-50"
             change={5}
           />
+          <StatCard
+            title="Total Deal Value"
+            value={`₹${formatNumberToIndian(
+              filteredData.filteredDeals.reduce(
+                (sum, deal) => sum + (deal.amount || 0),
+                0
+              )
+            )}`}
+            icon={<IndianRupeeIcon className="w-6 h-6" />}
+            color="text-orange-600"
+            bgColor="bg-orange-50"
+            change={15}
+          />
+          <StatCard
+            title="Total Purchases"
+            value={`₹${formatNumberToIndian(
+              filteredData.filteredPurchases.reduce(
+                (sum, purchase) => sum + (purchase.totalAmount || 0),
+                0
+              )
+            )}`}
+            icon={<Package className="w-6 h-6" />}
+            color="text-pink-600"
+            bgColor="bg-pink-50"
+            change={-2}
+          />
+          <StatCard
+            title="Total Invoices"
+            value={filteredData.filteredInvoices.length}
+            icon={<FileText className="w-6 h-6" />}
+            color="text-teal-600"
+            bgColor="bg-teal-50"
+            change={10}
+          />
+          <StatCard
+            title="Total Invoice Value"
+            value={`₹${formatNumberToIndian(
+              filteredData.filteredInvoices.reduce(
+                (sum, inv) => sum + (inv.amount || 0),
+                0
+              )
+            )}`}
+            icon={<IndianRupeeIcon className="w-6 h-6" />}
+            color="text-indigo-600"
+            bgColor="bg-indigo-50"
+            change={18}
+          />
         </div>
-      </div>
-
-      {/* Second row of stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard
-          title="Total Deal Value"
-          value={`₹${formatNumberToIndian(
-            filteredData.filteredDeals.reduce(
-              (sum, deal) => sum + (deal.amount || 0),
-              0
-            )
-          )}`}
-          icon={<IndianRupeeIcon className="w-6 h-6" />}
-          color="text-orange-600"
-          bgColor="bg-orange-50"
-          change={15}
-        />
-        <StatCard
-          title="Purchase Orders"
-          value={filteredData.filteredPurchaseOrders.length}
-          icon={<ShoppingCart className="w-6 h-6" />}
-          color="text-cyan-600"
-          bgColor="bg-cyan-50"
-          change={7}
-        />
-        <StatCard
-          title="Total Purchases"
-          value={`₹${formatNumberToIndian(
-            filteredData.filteredPurchases.reduce(
-              (sum, purchase) => sum + (purchase.totalAmount || 0),
-              0
-            )
-          )}`}
-          icon={<Package className="w-6 h-6" />}
-          color="text-pink-600"
-          bgColor="bg-pink-50"
-          change={-2}
-        />
-      </div>
-
-      {/* Third row for invoices */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <StatCard
-          title="Total Invoices"
-          value={filteredData.filteredInvoices.length}
-          icon={<FileText className="w-6 h-6" />}
-          color="text-teal-600"
-          bgColor="bg-teal-50"
-          change={10}
-        />
-        <StatCard
-          title="Total Invoice Value"
-          value={`₹${formatNumberToIndian(
-            filteredData.filteredInvoices.reduce(
-              (sum, inv) => sum + (inv.amount || 0),
-              0
-            )
-          )}`}
-          icon={<IndianRupeeIcon className="w-6 h-6" />}
-          color="text-indigo-600"
-          bgColor="bg-indigo-50"
-          change={18}
-        />
       </div>
 
       {/* Charts */}
       <div>
-        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <div className="w-1 h-6 bg-blue-600 rounded-full"></div>
-          Analytics
-        </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Monthly Trends */}
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-gray-900">
-                Monthly Trends
-              </h3>
-              <BarChart3 className="w-5 h-5 text-gray-400" />
-            </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={chartData.monthlyTrends}>
-                <defs>
-                  <linearGradient
-                    id="colorContacts"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1} />
-                  </linearGradient>
-                  <linearGradient
-                    id="colorCompanies"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.1} />
-                  </linearGradient>
-                  <linearGradient id="colorDeals" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 12, fill: "#6b7280" }}
-                />
-                <YAxis tick={{ fontSize: 12, fill: "#6b7280" }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#fff",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "8px",
-                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="contacts"
-                  stackId="1"
-                  stroke="#3b82f6"
-                  fill="url(#colorContacts)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="companies"
-                  stackId="1"
-                  stroke="#10b981"
-                  fill="url(#colorCompanies)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="deals"
-                  stackId="1"
-                  stroke="#f59e0b"
-                  fill="url(#colorDeals)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Contact Status Distribution */}
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-gray-900">
-                Contact Distribution
-              </h3>
-              <Target className="w-5 h-5 text-gray-400" />
-            </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={chartData.contactStatusData.filter(
-                    (item) => item.value > 0
-                  )}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) =>
-                    `${name} ${(percent * 100).toFixed(0)}%`
-                  }
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Monthly Trends — spans the same width as the first 3 KPI cards */}
+          <div className="lg:col-span-3 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-semibold leading-[120%] text-[#0E121B]">
+                  Revenue vs Business Spends
+                </h3>
+                <button
+                  onClick={scrollTrendsToToday}
+                  className="h-7 px-3 rounded-full text-xs font-medium bg-[#F8F8FB] text-[#1F2937] hover:bg-gray-200 transition-colors flex-shrink-0"
                 >
-                  {chartData.contactStatusData
-                    .filter((item) => item.value > 0)
-                    .map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                  Today
+                </button>
+              </div>
+              <div className="flex flex-row flex-wrap items-center gap-4">
+                {[
+                  { color: "#0085FF", label: "Revenue" },
+                  { color: "#00C950", label: "Purchases" },
+                  { color: "#D87000", label: "Vendor Spends" },
+                ].map((legend) => (
+                  <div key={legend.label} className="flex items-center gap-2">
+                    <span
+                      className="inline-block w-10 h-2 rounded-full flex-shrink-0"
+                      style={{ background: legend.color }}
+                    />
+                    <span
+                      className="text-xs font-normal leading-6"
+                      style={{ color: "rgba(33, 32, 31, 0.56)" }}
+                    >
+                      {legend.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-row items-stretch" style={{ height: 380 }}>
+              {/* Fixed Y-axis column, mirrors Dashboard's Sales Revenue widget */}
+              <div style={{ width: 68, height: "100%", flexShrink: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData.dailyTrends} margin={{ top: 12, right: 0, left: 0, bottom: 8 }}>
+                    <XAxis dataKey="date" tick={false} axisLine={false} tickLine={false} />
+                    <YAxis
+                      domain={[0, dailyTrendsYMax]}
+                      ticks={dailyTrendsTicks}
+                      tickFormatter={formatDailyTrendsTick}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                      width={68}
+                      tick={{ fontSize: 11, fontFamily: "Inter", fill: "rgba(33, 32, 31, 0.56)", textAnchor: "end" }}
+                    />
+                    <Area dataKey="revenue" stroke="none" fill="none" isAnimationActive={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Scrollable X-axis — pans across the full data range instead of
+                  being capped to a fixed window. */}
+              <div
+                ref={trendsScrollRef}
+                className="dc-scroll-visible flex-1 min-w-0 overflow-x-auto overflow-y-hidden"
+                style={{ height: "100%", cursor: "grab" }}
+              >
+                <div
+                  style={{
+                    minWidth: `${Math.max(100, (chartData.dailyTrends.length / 20) * 100)}%`,
+                    height: "100%",
+                  }}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData.dailyTrends} margin={{ top: 12, right: 24, left: 8, bottom: 8 }}>
+                      <defs>
+                        <linearGradient
+                          id="colorRevenue"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop offset="5%" stopColor="#0085FF" stopOpacity={0.8} />
+                          <stop offset="95%" stopColor="#0085FF" stopOpacity={0.1} />
+                        </linearGradient>
+                        <linearGradient
+                          id="colorPurchases"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop offset="5%" stopColor="#00C950" stopOpacity={0.8} />
+                          <stop offset="95%" stopColor="#00C950" stopOpacity={0.1} />
+                        </linearGradient>
+                        <linearGradient id="colorVendorSpends" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#D87000" stopOpacity={0.8} />
+                          <stop offset="95%" stopColor="#D87000" stopOpacity={0.1} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E7E4E3" vertical={false} />
+                      <XAxis
+                        dataKey="date"
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={20}
+                        ticks={dailyTrendsDateTicks}
+                        interval="preserveStart"
+                        tick={{ fontSize: 12, fontFamily: "Inter", fill: "rgba(33, 32, 31, 0.56)" }}
+                      />
+                      <YAxis domain={[0, dailyTrendsYMax]} ticks={dailyTrendsTicks} hide />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#fff",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "8px",
+                          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke="#0085FF"
+                        strokeWidth={2}
+                        fill="none"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="purchases"
+                        stroke="#00C950"
+                        strokeWidth={2}
+                        fill="none"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="vendorSpends"
+                        stroke="#D87000"
+                        strokeWidth={2}
+                        fill="none"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Business Activity — remaining 1-column width, matching the 4th KPI card */}
+          <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+            <h3 className="text-base font-bold text-gray-900 mb-4">
+              Business Activity
+            </h3>
+            <div className="flex flex-row items-center gap-2 mb-4 overflow-x-auto max-w-full">
+              {[
+                { id: "all", label: "All" },
+                { id: "deals", label: "Deals" },
+                { id: "tasks", label: "Tasks" },
+                { id: "meetings", label: "Meetings" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActivityTab(tab.id)}
+                  className={`flex items-center justify-center h-7 px-3 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
+                    activityTab === tab.id
+                      ? "bg-[#0085FF] text-white"
+                      : "bg-[#F8F8FB] text-[#1F2937]"
+                  }`}
+                  style={{ boxShadow: "0px 0px 6px rgba(0, 0, 0, 0.1)" }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="dc-scroll-visible relative flex-1 max-h-[380px] overflow-y-auto pl-4 pr-2">
+              {filteredActivity.length === 0 ? (
+                <p className="text-sm text-gray-400 py-6 text-center">
+                  No recent activity
+                </p>
+              ) : (
+                <>
+                  <div className="absolute left-8 top-2 bottom-2 w-px bg-gray-200" />
+                  <div className="space-y-5">
+                    {filteredActivity.map((item) => (
+                      <div key={item.id} className="relative flex items-start gap-3">
+                        <div
+                          className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${item.iconBg}`}
+                        >
+                          {item.icon}
+                        </div>
+                        <div className="min-w-0 flex-1 pt-0.5">
+                          <p className="text-sm font-semibold text-gray-900 truncate">
+                            {item.title}
+                          </p>
+                          {item.subtitle && (
+                            <p className="text-xs text-gray-500 truncate">
+                              {item.subtitle}
+                            </p>
+                          )}
+                          <p className="text-[11px] text-gray-400 mt-0.5">
+                            {formatActivityDate(item.at)}
+                          </p>
+                        </div>
+                      </div>
                     ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Purchase Order and Purchase Status Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-gray-900">
-              Purchase Order Status
-            </h3>
-            <ShoppingCart className="w-5 h-5 text-gray-400" />
-          </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={chartData.poStatusData.filter((item) => item.value > 0)}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) =>
-                  `${name} ${(percent * 100).toFixed(0)}%`
-                }
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {chartData.poStatusData
-                  .filter((item) => item.value > 0)
-                  .map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+      {/* Sales Performance / Revenue & Collections / Deal Pipeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {(() => {
+          const dealsForStats = filteredData.filteredDeals;
+          const totalDeals = dealsForStats.length;
+          const wonDeals = dealsForStats.filter((d) => d.stage === "Won").length;
+          const lostDeals = dealsForStats.filter((d) => d.stage === "Lost").length;
+          const decidedDeals = wonDeals + lostDeals;
+          const winRate = decidedDeals > 0 ? Math.round((wonDeals / decidedDeals) * 100) : 0;
+          const totalDealValue = dealsForStats.reduce((sum, d) => sum + (d.amount || 0), 0);
+          const avgDealSize = totalDeals > 0 ? totalDealValue / totalDeals : 0;
 
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-gray-900">
-              Purchase Status
-            </h3>
-            <Package className="w-5 h-5 text-gray-400" />
-          </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={chartData.purchaseStatusData.filter(
-                  (item) => item.value > 0
+          const invoicesForStats = filteredData.filteredInvoices;
+          const totalRevenue = invoicesForStats.reduce((sum, inv) => sum + (inv.amount || 0), 0);
+          const collected = invoicesForStats
+            .filter((inv) => inv.status === "Paid")
+            .reduce((sum, inv) => sum + (inv.amount || 0), 0);
+          const outstanding = totalRevenue - collected;
+          const collectionRate = totalRevenue > 0 ? Math.round((collected / totalRevenue) * 100) : 0;
+
+          const stageCounts = {};
+          dealsForStats.forEach((d) => {
+            const stage = d.stage || "Unknown";
+            stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+          });
+          const stageEntries = Object.entries(stageCounts).sort((a, b) => b[1] - a[1]);
+          const maxStageCount = Math.max(1, ...stageEntries.map(([, count]) => count));
+          const pipelineStageColors = ["#0085FF", "#0C4FCD", "#2E7D32", "#D97706", "#E82222", "#00C950"];
+
+          // Monthly Invoiced / Collected / Outstanding for the Revenue &
+          // Collections chart — 12 buckets by calendar month (all years
+          // merged into one, same convention as the earlier monthlyTrends).
+          const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          const revenueCollectionsData = monthLabels.map((label, idx) => {
+            const monthInvoices = invoicesForStats.filter((inv) => {
+              const d = inv.date || inv.createdAt;
+              return d && new Date(d).getMonth() === idx;
+            });
+            const invoiced = monthInvoices.reduce((sum, inv) => sum + (inv.amount || 0), 0);
+            const monthCollected = monthInvoices
+              .filter((inv) => inv.status === "Paid")
+              .reduce((sum, inv) => sum + (inv.amount || 0), 0);
+            return {
+              month: label,
+              invoiced,
+              collected: monthCollected,
+              outstanding: invoiced - monthCollected,
+            };
+          });
+
+          const openDeals = totalDeals - wonDeals - lostDeals;
+          const salesPerformanceData = [
+            { name: "Won", value: wonDeals, color: "#00C950" },
+            { name: "Lost", value: lostDeals, color: "#E82222" },
+            { name: "Open", value: openDeals, color: "#0085FF" },
+          ];
+          const hasAnyDeals = totalDeals > 0;
+
+          return (
+            <>
+              {/* Sales Performance */}
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <h3 className="text-base font-bold text-gray-900 mb-4">
+                  Sales Performance
+                </h3>
+                {hasAnyDeals ? (
+                  <div className="flex items-center gap-8">
+                    <div className="relative flex-shrink-0" style={{ width: 148, height: 148 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={salesPerformanceData.filter((s) => s.value > 0)}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={52}
+                            outerRadius={74}
+                            paddingAngle={salesPerformanceData.filter((s) => s.value > 0).length > 1 ? 2 : 0}
+                            dataKey="value"
+                            stroke="none"
+                          >
+                            {salesPerformanceData
+                              .filter((s) => s.value > 0)
+                              .map((entry) => (
+                                <Cell key={entry.name} fill={entry.color} />
+                              ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-[28px] font-semibold leading-tight text-[#0A0A0A]">
+                          {winRate}%
+                        </span>
+                        <span className="text-[11px] font-medium text-[#525252]">
+                          Win Rate
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-3">
+                      {salesPerformanceData.map((entry) => (
+                        <div key={entry.name} className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className="w-3 h-3 rounded-sm flex-shrink-0"
+                              style={{ background: entry.color }}
+                            />
+                            <span className="text-sm font-medium text-[#0A0A0A] truncate">
+                              {entry.name === "Open" ? "Open Deals" : `${entry.name} Deals`}
+                            </span>
+                          </div>
+                          <span className="text-sm font-medium text-[#525252] flex-shrink-0">
+                            {entry.value}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                        <span className="text-sm text-gray-500">Avg Deal Size</span>
+                        <span className="text-sm font-semibold text-gray-900">
+                          ₹{formatNumberToIndian(Math.round(avgDealSize))}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 py-10 text-center">No deals yet</p>
                 )}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) =>
-                  `${name} ${(percent * 100).toFixed(0)}%`
-                }
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {chartData.purchaseStatusData
-                  .filter((item) => item.value > 0)
-                  .map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+              </div>
 
-      {/* Invoice Status Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-gray-900">
-              Invoice Status
-            </h3>
-            <FileText className="w-5 h-5 text-gray-400" />
-          </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={chartData.invoiceStatusData.filter(
-                  (item) => item.value > 0
+              {/* Revenue & Collections */}
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <h3 className="text-base font-bold text-gray-900 mb-4">
+                  Revenue &amp; Collections
+                </h3>
+                {totalRevenue === 0 ? (
+                  <p className="text-sm text-gray-400 py-10 text-center">No invoices yet</p>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <AreaChart data={revenueCollectionsData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorInvoiced" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#0085FF" stopOpacity={0.6} />
+                            <stop offset="95%" stopColor="#0085FF" stopOpacity={0} />
+                          </linearGradient>
+                          <linearGradient id="colorCollected" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#0F766E" stopOpacity={0.6} />
+                            <stop offset="95%" stopColor="#0F766E" stopOpacity={0} />
+                          </linearGradient>
+                          <linearGradient id="colorOutstanding" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#E82222" stopOpacity={0.6} />
+                            <stop offset="95%" stopColor="#E82222" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+                        <XAxis
+                          dataKey="month"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fontSize: 11, fontFamily: "Inter", fill: "#525252" }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          width={40}
+                          tickFormatter={(v) => (v === 0 ? "₹0" : `₹${(v / 100000).toFixed(0)}L`)}
+                          tick={{ fontSize: 10, fontFamily: "Inter", fill: "#525252" }}
+                        />
+                        <Tooltip
+                          content={({ active, payload, label }) => {
+                            if (!active || !payload || payload.length === 0) return null;
+                            const row = payload[0].payload;
+                            const rows = [
+                              { label: "Invoiced", value: row.invoiced, color: "#0085FF" },
+                              { label: "Collected", value: row.collected, color: "#00C950" },
+                              { label: "Outstanding", value: row.outstanding, color: "#E82222" },
+                            ];
+                            return (
+                              <div className="bg-white border border-gray-200 rounded-md shadow-lg p-2">
+                                <p className="text-xs font-medium text-gray-500 mb-1.5">{label}</p>
+                                <div className="space-y-1.5">
+                                  {rows.map((r) => (
+                                    <div key={r.label} className="flex items-center gap-1.5">
+                                      <span
+                                        className="w-1 self-stretch rounded-full flex-shrink-0"
+                                        style={{ background: r.color }}
+                                      />
+                                      <div>
+                                        <p className="text-[11px] text-gray-500 leading-tight">{r.label}</p>
+                                        <p className="text-xs font-medium text-gray-900 leading-tight">
+                                          ₹{formatNumberToIndian(Math.round(r.value))}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }}
+                        />
+                        <Area type="monotone" dataKey="invoiced" stroke="#0085FF" strokeWidth={2} fill="url(#colorInvoiced)" />
+                        <Area type="monotone" dataKey="collected" stroke="#0F766E" strokeWidth={2} fill="url(#colorCollected)" />
+                        <Area type="monotone" dataKey="outstanding" stroke="#E82222" strokeWidth={2} fill="url(#colorOutstanding)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </>
                 )}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) =>
-                  `${name} ${(percent * 100).toFixed(0)}%`
-                }
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {chartData.invoiceStatusData
-                  .filter((item) => item.value > 0)
-                  .map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+              </div>
 
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-gray-900">
-              Top 10 Invoice Values
-            </h3>
-            <IndianRupee className="w-5 h-5 text-gray-400" />
-          </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData?.invoiceValues?.slice(0, 10)}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6b7280" }} />
-              <YAxis tick={{ fontSize: 12, fill: "#6b7280" }} />
-              <Tooltip
-                formatter={(value) => [
-                  `₹${formatNumberToIndian(value)}`,
-                  "Value",
-                ]}
-                contentStyle={{
-                  backgroundColor: "#fff",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "8px",
-                  boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                }}
-              />
-              <Bar dataKey="value" fill="#10b981" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+              {/* Deal Pipeline */}
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-[#0E121B]">Deal Pipeline</h3>
+                  <p className="text-xs text-[#525866] mt-0.5">Active Opportunities by Stage</p>
+                </div>
+                {stageEntries.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-10 text-center">No deals yet</p>
+                ) : (
+                  <>
+                    {/* Segmented bar — one block per stage, sized by share of total */}
+                    <div className="flex flex-row items-stretch gap-0.5 h-10 rounded-lg overflow-hidden mb-4">
+                      {stageEntries.map(([stage, count], idx) => (
+                        <div
+                          key={stage}
+                          title={`${stage}: ${count}`}
+                          style={{
+                            background: pipelineStageColors[idx % pipelineStageColors.length],
+                            flexGrow: count,
+                            flexBasis: 0,
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div className="border-t border-gray-100 pt-3 space-y-3">
+                      {stageEntries.map(([stage, count], idx) => (
+                        <div key={stage} className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                              style={{ background: pipelineStageColors[idx % pipelineStageColors.length] }}
+                            />
+                            <span className="text-xs font-medium text-[#0A0A0A] truncate">{stage}</span>
+                          </div>
+                          <span className="text-xs text-[#525252] flex-shrink-0">
+                            {count} ({Math.round((count / totalDeals) * 100)}%)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          );
+        })()}
       </div>
     </div>
   );
@@ -1197,6 +1592,18 @@ const Insights = () => {
     ).length;
     const contactsWithCompany = filteredData.filteredContacts.filter(
       (c) => c.company?.name
+    ).length;
+    const contactIdsWithDeals = new Set(
+      filteredData.filteredDeals.filter((d) => d.contact).map((d) => d.contact._id || d.contact)
+    );
+    const contactsWithDeals = filteredData.filteredContacts.filter((c) =>
+      contactIdsWithDeals.has(c._id)
+    ).length;
+    const wonContacts = filteredData.filteredContacts.filter(
+      (c) => c.stageStatus === "Won"
+    ).length;
+    const lostContacts = filteredData.filteredContacts.filter(
+      (c) => c.stageStatus === "Lost"
     ).length;
 
     // Status distribution
@@ -1219,6 +1626,96 @@ const Insights = () => {
         createdDate.getFullYear() === currentYear
       );
     }).length;
+    // Total Contacts card's trend: how many contacts existed at the start of
+    // this month vs the current total, i.e. growth over the current month.
+    const monthStart = new Date(currentYear, currentMonth, 1);
+    const contactsBeforeThisMonth = filteredData.filteredContacts.filter(
+      (c) => new Date(c.createdAt) < monthStart
+    ).length;
+    const totalContactsChange =
+      contactsBeforeThisMonth > 0
+        ? Math.round((contactsThisMonth / contactsBeforeThisMonth) * 100)
+        : totalContacts > 0
+        ? 100
+        : 0;
+    // New Contacts card's trend: this month's new contacts vs last month's.
+    const lastMonthDate = new Date(currentYear, currentMonth - 1, 1);
+    const lastMonth = lastMonthDate.getMonth();
+    const lastMonthYear = lastMonthDate.getFullYear();
+    const contactsLastMonth = filteredData.filteredContacts.filter((c) => {
+      const createdDate = new Date(c.createdAt);
+      return (
+        createdDate.getMonth() === lastMonth &&
+        createdDate.getFullYear() === lastMonthYear
+      );
+    }).length;
+    const newContactsChange =
+      contactsLastMonth > 0
+        ? Math.round(((contactsThisMonth - contactsLastMonth) / contactsLastMonth) * 100)
+        : contactsThisMonth > 0
+        ? 100
+        : 0;
+    // Contacts with Deals card's trend: deals opened (linked to a contact)
+    // this month vs last month.
+    const dealsWithContactThisMonth = filteredData.filteredDeals.filter((d) => {
+      if (!d.contact) return false;
+      const createdDate = new Date(d.createdAt);
+      return (
+        createdDate.getMonth() === currentMonth &&
+        createdDate.getFullYear() === currentYear
+      );
+    }).length;
+    const dealsWithContactLastMonth = filteredData.filteredDeals.filter((d) => {
+      if (!d.contact) return false;
+      const createdDate = new Date(d.createdAt);
+      return (
+        createdDate.getMonth() === lastMonth &&
+        createdDate.getFullYear() === lastMonthYear
+      );
+    }).length;
+    const contactsWithDealsChange =
+      dealsWithContactLastMonth > 0
+        ? Math.round(
+            ((dealsWithContactThisMonth - dealsWithContactLastMonth) / dealsWithContactLastMonth) * 100
+          )
+        : dealsWithContactThisMonth > 0
+        ? 100
+        : 0;
+    // Won/Lost Contacts cards' trend: contacts of that status created this
+    // month vs last month.
+    const wonContactsThisMonth = filteredData.filteredContacts.filter((c) => {
+      if (c.stageStatus !== "Won") return false;
+      const createdDate = new Date(c.createdAt);
+      return createdDate.getMonth() === currentMonth && createdDate.getFullYear() === currentYear;
+    }).length;
+    const wonContactsLastMonth = filteredData.filteredContacts.filter((c) => {
+      if (c.stageStatus !== "Won") return false;
+      const createdDate = new Date(c.createdAt);
+      return createdDate.getMonth() === lastMonth && createdDate.getFullYear() === lastMonthYear;
+    }).length;
+    const wonContactsChange =
+      wonContactsLastMonth > 0
+        ? Math.round(((wonContactsThisMonth - wonContactsLastMonth) / wonContactsLastMonth) * 100)
+        : wonContactsThisMonth > 0
+        ? 100
+        : 0;
+
+    const lostContactsThisMonth = filteredData.filteredContacts.filter((c) => {
+      if (c.stageStatus !== "Lost") return false;
+      const createdDate = new Date(c.createdAt);
+      return createdDate.getMonth() === currentMonth && createdDate.getFullYear() === currentYear;
+    }).length;
+    const lostContactsLastMonth = filteredData.filteredContacts.filter((c) => {
+      if (c.stageStatus !== "Lost") return false;
+      const createdDate = new Date(c.createdAt);
+      return createdDate.getMonth() === lastMonth && createdDate.getFullYear() === lastMonthYear;
+    }).length;
+    const lostContactsChange =
+      lostContactsLastMonth > 0
+        ? Math.round(((lostContactsThisMonth - lostContactsLastMonth) / lostContactsLastMonth) * 100)
+        : lostContactsThisMonth > 0
+        ? 100
+        : 0;
 
     // Company distribution (top 5)
     const companyDistribution = filteredData.filteredContacts
@@ -1235,162 +1732,60 @@ const Insights = () => {
 
     return (
       <div className="space-y-6">
-        {/* Header with Actions */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-gray-900">
-            Contacts Insights
-          </h2>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => (window.location.href = "/contacts")}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-            >
-              <Users className="w-4 h-4" />
-              View All Contacts
-            </button>
-            <button
-              onClick={() => exportToPDF("Contacts")}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Export Report
-            </button>
-          </div>
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard
+            title="Total Contacts"
+            value={totalContacts}
+            icon={<Users className="w-6 h-6" />}
+            color="text-blue-600"
+            bgColor="bg-blue-50"
+            change={totalContactsChange}
+            changeLabel="growth this month"
+          />
+          <StatCard
+            title="New Contacts"
+            value={contactsThisMonth}
+            icon={<TrendingUp className="w-6 h-6" />}
+            color="text-green-600"
+            bgColor="bg-green-50"
+            change={newContactsChange}
+            changeLabel="vs last month"
+          />
+          <StatCard
+            title="Contacts with Deals"
+            value={contactsWithDeals}
+            icon={<Briefcase className="w-6 h-6" />}
+            color="text-purple-600"
+            bgColor="bg-purple-50"
+            change={contactsWithDealsChange}
+            changeLabel="new deals vs last month"
+          />
+          <StatCard
+            title="Won Contacts"
+            value={wonContacts}
+            icon={<CheckSquare className="w-6 h-6" />}
+            color="text-emerald-600"
+            bgColor="bg-emerald-50"
+            change={wonContactsChange}
+            changeLabel="wins vs last month"
+          />
+          <StatCard
+            title="Lost Contacts"
+            value={lostContacts}
+            icon={<XCircle className="w-6 h-6" />}
+            color="text-red-600"
+            bgColor="bg-red-50"
+            change={lostContactsChange}
+            changeLabel="losses vs last month"
+          />
         </div>
 
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Total Contacts */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Total Contacts
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {totalContacts}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Users className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-          </div>
-
-          {/* New This Month */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  New This Month
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {contactsThisMonth}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          {/* With Phone Numbers */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">With Phone</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {contactsWithPhone}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {((contactsWithPhone / totalContacts) * 100).toFixed(1)}% of
-                  total
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Phone className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </div>
-
-          {/* With Company */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  With Company
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {contactsWithCompany}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {((contactsWithCompany / totalContacts) * 100).toFixed(1)}% of
-                  total
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                <Building className="w-6 h-6 text-orange-600" />
-              </div>
-            </div>
-          </div>
+        {/* Placeholder row — content TBD */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+          <div className="lg:col-span-3 bg-white p-6 rounded-xl border border-gray-200 shadow-sm min-h-[560px]" />
+          <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm min-h-[560px]" />
         </div>
-
-        {/* Status Distribution */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Status Distribution
-          </h3>
-          <div className="space-y-3">
-            {Object.entries(statusDistribution).map(([status, count]) => (
-              <div key={status} className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1">
-                  {getStatusBadge(status)}
-                  <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-blue-600 h-full rounded-full transition-all duration-300"
-                      style={{ width: `${(count / totalContacts) * 100}%` }}
-                    />
-                  </div>
-                </div>
-                <span className="text-sm font-semibold text-gray-900 ml-4 min-w-[60px] text-right">
-                  {count} ({((count / totalContacts) * 100).toFixed(1)}%)
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Top Companies */}
-        {topCompanies.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Top Companies
-            </h3>
-            <div className="space-y-3">
-              {topCompanies.map(([company, count], index) => (
-                <div key={company} className="flex items-center gap-4">
-                  <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-sm font-semibold text-gray-600">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">
-                      {company}
-                    </p>
-                    <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden mt-2">
-                      <div
-                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full transition-all duration-300"
-                        style={{ width: `${(count / totalContacts) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                  <span className="text-sm font-semibold text-gray-900 min-w-[80px] text-right">
-                    {count} contacts
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     );
   };
@@ -4210,32 +4605,79 @@ const Insights = () => {
     );
   }
 
-  return (
-    <div className="w-full max-w-screen-2xl mx-auto ">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="bg-blue-100 p-2.5 rounded-xl">
-            <BarChart3 className="w-6 h-6 text-blue-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              Insights & Analytics
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Comprehensive reports and analytics for your CRM data
-            </p>
-          </div>
-        </div>
-      </div>
+  const activeFilterCount =
+    (dateRange.startDate ? 1 : 0) +
+    (dateRange.endDate ? 1 : 0) +
+    (filters.contactStatus !== "all" ? 1 : 0) +
+    (filters.poStatus !== "all" ? 1 : 0) +
+    (filters.purchaseStatus !== "all" ? 1 : 0);
 
-      {/* Filters */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mb-6">
+  return (
+    <div
+      style={{
+        marginTop: -24,
+        marginLeft: -32,
+        marginRight: -32,
+        paddingLeft: 24,
+        paddingRight: 24,
+        boxSizing: "border-box",
+      }}
+    >
+      {/* Fixed strip — same pinned-below-header treatment as Companies.jsx's
+          toolbar. Title text lives in the top navbar (Header.jsx) instead;
+          this strip is just the spacer bar. */}
+      <div
+        className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center justify-between top-[54px] lg:top-16"
+        style={{
+          left: "var(--sidebar-width, 0px)",
+          zIndex: 40,
+          minHeight: "64px",
+          maxHeight: "64px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div className="inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto max-w-full">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                activeTab === tab.id
+                  ? "bg-white text-[#0085FF] shadow-sm"
+                  : "text-gray-700 hover:text-gray-900"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative flex-shrink-0">
+          <button
+            onClick={() => setShowFiltersPanel((prev) => !prev)}
+            className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+            title="Filters"
+          >
+            <Filter className="w-4 h-4" />
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          {showFiltersPanel && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowFiltersPanel(false)}
+              />
+              <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[min(90vw,720px)] bg-white p-6 rounded-xl border border-gray-200 shadow-lg">
         <div className="flex items-center gap-3 mb-4">
           <Filter className="w-5 h-5 text-gray-600" />
           <h3 className="text-base font-bold text-gray-900">Filters</h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <Calendar className="w-4 h-4 inline mr-1" />
@@ -4345,28 +4787,13 @@ const Insights = () => {
             </button>
           </div>
         </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6 bg-white rounded-t-xl overflow-hidden">
-        <nav className="flex space-x-2 px-4 overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 py-4 px-4 border-b-2 font-semibold text-sm whitespace-nowrap transition-colors ${
-                activeTab === tab.id
-                  ? `border-blue-600 ${tab.color} ${tab.bgColor} rounded-t-lg`
-                  : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-lg"
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
+      <div className="pt-[80px] lg:pt-[90px]">
       {/* Tab Content */}
       <div className="min-h-[400px]">
         {activeTab === "overview" && renderOverview()}
@@ -4377,6 +4804,7 @@ const Insights = () => {
         {activeTab === "purchase-orders" && renderPurchaseOrdersReport()}
         {activeTab === "purchases" && renderPurchasesReport()}
         {activeTab === "invoices" && renderInvoicesReport()}
+      </div>
       </div>
     </div>
   );

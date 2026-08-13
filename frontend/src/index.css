@@ -178,6 +178,31 @@
   background: #a0aec0;
 }
 
+/* Always-visible thin scrollbar, unlike .dc-card-scroll's hover-only thumb —
+   for lists where the scroll affordance should be visible without hovering. */
+.dc-scroll-visible {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 transparent;
+}
+
+.dc-scroll-visible::-webkit-scrollbar {
+  width: 6px;
+  display: block;
+}
+
+.dc-scroll-visible::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dc-scroll-visible::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.dc-scroll-visible::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}
+
 /* Smooth scrolling */
 .overflow-x-auto {
   scroll-behavior: smooth;

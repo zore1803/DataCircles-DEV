@@ -151,7 +151,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
     });
   }, [filteredContacts, sortConfig]);
 
-  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+  const { selectedItems, toggleItem, clearSelection, selectAll, upgradeModal } = useBulkSelection({
     items: filteredContacts,
     onDelete: () => setShowBulkDeleteModal(true)
   });
@@ -1137,6 +1137,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
           </div>
         </div>
       )}
+      {upgradeModal}
     </div>
   );
 }

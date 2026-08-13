@@ -775,7 +775,7 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
     [sortedNotes, page, limit],
   );
 
-  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+  const { selectedItems, toggleItem, clearSelection, selectAll, upgradeModal } = useBulkSelection({
     items: filteredNotes,
   });
   const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedItems.length);
@@ -1406,6 +1406,7 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
     margin-bottom: 0.5em;
   }
 `}</style>
+      {upgradeModal}
     </div>
   );
 };

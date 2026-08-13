@@ -216,7 +216,7 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
     [sortedMeetings, page, limit],
   );
 
-  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+  const { selectedItems, toggleItem, clearSelection, selectAll, upgradeModal } = useBulkSelection({
     items: filteredMeetings,
   });
   const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedItems.length);
@@ -742,6 +742,7 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
           onClose={handleCloseMeetingModal}
         />
       )}
+      {upgradeModal}
     </div>
   );
 };

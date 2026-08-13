@@ -215,7 +215,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
     });
   }, [filteredInvoices, sortConfig]);
 
-  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+  const { selectedItems, toggleItem, clearSelection, selectAll, upgradeModal } = useBulkSelection({
     items: filteredInvoices,
     onDelete: () => setShowBulkDeleteModal(true)
   });
@@ -1311,6 +1311,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
           </div>
         </div>
       )}
+      {upgradeModal}
     </div>
   );
 }

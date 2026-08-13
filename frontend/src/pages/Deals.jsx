@@ -84,6 +84,9 @@ import DealQuickView from "../components/deal/DealQuickView";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import AppToaster from "../components/AppToaster";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -842,6 +845,9 @@ function Deals() {
   const [staleDays, setStaleDays] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in-left entrance).
   const [showBulkStrip, setShowBulkStrip] = useState(false);
@@ -969,6 +975,10 @@ function Deals() {
 
   // Long press handlers
   const handleRowMouseDown = (dealId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     const timer = setTimeout(() => {
       setSelectionMode(true);
       if (!selectedRows.includes(dealId)) {
@@ -1934,13 +1944,21 @@ function Deals() {
 
   // NEW: Handle row selection
   const handleRowSelect = useCallback((dealId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedRows((prev) =>
       prev.includes(dealId) ? prev.filter((id) => id !== dealId) : [...prev, dealId]
     );
-  }, []);
+  }, [hasBulkAccess]);
 
   // NEW: Handle select all
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     const pageIds = paginatedTableDeals.map((deal) => deal._id);
     const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedRows.includes(id));
     if (allPageSelected) {
@@ -1956,6 +1974,10 @@ function Deals() {
   // counterpart: it doesn't clear the selection outright (that's "Cancel")
   // — it steps back down to only the rows on the current page.
   const handleSelectAllAcrossPages = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedRows(sortedTableDeals.map((deal) => deal._id));
   };
 
@@ -1968,13 +1990,17 @@ function Deals() {
   // selected — removes just those ids, leaving other columns' selections
   // untouched. Same handler is reused for every column.
   const handleToggleColumnSelect = useCallback((dealIds) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedRows((prev) => {
       const allSelected = dealIds.every((id) => prev.includes(id));
       return allSelected
         ? prev.filter((id) => !dealIds.includes(id))
         : [...new Set([...prev, ...dealIds])];
     });
-  }, []);
+  }, [hasBulkAccess]);
 
   const handleExport = (format) => {
     if (permission === "readonly") {
@@ -2265,7 +2291,9 @@ function Deals() {
 
       {/* New Strip */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
+        className={`fixed right-0 border-b flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16 ${
+          showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"
+        }`}
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,
@@ -3081,6 +3109,13 @@ function Deals() {
           </div>
         )}
       </div>
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </div>
   );
 }

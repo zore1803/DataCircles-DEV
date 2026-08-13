@@ -58,6 +58,9 @@ import {
   createColumnHelper,
 } from "@tanstack/react-table";
 import AppToaster from "../components/AppToaster";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 
 import SearchIcon from "../components/common/SearchIcon";
@@ -493,6 +496,9 @@ function Tasks() {
 
   // Bulk Selection for Meetings
   const [selectedMeetings, setSelectedMeetings] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in entrance), same as Companies.
   const [showBulkStrip, setShowBulkStrip] = useState(false);
@@ -1365,6 +1371,10 @@ function Tasks() {
   };
 
   const handleSelectTask = (taskId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedTasks((prev) =>
       prev.includes(taskId)
         ? prev.filter((id) => id !== taskId)
@@ -1373,6 +1383,10 @@ function Tasks() {
   };
 
   const handleSelectAllTasks = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedTasks((prev) =>
       prev.length === tasks.length ? [] : tasks.map((t) => t._id),
     );
@@ -1383,6 +1397,10 @@ function Tasks() {
   // selected — removes just those ids, leaving other columns' selections
   // untouched. Same handler is reused for every column.
   const handleToggleColumnSelectTasks = (taskIds) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedTasks((prev) => {
       const allSelected = taskIds.every((id) => prev.includes(id));
       return allSelected
@@ -1392,6 +1410,10 @@ function Tasks() {
   };
 
   const handleSelectMeeting = (meetingId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedMeetings((prev) =>
       prev.includes(meetingId)
         ? prev.filter((id) => id !== meetingId)
@@ -1400,6 +1422,10 @@ function Tasks() {
   };
 
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     if (activeTab === "tasks") {
       if (selectedTasks.length === tasks.length && tasks.length > 0) {
         setSelectedTasks([]);
@@ -2632,8 +2658,8 @@ function Tasks() {
           height: 64,
           minHeight: 64,
           maxHeight: 64,
-          background: "#FFFFFF",
-          borderBottom: "1px solid #E1E4EA",
+          background: showBulkStrip ? "#EFF6FF" : "#FFFFFF",
+          borderBottom: showBulkStrip ? "1px solid #BFDBFE" : "1px solid #E1E4EA",
           borderRadius: 0,
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
@@ -3668,6 +3694,13 @@ function Tasks() {
         title={activeTab === "tasks" ? "Filter Tasks" : "Filter Meetings"}
         subtitle="Find items due on a specific date"
         emptyStateText="Add a rule to narrow down the list."
+      />
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
       />
     </div>
   );

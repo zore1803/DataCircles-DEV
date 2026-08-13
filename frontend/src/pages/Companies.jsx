@@ -90,6 +90,9 @@ const CompanyDocumentSignedIcon = (props) => (
 const CompanyLeadSourceIcon = CompanyDocumentSignedIcon;
 import { getVideoTutorial } from "../utils/videoTutorials";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import useCompanyStore from "../store/useCompanyStore";
 import AddToCompanyHotlistModal from "../components/company/AddToCompanyHotlistModal";
@@ -250,6 +253,12 @@ function Companies() {
   const [selectedCompanies, setSelectedCompanies] = useState([]);
   // O(1) membership checks instead of .includes() array scans repeated per row.
   const selectedCompaniesSet = useMemo(() => new Set(selectedCompanies), [selectedCompanies]);
+  // Bulk row selection requires Growth+ — same gate as the shared
+  // useBulkSelection hook used elsewhere, reimplemented here because this
+  // page manages its own selection state instead of that hook.
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -1278,6 +1287,10 @@ function Companies() {
 
   // Bulk selection and actions
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     if (selectedCompanies.length === companies.length) {
       setSelectedCompanies([]);
       setSelectionMode(true);
@@ -1288,6 +1301,10 @@ function Companies() {
   };
 
   const handleSelectCompany = (companyId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedCompanies((prev) =>
       prev.includes(companyId)
         ? prev.filter((id) => id !== companyId)
@@ -2440,6 +2457,13 @@ function Companies() {
           }}
         />
       )}
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </div>
   );
 }

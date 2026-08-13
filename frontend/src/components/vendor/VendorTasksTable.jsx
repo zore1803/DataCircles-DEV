@@ -245,7 +245,7 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
     [sortedTasks, page, limit],
   );
 
-  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+  const { selectedItems, toggleItem, clearSelection, selectAll, upgradeModal } = useBulkSelection({
     items: filteredTasks,
   });
   const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedItems.length);
@@ -748,6 +748,7 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
           getRelatedToName={getRelatedToName}
         />
       )}
+      {upgradeModal}
     </div>
   );
 };

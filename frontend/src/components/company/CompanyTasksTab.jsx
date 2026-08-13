@@ -639,7 +639,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     });
   }, [filteredTasks, sortConfig]);
 
-  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+  const { selectedItems, toggleItem, clearSelection, selectAll, upgradeModal } = useBulkSelection({
     items: filteredTasks,
     onDelete: () => setShowBulkDeleteModal(true)
   });
@@ -1687,6 +1687,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
           </div>
         </div>
       )}
+      {upgradeModal}
     </div>
   );
 }

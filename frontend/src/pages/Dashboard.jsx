@@ -8,6 +8,9 @@ import DataTable from "../components/common/DataTable";
 import InvoiceQuickView from "../components/invoice/InvoiceQuickView";
 import Skeleton from "../components/common/Skeleton";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 
 const getRootZoom = () => {
   if (typeof window === "undefined") return 1;
@@ -152,6 +155,9 @@ function Dashboard() {
   }, []);
 
   const [selectedInvoices, setSelectedInvoices] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in entrance).
   const [showBulkStrip, setShowBulkStrip] = useState(false);
@@ -231,10 +237,18 @@ function Dashboard() {
   };
 
   const handleSelectAllInvoices = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedInvoices((prev) => (prev.length === invoices.length ? [] : invoices.map((inv) => inv._id)));
   };
 
   const handleSelectInvoice = (id) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedInvoices((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
@@ -2778,6 +2792,13 @@ function Dashboard() {
           </div>
         </div>
       </div>
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </div>
   );
 }
