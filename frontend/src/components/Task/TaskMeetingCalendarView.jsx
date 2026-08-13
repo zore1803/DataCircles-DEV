@@ -1,10 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
-import API from "../../services/api";
-import VendorMeetingForm from "./VendorMeetingForm";
-import VendorTaskForm from "./VendorTaskForm";
-import MeetingDetailsModal from "../company/MeetingDetailsModal";
-import TaskDetailsModal from "../Task/TaskDetailsModal";
-import toast from "react-hot-toast";
+import React, { useState, useRef, useLayoutEffect } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,15 +9,12 @@ import {
   Calendar,
   Loader2,
 } from "lucide-react";
-import AppToaster from "../AppToaster";
-
 import SearchIcon from "../common/SearchIcon";
 import HighlightText from "../common/HighlightText";
 
-// Same markup/behavior as CompanyCalendar.jsx's CompactEventCard — a chip
-// per event with its time on the right, instead of the old truncated-title
-// pill with no time shown. Title is run through HighlightText so search
-// matches still get highlighted.
+// Same visual language as CompanyProfilePage's Calendar tab (CompanyCalendar.jsx),
+// but scoped to the whole org instead of one company, and driven by
+// callback props into Tasks.jsx's own create/edit forms instead of owning them.
 const CompactEventCard = ({ item, type, onClick, searchTerm }) => {
   const time = item.scheduledAt || item.dueDate;
   return (
@@ -58,8 +49,6 @@ const CompactEventCard = ({ item, type, onClick, searchTerm }) => {
 
 const QuickAddModal = ({ isOpen, onClose, onAddMeeting, onAddTask, date }) => {
   if (!isOpen) return null;
-
-  // Parse the string date for display
   const displayDate = date ? new Date(date + "T00:00:00") : null;
 
   return (
@@ -67,20 +56,13 @@ const QuickAddModal = ({ isOpen, onClose, onAddMeeting, onAddTask, date }) => {
       <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-xs border border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xl font-semibold text-gray-900">Quick Add</h3>
-          <button
-            onClick={onClose}
-            className="p-1 text-gray-400 hover:text-gray-600"
-          >
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
             <X className="w-4 h-4" />
           </button>
         </div>
         <p className="text-xs text-gray-600 mb-4">
           {displayDate
-            ? displayDate.toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })
+            ? displayDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
             : ""}
         </p>
         <div className="space-y-2">
@@ -91,7 +73,7 @@ const QuickAddModal = ({ isOpen, onClose, onAddMeeting, onAddTask, date }) => {
             <Users className="w-4 h-4 text-gray-600" />
             <div>
               <div className="text-sm font-medium text-gray-900">Meeting</div>
-              <div className="text-xs text-gray-600">Schedule with vendor</div>
+              <div className="text-xs text-gray-600">Schedule with contacts</div>
             </div>
           </button>
           <button
@@ -129,16 +111,9 @@ const ActivityListPopup = ({
       <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-sm border border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-semibold text-gray-900">
-            {date?.toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
+            {date?.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
           </h3>
-          <button
-            onClick={onClose}
-            className="p-1 text-gray-400 hover:text-gray-600"
-          >
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -205,105 +180,55 @@ const ActivityListPopup = ({
   );
 };
 
-const VendorCalendar = ({ vendorId }) => {
+const formatDateToString = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const TaskMeetingCalendarView = ({
+  meetings = [],
+  tasksList = [],
+  isLoading = false,
+  onMeetingClick,
+  onTaskClick,
+  onQuickAddMeeting,
+  onQuickAddTask,
+}) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState("month");
-  // Sliding pill indicator for the month/week/day switcher
   const viewRefs = useRef({});
   const [viewIndicator, setViewIndicator] = useState({ left: 0, width: 0 });
   useLayoutEffect(() => {
     const el = viewRefs.current[viewMode];
     if (el) setViewIndicator({ left: el.offsetLeft, width: el.offsetWidth });
   }, [viewMode]);
-  const [meetings, setMeetings] = useState({});
-  const [tasks, setTasks] = useState({});
-  const [isLoading, setIsLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState("create");
-  const [modalType, setModalType] = useState("meeting");
-  const [calendarDate, setCalendarDate] = useState(null);
-  const [selectedMeeting, setSelectedMeeting] = useState(null);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [isMeetingDetailsOpen, setIsMeetingDetailsOpen] = useState(false);
-  const [isTaskDetailsOpen, setIsTaskDetailsOpen] = useState(false);
-  const [users, setUsers] = useState([]);
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [quickAddDate, setQuickAddDate] = useState(null);
+
   const [searchTerm, setSearchTerm] = useState("");
   const searchInputRef = useRef(null);
-  const [activityPopup, setActivityPopup] = useState({
-    isOpen: false,
-    date: null,
-    meetings: [],
-    tasks: [],
-  });
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddDate, setQuickAddDate] = useState(null);
+  const [activityPopup, setActivityPopup] = useState({ isOpen: false, date: null, meetings: [], tasks: [] });
 
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const weekdays = ["M", "T", "W", "T", "F", "S", "S"];
 
-  // ✅ Add helper function to convert Date to string
-  const formatDateToString = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
+  const meetingsByDate = {};
+  meetings.forEach((meeting) => {
+    if (!meeting.scheduledAt) return;
+    const key = new Date(meeting.scheduledAt).toDateString();
+    if (!meetingsByDate[key]) meetingsByDate[key] = [];
+    meetingsByDate[key].push(meeting);
+  });
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const meetingsRes = await API.get("/meetings", { params: { vendorId } });
-      const meetingsByDate = {};
-      meetingsRes.data.meetings.forEach((meeting) => {
-        const key = new Date(meeting.scheduledAt).toDateString();
-        if (!meetingsByDate[key]) meetingsByDate[key] = [];
-        meetingsByDate[key].push(meeting);
-      });
-      setMeetings(meetingsByDate);
-
-      const tasksRes = await API.get(`/tasks/vendor/${vendorId}`);
-      const tasksByDate = {};
-      tasksRes.data.forEach((task) => {
-        if (task.selectedDate) {
-          const key = new Date(task.selectedDate).toDateString();
-          if (!tasksByDate[key]) tasksByDate[key] = [];
-          tasksByDate[key].push(task);
-        }
-      });
-      setTasks(tasksByDate);
-    } catch (error) {
-      toast.error(error.response?.data?.error || "Failed to fetch calendar data");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [vendorId]);
-
-  const fetchUsers = useCallback(async () => {
-    try {
-      const usersRes = await API.get(`/auth/all-user`);
-      setUsers(usersRes.data.allUsers);
-    } catch (error) {
-      toast.error("Failed to fetch users");
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-    fetchUsers();
-  }, [fetchData, fetchUsers]);
+  const tasksByDate = {};
+  tasksList.forEach((task) => {
+    if (!task.dueDate) return;
+    const key = new Date(task.dueDate).toDateString();
+    if (!tasksByDate[key]) tasksByDate[key] = [];
+    tasksByDate[key].push(task);
+  });
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -315,30 +240,17 @@ const VendorCalendar = ({ vendorId }) => {
 
   const calendarDays = [];
   for (let i = adjustedFirstDay - 1; i >= 0; i--) {
-    calendarDays.push({
-      date: new Date(year, month, -i),
-      isCurrentMonth: false,
-    });
+    calendarDays.push({ date: new Date(year, month, -i), isCurrentMonth: false });
   }
   for (let d = 1; d <= daysInMonth; d++) {
     calendarDays.push({ date: new Date(year, month, d), isCurrentMonth: true });
   }
-  // Rounds up to the next full week (35 or 42 cells) instead of a hardcoded
-  // 35 — a month that needs 6 rows (e.g. a 31-day month starting on a
-  // Saturday) was 1 cell short of a full grid, leaving the last row's
-  // remaining columns with no cell rendered at all: no border, no fill,
-  // just the single populated cell's own right border standing alone.
-  const totalCells = Math.ceil(calendarDays.length / 7) * 7;
-  const extraDays = totalCells - calendarDays.length;
+  const extraDays = 35 - calendarDays.length;
   for (let d = 1; d <= extraDays; d++) {
-    calendarDays.push({
-      date: new Date(year, month + 1, d),
-      isCurrentMonth: false,
-    });
+    calendarDays.push({ date: new Date(year, month + 1, d), isCurrentMonth: false });
   }
 
-  const goToMonth = (offset) =>
-    setCurrentDate(new Date(year, month + offset, 1));
+  const goToMonth = (offset) => setCurrentDate(new Date(year, month + offset, 1));
   const goToPeriod = (offset) => {
     if (viewMode === "month") {
       goToMonth(offset);
@@ -353,7 +265,6 @@ const VendorCalendar = ({ vendorId }) => {
     }
   };
 
-  // Monday-start week containing currentDate
   const weekStart = (() => {
     const d = new Date(currentDate);
     const dow = d.getDay() === 0 ? 6 : d.getDay() - 1;
@@ -379,186 +290,58 @@ const VendorCalendar = ({ vendorId }) => {
       });
       return `${startLabel} - ${endLabel}`;
     }
-    return currentDate.toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    return currentDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
   })();
 
-  // ✅ Updated to convert Date to string
   const handleDayClick = (date) => {
     const day = new Date(date);
     day.setHours(0, 0, 0, 0);
     if (day >= today) {
-      const dateString = formatDateToString(day); // ✅ Convert to "YYYY-MM-DD"
-      setQuickAddDate(dateString);
+      setQuickAddDate(formatDateToString(day));
       setQuickAddOpen(true);
     }
   };
 
   const handleQuickAddMeeting = () => {
-    setModalType("meeting");
-    setModalMode("create");
-    setCalendarDate(quickAddDate); // ✅ Now a string like "2025-11-23"
-    setSelectedMeeting(null);
-    setModalOpen(true);
+    onQuickAddMeeting(quickAddDate);
     setQuickAddOpen(false);
   };
 
   const handleQuickAddTask = () => {
-    setModalType("task");
-    setModalMode("create");
-    setCalendarDate(quickAddDate); // ✅ Now a string like "2025-11-23"
-    setSelectedTask(null);
-    setModalOpen(true);
+    onQuickAddTask(quickAddDate);
     setQuickAddOpen(false);
   };
 
-  // "+ Add" inside the day's activity list popup — same create flow as
-  // Quick Add, just seeded with that day's date instead of quickAddDate.
   const handleAddMeetingForDate = (date) => {
-    setModalType("meeting");
-    setModalMode("create");
-    setCalendarDate(formatDateToString(date));
-    setSelectedMeeting(null);
-    setModalOpen(true);
+    onQuickAddMeeting(formatDateToString(date));
     setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
   };
 
   const handleAddTaskForDate = (date) => {
-    setModalType("task");
-    setModalMode("create");
-    setCalendarDate(formatDateToString(date));
-    setSelectedTask(null);
-    setModalOpen(true);
+    onQuickAddTask(formatDateToString(date));
     setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
   };
 
   const handleMeetingClick = (meeting) => {
-    setSelectedMeeting(meeting);
-    setIsMeetingDetailsOpen(true);
+    onMeetingClick(meeting);
     setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
   };
 
   const handleTaskClick = (task) => {
-    setSelectedTask(task);
-    setIsTaskDetailsOpen(true);
+    onTaskClick(task);
     setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
-  };
-
-  const handleEditMeetingFromDetails = (meeting) => {
-    setIsMeetingDetailsOpen(false);
-    setModalType("meeting");
-    setModalMode("view");
-    setSelectedMeeting(meeting);
-    setModalOpen(true);
-  };
-
-  const handleEditTaskFromDetails = (task) => {
-    setIsTaskDetailsOpen(false);
-    setModalType("task");
-    setModalMode("view");
-    setSelectedTask(task);
-    setModalOpen(true);
-  };
-
-  const handleMeetingComplete = async (meeting) => {
-    try {
-      await API.put(`/meetings/${meeting._id}`, { status: "completed" });
-      await fetchData();
-      setSelectedMeeting((prev) => (prev && prev._id === meeting._id ? { ...prev, status: "completed" } : prev));
-      toast.success("Meeting marked as complete!");
-    } catch (err) {
-      toast.error(err.response?.data?.error || "Failed to update meeting.");
-    }
-  };
-
-  const handleTaskComplete = async (task) => {
-    try {
-      await API.put(`/tasks/${task._id}`, { status: "Completed" });
-      await fetchData();
-      setSelectedTask((prev) => (prev && prev._id === task._id ? { ...prev, status: "Completed" } : prev));
-      toast.success("Task marked as complete!");
-    } catch (err) {
-      toast.error(err.response?.data?.error || "Failed to update task.");
-    }
-  };
-
-  const handleSave = async (form, type) => {
-    const loadingToast = toast.loading(`Saving ${type}...`);
-    try {
-      if (type === "meeting") {
-        await API.post("/meetings", { ...form, vendorId, linkedTo: "vendor" });
-      } else {
-        await API.post("/tasks", { ...form, vendorId });
-      }
-      toast.success(`${type} saved`, { id: loadingToast });
-      setModalOpen(false);
-      resetForm();
-      fetchData();
-    } catch (error) {
-      toast.error(`Failed to save ${type}`, { id: loadingToast });
-    }
-  };
-
-  const onUpdate = async () => {
-    fetchData();
-  };
-
-  const handleDelete = async (id, type) => {
-    const loadingToast = toast.loading(`Deleting ${type}...`);
-    try {
-      await API.delete(`/${type}s/${id}`);
-      toast.success(`${type} deleted`, { id: loadingToast });
-      setModalOpen(false);
-      setIsMeetingDetailsOpen(false);
-      setIsTaskDetailsOpen(false);
-      fetchData();
-    } catch (error) {
-      toast.error(`Failed to delete ${type}`, { id: loadingToast });
-    }
-  };
-
-  const resetForm = () => {
-    setCalendarDate(null);
-    setSelectedMeeting(null);
-    setSelectedTask(null);
-  };
-
-  const closeModal = () => {
-    const wasEditing = modalMode === "view";
-    setModalOpen(false);
-    resetForm();
-    // The edit form (mode="view") does its own PUT internally and just
-    // calls onClose when done — refetch here so the calendar reflects the
-    // change, same as create does via handleSave.
-    if (wasEditing) fetchData();
   };
 
   const filteredEvents = (dayMeetings, dayTasks) => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return { meetings: dayMeetings, tasks: dayTasks };
-
-    // A missing title used to throw here (undefined.toLowerCase()) and
-    // silently crash the whole month grid the moment a search term was
-    // typed — every day cell would just stop rendering, which is
-    // indistinguishable from "the search box doesn't work".
-    const meetings = dayMeetings.filter((m) =>
-      (m.title || "").toLowerCase().includes(term)
-    );
-    const tasks = dayTasks.filter((t) =>
-      (t.title || "").toLowerCase().includes(term)
-    );
-
-    return { meetings, tasks };
+    const filteredMeetings = dayMeetings.filter((m) => (m.title || "").toLowerCase().includes(term));
+    const filteredTasks = dayTasks.filter((t) => (t.title || "").toLowerCase().includes(term));
+    return { meetings: filteredMeetings, tasks: filteredTasks };
   };
 
   return (
     <div className="min-h-[868px]">
-      <AppToaster />
-
       {/* Header */}
       <div className="relative flex items-center gap-1.5 lg:gap-3 mb-4">
         <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
@@ -589,9 +372,7 @@ const VendorCalendar = ({ vendorId }) => {
               key={mode}
               ref={(el) => (viewRefs.current[mode] = el)}
               onClick={() => setViewMode(mode)}
-              className={`relative z-10 px-2 lg:px-3 py-1 lg:py-1.5 rounded-full text-[11px] lg:text-sm font-medium capitalize transition-colors ${viewMode === mode
-                ? "text-blue-600"
-                : "text-gray-500 hover:text-gray-700"
+              className={`relative z-10 px-2 lg:px-3 py-1 lg:py-1.5 rounded-full text-[11px] lg:text-sm font-medium capitalize transition-colors ${viewMode === mode ? "text-blue-600" : "text-gray-500 hover:text-gray-700"
                 }`}
             >
               {mode}
@@ -607,15 +388,24 @@ const VendorCalendar = ({ vendorId }) => {
         </button>
 
         <div className="relative flex items-center flex-1 min-w-0 rounded-full bg-white">
-          <SearchIcon className="absolute left-2.5 lg:left-3 -translate-y-1/2 lg: top-1/2 w-4 h-4 text-[#525866]" />
+          <SearchIcon className="absolute left-2.5 lg:left-3 -translate-y-1/2 lg:top-1/2 w-4 h-4 text-[#525866]" />
           <input
             ref={searchInputRef}
             type="text"
             placeholder="Search Events"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-8 lg:h-9 pl-11 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
+            className="w-full h-8 lg:h-9 pl-11 lg:pl-9 pr-8 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-[#0085FF]"
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="absolute right-2.5 lg:right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         <button
@@ -634,115 +424,95 @@ const VendorCalendar = ({ vendorId }) => {
         </div>
       )}
 
-      {/* Calendar Grid */}
+      {/* Month View */}
       {!isLoading && viewMode === "month" && (
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
-          {weekdays.map((day, index) => (
-            <div key={index} className="p-1 text-center">
-              <span className="text-xs font-medium text-gray-600">{day}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-7">
-          {calendarDays.map(({ date, isCurrentMonth }, idx) => {
-            const key = date.toDateString();
-            const isToday = date.toDateString() === today.toDateString();
-            const isFuture = date >= today;
-            const dayMeetings = meetings[key] || [];
-            const dayTasks = tasks[key] || [];
-            const { meetings: filteredMeetings, tasks: filteredTasks } =
-              filteredEvents(dayMeetings, dayTasks);
-
-            // Combine into one ordered list (meetings first) and cap at
-            // however many chips actually fit inside the cell's fixed
-            // height, rather than the old hardcoded 1 — the rest collapse
-            // into a "+N" chip instead of overflowing the box.
-            const allDayItems = [
-              ...filteredMeetings.map((m) => ({ item: m, type: "meeting" })),
-              ...filteredTasks.map((t) => ({ item: t, type: "task" })),
-            ];
-            const totalItems = allDayItems.length;
-            const maxDisplay = 4;
-            const visibleItems = allDayItems.slice(0, maxDisplay);
-            const hasMore = totalItems > maxDisplay;
-            const hasHighPriority = filteredMeetings.some(
-              (m) => m.priority === "high",
-            );
-
-            return (
-              <div
-                key={key + idx}
-                className={`
-                  min-h-[148px] p-1 border-b border-r border-gray-200 last:border-r-0 relative transition-all
-                  ${!isCurrentMonth
-                    ? "bg-gray-50 text-gray-400"
-                    : "bg-white text-gray-900"
-                  }
-                  ${isCurrentMonth && isFuture
-                    ? "hover:bg-gray-50 cursor-pointer"
-                    : ""
-                  }
-                  ${isToday ? "bg-gray-100 border-gray-300" : ""}
-                `}
-                onClick={() =>
-                  isCurrentMonth && isFuture && handleDayClick(date)
-                }
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span
-                    className={`
-                      text-xs
-                      ${isToday
-                        ? "bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center"
-                        : !isCurrentMonth
-                          ? "text-gray-400"
-                          : "text-gray-900"
-                      }
-                    `}
-                  >
-                    {date.getDate()}
-                  </span>
-                  {hasHighPriority && (
-                    <span className="text-[9px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">
-                      High
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-0.5">
-                  {visibleItems.map(({ item, type }) => (
-                    <CompactEventCard
-                      key={item._id}
-                      item={item}
-                      type={type}
-                      onClick={type === "meeting" ? handleMeetingClick : handleTaskClick}
-                      searchTerm={searchTerm}
-                    />
-                  ))}
-                  {hasMore && (
-                    <div
-                      className="text-[9px] text-gray-500 px-1 py-0.5 bg-gray-100 rounded cursor-pointer hover:bg-gray-200"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActivityPopup({
-                          isOpen: true,
-                          date,
-                          meetings: filteredMeetings,
-                          tasks: filteredTasks,
-                        });
-                      }}
-                    >
-                      +{totalItems - maxDisplay}
-                    </div>
-                  )}
-                </div>
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
+            {weekdays.map((day, index) => (
+              <div key={index} className="p-1 text-center">
+                <span className="text-xs font-medium text-gray-600">{day}</span>
               </div>
-            );
-          })}
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7">
+            {calendarDays.map(({ date, isCurrentMonth }, idx) => {
+              const key = date.toDateString();
+              const isToday = date.toDateString() === today.toDateString();
+              const isFuture = date >= today;
+              const dayMeetings = meetingsByDate[key] || [];
+              const dayTasks = tasksByDate[key] || [];
+              const { meetings: filteredMeetings, tasks: filteredTasks } = filteredEvents(dayMeetings, dayTasks);
+
+              const allDayItems = [
+                ...filteredMeetings.map((m) => ({ item: m, type: "meeting" })),
+                ...filteredTasks.map((t) => ({ item: t, type: "task" })),
+              ];
+              const totalItems = allDayItems.length;
+              const maxDisplay = 4;
+              const visibleItems = allDayItems.slice(0, maxDisplay);
+              const hasMore = totalItems > maxDisplay;
+              const hasHighPriority = filteredMeetings.some((m) => m.priority === "high");
+
+              return (
+                <div
+                  key={key + idx}
+                  className={`
+                    min-h-[148px] p-1 border-b border-r border-gray-200 last:border-r-0 relative transition-all
+                    ${!isCurrentMonth ? "bg-gray-50 text-gray-400" : "bg-white text-gray-900"}
+                    ${isCurrentMonth && isFuture ? "hover:bg-gray-50 cursor-pointer" : ""}
+                    ${isToday ? "bg-gray-100 border-gray-300" : ""}
+                  `}
+                  onClick={() => isCurrentMonth && isFuture && handleDayClick(date)}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span
+                      className={`
+                        text-xs
+                        ${isToday
+                          ? "bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center"
+                          : !isCurrentMonth
+                            ? "text-gray-400"
+                            : "text-gray-900"
+                        }
+                      `}
+                    >
+                      {date.getDate()}
+                    </span>
+                    {hasHighPriority && (
+                      <span className="text-[9px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">
+                        High
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-0.5">
+                    {visibleItems.map(({ item, type }) => (
+                      <CompactEventCard
+                        key={item._id}
+                        item={item}
+                        type={type}
+                        onClick={type === "meeting" ? handleMeetingClick : handleTaskClick}
+                        searchTerm={searchTerm}
+                      />
+                    ))}
+                    {hasMore && (
+                      <div
+                        className="text-[9px] text-gray-500 px-1 py-0.5 bg-gray-100 rounded cursor-pointer hover:bg-gray-200"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActivityPopup({ isOpen: true, date, meetings: filteredMeetings, tasks: filteredTasks });
+                        }}
+                      >
+                        +{totalItems - maxDisplay}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
       )}
 
       {/* Week View */}
@@ -770,10 +540,9 @@ const VendorCalendar = ({ vendorId }) => {
             {weekDays.map((date, idx) => {
               const key = date.toDateString();
               const isFuture = date >= today;
-              const dayMeetings = meetings[key] || [];
-              const dayTasks = tasks[key] || [];
-              const { meetings: filteredMeetings, tasks: filteredTasks } =
-                filteredEvents(dayMeetings, dayTasks);
+              const dayMeetings = meetingsByDate[key] || [];
+              const dayTasks = tasksByDate[key] || [];
+              const { meetings: filteredMeetings, tasks: filteredTasks } = filteredEvents(dayMeetings, dayTasks);
 
               return (
                 <div
@@ -788,6 +557,7 @@ const VendorCalendar = ({ vendorId }) => {
                       item={meeting}
                       type="meeting"
                       onClick={handleMeetingClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
                   {filteredTasks.map((task) => (
@@ -796,6 +566,7 @@ const VendorCalendar = ({ vendorId }) => {
                       item={task}
                       type="task"
                       onClick={handleTaskClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
                 </div>
@@ -809,10 +580,9 @@ const VendorCalendar = ({ vendorId }) => {
       {!isLoading && viewMode === "day" && (() => {
         const key = currentDate.toDateString();
         const isFuture = currentDate >= today;
-        const dayMeetings = meetings[key] || [];
-        const dayTasks = tasks[key] || [];
-        const { meetings: filteredMeetings, tasks: filteredTasks } =
-          filteredEvents(dayMeetings, dayTasks);
+        const dayMeetings = meetingsByDate[key] || [];
+        const dayTasks = tasksByDate[key] || [];
+        const { meetings: filteredMeetings, tasks: filteredTasks } = filteredEvents(dayMeetings, dayTasks);
         const hasEvents = filteredMeetings.length > 0 || filteredTasks.length > 0;
 
         return (
@@ -840,14 +610,13 @@ const VendorCalendar = ({ vendorId }) => {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <Users className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{meeting.title}</span>
+                      <span className="text-sm font-medium truncate">
+                        <HighlightText text={meeting.title} query={searchTerm} />
+                      </span>
                     </div>
                     {meeting.scheduledAt && (
                       <span className="text-xs flex-shrink-0">
-                        {new Date(meeting.scheduledAt).toLocaleTimeString("en-US", {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
+                        {new Date(meeting.scheduledAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                       </span>
                     )}
                   </div>
@@ -860,14 +629,13 @@ const VendorCalendar = ({ vendorId }) => {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <CheckSquare className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{task.title}</span>
+                      <span className="text-sm font-medium truncate">
+                        <HighlightText text={task.title} query={searchTerm} />
+                      </span>
                     </div>
                     {task.dueDate && (
                       <span className="text-xs flex-shrink-0">
-                        {new Date(task.dueDate).toLocaleTimeString("en-US", {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
+                        {new Date(task.dueDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                       </span>
                     )}
                   </div>
@@ -895,74 +663,11 @@ const VendorCalendar = ({ vendorId }) => {
         onTaskClick={handleTaskClick}
         onAddMeeting={handleAddMeetingForDate}
         onAddTask={handleAddTaskForDate}
-        onClose={() =>
-          setActivityPopup({
-            isOpen: false,
-            date: null,
-            meetings: [],
-            tasks: [],
-          })
-        }
-      />
-
-      {modalType === "meeting" && (
-        <VendorMeetingForm
-          open={modalOpen}
-          mode={modalMode}
-          startInEditMode={modalMode === "view"}
-          meetingData={modalMode === "view" ? selectedMeeting : undefined}
-          calendarDate={calendarDate}
-          vendorId={vendorId}
-          users={users}
-          onSave={(form) => handleSave(form, "meeting")}
-          onDelete={
-            modalMode === "view"
-              ? (id) => handleDelete(id, "meeting")
-              : undefined
-          }
-          onClose={closeModal}
-        />
-      )}
-
-      {modalType === "task" && (
-        <VendorTaskForm
-          open={modalOpen}
-          mode={modalMode}
-          startInEditMode={modalMode === "view"}
-          taskData={modalMode === "view" ? selectedTask : undefined}
-          vendorId={vendorId}
-          calendarDate={calendarDate}
-          users={users}
-          onSave={(form) => handleSave(form, "task")}
-          onDelete={
-            modalMode === "view" ? (id) => handleDelete(id, "task") : undefined
-          }
-          onClose={closeModal}
-          onUpdate={onUpdate}
-        />
-      )}
-
-      <MeetingDetailsModal
-        open={isMeetingDetailsOpen}
-        meetingData={selectedMeeting}
-        users={users}
-        onDelete={(id) => handleDelete(id, "meeting")}
-        onEdit={handleEditMeetingFromDetails}
-        onComplete={handleMeetingComplete}
-        onClose={() => setIsMeetingDetailsOpen(false)}
-      />
-
-      <TaskDetailsModal
-        open={isTaskDetailsOpen}
-        taskData={selectedTask}
-        users={users}
-        onDelete={(id) => handleDelete(id, "task")}
-        onEdit={handleEditTaskFromDetails}
-        onComplete={handleTaskComplete}
-        onClose={() => setIsTaskDetailsOpen(false)}
+        onClose={() => setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] })}
+        searchTerm={searchTerm}
       />
     </div>
   );
 };
 
-export default VendorCalendar;
+export default TaskMeetingCalendarView;

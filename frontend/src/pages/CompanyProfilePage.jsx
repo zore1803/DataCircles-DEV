@@ -13,6 +13,7 @@ import CompanyFolderTab from "../components/company/CompanyFolderTab";
 import CompanyCalendar from "../components/company/CompanyCalendar";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import toast from "react-hot-toast";
+import AppToaster from "../components/AppToaster";
 import logo from "/DataCircles.png";
 import {
   MapPin,
@@ -40,6 +41,7 @@ import {
   Calendar,
   FolderOpen,
   LayoutGrid,
+  X,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -239,6 +241,7 @@ const CompanyProfilePage = () => {
   const [showMergeModal, setShowMergeModal] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [companyFieldNames, setCompanyFieldNames] = useState([]);
   const [additionalFields, setAdditionalFields] = useState({});
@@ -257,10 +260,7 @@ const CompanyProfilePage = () => {
     (d) => d.status === "Won" || d.status === "Lost",
   ).length;
   const upcomingTasksCount = tasks.filter(
-    (t) =>
-      t.status !== "Completed" &&
-      t.dueDate &&
-      new Date(t.dueDate) >= new Date(),
+    (t) => t.status !== "Completed"
   ).length;
   const upcomingMeetingsCount = meetings.filter(
     (m) => m.scheduledAt && new Date(m.scheduledAt) >= new Date(),
@@ -517,6 +517,19 @@ const CompanyProfilePage = () => {
 
     return { year, month, today: today.getDate(), days };
   })();
+
+  const futureEventDays = new Set(
+    [...tasks, ...meetings]
+      .map((item) => new Date(item.dueDate || item.scheduledAt))
+      .filter(
+        (d) =>
+          !isNaN(d) &&
+          d.getFullYear() === miniCalendar.year &&
+          d.getMonth() === miniCalendar.month &&
+          d.getDate() > miniCalendar.today
+      )
+      .map((d) => d.getDate())
+  );
 
   const upcomingItems = [...tasks, ...meetings]
     .map((item) => ({
@@ -1400,23 +1413,40 @@ const CompanyProfilePage = () => {
                         {miniCalendar.days.map((day, idx) => (
                           <div
                             key={idx}
-                            className={`text-[11px] text-center py-1 rounded-full ${day === miniCalendar.today
-                              ? "bg-blue-600 text-white font-semibold"
-                              : day
-                                ? "text-gray-700"
-                                : ""
-                              }`}
+                            className="flex flex-col items-center"
                           >
-                            {day || ""}
+                            {day && futureEventDays.has(day) && (
+                              <span className="mb-1 w-1.5 h-1.5 rounded-full bg-[#1E3A8A] flex-shrink-0"></span>
+                            )}
+                            <span
+                              className={`text-[11px] w-6 h-6 flex items-center justify-center rounded-full ${day === miniCalendar.today
+                                ? "bg-blue-600 text-white font-semibold"
+                                : day
+                                  ? "text-gray-700"
+                                  : ""
+                                }`}
+                            >
+                              {day || ""}
+                            </span>
                           </div>
                         ))}
                       </div>
                     </>
                   )}
 
-                  <h4 className="text-xs font-semibold text-gray-900 mt-4 mb-2">
-                    {showOverviewSkeleton ? <Skeleton width={70} height={12} /> : "Upcoming"}
-                  </h4>
+                  <div className="flex items-center justify-between mt-4 mb-2">
+                    <h4 className="text-xs font-semibold text-gray-900">
+                      {showOverviewSkeleton ? <Skeleton width={70} height={12} /> : "Upcoming"}
+                    </h4>
+                    {!showOverviewSkeleton && [...tasks, ...meetings].length > 4 && (
+                      <button
+                        onClick={() => setShowAllUpcoming(true)}
+                        className="text-[10px] font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        Show All
+                      </button>
+                    )}
+                  </div>
                   <div className="space-y-2">
                     {showOverviewSkeleton ? (
                       Array.from({ length: 5 }).map((_, idx) => (
@@ -1760,6 +1790,73 @@ const CompanyProfilePage = () => {
             {activeTab === "Calendar" && <CompanyCalendar companyId={id} />}
         </div>
       </div>
+      {showAllUpcoming && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">All Upcoming Events</h2>
+              <button onClick={() => setShowAllUpcoming(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {[...tasks, ...meetings]
+                .map((item) => ({
+                  title: item.title,
+                  date: new Date(item.dueDate || item.scheduledAt),
+                  overdue:
+                    item.status !== "Completed" &&
+                    (item.dueDate || item.scheduledAt) &&
+                    new Date(item.dueDate || item.scheduledAt) < new Date(),
+                  isMeeting: !!item.scheduledAt,
+                  original: item
+                }))
+                .filter((item) => !isNaN(item.date))
+                .sort((a, b) => a.date - b.date)
+                .map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50/50">
+                    <span
+                      className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${item.overdue ? "bg-red-500" : "bg-blue-500"
+                        }`}
+                    />
+                    <div className="min-w-0">
+                      <p
+                        className={`text-sm font-medium truncate ${item.overdue ? "text-red-600" : "text-gray-900"
+                          }`}
+                      >
+                        {item.title}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {item.date.toLocaleDateString("en-US", {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric"
+                        })} {item.isMeeting && " · " + item.date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                        <span className="ml-1 text-[10px] uppercase font-semibold text-gray-400">({item.isMeeting ? "Meeting" : "Task"})</span>
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              {[...tasks, ...meetings].length === 0 && (
+                <p className="text-sm text-center text-gray-500 py-4">No upcoming tasks or meetings.</p>
+              )}
+            </div>
+            <div className="p-4 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowAllUpcoming(false);
+                  setActiveTab("Meetings");
+                  setPendingCreate("meeting");
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Plus size={16} /> Add New Meeting
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <SubsidiaryModal
         companyId={id}
         isOpen={showSubsidiaryModal}
@@ -1776,6 +1873,7 @@ const CompanyProfilePage = () => {
           fetchCompanyDetails();
         }}
       />
+      <AppToaster />
     </div>
   );
 };

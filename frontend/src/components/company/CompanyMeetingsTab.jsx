@@ -1111,7 +1111,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
               ) : (
                 paginatedMeetings.map((meeting) => {
                   const isSelected = selectedItems.includes(meeting._id);
-                  const participants = meeting.participants || [];
+                  const attendees = [...(meeting.internalParticipants || []), ...(meeting.participants || [])];
                   const organizer = typeof meeting.createdBy === "object" ? meeting.createdBy : null;
                   const isActionsOpen = openRowActionsId === meeting._id;
                   const meetingActionsMenu = (
@@ -1258,24 +1258,24 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                     ),
                     attendees: (
                         <td key="attendees" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
-                          {participants.length ? (
+                          {attendees.length ? (
                             <div className="flex items-center">
-                              {participants.slice(0, 3).map((p, i) => (
+                              {attendees.slice(0, 3).map((p, i) => (
                                 <div
                                   key={p._id || i}
                                   className="rounded-full bg-gray-200 border border-white flex items-center justify-center text-[9px] font-semibold text-gray-600 flex-shrink-0"
                                   style={{ width: 24, height: 24, marginLeft: i === 0 ? 0 : -8 }}
                                 >
-                                  {p.name?.charAt(0)?.toUpperCase() || "?"}
+                                  {(p.name || "?").charAt(0).toUpperCase()}
                                 </div>
                               ))}
-                              {participants.length > 3 && (
+                              {attendees.length > 3 && (
                                 <div
                                   className="rounded-full bg-[#D9D9D9] border border-white flex items-center justify-center flex-shrink-0"
-                                  style={{ width: 24, height: 24, marginLeft: -8 }}
+                                  style={{ height: 24, padding: "0 6px", borderRadius: 12, marginLeft: -8 }}
                                 >
-                                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
-                                    +{participants.length - 3}
+                                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#78788D", whiteSpace: "nowrap" }}>
+                                    +{attendees.length - 3} more
                                   </span>
                                 </div>
                               )}
@@ -1489,9 +1489,15 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                 {cells.map((day, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center justify-center"
-                    style={{ width: 24, height: 24, justifySelf: "center" }}
+                    className="flex flex-col items-center justify-center"
+                    style={{ width: 24, justifySelf: "center" }}
                   >
+                    {day && meetingDays.has(day) && (
+                      <span
+                        className="flex-shrink-0"
+                        style={{ width: 6, height: 6, borderRadius: 99, background: "#0085FF", marginBottom: 2 }}
+                      />
+                    )}
                     {day && (
                       <span
                         className="flex items-center justify-center"
@@ -1504,7 +1510,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                           fontSize: 14,
                           lineHeight: "17px",
                           background: day === now.getDate() ? "#0085FF" : "transparent",
-                          color: day === now.getDate() ? "#FFFFFF" : meetingDays.has(day) ? "#0085FF" : "#333333",
+                          color: day === now.getDate() ? "#FFFFFF" : "#333333",
                         }}
                       >
                         {day}
@@ -1578,16 +1584,9 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
               .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
               .slice(0, 3);
             if (realUpcomingMeetings.length === 0) return null;
-            const upcomingMeetings =
-              realUpcomingMeetings.length === 1
-                ? [...realUpcomingMeetings, realUpcomingMeetings[0]]
-                : realUpcomingMeetings;
+            const upcomingMeetings = realUpcomingMeetings;
             return (
               <div className="relative flex-shrink-0" style={{ isolation: "isolate", width: 994 }}>
-                <div
-                  className="absolute"
-                  style={{ width: 1, top: 60, bottom: -34, left: 4, background: "#E7E7E9" }}
-                />
                 {upcomingMeetings.map((meeting, idx) => {
                   const start = new Date(meeting.scheduledAt);
                   const duration = meeting.duration || 30;
@@ -1598,12 +1597,23 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                   return (
                     <div
                       key={`${meeting._id}-${idx}`}
-                      className="flex flex-row items-center"
+                      className="relative flex flex-row items-center"
                       style={{ gap: 12, width: "100%" }}
                     >
+                      {/* Connector line: each row draws only the portion between
+                          its own top/bottom edge and its own dot's center, sized
+                          in percentages of THIS row's actual (content-driven)
+                          height — so it lines up exactly regardless of how tall
+                          any individual card renders. */}
+                      {!isFirst && (
+                        <div className="absolute" style={{ width: 1, left: 4, top: 0, height: "50%", background: "#E7E7E9" }} />
+                      )}
+                      {!isLast && (
+                        <div className="absolute" style={{ width: 1, left: 4, top: "50%", height: "50%", background: "#E7E7E9" }} />
+                      )}
                       <span
-                        className="flex-shrink-0"
-                        style={{ width: 10, height: 10, borderRadius: 9999, background: color }}
+                        className="relative flex-shrink-0"
+                        style={{ width: 10, height: 10, borderRadius: 9999, background: color, zIndex: 1 }}
                       />
                       <div
                         className="flex flex-col justify-center items-start flex-1"
@@ -1640,7 +1650,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               </span>
                             </div>
                             {(() => {
-                              const attendees = meeting.internalTeam || meeting.participants || [];
+                              const attendees = [...(meeting.internalParticipants || []), ...(meeting.participants || [])];
                               const visibleAttendees = attendees.slice(0, 3);
                               const extraAttendees = attendees.length - visibleAttendees.length;
                               if (attendees.length === 0) return null;
@@ -1672,16 +1682,16 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                                       <div
                                         className="flex items-center justify-center flex-shrink-0"
                                         style={{
-                                          width: 20,
                                           height: 20,
-                                          borderRadius: "50%",
+                                          padding: "0 6px",
+                                          borderRadius: 10,
                                           background: "#D9D9D9",
                                           border: "1px solid #FFFFFF",
                                           marginLeft: -4,
                                         }}
                                       >
-                                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, color: "#78788D" }}>
-                                          +{extraAttendees}
+                                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, color: "#78788D", whiteSpace: "nowrap" }}>
+                                          +{extraAttendees} more
                                         </span>
                                       </div>
                                     )}
@@ -1801,20 +1811,19 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
               .sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt))
               .slice(0, 3);
             if (realCompletedMeetings.length === 0) return null;
-            const completedMeetings =
-              realCompletedMeetings.length === 1
-                ? [...realCompletedMeetings, realCompletedMeetings[0]]
-                : realCompletedMeetings;
+            const completedMeetings = realCompletedMeetings;
             return (
               <div className="relative flex-shrink-0" style={{ isolation: "isolate", width: 994 }}>
-                <div
-                  className="absolute"
-                  style={{ width: 1, top: 60, bottom: -34, left: 4, background: "#E7E7E9" }}
-                />
                 {isLoading ? (
                   [1, 2, 3].map((_, idx) => (
-                    <div key={idx} className="flex flex-row items-center" style={{ gap: 12, width: "100%" }}>
-                      <span className="flex-shrink-0" style={{ width: 10, height: 10, borderRadius: 9999, background: "#E1E4EA" }} />
+                    <div key={idx} className="relative flex flex-row items-center" style={{ gap: 12, width: "100%" }}>
+                      {idx !== 0 && (
+                        <div className="absolute" style={{ width: 1, left: 4, top: 0, height: "50%", background: "#E7E7E9" }} />
+                      )}
+                      {idx !== 2 && (
+                        <div className="absolute" style={{ width: 1, left: 4, top: "50%", height: "50%", background: "#E7E7E9" }} />
+                      )}
+                      <span className="relative flex-shrink-0" style={{ width: 10, height: 10, borderRadius: 9999, background: "#E1E4EA", zIndex: 1 }} />
                       <div
                         className="flex flex-col justify-center items-start flex-1"
                         style={{
@@ -1838,12 +1847,18 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                   return (
                     <div
                       key={`${meeting._id}-${idx}`}
-                      className="flex flex-row items-center"
+                      className="relative flex flex-row items-center"
                       style={{ gap: 12, width: "100%" }}
                     >
+                      {!isFirst && (
+                        <div className="absolute" style={{ width: 1, left: 4, top: 0, height: "50%", background: "#E7E7E9" }} />
+                      )}
+                      {!isLast && (
+                        <div className="absolute" style={{ width: 1, left: 4, top: "50%", height: "50%", background: "#E7E7E9" }} />
+                      )}
                       <span
-                        className="flex-shrink-0"
-                        style={{ width: 10, height: 10, borderRadius: 9999, background: color }}
+                        className="relative flex-shrink-0"
+                        style={{ width: 10, height: 10, borderRadius: 9999, background: color, zIndex: 1 }}
                       />
                       <div
                         className="flex flex-col justify-center items-start flex-1"
@@ -1880,7 +1895,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               </span>
                             </div>
                             {(() => {
-                              const attendees = meeting.internalTeam || meeting.participants || [];
+                              const attendees = [...(meeting.internalParticipants || []), ...(meeting.participants || [])];
                               const visibleAttendees = attendees.slice(0, 3);
                               const extraAttendees = attendees.length - visibleAttendees.length;
                               if (attendees.length === 0) return null;
@@ -1912,16 +1927,16 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                                       <div
                                         className="flex items-center justify-center flex-shrink-0"
                                         style={{
-                                          width: 20,
                                           height: 20,
-                                          borderRadius: "50%",
+                                          padding: "0 6px",
+                                          borderRadius: 10,
                                           background: "#D9D9D9",
                                           border: "1px solid #FFFFFF",
                                           marginLeft: -4,
                                         }}
                                       >
-                                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, color: "#78788D" }}>
-                                          +{extraAttendees}
+                                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, color: "#78788D", whiteSpace: "nowrap" }}>
+                                          +{extraAttendees} more
                                         </span>
                                       </div>
                                     )}

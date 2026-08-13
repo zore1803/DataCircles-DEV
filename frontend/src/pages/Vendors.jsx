@@ -28,13 +28,16 @@ import {
   Pin,
   PinOff,
   EyeOff,
+  Video,
 } from "lucide-react";
+import VideoTutorialModal from "../components/VideoTutorialModal";
 import BulkActions from "../components/BulkActions";
 import VendorForm from "../components/vendor/VendorForm";
 import QuickVendorForm from "../components/vendor/QuickVendorForm";
 import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
 import { useLocation } from "react-router-dom";
 import ImportVendors from "../components/vendor/ImportVendors";
+import QuickItemDrawer from "../components/item/QuickItemDrawer";
 import toast from "react-hot-toast";
 import AppToaster from "../components/AppToaster";
 import HighlightText from "../components/common/HighlightText";
@@ -114,6 +117,7 @@ function Vendors() {
   const [debouncedFilterCompany, setDebouncedFilterCompany] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [showTestDrawer, setShowTestDrawer] = useState(false);
   const [editVendor, setEditVendor] = useState(null);
   const [selectedVendors, setSelectedVendors] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
@@ -1123,11 +1127,16 @@ function Vendors() {
   // `loading` toggles around every fetchVendors() call, including page/limit
   // changes — same source Companies.jsx feeds its top-edge bar from, so
   // paging here now gets the identical progress flash Companies.jsx shows.
-  useTopLoadingSignal(loading);
+  const [showVideoTutorial, setShowVideoTutorial] = useState(false);
 
   return (
     <>
       <AppToaster />
+      <VideoTutorialModal
+        isOpen={showVideoTutorial}
+        onClose={() => setShowVideoTutorial(false)}
+        title="Vendors Module Guide"
+      />
 
       {/* Fixed toolbar — same positioning Companies.jsx uses (pinned right
           below the app header, not part of the scrolling page), and the
@@ -1220,7 +1229,17 @@ function Vendors() {
                 </>
               ) : (
                 <>
-                  <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Vendors</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Vendors</h1>
+                    <button
+                      type="button"
+                      onClick={() => setShowVideoTutorial(true)}
+                      className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 transition-all flex-shrink-0 shadow-sm"
+                      title="Watch Vendors Module Video Guide"
+                    >
+                      <Video className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
                     Manage your vendors.
                   </p>
@@ -1357,7 +1376,7 @@ function Vendors() {
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                 >
                   <Upload className="w-4 h-4 text-gray-400" />
-                  {showImport ? "Hide Import/Export" : "Import/Export"}
+                  {showImport ? "Hide Import" : "Import"}
                 </button>
                 <Link
                   to="/settings/forms?module=Vendor"
@@ -1370,6 +1389,15 @@ function Vendors() {
               </div>
             )}
           </div>
+
+          <button
+            onClick={() => setShowTestDrawer(true)}
+            className="h-11 px-4 flex items-center justify-center gap-1.5 bg-purple-600 hover:bg-purple-700 rounded-full transition-colors flex-shrink-0 ml-1"
+          >
+            <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">
+              Test Item Drawer
+            </span>
+          </button>
 
           <button
             onClick={() => {
@@ -1411,6 +1439,14 @@ function Vendors() {
         />
       )}
 
+      <QuickItemDrawer
+        isOpen={showTestDrawer}
+        onClose={() => setShowTestDrawer(false)}
+        onSave={(data) => {
+          console.log("Saved Item Data:", data);
+          setShowTestDrawer(false);
+        }}
+      />
 
       {showImport && (
         <ImportVendors

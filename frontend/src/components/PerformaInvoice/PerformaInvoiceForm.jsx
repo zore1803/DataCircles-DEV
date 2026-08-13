@@ -288,6 +288,7 @@ const PerformaInvoiceForm = ({
   onClose,
   fetchData,
   editingPerformaInvoice,
+  conversionData,
   onPreview,
 }) => {
   const [form, setForm] = useState({
@@ -453,18 +454,19 @@ const PerformaInvoiceForm = ({
   }, [isOpen, fetchItems, fetchCompanies, fetchContacts, deals]);
 
   useEffect(() => {
-    if (editingPerformaInvoice) {
+    if (editingPerformaInvoice || conversionData) {
+      const sourceData = editingPerformaInvoice || conversionData;
       const initialForm = {
-        deal: editingPerformaInvoice.deal?._id || "",
-        date: editingPerformaInvoice.date
-          ? editingPerformaInvoice.date.slice(0, 10)
+        deal: sourceData.deal?._id || sourceData.deal || "",
+        date: sourceData.date
+          ? sourceData.date.slice(0, 10)
           : "",
-        dueDate: editingPerformaInvoice.dueDate
-          ? editingPerformaInvoice.dueDate.slice(0, 10)
+        dueDate: sourceData.dueDate
+          ? sourceData.dueDate.slice(0, 10)
           : "",
-        receiverGSTIN: editingPerformaInvoice.receiverGSTIN || "",
-        items: editingPerformaInvoice.items.map((item) => ({
-          _id: item.itemId || null,
+        receiverGSTIN: sourceData.receiverGSTIN || "",
+        items: (sourceData.items || []).map((item) => ({
+          _id: item.itemId || item._id || null,
           name: item.name || "",
           description: item.description || "",
           rate: item.rate || "",
@@ -475,14 +477,14 @@ const PerformaInvoiceForm = ({
           discountType: item.discountType || "amount",
           discount: item.discount || 0,
         })),
-        discount: editingPerformaInvoice.discount || {
+        discount: sourceData.discount || {
           type: "fixed",
           value: 0,
         },
-        amount: editingPerformaInvoice.amount || 0,
-        status: editingPerformaInvoice.status || "Draft",
-        style: editingPerformaInvoice.style || "",
-        isTaxInvoice: editingPerformaInvoice.isTaxInvoice || false,
+        amount: sourceData.amount || 0,
+        status: editingPerformaInvoice ? sourceData.status : "Draft",
+        style: sourceData.style || "",
+        isTaxInvoice: sourceData.isTaxInvoice || false,
       };
       setForm(initialForm);
       setHasUnsavedChanges(false);
@@ -1522,3 +1524,11 @@ const PerformaInvoiceForm = ({
 };
 
 export default PerformaInvoiceForm;
+
+import { CreateInvoicePanel } from "../invoice/InvoiceForm";
+
+const CreatePerformaPanel = (props) => (
+  <CreateInvoicePanel {...props} type="performa" />
+);
+
+export { CreatePerformaPanel };

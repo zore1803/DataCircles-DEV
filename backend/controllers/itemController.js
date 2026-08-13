@@ -285,6 +285,57 @@ const toggleItemStatus = async (req, res) => {
   }
 };
 
+const exportSelectedItems = async (req, res) => {
+  try {
+    const { selectedIds, columns } = req.body;
+
+    if (!selectedIds || selectedIds.length === 0) {
+      return res.status(400).json({ error: "No items selected for export" });
+    }
+
+    // Fetch every selected item regardless of pagination, scoped to the org
+    // so one tenant can never export another's rows.
+    const items = await Item.find({
+      _id: { $in: selectedIds },
+      organization: req.user.organization,
+    }).lean();
+
+    const headerRow = columns.map((c) => `"${c.label}"`).join(",");
+
+    const dataRows = items.map((item) =>
+      columns
+        .map((c) => {
+          let val = "";
+
+          if (c.isCustomField) {
+            const field = item.additionalFields?.find((f) => f.key === c.key);
+            val = field ? field.value : "";
+          } else if (c.key === "variants") {
+            // Variants is an array subdocument; flatten to one readable cell.
+            val = (item.variants || []).map((v) => v.name).filter(Boolean).join(", ");
+          } else {
+            val = item[c.key] ?? "";
+          }
+
+          if (typeof val === "object" && val !== null) val = JSON.stringify(val);
+          val = String(val).replace(/"/g, '""');
+
+          return `"${val}"`;
+        })
+        .join(","),
+    );
+
+    const csvContent = [headerRow, ...dataRows].join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="Exported_Items.csv"');
+    res.status(200).send(csvContent);
+  } catch (error) {
+    console.error("Item export error:", error);
+    res.status(500).json({ error: "Failed to export items" });
+  }
+};
+
 module.exports = {
   createItem,
   getAllItems,
@@ -293,5 +344,6 @@ module.exports = {
   deleteItem,
   getItemCategories,
   toggleItemStatus,
-  getAllItemsPaginated
+  getAllItemsPaginated,
+  exportSelectedItems,
 };

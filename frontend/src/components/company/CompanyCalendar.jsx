@@ -18,7 +18,8 @@ import {
 import AppToaster from "../AppToaster";
 
 import SearchIcon from "../common/SearchIcon";
-const CompactEventCard = ({ item, type, onClick }) => {
+import HighlightText from "../common/HighlightText";
+const CompactEventCard = ({ item, type, onClick, searchTerm }) => {
   const time = item.scheduledAt || item.dueDate;
   return (
     <div
@@ -35,7 +36,9 @@ const CompactEventCard = ({ item, type, onClick }) => {
       }}
       title={`${type}: ${item.title}`}
     >
-      <span className="truncate">{item.title}</span>
+      <span className="truncate">
+        <HighlightText text={item.title} query={searchTerm} />
+      </span>
       {time && (
         <span className="flex-shrink-0 opacity-70">
           {new Date(time).toLocaleTimeString("en-US", {
@@ -114,6 +117,7 @@ const ActivityListPopup = ({
   onAddMeeting,
   onAddTask,
   onClose,
+  searchTerm,
 }) => {
   if (!isOpen) return null;
 
@@ -157,7 +161,9 @@ const ActivityListPopup = ({
                   onClick={() => onMeetingClick(meeting)}
                 >
                   <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                  <span className="truncate">{meeting.title}</span>
+                  <span className="truncate">
+                    <HighlightText text={meeting.title} query={searchTerm} />
+                  </span>
                 </div>
               ))
             )}
@@ -183,7 +189,9 @@ const ActivityListPopup = ({
                   onClick={() => onTaskClick(task)}
                 >
                   <CheckSquare className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                  <span className="truncate">{task.title}</span>
+                  <span className="truncate">
+                    <HighlightText text={task.title} query={searchTerm} />
+                  </span>
                 </div>
               ))
             )}
@@ -741,6 +749,7 @@ const CompanyCalendar = ({ companyId }) => {
                       item={item}
                       type={type}
                       onClick={type === "meeting" ? handleMeetingClick : handleTaskClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
                   {hasMore && (
@@ -810,6 +819,7 @@ const CompanyCalendar = ({ companyId }) => {
                       item={meeting}
                       type="meeting"
                       onClick={handleMeetingClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
                   {filteredTasks.map((task) => (
@@ -818,6 +828,7 @@ const CompanyCalendar = ({ companyId }) => {
                       item={task}
                       type="task"
                       onClick={handleTaskClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
                 </div>
@@ -862,7 +873,9 @@ const CompanyCalendar = ({ companyId }) => {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <Users className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{meeting.title}</span>
+                      <span className="text-sm font-medium truncate">
+                        <HighlightText text={meeting.title} query={searchTerm} />
+                      </span>
                     </div>
                     {meeting.scheduledAt && (
                       <span className="text-xs flex-shrink-0">
@@ -882,7 +895,9 @@ const CompanyCalendar = ({ companyId }) => {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <CheckSquare className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{task.title}</span>
+                      <span className="text-sm font-medium truncate">
+                        <HighlightText text={task.title} query={searchTerm} />
+                      </span>
                     </div>
                     {task.dueDate && (
                       <span className="text-xs flex-shrink-0">

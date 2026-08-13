@@ -8,6 +8,11 @@ import {
   FileText,
   X,
   Eye,
+  ChevronLeft,
+  ChevronDown,
+  ChevronRight,
+  Settings,
+  Minimize2,
 } from "lucide-react";
 import API from "../../services/api";
 import ItemForm from "../item/ItemForm";
@@ -289,12 +294,18 @@ const QuotationForm = ({
   fetchData,
   editingQuotation,
   onPreview,
+  // Optional. Supplied when this screen was opened as the "full width" mode of
+  // the split-view quotation panel — renders a control to go back to it.
+  onExitFullWidth,
 }) => {
   const [form, setForm] = useState({
     deal: "",
     date: "",
     dueDate: "",
+    reference: "",
     receiverGSTIN: "",
+    quotationPrefix: "EST-",
+    quotationNumber: "",
     items: [
       {
         _id: null,
@@ -312,8 +323,13 @@ const QuotationForm = ({
     discount: { type: "fixed", value: 0 },
     amount: 0,
     status: "Draft",
-    style: "",
+    style: "Regular",
     isTaxQuotation: false,
+    notes: "",
+    terms: "",
+    attachments: [],
+    bankDetails: "",
+    signature: "",
   });
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
@@ -452,6 +468,9 @@ const QuotationForm = ({
           ? editingQuotation.dueDate.slice(0, 10)
           : "",
         receiverGSTIN: editingQuotation.receiverGSTIN || "",
+        reference: editingQuotation.reference || "",
+        quotationPrefix: editingQuotation.quotationPrefix || "EST-",
+        quotationNumber: editingQuotation.quotationNumber || "",
         items: editingQuotation.items.map((item) => ({
           _id: item.itemId || null,
           name: item.name || "",
@@ -467,8 +486,13 @@ const QuotationForm = ({
         discount: editingQuotation.discount || { type: "fixed", value: 0 },
         amount: editingQuotation.amount || 0,
         status: editingQuotation.status || "Draft",
-        style: editingQuotation.style || "",
+        style: editingQuotation.style || "Regular",
         isTaxQuotation: editingQuotation.isTaxQuotation || false,
+        notes: editingQuotation.notes || "",
+        terms: editingQuotation.terms || "",
+        attachments: editingQuotation.attachments || [],
+        bankDetails: editingQuotation.bankDetails || "",
+        signature: editingQuotation.signature || "",
       });
       setHasUnsavedChanges(false);
     } else {
@@ -477,6 +501,9 @@ const QuotationForm = ({
         date: "",
         dueDate: "",
         receiverGSTIN: "",
+        reference: "",
+        quotationPrefix: "EST-",
+        quotationNumber: "",
         items: [
           {
             _id: null,
@@ -494,8 +521,13 @@ const QuotationForm = ({
         discount: { type: "fixed", value: 0 },
         amount: 0,
         status: "Draft",
-        style: "",
+        style: "Regular",
         isTaxQuotation: false,
+        notes: "",
+        terms: "",
+        attachments: [],
+        bankDetails: "",
+        signature: "",
       });
       setHasUnsavedChanges(false);
     }
@@ -957,39 +989,119 @@ const QuotationForm = ({
       )}
 
       <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
-        style={{ opacity: isSliding ? 1 : 0 }}
-        onClick={handleClose}
-      />
-      <div
         ref={formRef}
-        className={`fixed inset-y-0 right-0 z-[10000] w-full md:w-[600px] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${isSliding ? "translate-x-0" : "translate-x-full"
-          }`}
+        className={`fixed inset-0 z-[10000] w-full h-full bg-white overflow-y-auto transform transition-transform duration-300 ease-in-out ${
+          isSliding ? "translate-y-0" : "translate-y-full"
+        }`}
       >
-        <form onSubmit={handleSubmit} className="p-6 space-y-8">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
-              {editingQuotation ? "Edit Quotation" : "Create New Quotation"}
-            </h2>
-            <button
-              type="button"
-              onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-              aria-label="Close form"
-            >
-              <X className="w-6 h-6" />
-            </button>
+        <form onSubmit={handleSubmit} className="h-full flex flex-col bg-[#F8F9FA] w-full min-h-screen">
+          {/* Section 1: Header */}
+          <div className="flex justify-between items-center px-6 py-4 bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
+            <div className="flex items-center gap-6">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="text-gray-500 hover:text-gray-800 transition-colors flex items-center gap-1"
+                aria-label="Close form"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              
+              <div className="flex items-center gap-4">
+                <div className="flex flex-col">
+                  <h2 className="text-xl font-bold text-slate-900 flex items-center gap-1 cursor-pointer">
+                    Create Quotation <ChevronDown className="w-5 h-5 text-gray-400" />
+                  </h2>
+                  <span className="text-xs text-gray-500">Jivesh Sales</span>
+                </div>
+                
+                <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden h-10 bg-white">
+                  <input
+                    type="text"
+                    value={form.quotationPrefix}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, quotationPrefix: e.target.value }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    className="w-20 px-3 py-2 text-sm font-semibold text-gray-700 bg-gray-50 border-r border-gray-300 focus:outline-none focus:bg-white"
+                  />
+                  <input
+                    type="text"
+                    placeholder="1"
+                    value={form.quotationNumber}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, quotationNumber: e.target.value }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    className="w-24 px-3 py-2 text-sm font-semibold text-gray-900 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {onExitFullWidth && (
+                <button
+                  type="button"
+                  onClick={onExitFullWidth}
+                  title="Back to split view with live preview"
+                  className="h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-full text-gray-600 hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
+                >
+                  <Minimize2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {}}
+                className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
+              >
+                <Settings className="w-4 h-4" /> Settings
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg flex items-center gap-2 transition-colors"
+              >
+                Save <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Select Deal *
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className="w-full">
+          <div className="flex items-center px-6 py-3 bg-white border-b border-gray-100 text-sm">
+            <span className="text-gray-500 mr-2">Type</span>
+            <select
+              value={form.style}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, style: e.target.value }));
+                setHasUnsavedChanges(true);
+              }}
+              className="font-medium text-gray-800 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
+            >
+              <option value="Regular">Regular</option>
+              {styles.map((s, idx) => (
+                <option key={idx} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+            {/* Section 2: Customer Details Card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                
+                {/* Select Customer */}
+                <div className="md:col-span-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-sm font-semibold text-gray-700">Select Customer</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickDealForm(true)}
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center"
+                    >
+                      + Create Customer
+                    </button>
+                  </div>
+                  <div className="bg-blue-50/50 rounded-lg">
                     <SearchableDropdown
                       options={localDeals}
                       value={form.deal}
@@ -997,470 +1109,504 @@ const QuotationForm = ({
                         setForm((prev) => ({ ...prev, deal: value }));
                         setHasUnsavedChanges(true);
                       }}
-                      placeholder="Select Deal"
+                      placeholder="Search customers by name, company, GSTIN..."
                       displayKey="title"
                       valueKey="_id"
-                      className="flex-1"
+                      className="w-full"
                     />
+                  </div>
+                </div>
+
+                {/* Quotation Date */}
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Quotation Date</label>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      className="w-full pl-3 pr-8 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      required
+                      value={form.date}
+                      onChange={(e) => {
+                        setForm((prev) => ({ ...prev, date: e.target.value }));
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Validity */}
+                <div className="md:col-span-3 space-y-2">
+                  <div className="flex items-center gap-1">
+                    <label className="text-sm font-semibold text-gray-700">Validity</label>
+                    <div className="group relative">
+                      <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px] cursor-help">?</div>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      className="w-full pl-3 pr-8 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      value={form.dueDate}
+                      onChange={(e) => {
+                        setForm((prev) => ({ ...prev, dueDate: e.target.value }));
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  </div>
+                  {/* Quick Date Buttons */}
+                  <div className="flex gap-2 mt-1">
+                    {[7, 15, 30].map(days => (
+                      <button
+                        key={days}
+                        type="button"
+                        className="text-[11px] font-medium px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors"
+                        onClick={() => {
+                          const newDate = new Date();
+                          newDate.setDate(newDate.getDate() + days);
+                          setForm(prev => ({ ...prev, dueDate: newDate.toISOString().split('T')[0] }));
+                          setHasUnsavedChanges(true);
+                        }}
+                      >
+                        +{days} Days
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Reference */}
+                <div className="md:col-span-3 space-y-2">
+                  <div className="flex items-center gap-1">
+                    <label className="text-sm font-semibold text-gray-700">Reference</label>
+                    <div className="group relative">
+                      <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px] cursor-help">?</div>
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Reference, e.g. PO Number... (Optional)"
+                    value={form.reference}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, reference: e.target.value }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+              </div>
+            </div>
+
+            {/* ── Section 3: Products & Services ── */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-slate-800">Products & Services</h3>
+                  <div className="group relative">
+                    <div className="w-4 h-4 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px] cursor-help">?</div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setShowQuickDealForm(true)}
-                    className="px-3 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-600 transition-all duration-200"
-                    aria-label="Add new deal"
+                    onClick={handleOpenItemForm}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 ml-2"
                   >
-                    <Plus className="w-6 h-6" />
+                    + Add new Product?
+                  </button>
+                </div>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 text-sm text-gray-600">
+                    <input type="checkbox" className="rounded text-blue-600 focus:ring-blue-500" defaultChecked />
+                    Show description
+                  </label>
+                  <button type="button" className="text-gray-400 hover:text-gray-600" aria-label="Settings">
+                    <Settings className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Quotation Style
-                </label>
-                <div className="flex items-center gap-2">
-                  <select
-                    className="w-full border-2 border-slate-200 rounded-xl p-3 bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                    value={form.style}
-                    onChange={(e) => {
-                      setForm((prev) => ({ ...prev, style: e.target.value }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    aria-label="Select quotation style"
-                  >
-                    <option value="">Select style...</option>
-                    {styles.map((s, idx) => (
-                      <option key={idx} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  {/* {form.style && (
-                    <button
-                      type="button"
-                      onClick={() => onPreview(form)}
-                      className="px-3 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                      aria-label="Preview quotation"
-                    >
-                      <Eye className="w-6 h-6" />
-                    </button>
-                  )} */}
-                </div>
+              {/* Column Headers */}
+              <div className="grid grid-cols-12 gap-4 pb-2 border-b border-gray-100 text-xs font-semibold text-gray-500">
+                <div className="col-span-4">Product Name</div>
+                <div className="col-span-2 text-center">Quantity</div>
+                <div className="col-span-2 text-right">Unit Price</div>
+                <div className="col-span-2 text-center">Discount</div>
+                <div className="col-span-2 text-right">Total</div>
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Quotation Date *
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="date"
-                    className="w-full pl-10 pr-4 py-3 border-2 border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                    required
-                    value={form.date}
-                    onChange={(e) => {
-                      setForm((prev) => ({ ...prev, date: e.target.value }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    aria-label="Select quotation date"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Due Date
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="date"
-                    className="w-full pl-10 pr-4 py-3 border-2 border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                    value={form.dueDate}
-                    onChange={(e) => {
-                      setForm((prev) => ({ ...prev, dueDate: e.target.value }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    aria-label="Select due date"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Receiver GSTIN
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Enter Receiver GSTIN (e.g., 22AAAAA0000A1Z5)"
-                    value={form.receiverGSTIN}
-                    onChange={(e) => {
-                      setForm((prev) => ({
-                        ...prev,
-                        receiverGSTIN: e.target.value.toUpperCase(),
-                      }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    className="w-full pl-4 pr-4 py-3 border-2 border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                    aria-label="Receiver GSTIN"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <IndianRupeeIcon className="w-5 h-5 text-slate-600" />
-                <label className="block font-semibold text-slate-700">
-                  Quotation Items
-                </label>
-              </div>
-
-              <div className="space-y-4">
-                {form.items.map((item, index) => (
-                  <div
-                    key={index}
-                    className="bg-white p-4 rounded-lg border border-slate-200 space-y-4"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Item
-                        </label>
-                        <ItemSearchSelect
-                          value={item}
-                          onSelect={(itemData) =>
-                            handleItemSelect(index, itemData)
-                          }
-                          onAddNew={handleOpenItemForm}
-                          fetchItems={fetchItems}
-                          items={items}
-                          setItems={setItems}
-                        />
+              {/* Item Rows */}
+              <div className="space-y-4 mt-4">
+                {form.items.map((item, index) => {
+                  const rowTotal = calculateItemAmount(item);
+                  return (
+                    <div key={index} className="group relative bg-white border border-gray-100 rounded-lg p-4 shadow-sm hover:border-blue-100 transition-colors">
+                      <div className="absolute -left-2.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-move p-1 bg-white border border-gray-200 rounded shadow-sm text-gray-400 hover:text-gray-600">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16"></path></svg>
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Description
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Item description"
-                          value={item.description}
-                          onChange={(e) => {
-                            handleItemChange(
-                              index,
-                              "description",
-                              e.target.value
-                            );
-                            setHasUnsavedChanges(true);
-                          }}
-                          className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                          aria-label="Item description"
-                        />
-                      </div>
-                    </div>
+                      
+                      <div className="grid grid-cols-12 gap-4 items-start">
+                        {/* Product Name (using ItemSearchSelect) */}
+                        <div className="col-span-4">
+                          <ItemSearchSelect
+                            value={item}
+                            onSelect={(itemData) => handleItemSelect(index, itemData)}
+                            onAddNew={handleOpenItemForm}
+                            fetchItems={fetchItems}
+                            items={items}
+                            setItems={setItems}
+                          />
+                        </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Rate (₹)
-                        </label>
-                        <input
-                          type="number"
-                          placeholder="0"
-                          min="0"
-                          step="1"
-                          value={item.rate}
-                          onChange={(e) => {
-                            handleItemChange(index, "rate", e.target.value);
-                            setHasUnsavedChanges(true);
-                          }}
-                          className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                          required
-                          aria-label="Item rate"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Quantity
-                        </label>
-                        <input
-                          type="number"
-                          placeholder="1"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            handleItemChange(index, "quantity", e.target.value);
-                            setHasUnsavedChanges(true);
-                          }}
-                          className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                          required
-                          aria-label="Item quantity"
-                        />
-                      </div>
-                      {form.isTaxQuotation && (
-                        <>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-600">
-                              Discount
-                            </label>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                placeholder="0"
-                                min="0"
-                                step={
-                                  item.discountType === "percentage" ? "1" : "1"
-                                }
-                                value={item.discount}
-                                onChange={(e) => {
-                                  handleItemChange(
-                                    index,
-                                    "discount",
-                                    e.target.value
-                                  );
-                                  setHasUnsavedChanges(true);
-                                }}
-                                className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                                aria-label="Item discount"
-                              />
-                              <select
-                                value={item.discountType}
-                                onChange={(e) => {
-                                  handleItemChange(
-                                    index,
-                                    "discountType",
-                                    e.target.value
-                                  );
-                                  setHasUnsavedChanges(true);
-                                }}
-                                className="border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                                aria-label="Discount type"
-                              >
-                                <option value="amount">₹</option>
-                                <option value="percentage">%</option>
-                              </select>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-600">
-                              HSN/SAC
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="HSN/SAC code"
-                              value={item.hsn}
-                              onChange={(e) => {
-                                handleItemChange(index, "hsn", e.target.value);
-                                setHasUnsavedChanges(true);
-                              }}
-                              className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                              required
-                              aria-label="HSN/SAC code"
-                            />
-                          </div>
-                        </>
-                      )}
-                      {!form.isTaxQuotation && (
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-600">
-                            Discount
-                          </label>
-                          <div className="flex items-center gap-2">
+                        {/* Quantity */}
+                        <div className="col-span-2">
+                          <input
+                            type="number"
+                            placeholder="1"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              handleItemChange(index, "quantity", e.target.value);
+                              setHasUnsavedChanges(true);
+                            }}
+                            className="w-full text-center text-sm border border-gray-200 rounded-lg px-2 py-2.5 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                            required
+                          />
+                        </div>
+
+                        {/* Rate */}
+                        <div className="col-span-2">
+                          <input
+                            type="number"
+                            placeholder="0.00"
+                            min="0"
+                            step="0.01"
+                            value={item.rate}
+                            onChange={(e) => {
+                              handleItemChange(index, "rate", e.target.value);
+                              setHasUnsavedChanges(true);
+                            }}
+                            className="w-full text-right text-sm border border-gray-200 rounded-lg px-2 py-2.5 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                            required
+                          />
+                        </div>
+
+                        {/* Discount */}
+                        <div className="col-span-2">
+                          <div className="flex items-center gap-1 border border-gray-200 rounded-lg bg-gray-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-colors overflow-hidden">
                             <input
                               type="number"
                               placeholder="0"
                               min="0"
-                              step={
-                                item.discountType === "percentage" ? "1" : "1"
-                              }
+                              step="0.01"
                               value={item.discount}
                               onChange={(e) => {
-                                handleItemChange(
-                                  index,
-                                  "discount",
-                                  e.target.value
-                                );
+                                handleItemChange(index, "discount", e.target.value);
                                 setHasUnsavedChanges(true);
                               }}
-                              className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                              aria-label="Item discount"
+                              className="w-full min-w-0 text-center text-sm px-2 py-2.5 bg-transparent focus:outline-none"
                             />
                             <select
                               value={item.discountType}
                               onChange={(e) => {
-                                handleItemChange(
-                                  index,
-                                  "discountType",
-                                  e.target.value
-                                );
+                                handleItemChange(index, "discountType", e.target.value);
                                 setHasUnsavedChanges(true);
                               }}
-                              className="border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                              aria-label="Discount type"
+                              className="w-12 text-xs font-medium border-l border-gray-200 bg-gray-100 py-3 focus:outline-none cursor-pointer"
                             >
-                              <option value="amount">₹</option>
                               <option value="percentage">%</option>
+                              <option value="amount">₹</option>
                             </select>
                           </div>
                         </div>
-                      )}
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">
-                          Amount
-                        </label>
-                        <div className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-medium">
-                          ₹{calculateItemAmount(item).toFixed(2)}
+
+                        {/* Total & Delete */}
+                        <div className="col-span-2 flex items-center justify-end gap-3 pt-2">
+                          <span className="font-semibold text-gray-900 tabular-nums">
+                            ₹{formatNumberToIndian(rowTotal)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItem(index)}
+                            className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            aria-label="Remove item"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
+
+                      {/* More Details (Expandable) */}
+                      <details className="mt-4 group/details">
+                        <summary className="text-xs font-semibold text-blue-600 cursor-pointer list-none flex items-center gap-1 w-max select-none">
+                          <ChevronRight className="w-3.5 h-3.5 transition-transform group-open/details:rotate-90" />
+                          More Details
+                        </summary>
+                        <div className="pt-3 pb-1 pl-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-l-2 border-blue-100 ml-1.5 mt-2">
+                          {form.isTaxQuotation && (
+                            <div className="space-y-1">
+                              <label className="text-xs text-gray-500 font-medium">HSN/SAC Code</label>
+                              <input
+                                type="text"
+                                placeholder="Enter HSN/SAC code"
+                                value={item.hsn}
+                                onChange={(e) => {
+                                  handleItemChange(index, "hsn", e.target.value);
+                                  setHasUnsavedChanges(true);
+                                }}
+                                className="w-full text-sm border border-gray-200 rounded px-3 py-1.5 focus:outline-none focus:border-blue-400"
+                                required
+                              />
+                            </div>
+                          )}
+                          <div className="space-y-1 md:col-span-2">
+                            <label className="text-xs text-gray-500 font-medium">Item Description</label>
+                            <textarea
+                              placeholder="Enter item description..."
+                              value={item.description}
+                              rows={2}
+                              onChange={(e) => {
+                                handleItemChange(index, "description", e.target.value);
+                                setHasUnsavedChanges(true);
+                              }}
+                              className="w-full resize-none text-sm text-gray-700 border border-gray-200 rounded px-3 py-2 focus:outline-none focus:border-blue-400"
+                            />
+                          </div>
+                        </div>
+                      </details>
                     </div>
+                  );
+                })}
+              </div>
 
-                    {form.items.length > 1 && (
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveItem(index)}
-                          className="flex items-center gap-2 text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-all duration-200"
-                          aria-label="Remove item"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Remove Item
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
+              {/* Add New Product Button */}
+              <div className="mt-4 flex justify-center">
                 <button
                   type="button"
                   onClick={handleAddItem}
-                  className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium p-2 rounded-lg hover:bg-blue-50 transition-all duration-200"
-                  aria-label="Add another item"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-50 text-blue-600 font-semibold text-sm rounded-lg hover:bg-blue-100 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
-                  Add Another Item
+                  Add New Product
                 </button>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-700">
-                Quotation Discount
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  placeholder="0"
-                  min="0"
-                  step={form.discount.type === "percentage" ? "1" : "1"}
-                  value={form.discount.value}
-                  onChange={(e) => {
-                    handleDiscountChange("value", e.target.value);
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                  aria-label="Quotation discount"
-                />
-                <select
-                  value={form.discount.type}
-                  onChange={(e) => {
-                    handleDiscountChange("type", e.target.value);
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                  aria-label="Quotation discount type"
-                >
-                  <option value="fixed">₹</option>
-                  <option value="percentage">%</option>
-                </select>
+            {/* ── Section 4 & 5: Bottom Details & Totals ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              
+              {/* Left Column: Notes, Terms, Attachments */}
+              <div className="space-y-4">
+                {/* Notes Accordion */}
+                <details className="group bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm" open>
+                  <summary className="flex items-center gap-2 px-4 py-3 bg-gray-50/50 cursor-pointer select-none">
+                    <ChevronDown className="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" />
+                    <span className="font-semibold text-gray-800 text-sm">Notes</span>
+                    <div className="group/help relative ml-1">
+                      <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px] cursor-help">?</div>
+                    </div>
+                  </summary>
+                  <div className="p-4 border-t border-gray-200 space-y-3">
+                    <textarea
+                      placeholder="Enter your notes, say thanks, or anything else"
+                      rows={3}
+                      value={form.notes}
+                      onChange={(e) => {
+                        setForm((prev) => ({ ...prev, notes: e.target.value }));
+                        setHasUnsavedChanges(true);
+                      }}
+                      className="w-full text-sm text-gray-700 resize-none focus:outline-none placeholder-gray-400"
+                    />
+                    <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
+                      <span className="text-sm">✨</span> AI
+                    </button>
+                  </div>
+                </details>
+
+                {/* Terms Accordion */}
+                <details className="group bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                  <summary className="flex items-center gap-2 px-4 py-3 bg-gray-50/50 cursor-pointer select-none">
+                    <ChevronRight className="w-4 h-4 text-gray-500 transition-transform group-open:rotate-90" />
+                    <span className="font-semibold text-gray-800 text-sm">Terms & Conditions</span>
+                    <div className="group/help relative ml-1">
+                      <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px] cursor-help">?</div>
+                    </div>
+                  </summary>
+                  <div className="p-4 border-t border-gray-200">
+                    <textarea
+                      placeholder="Enter terms & conditions"
+                      rows={3}
+                      value={form.terms}
+                      onChange={(e) => {
+                        setForm((prev) => ({ ...prev, terms: e.target.value }));
+                        setHasUnsavedChanges(true);
+                      }}
+                      className="w-full text-sm text-gray-700 resize-none focus:outline-none placeholder-gray-400"
+                    />
+                  </div>
+                </details>
+
+                {/* E-Waybill & Attachments */}
+                <div className="pt-4 space-y-4">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <div className="relative">
+                      <input type="checkbox" className="sr-only peer" />
+                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-700">Create E-Waybill</span>
+                  </label>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm font-semibold text-gray-700">Attach files</span>
+                      <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px]">?</div>
+                    </div>
+                    <button type="button" className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 border-dashed rounded-lg hover:border-gray-400 transition-colors">
+                      <span className="text-lg">↑</span> Attach Files (Max: 5)
+                    </button>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer">
+                    <div className="w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center">
+                      {/* empty state */}
+                    </div>
+                    Use Coupons
+                  </label>
+                </div>
+              </div>
+
+              {/* Right Column: Totals, Bank, Signature */}
+              <div className="space-y-6">
+                
+                {/* Math Card */}
+                <div className="bg-[#EBF5EE] rounded-xl p-5 shadow-sm space-y-4 relative">
+                  <div className="flex justify-end gap-2 items-center mb-2">
+                    <span className="text-xs text-gray-500 font-medium">Extra Discount</span>
+                    <div className="flex items-center border border-gray-200 bg-white rounded-lg overflow-hidden h-8">
+                      <select
+                        value={form.discount.type}
+                        onChange={(e) => {
+                          handleDiscountChange("type", e.target.value);
+                          setHasUnsavedChanges(true);
+                        }}
+                        className="text-xs font-medium text-gray-600 bg-transparent border-r border-gray-200 px-2 py-1 focus:outline-none cursor-pointer"
+                      >
+                        <option value="fixed">₹</option>
+                        <option value="percentage">%</option>
+                      </select>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        min="0"
+                        step="0.01"
+                        value={form.discount.value}
+                        onChange={(e) => {
+                          handleDiscountChange("value", e.target.value);
+                          setHasUnsavedChanges(true);
+                        }}
+                        className="w-16 text-right text-xs px-2 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600 font-medium">Taxable Amount</span>
+                      <span className="text-gray-900 font-semibold">₹{formatNumberToIndian(subtotalAfterItemDiscounts)}</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-600 font-medium">Round Off</span>
+                        <div className="relative">
+                          <input type="checkbox" className="sr-only peer" defaultChecked />
+                          <div className="w-8 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                        </div>
+                      </div>
+                      <span className="text-gray-900 font-semibold">0.00</span>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-lg font-bold text-gray-900">Total Amount</span>
+                      <span className="text-lg font-bold text-gray-900">₹{formatNumberToIndian(finalTotal)}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-sm pt-1">
+                      <span className="text-gray-500">Total Discount</span>
+                      <span className="text-gray-600 font-medium">₹{formatNumberToIndian(totalItemDiscounts + invoiceDiscountAmount)}</span>
+                    </div>
+
+                    <div className="flex justify-end gap-2 text-xs pt-1">
+                      <label className="flex items-center gap-1.5 cursor-pointer text-gray-500">
+                        Hide Totals
+                        <input type="checkbox" className="rounded text-blue-600 focus:ring-blue-500" />
+                      </label>
+                    </div>
+                    
+                    <div className="text-xs text-gray-400 italic text-right mt-1">
+                      {numberToWords(finalTotal)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Select Bank */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1">
+                    <label className="text-sm font-semibold text-gray-700">Select Bank</label>
+                    <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px]">?</div>
+                  </div>
+                  <button type="button" className="w-full py-3 bg-[#FAF5FF] border border-[#E9D5FF] rounded-xl text-[#9333EA] font-semibold text-sm hover:bg-[#F3E8FF] transition-colors flex items-center justify-center gap-2">
+                    <span className="text-lg">🏦</span> Add Bank to Invoice (Optional)
+                  </button>
+                </div>
+
+                {/* Select Signature */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1">
+                    <label className="text-sm font-semibold text-gray-700">Select Signature</label>
+                    <div className="w-2 h-2 rounded-full bg-pink-500"></div>
+                  </div>
+                  <button type="button" className="w-full py-8 bg-[#FDF2F8] border border-[#FBCFE8] rounded-xl text-[#DB2777] font-semibold text-sm hover:bg-[#FCE7F3] transition-colors flex flex-col items-center justify-center gap-2 relative">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">✍️</span> Add Signature to Invoice (Optional)
+                    </div>
+                    <span className="absolute bottom-2 right-4 text-[10px] font-bold text-gray-800">Signature on the document</span>
+                  </button>
+                </div>
+
               </div>
             </div>
 
-            <div className="space-y-2 p-6 bg-gradient-to-r from-slate-50 to-blue-50/30 rounded-xl border border-slate-200/50">
-              <div className="flex justify-between">
-                <span className="text-sm font-medium text-slate-600">
-                  Subtotal
-                </span>
-                <span className="text-sm font-medium text-slate-900">
-                  <h6>₹{formatNumberToIndian(subtotal)}</h6>
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm font-medium text-slate-600">
-                  Item Discounts
-                </span>
-                <span className="text-sm font-medium text-red-600">
-                  - <h6>₹{formatNumberToIndian(totalItemDiscounts)}</h6>
-                </span>
-              </div>
-              <div className="flex justify-between border-t pt-2">
-                <span className="text-sm font-medium text-slate-600">
-                  After Item Discounts
-                </span>
-                <span className="text-sm font-medium text-slate-900">
-                  <h6>₹{formatNumberToIndian(subtotalAfterItemDiscounts)}</h6>
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm font-medium text-slate-600">
-                  Quotation Discount
-                </span>
-                <span className="text-sm font-medium text-red-600">
-                  - <h6>₹{formatNumberToIndian(invoiceDiscountAmount)}</h6>
-                </span>
-              </div>
-              <div className="flex justify-between border-t pt-2 mt-2">
-                <span className="text-lg font-bold text-slate-900">
-                  Final Total
-                </span>
-                <span className="text-lg font-bold text-slate-900">
-                  <h6>₹{formatNumberToIndian(finalTotal)}</h6>
-                </span>
-              </div>
-              <div className="text-sm text-slate-600 italic text-right mt-2">
-                <h6>{numberToWords(finalTotal)}</h6>
-              </div>
-            </div>
+            {/* ── Section 6: Sticky Footer Actions ── */}
+            <div className="sticky bottom-0 -mx-6 -mb-6 p-4 bg-white border-t border-gray-200 flex justify-end gap-3 rounded-b-xl z-40 mt-12">
+              <button
+                type="button"
+                className="px-5 py-2 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                disabled={isSubmitting}
+              >
+                Save as Draft
+              </button>
+              
+              <button
+                type="button"
+                className="px-5 py-2 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-2"
+                disabled={isSubmitting}
+              >
+                Save and Print <ChevronDown className="w-4 h-4" />
+              </button>
 
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 p-6 bg-gradient-to-r from-slate-50 to-blue-50/30 rounded-xl border border-slate-200/50">
               <button
                 type="submit"
-                className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-700 hover:to-blue-600 text-white font-semibold px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 flex items-center gap-2"
                 disabled={isSubmitting}
-                aria-label={
-                  editingQuotation ? "Update quotation" : "Create quotation"
-                }
+                className="px-6 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2"
               >
                 {isSubmitting ? (
                   <>
-                    <svg
-                      className="animate-spin h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v8h8a8 8 0 01-8 8v-8H4z"
-                      ></path>
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8h8a8 8 0 01-8 8v-8H4z"></path>
                     </svg>
                     Processing...
                   </>
-                ) : editingQuotation ? (
-                  "Update Quotation"
                 ) : (
-                  "Create Quotation"
+                  <>Save <ChevronRight className="w-4 h-4" /></>
                 )}
               </button>
             </div>
@@ -1488,3 +1634,13 @@ const QuotationForm = ({
 };
 
 export default QuotationForm;
+
+// Thin wrapper around the shared CreateInvoicePanel for quotation type.
+// Used by Accounting.jsx when opening the two-pane create/edit form.
+import { CreateInvoicePanel } from "../invoice/InvoiceForm";
+
+const CreateQuotationPanel = (props) => (
+  <CreateInvoicePanel {...props} type="quotation" />
+);
+
+export { CreateQuotationPanel };

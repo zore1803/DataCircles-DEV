@@ -160,12 +160,13 @@ const QuickTaskForm = ({
   onTaskUpdated,
   onRequestClose,
   editTask = null,
+  initialDueDate = "",
 }) => {
   const isEditing = !!editTask;
   const [form, setForm] = useState({
     title: "",
-    dueDate: "",
-    selectedDate: "",
+    dueDate: initialDueDate,
+    selectedDate: initialDueDate,
     description: "",
     status: "Pending",
     priority: "medium",

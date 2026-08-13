@@ -37,6 +37,7 @@ import {
   Pin,
   PinOff,
   Star,
+  Video,
 } from "lucide-react";
 import ImportClients from "../components/company/ImportClients";
 import Hotlist from "../components/company/Hotlist";
@@ -1867,9 +1868,19 @@ function Companies() {
                   </>
                 ) : (
                   <>
-                    <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Companies</h1>
+                    <div className="flex items-center gap-2">
+                      <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Companies</h1>
+                      <button
+                        type="button"
+                        onClick={() => setShowVideoTutorial(true)}
+                        className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 transition-all flex-shrink-0 shadow-sm"
+                        title="Watch Companies Module Video Guide"
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
-                      Manage your organisation contracts
+                      Manage your accounts & company directory
                     </p>
                   </>
                 )}
