@@ -2060,8 +2060,8 @@ const Insights = () => {
                               cy="50%"
                               innerRadius={50}
                               outerRadius={80}
-                              cornerRadius={8}
-                              paddingAngle={sourceData.length > 1 ? 4 : 0}
+                              cornerRadius={3}
+                              paddingAngle={sourceData.length > 1 ? 2 : 0}
                               dataKey="value"
                               stroke="none"
                               label={({ cx, cy, midAngle, innerRadius, outerRadius, value }) => {
@@ -2164,11 +2164,33 @@ const Insights = () => {
             (sum, c) => sum + (dealsByContactId[c._id] || []).reduce((s, d) => s + (d.amount || 0), 0),
             0,
           );
+          // Contacts with at least one overdue invoice on a linked deal.
+          const overdueInvoicesByContactId = {};
+          filteredData.filteredInvoices
+            .filter((inv) => inv.status === "Overdue" && inv.deal?.contact)
+            .forEach((inv) => {
+              const cid = inv.deal.contact?._id || inv.deal.contact;
+              if (!cid) return;
+              if (!overdueInvoicesByContactId[cid]) overdueInvoicesByContactId[cid] = [];
+              overdueInvoicesByContactId[cid].push(inv);
+            });
+          const overdueContacts = filteredData.filteredContacts.filter(
+            (c) => overdueInvoicesByContactId[c._id]?.length > 0,
+          );
+          const overduePipeline = Object.values(overdueInvoicesByContactId)
+            .flat()
+            .reduce((sum, inv) => sum + (inv.amount || 0), 0);
           const formatCrAlert = (v) => {
             if (v >= 1e7) return `₹${(v / 1e7).toFixed(1)} Cr`;
             if (v >= 1e5) return `₹${(v / 1e5).toFixed(1)} L`;
             if (v >= 1e3) return `₹${(v / 1e3).toFixed(1)}k`;
             return `₹${Math.round(v)}`;
+          };
+          // "Review Contacts" deep-links into /contacts pre-filtered to
+          // exactly the ids shown in that alert row.
+          const reviewContacts = (ids) => {
+            sessionStorage.setItem("insightsContactIdFilter", JSON.stringify(ids));
+            window.location.href = "/contacts";
           };
           const alertRows = [
             {
@@ -2177,6 +2199,7 @@ const Insights = () => {
               iconColor: "#DF120B",
               title: `${coldContacts.length} Contacts going cold`,
               subtitle: `${formatCrAlert(coldPipeline)} associated pipeline has had no activity for 30+ days`,
+              onClick: () => reviewContacts(coldContacts.map((c) => c._id)),
             },
             {
               icon: <Clock className="w-4 h-4" />,
@@ -2184,6 +2207,7 @@ const Insights = () => {
               iconColor: "#D4BF00",
               title: `${followUpContacts.length} Contacts awaiting follow-up`,
               subtitle: `${formatCrAlert(followUpPipeline)} associated pipeline still in early stages`,
+              onClick: () => reviewContacts(followUpContacts.map((c) => c._id)),
             },
             {
               icon: <Users className="w-4 h-4" />,
@@ -2191,6 +2215,15 @@ const Insights = () => {
               iconColor: "#0085FF",
               title: `${noOwnerContacts.length} Contacts with no owner`,
               subtitle: `${formatCrAlert(noOwnerPipeline)} associated pipeline is unassigned`,
+              onClick: () => reviewContacts(noOwnerContacts.map((c) => c._id)),
+            },
+            {
+              icon: <FileText className="w-4 h-4" />,
+              iconBg: "#FCCCCD",
+              iconColor: "#DF120B",
+              title: `${overdueContacts.length} Contacts with overdue invoices`,
+              subtitle: `${formatCrAlert(overduePipeline)} in overdue invoice value`,
+              onClick: () => reviewContacts(overdueContacts.map((c) => c._id)),
             },
           ];
 
@@ -2211,8 +2244,8 @@ const Insights = () => {
           const industryMaxCount = Math.max(1, ...industryEntries.map(([, v]) => v.count));
           const industryColors = ["#0085FF", "#0C4FCD", "#2E7D32", "#D97706", "#E82222", "#00C950"];
 
-          // Card 3: Recent Contact Activity — deals-with-contact events and
-          // their invoices, merged into one timeline.
+          // Card 3: Recent Contact Activity — deals, invoices, meetings, and
+          // tasks tied to a contact, merged into one timeline.
           const contactActivity = [];
           filteredData.filteredDeals
             .filter((d) => d.contact)
@@ -2225,7 +2258,8 @@ const Insights = () => {
                 iconBg: "#CCE7FF",
                 iconColor: "#0085FF",
                 title: d.title || "Deal",
-                subtitle: `${d.status || "Update"} • ${formatCrAlert(d.amount || 0)}`,
+                subtitle: d.status || "Update",
+                amount: d.amount || 0,
                 at,
               });
             });
@@ -2240,7 +2274,42 @@ const Insights = () => {
                 iconBg: "#FCCCCD",
                 iconColor: "#EF0004",
                 title: `Invoice #${inv.invoiceNumber}`,
-                subtitle: `${inv.status} • ${formatCrAlert(inv.amount || 0)}`,
+                subtitle: inv.status,
+                amount: inv.amount || 0,
+                at,
+              });
+            });
+          meetings
+            .filter((m) => m.linkedTo === "contact" && m.contact)
+            .forEach((m) => {
+              const at = m.updatedAt || m.scheduledAt || m.createdAt;
+              if (!at) return;
+              contactActivity.push({
+                id: `meeting-${m._id}`,
+                icon: <Video className="w-4 h-4" />,
+                iconBg: "rgba(0, 133, 255, 0.1)",
+                iconColor: "#0085FF",
+                title: m.title || "Meeting",
+                subtitle: m.status || "Scheduled",
+                amount: null,
+                at,
+              });
+            });
+          tasks
+            .filter((t) =>
+              (t.relatedEntities || []).some((r) => r.entityModel === "Contact"),
+            )
+            .forEach((t) => {
+              const at = t.updatedAt || t.dueDate || t.createdAt;
+              if (!at) return;
+              contactActivity.push({
+                id: `task-${t._id}`,
+                icon: <ClipboardList className="w-4 h-4" />,
+                iconBg: "rgba(0, 201, 80, 0.12)",
+                iconColor: "#00A745",
+                title: t.title || "Task",
+                subtitle: t.status || "Pending",
+                amount: null,
                 at,
               });
             });
@@ -2283,6 +2352,14 @@ const Insights = () => {
                           </p>
                         </div>
                       </div>
+                      {row.onClick && (
+                        <button
+                          onClick={row.onClick}
+                          className="text-[10px] font-semibold text-[#0085FF] hover:underline flex-shrink-0 whitespace-nowrap"
+                        >
+                          Review Contacts
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2355,9 +2432,27 @@ const Insights = () => {
                           <span style={{ color: item.iconColor }}>{item.icon}</span>
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-[#1C1C1D] truncate">{item.title}</p>
-                          <p className="text-[10px] text-[#78788D] truncate">{item.subtitle}</p>
+                          <p className="text-xs font-semibold text-[#1C1C1D] truncate flex items-center gap-1.5">
+                            <span className="truncate">{item.title}</span>
+                            <span className="text-[9px] font-medium text-[#78788D] bg-gray-100 rounded px-1.5 py-0.5 flex-shrink-0">
+                              {item.subtitle}
+                            </span>
+                          </p>
+                          <p className="text-[10px] text-[#78788D] mt-0.5">
+                            {new Date(item.at).toLocaleString("en-IN", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
                         </div>
+                        {item.amount !== null && (
+                          <p className="text-xs font-semibold text-[#1C1C1D] flex-shrink-0">
+                            {formatCrAlert(item.amount)}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -2805,8 +2900,8 @@ const Insights = () => {
                       cy="50%"
                       innerRadius={68}
                       outerRadius={108}
-                      cornerRadius={8}
-                      paddingAngle={companySourceData.length > 1 ? 4 : 0}
+                      cornerRadius={3}
+                      paddingAngle={companySourceData.length > 1 ? 2 : 0}
                       dataKey="value"
                       stroke="none"
                       label={({ cx, cy, midAngle, innerRadius, outerRadius, value }) => {

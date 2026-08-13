@@ -226,6 +226,27 @@ function Contacts() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Deep-link from Insights "Review Contacts" — a specific set of contact
+  // ids to show, dropped in sessionStorage since a full navigation
+  // (window.location.href) doesn't carry React Router state. Kept out of
+  // `activeFilters` deliberately — that state drives the visible "Filter
+  // Contacts" panel, and raw internal ids have no business showing up
+  // there as a user-facing filter chip.
+  const [insightsIdFilter, setInsightsIdFilter] = useState(null);
+  useEffect(() => {
+    const raw = sessionStorage.getItem("insightsContactIdFilter");
+    if (!raw) return;
+    sessionStorage.removeItem("insightsContactIdFilter");
+    try {
+      const ids = JSON.parse(raw);
+      if (Array.isArray(ids) && ids.length > 0) {
+        setInsightsIdFilter(ids);
+        setPagination((prev) => ({ ...prev, currentPage: 1 }));
+      }
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [showImport, setShowImport] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
@@ -2217,6 +2238,10 @@ function Contacts() {
         params.append("advancedFilters", JSON.stringify(activeFilters));
       }
 
+      if (insightsIdFilter && insightsIdFilter.length > 0) {
+        params.append("ids", insightsIdFilter.join(","));
+      }
+
       if (activeTab !== "All") {
         switch (activeTab) {
           case "Leads":
@@ -2300,7 +2325,7 @@ function Contacts() {
     } else {
       setPagination((prev) => ({ ...prev, currentPage: 1 }));
     }
-  }, [activeFilters]);
+  }, [activeFilters, insightsIdFilter]);
 
   const handleEditContact = async (contact) => {
     try {
