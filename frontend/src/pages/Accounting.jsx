@@ -1610,7 +1610,7 @@ const Accounting = () => {
             mirroring the Companies page layout and slide animation. */}
         {showBulkStrip && (
           <div
-            className="fixed right-0 h-[72px] px-4 lg:px-[24px] border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
+            className="fixed right-0 h-16 px-4 lg:px-[24px] border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
             style={{ left: "var(--sidebar-width, 0px)", zIndex: 41 }}
           >
             <div
@@ -1683,13 +1683,13 @@ const Accounting = () => {
         )}
         {/* 2nd Header - Tab Bar & Actions Row */}
         <div
-          className="fixed right-0 h-[72px] px-4 lg:px-[24px] border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[54px] lg:top-16"
+          className="fixed right-0 h-16 px-4 lg:px-[24px] border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[54px] lg:top-16"
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
         >
           {/* Left Side: Tabs Container — same pill selector as the Company tabs.
               Never skeletoned: the tabs are navigation, not data, so they stay
               mounted and clickable while the table loads. */}
-          <div className="relative flex-shrink-0 inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar">
+          <div className="relative flex-shrink-0 inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
               style={{ left: tabIndicator.left, width: tabIndicator.width }}
@@ -1699,7 +1699,7 @@ const Accounting = () => {
                 key={tab.key}
                 ref={(el) => (tabRefs.current[tab.key] = el)}
                 onClick={() => setActiveTab(tab.key)}
-                className={`relative z-10 flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab.key
+                className={`relative z-10 flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab.key
                     ? "text-[#0085FF]"
                     : "text-gray-700 hover:text-gray-900"
                   }`}
@@ -1712,20 +1712,20 @@ const Accounting = () => {
           {/* Right Side: Search, Filter, More, Add */}
           {showLoadingSkeleton ? (
             <div className="flex flex-row items-center gap-2 flex-shrink-0">
-              <Skeleton width={44} height={44} shape="circle" />
-              <Skeleton width={44} height={44} shape="circle" />
-              <Skeleton width={44} height={44} shape="circle" />
-              <Skeleton width={146} height={44} shape="circle" className="ml-1" />
+              <Skeleton width={40} height={40} shape="circle" />
+              <Skeleton width={40} height={40} shape="circle" />
+              <Skeleton width={40} height={40} shape="circle" />
+              <Skeleton width={140} height={40} shape="circle" className="ml-1" />
             </div>
           ) : (
             <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
               {/* Search field — expands in place from the search icon,
                   matching the Companies strip behaviour. */}
               <div
-                className={`relative h-11 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-11"} max-w-full flex-shrink-0`}
+                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"} max-w-full flex-shrink-0`}
               >
                 <SearchIcon
-                  className="absolute left-3.5 text-[#1F2937] w-[18px] h-[18px] cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
+                  className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
                   onClick={() => {
                     setIsSearchExpanded(true);
                     searchInputRef.current?.focus();
@@ -1774,19 +1774,18 @@ const Accounting = () => {
                     e.stopPropagation();
                     setShowFilterMenu((v) => !v);
                   }}
-                  className={`flex items-center justify-center w-11 h-11 rounded-full border transition-colors bg-white ${filterStatuses[activeTab]
+                  className={`flex items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${filterStatuses[activeTab]
                       ? "border-[#0085FF] text-[#0085FF]"
                       : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
                     }`}
                 >
                   <SlidersHorizontal
-                    size={18}
-                    strokeWidth={2}
-                    className={
+                    strokeWidth={2.5}
+                    className={`w-4 h-4 ${
                       filterStatuses[activeTab]
                         ? "text-[#0085FF]"
-                        : "text-[#1F2937]"
-                    }
+                        : "text-gray-800"
+                    }`}
                   />
                 </button>
                 {showFilterMenu && (
@@ -1824,9 +1823,9 @@ const Accounting = () => {
                     e.stopPropagation();
                     setShowMoreMenu((v) => !v);
                   }}
-                  className="flex items-center justify-center w-11 h-11 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors bg-white"
+                  className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors bg-white"
                 >
-                  <MoreVertical size={18} strokeWidth={2} className="text-[#1F2937]" />
+                  <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
                 </button>
                 {showMoreMenu && (
                   <div
@@ -1876,7 +1875,7 @@ const Accounting = () => {
                 style={{
                   width: activeTab === "tax" ? 146 : undefined,
                   minWidth: 146,
-                  height: 44,
+                  height: 40,
                   padding: 12,
                   gap: 6,
                   background: "#0085FF",
@@ -1897,7 +1896,7 @@ const Accounting = () => {
             region Companies.jsx uses: edge to edge under the tab bar, stopping
             above the pagination bar. */}
         <div
-          className="fixed right-0 overflow-x-auto overflow-y-auto bg-white top-[126px] lg:top-[136px]"
+          className="fixed right-0 overflow-x-auto overflow-y-auto bg-white top-[118px] lg:top-[128px]"
           style={{ left: "var(--sidebar-width, 0px)", bottom: 64 }}
         >
           <table

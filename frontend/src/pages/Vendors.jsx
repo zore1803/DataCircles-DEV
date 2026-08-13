@@ -71,9 +71,9 @@ function useOutsideClick(ref, callback) {
 // menu rides along inside the last visible column's cell, same as Companies.
 const BASE_COLUMN_DEFS = [
   { id: "name", label: "Name", required: true, width: 200 },
+  { id: "company", label: "Company", width: 180 },
   { id: "email", label: "Email", width: 220 },
   { id: "phone", label: "Phone", width: 160 },
-  { id: "company", label: "Company", width: 180 },
   { id: "address", label: "Address", width: 260 },
   // Wider than the others so "CLOSING BALANCE" renders in full rather than
   // truncating to "CLOSING BAL...".
@@ -571,7 +571,6 @@ function Vendors() {
         return (
           <Link
             to={`/vendors/${vendor._id}`}
-            state={{ vendorIds: vendors.map((v) => v._id) }}
             className="text-blue-600 font-bold text-sm underline hover:text-blue-700 transition-colors truncate block"
           >
             <HighlightText text={vendor.name} query={searchTerm} />
@@ -581,7 +580,7 @@ function Vendors() {
         return vendor.email ? (
           <a
             href={`mailto:${vendor.email}`}
-            className="text-sm text-gray-700 hover:text-blue-600 transition-colors truncate block"
+            className="text-sm font-medium text-blue-600 hover:underline transition-colors truncate block"
           >
             <HighlightText text={vendor.email} query={searchTerm} />
           </a>
@@ -592,7 +591,7 @@ function Vendors() {
         return vendor.phone ? (
           <a
             href={`tel:${vendor.phone}`}
-            className="text-sm text-gray-700 hover:text-blue-600 transition-colors truncate block"
+            className="text-sm font-medium text-blue-600 hover:underline transition-colors truncate block"
           >
             <HighlightText text={vendor.phone} query={searchTerm} />
           </a>
@@ -1252,16 +1251,20 @@ function Vendors() {
 
         {showLoadingSkeleton ? (
           <div className="flex items-center gap-2 flex-shrink-0">
-            <Skeleton width={44} height={44} shape="circle" />
-            <Skeleton width={44} height={44} shape="circle" />
-            <Skeleton width={44} height={44} shape="circle" />
-            <Skeleton width={130} height={44} shape="circle" />
+            <Skeleton width={40} height={40} shape="circle" />
+            <Skeleton width={40} height={40} shape="circle" />
+            <Skeleton width={40} height={40} shape="circle" />
+            <Skeleton width={130} height={40} shape="circle" />
           </div>
         ) : (
-        <div className="flex flex-row items-center gap-2 h-[44px] flex-shrink-0">
-          <div className={`relative flex items-center h-11 rounded-full border border-[#E1E4EA] bg-white focus-within:border-[#0085FF] transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-full sm:w-[300px] lg:w-[380px]" : "w-11"}`}>
+        <div className="flex flex-row items-center gap-2 h-10 flex-shrink-0">
+          <div
+            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${
+              isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"
+            } max-w-full flex-shrink-0`}
+          >
             <SearchIcon
-              className="absolute left-3.5 cursor-pointer z-10 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
+              className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
               onClick={() => {
                 setIsSearchExpanded(true);
                 searchInputRef.current?.focus();
@@ -1303,15 +1306,14 @@ function Vendors() {
                 e.stopPropagation();
                 setShowFilterMenu((v) => !v);
               }}
-              className={`flex items-center justify-center w-11 h-11 rounded-full border transition-colors bg-white ${
+              className={`flex items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
                 filterCompany
                   ? "border-[#0085FF] text-[#0085FF]"
                   : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
               }`}
             >
               <FilterIcon
-                size={16}
-                className={filterCompany ? "text-[#0085FF]" : "text-[#1F2937]"}
+                className={`w-4 h-4 ${filterCompany ? "text-[#0085FF]" : "text-gray-800"}`}
               />
             </button>
             {showFilterMenu && (
@@ -1357,9 +1359,9 @@ function Vendors() {
                 setShowMoreMenu((v) => !v);
               }}
               title="More"
-              className="flex items-center justify-center w-11 h-11 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors bg-white"
+              className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors bg-white"
             >
-              <MoreVertical size={18} strokeWidth={2} className="text-[#1F2937]" />
+              <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
             </button>
             {showMoreMenu && (
               <div
@@ -1402,7 +1404,7 @@ function Vendors() {
               setEditVendor(null);
               setShowQuickAdd((v) => !v);
             }}
-            className="h-11 px-4 flex items-center justify-center gap-1.5 bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors flex-shrink-0 ml-1"
+            className="h-10 px-4 flex items-center justify-center gap-1.5 bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors flex-shrink-0 ml-1"
           >
             <Plus size={18} className="text-white" />
             <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">
