@@ -1,6 +1,8 @@
 const Purchase = require("../models/Purchase");
 const Vendor = require("../models/Vendor");
 const PurchaseOrder = require("../models/PurchaseOrder");
+const Branding = require("../models/Branding");
+const purchaseDocumentPdf = require("../utils/purchaseDocumentPdf");
 
 // Helper function to calculate item total
 const calculateItemTotal = (quantity, unitPrice) => {
@@ -163,7 +165,15 @@ exports.getAllPurchasesWithPagination = async (req, res) => {
     // Build sort object
     const sortObj = {};
     sortObj[sortBy] = sortOrder === 'desc' ? -1 : 1;
-    
+
+    // "Select All" support: return every matching purchase's _id (ignoring
+    // pagination) so the frontend can select all rows across every page, not
+    // just the current page.
+    if (req.query.allIds === 'true') {
+      const allPurchases = await Purchase.find(query).select('_id').lean();
+      return res.json({ ids: allPurchases.map((p) => p._id) });
+    }
+
     // Execute queries in parallel for better performance
     const [purchases, totalCount] = await Promise.all([
       Purchase.find(query)
@@ -375,6 +385,45 @@ exports.deletePurchase = async (req, res) => {
   }
 };
 
+// Download Purchase as PDF — same rendered-server-side approach as
+// invoiceController.downloadInvoice, but with its own template (see
+// utils/purchaseDocumentPdf.js) since a Purchase's shape/direction (we're
+// the buyer) doesn't fit shared/documentTemplates.js's invoice-family model.
+exports.downloadPurchase = async (req, res) => {
+  try {
+    const purchase = await Purchase.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    })
+      .populate("vendor")
+      .populate("items.itemId", "name description purchasePrice hsnSac gstRate");
+
+    if (!purchase) {
+      return res.status(404).json({ error: "Purchase not found" });
+    }
+
+    const orgDetails = await Branding.findOne({
+      organization: req.user.organization,
+    }).sort({ updatedAt: -1 });
+
+    const pdfBuffer = await purchaseDocumentPdf(
+      purchase,
+      orgDetails,
+      purchase.vendor,
+      "purchase"
+    );
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename=purchase-${purchase.purchaseNumber}.pdf`,
+    });
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error("Error downloading purchase:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // Export Selected Purchases
 exports.exportSelectedPurchases = async (req, res) => {
   try {
@@ -427,5 +476,111 @@ exports.exportSelectedPurchases = async (req, res) => {
   } catch (error) {
     console.error("Purchase export error:", error);
     res.status(500).json({ error: "Failed to export purchases" });
+  }
+};
+
+// Bulk Import Purchases from CSV rows.
+// Same flat "one row per item, vendor matched/created by name" pattern as
+// Purchase Orders bulk import. Rows sharing the same purchaseNumber +
+// vendorName are grouped into one Purchase with multiple line items.
+exports.bulkImportPurchases = async (req, res) => {
+  try {
+    const { rows } = req.body;
+
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: "No purchase data provided" });
+    }
+
+    const organizationId = req.user.organization;
+
+    const vendorCache = new Map();
+    const resolveVendor = async (name) => {
+      const key = name.trim().toLowerCase();
+      if (vendorCache.has(key)) return vendorCache.get(key);
+      let vendor = await Vendor.findOne({
+        organization: organizationId,
+        name: { $regex: `^${name.trim()}$`, $options: "i" },
+      });
+      if (!vendor) {
+        vendor = await Vendor.create({
+          name: name.trim(),
+          organization: organizationId,
+          user: req.user.id,
+        });
+      }
+      vendorCache.set(key, vendor);
+      return vendor;
+    };
+
+    const groups = new Map();
+    let ungroupedIndex = 0;
+    for (const row of rows) {
+      if (!row.vendorName || !row.vendorName.trim()) continue;
+      if (!row.itemName || !row.itemName.trim()) continue;
+      const groupKey = row.purchaseNumber && row.purchaseNumber.trim()
+        ? `${row.purchaseNumber.trim().toLowerCase()}::${row.vendorName.trim().toLowerCase()}`
+        : `__row_${ungroupedIndex++}`;
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          purchaseNumber: row.purchaseNumber?.trim() || null,
+          vendorName: row.vendorName.trim(),
+          status: row.status?.trim() || "Draft",
+          notes: row.notes?.trim() || "",
+          items: [],
+        });
+      }
+      const quantity = parseFloat(row.quantity) || 0;
+      const unitPrice = parseFloat(row.unitPrice) || 0;
+      groups.get(groupKey).items.push({
+        name: row.itemName.trim(),
+        quantity,
+        unitPrice,
+        total: calculateItemTotal(quantity, unitPrice),
+      });
+    }
+
+    if (groups.size === 0) {
+      return res.status(400).json({
+        error: "No valid rows found. Each row needs Vendor Name and Item Name.",
+      });
+    }
+
+    const validStatuses = ["Draft", "Pending", "Received", "Partial", "Cancelled"];
+    const errors = [];
+    let imported = 0;
+
+    for (const group of groups.values()) {
+      try {
+        const vendor = await resolveVendor(group.vendorName);
+        const subtotal = calculateSubtotal(group.items);
+        const purchaseNumber = group.purchaseNumber || (await generatePurchaseNumber(organizationId));
+        const status = validStatuses.includes(group.status) ? group.status : "Draft";
+
+        await Purchase.create({
+          vendor: vendor._id,
+          purchaseNumber,
+          items: group.items,
+          subtotal,
+          grandTotal: subtotal,
+          status,
+          notes: group.notes,
+          user: req.user.id,
+          organization: organizationId,
+        });
+        imported++;
+      } catch (err) {
+        errors.push({ purchaseNumber: group.purchaseNumber, vendor: group.vendorName, message: err.message });
+      }
+    }
+
+    res.json({
+      message: `Imported ${imported} purchase${imported !== 1 ? "s" : ""}${errors.length ? `, ${errors.length} failed` : ""}`,
+      imported,
+      total: groups.size,
+      errors: errors.slice(0, 5),
+    });
+  } catch (error) {
+    console.error("Bulk import purchases error:", error);
+    res.status(500).json({ error: "Failed to import purchases: " + error.message });
   }
 };

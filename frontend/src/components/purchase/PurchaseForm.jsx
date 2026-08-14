@@ -363,43 +363,62 @@ const PurchaseForm = ({
   });
 
   return (
-    <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 transition-opacity duration-300"
-      style={{ opacity: isOpen ? 1 : 0 }}
-      onClick={handleClose}
-    >
+    <>
+      {/* Backdrop */}
       <div
-        className="bg-white w-full max-w-4xl rounded-xl shadow-2xl max-h-[95vh] flex flex-col transition-transform duration-300 transform"
-        style={{ transform: isOpen ? "scale(100%)" : "scale(95%)" }}
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
+        style={{ opacity: isOpen ? 1 : 0 }}
+        onClick={handleClose}
+      />
+
+      {/* Compact card — narrow single-column layout, matched to
+          PurchaseOrderForm.jsx and the reference design. */}
+      <div
+        className={`
+          fixed top-6 bottom-6 right-6 rounded-[24px] z-[10001]
+          w-full sm:w-[600px]
+          bg-white shadow-2xl flex flex-col overflow-hidden
+          transform transition-transform duration-300 ease-in-out
+          ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
+        `}
       >
         {/* Header */}
-        <div className="px-8 py-5 border-b border-gray-100 flex justify-between items-start">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              {editingPurchase ? "Edit Purchase" : "Create New Purchase"}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {dateStr} at {timeStr}
-            </p>
+        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
+          <h2 className="text-sm text-gray-500 font-medium uppercase tracking-wide">
+            {editingPurchase ? "EDIT PURCHASE" : "CREATE NEW PURCHASE"}
+          </h2>
+          <div className="flex items-center gap-4">
+            {editingPurchase && (
+              <>
+                <button type="button" className="text-[#0085FF] hover:text-blue-600 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                </button>
+                <button type="button" className="text-red-500 hover:text-red-600 transition-colors">
+                  <Trash2 className="w-[18px] h-[18px]" />
+                </button>
+                <div className="w-px h-4 bg-gray-300"></div>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={handleClose}
+              className="text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            onClick={handleClose}
-            className="p-1 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8">
+        {/* Content — single column throughout, tightened spacing to suit
+            the narrower card. */}
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
           {/* Vendor & PO Link */}
-          <div className="grid grid-cols-1 gap-6">
+          <div className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                 Select Vendor <span className="text-red-500">*</span>
               </label>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <SearchableDropdown
                   options={localVendors}
                   value={vendorId}
@@ -410,10 +429,13 @@ const PurchaseForm = ({
                   className="flex-1 w-full"
                   required={true}
                 />
+                {/* Matched to the dropdown's own h-12 / rounded-[25px] pill
+                    shape — was a mismatched rounded-lg square before. */}
                 <button
                   type="button"
                   onClick={() => setShowQuickVendorForm(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg transition-colors"
+                  className="w-12 h-12 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-colors flex-shrink-0"
+                  aria-label="Add new vendor"
                 >
                   <Plus className="w-5 h-5" />
                 </button>
@@ -421,14 +443,14 @@ const PurchaseForm = ({
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                 Link to Purchase Order (Optional)
               </label>
               <div className="relative">
                 <select
                   value={selectedPO}
                   onChange={(e) => setSelectedPO(e.target.value)}
-                  className="w-full appearance-none px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  className="w-full appearance-none px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 >
                   <option value="">Select Purchase Order</option>
                   {purchaseOrders.map((po) => (
@@ -437,7 +459,7 @@ const PurchaseForm = ({
                     </option>
                   ))}
                 </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
                   <ChevronDown className="w-4 h-4" />
                 </div>
               </div>
@@ -446,62 +468,68 @@ const PurchaseForm = ({
 
           {/* Items Section */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Add Items
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900">Items</h3>
+              <button
+                type="button"
+                onClick={addItem}
+                className="flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium text-xs transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Item Manually
+              </button>
+            </div>
 
-            <div className="space-y-6">
+            <div className="space-y-4">
               {items.map((item, index) => (
                 <div
                   key={index}
-                  className="bg-gray-50/50 rounded-xl border border-gray-200 p-5 relative group"
+                  className="bg-gray-50/50 rounded-xl border border-gray-200 p-4 relative group space-y-3"
                 >
                   {/* Remove Button for Item */}
                   {items.length > 1 && (
                     <button
                       onClick={() => removeItem(index)}
-                      className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                      className="absolute top-3 right-3 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                    {/* Item Search */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Select Item <span className="text-red-500">*</span>
-                      </label>
-                      <ItemSearchSelect
-                        value={item}
-                        onSelect={(data) => {
-                          const newItems = [...items];
-                          newItems[index] = { ...newItems[index], ...data };
-                          setItems(newItems);
-                        }}
-                      />
-                    </div>
-                    {/* Manual Name */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Manual Item Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Or Enter Item name Manually"
-                        value={item.name}
-                        onChange={(e) =>
-                          updateItem(index, "name", e.target.value)
-                        }
-                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
+                  {/* Item Search */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Item <span className="text-red-500">*</span>
+                    </label>
+                    <ItemSearchSelect
+                      value={item}
+                      onSelect={(data) => {
+                        const newItems = [...items];
+                        newItems[index] = { ...newItems[index], ...data };
+                        setItems(newItems);
+                      }}
+                    />
+                  </div>
+                  {/* Manual Name */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Manual Item Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Or Enter Item Name Manually"
+                      value={item.name}
+                      onChange={(e) =>
+                        updateItem(index, "name", e.target.value)
+                      }
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-2 gap-3">
                     {/* Quantity */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">
                         Quantity
                       </label>
                       <div className="relative">
@@ -511,17 +539,17 @@ const PurchaseForm = ({
                           onChange={(e) =>
                             updateItem(index, "quantity", e.target.value)
                           }
-                          className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="01"
                         />
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
                           <ListFilter className="w-4 h-4" />
                         </div>
                       </div>
                     </div>
                     {/* Unit Price */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">
                         Unit Price <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
@@ -531,115 +559,116 @@ const PurchaseForm = ({
                           onChange={(e) =>
                             updateItem(index, "unitPrice", e.target.value)
                           }
-                          className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full pl-7 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="0"
                         />
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-sm">
                           ₹
                         </span>
                       </div>
                     </div>
-                    {/* Amount */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Amount
-                      </label>
-                      <div className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-sm font-semibold text-gray-800">
-                        ₹
-                        {(
-                          (parseFloat(item.quantity) || 0) *
-                          (parseFloat(item.unitPrice) || 0)
-                        ).toFixed(2)}
-                      </div>
+                  </div>
+
+                  {/* Amount */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Amount
+                    </label>
+                    <div className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm font-semibold text-gray-800">
+                      ₹
+                      {(
+                        (parseFloat(item.quantity) || 0) *
+                        (parseFloat(item.unitPrice) || 0)
+                      ).toFixed(2)}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-
-            <button
-              type="button"
-              onClick={addItem}
-              className="mt-4 flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Item Manually
-            </button>
           </div>
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
               Additional Notes <span className="text-red-500">*</span>
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add Additional Notes"
-              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] resize-none"
+              className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[90px] resize-none"
             />
           </div>
 
           {/* Status, Transaction Type, GST Rate */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                 Status
               </label>
               <div className="relative">
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="w-full appearance-none px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  className="w-full appearance-none px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 >
                   <option value="Draft">Draft</option>
                   <option value="Pending">Pending</option>
                   <option value="Paid">Paid</option>
                   <option value="Cancelled">Cancelled</option>
                 </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
                   <ChevronDown className="w-4 h-4" />
                 </div>
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Transaction Type
-              </label>
-              <div className="relative">
-                <select
-                  value={transactionType}
-                  onChange={(e) => setTransactionType(e.target.value)}
-                  className="w-full appearance-none px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                >
-                  <option value="intra">Intra State (CGST + SGST)</option>
-                  <option value="inter">Inter State (IGST)</option>
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                  <ChevronDown className="w-4 h-4" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                  Transaction Type
+                </label>
+                <div className="relative">
+                  <select
+                    value={transactionType}
+                    onChange={(e) => setTransactionType(e.target.value)}
+                    className="w-full appearance-none px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  >
+                    <option value="intra">Intra State</option>
+                    <option value="inter">Inter State</option>
+                  </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                    <ChevronDown className="w-4 h-4" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                GST Rate (%)
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={gstRate}
-                  onChange={(e) => setGstRate(parseFloat(e.target.value) || 0)}
-                  className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="0"
-                />
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                  GST Rate (%)
+                </label>
+                <div className="relative">
+                  <select
+                    value={gstRate}
+                    onChange={(e) => setGstRate(parseFloat(e.target.value) || 0)}
+                    className="w-full appearance-none px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  >
+                    <option value={0}>0</option>
+                    <option value={5}>5</option>
+                    <option value={12}>12</option>
+                    <option value={18}>18</option>
+                    <option value={28}>28</option>
+                  </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                    <ChevronDown className="w-4 h-4" />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Total Amount Banner */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg px-6 py-4 flex flex-col gap-2">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex flex-col gap-1.5">
             <div className="flex justify-between items-center text-sm text-blue-800">
               <span>Subtotal:</span>
               <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
@@ -655,7 +684,7 @@ const PurchaseForm = ({
               <span className="text-blue-800 font-medium text-sm">
                 Grand Total:
               </span>
-              <span className="text-blue-700 font-bold text-xl">
+              <span className="text-blue-700 font-bold text-lg">
                 ₹{grandTotal.toFixed(2)}
               </span>
             </div>
@@ -663,11 +692,11 @@ const PurchaseForm = ({
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-5 border-t border-gray-100 flex justify-between gap-4 bg-gray-50 rounded-b-xl">
+        <div className="px-5 py-4 border-t border-dashed border-gray-300 flex gap-3 items-center bg-white flex-shrink-0">
           <button
             type="button"
             onClick={handleClose}
-            className="flex-1 px-4 py-2.5 border border-gray-200 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 text-sm transition-colors shadow-sm"
+            className="flex-1 px-4 py-2.5 border border-red-200 text-red-500 font-medium rounded-full hover:bg-red-50 text-sm transition-colors"
           >
             Cancel
           </button>
@@ -675,12 +704,12 @@ const PurchaseForm = ({
             type="button"
             onClick={handleSubmit}
             disabled={loading}
-            className="flex-1 px-4 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 text-sm transition-colors shadow-sm disabled:opacity-70"
+            className="flex-1 px-4 py-2.5 bg-[#0085FF] text-white font-medium rounded-full hover:bg-blue-600 text-sm transition-colors disabled:opacity-70"
           >
             {loading
               ? "Creating..."
               : editingPurchase
-                ? "Update Purchase"
+                ? "Update"
                 : "Create Purchase"}
           </button>
         </div>
@@ -696,7 +725,7 @@ const PurchaseForm = ({
           onRequestClose={() => setShowQuickVendorForm(false)}
         />
       )}
-    </div>
+    </>
   );
 };
 

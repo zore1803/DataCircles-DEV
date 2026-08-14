@@ -157,7 +157,7 @@ const ItemSearchSelect = ({
     (search) => {
       clearTimeout(debounceTimeout.current);
       debounceTimeout.current = setTimeout(() => {
-        fetchItems(search);
+        Promise.resolve(fetchItems(search)).finally(() => setLoading(false));
       }, 300);
     },
     [fetchItems]
@@ -193,7 +193,7 @@ const ItemSearchSelect = ({
     setIsOpen(true);
     if (items.length === 0) {
       setLoading(true);
-      fetchItems();
+      Promise.resolve(fetchItems()).finally(() => setLoading(false));
     }
   };
 
@@ -417,21 +417,12 @@ const InvoiceForm = ({
       const itemsWithVariants = res.data
         .filter((item) => item.isActive)
         .flatMap((item) => {
-          const baseItem = {
-            _id: item._id,
-            displayName: item.name,
-            name: item.name,
-            description: item.description || "",
-            sellingPrice: item.sellingPrice,
-            hsnSac: item.hsnSac || "",
-            type: item.type,
-            category: item.category || "",
-            primaryUnit: item.primaryUnit || "OTH OTHERS",
-            isVariant: false,
-            parentItemId: null,
-          };
-          const variants =
-            item.variants?.map((variant) => ({
+          // Same variant-only logic as PurchaseForm.jsx/PurchaseOrderForm.jsx:
+          // if the item has variants, only the variants are selectable (the
+          // parent is just a grouping, not something you'd actually bill);
+          // otherwise fall back to the item itself.
+          if (item.variants && item.variants.length > 0) {
+            return item.variants.map((variant) => ({
               _id: variant._id,
               displayName: `${item.name} - ${variant.name}`,
               name: variant.name,
@@ -444,8 +435,23 @@ const InvoiceForm = ({
                 variant.primaryUnit || item.primaryUnit || "OTH OTHERS",
               isVariant: true,
               parentItemId: item._id,
-            })) || [];
-          return [baseItem, ...variants];
+            }));
+          }
+          return [
+            {
+              _id: item._id,
+              displayName: item.name,
+              name: item.name,
+              description: item.description || "",
+              sellingPrice: item.sellingPrice,
+              hsnSac: item.hsnSac || "",
+              type: item.type,
+              category: item.category || "",
+              primaryUnit: item.primaryUnit || "OTH OTHERS",
+              isVariant: false,
+              parentItemId: null,
+            },
+          ];
         });
       setItems(itemsWithVariants);
     } catch (error) {
@@ -1424,7 +1430,7 @@ const InvoiceForm = ({
                             type="number"
                             placeholder="0"
                             min="0"
-                            step="1"
+                            step="0.01"
                             value={item.rate}
                             onChange={(e) => {
                               handleItemChange(index, "rate", e.target.value);
@@ -1482,7 +1488,7 @@ const InvoiceForm = ({
                                   placeholder="0"
                                   min="0"
                                   step={
-                                    item.discountType === "percentage" ? "1" : "1"
+                                    item.discountType === "percentage" ? "0.1" : "0.01"
                                   }
                                   value={item.discount}
                                   onChange={(e) => {
@@ -1527,7 +1533,7 @@ const InvoiceForm = ({
                                 placeholder="0"
                                 min="0"
                                 step={
-                                  item.discountType === "percentage" ? "1" : "1"
+                                  item.discountType === "percentage" ? "0.1" : "0.01"
                                 }
                                 value={item.discount}
                                 onChange={(e) => {
@@ -1607,7 +1613,7 @@ const InvoiceForm = ({
                     type="number"
                     placeholder="0"
                     min="0"
-                    step={form.discount.type === "percentage" ? "1" : "1"}
+                    step={form.discount.type === "percentage" ? "0.1" : "0.01"}
                     value={form.discount.value}
                     onChange={(e) => {
                       handleDiscountChange("value", e.target.value);
@@ -2223,27 +2229,34 @@ const CreateInvoicePanel = ({
         const flattened = (res.data || [])
           .filter((item) => item.isActive)
           .flatMap((item) => {
-            const base = {
-              _id: item._id,
-              displayName: item.name,
-              name: item.name,
-              description: item.description || "",
-              sellingPrice: item.sellingPrice,
-              hsnSac: item.hsnSac || "",
-              isVariant: false,
-              parentItemId: null,
-            };
-            const variants = (item.variants || []).map((v) => ({
-              _id: v._id,
-              displayName: `${item.name} - ${v.name}`,
-              name: v.name,
-              description: v.description || item.description || "",
-              sellingPrice: v.sellingPrice || item.sellingPrice,
-              hsnSac: v.hsnSac || item.hsnSac || "",
-              isVariant: true,
-              parentItemId: item._id,
-            }));
-            return [base, ...variants];
+            // Same variant-only logic as PurchaseForm.jsx/PurchaseOrderForm.jsx
+            // (and the other fetchItems in this file): variants only when
+            // present, otherwise the item itself.
+            const variants = item.variants || [];
+            if (variants.length > 0) {
+              return variants.map((v) => ({
+                _id: v._id,
+                displayName: `${item.name} - ${v.name}`,
+                name: v.name,
+                description: v.description || item.description || "",
+                sellingPrice: v.sellingPrice || item.sellingPrice,
+                hsnSac: v.hsnSac || item.hsnSac || "",
+                isVariant: true,
+                parentItemId: item._id,
+              }));
+            }
+            return [
+              {
+                _id: item._id,
+                displayName: item.name,
+                name: item.name,
+                description: item.description || "",
+                sellingPrice: item.sellingPrice,
+                hsnSac: item.hsnSac || "",
+                isVariant: false,
+                parentItemId: null,
+              },
+            ];
           });
         setCatalogue(flattened);
       } catch (err) {
@@ -3187,6 +3200,7 @@ const CreateInvoicePanel = ({
                         <input
                           type="number"
                           min="0"
+                          step="0.01"
                           value={item.rate}
                           onChange={(e) => updateItem(index, { rate: e.target.value })}
                           placeholder="0"
@@ -3198,6 +3212,7 @@ const CreateInvoicePanel = ({
                           <input
                             type="number"
                             min="0"
+                            step={item.discountType === "percentage" ? "0.1" : "0.01"}
                             value={item.discount}
                             onChange={(e) => {
                               const raw = e.target.value;
@@ -3337,7 +3352,7 @@ const CreateInvoicePanel = ({
                     )}
                     <div className="min-w-0">
                       <label className={lbl}>Rate (₹)</label>
-                      <input type="number" min="0" value={item.rate} onChange={(e) => updateItem(index, { rate: e.target.value })} placeholder="0.00" className={numInput} />
+                      <input type="number" min="0" step="0.01" value={item.rate} onChange={(e) => updateItem(index, { rate: e.target.value })} placeholder="0.00" className={numInput} />
                     </div>
                     <div className="min-w-0">
                       <label className={lbl}>Qty</label>
@@ -3347,7 +3362,7 @@ const CreateInvoicePanel = ({
                       <label className={lbl}>Discount</label>
                       <div className="flex items-center gap-1.5">
                         <input
-                          type="number" min="0" value={item.discount}
+                          type="number" min="0" step={item.discountType === "percentage" ? "0.1" : "0.01"} value={item.discount}
                           onChange={(e) => {
                             const rawValue = e.target.value;
                             const parsed = parseFloat(rawValue) || 0;
@@ -3409,179 +3424,10 @@ const CreateInvoicePanel = ({
           </>
           )}
 
-          {type === "quotation" ? (
-            /* ── Quotation: Swipe-style Notes, Terms, Summary ── */
-            <div className="w-full mt-4 grid grid-cols-1 @2xl:grid-cols-2 gap-6">
-              {/* Left: Notes + Terms (collapsible accordion) */}
-              <div className="flex flex-col gap-3">
-                <span className="text-[13px] font-semibold text-[#525866]">Notes, terms &amp; more...</span>
-
-                {/* Notes accordion */}
-                <div className="border border-[#E1E4EA] rounded-lg overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setField("_notesOpen", !form._notesOpen)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-[#FAFBFC] transition-colors text-left"
-                  >
-                    <span className="flex items-center gap-2 text-[13px] font-semibold text-[#1F2937]">
-                      {form._notesOpen ? <ChevronDown className="w-4 h-4 text-[#525866]" /> : <ChevronRight className="w-4 h-4 text-[#525866]" />}
-                      Notes
-                    </span>
-                  </button>
-                  {form._notesOpen && (
-                    <div className="px-4 pb-4">
-                      <textarea
-                        rows={3}
-                        value={form.notes}
-                        onChange={(e) => setField("notes", e.target.value)}
-                        placeholder="Enter your notes, say thanks, or anything else"
-                        className="w-full px-3 py-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Terms accordion */}
-                <div className="border border-[#E1E4EA] rounded-lg overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setField("_termsOpen", !form._termsOpen)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-[#FAFBFC] transition-colors text-left"
-                  >
-                    <span className="flex items-center gap-2 text-[13px] font-semibold text-[#1F2937]">
-                      {form._termsOpen ? <ChevronDown className="w-4 h-4 text-[#525866]" /> : <ChevronRight className="w-4 h-4 text-[#525866]" />}
-                      Terms &amp; Conditions
-                    </span>
-                  </button>
-                  {form._termsOpen && (
-                    <div className="px-4 pb-4">
-                      <textarea
-                        rows={3}
-                        value={form.terms}
-                        onChange={(e) => setField("terms", e.target.value)}
-                        placeholder={"1. Goods once sold cannot be taken back or exchanged.\n2. Subject to local jurisdiction."}
-                        className="w-full px-3 py-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Signature */}
-                <div className="border border-[#E1E4EA] rounded-lg p-4">
-                  <span className="text-[13px] font-semibold text-[#1F2937] mb-2 block">Select Signature</span>
-                  <div className="relative flex items-center h-10 rounded-lg border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
-                    <select
-                      value={form.signature}
-                      onChange={(e) => setField("signature", e.target.value)}
-                      disabled={signaturesLoading}
-                      className="flex-1 min-w-0 h-full pl-3 pr-8 text-[13px] bg-transparent appearance-none focus:outline-none disabled:opacity-60"
-                    >
-                      <option value="">No signature</option>
-                      {savedSignatures.map((sig) => (
-                        <option key={sig.id} value={sig.dataUrl}>
-                          {sig.name}{sig.isDefault ? " (Default)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  </div>
-                  {form.signature && (
-                    <div className="mt-2 h-16 flex items-center justify-center rounded-lg border border-dashed border-[#E1E4EA] bg-[#FAFBFC]">
-                      <img src={form.signature} alt="Signature" className="max-h-14 max-w-full object-contain" />
-                    </div>
-                  )}
-                  <p className="text-[11px] text-[#99A0AE] mt-1.5">Signature on the document</p>
-                </div>
-              </div>
-
-              {/* Right: Summary panel */}
-              <div className="flex flex-col gap-3">
-                <div className="rounded-lg border border-[#E1E4EA] bg-[#F0FFF0] p-4">
-                  {/* Extra Discount */}
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[13px] font-medium text-[#525866]">Extra Discount</span>
-                    <div className="flex items-center gap-1.5">
-                      <select
-                        value={form.discount.type === "percentage" ? "%" : "₹"}
-                        onChange={(e) =>
-                          setField("discount", { ...form.discount, type: e.target.value === "%" ? "percentage" : "fixed" })
-                        }
-                        className="h-8 px-1.5 rounded-lg border border-[#E1E4EA] text-[12px] bg-white focus:outline-none focus:border-[#0085FF]"
-                      >
-                        <option value="₹">₹</option>
-                        <option value="%">%</option>
-                      </select>
-                      <input
-                        type="number"
-                        min="0"
-                        value={form.discount.value}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          const parsed = parseFloat(raw) || 0;
-                          let clamped = raw;
-                          if (form.discount.type === "percentage" && parsed > 100) {
-                            clamped = 100; toast.error("Percentage discount cannot exceed 100%.");
-                          } else if (form.discount.type === "fixed" && parsed > afterItemDiscounts) {
-                            clamped = afterItemDiscounts; toast.error("Discount cannot exceed subtotal.");
-                          }
-                          setField("discount", { ...form.discount, value: clamped });
-                        }}
-                        placeholder="0"
-                        className="w-20 h-8 px-2 rounded-lg border border-[#E1E4EA] text-[13px] text-right focus:outline-none focus:border-[#0085FF] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Breakdown */}
-                  <div className="space-y-2 text-[13px] border-t border-[#D0E8D0] pt-3">
-                    {form.isTaxInvoice && (
-                      <div className="flex justify-between text-[#525866]">
-                        <span>Taxable Amount</span>
-                        <span className="font-medium text-[#1F2937]">{money(netTaxable)}</span>
-                      </div>
-                    )}
-                    {form.isTaxInvoice && (
-                      gstSplit.isInterState ? (
-                        <div className="flex justify-between text-[#525866]">
-                          <span>IGST ({form.gstRate}%)</span>
-                          <span className="font-medium text-[#1F2937]">{money(gstSplit.igst)}</span>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex justify-between text-[#525866]">
-                            <span>CGST ({form.gstRate / 2}%)</span>
-                            <span className="font-medium text-[#1F2937]">{money(gstSplit.cgst)}</span>
-                          </div>
-                          <div className="flex justify-between text-[#525866]">
-                            <span>SGST ({form.gstRate / 2}%)</span>
-                            <span className="font-medium text-[#1F2937]">{money(gstSplit.sgst)}</span>
-                          </div>
-                        </>
-                      )
-                    )}
-                    <div className="flex justify-between items-center pt-2 border-t border-[#D0E8D0]">
-                      <span className="text-[15px] font-bold text-[#1F2937]">Total Amount</span>
-                      <span className="text-[15px] font-bold text-[#1F2937]">{money(finalTotal)}</span>
-                    </div>
-                    {invoiceDiscountAmount > 0 && (
-                      <div className="flex justify-between text-red-500">
-                        <span>Total Discount</span>
-                        <span>{money(itemDiscountsTotal + invoiceDiscountAmount)}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Amount in words */}
-                <div className="text-[12px] text-[#525866]">
-                  <span className="text-[#99A0AE]">Amount in Words: </span>
-                  <span className="font-medium">{numberToWords(finalTotal)}</span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* ── Invoice / Proforma / Challan: original layout ── */
-            <>
+          {/* Notes / Terms / Signature / Summary — shared by every document
+              type (including quotation, which used to get its own
+              swipe-style accordion layout here; that's retired so quotation
+              matches Invoice/Proforma/Challan exactly). */}
           <div className="grid grid-cols-1 @2xl:grid-cols-2 gap-x-6 gap-y-2 w-full mt-3">
             <div className="flex flex-col">
               <div className="flex items-center justify-between gap-2">
@@ -3677,6 +3523,7 @@ const CreateInvoicePanel = ({
                 <input
                   type="number"
                   min="0"
+                  step={form.discount.type === "percentage" ? "0.1" : "0.01"}
                   value={form.discount.value}
                   onChange={(e) => {
                     const raw = e.target.value;
@@ -3794,8 +3641,6 @@ const CreateInvoicePanel = ({
               </div>
             </div>
           </div>
-            </>
-          )}
 
           {/* Running total + primary actions, pinned to the bottom of the form
               column. It sticks inside this scroll container rather than being

@@ -13,9 +13,12 @@ import {
   ChevronRight,
   Settings,
   Minimize2,
+  Printer,
+  Inbox,
 } from "lucide-react";
 import API from "../../services/api";
-import ItemForm from "../item/ItemForm";
+import QuickItemDrawer from "../item/QuickItemDrawer";
+import { AddressFieldsGroup, emptyAddress, isAddressEmpty, SectionHeader } from "../invoice/formPrimitives";
 import QuickDealForm from "../deal/QuickDealForm";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import toast from "react-hot-toast";
@@ -109,6 +112,21 @@ const ItemSearchSelect = ({
   value,
   onSelect,
   onAddNew,
+  // The quick-add bar passes false here — it's for finding an existing
+  // product only; creating a new one already has its own dedicated
+  // "+ Add new Product?" link, so offering it a second time in this
+  // dropdown too was redundant and confusing.
+  allowAddNew = true,
+  // Per-row pickers (true) keep showing the picked item's name in the box,
+  // since the box IS that row's current value. The quick-add bar (false)
+  // is a one-shot "find something to add" control, not a persistent value —
+  // it should snap back to the empty placeholder the instant something's
+  // picked, with the pending pick surfaced elsewhere (a chip) instead.
+  showSelectedValue = true,
+  // Ids to hide from the results — the quick-add bar passes the ids of
+  // items already sitting in the bill, so an already-added product can't
+  // be picked (and silently duplicated) again from this dropdown.
+  excludeIds,
   fetchItems,
   items,
   setItems,
@@ -119,6 +137,14 @@ const ItemSearchSelect = ({
   const dropdownRef = useRef(null);
   const inputRef = useRef(null);
   const debounceTimeout = useRef(null);
+
+  // Whenever the parent clears the selection (e.g. after "Add to Bill"
+  // resets quickAddItem to null), make sure any leftover typed text clears
+  // with it — otherwise the box could keep showing stale text instead of
+  // reverting to the placeholder.
+  useEffect(() => {
+    if (!value) setSearchTerm("");
+  }, [value]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -134,7 +160,7 @@ const ItemSearchSelect = ({
     (search) => {
       clearTimeout(debounceTimeout.current);
       debounceTimeout.current = setTimeout(() => {
-        fetchItems(search);
+        Promise.resolve(fetchItems(search)).finally(() => setLoading(false));
       }, 300);
     },
     [fetchItems]
@@ -163,35 +189,43 @@ const ItemSearchSelect = ({
       discount: 0,
     });
     setIsOpen(false);
-    setSearchTerm("");
+    setSearchTerm(item.displayName);
   };
 
   const handleInputFocus = () => {
     setIsOpen(true);
     if (items.length === 0) {
       setLoading(true);
-      fetchItems();
+      Promise.resolve(fetchItems()).finally(() => setLoading(false));
     }
   };
 
-  const selectedItem = items.find((item) => item._id === value?._id);
+  const selectedItem = showSelectedValue
+    ? items.find((item) => item._id === value?._id)
+    : null;
+
+  const visibleItems = excludeIds?.length
+    ? items.filter((item) => !excludeIds.includes(item._id))
+    : items;
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <div className="relative">
-        <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
+      {/* Same static box shape as the Companies.jsx search bar (h-10,
+          rounded-full, #E1E4EA border, #0085FF focus) — without its
+          expand/collapse animation, which doesn't apply here. */}
+      <div className="relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-colors hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white overflow-hidden">
+        <div className="pl-3 pr-2 flex items-center justify-center flex-shrink-0">
+          <SearchIcon className="w-4 h-4 text-[#525866]" />
+        </div>
+
         <input
           ref={inputRef}
           type="text"
-          placeholder={
-            selectedItem
-              ? selectedItem.displayName
-              : "Search items or variants..."
-          }
-          value={selectedItem ? selectedItem.displayName : searchTerm}
+          placeholder="Search items or variants..."
+          value={searchTerm}
           onChange={handleSearchChange}
           onFocus={handleInputFocus}
-          className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 bg-white"
+          className="w-full h-full bg-transparent text-sm focus:outline-none pr-4 min-w-[100px]"
           aria-label="Search items or variants"
         />
       </div>
@@ -202,30 +236,36 @@ const ItemSearchSelect = ({
             <div className="p-4 text-center text-slate-500">Loading...</div>
           ) : (
             <>
-              <div className="p-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onAddNew();
-                    setIsOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  aria-label="Add new item"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add New Item
-                </button>
-              </div>
-              <div className="border-t border-slate-100"></div>
-              {items.length === 0 ? (
+              {allowAddNew && (
+                <>
+                  <div className="p-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onAddNew();
+                        setIsOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      aria-label="Add new item"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add New Item
+                    </button>
+                  </div>
+                  <div className="border-t border-slate-100"></div>
+                </>
+              )}
+              {visibleItems.length === 0 ? (
                 <div className="p-4 text-center text-slate-500">
                   {searchTerm
-                    ? "No items or variants found"
-                    : "No items or variants available"}
+                    ? "No matching products found"
+                    : items.length > 0
+                      ? "Already added to this bill"
+                      : "No products available yet"}
                 </div>
               ) : (
                 <div className="max-h-48 overflow-y-auto">
-                  {items.map((item) => (
+                  {visibleItems.map((item) => (
                     <button
                       key={item._id}
                       type="button"
@@ -306,20 +346,14 @@ const QuotationForm = ({
     receiverGSTIN: "",
     quotationPrefix: "EST-",
     quotationNumber: "",
-    items: [
-      {
-        _id: null,
-        name: "",
-        description: "",
-        rate: "",
-        quantity: 1,
-        hsn: "",
-        isVariant: false,
-        parentItemId: null,
-        discountType: "amount",
-        discount: 0,
-      },
-    ],
+    billingAddress: emptyAddress(),
+    shippingAddress: emptyAddress(),
+    sameAsBilling: true,
+    // Starts empty so the Products & Services section shows the "search
+    // existing products to add to this list" empty state instead of an
+    // already-open blank row — matches the reference layout, where the
+    // table only gains rows once something's actually added.
+    items: [],
     discount: { type: "fixed", value: 0 },
     amount: 0,
     status: "Draft",
@@ -334,27 +368,14 @@ const QuotationForm = ({
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
   const [showItemForm, setShowItemForm] = useState(false);
+  const [quickAddItem, setQuickAddItem] = useState(null);
+  const [quickAddQty, setQuickAddQty] = useState(1);
+  const [savedSignatures, setSavedSignatures] = useState([]);
+  const [signaturesLoading, setSignaturesLoading] = useState(false);
   const [showQuickDealForm, setShowQuickDealForm] = useState(false);
   const [localDeals, setLocalDeals] = useState(deals);
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
-  const [itemForm, setItemForm] = useState({
-    type: "product",
-    name: "",
-    description: "",
-    purchasePrice: 0,
-    sellingPrice: 0,
-    taxInclusive: true,
-    hsnSac: "",
-    barcode: "",
-    category: "",
-    primaryUnit: "OTH OTHERS",
-    images: [],
-    isActive: true,
-  });
-  const [itemFormLoading, setItemFormLoading] = useState(false);
-  const [itemFormError, setItemFormError] = useState("");
-  const [itemFormSuccess, setItemFormSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [items, setItems] = useState([]);
@@ -380,26 +401,16 @@ const QuotationForm = ({
   // Fetch items and variants
   const fetchItems = useCallback(async (search = "") => {
     try {
-      setItemFormLoading(true);
       const res = await API.get(`/items?search=${search}&includeVariants=true`);
       const itemsWithVariants = res.data
         .filter((item) => item.isActive)
         .flatMap((item) => {
-          const baseItem = {
-            _id: item._id,
-            displayName: item.name,
-            name: item.name,
-            description: item.description || "",
-            sellingPrice: item.sellingPrice,
-            hsnSac: item.hsnSac || "",
-            type: item.type,
-            category: item.category || "",
-            primaryUnit: item.primaryUnit || "OTH OTHERS",
-            isVariant: false,
-            parentItemId: null,
-          };
-          const variants =
-            item.variants?.map((variant) => ({
+          // Same variant-only logic as PurchaseForm.jsx/PurchaseOrderForm.jsx:
+          // if the item has variants, only the variants are selectable (the
+          // parent is just a grouping, not something you'd actually bill);
+          // otherwise fall back to the item itself.
+          if (item.variants && item.variants.length > 0) {
+            return item.variants.map((variant) => ({
               _id: variant._id,
               displayName: `${item.name} - ${variant.name}`,
               name: variant.name,
@@ -412,15 +423,28 @@ const QuotationForm = ({
                 variant.primaryUnit || item.primaryUnit || "OTH OTHERS",
               isVariant: true,
               parentItemId: item._id,
-            })) || [];
-          return [baseItem, ...variants];
+            }));
+          }
+          return [
+            {
+              _id: item._id,
+              displayName: item.name,
+              name: item.name,
+              description: item.description || "",
+              sellingPrice: item.sellingPrice,
+              hsnSac: item.hsnSac || "",
+              type: item.type,
+              category: item.category || "",
+              primaryUnit: item.primaryUnit || "OTH OTHERS",
+              isVariant: false,
+              parentItemId: null,
+            },
+          ];
         });
       setItems(itemsWithVariants);
     } catch (error) {
       console.error("Error fetching items:", error);
       toast.error("Failed to fetch items.");
-    } finally {
-      setItemFormLoading(false);
     }
   }, []);
 
@@ -471,6 +495,12 @@ const QuotationForm = ({
         reference: editingQuotation.reference || "",
         quotationPrefix: editingQuotation.quotationPrefix || "EST-",
         quotationNumber: editingQuotation.quotationNumber || "",
+        billingAddress: { ...emptyAddress(), ...(editingQuotation.billingAddress || {}) },
+        shippingAddress: { ...emptyAddress(), ...(editingQuotation.shippingAddress || {}) },
+        sameAsBilling:
+          isAddressEmpty(editingQuotation.shippingAddress) ||
+          JSON.stringify({ ...emptyAddress(), ...(editingQuotation.billingAddress || {}) }) ===
+            JSON.stringify({ ...emptyAddress(), ...(editingQuotation.shippingAddress || {}) }),
         items: editingQuotation.items.map((item) => ({
           _id: item.itemId || null,
           name: item.name || "",
@@ -504,20 +534,10 @@ const QuotationForm = ({
         reference: "",
         quotationPrefix: "EST-",
         quotationNumber: "",
-        items: [
-          {
-            _id: null,
-            name: "",
-            description: "",
-            rate: "",
-            quantity: 1,
-            hsn: "",
-            isVariant: false,
-            parentItemId: null,
-            discountType: "amount",
-            discount: 0,
-          },
-        ],
+        billingAddress: emptyAddress(),
+        shippingAddress: emptyAddress(),
+        sameAsBilling: true,
+        items: [],
         discount: { type: "fixed", value: 0 },
         amount: 0,
         status: "Draft",
@@ -532,6 +552,39 @@ const QuotationForm = ({
       setHasUnsavedChanges(false);
     }
   }, [editingQuotation]);
+
+  // Same default-signature behavior as the split-view Invoice panel
+  // (InvoiceForm.jsx): fall back to the org's default signature whenever
+  // this quotation isn't already pointing at one of the saved signatures —
+  // a blank, stale, or never-set signature resolves to the default rather
+  // than nothing. A quotation that stored a still-valid custom signature
+  // keeps it.
+  useEffect(() => {
+    const loadSignatures = async () => {
+      setSignaturesLoading(true);
+      try {
+        const res = await API.get("/document-settings/signatures");
+        const sigs = Array.isArray(res.data) ? res.data : [];
+        setSavedSignatures(sigs);
+        const defaultSig = sigs.find((s) => s.isDefault);
+        if (defaultSig) {
+          setForm((prev) => {
+            const hasSavedMatch = sigs.some((s) => s.dataUrl === prev.signature);
+            return hasSavedMatch
+              ? prev
+              : { ...prev, signature: defaultSig.dataUrl || "" };
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load signatures", error);
+        setSavedSignatures([]);
+      } finally {
+        setSignaturesLoading(false);
+      }
+    };
+
+    loadSignatures();
+  }, []);
 
   const calculateItemAmount = (item) => {
     const rate = parseFloat(item.rate) || 0;
@@ -592,20 +645,28 @@ const QuotationForm = ({
     setForm((prev) => {
       const newItems = [...prev.items];
       let newValue = value;
+      const item = newItems[index];
 
-      if (field === "discount") {
-        const item = newItems[index];
+      if (field === "discount" || field === "discountType") {
         const rate = parseFloat(item.rate) || 0;
         const quantity = parseInt(item.quantity) || 0;
         const subtotal = rate * quantity;
-        const parsedDiscount = parseFloat(value) || 0;
+        
+        let activeDiscount = field === "discount" ? (parseFloat(value) || 0) : (parseFloat(item.discount) || 0);
+        let activeType = field === "discountType" ? value : item.discountType;
 
-        if (item.discountType === "amount" && parsedDiscount > subtotal) {
-          newValue = subtotal;
+        if (activeType === "amount" && activeDiscount > subtotal) {
+          activeDiscount = subtotal;
           toast.error("Item discount cannot exceed item total price.");
-        } else if (item.discountType === "percentage" && parsedDiscount > 100) {
-          newValue = 100;
+        } else if (activeType === "percentage" && activeDiscount > 100) {
+          activeDiscount = 100;
           toast.error("Percentage discount cannot exceed 100%.");
+        }
+
+        if (field === "discount") {
+          newValue = activeDiscount;
+        } else if (field === "discountType") {
+          newItems[index].discount = activeDiscount;
         }
       }
 
@@ -621,41 +682,21 @@ const QuotationForm = ({
 
   const handleDiscountChange = (field, value) => {
     setForm((prev) => {
-      const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
-        prev.items
-      );
+      const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(prev.items);
       let newValue = value;
+      let newDiscount = { ...prev.discount, [field]: newValue };
 
-      if (field === "value") {
-        const parsedValue = parseFloat(value) || 0;
-        if (
-          prev.discount.type === "fixed" &&
-          parsedValue > subtotalAfterItemDiscounts
-        ) {
-          newValue = subtotalAfterItemDiscounts;
-          toast.error(
-            "Quotation discount cannot exceed subtotal after item discounts."
-          );
-        } else if (prev.discount.type === "percentage" && parsedValue > 100) {
-          newValue = 100;
+      if (field === "value" || field === "type") {
+        let activeValue = parseFloat(newDiscount.value) || 0;
+        let activeType = newDiscount.type;
+
+        if (activeType === "fixed" && activeValue > subtotalAfterItemDiscounts) {
+          newDiscount.value = subtotalAfterItemDiscounts;
+          toast.error("Quotation discount cannot exceed subtotal after item discounts.");
+        } else if (activeType === "percentage" && activeValue > 100) {
+          newDiscount.value = 100;
           toast.error("Percentage discount cannot exceed 100%.");
         }
-      }
-
-      const newDiscount = { ...prev.discount, [field]: newValue };
-      const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
-        subtotalAfterItemDiscounts,
-        newDiscount
-      );
-
-      if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
-        newDiscount.value = subtotalAfterItemDiscounts;
-        if (newDiscount.type === "percentage") {
-          newDiscount.value = 100;
-        }
-        toast.error(
-          "Quotation discount cannot exceed subtotal after item discounts."
-        );
       }
 
       return {
@@ -686,43 +727,64 @@ const QuotationForm = ({
     setHasUnsavedChanges(true);
   };
 
-  const handleAddItem = () => {
-    setForm((prev) => ({
-      ...prev,
-      items: [
-        ...prev.items,
-        {
-          _id: null,
-          name: "",
-          description: "",
-          rate: "",
-          quantity: 1,
-          hsn: "",
-          isVariant: false,
-          parentItemId: null,
-          discountType: "amount",
-          discount: 0,
-        },
-      ],
-      amount: calculateTotalAmount(
-        [
-          ...prev.items,
-          {
-            _id: null,
-            name: "",
-            description: "",
-            rate: "",
-            quantity: 1,
-            hsn: "",
-            isVariant: false,
-            parentItemId: null,
-            discountType: "amount",
-            discount: 0,
-          },
-        ],
-        prev.discount
-      ),
-    }));
+  // Fires once QuickItemDrawer actually creates the product (POST /items
+  // succeeded) — refreshes the picker's item list AND drops the new
+  // product straight into the bill as a real row (name/price already
+  // filled in from what was just entered), instead of leaving a blank row
+  // behind for the quantity/price to be typed in separately.
+  const handleProductCreated = (item) => {
+    fetchItems();
+    // Clear any pending pick left over in the quick-add bar from before the
+    // drawer was opened — otherwise a stale chip/search text sticks around
+    // even though the product just got added a different way.
+    setQuickAddItem(null);
+    setQuickAddQty(1);
+    const newItem = {
+      _id: item._id,
+      name: item.name,
+      description: item.description || "",
+      rate: item.sellingPrice,
+      quantity: 1,
+      hsn: item.hsnSac || "",
+      isVariant: false,
+      parentItemId: null,
+      discountType: "amount",
+      discount: 0,
+    };
+    setForm((prev) => {
+      const isBlankStarterRow =
+        prev.items.length === 1 && !prev.items[0].name && !prev.items[0]._id;
+      const newItems = isBlankStarterRow ? [newItem] : [...prev.items, newItem];
+      return {
+        ...prev,
+        items: newItems,
+        amount: calculateTotalAmount(newItems, prev.discount),
+      };
+    });
+    setHasUnsavedChanges(true);
+  };
+
+  // Quick-add bar above the item table: search a product, set its quantity,
+  // "Add to Bill" drops it straight into form.items — separate from the
+  // per-row inline search each existing row also has.
+  const handleAddToBill = () => {
+    if (!quickAddItem) {
+      toast.error("Search and select a product first.");
+      return;
+    }
+    const newItem = { ...quickAddItem, quantity: parseInt(quickAddQty) || 1 };
+    setForm((prev) => {
+      const isBlankStarterRow =
+        prev.items.length === 1 && !prev.items[0].name && !prev.items[0]._id;
+      const newItems = isBlankStarterRow ? [newItem] : [...prev.items, newItem];
+      return {
+        ...prev,
+        items: newItems,
+        amount: calculateTotalAmount(newItems, prev.discount),
+      };
+    });
+    setQuickAddItem(null);
+    setQuickAddQty(1);
     setHasUnsavedChanges(true);
   };
 
@@ -750,21 +812,10 @@ const QuotationForm = ({
     setShowQuickDealForm(false);
   };
 
-  const resetItemForm = () => {
-    setItemForm({
-      type: "product",
-      name: "",
-      description: "",
-      purchasePrice: 0,
-      sellingPrice: 0,
-      taxInclusive: true,
-      hsnSac: "",
-      barcode: "",
-      category: "",
-      primaryUnit: "OTH OTHERS",
-      images: [],
-      isActive: true,
-    });
+  // Hands the current form state to the parent's preview/print modal —
+  // same onPreview contract Accounting.jsx wires up for the split-view panel.
+  const handlePrint = () => {
+    if (onPreview) onPreview(form);
   };
 
   const validateGSTIN = (gstin) => {
@@ -792,6 +843,15 @@ const QuotationForm = ({
       toast.error(
         "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
       );
+      setIsSubmitting(false);
+      return;
+    }
+
+    // items now starts empty (no blank starter row) so this has to be
+    // checked explicitly — an empty array otherwise sails right through
+    // the invalidItems filter below since filtering nothing finds nothing.
+    if (form.items.length === 0) {
+      toast.error("Add at least one product or service.");
       setIsSubmitting(false);
       return;
     }
@@ -834,6 +894,9 @@ const QuotationForm = ({
         date: form.date,
         dueDate: form.dueDate,
         receiverGSTIN: form.receiverGSTIN,
+        billingAddress: form.billingAddress,
+        shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
+        signature: form.signature,
         amount: calculateTotalAmount(form.items, form.discount),
         discount: form.discount,
         status: form.status,
@@ -867,20 +930,10 @@ const QuotationForm = ({
         date: "",
         dueDate: "",
         receiverGSTIN: "",
-        items: [
-          {
-            _id: null,
-            name: "",
-            description: "",
-            rate: "",
-            quantity: 1,
-            hsn: "",
-            isVariant: false,
-            parentItemId: null,
-            discountType: "amount",
-            discount: 0,
-          },
-        ],
+        billingAddress: emptyAddress(),
+        shippingAddress: emptyAddress(),
+        sameAsBilling: true,
+        items: [],
         discount: { type: "fixed", value: 0 },
         amount: 0,
         status: "Draft",
@@ -1039,13 +1092,16 @@ const QuotationForm = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            {/* Right-side action pills — matched to the split-view Invoice
+                panel's header (CreateInvoicePanel in InvoiceForm.jsx) so
+                the full-width Quotation screen reads the same way. */}
+            <div className="flex items-center gap-2 flex-shrink-0">
               {onExitFullWidth && (
                 <button
                   type="button"
                   onClick={onExitFullWidth}
                   title="Back to split view with live preview"
-                  className="h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-full text-gray-600 hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
+                  className="h-8 w-8 flex items-center justify-center bg-white border border-[#E1E4EA] rounded-full text-[#525866] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
                 >
                   <Minimize2 className="w-3.5 h-3.5" />
                 </button>
@@ -1053,16 +1109,19 @@ const QuotationForm = ({
               <button
                 type="button"
                 onClick={() => {}}
-                className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
+                title="Quotation settings"
+                className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
               >
-                <Settings className="w-4 h-4" /> Settings
+                <Settings className="w-3.5 h-3.5 text-[#525866]" />
+                Settings
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
-                Save <ChevronRight className="w-4 h-4" />
+                <FileText className="w-3.5 h-3.5" />
+                Save as Draft
               </button>
             </div>
           </div>
@@ -1106,7 +1165,29 @@ const QuotationForm = ({
                       options={localDeals}
                       value={form.deal}
                       onChange={(value) => {
-                        setForm((prev) => ({ ...prev, deal: value }));
+                        // Switching the deal replaces the Receiver GSTIN and
+                        // billing/shipping address with whatever the new
+                        // deal's company has — same prefetch behavior as the
+                        // split-view Invoice panel (InvoiceForm.jsx). Clears
+                        // them to empty when that company has none, rather
+                        // than carrying over the previous deal's data.
+                        const selectedDeal = localDeals.find((d) => d._id === value);
+                        const company = selectedDeal?.company;
+                        const nextBilling =
+                          company && !isAddressEmpty(company.billingAddress)
+                            ? { ...emptyAddress(), ...company.billingAddress }
+                            : emptyAddress();
+                        const nextShipping =
+                          company && !isAddressEmpty(company.shippingAddresses?.[0])
+                            ? { ...emptyAddress(), ...company.shippingAddresses[0] }
+                            : emptyAddress();
+                        setForm((prev) => ({
+                          ...prev,
+                          deal: value,
+                          receiverGSTIN: company?.gstin || "",
+                          billingAddress: nextBilling,
+                          shippingAddress: prev.sameAsBilling ? nextBilling : nextShipping,
+                        }));
                         setHasUnsavedChanges(true);
                       }}
                       placeholder="Search customers by name, company, GSTIN..."
@@ -1196,6 +1277,67 @@ const QuotationForm = ({
               </div>
             </div>
 
+            {/* ── Billing & Shipping Address — same fields/behavior as the
+                split-view Invoice panel's address section (AddressFieldsGroup
+                from formPrimitives.jsx), so quotations round-trip these the
+                same way invoices do. ── */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-slate-800">Billing & Shipping Address</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((prev) => {
+                        const nowSame = !prev.sameAsBilling;
+                        setHasUnsavedChanges(true);
+                        return {
+                          ...prev,
+                          sameAsBilling: nowSame,
+                          shippingAddress: nowSame ? prev.billingAddress : prev.shippingAddress,
+                        };
+                      })
+                    }
+                    className="flex-shrink-0"
+                  >
+                    <span
+                      className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${form.sameAsBilling ? "bg-blue-600" : "bg-gray-200"}`}
+                    >
+                      <span
+                        className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.sameAsBilling ? "translate-x-4" : "translate-x-0"}`}
+                      />
+                    </span>
+                  </button>
+                  <span className="text-sm font-medium text-gray-700">
+                    Shipping address same as billing
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 w-full">
+                <AddressFieldsGroup
+                  label="Billing address"
+                  value={form.billingAddress}
+                  onChange={(next) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      billingAddress: next,
+                      shippingAddress: prev.sameAsBilling ? next : prev.shippingAddress,
+                    }));
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+                <AddressFieldsGroup
+                  label="Shipping address"
+                  value={form.shippingAddress}
+                  disabled={!!form.sameAsBilling}
+                  onChange={(next) => {
+                    setForm((prev) => ({ ...prev, shippingAddress: next }));
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </div>
+            </div>
+
             {/* ── Section 3: Products & Services ── */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex justify-between items-center mb-6">
@@ -1223,6 +1365,67 @@ const QuotationForm = ({
                 </div>
               </div>
 
+              {/* Quick-add bar: search an EXISTING product, set quantity,
+                  drop it straight into the bill — separate from the per-row
+                  inline search each already-added row keeps for editing.
+                  allowAddNew is off here since creating a new product
+                  already has its own "+ Add new Product?" link above;
+                  offering it a second time inside this dropdown too was
+                  redundant. Wraps to its own rows on narrow screens instead
+                  of overflowing. */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3 mb-5 bg-blue-50/60 border border-blue-100 rounded-xl">
+                <div className="flex-1 min-w-0">
+                  <ItemSearchSelect
+                    value={quickAddItem}
+                    onSelect={(itemData) => setQuickAddItem(itemData)}
+                    onAddNew={handleOpenItemForm}
+                    allowAddNew={false}
+                    showSelectedValue={false}
+                    excludeIds={form.items.map((i) => i._id).filter(Boolean)}
+                    fetchItems={fetchItems}
+                    items={items}
+                    setItems={setItems}
+                  />
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Qty"
+                    value={quickAddQty}
+                    onChange={(e) => setQuickAddQty(e.target.value)}
+                    className="w-20 h-[42px] text-center text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 flex-shrink-0"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddToBill}
+                    className="h-[42px] px-4 flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add to Bill
+                  </button>
+                </div>
+              </div>
+
+              {form.items.length === 0 ? (
+                /* Empty state — shown until something's actually been added,
+                   instead of opening with an already-blank editable row. */
+                <div className="flex flex-col items-center justify-center py-14 text-center">
+                  <Inbox className="w-12 h-12 text-gray-300 mb-4" strokeWidth={1.5} />
+                  <p className="text-gray-500 text-sm mb-4">
+                    Search existing products to add to this list or add new product to get started! 🚀
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleOpenItemForm}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-semibold text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add New Product
+                  </button>
+                </div>
+              ) : (
+                <>
               {/* Column Headers */}
               <div className="grid grid-cols-12 gap-4 pb-2 border-b border-gray-100 text-xs font-semibold text-gray-500">
                 <div className="col-span-4">Product Name</div>
@@ -1237,21 +1440,24 @@ const QuotationForm = ({
                 {form.items.map((item, index) => {
                   const rowTotal = calculateItemAmount(item);
                   return (
-                    <div key={index} className="group relative bg-white border border-gray-100 rounded-lg p-4 shadow-sm hover:border-blue-100 transition-colors">
-                      <div className="absolute -left-2.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-move p-1 bg-white border border-gray-200 rounded shadow-sm text-gray-400 hover:text-gray-600">
+                    <div key={index} className="group relative py-3 border-b border-gray-100 last:border-b-0">
+                      <div className="absolute -left-4 top-4 opacity-0 group-hover:opacity-100 cursor-move text-gray-300 hover:text-gray-500 transition-opacity">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16"></path></svg>
                       </div>
-                      
+
                       <div className="grid grid-cols-12 gap-4 items-start">
-                        {/* Product Name (using ItemSearchSelect) */}
+                        {/* Product Name (Plain Input instead of Search) */}
                         <div className="col-span-4">
-                          <ItemSearchSelect
-                            value={item}
-                            onSelect={(itemData) => handleItemSelect(index, itemData)}
-                            onAddNew={handleOpenItemForm}
-                            fetchItems={fetchItems}
-                            items={items}
-                            setItems={setItems}
+                          <input
+                            type="text"
+                            value={item.name || ""}
+                            onChange={(e) => {
+                              handleItemChange(index, "name", e.target.value);
+                              setHasUnsavedChanges(true);
+                            }}
+                            className="w-full text-sm font-medium text-gray-900 bg-transparent px-1 py-1.5 focus:outline-none focus:bg-gray-50 focus:ring-1 focus:ring-gray-200 rounded transition-colors"
+                            placeholder="Product Name"
+                            required
                           />
                         </div>
 
@@ -1333,13 +1539,15 @@ const QuotationForm = ({
                         </div>
                       </div>
 
-                      {/* More Details (Expandable) */}
-                      <details className="mt-4 group/details">
+                      {/* More Details (Expandable) — kept flat against the
+                          row instead of boxed in its own indented panel, so
+                          the table doesn't stack box-inside-box. */}
+                      <details className="mt-3 group/details">
                         <summary className="text-xs font-semibold text-blue-600 cursor-pointer list-none flex items-center gap-1 w-max select-none">
                           <ChevronRight className="w-3.5 h-3.5 transition-transform group-open/details:rotate-90" />
                           More Details
                         </summary>
-                        <div className="pt-3 pb-1 pl-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-l-2 border-blue-100 ml-1.5 mt-2">
+                        <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
                           {form.isTaxQuotation && (
                             <div className="space-y-1">
                               <label className="text-xs text-gray-500 font-medium">HSN/SAC Code</label>
@@ -1351,7 +1559,7 @@ const QuotationForm = ({
                                   handleItemChange(index, "hsn", e.target.value);
                                   setHasUnsavedChanges(true);
                                 }}
-                                className="w-full text-sm border border-gray-200 rounded px-3 py-1.5 focus:outline-none focus:border-blue-400"
+                                className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
                                 required
                               />
                             </div>
@@ -1366,7 +1574,7 @@ const QuotationForm = ({
                                 handleItemChange(index, "description", e.target.value);
                                 setHasUnsavedChanges(true);
                               }}
-                              className="w-full resize-none text-sm text-gray-700 border border-gray-200 rounded px-3 py-2 focus:outline-none focus:border-blue-400"
+                              className="w-full resize-none text-sm text-gray-700 border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
                             />
                           </div>
                         </div>
@@ -1376,72 +1584,60 @@ const QuotationForm = ({
                 })}
               </div>
 
-              {/* Add New Product Button */}
+              {/* Add New Product Button — opens the drawer to create a new
+                  catalog product and drops it straight into the bill, same
+                  as the empty-state button above. Finding an EXISTING
+                  product is what the quick-add search bar is for. */}
               <div className="mt-4 flex justify-center">
                 <button
                   type="button"
-                  onClick={handleAddItem}
+                  onClick={handleOpenItemForm}
                   className="flex items-center gap-2 px-6 py-2.5 bg-blue-50 text-blue-600 font-semibold text-sm rounded-lg hover:bg-blue-100 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                   Add New Product
                 </button>
               </div>
+                </>
+              )}
             </div>
 
-            {/* ── Section 4 & 5: Bottom Details & Totals ── */}
+            {/* ── Section 4 & 5: Notes, Terms, Signature, Totals — matched to
+                the split-view Invoice panel's numbered layout
+                (InvoiceForm.jsx's CreateInvoicePanel) instead of the old
+                collapsible accordions with a decorative, non-functional
+                "AI" button and dead Signature button. ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              
-              {/* Left Column: Notes, Terms, Attachments */}
-              <div className="space-y-4">
-                {/* Notes Accordion */}
-                <details className="group bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm" open>
-                  <summary className="flex items-center gap-2 px-4 py-3 bg-gray-50/50 cursor-pointer select-none">
-                    <ChevronDown className="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" />
-                    <span className="font-semibold text-gray-800 text-sm">Notes</span>
-                    <div className="group/help relative ml-1">
-                      <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px] cursor-help">?</div>
-                    </div>
-                  </summary>
-                  <div className="p-4 border-t border-gray-200 space-y-3">
-                    <textarea
-                      placeholder="Enter your notes, say thanks, or anything else"
-                      rows={3}
-                      value={form.notes}
-                      onChange={(e) => {
-                        setForm((prev) => ({ ...prev, notes: e.target.value }));
-                        setHasUnsavedChanges(true);
-                      }}
-                      className="w-full text-sm text-gray-700 resize-none focus:outline-none placeholder-gray-400"
-                    />
-                    <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
-                      <span className="text-sm">✨</span> AI
-                    </button>
-                  </div>
-                </details>
 
-                {/* Terms Accordion */}
-                <details className="group bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                  <summary className="flex items-center gap-2 px-4 py-3 bg-gray-50/50 cursor-pointer select-none">
-                    <ChevronRight className="w-4 h-4 text-gray-500 transition-transform group-open:rotate-90" />
-                    <span className="font-semibold text-gray-800 text-sm">Terms & Conditions</span>
-                    <div className="group/help relative ml-1">
-                      <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px] cursor-help">?</div>
-                    </div>
-                  </summary>
-                  <div className="p-4 border-t border-gray-200">
-                    <textarea
-                      placeholder="Enter terms & conditions"
-                      rows={3}
-                      value={form.terms}
-                      onChange={(e) => {
-                        setForm((prev) => ({ ...prev, terms: e.target.value }));
-                        setHasUnsavedChanges(true);
-                      }}
-                      className="w-full text-sm text-gray-700 resize-none focus:outline-none placeholder-gray-400"
-                    />
-                  </div>
-                </details>
+              {/* Left Column: Notes, Terms, Attachments */}
+              <div className="space-y-5">
+                <div>
+                  <SectionHeader number="05" title="Notes" />
+                  <textarea
+                    placeholder="Enter your notes, say thanks, or anything else"
+                    rows={3}
+                    value={form.notes}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, notes: e.target.value }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    className="w-full px-3 py-2 rounded-[25px] border border-gray-200 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 resize-y"
+                  />
+                </div>
+
+                <div>
+                  <SectionHeader number="06" title="Terms & Conditions" />
+                  <textarea
+                    placeholder="Enter terms & conditions"
+                    rows={3}
+                    value={form.terms}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, terms: e.target.value }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    className="w-full px-3 py-2 rounded-[25px] border border-gray-200 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 resize-y"
+                  />
+                </div>
 
                 {/* E-Waybill & Attachments */}
                 <div className="pt-4 space-y-4">
@@ -1458,7 +1654,7 @@ const QuotationForm = ({
                       <span className="text-sm font-semibold text-gray-700">Attach files</span>
                       <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px]">?</div>
                     </div>
-                    <button type="button" className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 border-dashed rounded-lg hover:border-gray-400 transition-colors">
+                    <button type="button" className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 border-dashed rounded-[25px] hover:border-gray-400 transition-colors">
                       <span className="text-lg">↑</span> Attach Files (Max: 5)
                     </button>
                   </div>
@@ -1479,14 +1675,14 @@ const QuotationForm = ({
                 <div className="bg-[#EBF5EE] rounded-xl p-5 shadow-sm space-y-4 relative">
                   <div className="flex justify-end gap-2 items-center mb-2">
                     <span className="text-xs text-gray-500 font-medium">Extra Discount</span>
-                    <div className="flex items-center border border-gray-200 bg-white rounded-lg overflow-hidden h-8">
+                    <div className="flex items-center border border-gray-200 bg-white rounded-[25px] overflow-hidden h-8">
                       <select
                         value={form.discount.type}
                         onChange={(e) => {
                           handleDiscountChange("type", e.target.value);
                           setHasUnsavedChanges(true);
                         }}
-                        className="text-xs font-medium text-gray-600 bg-transparent border-r border-gray-200 px-2 py-1 focus:outline-none cursor-pointer"
+                        className="text-xs font-medium text-gray-600 bg-transparent border-r border-gray-200 pl-3 pr-2 py-1 focus:outline-none cursor-pointer"
                       >
                         <option value="fixed">₹</option>
                         <option value="percentage">%</option>
@@ -1501,7 +1697,7 @@ const QuotationForm = ({
                           handleDiscountChange("value", e.target.value);
                           setHasUnsavedChanges(true);
                         }}
-                        className="w-16 text-right text-xs px-2 focus:outline-none"
+                        className="w-16 text-right text-xs pr-3 pl-1 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -1552,82 +1748,114 @@ const QuotationForm = ({
                     <label className="text-sm font-semibold text-gray-700">Select Bank</label>
                     <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px]">?</div>
                   </div>
-                  <button type="button" className="w-full py-3 bg-[#FAF5FF] border border-[#E9D5FF] rounded-xl text-[#9333EA] font-semibold text-sm hover:bg-[#F3E8FF] transition-colors flex items-center justify-center gap-2">
+                  <button type="button" className="w-full py-3 bg-[#FAF5FF] border border-[#E9D5FF] rounded-[25px] text-[#9333EA] font-semibold text-sm hover:bg-[#F3E8FF] transition-colors flex items-center justify-center gap-2">
                     <span className="text-lg">🏦</span> Add Bank to Invoice (Optional)
                   </button>
                 </div>
 
-                {/* Select Signature */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1">
-                    <label className="text-sm font-semibold text-gray-700">Select Signature</label>
-                    <div className="w-2 h-2 rounded-full bg-pink-500"></div>
-                  </div>
-                  <button type="button" className="w-full py-8 bg-[#FDF2F8] border border-[#FBCFE8] rounded-xl text-[#DB2777] font-semibold text-sm hover:bg-[#FCE7F3] transition-colors flex flex-col items-center justify-center gap-2 relative">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">✍️</span> Add Signature to Invoice (Optional)
+                {/* Signature — same functional select + preview + default-
+                    signature fallback as the split-view Invoice panel,
+                    replacing the old decorative button that didn't actually
+                    do anything. */}
+                <div>
+                  <SectionHeader number="07" title="Signature" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <div className="relative flex items-center h-10 rounded-[25px] border border-gray-200 focus-within:border-blue-500 overflow-hidden">
+                        <select
+                          value={form.signature}
+                          onChange={(e) => {
+                            setForm((prev) => ({ ...prev, signature: e.target.value }));
+                            setHasUnsavedChanges(true);
+                          }}
+                          disabled={signaturesLoading}
+                          className="flex-1 min-w-0 h-full pl-3 pr-8 text-[13px] bg-transparent appearance-none focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          <option value="">No signature</option>
+                          {savedSignatures.map((sig) => (
+                            <option key={sig.id} value={sig.dataUrl}>
+                              {sig.name}
+                              {sig.isDefault ? " (Default)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        {signaturesLoading
+                          ? "Loading signatures…"
+                          : savedSignatures.length === 0
+                            ? "No saved signatures yet — add them in Settings → Document Settings → Signatures."
+                            : "The default is applied to every quotation unless you pick another here."}
+                      </p>
                     </div>
-                    <span className="absolute bottom-2 right-4 text-[10px] font-bold text-gray-800">Signature on the document</span>
-                  </button>
+                    <div className="h-[72px] flex items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50">
+                      {form.signature ? (
+                        <img
+                          src={form.signature}
+                          alt="Selected signature"
+                          className="max-h-16 max-w-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-xs text-gray-400">No signature selected</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
               </div>
             </div>
 
-            {/* ── Section 6: Sticky Footer Actions ── */}
-            <div className="sticky bottom-0 -mx-6 -mb-6 p-4 bg-white border-t border-gray-200 flex justify-end gap-3 rounded-b-xl z-40 mt-12">
-              <button
-                type="button"
-                className="px-5 py-2 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                disabled={isSubmitting}
-              >
-                Save as Draft
-              </button>
-              
-              <button
-                type="button"
-                className="px-5 py-2 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-2"
-                disabled={isSubmitting}
-              >
-                Save and Print <ChevronDown className="w-4 h-4" />
-              </button>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-6 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8h8a8 8 0 01-8 8v-8H4z"></path>
-                    </svg>
-                    Processing...
-                  </>
-                ) : (
-                  <>Save <ChevronRight className="w-4 h-4" /></>
-                )}
-              </button>
+            {/* Running total + primary actions, as a floating pill pinned to
+                the bottom of the form — matched to the split-view Invoice
+                panel's sticky bar (InvoiceForm.jsx's CreateInvoicePanel). */}
+            <div className="sticky bottom-0 z-20 w-full pt-3 pb-1 -mx-6 mt-12 flex justify-center pointer-events-none">
+              <div className="pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-5 rounded-full border border-[#E1E4EA] bg-white/95 backdrop-blur-sm pl-6 pr-2.5 py-2.5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.22)]">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold tracking-wide text-[#99A0AE] uppercase leading-none">
+                    Total
+                  </p>
+                  <p className="text-[18px] font-bold text-[#1F2937] leading-tight truncate">
+                    ₹{formatNumberToIndian(finalTotal)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    className="h-9 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors whitespace-nowrap"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-[#525866]" />
+                    Print
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="h-9 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    {isSubmitting
+                      ? editingQuotation
+                        ? "Updating..."
+                        : "Creating..."
+                      : editingQuotation
+                        ? "Update Quotation"
+                        : "Create Quotation"}
+                    {!isSubmitting && <ChevronRight className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </form>
 
-        {showItemForm && (
-          <ItemForm
-            form={itemForm}
-            setForm={setItemForm}
-            loading={itemFormLoading}
-            setLoading={setItemFormLoading}
-            setError={setItemFormError}
-            setSuccess={setItemFormSuccess}
-            fetchItems={fetchItems}
-            onRequestClose={() => {
-              resetItemForm();
-              setShowItemForm(false);
-            }}
-          />
-        )}
+        {/* Right-side drawer for adding a product on the fly, matching the
+            Vendor module's QuickItemDrawer instead of the old centered
+            "Create New Item" modal. */}
+        <QuickItemDrawer
+          isOpen={showItemForm}
+          onClose={() => setShowItemForm(false)}
+          onSaved={handleProductCreated}
+        />
       </div>
     </>
   );

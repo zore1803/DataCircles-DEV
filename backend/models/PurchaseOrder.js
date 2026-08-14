@@ -17,6 +17,15 @@ const purchaseOrderSchema = new mongoose.Schema({
     }
   ],
   totalAmount: { type: Number, required: true },
+  subtotal: { type: Number, default: 0, min: 0 },
+  transactionType: {
+    type: String,
+    enum: ["intra", "inter"],
+    default: "intra",
+  },
+  gstRate: { type: Number, default: 0, min: 0 },
+  totalTax: { type: Number, default: 0, min: 0 },
+  grandTotal: { type: Number, default: 0, min: 0 },
   paymentTerms: { type: String, default: "Net 30" },
   status: { type: String, enum: ["Pending", "Approved", "Rejected", "Delivered"], default: "Pending" },
   notes: String,

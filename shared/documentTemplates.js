@@ -672,7 +672,19 @@ export function buildDocumentHtml(doc, options = {}) {
     // Pre-encoded UPI QR (see buildUpiUri) and the VPA to print under it.
     upiQrSvg,
     upiId,
+    // Which physical copy this render represents — the standard Indian GST
+    // invoice practice of printing "ORIGINAL FOR RECIPIENT" / "DUPLICATE FOR
+    // TRANSPORTER" / "TRIPLICATE FOR SUPPLIER" as the only difference between
+    // otherwise-identical copies of the same document.
+    copyType = "original",
   } = options;
+
+  const COPY_TYPE_LABEL = {
+    original: "ORIGINAL FOR RECIPIENT",
+    duplicate: "DUPLICATE FOR TRANSPORTER",
+    triplicate: "TRIPLICATE FOR SUPPLIER",
+  };
+  const copySubtitle = COPY_TYPE_LABEL[copyType] || COPY_TYPE_LABEL.original;
 
   const tpl = DOCUMENT_TEMPLATES.includes(template) ? template : DEFAULT_TEMPLATE;
   const org = orgDetails || {};
@@ -797,7 +809,7 @@ export function buildDocumentHtml(doc, options = {}) {
     </div>
     <div class="dc-title-block">
       <div class="dc-title">${t.isTax ? `TAX ${esc(docLabel)}` : esc(docLabel)}</div>
-      <div class="dc-subtitle">ORIGINAL FOR RECIPIENT</div>
+      <div class="dc-subtitle">${copySubtitle}</div>
     </div>
   </div>
 
