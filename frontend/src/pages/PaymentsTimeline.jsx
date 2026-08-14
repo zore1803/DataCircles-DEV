@@ -1119,8 +1119,7 @@ export default function PaymentsTimeline() {
         </div>
       )}
 
-<<<<<<< HEAD
-      {/* ── Advanced Filter Panel (same as Companies.jsx) ─────────────── */}
+      {/* ── Advanced Filter Panel ─────────────── */}
       <AdvancedFilterPanel
         isOpen={showAdvancedFilters}
         onClose={() => setShowAdvancedFilters(false)}
@@ -1131,13 +1130,13 @@ export default function PaymentsTimeline() {
         title="Filter Transactions"
         subtitle="Find specific transactions quickly"
         emptyStateText="Add a rule to narrow down your payments timeline."
-=======
+      />
+
       <UpgradeRequiredModal
         open={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
         minPlan="growth"
         feature="Selecting multiple rows"
->>>>>>> 98ff76154ff0639a44c01ab48c761bf5c06043da
       />
     </div>
   );
