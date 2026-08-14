@@ -1,8 +1,0 @@
-portal.datacircles.in {
-	handle /api/* {
-		reverse_proxy crm-backend:5000
-	}
-	handle {
-		reverse_proxy crm-frontend:80
-	}
-}

@@ -51,27 +51,5 @@ services:
       - crm-backend
     restart: unless-stopped
 
-  # Public entrypoint for the VPS-hosted deploy (portal.datacircles.in) —
-  # terminates TLS with an automatic, auto-renewing Let's Encrypt cert and
-  # reverse-proxies to crm-frontend / crm-backend over the internal Docker
-  # network. Needs DNS for the domain in the Caddyfile pointed at this
-  # VPS's IP before Let's Encrypt's HTTP-01 challenge can succeed.
-  caddy:
-    image: caddy:2-alpine
-    container_name: crm-caddy
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on:
-      - crm-backend
-      - crm-frontend
-    restart: unless-stopped
-
 volumes:
   crm-redis-data:
-  caddy-data:
-  caddy-config:
