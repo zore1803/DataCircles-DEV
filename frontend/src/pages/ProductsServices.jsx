@@ -1229,48 +1229,10 @@ function ProductsServices() {
               );
             }
 
-            // Hover quick-actions (Eye/Edit/Trash) live only on the primary
-            // (name) column; the row's ⋮ menu is appended to whichever
+            // The row's ⋮ menu is appended to whichever
             // column currently sits last — pin/drag can move that around,
             // same as Companies.jsx — instead of a separate fixed column.
-            const withHoverActions = vc.key === "name" ? (
-              <div className="flex items-center justify-between w-full group relative">
-                {baseContent}
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-150 ease-out pointer-events-none group-hover:pointer-events-auto bg-white/80 backdrop-blur-[2px] rounded-lg">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedItem(item);
-                      setShowDetails(true);
-                    }}
-                    className="p-1.5 rounded-md bg-white shadow-sm border border-gray-200 hover:bg-blue-50 text-blue-600 transition-colors"
-                    title="Quick view"
-                  >
-                    <Eye size={15} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditItem(item);
-                    }}
-                    className="p-1.5 rounded-md hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
-                    title="Edit Item"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(item._id);
-                    }}
-                    className="p-1.5 rounded-md hover:bg-red-50 text-gray-500 hover:text-red-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
-                    title="Delete Item"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ) : baseContent;
+            const withHoverActions = baseContent;
 
             if (vc.key === lastColumnKey) {
               return (

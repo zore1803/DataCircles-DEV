@@ -1,16 +1,10 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import API from "../../services/api";
 import {
-  Upload,
   X,
   Plus,
   Trash2,
-  Box,
-  Barcode as BarcodeIcon,
-  RefreshCw,
-  Check,
   Type,
-  Layers,
   FolderOpen,
   ChevronDown,
 } from "lucide-react";
@@ -22,15 +16,10 @@ const ItemForm = ({
   setForm,
   loading,
   setLoading,
-  setError,
-  setSuccess,
   fetchItems,
   onRequestClose,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [shouldRender, setShouldRender] = useState(true);
-  const [images, setImages] = useState([]);
-  const [imagePreviews, setImagePreviews] = useState([]);
   const [variants, setVariants] = useState(form.variants || []);
   const [showVariantForm, setShowVariantForm] = useState(false);
   const [currentVariant, setCurrentVariant] = useState({
@@ -45,9 +34,7 @@ const ItemForm = ({
   const [variantIndex, setVariantIndex] = useState(null);
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const fileInputRef = useRef(null);
   const [validationErrors, setValidationErrors] = useState({});
-  const [variantValidationErrors, setVariantValidationErrors] = useState({});
 
   // Org-defined custom fields (configured in Settings -> Item Fields).
   // Definitions come from /item-fields/latest; the entered values live in
@@ -62,7 +49,7 @@ const ItemForm = ({
       try {
         const res = await API.get("/item-fields/latest");
         setItemFields(res.data?.fields || []);
-      } catch (err) {
+      } catch {
         // A missing/forbidden field config just means no custom fields to
         // show — the rest of the form still works, so fail quietly.
         setItemFields([]);
@@ -249,22 +236,12 @@ const ItemForm = ({
   };
 
   useEffect(() => {
-    setShouldRender(true);
     setTimeout(() => setIsOpen(true), 10);
-    if (form._id && form.images && form.images.length > 0) {
-      setImagePreviews(
-        form.images.map((img) => `${import.meta.env.VITE_APP_API_URL}${img}`),
-      );
-    } else {
-      setImagePreviews([]);
-    }
     setVariants(form.variants || []);
     return () => {
       setIsOpen(false);
-      setImages([]);
-      setImagePreviews([]);
     };
-  }, [form._id, form.images, form.variants]);
+  }, [form._id, form.variants]);
 
   const handleClose = () => {
     if (isFormDirty) {
@@ -288,7 +265,7 @@ const ItemForm = ({
 
   const handleSaveAndExit = async () => {
     setShowConfirmDialog(false);
-    await handleSubmit({ preventDefault: () => {} }, true);
+    await handleSubmit({ preventDefault: () => {} });
   };
 
   const generateBarcode = () => {
@@ -344,7 +321,7 @@ const ItemForm = ({
     return errors;
   };
 
-  const handleSubmit = async (e, isSaveAndExit = false) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
@@ -457,99 +434,118 @@ const ItemForm = ({
       onClick={handleClose}
     >
       <div
-        className="bg-white w-full max-w-4xl rounded-xl shadow-2xl max-h-[90vh] flex flex-col transition-transform duration-300 transform"
+        className="bg-white w-full max-w-md rounded-xl shadow-2xl max-h-[90vh] flex flex-col transition-transform duration-300 transform"
         style={{ transform: isOpen ? "scale(100%)" : "scale(95%)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-8 py-5 border-b border-gray-100 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 font-sf">
-              {form._id ? "Edit Item" : "Create New Item"}
-            </h2>
-            <p className="text-xs text-gray-400 mt-1 font-inter">
-              Lorem ipsum dolor sit amet consectetur
-            </p>
-          </div>
+        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+          <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wide">
+            {form._id ? "Edit Item" : "Create New Item"}
+          </h2>
           <button
+            type="button"
             onClick={handleClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 font-inter custom-scrollbar">
-          {/* Title & Meta Controls */}
-          <div className="space-y-4">
-            <label className="block text-sm font-semibold text-gray-700">
-              Item Title
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 font-inter custom-scrollbar">
+          {/* Item Name */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Item Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => handleFormChange("name", e.target.value)}
-              placeholder="Item Name"
-              className={`w-full px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2 ${validationErrors.name ? "border-red-300" : "border-gray-200"}`}
+              placeholder="Enter Item Name"
+              className={`w-full px-3.5 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${validationErrors.name ? "border-red-300" : "border-gray-200"}`}
             />
+            {validationErrors.name && (
+              <p className="text-red-500 text-xs mt-1">{validationErrors.name}</p>
+            )}
+          </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Category Pill */}
-              <div className="relative group">
-                <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-full text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
-                  <Layers className="w-3.5 h-3.5" />
-                  {form.category || "Category"}
-                </div>
-                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-lg shadow-lg hidden group-hover:block z-10 p-2">
-                  <input
-                    type="text"
-                    placeholder="Enter Category"
-                    value={form.category}
-                    onChange={(e) =>
-                      handleFormChange("category", e.target.value)
-                    }
-                    className="w-full text-xs border border-gray-200 rounded p-1.5"
-                  />
-                </div>
-              </div>
+          {/* Type */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Type <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={form.type}
+              onChange={(e) => handleFormChange("type", e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+            >
+              <option value="product">Product</option>
+              <option value="service">Service</option>
+            </select>
+          </div>
 
-              {/* Active Toggle Pill */}
-              <button
-                type="button"
-                onClick={() => handleFormChange("isActive", !form.isActive)}
-                className={`flex items-center gap-2 px-3 py-1.5 border rounded-full text-xs font-medium transition-colors ${
-                  form.isActive
-                    ? "bg-green-50 text-green-700 border-green-200"
-                    : "bg-gray-50 text-gray-600 border-gray-200"
-                }`}
-              >
-                <div
-                  className={`w-2 h-2 rounded-full ${form.isActive ? "bg-green-500" : "bg-gray-400"}`}
-                />
-                {form.isActive ? "Active" : "Inactive"}
-              </button>
-
-              {/* Add Variant Button */}
+          {/* Variants */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-gray-700">
+                Variants
+              </label>
               <button
                 type="button"
                 onClick={() => setShowVariantForm(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white border border-blue-600 rounded-full text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add Variant
               </button>
-
-              <span className="text-xs text-gray-400 italic ml-2">
-                A new variant will be added to the item
-              </span>
             </div>
+            {variants.length === 0 ? (
+              <div className="w-full px-3.5 py-2.5 border border-dashed border-gray-200 rounded-lg text-xs text-gray-400 text-center">
+                No Variants Added
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {variants.map((v, i) => (
+                  <div
+                    key={i}
+                    className="flex justify-between items-center bg-gray-50 border border-gray-100 rounded-lg p-2.5"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">
+                        {v.name}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        SKU: {v.sku || "N/A"} | ₹{v.sellingPrice}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleEditVariant(i)}
+                        className="text-blue-600 hover:text-blue-700 p-1"
+                      >
+                        <Type className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveVariant(i)}
+                        className="text-red-600 hover:text-red-700 p-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-              Description of the item <span className="text-red-500">*</span>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Description
             </label>
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
               <ReactQuill
@@ -562,9 +558,9 @@ const ItemForm = ({
           </div>
 
           {/* Price Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                 Purchase Price <span className="text-red-500">*</span>
               </label>
               <input
@@ -574,12 +570,12 @@ const ItemForm = ({
                 onChange={(e) =>
                   handleFormChange("purchasePrice", e.target.value)
                 }
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter Purchase Price"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                 Selling Price <span className="text-red-500">*</span>
               </label>
               <input
@@ -589,7 +585,7 @@ const ItemForm = ({
                 onChange={(e) =>
                   handleFormChange("sellingPrice", e.target.value)
                 }
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter Selling Price"
               />
             </div>
@@ -612,21 +608,21 @@ const ItemForm = ({
 
           {/* HSN/SAC */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
               HSN/SAC Code
             </label>
             <input
               type="text"
               value={form.hsnSac}
               onChange={(e) => handleFormChange("hsnSac", e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter HSN/SAC Code"
             />
           </div>
 
           {/* Barcode */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
               Barcode
             </label>
             <div className="flex gap-2">
@@ -634,28 +630,42 @@ const ItemForm = ({
                 type="text"
                 value={form.barcode}
                 onChange={(e) => handleFormChange("barcode", e.target.value)}
-                className="flex-1 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 min-w-0 px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter or Generate Barcode"
               />
               <button
                 type="button"
                 onClick={generateBarcode}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-xs font-medium transition-colors"
+                className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-xs font-medium transition-colors"
               >
-                Generate Barcode
+                Generate
               </button>
             </div>
           </div>
 
+          {/* Category */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Category
+            </label>
+            <input
+              type="text"
+              value={form.category}
+              onChange={(e) => handleFormChange("category", e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter Item Category"
+            />
+          </div>
+
           {/* Primary Unit */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-              Primary Unit
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Primary Unit <span className="text-red-500">*</span>
             </label>
             <select
               value={form.primaryUnit}
               onChange={(e) => handleFormChange("primaryUnit", e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
             >
               <option value="OTH-OTHERS">OTH-OTHERS</option>
               <option value="PCS-PIECES">PCS-PIECES</option>
@@ -663,6 +673,19 @@ const ItemForm = ({
               <option value="KGS-KILOGRAMS">KGS-KILOGRAMS</option>
               {/* Add more as needed */}
             </select>
+          </div>
+
+          {/* Active */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) => handleFormChange("isActive", e.target.checked)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <label className="text-sm text-gray-700 font-medium">
+              Active
+            </label>
           </div>
 
           {/* Custom Fields (Categorized & Collapsible) — sits after the
@@ -865,6 +888,48 @@ const ItemForm = ({
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
               >
                 {variantIndex !== null ? "Update Variant" : "Add Variant"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unsaved-changes confirmation — closing (X/backdrop/Cancel) while the
+          form is dirty asks instead of silently discarding edits. */}
+      {showConfirmDialog && (
+        <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] z-[10002] flex items-center justify-center p-4">
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-gray-900 mb-2">
+              Discard unsaved changes?
+            </h3>
+            <p className="text-sm text-gray-500 mb-6">
+              You have unsaved changes to this item. Choose what to do before closing.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleSaveAndExit}
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-70"
+              >
+                {loading ? "Saving..." : form._id ? "Save Changes" : "Save Item"}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmExit}
+                className="w-full border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Discard Changes
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowConfirmDialog(false)}
+                className="w-full text-gray-500 text-xs py-1.5 hover:text-gray-700 transition-colors"
+              >
+                Keep Editing
               </button>
             </div>
           </div>
