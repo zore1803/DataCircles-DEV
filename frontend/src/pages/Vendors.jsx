@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import BulkActions from "../components/BulkActions";
+import { formatNumberFixed } from "../utils/numberFormatter";
 import VendorForm from "../components/vendor/VendorForm";
 import QuickVendorForm from "../components/vendor/QuickVendorForm";
 import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
@@ -618,7 +619,7 @@ function Vendors() {
       case "balance":
         return (
           <span className="text-sm text-gray-700 font-mono">
-            ₹{vendor.balance?.toFixed(2) || "0.00"}
+            ₹{formatNumberFixed(vendor.balance)}
           </span>
         );
       default:

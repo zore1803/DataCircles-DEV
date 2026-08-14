@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { formatNumberToIndian } from "../../utils/numberFormatter";
+import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
 import {
   Plus,
   IndianRupeeIcon,
@@ -1201,7 +1201,7 @@ const DeliveryChallanForm = ({
                           Amount
                         </label>
                         <div className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-medium">
-                          <h6>₹{calculateItemAmount(item).toFixed(2)}</h6>
+                          <h6>₹{formatNumberFixed(calculateItemAmount(item))}</h6>
                         </div>
                       </div>
                     </div>

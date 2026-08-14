@@ -20,7 +20,10 @@ import {
   IndianRupee,
   IndianRupeeIcon,
   ReceiptIndianRupee,
+  CalendarDays,
+  UserCircle2,
 } from "lucide-react";
+import { formatNumberFixed } from "../../utils/numberFormatter";
 import axios from "axios";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -168,7 +171,8 @@ const BillingHistory = ({ embedded = false } = {}) => {
 
   // Helper function to format currency
   const formatCurrency = (amount, currency = "INR") => {
-    const value = (amount).toFixed(2);
+    if (amount == null) return "₹0.00";
+    const value = formatNumberFixed(amount);
     return `${currency} ${value}`;
   };
 

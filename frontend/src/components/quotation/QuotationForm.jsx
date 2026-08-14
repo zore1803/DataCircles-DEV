@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { formatNumberToIndian } from "../../utils/numberFormatter";
+import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
 import {
   Plus,
   IndianRupeeIcon,
@@ -22,6 +22,7 @@ import { AddressFieldsGroup, emptyAddress, isAddressEmpty, SectionHeader } from 
 import QuickDealForm from "../deal/QuickDealForm";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import toast from "react-hot-toast";
+import { computeDocument } from "../../../../shared/documentTemplates";
 
 import SearchIcon from "../common/SearchIcon";
 // Function to convert number to words
@@ -527,6 +528,7 @@ const QuotationForm = ({
         status: editingQuotation.status || "Draft",
         style: editingQuotation.style || "Regular",
         isTaxQuotation: editingQuotation.isTaxQuotation || false,
+        transactionType: editingQuotation.transactionType || "intra",
         notes: editingQuotation.notes || "",
         terms: editingQuotation.terms || "",
         attachments: editingQuotation.attachments || [],
@@ -552,6 +554,7 @@ const QuotationForm = ({
         status: "Draft",
         style: "Regular",
         isTaxQuotation: false,
+        transactionType: "intra",
         notes: "",
         terms: "",
         attachments: [],
@@ -952,7 +955,9 @@ const QuotationForm = ({
         billingAddress: form.billingAddress,
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
         signature: form.signature,
-        amount: calculateTotalAmount(form.items, form.discount),
+        amount: form.isTaxQuotation 
+          ? computeDocument(form, "quotation").grandTotal 
+          : calculateTotalAmount(form.items, form.discount),
         discount: form.discount,
         status: form.status,
         items: form.items.map((item) => ({
@@ -970,6 +975,7 @@ const QuotationForm = ({
         })),
         style: form.style,
         isTaxQuotation: form.isTaxQuotation,
+        transactionType: form.transactionType,
       };
 
       if (editingQuotation) {
@@ -1039,7 +1045,13 @@ const QuotationForm = ({
     subtotalAfterItemDiscounts,
     form.discount
   );
-  const finalTotal = subtotalAfterItemDiscounts - invoiceDiscountAmount;
+  
+  let finalTotal = subtotalAfterItemDiscounts - invoiceDiscountAmount;
+  let taxDetails = null;
+  if (form.isTaxQuotation) {
+    taxDetails = computeDocument(form, "quotation");
+    finalTotal = taxDetails.grandTotal;
+  }
 
   return (
     <>
@@ -1214,6 +1226,37 @@ const QuotationForm = ({
               />
               <span className="text-gray-700 font-medium">Tax Quotation</span>
             </label>
+
+            {form.isTaxQuotation && (
+              <div className="flex items-center gap-4 ml-6 pl-6 border-l border-gray-200">
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="radio"
+                    name="transactionType"
+                    checked={form.transactionType === "intra"}
+                    onChange={() => {
+                      setForm(prev => ({ ...prev, transactionType: "intra" }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    className="text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-700 font-medium text-xs">Intra-State (CGST+SGST)</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="radio"
+                    name="transactionType"
+                    checked={form.transactionType === "inter"}
+                    onChange={() => {
+                      setForm(prev => ({ ...prev, transactionType: "inter" }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    className="text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-700 font-medium text-xs">Inter-State (IGST)</span>
+                </label>
+              </div>
+            )}
           </div>
 
           <div className="p-6 space-y-6 flex-1 overflow-y-auto">
@@ -1800,7 +1843,7 @@ const QuotationForm = ({
                   <div className="space-y-2">
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-600 font-medium">Taxable Amount</span>
-                      <span className="text-gray-900 font-semibold">₹{formatNumberToIndian(subtotalAfterItemDiscounts)}</span>
+                      <span className="text-gray-900 font-semibold">₹{formatNumberFixed(subtotalAfterItemDiscounts)}</span>
                     </div>
                     
                     <div className="flex justify-between items-center text-sm">
@@ -1814,14 +1857,33 @@ const QuotationForm = ({
                       <span className="text-gray-900 font-semibold">0.00</span>
                     </div>
 
+                    {taxDetails && form.transactionType === "intra" && (
+                      <>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600 font-medium">CGST</span>
+                          <span className="text-gray-900 font-medium">₹{formatNumberFixed(taxDetails.totalCGST)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600 font-medium">SGST</span>
+                          <span className="text-gray-900 font-medium">₹{formatNumberFixed(taxDetails.totalSGST)}</span>
+                        </div>
+                      </>
+                    )}
+                    {taxDetails && form.transactionType === "inter" && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600 font-medium">IGST</span>
+                        <span className="text-gray-900 font-medium">₹{formatNumberFixed(taxDetails.totalIGST)}</span>
+                      </div>
+                    )}
+
                     <div className="flex justify-between items-center pt-2">
                       <span className="text-lg font-bold text-gray-900">Total Amount</span>
-                      <span className="text-lg font-bold text-gray-900">₹{formatNumberToIndian(finalTotal)}</span>
+                      <span className="text-lg font-bold text-gray-900">₹{formatNumberFixed(finalTotal)}</span>
                     </div>
 
                     <div className="flex justify-between items-center text-sm pt-1">
                       <span className="text-gray-500">Total Discount</span>
-                      <span className="text-gray-600 font-medium">₹{formatNumberToIndian(totalItemDiscounts + invoiceDiscountAmount)}</span>
+                      <span className="text-gray-600 font-medium">₹{formatNumberFixed(totalItemDiscounts + invoiceDiscountAmount)}</span>
                     </div>
 
                     <div className="flex justify-end gap-2 text-xs pt-1">

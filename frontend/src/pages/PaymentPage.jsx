@@ -21,7 +21,9 @@ import {
   Plus,
   ArrowUpCircle,
   ArrowDownCircle,
+  Building,
 } from "lucide-react";
+import { formatNumberFixed } from "../utils/numberFormatter";
 import toast from "react-hot-toast";
 import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
 import logo from "/DataCircles.png";
@@ -691,7 +693,7 @@ const PaymentPage = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <h6 className="text-sm text-gray-700 font-mono">
-                            ₹{p.amount?.toFixed(2) || "0.00"}
+                            ₹{formatNumberFixed(p.amount)}
                           </h6>
                         </div>
                       </td>

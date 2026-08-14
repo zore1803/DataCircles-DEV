@@ -1,5 +1,6 @@
 // components/vendor/PaymentReceiptModal.jsx
 import React from 'react';
+import { formatNumberFixed } from "../../utils/numberFormatter";
 import { X, Download, Printer } from 'lucide-react';
 
 const PaymentReceiptModal = ({ isOpen, onClose, payment, vendor }) => {
@@ -111,7 +112,7 @@ const PaymentReceiptModal = ({ isOpen, onClose, payment, vendor }) => {
               </div>
               <div>
                 <span className="text-sm font-medium text-gray-600 block">Amount:</span>
-                <h6 className="text-2xl font-bold text-gray-900">₹{payment.amount?.toFixed(2)}</h6>
+                <h6 className="text-2xl font-bold text-gray-900">₹{formatNumberFixed(payment.amount)}</h6>
               </div>
               {payment.bank && (
                 <div>

@@ -46,6 +46,7 @@ import API from "../services/api";
 import toast from "react-hot-toast";
 import AppToaster from "../components/AppToaster";
 import HighlightText from "../components/common/HighlightText";
+import { formatNumberFixed } from "../utils/numberFormatter";
 import InvoiceForm, { CreateInvoicePanel } from "../components/invoice/InvoiceForm";
 import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceForm";
 import { CreatePerformaPanel } from "../components/PerformaInvoice/PerformaInvoiceForm";
@@ -219,7 +220,7 @@ const cellText = (colId, doc, tab) => {
     case "dueDate":
       return doc.dueDate ? new Date(doc.dueDate).toLocaleDateString() : "N/A";
     case "amount":
-      return `₹${doc.amount?.toFixed(2) || "0.00"}`;
+      return `₹${formatNumberFixed(doc.amount)}`;
     case "status":
       return doc.status || "—";
     default:
@@ -1578,7 +1579,7 @@ const Accounting = () => {
       case "amount":
         return (
           <span className="text-sm font-semibold text-gray-900">
-            ₹<HighlightText text={doc.amount?.toFixed(2) || "0.00"} query={searchQuery} />
+            ₹<HighlightText text={formatNumberFixed(doc.amount)} query={searchQuery} />
           </span>
         );
 

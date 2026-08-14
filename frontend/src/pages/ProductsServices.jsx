@@ -41,6 +41,7 @@ import AppToaster from "../components/AppToaster";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
+import { formatNumberFixed } from "../utils/numberFormatter";
 import {
   useReactTable,
   getCoreRowModel,
@@ -97,7 +98,8 @@ const ViewDetails = ({ item, onRequestClose, onEdit, onDelete }) => {
   };
 
   const formatCurrency = (amount) => {
-    return `₹${parseFloat(amount || 0).toFixed(2)}`;
+    if (!amount) return "₹0.00";
+    return `₹${formatNumberFixed(parseFloat(amount))}`;
   };
 
   if (!shouldRender) return null;
@@ -823,8 +825,8 @@ function ProductsServices() {
     if (key === "name") return item.name || "";
     if (key === "type") return item.type || "";
     if (key === "category") return item.category || "";
-    if (key === "purchasePrice") return `₹${(item.purchasePrice ?? 0).toFixed(2)}`;
-    if (key === "sellingPrice") return `₹${(item.sellingPrice ?? 0).toFixed(2)}`;
+    if (key === "purchasePrice") return `₹${formatNumberFixed(item.purchasePrice ?? 0)}`;
+    if (key === "sellingPrice") return `₹${formatNumberFixed(item.sellingPrice ?? 0)}`;
     if (key === "hsnSac") return item.hsnSac || "";
     if (key === "variants") return item.variants?.length ? `${item.variants.length} Variant${item.variants.length > 1 ? "s" : ""}` : "0 Variants";
     if (key === "isActive") return item.isActive ? "Active" : "In-Active";
@@ -1255,9 +1257,9 @@ function ProductsServices() {
                 </div>
               );
             } else if (vc.key === "purchasePrice") {
-              baseContent = <div className="truncate text-sm text-gray-700 font-mono">₹{(item.purchasePrice ?? 0).toFixed(2)}</div>;
+              baseContent = <div className="truncate text-sm text-gray-700 font-mono">₹{formatNumberFixed(item.purchasePrice ?? 0)}</div>;
             } else if (vc.key === "sellingPrice") {
-              baseContent = <div className="truncate text-sm text-gray-700 font-mono">₹{(item.sellingPrice ?? 0).toFixed(2)}</div>;
+              baseContent = <div className="truncate text-sm text-gray-700 font-mono">₹{formatNumberFixed(item.sellingPrice ?? 0)}</div>;
             } else if (vc.key === "hsnSac") {
               baseContent = <div className="truncate text-sm text-gray-700">{item.hsnSac ? <HighlightText text={item.hsnSac} query={searchTerm} /> : "—"}</div>;
             } else if (vc.key === "variants") {

@@ -21,6 +21,7 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
+import { formatNumberFixed } from "../../utils/numberFormatter";
 import VendorForm from "../vendor/VendorForm";
 import VendorPaymentForm from "../vendor/VendorPaymentForm";
 import PaymentPreview from "../vendor/venerPaymentPreview";
@@ -310,8 +311,8 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
       `${new Date(payment.paymentDate).toLocaleDateString()} ${new Date(payment.paymentDate).toLocaleTimeString()}`,
       payment.direction === "OUT" ? "Payment Out" : "Payment In",
       payment.paymentType || "UPI",
-      `₹${payment.amount.toFixed(2)}`,
-      `₹${payment.amount.toFixed(2)}`,
+      `₹${formatNumberFixed(payment.amount)}`,
+      `₹${formatNumberFixed(payment.amount)}`,
     ]);
 
     const tableHeaders = ["ID", "Date / Time", "Status", "Mode", "Amount", "Balance"];
@@ -565,7 +566,7 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
             className={`text-sm ${row.original.direction === "OUT" ? "text-red-600" : "text-green-600"
               }`}
           >
-            {row.original.direction === "OUT" ? "−" : "+"} <HighlightText text={`₹${row.original.amount.toFixed(2)}`} query={search} />
+            {row.original.direction === "OUT" ? "−" : "+"} <HighlightText text={`₹${formatNumberFixed(row.original.amount)}`} query={search} />
           </span>
         ),
       },
@@ -643,7 +644,7 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
   const getGhostPreview = (colId) => {
     return paginatedPayments.slice(0, 10).map((p) => {
       if (colId === "paymentDate") return new Date(p.paymentDate).toLocaleDateString();
-      if (colId === "amount") return `₹${p.amount.toFixed(2)}`;
+      if (colId === "amount") return `₹${formatNumberFixed(p.amount)}`;
       if (colId === "reference_id") return p._id.slice(-4).toUpperCase();
       return String(getPaymentFieldValue(p, colId) ?? "").trim() || "—";
     });
@@ -663,11 +664,11 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
       {showKPIs && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
           {[
-            { label: "Total Given", value: `₹${stats.totalAmountOut.toFixed(2)}`, icon: TrendingUp, trend: trendStats.given },
-            { label: "Total Got", value: `₹${stats.totalAmountIn.toFixed(2)}`, icon: TrendingDown, trend: trendStats.got },
+            { label: "Total Given", value: `₹${formatNumberFixed(stats.totalAmountOut)}`, icon: TrendingUp, trend: trendStats.given },
+            { label: "Total Got", value: `₹${formatNumberFixed(stats.totalAmountIn)}`, icon: TrendingDown, trend: trendStats.got },
             {
-              label: "Balance",
-              value: `₹${Math.abs(netBalance).toFixed(2)}`,
+              label: "Net Balance",
+              value: `₹${formatNumberFixed(Math.abs(netBalance))}`,
               icon: AlertCircle,
               valueClass: netBalance >= 0 ? "text-green-600" : "text-red-600",
               trend: trendStats.balance,

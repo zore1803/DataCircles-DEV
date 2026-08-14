@@ -13,6 +13,7 @@ import {
 import SearchableDropdown from "../contact/SearchableDropdown";
 import QuickVendorForm from "../vendor/QuickVendorForm";
 import API from "../../services/api";
+import { formatNumberFixed } from "../../utils/numberFormatter";
 import toast from "react-hot-toast";
 
 import SearchIcon from "../common/SearchIcon";
@@ -603,10 +604,10 @@ const PurchaseOrderForm = ({
                     </label>
                     <div className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm font-semibold text-gray-800">
                       ₹
-                      {(
+                      {formatNumberFixed(
                         (parseFloat(item.quantity) || 0) *
                         (parseFloat(item.unitPrice) || 0)
-                      ).toFixed(2)}
+                      )}
                     </div>
                   </div>
 
@@ -708,7 +709,7 @@ const PurchaseOrderForm = ({
               Total Amount
             </span>
             <span className="text-[#0085FF] font-medium text-base">
-              ₹{totalAmount.toFixed(2)}
+              ₹{formatNumberFixed(totalAmount)}
             </span>
           </div>
         </div>

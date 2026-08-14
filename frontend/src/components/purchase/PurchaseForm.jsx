@@ -11,6 +11,7 @@ import SearchableDropdown from "../contact/SearchableDropdown";
 import QuickVendorForm from "../vendor/QuickVendorForm";
 import API from "../../services/api";
 import toast from "react-hot-toast";
+import { formatNumberFixed } from "../../utils/numberFormatter";
 
 import SearchIcon from "../common/SearchIcon";
 const API_BASE = `${import.meta.env.VITE_APP_API_URL}/api`;
@@ -576,10 +577,9 @@ const PurchaseForm = ({
                     </label>
                     <div className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm font-semibold text-gray-800">
                       ₹
-                      {(
-                        (parseFloat(item.quantity) || 0) *
-                        (parseFloat(item.unitPrice) || 0)
-                      ).toFixed(2)}
+                      {formatNumberFixed(
+                        (parseFloat(item.unitPrice) || 0) * (parseFloat(item.quantity) || 0)
+                      )}
                     </div>
                   </div>
                 </div>
@@ -669,23 +669,22 @@ const PurchaseForm = ({
 
           {/* Total Amount Banner */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex flex-col gap-1.5">
-            <div className="flex justify-between items-center text-sm text-blue-800">
-              <span>Subtotal:</span>
-              <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
+            <div className="flex justify-between items-center text-slate-700">
+              <span className="text-sm">Subtotal</span>
+              <span className="font-semibold">₹{formatNumberFixed(subtotal)}</span>
             </div>
+
             {gstRate > 0 && (
-              <div className="flex justify-between items-center text-sm text-blue-800">
-                <span>Tax ({gstRate}%):</span>
-                <span className="font-semibold">₹{totalTax.toFixed(2)}</span>
+              <div className="flex justify-between items-center text-slate-700">
+                <span className="text-sm">Total Tax</span>
+                <span className="font-semibold">₹{formatNumberFixed(totalTax)}</span>
               </div>
             )}
-            <div className="border-t border-blue-200 my-1"></div>
-            <div className="flex justify-between items-center">
-              <span className="text-blue-800 font-medium text-sm">
-                Grand Total:
-              </span>
-              <span className="text-blue-700 font-bold text-lg">
-                ₹{grandTotal.toFixed(2)}
+
+            <div className="flex justify-between items-center pt-3 border-t border-slate-200">
+              <span className="font-bold text-slate-900">Grand Total</span>
+              <span className="font-bold text-blue-600 text-lg">
+                ₹{formatNumberFixed(grandTotal)}
               </span>
             </div>
           </div>
