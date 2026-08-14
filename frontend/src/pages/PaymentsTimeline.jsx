@@ -6,6 +6,8 @@ import {
   ChevronLeft, ChevronRight, Pin, PinOff, FileText
 } from "lucide-react";
 import SearchIcon from "../components/common/SearchIcon";
+import FilterIcon from "../components/common/FilterIcon";
+import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import API from "../services/api";
 import toast from "react-hot-toast";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
@@ -14,6 +16,7 @@ import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { getAncestorZoom } from "../utils/domUtils";
 import BulkActionBar from "../components/common/BulkActionBar";
 import { useBulkStrip } from "../hooks/useBulkSelection";
+import * as XLSX from "xlsx";
 
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
@@ -28,12 +31,12 @@ const DEFAULT_COL_WIDTHS = {
 const MIN_COL_WIDTH = 60;
 
 const ALL_COLUMNS = [
-  { id: "payment-id", label: "Transaction ID" },
-  { id: "party",     label: "Party / Entity"  },
-  { id: "amount",    label: "Amount"           },
-  { id: "direction", label: "Direction"        },
-  { id: "type",      label: "Type"             },
-  { id: "date",      label: "Date"             },
+  { id: "payment-id", key: "payment-id", label: "Transaction ID" },
+  { id: "party",      key: "party",      label: "Party / Entity"  },
+  { id: "amount",     key: "amount",     label: "Amount"           },
+  { id: "direction",  key: "direction",  label: "Direction"        },
+  { id: "type",       key: "type",       label: "Type"             },
+  { id: "date",       key: "date",       label: "Date"             },
 ];
 
 /* ─── Shared resize handle (same as Accounting.jsx pattern) ─────────── */
@@ -92,6 +95,8 @@ export default function PaymentsTimeline() {
   const [partyFilter, setPartyFilter]           = useState("");
   const [directionFilter, setDirectionFilter]   = useState("");
   const [typeFilter, setTypeFilter]             = useState("");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [activeFilters, setActiveFilters]       = useState([]);
 
   /* drag-reorder state (mirror of Accounting.jsx) */
   const [draggedColKey,  setDraggedColKey]  = useState(null);
@@ -111,6 +116,8 @@ export default function PaymentsTimeline() {
   const [openActionMenuId,  setOpenActionMenuId]  = useState(null);
   const [actionMenuPos,     setActionMenuPos]     = useState(null);
   const [deleteConfirmState, setDeleteConfirmState] = useState({ isOpen: false, type: "single", target: null });
+  const [editingPage, setEditingPage] = useState(false);
+  const [pageInput, setPageInput] = useState("");
 
   /* Fetch companies list for Party filter */
   useEffect(() => {
@@ -201,8 +208,18 @@ export default function PaymentsTimeline() {
   const fetchData = useCallback(async () => {
     setShowLoadingSkeleton(true);
     try {
-      const partyParam = partyFilter ? `&party=${encodeURIComponent(partyFilter)}` : "";
-      const res = await API.get(`/payments-timeline?page=${pagination.currentPage}&limit=${pagination.limit}${partyParam}`);
+      const params = new URLSearchParams();
+      params.append("page", pagination.currentPage);
+      params.append("limit", pagination.limit);
+      if (searchQuery) params.append("search", searchQuery);
+
+      // Pass all active filters as JSON string to backend
+      const validRules = (activeFilters || []).filter(f => f.column && (f.value !== "" || ["is_empty", "is_not_empty"].includes(f.operator)));
+      if (validRules.length > 0) {
+        params.append("rules", JSON.stringify(validRules));
+      }
+
+      const res = await API.get(`/payments-timeline?${params.toString()}`);
       setDocuments(res.data.documents || []);
       if (res.data.pagination) setPagination(res.data.pagination);
     } catch (err) {
@@ -211,14 +228,23 @@ export default function PaymentsTimeline() {
     } finally {
       setShowLoadingSkeleton(false);
     }
-  }, [pagination.currentPage, pagination.limit, partyFilter]);
+  }, [pagination.currentPage, pagination.limit, searchQuery, activeFilters]);
 
   /* ── fetch ALL record IDs from DB for global Select All ─────────── */
   const fetchAllIds = useCallback(async () => {
     const tid = toast.loading("Selecting all records...");
     try {
-      const partyParam = partyFilter ? `&party=${encodeURIComponent(partyFilter)}` : "";
-      const res = await API.get(`/payments-timeline?page=1&limit=99999${partyParam}`);
+      const params = new URLSearchParams();
+      params.append("page", 1);
+      params.append("limit", 99999);
+      if (searchQuery) params.append("search", searchQuery);
+
+      const validRules = (activeFilters || []).filter(f => f.column && (f.value !== "" || ["is_empty", "is_not_empty"].includes(f.operator)));
+      if (validRules.length > 0) {
+        params.append("rules", JSON.stringify(validRules));
+      }
+
+      const res = await API.get(`/payments-timeline?${params.toString()}`);
       const allDocs = res.data.documents || [];
       setSelectedIds(allDocs.map(d => d._id));
       toast.success(`Selected all ${allDocs.length} record(s).`, { id: tid });
@@ -226,38 +252,21 @@ export default function PaymentsTimeline() {
       toast.error("Failed to fetch all records", { id: tid });
       console.error(err);
     }
-  }, [partyFilter]);
+  }, [searchQuery, activeFilters]);
 
-  useEffect(() => { fetchData(); }, [pagination.currentPage, pagination.limit, partyFilter]);
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+  }, [searchQuery, activeFilters]);
 
-  /* ── filtered and sorted docs ─────────────────────────────────────── */
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  /* ── sorted docs ─────────────────────────────────────── */
   const filteredDocs = useMemo(() => {
-    let list = documents.filter(doc => {
-      const term = searchQuery.toLowerCase();
-      const matchesSearch = (doc["payment-id"] || "").toLowerCase().includes(term) ||
-                            (doc.party || "").toLowerCase().includes(term);
-      if (!matchesSearch) return false;
-
-      if (partyFilter && doc.party !== partyFilter) return false;
-
-      if (directionFilter) {
-        if (directionFilter === "Credit" && doc.direction !== "IN") return false;
-        if (directionFilter === "Debit" && doc.direction !== "OUT") return false;
-      }
-
-      if (typeFilter) {
-        if (typeFilter === "Credit" && doc.direction !== "IN") return false;
-        if (typeFilter === "Debit" && doc.direction !== "OUT") return false;
-        if (["Invoice", "Purchase", "Subscription", "Payment"].includes(typeFilter)) {
-          if ((doc.source || "").toLowerCase() !== typeFilter.toLowerCase()) return false;
-        }
-      }
-
-      return true;
-    });
+    let list = [...documents];
 
     if (sortConfig.key) {
-      list = [...list].sort((a, b) => {
+      list.sort((a, b) => {
         let valA = a[sortConfig.key];
         let valB = b[sortConfig.key];
         if (sortConfig.key === "party") {
@@ -273,7 +282,7 @@ export default function PaymentsTimeline() {
     }
 
     return list;
-  }, [documents, searchQuery, partyFilter, directionFilter, typeFilter, sortConfig]);
+  }, [documents, sortConfig]);
 
   const handleSelectAll = e =>
     setSelectedIds(e.target.checked ? filteredDocs.map(d => d._id) : []);
@@ -282,6 +291,47 @@ export default function PaymentsTimeline() {
     setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
+
+  /* ── Export to Excel function ───────────────────────────────────── */
+  const handleExportExcel = useCallback((itemsToExport) => {
+    const list = Array.isArray(itemsToExport) ? itemsToExport : [itemsToExport];
+    if (!list.length) {
+      toast.error("No entries selected for export");
+      return;
+    }
+
+    const exportData = list.map(item => ({
+      "Transaction ID": item["payment-id"] || item._id || "N/A",
+      "Party / Entity": item.party || "N/A",
+      "Amount (₹)": item.amount !== undefined ? item.amount : 0,
+      "Direction": item.direction === "IN" ? "Credit (IN)" : "Debit (OUT)",
+      "Type": item.type || item.paymentType || item.source || "N/A",
+      "Date": item.date ? new Date(item.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "N/A",
+      "Bank Account": item.bank || "N/A",
+      "Notes": item.notes || ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Payments Timeline");
+
+    // Dynamic column width adjustment
+    const colWidths = [
+      { wch: 22 }, // Transaction ID
+      { wch: 26 }, // Party
+      { wch: 15 }, // Amount
+      { wch: 15 }, // Direction
+      { wch: 16 }, // Type
+      { wch: 18 }, // Date
+      { wch: 22 }, // Bank
+      { wch: 30 }, // Notes
+    ];
+    worksheet["!cols"] = colWidths;
+
+    const filename = `Payments_Timeline_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+    toast.success(`Exported ${list.length} item(s) to ${filename}`);
+  }, []);
 
   /* ── pagination ─────────────────────────────────────────────────── */
   const handlePageChange  = newPage   => { if (newPage > 0 && newPage <= pagination.totalPages) setPagination(p => ({ ...p, currentPage: newPage })); };
@@ -361,7 +411,7 @@ export default function PaymentsTimeline() {
 
       const rect = th.getBoundingClientRect();
       const col  = ALL_COLUMNS.find(c => c.id === colId);
-      const previewRows = documents.slice(0, 5).map(doc => cellTextFor(colId, doc));
+      const previewRows = documents.map(doc => cellTextFor(colId, doc));
 
       dragState.zGhost  = getAncestorZoom(document.body);
       dragState.offsetX = startX - rect.left;
@@ -451,8 +501,12 @@ export default function PaymentsTimeline() {
                 }}>
                 <Pencil className="w-4 h-4 text-gray-400" /> Edit
               </button>
-              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); toast.success("Download coming soon!"); }}>
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+                onClick={() => {
+                  setOpenActionMenuId(null);
+                  setActionMenuPos(null);
+                  handleExportExcel(doc);
+                }}>
                 <Download className="w-4 h-4 text-gray-400" /> Download
               </button>
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -534,7 +588,7 @@ export default function PaymentsTimeline() {
 
       {/* ── Fixed header bar ─────────────────────────────────────────────────────── */}
       <div
-        className="fixed right-0 h-[72px] px-6 flex items-center justify-between border-b border-[#E1E4EA] bg-white top-[54px] lg:top-16"
+        className="fixed right-0 h-16 px-6 flex items-center justify-between border-b border-[#E1E4EA] bg-white top-[54px] lg:top-16"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
       >
         <div className="flex items-center gap-4">
@@ -547,10 +601,10 @@ export default function PaymentsTimeline() {
         <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
           {/* Search — expands in place from the icon */}
           <div
-            className={`relative h-11 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-11"} max-w-full flex-shrink-0`}
+            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"} max-w-full flex-shrink-0`}
           >
             <SearchIcon
-              className="absolute left-3.5 text-[#525866] w-4 h-4 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2"
+              className="absolute left-3 text-[#525866] w-4 h-4 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2"
               onClick={() => { setIsSearchExpanded(true); searchInputRef.current?.focus(); }}
             />
             <input
@@ -561,7 +615,7 @@ export default function PaymentsTimeline() {
               onFocus={() => setIsSearchExpanded(true)}
               onBlur={() => { if (!searchQuery) setIsSearchExpanded(false); }}
               placeholder="Search by ID or party..."
-              className={`w-full h-full bg-transparent rounded-full pl-11 pr-9 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+              className={`w-full h-full bg-transparent rounded-full pl-9 pr-9 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
             />
             {isSearchExpanded && searchQuery && (
               <button
@@ -577,41 +631,19 @@ export default function PaymentsTimeline() {
           </div>
 
           {/* Filter Button */}
-          <div className="relative flex-shrink-0">
-            <button
-              title="Filter"
-              onClick={e => { e.stopPropagation(); setShowFilterMenu(v => !v); }}
-              className={`flex items-center justify-center w-11 h-11 rounded-full border transition-colors bg-white cursor-pointer ${showFilterMenu || typeFilter ? "border-[#0085FF] text-[#0085FF] bg-blue-50/50" : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"}`}
-            >
-              <SlidersHorizontal size={18} strokeWidth={2} className={showFilterMenu || typeFilter ? "text-[#0085FF]" : "text-[#1F2937]"} />
-            </button>
-            {showFilterMenu && (
-              <div
-                onClick={e => e.stopPropagation()}
-                className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-50 animate-in fade-in zoom-in-95 duration-100"
-              >
-                <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Filter by Type
-                </div>
-                {["", "Credit", "Debit", "Invoice", "Purchase", "Subscription", "Payment"].map(opt => {
-                  const isSelected = typeFilter === opt;
-                  return (
-                    <button
-                      key={opt || "all"}
-                      onClick={() => {
-                        setTypeFilter(opt);
-                        setShowFilterMenu(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between transition-colors cursor-pointer ${isSelected ? "bg-blue-50 text-[#0085FF] font-medium" : "text-gray-700 hover:bg-gray-50"}`}
-                    >
-                      <span>{opt || "All Types"}</span>
-                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[#0085FF]" />}
-                    </button>
-                  );
-                })}
-              </div>
+          <button
+            type="button"
+            onClick={() => setShowAdvancedFilters(true)}
+            className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors bg-white cursor-pointer flex-shrink-0"
+            title="Filters"
+          >
+            <FilterIcon size={16} />
+            {activeFilters.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                {activeFilters.length}
+              </span>
             )}
-          </div>
+          </button>
 
           {/* Add Button */}
           <button
@@ -619,11 +651,10 @@ export default function PaymentsTimeline() {
               setEditingPaymentItem(null);
               setIsPaymentModalOpen(true);
             }}
-            style={{ minWidth: 146, height: 44, padding: 12, gap: 6, background: "#0085FF", borderRadius: 96 }}
-            className="flex flex-row justify-center items-center hover:bg-blue-600 transition-colors flex-shrink-0 ml-1 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 transition-colors flex-shrink-0 ml-1 cursor-pointer"
           >
-            <Plus size={18} className="text-white flex-shrink-0" />
-            <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">Add Payment</span>
+            <Plus className="w-4 h-4 flex-shrink-0 text-white" />
+            <span className="whitespace-nowrap">Add Payment</span>
           </button>
         </div>
       </div>
@@ -632,7 +663,7 @@ export default function PaymentsTimeline() {
       {stripVisible && (
         <div
           className="fixed right-0 px-6 z-[40]"
-          style={{ left: "var(--sidebar-width, 0px)", top: 134, paddingTop: 4, paddingBottom: 4 }}
+          style={{ left: "var(--sidebar-width, 0px)", top: 126, paddingTop: 4, paddingBottom: 4 }}
         >
           <BulkActionBar
             selectedCount={selectedIds.length}
@@ -640,7 +671,10 @@ export default function PaymentsTimeline() {
             isClosing={stripClosing}
             onSelectAll={fetchAllIds}
             onDeselectAll={() => setSelectedIds([])}
-            onExport={() => toast.success(`Exporting ${selectedIds.length} payment(s)...`)}
+            onExport={() => {
+              const selectedDocs = documents.filter(doc => selectedIds.includes(doc._id));
+              handleExportExcel(selectedDocs.length > 0 ? selectedDocs : selectedIds.map(id => ({ _id: id })));
+            }}
             onDelete={() => {
               setDeleteConfirmState({ isOpen: true, type: "bulk", target: selectedIds });
             }}
@@ -655,7 +689,7 @@ export default function PaymentsTimeline() {
         style={{
           left: "var(--sidebar-width, 0px)",
           bottom: 64,
-          top: stripVisible ? 186 : 138,
+          top: stripVisible ? 178 : 130,
         }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
@@ -821,7 +855,7 @@ export default function PaymentsTimeline() {
             onChange={e => handleLimitChange(parseInt(e.target.value))}
             className="border border-gray-300 rounded-md text-sm py-1 pl-2 pr-6 focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
           >
-            {[10, 25, 50, 100].map(val => <option key={val} value={val}>{val} / page</option>)}
+            {[10, 25, 50, 100].map(val => <option key={val} value={val}>{val} per page</option>)}
           </select>
         </div>
 
@@ -834,19 +868,61 @@ export default function PaymentsTimeline() {
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          {paginationItems.map((item, idx) =>
-            item === "left-dots" || item === "right-dots"
-              ? <span key={`${item}-${idx}`} className="px-2 text-gray-400">…</span>
-              : (
+          {(() => {
+            const commitPage = () => {
+              const val = parseInt(pageInput, 10);
+              if (!isNaN(val) && val >= 1 && val <= pagination.totalPages) {
+                handlePageChange(val);
+              }
+              setEditingPage(false);
+            };
+
+            return paginationItems.map((item, idx) => {
+              if (item === "left-dots" || item === "right-dots") {
+                return (
+                  <span key={`${item}-${idx}`} className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none">
+                    ....
+                  </span>
+                );
+              }
+              const isCurrent = item === pagination.currentPage;
+              if (isCurrent && editingPage) {
+                return (
+                  <input
+                    key="page-edit"
+                    autoFocus
+                    type="number"
+                    min={1}
+                    max={pagination.totalPages}
+                    value={pageInput}
+                    onChange={e => setPageInput(e.target.value)}
+                    onBlur={commitPage}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") commitPage();
+                      if (e.key === "Escape") setEditingPage(false);
+                    }}
+                    className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                );
+              }
+              return (
                 <button
                   key={item}
                   onClick={() => handlePageChange(item)}
-                  className={`w-8 h-8 rounded-full text-sm font-medium transition-colors ${pagination.currentPage === item ? "bg-[#0085FF] text-white" : "text-gray-700 hover:bg-gray-100"}`}
+                  onDoubleClick={() => {
+                    if (isCurrent) {
+                      setPageInput(String(pagination.currentPage));
+                      setEditingPage(true);
+                    }
+                  }}
+                  title={isCurrent ? "Double-click to type a page number" : undefined}
+                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors cursor-pointer ${isCurrent ? "bg-[#0085FF] text-white" : "bg-white border border-[#E1E4EA] text-gray-700 hover:bg-gray-50"}`}
                 >
                   {item}
                 </button>
-              )
-          )}
+              );
+            });
+          })()}
 
           <button
             onClick={() => handlePageChange(pagination.currentPage + 1)}
@@ -922,64 +998,7 @@ export default function PaymentsTimeline() {
                     >
                       <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                       Sort Descending
-                    </button>
-
-                    {/* Party Company Filter list if Party column */}
-                    {col.id === "party" && (
-                      <>
-                        <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-                        <div className="px-2 py-1 text-[11px] font-bold text-gray-400 uppercase">Filter by Company</div>
-                        <div className="max-h-36 overflow-y-auto flex flex-col gap-0.5 no-scrollbar">
-                          <button
-                            onClick={() => { closeColumnMenu(); setPartyFilter(""); }}
-                            className={`${itemClass} ${!partyFilter ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
-                          >
-                            All Companies
-                          </button>
-                          {companies.map(c => {
-                            const name = c.companyName || c.name || (typeof c === "string" ? c : "");
-                            if (!name) return null;
-                            return (
-                              <button
-                                key={c._id || name}
-                                onClick={() => { closeColumnMenu(); setPartyFilter(name); }}
-                                className={`${itemClass} ${partyFilter === name ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
-                              >
-                                {name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-
-                    {/* Direction Filter if Direction column */}
-                    {col.id === "direction" && (
-                      <>
-                        <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-                        <div className="px-2 py-1 text-[11px] font-bold text-gray-400 uppercase">Filter Direction</div>
-                        <button
-                          onClick={() => { closeColumnMenu(); setDirectionFilter(""); }}
-                          className={`${itemClass} ${!directionFilter ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
-                        >
-                          All Directions
-                        </button>
-                        <button
-                          onClick={() => { closeColumnMenu(); setDirectionFilter("Credit"); }}
-                          className={`${itemClass} ${directionFilter === "Credit" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
-                        >
-                          Credit (IN)
-                        </button>
-                        <button
-                          onClick={() => { closeColumnMenu(); setDirectionFilter("Debit"); }}
-                          className={`${itemClass} ${directionFilter === "Debit" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
-                        >
-                          Debit (OUT)
-                        </button>
-                      </>
-                    )}
-
-                    <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                    </button>                    <div className="w-full border-t border-[#F1F1F5] my-0.5" />
 
                     <button
                       onClick={() => {
@@ -1080,6 +1099,19 @@ export default function PaymentsTimeline() {
           </div>
         </div>
       )}
+
+      {/* ── Advanced Filter Panel (same as Companies.jsx) ─────────────── */}
+      <AdvancedFilterPanel
+        isOpen={showAdvancedFilters}
+        onClose={() => setShowAdvancedFilters(false)}
+        columns={ALL_COLUMNS}
+        filters={activeFilters}
+        setFilters={setActiveFilters}
+        onApply={(newFilters) => setActiveFilters(newFilters)}
+        title="Filter Transactions"
+        subtitle="Find specific transactions quickly"
+        emptyStateText="Add a rule to narrow down your payments timeline."
+      />
     </div>
   );
 }
