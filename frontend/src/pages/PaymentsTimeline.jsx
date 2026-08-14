@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { 
   X, ChevronDown, ChevronUp, MoreVertical, Pencil, Trash2, Eye, EyeOff,
   SlidersHorizontal, Plus, Download, Share2, Edit2,
-  ChevronLeft, ChevronRight, Pin, PinOff, FileText
+  ChevronLeft, ChevronRight, Pin, PinOff, FileText, ArrowLeftRight
 } from "lucide-react";
 import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
@@ -19,6 +19,8 @@ import { getAncestorZoom } from "../utils/domUtils";
 import BulkActionBar from "../components/common/BulkActionBar";
 import { useBulkStrip } from "../hooks/useBulkSelection";
 import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
+import "jspdf-autotable";
 import { useSubscription } from "../contexts/SubscriptionContext";
 import { hasMinPlan } from "../utils/subscriptionHelpers";
 import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
@@ -78,6 +80,30 @@ export default function PaymentsTimeline() {
   const walletSummary = useMemo(() => accountsSummary.find(a => a.type === "wallet"), [accountsSummary]);
   const cashSummary   = useMemo(() => accountsSummary.find(a => a.type === "cash"),   [accountsSummary]);
   const bankSummaries = useMemo(() => accountsSummary.filter(a => a.type === "bank"),  [accountsSummary]);
+
+  const transferAccounts = useMemo(() => {
+    const list = [];
+    if (walletSummary) {
+      list.push({
+        id: "wallet-card",
+        type: "wallet",
+        title: "Wallet",
+        accountNumber: "Prepaid Credits",
+        currentBalance: walletSummary.currentBalance
+      });
+    }
+    if (cashSummary) {
+      list.push({
+        id: "cash-card",
+        type: "cash",
+        title: "Cash",
+        accountNumber: "Physical Cash",
+        currentBalance: cashSummary.currentBalance
+      });
+    }
+    list.push(...bankSummaries);
+    return list;
+  }, [walletSummary, cashSummary, bankSummaries]);
 
   // ----- Funds filter state (which accounts to include in total) -----------
   const [filterOpen, setFilterOpen] = useState(false);
@@ -193,6 +219,23 @@ export default function PaymentsTimeline() {
   const [showFilterMenu,    setShowFilterMenu]    = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [editingPaymentItem, setEditingPaymentItem] = useState(null);
+  const [selectedAccountDetail, setSelectedAccountDetail] = useState(null);
+  const [showBalance, setShowBalance] = useState(false);
+  const [accountTransactions, setAccountTransactions] = useState([]);
+  const [loadingAccountTransactions, setLoadingAccountTransactions] = useState(false);
+  const [modalStartDate, setModalStartDate] = useState("");
+  const [modalEndDate, setModalEndDate] = useState("");
+  const [showModalOptions, setShowModalOptions] = useState(false);
+  const [showSelfTransferModal, setShowSelfTransferModal] = useState(false);
+  const [selfTransferFromBankId, setSelfTransferFromBankId] = useState("");
+  const [selfTransferToBankId, setSelfTransferToBankId] = useState("");
+  const [selfTransferAmount, setSelfTransferAmount] = useState("");
+  const [selfTransferDate, setSelfTransferDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selfTransferNotes, setSelfTransferNotes] = useState("");
+  const [loadingSelfTransfer, setLoadingSelfTransfer] = useState(false);
+  const [fromDropdownOpen, setFromDropdownOpen] = useState(false);
+  const [toDropdownOpen, setToDropdownOpen] = useState(false);
+  const [showTimelineMenu, setShowTimelineMenu] = useState(false);
   const [openActionMenuId,  setOpenActionMenuId]  = useState(null);
   const [actionMenuPos,     setActionMenuPos]     = useState(null);
   const [deleteConfirmState, setDeleteConfirmState] = useState({ isOpen: false, type: "single", target: null });
@@ -621,6 +664,270 @@ export default function PaymentsTimeline() {
     );
   };
 
+  const getAccountTransactions = useCallback((account) => {
+    if (!account) return [];
+    let txs = [];
+    if (account.type === "cash") {
+      txs = accountTransactions.filter(doc => doc.type === "Cash" || doc.paymentType === "Cash" || doc.bank?.toLowerCase() === "cash");
+    } else if (account.type === "wallet") {
+      txs = accountTransactions.filter(doc => doc.type?.toLowerCase() === "wallet" || doc.bank?.toLowerCase() === "wallet");
+    } else if (account.type === "bank") {
+      const bankName = account.title?.toLowerCase() || "";
+      const accNum = account.accountNumber || "";
+      txs = accountTransactions.filter(doc => {
+        if (!doc.bank) return false;
+        const b = doc.bank.toLowerCase();
+        return b.includes(bankName) || (accNum && b.includes(accNum.toLowerCase()));
+      });
+    }
+
+    // Sort chronologically ascending to compute running balance
+    txs.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Initial balance starting point
+    let running = 0;
+    if (account.type === "bank" && account.openingBalance !== undefined) {
+      running = Number(account.openingBalance) || 0;
+    }
+
+    // Compute running balance for each transaction
+    const computedTxs = txs.map(tx => {
+      const amount = Number(tx.amount) || 0;
+      if (tx.direction === "IN") {
+        running += amount;
+      } else {
+        running -= amount;
+      }
+      return {
+        ...tx,
+        runningBalance: running
+      };
+    });
+
+    // Sort descending (latest first) for display
+    computedTxs.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Append opening balance at the end (oldest starting point) if available
+    let list = [...computedTxs];
+    if (account.type === "bank" && account.openingBalance !== undefined) {
+      list.push({
+        _id: "opening-balance-row",
+        date: "",
+        party: "Opening Balance",
+        type: "Opening Balance",
+        amount: account.openingBalance,
+        direction: "IN",
+        isOpeningBalance: true,
+        runningBalance: account.openingBalance
+      });
+    }
+
+    // Apply date range filter for display
+    if (modalStartDate) {
+      list = list.filter(t => t.isOpeningBalance || !t.date || new Date(t.date) >= new Date(modalStartDate));
+    }
+    if (modalEndDate) {
+      list = list.filter(t => t.isOpeningBalance || !t.date || new Date(t.date) <= new Date(modalEndDate + "T23:59:59"));
+    }
+
+    return list;
+  }, [accountTransactions, modalStartDate, modalEndDate]);
+
+  const handleExportPDF = useCallback((account, itemsToExport) => {
+    const list = Array.isArray(itemsToExport) ? itemsToExport : [itemsToExport];
+    if (!list.length) {
+      toast.error("No entries to export");
+      return;
+    }
+
+    const doc = new jsPDF();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text(`${account.title} Transactions Report`, 14, 20);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Account Number/Type: ${account.accountNumber || "N/A"}`, 14, 28);
+    doc.text(`Generated on: ${new Date().toLocaleDateString("en-IN")}`, 14, 34);
+
+    const headers = [["Date", "Party / Entity", "Type", "Amount", "Running Balance", "Status"]];
+    const data = list.map(item => {
+      const isCredit = item.direction === "IN";
+      return [
+        item.isOpeningBalance 
+          ? "—" 
+          : item.date 
+            ? new Date(item.date).toLocaleDateString("en-IN") 
+            : "",
+        item.party || "",
+        item.type || "",
+        `${isCredit ? "+" : "-"} INR ${Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        `INR ${Number(item.runningBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        isCredit ? "Got" : "Gave"
+      ];
+    });
+
+    doc.autoTable({
+      head: headers,
+      body: data,
+      startY: 42,
+      theme: "striped",
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [0, 133, 255] }
+    });
+
+    const filename = `${account.title.replace(/\s+/g, "_")}_Transactions_${new Date().toISOString().slice(0, 10)}.pdf`;
+    doc.save(filename);
+    toast.success(`Exported PDF successfully!`);
+  }, []);
+
+  const handleMainExportPDF = useCallback(() => {
+    if (!documents || !documents.length) {
+      toast.error("No entries to export");
+      return;
+    }
+
+    const doc = new jsPDF();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text(`Payments Timeline Report`, 14, 20);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${new Date().toLocaleDateString("en-IN")}`, 14, 28);
+
+    const headers = [["Date", "Transaction ID", "Party / Entity", "Type", "Amount", "Direction", "Bank Account"]];
+    const data = documents.map(item => {
+      const isCredit = item.direction === "IN";
+      return [
+        item.date ? new Date(item.date).toLocaleDateString("en-IN") : "",
+        item["payment-id"] || item._id || "N/A",
+        item.party || "",
+        item.type || item.paymentType || item.source || "N/A",
+        `INR ${Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        isCredit ? "Credit (IN)" : "Debit (OUT)",
+        item.bank || "N/A"
+      ];
+    });
+
+    doc.autoTable({
+      head: headers,
+      body: data,
+      startY: 36,
+      theme: "striped",
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [0, 133, 255] }
+    });
+
+    const filename = `Payments_Timeline_${new Date().toISOString().slice(0, 10)}.pdf`;
+    doc.save(filename);
+    toast.success(`Exported PDF successfully!`);
+  }, [documents]);
+
+  const handleCardClick = async (account) => {
+    setSelectedAccountDetail(account);
+    setLoadingAccountTransactions(true);
+    try {
+      const res = await API.get("/payments-timeline?limit=999999");
+      const allTx = res.data.documents || [];
+      setAccountTransactions(allTx);
+    } catch (err) {
+      console.error("Error fetching account transactions:", err);
+      toast.error("Failed to load transactions history");
+    } finally {
+      setLoadingAccountTransactions(false);
+    }
+  };
+
+  const handleYouGot = () => {
+    if (!selectedAccountDetail) return;
+    setEditingPaymentItem({
+      direction: "IN",
+      bank: selectedAccountDetail.type === "bank" ? selectedAccountDetail.title : "",
+      paymentType: selectedAccountDetail.type === "cash" ? "Cash" : "UPI",
+    });
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleYouGave = () => {
+    if (!selectedAccountDetail) return;
+    setEditingPaymentItem({
+      direction: "OUT",
+      bank: selectedAccountDetail.type === "bank" ? selectedAccountDetail.title : "",
+      paymentType: selectedAccountDetail.type === "cash" ? "Cash" : "UPI",
+    });
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleOpenSelfTransfer = (acc) => {
+    setSelfTransferFromBankId(acc.id);
+    setSelfTransferToBankId("");
+    setSelfTransferAmount("");
+    setSelfTransferDate(new Date().toISOString().slice(0, 10));
+    setSelfTransferNotes("");
+    setShowSelfTransferModal(true);
+  };
+
+  const handleSelfTransferSubmit = async (e) => {
+    e.preventDefault();
+    if (!selfTransferFromBankId || !selfTransferToBankId) {
+      toast.error("Please select both from and to accounts");
+      return;
+    }
+    if (selfTransferFromBankId === selfTransferToBankId) {
+      toast.error("Source and destination accounts cannot be the same");
+      return;
+    }
+    if (!selfTransferAmount || Number(selfTransferAmount) <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+
+    setLoadingSelfTransfer(true);
+    try {
+      const fromAcc = transferAccounts.find(a => a.id === selfTransferFromBankId);
+      const toAcc = transferAccounts.find(a => a.id === selfTransferToBankId);
+      
+      const noteSuffix = selfTransferNotes ? `: ${selfTransferNotes}` : "";
+
+      const [year, month, day] = selfTransferDate.split("-").map(Number);
+      const now = new Date();
+      const localDateObj = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+      const payloadDate = localDateObj.toISOString();
+
+      // 1. Post Debit (OUT) to source account
+      await API.post("/payments-timeline", {
+        vendorName: "Self Transfer",
+        amount: Number(selfTransferAmount),
+        paymentDate: payloadDate,
+        direction: "OUT",
+        paymentType: fromAcc.type === "cash" ? "Cash" : fromAcc.type === "wallet" ? "Wallet" : "Net Banking",
+        bank: (fromAcc.type === "cash" || fromAcc.type === "wallet") ? "" : fromAcc.title,
+        notes: `Self Transfer to ${toAcc.title}${noteSuffix}`
+      });
+
+      // 2. Post Credit (IN) to destination account
+      await API.post("/payments-timeline", {
+        vendorName: "Self Transfer",
+        amount: Number(selfTransferAmount),
+        paymentDate: payloadDate,
+        direction: "IN",
+        paymentType: toAcc.type === "cash" ? "Cash" : toAcc.type === "wallet" ? "Wallet" : "Net Banking",
+        bank: (toAcc.type === "cash" || toAcc.type === "wallet") ? "" : toAcc.title,
+        notes: `Self Transfer from ${fromAcc.title}${noteSuffix}`
+      });
+
+      toast.success("Self transfer completed successfully!");
+      setShowSelfTransferModal(false);
+      fetchData(); // Refresh timeline entries and balances
+    } catch (err) {
+      console.error("Self transfer failed:", err);
+      toast.error(err.response?.data?.error || "Failed to complete self transfer");
+    } finally {
+      setLoadingSelfTransfer(false);
+    }
+  };
+
   /* ── Cell renderer ───────────────────────────────────────────────── */
   const renderCell = (colId, doc, isRightmost) => {
     let content;
@@ -684,15 +991,6 @@ export default function PaymentsTimeline() {
       >
         <div className="flex-1 flex items-center gap-2 min-w-0 pr-4">
 
-          {/* Left scroll button */}
-          <button
-            onClick={() => cardsScrollRef.current?.scrollBy({ left: -260, behavior: "smooth" })}
-            className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-[#E2E8F0] bg-white shadow-sm text-gray-500 hover:text-blue-600 hover:border-blue-400 transition-all ${canScrollLeft ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-            aria-label="Scroll cards left"
-          >
-            <ChevronLeft size={15} />
-          </button>
-
           {/* Scrollable Container for all Individual Cards */}
           <div
             ref={cardsScrollRef}
@@ -705,7 +1003,7 @@ export default function PaymentsTimeline() {
               const activeCount = selectedAccountIds.length;
               const totalCount = (walletSummary ? 1 : 0) + bankSummaries.length;
               return (
-                <div className="relative hidden sm:flex flex-col justify-between w-[230px] h-[116px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 hover:border-blue-400 hover:shadow-sm transition-all">
+                <div className="relative hidden sm:flex flex-col justify-between w-[270px] h-[130px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 hover:border-blue-400 hover:shadow-sm transition-all">
                   {/* Top row: icon + label + filter button */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
@@ -801,9 +1099,9 @@ export default function PaymentsTimeline() {
               const isNegative = balance < 0;
               return (
                 <div
-                  onClick={() => navigate("/settings/wallet")}
-                  className="hidden sm:flex flex-col justify-between w-[230px] h-[116px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 hover:border-violet-400 hover:bg-violet-50/10 hover:shadow-sm cursor-pointer transition-all"
-                  title="View Wallet Settings"
+                  onClick={() => handleCardClick(walletSummary)}
+                  className="group relative hidden sm:flex flex-col justify-between w-[270px] h-[130px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 hover:border-violet-400 hover:bg-violet-50/10 hover:shadow-sm cursor-pointer transition-all"
+                  title="View Wallet Transactions"
                 >
                   {/* Top row: icon + name + sub-label */}
                   <div className="flex items-center gap-2">
@@ -814,12 +1112,23 @@ export default function PaymentsTimeline() {
                       <span className="text-base font-bold text-gray-900 leading-tight">Wallet</span>
                       <span className="text-xs text-gray-400 leading-tight">Prepaid Credits</span>
                     </div>
-                    <span className={`w-2 h-2 rounded-full ml-auto flex-shrink-0 ${isNegative ? "bg-red-500 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
                   </div>
                   {/* Bottom: amount */}
                   <span className={`text-2xl font-semibold tracking-tight leading-none ${isNegative ? "text-red-600" : "text-emerald-600"}`}>
                     ₹{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
+
+                  {/* Hover Self Transfer Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenSelfTransfer(walletSummary);
+                    }}
+                    className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-800 hover:bg-gray-900 border-none p-2 rounded-lg text-white hover:text-[#0085FF] shadow-md cursor-pointer flex items-center justify-center"
+                    title="Self Transfer"
+                  >
+                    <ArrowLeftRight size={16} />
+                  </button>
                 </div>
               );
             })()}
@@ -830,7 +1139,8 @@ export default function PaymentsTimeline() {
               const isNegative = balance < 0;
               return (
                 <div
-                  className="hidden sm:flex flex-col justify-between w-[230px] h-[116px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 hover:border-green-400 hover:bg-green-50/10 hover:shadow-sm transition-all"
+                  onClick={() => handleCardClick(cashSummary)}
+                  className="group relative hidden sm:flex flex-col justify-between w-[270px] h-[130px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 hover:border-green-400 hover:bg-green-50/10 hover:shadow-sm cursor-pointer transition-all"
                   title="Cash Transactions"
                 >
                   {/* Top row: icon + name + sub-label */}
@@ -842,12 +1152,23 @@ export default function PaymentsTimeline() {
                       <span className="text-base font-bold text-gray-900 leading-tight">Cash</span>
                       <span className="text-xs text-gray-400 leading-tight">Physical Cash</span>
                     </div>
-                    <span className={`w-2 h-2 rounded-full ml-auto flex-shrink-0 ${isNegative ? "bg-red-500 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
                   </div>
                   {/* Bottom: amount */}
                   <span className={`text-2xl font-semibold tracking-tight leading-none ${isNegative ? "text-red-600" : "text-emerald-600"}`}>
                     ₹{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
+
+                  {/* Hover Self Transfer Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenSelfTransfer(cashSummary);
+                    }}
+                    className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-800 hover:bg-gray-900 border-none p-2 rounded-lg text-white hover:text-[#0085FF] shadow-md cursor-pointer flex items-center justify-center"
+                    title="Self Transfer"
+                  >
+                    <ArrowLeftRight size={16} />
+                  </button>
                 </div>
               );
             })()}
@@ -860,9 +1181,9 @@ export default function PaymentsTimeline() {
                 return (
                   <div
                     key={bank.id}
-                    onClick={() => navigate("/settings/bank")}
-                    className="hidden sm:flex flex-col justify-between w-[230px] h-[116px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 hover:border-blue-400 hover:bg-blue-50/10 hover:shadow-sm cursor-pointer transition-all"
-                    title="View Bank Settings"
+                    onClick={() => handleCardClick(bank)}
+                    className="group relative hidden sm:flex flex-col justify-between w-[270px] h-[130px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 hover:border-blue-400 hover:bg-blue-50/10 hover:shadow-sm cursor-pointer transition-all"
+                    title="View Bank Transactions"
                   >
                     {/* Top row: logo + name + account number */}
                     <div className="flex items-center gap-2">
@@ -873,30 +1194,32 @@ export default function PaymentsTimeline() {
                           {bank.accountNumber || "Bank Account"}
                         </span>
                       </div>
-                      <span className={`w-2 h-2 rounded-full ml-auto flex-shrink-0 ${isNegative ? "bg-red-500 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
                     </div>
                     {/* Bottom: amount left-aligned */}
                     <span className={`text-2xl font-semibold tracking-tight leading-none ${isNegative ? "text-red-600" : "text-emerald-600"}`}>
                       ₹{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
+
+                    {/* Hover Self Transfer Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenSelfTransfer(bank);
+                      }}
+                      className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-800 hover:bg-gray-900 border-none p-2 rounded-lg text-white hover:text-[#0085FF] shadow-md cursor-pointer flex items-center justify-center"
+                      title="Self Transfer"
+                    >
+                      <ArrowLeftRight size={16} />
+                    </button>
                   </div>
                 );
               })
             ) : (
-              <div className="hidden sm:flex flex-col justify-center w-[230px] h-[116px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4">
+              <div className="hidden sm:flex flex-col justify-center w-[270px] h-[130px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4">
                 <span className="text-sm font-medium text-[#94A3B8]">No active banks</span>
               </div>
             )}
           </div>
-
-          {/* Right scroll button */}
-          <button
-            onClick={() => cardsScrollRef.current?.scrollBy({ left: 260, behavior: "smooth" })}
-            className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-[#E2E8F0] bg-white shadow-sm text-gray-500 hover:text-blue-600 hover:border-blue-400 transition-all ${canScrollRight ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-            aria-label="Scroll cards right"
-          >
-            <ChevronRight size={15} />
-          </button>
         </div>
 
         <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
@@ -1413,6 +1736,511 @@ export default function PaymentsTimeline() {
         subtitle="Find specific transactions quickly"
         emptyStateText="Add a rule to narrow down your payments timeline."
       />
+
+      {/* ── Payment Account Detail Modal ───────────────────────────── */}
+      {selectedAccountDetail && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-[90vw] max-w-5xl h-[80vh] p-6 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150 relative flex flex-col">
+            
+            {/* Close button */}
+            <button
+              onClick={() => { setSelectedAccountDetail(null); setShowBalance(false); }}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1.5 rounded-full transition-colors flex-shrink-0"
+            >
+              <X size={20} />
+            </button>
+
+            {/* Header: Logo, Name, Account Number, Buttons */}
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-4 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                {selectedAccountDetail.type === "bank" ? (
+                  <BankLogo bankName={selectedAccountDetail.title} size={40} className="rounded-lg overflow-hidden flex-shrink-0" />
+                ) : selectedAccountDetail.type === "cash" ? (
+                  <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    {selectedAccountDetail.title}
+                    {selectedAccountDetail.accountNumber && (
+                      <span className="text-sm font-normal text-gray-400">
+                        ({selectedAccountDetail.accountNumber})
+                      </span>
+                    )}
+                  </h3>
+                  
+                  {/* Button to see current bank balance */}
+                  <button
+                    onClick={() => setShowBalance(!showBalance)}
+                    className="mt-1 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                  >
+                    {showBalance 
+                      ? `Balance: ₹${selectedAccountDetail.currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+                      : `See current ${selectedAccountDetail.type === "bank" ? "bank" : selectedAccountDetail.type === "cash" ? "cash" : "wallet"} balance`}
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Buttons (You Got / You Gave) */}
+              <div className="flex items-center gap-2.5 mr-10">
+                <button
+                  onClick={handleYouGot}
+                  className="px-4 py-2 rounded-full bg-green-600 hover:bg-green-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                >
+                  You Got
+                </button>
+                <button
+                  onClick={handleYouGave}
+                  className="px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                >
+                  You Gave
+                </button>
+                
+                {/* 3 Dots Options Button */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowModalOptions(!showModalOptions)}
+                    className="p-2 rounded-full border border-gray-200 hover:bg-gray-50 text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0 cursor-pointer flex items-center justify-center"
+                    title="More options"
+                  >
+                    <MoreVertical size={16} />
+                  </button>
+                  {showModalOptions && (
+                    <>
+                      {/* Close dropdown on click outside */}
+                      <div className="fixed inset-0 z-20" onClick={() => setShowModalOptions(false)} />
+                      <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-30 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                        <button
+                          onClick={() => {
+                            setShowModalOptions(false);
+                            handleExportPDF(selectedAccountDetail, getAccountTransactions(selectedAccountDetail));
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 text-left transition-colors cursor-pointer font-medium"
+                        >
+                          <FileText size={14} className="text-gray-400" />
+                          Download PDF
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowModalOptions(false);
+                            handleExportExcel(getAccountTransactions(selectedAccountDetail));
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 text-left transition-colors cursor-pointer font-medium"
+                        >
+                          <Download size={14} className="text-gray-400" />
+                          Download Excel
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Date Filters block */}
+            <div className="flex flex-col sm:flex-row items-center gap-3 mb-4 flex-shrink-0 bg-gray-50 p-3 py-2.5 rounded-xl border border-gray-100">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <span className="text-xs font-semibold text-gray-500 whitespace-nowrap">Filter by Date:</span>
+                <input
+                  type="date"
+                  value={modalStartDate}
+                  onChange={(e) => setModalStartDate(e.target.value)}
+                  className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] bg-white text-gray-700 cursor-pointer"
+                />
+                <span className="text-xs text-gray-400">to</span>
+                <input
+                  type="date"
+                  value={modalEndDate}
+                  onChange={(e) => setModalEndDate(e.target.value)}
+                  className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] bg-white text-gray-700 cursor-pointer"
+                />
+              </div>
+              {(modalStartDate || modalEndDate) && (
+                <button
+                  onClick={() => { setModalStartDate(""); setModalEndDate(""); }}
+                  className="text-xs font-bold text-red-600 hover:text-red-700 ml-auto flex items-center gap-1 hover:underline transition-all cursor-pointer"
+                >
+                  Clear Filter
+                </button>
+              )}
+            </div>
+
+            {/* Transactions Title */}
+            <h4 className="text-sm font-bold text-gray-800 mb-2 flex-shrink-0">Transactions</h4>
+
+            {/* Loading / Table Container */}
+            <div className="flex-1 min-h-0 overflow-y-auto border border-gray-200 rounded-xl bg-white">
+              {loadingAccountTransactions ? (
+                <div className="w-full h-full flex flex-col items-center justify-center py-16 gap-3">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs text-gray-400 font-medium">Loading transactions history...</span>
+                </div>
+              ) : (
+                (() => {
+                  const accTx = getAccountTransactions(selectedAccountDetail);
+                  return (
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-[#F8FAFC] sticky top-0 z-10">
+                        <tr>
+                          <th className="px-5 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                          <th className="px-5 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Party</th>
+                          <th className="px-5 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Type</th>
+                          <th className="px-5 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Amount</th>
+                          <th className="px-5 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Running Balance</th>
+                          <th className="px-5 py-3 text-center text-xs font-bold text-gray-500 tracking-wider">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {accTx.map((tx) => {
+                          const isCredit = tx.direction === "IN";
+                          if (tx.isOpeningBalance) {
+                            return (
+                              <tr key={tx._id} className="bg-emerald-50/20 font-semibold border-b border-gray-200">
+                                <td className="px-5 py-3.5 text-xs text-gray-400 whitespace-nowrap italic">
+                                  &mdash;
+                                </td>
+                                <td className="px-5 py-3.5 text-xs text-gray-900">
+                                  Opening Balance
+                                </td>
+                                <td className="px-5 py-3.5 text-xs text-gray-500">
+                                  Setup Balance
+                                </td>
+                                <td className="px-5 py-3.5 text-xs text-right text-emerald-600 whitespace-nowrap">
+                                  + ₹{Number(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                                <td className="px-5 py-3.5 text-xs text-right text-emerald-600 whitespace-nowrap">
+                                  ₹{Number(tx.runningBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                                <td className="px-5 py-3.5 text-xs text-center whitespace-nowrap">
+                                  <span className="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">
+                                    Initial
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          }
+                          return (
+                            <tr key={tx._id} className="hover:bg-gray-50/50 transition-colors">
+                              <td className="px-5 py-3.5 text-xs text-gray-500 whitespace-nowrap">
+                                {tx.date ? new Date(tx.date).toLocaleDateString() : ""}
+                              </td>
+                              <td className="px-5 py-3.5 text-xs font-semibold text-gray-900 truncate max-w-[220px]" title={tx.party}>
+                                {tx.party}
+                              </td>
+                              <td className="px-5 py-3.5 text-xs text-gray-600 whitespace-nowrap">
+                                {tx.type}
+                              </td>
+                              <td className={`px-5 py-3.5 text-xs font-bold text-right whitespace-nowrap ${isCredit ? "text-green-600" : "text-red-600"}`}>
+                                {isCredit ? "+" : "-"} ₹{Number(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="px-5 py-3.5 text-xs font-bold text-right text-gray-900 whitespace-nowrap">
+                                ₹{Number(tx.runningBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="px-5 py-3.5 text-xs text-center whitespace-nowrap">
+                                <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isCredit ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                                  {isCredit ? "Got" : "Gave"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {accTx.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-5 py-16 text-center text-xs text-gray-400">
+                              No transactions found for this account.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  );
+                })()
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Self Transfer Modal ────────────────────────────────────────── */}
+      {showSelfTransferModal && (() => {
+        const selectedFromAcc = transferAccounts.find(a => a.id === selfTransferFromBankId);
+        const selectedToAcc = transferAccounts.find(a => a.id === selfTransferToBankId);
+        return (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl max-w-xl w-full p-8 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150 relative">
+              
+              {/* Close button */}
+              <button
+                onClick={() => setShowSelfTransferModal(false)}
+                className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+
+              <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <ArrowLeftRight size={22} className="text-[#0085FF]" />
+                Self Transfer Funds
+              </h3>
+
+              {/* Warning Banner */}
+              <div className="mb-5 flex items-start gap-2.5 bg-amber-50 border border-amber-200 text-amber-800 p-3.5 rounded-xl text-xs leading-relaxed">
+                <svg className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                <div>
+                  <span className="font-bold">Important Notice:</span> We aren't actually transferring money. This transfer only affects internal bank balances. It does not change actual bank balances.
+                </div>
+              </div>
+
+              <form onSubmit={handleSelfTransferSubmit} className="space-y-5">
+                
+                {/* Transfer From */}
+                <div className="relative">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Transfer From
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { setFromDropdownOpen(!fromDropdownOpen); setToDropdownOpen(false); }}
+                    className="w-full h-11 px-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] bg-white text-sm font-medium text-gray-700 cursor-pointer flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      {selectedFromAcc ? (
+                        <>
+                          {selectedFromAcc.type === "bank" ? (
+                            <BankLogo bankName={selectedFromAcc.title} size={20} className="rounded overflow-hidden flex-shrink-0" />
+                          ) : selectedFromAcc.type === "cash" ? (
+                            <div className="w-5 h-5 rounded bg-green-100 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                            </div>
+                          ) : (
+                            <div className="w-5 h-5 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                            </div>
+                          )}
+                          <span>{selectedFromAcc.title} {selectedFromAcc.accountNumber ? `(${selectedFromAcc.accountNumber})` : ""}</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">Select Account</span>
+                      )}
+                    </div>
+                    <ChevronDown size={16} className="text-gray-400" />
+                  </button>
+
+                  {fromDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[10001]" onClick={() => setFromDropdownOpen(false)} />
+                      <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-xl py-1 z-[10002] animate-in fade-in slide-in-from-top-1 duration-100">
+                        {transferAccounts.map((acc) => (
+                          <button
+                            key={acc.id}
+                            type="button"
+                            onClick={() => {
+                              setSelfTransferFromBankId(acc.id);
+                              setFromDropdownOpen(false);
+                              if (acc.id === selfTransferToBankId) {
+                                setSelfTransferToBankId("");
+                              }
+                            }}
+                            className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-gray-50 text-left transition-colors cursor-pointer ${
+                              acc.id === selfTransferFromBankId ? "bg-blue-50/50 font-semibold text-[#0085FF]" : "text-gray-700"
+                            }`}
+                          >
+                            {acc.type === "bank" ? (
+                              <BankLogo bankName={acc.title} size={20} className="rounded overflow-hidden flex-shrink-0" />
+                            ) : acc.type === "cash" ? (
+                              <div className="w-5 h-5 rounded bg-green-100 flex items-center justify-center flex-shrink-0">
+                                <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                              </div>
+                            ) : (
+                              <div className="w-5 h-5 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                              </div>
+                            )}
+                            <span className="truncate">{acc.title} {acc.accountNumber ? `(${acc.accountNumber})` : ""}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {selectedFromAcc && (() => {
+                    const isNeg = Number(selectedFromAcc.currentBalance) < 0;
+                    return (
+                      <p className="text-xs font-semibold text-gray-500 mt-2 ml-1">
+                        Available Balance: <span className={`font-bold transition-colors ${isNeg ? "text-red-600" : "text-emerald-600"}`}>₹{Number(selectedFromAcc.currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </p>
+                    );
+                  })()}
+                </div>
+
+                {/* Transfer To */}
+                <div className="relative">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Transfer To
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { setToDropdownOpen(!toDropdownOpen); setFromDropdownOpen(false); }}
+                    className="w-full h-11 px-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] bg-white text-sm font-medium text-gray-700 cursor-pointer flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      {selectedToAcc ? (
+                        <>
+                          {selectedToAcc.type === "bank" ? (
+                            <BankLogo bankName={selectedToAcc.title} size={20} className="rounded overflow-hidden flex-shrink-0" />
+                          ) : selectedToAcc.type === "cash" ? (
+                            <div className="w-5 h-5 rounded bg-green-100 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                            </div>
+                          ) : (
+                            <div className="w-5 h-5 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                            </div>
+                          )}
+                          <span>{selectedToAcc.title} {selectedToAcc.accountNumber ? `(${selectedToAcc.accountNumber})` : ""}</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">Select Account</span>
+                      )}
+                    </div>
+                    <ChevronDown size={16} className="text-gray-400" />
+                  </button>
+
+                  {toDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[10001]" onClick={() => setToDropdownOpen(false)} />
+                      <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-xl py-1 z-[10002] animate-in fade-in slide-in-from-top-1 duration-100">
+                        {transferAccounts
+                          .filter(acc => acc.id !== selfTransferFromBankId)
+                          .map((acc) => (
+                            <button
+                              key={acc.id}
+                              type="button"
+                              onClick={() => {
+                                setSelfTransferToBankId(acc.id);
+                                setToDropdownOpen(false);
+                              }}
+                              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-gray-50 text-left transition-colors cursor-pointer ${
+                                acc.id === selfTransferToBankId ? "bg-blue-50/50 font-semibold text-[#0085FF]" : "text-gray-700"
+                              }`}
+                            >
+                              {acc.type === "bank" ? (
+                                <BankLogo bankName={acc.title} size={20} className="rounded overflow-hidden flex-shrink-0" />
+                              ) : acc.type === "cash" ? (
+                                <div className="w-5 h-5 rounded bg-green-100 flex items-center justify-center flex-shrink-0">
+                                  <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                </div>
+                              ) : (
+                                <div className="w-5 h-5 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                  <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                                </div>
+                              )}
+                              <span className="truncate">{acc.title} {acc.accountNumber ? `(${acc.accountNumber})` : ""}</span>
+                            </button>
+                          ))}
+                      </div>
+                    </>
+                  )}
+
+                  {selectedToAcc && (() => {
+                    const isNeg = Number(selectedToAcc.currentBalance) < 0;
+                    return (
+                      <p className="text-xs font-semibold text-gray-500 mt-2 ml-1">
+                        Available Balance: <span className={`font-bold transition-colors ${isNeg ? "text-red-600" : "text-emerald-600"}`}>₹{Number(selectedToAcc.currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </p>
+                    );
+                  })()}
+                </div>
+
+                {/* Input for Amount */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Amount (₹)
+                  </label>
+                  {(() => {
+                    const isOverdraft = selectedFromAcc && selfTransferAmount && Number(selfTransferAmount) > Number(selectedFromAcc.currentBalance);
+                    return (
+                      <input
+                        type="number"
+                        required
+                        min="0.01"
+                        step="0.01"
+                        placeholder="Enter transfer amount"
+                        value={selfTransferAmount}
+                        onChange={(e) => setSelfTransferAmount(e.target.value)}
+                        className={`w-full h-11 px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 text-sm font-bold transition-all ${
+                          isOverdraft
+                            ? "border-red-300 bg-red-50/10 focus:border-red-500 focus:ring-red-500 text-red-600"
+                            : selfTransferAmount
+                              ? "border-emerald-300 bg-emerald-50/10 focus:border-emerald-500 focus:ring-emerald-500 text-emerald-600"
+                              : "border-[#E1E4EA] focus:border-[#0085FF] focus:ring-[#0085FF] text-gray-700"
+                        }`}
+                      />
+                    );
+                  })()}
+                </div>
+
+                {/* Transfer Date */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Transfer Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={selfTransferDate}
+                    onChange={(e) => setSelfTransferDate(e.target.value)}
+                    className="w-full h-11 px-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] text-sm cursor-pointer"
+                  />
+                </div>
+
+                {/* Notes Input */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Notes
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Optional internal notes..."
+                    value={selfTransferNotes}
+                    onChange={(e) => setSelfTransferNotes(e.target.value)}
+                    className="w-full h-11 px-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] text-sm"
+                  />
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex items-center justify-end gap-3 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowSelfTransferModal(false)}
+                    className="px-5 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loadingSelfTransfer}
+                    className="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2"
+                  >
+                    {loadingSelfTransfer ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Transferring...
+                      </>
+                    ) : (
+                      "Transfer Funds"
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
 
       <UpgradeRequiredModal
         open={showUpgradeModal}

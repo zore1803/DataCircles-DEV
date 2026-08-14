@@ -21,7 +21,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess, editItem 
     notes: ""
   });
 
-  const isEdit = Boolean(editItem);
+  const isEdit = Boolean(editItem && editItem._id);
 
   const fetchVendors = async () => {
     try {
@@ -38,7 +38,14 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess, editItem 
       const fetchedBanks = Array.isArray(res.data) ? res.data : [];
       setBanks(fetchedBanks);
       
-      if (!isEdit) {
+      if (editItem) {
+        const matchingBank = fetchedBanks.find(b => 
+          (b.bankName || b.bank || "").toLowerCase() === (editItem.bank || "").toLowerCase()
+        );
+        if (matchingBank) {
+          setSelectedBankId(matchingBank._id);
+        }
+      } else {
         const defaultBank = fetchedBanks.find(b => b.isDefault) || fetchedBanks[0];
         if (defaultBank) {
           setFormData(prev => ({ ...prev, bank: defaultBank.bankName || defaultBank.bank || "" }));
@@ -85,8 +92,12 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess, editItem 
     e.preventDefault();
     setLoading(true);
     try {
+      const [year, month, day] = formData.paymentDate.split("-").map(Number);
+      const now = new Date();
+      const localDateObj = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
       const payload = {
         ...formData,
+        paymentDate: localDateObj.toISOString(),
         vendor: selectedVendorId || undefined,
         vendorName: selectedVendorId ? undefined : vendorSearch
       };
