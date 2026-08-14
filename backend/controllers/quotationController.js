@@ -38,6 +38,9 @@ exports.createQuotation = async (req, res) => {
       receiverGSTIN,
       billingAddress,
       shippingAddress,
+      quotationPrefix,
+      quotationNumber: clientQuotationNumber,
+      reference,
     } = req.body;
 
     // Validate required fields
@@ -68,23 +71,44 @@ exports.createQuotation = async (req, res) => {
       }
     }
 
-    // Generate unique quotation number
-    const extractNumber = (number) => {
-      const match = number?.match(/^QUO-(\d+)$/);
-      return match ? parseInt(match[1], 10) : 0;
-    };
-    const quotations = await Quotation.find({
-      organization: req.user.organization,
-      quotationNumber: { $regex: /^QUO-\d+$/ },
-    })
-      .select("quotationNumber")
-      .session(session);
-    let maxNumber = 0;
-    quotations.forEach((q) => {
-      const num = extractNumber(q.quotationNumber);
-      if (num > maxNumber) maxNumber = num;
-    });
-    const quotationNumber = `QUO-${maxNumber + 1}`;
+    // Quotation number: respects a client-supplied prefix/number (the
+    // header's Prefix/Number boxes) instead of always forcing "QUO-N".
+    // With an explicit number, that exact value is used (after a
+    // uniqueness check); without one, auto-generate the next number for
+    // THIS prefix specifically, so switching prefixes doesn't collide with
+    // or continue another prefix's sequence.
+    const finalPrefix = (quotationPrefix && quotationPrefix.trim()) || "QUO-";
+    let quotationNumber;
+    if (clientQuotationNumber && String(clientQuotationNumber).trim()) {
+      quotationNumber = `${finalPrefix}${String(clientQuotationNumber).trim()}`;
+      const duplicate = await Quotation.findOne({
+        organization: req.user.organization,
+        quotationNumber,
+      }).session(session);
+      if (duplicate) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          error: `Quotation number "${quotationNumber}" is already in use.`,
+        });
+      }
+    } else {
+      const escapedPrefix = finalPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const numberRegex = new RegExp(`^${escapedPrefix}(\\d+)$`);
+      const quotations = await Quotation.find({
+        organization: req.user.organization,
+        quotationNumber: { $regex: numberRegex },
+      })
+        .select("quotationNumber")
+        .session(session);
+      let maxNumber = 0;
+      quotations.forEach((q) => {
+        const match = q.quotationNumber.match(numberRegex);
+        const num = match ? parseInt(match[1], 10) : 0;
+        if (num > maxNumber) maxNumber = num;
+      });
+      quotationNumber = `${finalPrefix}${maxNumber + 1}`;
+    }
 
     const dealDoc = await Deal.findById(deal).populate('company');
     let finalBillingAddress = billingAddress;
@@ -105,7 +129,9 @@ exports.createQuotation = async (req, res) => {
 
     const quotation = new Quotation({
       deal,
+      quotationPrefix: finalPrefix,
       quotationNumber,
+      reference: reference || "",
       date,
       dueDate,
       amount,
@@ -323,6 +349,7 @@ exports.updateQuotation = async (req, res) => {
       receiverGSTIN,
       billingAddress,
       shippingAddress,
+      reference,
     } = req.body;
 
     const requiredFields = ["deal", "date", "amount", "status", "discount"];
@@ -384,6 +411,7 @@ exports.updateQuotation = async (req, res) => {
         receiverGSTIN: finalReceiverGSTIN,
         billingAddress: finalBillingAddress,
         shippingAddress: finalShippingAddress,
+        reference: reference || "",
       },
       { new: true }
     );

@@ -28,6 +28,7 @@ import BulkActions from "../components/BulkActions";
 import ItemForm from "../components/item/ItemForm";
 import ImportItems from "../components/item/ImportItems";
 import ExportModal from "../components/common/ExportModal";
+import { exportClientSide } from "../utils/clientExport";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
@@ -67,7 +68,7 @@ const getAncestorZoom = (el) => {
   return z || 1;
 };
 
-const ViewDetails = ({ item, onRequestClose }) => {
+const ViewDetails = ({ item, onRequestClose, onEdit, onDelete }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
   const [imagePreviews, setImagePreviews] = useState([]);
@@ -103,13 +104,11 @@ const ViewDetails = ({ item, onRequestClose }) => {
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 transition-opacity duration-300"
-      style={{ opacity: isOpen ? 1 : 0 }}
+      className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex justify-end p-2 transition-opacity duration-300 ${isOpen ? "opacity-100" : "opacity-0"}`}
       onClick={handleClose}
     >
       <div
-        className="bg-white w-full max-w-2xl rounded-xl shadow-2xl max-h-[90vh] flex flex-col transition-transform duration-300 transform"
-        style={{ transform: isOpen ? "scale(100%)" : "scale(95%)" }}
+        className={`bg-white w-full max-w-lg h-full rounded-2xl shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ${isOpen ? "translate-x-0" : "translate-x-full"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
@@ -121,13 +120,30 @@ const ViewDetails = ({ item, onRequestClose }) => {
               View item information and variants
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="p-1 rounded-full hover:bg-gray-100 text-gray-400 transition-colors cursor-pointer"
-          >
-            <X className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onEdit}
+              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <div className="w-px h-5 bg-gray-300 mx-2"></div>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar">
@@ -331,6 +347,12 @@ function ProductsServices() {
   });
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const truncateText = (text, maxLength = 30) => {
+    if (!text) return "—";
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + "...";
+  };
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   // filterType removed — type filtering now done via AdvancedFilterPanel rule builder.
   const [showForm, setShowForm] = useState(false);
@@ -352,6 +374,11 @@ function ProductsServices() {
   const [activeFilters, setActiveFilters] = useState([]);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const tableScrollRef = useRef(null);
+  // Client-side Excel/PDF export — same "no selection required, export what
+  // you're currently looking at" flow as Deals.jsx, instead of the
+  // selection-gated backend ExportModal.
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportButtonRef = useRef(null);
 
   // Double-click-to-type a page number in the pagination bar (mirrors Companies.jsx).
   const [editingPage, setEditingPage] = useState(false);
@@ -451,6 +478,9 @@ function ProductsServices() {
     const handleClickOutside = (event) => {
       if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
         setIsMoreMenuOpen(false);
+      }
+      if (exportButtonRef.current && !exportButtonRef.current.contains(event.target)) {
+        setShowExportMenu(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -583,6 +613,27 @@ function ProductsServices() {
   const handleDelete = async (itemId) => {
     setItemToDelete(itemId);
     setShowDeleteModal(true);
+  };
+
+  // Client-side export — mirrors Deals.jsx's handleExport: confirm, then
+  // Excel (CSV via window.XLSX) or PDF (window.jspdf + autoTable), against
+  // whatever's currently filtered/visible rather than a manual selection.
+  const EXPORT_COLUMNS = [
+    { label: "Name", value: (item) => item.name },
+    { label: "Category", value: (item) => item.category },
+    { label: "Purchase Price", value: (item) => item.purchasePrice },
+    { label: "Selling Price", value: (item) => item.sellingPrice },
+    { label: "Status", value: (item) => (item.isActive ? "Active" : "Inactive") },
+  ];
+
+  const handleExport = (format) => {
+    if (!window.confirm(`Do you want to export in ${format}?`)) return;
+    exportClientSide(format, {
+      rows: filteredItems,
+      columns: EXPORT_COLUMNS,
+      fileNamePrefix: "products_export",
+      title: "Products & Services Report",
+    });
   };
 
   const confirmDelete = async () => {
@@ -1208,7 +1259,7 @@ function ProductsServices() {
             } else if (vc.key === "sellingPrice") {
               baseContent = <div className="truncate text-sm text-gray-700 font-mono">₹{(item.sellingPrice ?? 0).toFixed(2)}</div>;
             } else if (vc.key === "hsnSac") {
-              baseContent = <div className="truncate text-sm text-gray-700">{item.hsnSac || "—"}</div>;
+              baseContent = <div className="truncate text-sm text-gray-700">{item.hsnSac ? <HighlightText text={item.hsnSac} query={searchTerm} /> : "—"}</div>;
             } else if (vc.key === "variants") {
               baseContent = item.variants && item.variants.length > 0 ? (
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
@@ -1225,6 +1276,14 @@ function ProductsServices() {
                 >
                   {item.isActive ? "Active" : "In-Active"}
                 </span>
+              );
+            } else if (baseContent === undefined) {
+              const val = item[vc.key];
+              const truncated = truncateText(String(val ?? ""), 30);
+              baseContent = (
+                <div className="truncate text-sm text-gray-700 w-full" title={String(val ?? "")}>
+                  {truncated && truncated !== "—" ? <HighlightText text={truncated} query={searchTerm} /> : "—"}
+                </div>
               );
             }
 
@@ -1460,12 +1519,14 @@ function ProductsServices() {
         moduleName="Products & Services"
       />
 
-      {showImport && (
-        <ImportItems
-          onRequestClose={() => setShowImport(false)}
-          onSuccess={() => fetchItems()}
-        />
-      )}
+      <ImportItems
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        onImportSuccess={() => {
+          fetchItems();
+          exitSelectionMode();
+        }}
+      />
 
       {showDetails && selectedItem && (
         <ViewDetails
@@ -1473,6 +1534,14 @@ function ProductsServices() {
           onRequestClose={() => {
             setShowDetails(false);
             setSelectedItem(null);
+          }}
+          onEdit={() => {
+            setShowDetails(false);
+            handleEditItem(selectedItem);
+          }}
+          onDelete={() => {
+            setShowDetails(false);
+            handleDelete(selectedItem._id);
           }}
         />
       )}
@@ -1691,15 +1760,6 @@ function ProductsServices() {
                   )}
                 </button>
 
-                {/* Column Settings — dedicated icon (matches the reference
-                    screenshot), opens ColumnSettingsPanel directly. */}
-                <button
-                  onClick={() => setShowColumnSettings(true)}
-                  className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
-                  title="Column settings"
-                >
-                  <SlidersHorizontal className="w-4 h-4" />
-                </button>
 
                 {/* Overflow menu: filter/columns on mobile, Import, Export, Video Tutorial */}
                 <div className="relative" ref={moreMenuRef}>
@@ -1736,7 +1796,7 @@ function ProductsServices() {
                           setShowColumnSettings(true);
                           setIsMoreMenuOpen(false);
                         }}
-                        className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
                         <SlidersHorizontal className="w-4 h-4 text-gray-400" />
                         Columns
@@ -1751,18 +1811,39 @@ function ProductsServices() {
                         <Upload className="w-4 h-4 text-gray-400" />
                         Import
                       </button>
-                      <button
-                        onClick={() => {
-                          setShowExportModal(true);
-                          setIsMoreMenuOpen(false);
-                        }}
-                        disabled={selectedItems.length === 0}
-                        title={selectedItems.length === 0 ? "Select items to export" : "Export selected items"}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <Download className="w-4 h-4 text-gray-400" />
-                        Export
-                      </button>
+                      <div className="relative" ref={exportButtonRef}>
+                        <button
+                          onClick={() => setShowExportMenu((prev) => !prev)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <Download className="w-4 h-4 text-gray-400" />
+                          Export
+                        </button>
+                        {showExportMenu && (
+                          <div className="absolute left-full top-0 ml-1 z-10 w-44 bg-white border border-gray-200 rounded-lg shadow-xl">
+                            <button
+                              onClick={() => {
+                                handleExport("excel");
+                                setShowExportMenu(false);
+                                setIsMoreMenuOpen(false);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors first:rounded-t-lg flex items-center gap-2"
+                            >
+                              Export as Excel
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleExport("pdf");
+                                setShowExportMenu(false);
+                                setIsMoreMenuOpen(false);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors last:rounded-b-lg flex items-center gap-2"
+                            >
+                              Export as PDF
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={() => {
                           setShowVideoTutorial(true);

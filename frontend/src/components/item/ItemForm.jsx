@@ -277,9 +277,31 @@ const ItemForm = ({
   };
 
   const generateVariantSku = () => {
-    const timestamp = Date.now();
-    const randomNum = Math.floor(Math.random() * 10000);
-    const sku = `${timestamp}${randomNum}`.slice(-12);
+    let base = "";
+    if (form.name) {
+      base = form.name.replace(/[^a-zA-Z]/g, "").substring(0, 3).toUpperCase();
+    }
+    
+    if (base.length === 0) {
+      base = "ITM";
+    }
+
+    let attrs = "";
+    if (currentVariant.attributes) {
+        const attributeValues = Object.values(currentVariant.attributes).filter(val => val.trim() !== "");
+        if (attributeValues.length > 0) {
+           attrs = "-" + attributeValues.map(val => val.replace(/[^a-zA-Z0-9]/g, "").substring(0, 3).toUpperCase()).join("-");
+        }
+    }
+
+    let sku = "";
+    if (attrs.length > 0) {
+        sku = `${base}${attrs}`;
+    } else {
+        const randomString = Math.random().toString(36).substring(2, 7).toUpperCase();
+        sku = `${base}-${randomString}`;
+    }
+    
     setCurrentVariant({ ...currentVariant, sku });
     setIsFormDirty(true);
   };
@@ -429,13 +451,11 @@ const ItemForm = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 transition-opacity duration-300"
-      style={{ opacity: isOpen ? 1 : 0 }}
+      className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex justify-end p-2 transition-opacity duration-300 ${isOpen ? "opacity-100" : "opacity-0"}`}
       onClick={handleClose}
     >
       <div
-        className="bg-white w-full max-w-md rounded-xl shadow-2xl max-h-[90vh] flex flex-col transition-transform duration-300 transform"
-        style={{ transform: isOpen ? "scale(100%)" : "scale(95%)" }}
+        className={`bg-white w-full max-w-2xl h-full rounded-2xl shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ${isOpen ? "translate-x-0" : "translate-x-full"}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -492,31 +512,232 @@ const ItemForm = ({
               <label className="block text-xs font-semibold text-gray-700">
                 Variants
               </label>
-              <button
-                type="button"
-                onClick={() => setShowVariantForm(true)}
-                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add Variant
-              </button>
+              {!showVariantForm && (
+                <button
+                  type="button"
+                  onClick={() => setShowVariantForm(true)}
+                  className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Variant
+                </button>
+              )}
             </div>
-            {variants.length === 0 ? (
-              <div className="w-full px-3.5 py-2.5 border border-dashed border-gray-200 rounded-lg text-xs text-gray-400 text-center">
+
+            {showVariantForm && (
+              <div className="border border-gray-200 rounded-xl bg-white mb-4 shadow-sm">
+                <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                  <h3 className="font-semibold text-gray-900 text-sm">
+                    {variantIndex !== null ? "Edit Variant" : "Add Variant"}
+                  </h3>
+                  <button
+                    onClick={() => setShowVariantForm(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Variant Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={currentVariant.name}
+                      onChange={handleVariantChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="Enter Variant Name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      SKU
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        name="sku"
+                        value={currentVariant.sku}
+                        onChange={handleVariantChange}
+                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="Enter or Generate SKU"
+                      />
+                      <button
+                        onClick={generateVariantSku}
+                        className="bg-blue-600 hover:bg-blue-700 transition-colors text-white text-xs px-4 py-2 rounded-full font-medium whitespace-nowrap"
+                      >
+                        Generate
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Attributes Section */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-medium text-gray-700">
+                        Attributes
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentVariant((prev) => ({
+                            ...prev,
+                            attributes: { ...prev.attributes, "": "" },
+                          }));
+                        }}
+                        className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Attribute
+                      </button>
+                    </div>
+                    
+                    {Object.keys(currentVariant.attributes || {}).length > 0 && (
+                      <div className="space-y-2">
+                        {Object.entries(currentVariant.attributes || {}).map(([key, val], idx) => (
+                          <div key={idx} className="flex gap-2 items-center">
+                            <input
+                              type="text"
+                              value={key}
+                              onChange={(e) => {
+                                const newKey = e.target.value;
+                                setCurrentVariant((prev) => {
+                                  const newAttrs = { ...prev.attributes };
+                                  const value = newAttrs[key];
+                                  delete newAttrs[key];
+                                  newAttrs[newKey] = value;
+                                  return { ...prev, attributes: newAttrs };
+                                });
+                              }}
+                              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Attribute Name (e.g. color)"
+                            />
+                            <input
+                              type="text"
+                              value={val}
+                              onChange={(e) => {
+                                const newVal = e.target.value;
+                                setCurrentVariant((prev) => ({
+                                  ...prev,
+                                  attributes: { ...prev.attributes, [key]: newVal },
+                                }));
+                              }}
+                              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Attribute Value (e.g. Red)"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCurrentVariant((prev) => {
+                                  const newAttrs = { ...prev.attributes };
+                                  delete newAttrs[key];
+                                  return { ...prev, attributes: newAttrs };
+                                });
+                              }}
+                              className="text-red-500 hover:text-red-600 p-1"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Purchase Price <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="purchasePrice"
+                        value={currentVariant.purchasePrice}
+                        onChange={handleVariantChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="Enter Purchase Price"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Selling Price <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="sellingPrice"
+                        value={currentVariant.sellingPrice}
+                        onChange={handleVariantChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="Enter Selling Price"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Stock
+                    </label>
+                    <input
+                      type="number"
+                      name="stock"
+                      value={currentVariant.stock}
+                      onChange={handleVariantChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      type="checkbox"
+                      id="variantActive"
+                      name="isActive"
+                      checked={currentVariant.isActive !== false}
+                      onChange={(e) => setCurrentVariant(prev => ({ ...prev, isActive: e.target.checked }))}
+                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="variantActive" className="text-sm font-medium text-gray-900">
+                      Active
+                    </label>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowVariantForm(false)}
+                      className="flex-1 border border-red-200 text-red-500 font-medium rounded-full hover:bg-red-50 py-2 text-sm transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddVariant}
+                      className="flex-1 bg-[#0085FF] hover:bg-blue-600 text-white font-medium rounded-full py-2 text-sm transition-colors shadow-sm"
+                    >
+                      {variantIndex !== null ? "Update Variant" : "Add Variant"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!showVariantForm && variants.length === 0 ? (
+              <div className="w-full px-4 py-3 border border-dashed border-gray-200 rounded-xl text-xs text-gray-400 text-center">
                 No Variants Added
               </div>
-            ) : (
+            ) : !showVariantForm && variants.length > 0 ? (
               <div className="space-y-2">
                 {variants.map((v, i) => (
                   <div
                     key={i}
-                    className="flex justify-between items-center bg-gray-50 border border-gray-100 rounded-lg p-2.5"
+                    className="flex justify-between items-center bg-gray-50 border border-gray-100 rounded-lg p-3"
                   >
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-gray-900 truncate">
                         {v.name}
                       </div>
-                      <div className="text-xs text-gray-500 truncate">
+                      <div className="text-xs text-gray-500 truncate mt-0.5">
                         SKU: {v.sku || "N/A"} | ₹{v.sellingPrice}
                       </div>
                     </div>
@@ -524,22 +745,22 @@ const ItemForm = ({
                       <button
                         type="button"
                         onClick={() => handleEditVariant(i)}
-                        className="text-blue-600 hover:text-blue-700 p-1"
+                        className="text-blue-600 hover:text-blue-700 p-1.5 rounded hover:bg-blue-50 transition-colors"
                       >
-                        <Type className="w-3.5 h-3.5" />
+                        <Type className="w-4 h-4" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleRemoveVariant(i)}
-                        className="text-red-600 hover:text-red-700 p-1"
+                        className="text-red-600 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Description */}
@@ -774,11 +995,11 @@ const ItemForm = ({
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-5 border-t border-gray-100 flex justify-between gap-4 bg-white rounded-b-xl">
+        <div className="px-5 py-4 border-t border-dashed border-gray-300 flex gap-3 items-center bg-white flex-shrink-0">
           <button
             type="button"
             onClick={handleClose}
-            className="px-6 py-2.5 border border-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-50 text-sm transition-colors"
+            className="flex-1 px-4 py-2.5 border border-red-200 text-red-500 font-medium rounded-full hover:bg-red-50 text-sm transition-colors"
           >
             Cancel
           </button>
@@ -786,113 +1007,14 @@ const ItemForm = ({
             type="button"
             onClick={handleSubmit}
             disabled={loading}
-            className="px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 text-sm transition-colors shadow-sm disabled:opacity-70"
+            className="flex-1 px-4 py-2.5 bg-[#0085FF] text-white font-medium rounded-full hover:bg-blue-600 text-sm transition-colors shadow-sm disabled:opacity-70"
           >
             {loading ? "Saving..." : form._id ? "Update Item" : "Create Item"}
           </button>
         </div>
       </div>
 
-      {/* Nested Variant Form */}
-      {showVariantForm && (
-        <div className="absolute inset-0 bg-black/10 backdrop-blur-[1px] z-[10001] flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-semibold text-gray-900">
-                {variantIndex !== null ? "Edit Variant" : "Add New Variant"}
-              </h3>
-              <button
-                onClick={() => setShowVariantForm(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">
-                  Variant Name
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={currentVariant.name}
-                  onChange={handleVariantChange}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                  placeholder="e.g. Red, XL"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">
-                  SKU
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    name="sku"
-                    value={currentVariant.sku}
-                    onChange={handleVariantChange}
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                  />
-                  <button
-                    onClick={generateVariantSku}
-                    className="bg-gray-800 text-white text-xs px-3 rounded-lg"
-                  >
-                    Generate SKU
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">
-                    Purchase Price
-                  </label>
-                  <input
-                    type="number"
-                    name="purchasePrice"
-                    value={currentVariant.purchasePrice}
-                    onChange={handleVariantChange}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">
-                    Selling Price
-                  </label>
-                  <input
-                    type="number"
-                    name="sellingPrice"
-                    value={currentVariant.sellingPrice}
-                    onChange={handleVariantChange}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">
-                  Stock
-                </label>
-                <input
-                  type="number"
-                  name="stock"
-                  value={currentVariant.stock}
-                  onChange={handleVariantChange}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                />
-              </div>
-
-              <button
-                onClick={handleAddVariant}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
-              >
-                {variantIndex !== null ? "Update Variant" : "Add Variant"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Nested Variant Form removed as it's now inline */}
 
       {/* Unsaved-changes confirmation — closing (X/backdrop/Cancel) while the
           form is dirty asks instead of silently discarding edits. */}

@@ -226,9 +226,6 @@ export function splitGst(taxableAmount, gstRate, transactionType = "intra") {
 export function computeDocument(doc, type = "tax") {
   const supportsTax = type !== "deliveryChallan";
   const taxFlagKey = type === "quotation" ? "isTaxQuotation" : "isTaxInvoice";
-  const gstRate = GST_RATES.includes(Number(doc.gstRate))
-    ? Number(doc.gstRate)
-    : 18;
   const transactionType = doc.transactionType === "inter" ? "inter" : "intra";
   const isTax = supportsTax && !!doc[taxFlagKey];
 
@@ -240,12 +237,16 @@ export function computeDocument(doc, type = "tax") {
       it.discountType === "percentage"
         ? (sub * (parseFloat(it.discount) || 0)) / 100
         : parseFloat(it.discount) || 0;
+    const gstRate = GST_RATES.includes(Number(it.gstRate))
+      ? Number(it.gstRate)
+      : (GST_RATES.includes(Number(doc.gstRate)) ? Number(doc.gstRate) : 18);
     return {
       name: it.name || it.itemId?.name || "",
       description: it.description || "",
       hsn: it.hsn || "",
       rate,
       qty,
+      gstRate,
       taxable: sub - disc,
     };
   });
@@ -265,17 +266,17 @@ export function computeDocument(doc, type = "tax") {
   const rows = baseRows.map((r) => {
     const taxable = r.taxable * netFactor;
     const gst = isTax
-      ? splitGst(taxable, gstRate, transactionType)
-      : { cgst: 0, sgst: 0, igst: 0 };
+      ? splitGst(taxable, r.gstRate, transactionType)
+      : { cgst: 0, sgst: 0, igst: 0, cgstRate: 0, sgstRate: 0, igstRate: 0 };
     const tax = gst.cgst + gst.sgst + gst.igst;
     return { ...r, taxable, ...gst, tax, amount: taxable + tax };
   });
 
   const hsnMap = {};
   rows.forEach((r) => {
-    const key = r.hsn || "N/A";
+    const key = (r.hsn || "N/A") + "_" + r.gstRate;
     if (!hsnMap[key])
-      hsnMap[key] = { taxable: 0, cgst: 0, sgst: 0, igst: 0, rate: gstRate };
+      hsnMap[key] = { taxable: 0, cgst: 0, sgst: 0, igst: 0, hsn: r.hsn, rate: r.gstRate };
     hsnMap[key].taxable += r.taxable;
     hsnMap[key].cgst += r.cgst;
     hsnMap[key].sgst += r.sgst;
@@ -286,7 +287,6 @@ export function computeDocument(doc, type = "tax") {
 
   return {
     isTax,
-    gstRate,
     transactionType,
     isInterState: transactionType === "inter",
     rows,
@@ -300,7 +300,7 @@ export function computeDocument(doc, type = "tax") {
     totalSGST: rows.reduce((s, r) => s + r.sgst, 0),
     totalIGST: rows.reduce((s, r) => s + r.igst, 0),
     grandTotal,
-    hsnRows: Object.keys(hsnMap).map((k) => ({ hsn: k, ...hsnMap[k] })),
+    hsnRows: Object.keys(hsnMap).map((k) => hsnMap[k]),
     amountInWords: numberToWords(grandTotal),
   };
 }

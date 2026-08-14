@@ -183,6 +183,10 @@ const ItemSearchSelect = ({
       rate: item.sellingPrice,
       quantity: 1,
       hsn: item.hsnSac || "",
+      // Copied from the catalog product at pick time, same as rate/hsn —
+      // previously dropped entirely, so a tax quotation line item never
+      // carried its product's own GST rate.
+      gstRate: item.gstRate ?? 0,
       isVariant: item.isVariant || false,
       parentItemId: item.parentItemId || null,
       discountType: "amount",
@@ -417,6 +421,9 @@ const QuotationForm = ({
               description: variant.description || item.description || "",
               sellingPrice: variant.sellingPrice || item.sellingPrice,
               hsnSac: variant.hsnSac || item.hsnSac || "",
+              // Variant's own rate falls back to the parent item's, same as
+              // sellingPrice/hsnSac above.
+              gstRate: variant.gstRate ?? item.gstRate ?? 0,
               type: item.type,
               category: item.category || "",
               primaryUnit:
@@ -433,6 +440,7 @@ const QuotationForm = ({
               description: item.description || "",
               sellingPrice: item.sellingPrice,
               hsnSac: item.hsnSac || "",
+              gstRate: item.gstRate ?? 0,
               type: item.type,
               category: item.category || "",
               primaryUnit: item.primaryUnit || "OTH OTHERS",
@@ -508,6 +516,7 @@ const QuotationForm = ({
           rate: item.rate || "",
           quantity: item.quantity || 1,
           hsn: item.hsn || "",
+          gstRate: item.gstRate || 0,
           isVariant: item.isVariant || false,
           parentItemId: item.parentItemId || null,
           discountType: item.discountType || "amount",
@@ -651,21 +660,44 @@ const QuotationForm = ({
         const rate = parseFloat(item.rate) || 0;
         const quantity = parseInt(item.quantity) || 0;
         const subtotal = rate * quantity;
-        
-        let activeDiscount = field === "discount" ? (parseFloat(value) || 0) : (parseFloat(item.discount) || 0);
-        let activeType = field === "discountType" ? value : item.discountType;
+
+        let activeDiscount = parseFloat(item.discount) || 0;
+        let activeType = item.discountType;
+
+        if (field === "discount") {
+          // If value is empty, let them clear the input instead of forcing to 0
+          if (value === "") {
+            newValue = "";
+            activeDiscount = 0;
+          } else {
+            activeDiscount = parseFloat(value) || 0;
+            // Keep the exact string to allow typing decimals like "1."
+            newValue = value; 
+          }
+        } else if (field === "discountType") {
+          // conversion logic...
+          if (value === "percentage" && activeType === "amount") {
+            activeDiscount =
+              subtotal > 0
+                ? Math.round(Math.min(100, (activeDiscount / subtotal) * 100) * 100) / 100
+                : 0;
+          } else if (value === "amount" && activeType === "percentage") {
+            activeDiscount = Math.round(((activeDiscount / 100) * subtotal) * 100) / 100;
+          }
+          activeType = value;
+        }
 
         if (activeType === "amount" && activeDiscount > subtotal) {
           activeDiscount = subtotal;
+          if (field === "discount") newValue = activeDiscount.toString();
           toast.error("Item discount cannot exceed item total price.");
         } else if (activeType === "percentage" && activeDiscount > 100) {
           activeDiscount = 100;
+          if (field === "discount") newValue = "100";
           toast.error("Percentage discount cannot exceed 100%.");
         }
 
-        if (field === "discount") {
-          newValue = activeDiscount;
-        } else if (field === "discountType") {
+        if (field === "discountType") {
           newItems[index].discount = activeDiscount;
         }
       }
@@ -683,8 +715,27 @@ const QuotationForm = ({
   const handleDiscountChange = (field, value) => {
     setForm((prev) => {
       const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(prev.items);
-      let newValue = value;
-      let newDiscount = { ...prev.discount, [field]: newValue };
+      const newDiscount = { ...prev.discount };
+
+      if (field === "type") {
+        // Convert the existing discount value to an equivalent amount under
+        // the new type instead of reinterpreting the same raw number under
+        // a different unit — e.g. a ₹500 discount switched to "%" used to
+        // become "500%" (then get clamped down to 100%) instead of the
+        // ~equivalent percentage of the subtotal.
+        const oldValue = parseFloat(prev.discount.value) || 0;
+        if (value === "percentage" && prev.discount.type === "fixed") {
+          newDiscount.value =
+            subtotalAfterItemDiscounts > 0
+              ? Math.round(Math.min(100, (oldValue / subtotalAfterItemDiscounts) * 100) * 100) / 100
+              : 0;
+        } else if (value === "fixed" && prev.discount.type === "percentage") {
+          newDiscount.value = Math.round(((oldValue / 100) * subtotalAfterItemDiscounts) * 100) / 100;
+        }
+        newDiscount.type = value;
+      } else {
+        newDiscount.value = value;
+      }
 
       if (field === "value" || field === "type") {
         let activeValue = parseFloat(newDiscount.value) || 0;
@@ -746,6 +797,7 @@ const QuotationForm = ({
       rate: item.sellingPrice,
       quantity: 1,
       hsn: item.hsnSac || "",
+      gstRate: item.gstRate ?? 0,
       isVariant: false,
       parentItemId: null,
       discountType: "amount",
@@ -893,6 +945,9 @@ const QuotationForm = ({
         deal: form.deal,
         date: form.date,
         dueDate: form.dueDate,
+        reference: form.reference,
+        quotationPrefix: form.quotationPrefix,
+        quotationNumber: form.quotationNumber,
         receiverGSTIN: form.receiverGSTIN,
         billingAddress: form.billingAddress,
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
@@ -911,6 +966,7 @@ const QuotationForm = ({
           parentItemId: item.parentItemId,
           discountType: item.discountType,
           discount: parseFloat(item.discount),
+          gstRate: parseFloat(item.gstRate) || 0,
         })),
         style: form.style,
         isTaxQuotation: form.isTaxQuotation,
@@ -1141,6 +1197,23 @@ const QuotationForm = ({
                 <option key={idx} value={s}>{s}</option>
               ))}
             </select>
+
+            {/* Was read (form.isTaxQuotation gates the HSN/SAC field and its
+                required-on-submit validation) but had no control to actually
+                set it — every quotation created here was permanently
+                non-tax. */}
+            <label className="flex items-center gap-2 ml-6 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.isTaxQuotation}
+                onChange={(e) => {
+                  setForm((prev) => ({ ...prev, isTaxQuotation: e.target.checked }));
+                  setHasUnsavedChanges(true);
+                }}
+                className="rounded text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-gray-700 font-medium">Tax Quotation</span>
+            </label>
           </div>
 
           <div className="p-6 space-y-6 flex-1 overflow-y-auto">
@@ -1561,6 +1634,28 @@ const QuotationForm = ({
                                 }}
                                 className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
                                 required
+                              />
+                            </div>
+                          )}
+                          {form.isTaxQuotation && (
+                            <div className="space-y-1">
+                              {/* Pre-filled from the product's own GST Rate
+                                  (Products & Services page) when picked, but
+                                  editable here in case this line needs a
+                                  different rate. */}
+                              <label className="text-xs text-gray-500 font-medium">GST Rate (%)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.5"
+                                placeholder="0"
+                                value={item.gstRate}
+                                onChange={(e) => {
+                                  handleItemChange(index, "gstRate", e.target.value);
+                                  setHasUnsavedChanges(true);
+                                }}
+                                className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
                               />
                             </div>
                           )}

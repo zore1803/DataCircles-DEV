@@ -20,11 +20,24 @@ const itemSchema = new mongoose.Schema({
   parentItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', default: null },
   discountType: { type: String, enum: ['amount', 'percentage'], default: 'amount' },
   discount: { type: Number, default: 0, min: 0 },
+  // Carried over from the catalog Item/variant at the moment it's added to
+  // the quotation (not looked up live), same as rate/hsn — so a later
+  // change to the product's own GST rate doesn't retroactively change
+  // quotations that already reference it.
+  gstRate: { type: Number, default: 0, min: 0, max: 100 },
 });
 
 const quotationSchema = new mongoose.Schema({
   deal: { type: mongoose.Schema.Types.ObjectId, ref: 'Deal', required: true },
+  // Kept separate from quotationNumber (rather than baked in once) so the
+  // create/edit form's Prefix and Number boxes can round-trip independently
+  // instead of the prefix having to be re-parsed back out of the combined
+  // string.
+  quotationPrefix: { type: String, default: 'QUO-' },
   quotationNumber: { type: String, required: true },
+  // Free-text field (e.g. a customer's PO number) — has no bearing on
+  // quotationNumber/numbering, purely informational.
+  reference: { type: String, default: '' },
   date: { type: Date, required: true },
   dueDate: { type: Date },
   amount: { type: Number, required: true },

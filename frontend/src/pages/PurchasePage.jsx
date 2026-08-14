@@ -34,6 +34,7 @@ import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import AppToaster from "../components/AppToaster";
 import ExportModal from "../components/common/ExportModal";
+import { exportClientSide } from "../utils/clientExport";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
@@ -75,6 +76,12 @@ const PurchasePage = () => {
   const [editingPurchase, setEditingPurchase] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const truncateText = (text, maxLength = 30) => {
+    if (!text) return "—";
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + "...";
+  };
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   // filterStatus removed — status filtering now done via AdvancedFilterPanel rule builder.
   const [selectedPurchase, setSelectedPurchase] = useState(null);
@@ -89,6 +96,20 @@ const PurchasePage = () => {
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const tableScrollRef = useRef(null);
+  // Client-side Excel/PDF export — same "no selection required, export what
+  // you're currently looking at" flow as Deals.jsx, instead of the
+  // selection-gated backend ExportModal.
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportButtonRef = useRef(null);
+  useEffect(() => {
+    const handleClickOutsideExport = (event) => {
+      if (exportButtonRef.current && !exportButtonRef.current.contains(event.target)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutsideExport);
+    return () => document.removeEventListener("mousedown", handleClickOutsideExport);
+  }, []);
 
   // First-load skeleton only, same reasoning as Companies.jsx / PurchaseOrderPage.jsx:
   // once the page has loaded once, a search/filter that narrows results to zero must
@@ -333,6 +354,27 @@ const PurchasePage = () => {
   const handleDelete = (id) => {
     setPurchaseToDelete(id);
     setShowDeleteModal(true);
+  };
+
+  // Client-side export — mirrors Deals.jsx's handleExport: confirm, then
+  // Excel (CSV via window.XLSX) or PDF (window.jspdf + autoTable), against
+  // whatever's currently filtered/visible rather than a manual selection.
+  const EXPORT_COLUMNS = [
+    { label: "Purchase Number", value: (p) => p.purchaseNumber },
+    { label: "Vendor", value: (p) => p.vendor?.name },
+    { label: "Purchase Date", value: (p) => new Date(p.createdAt).toLocaleDateString() },
+    { label: "Grand Total", value: (p) => p.grandTotal },
+    { label: "Status", value: (p) => p.status },
+  ];
+
+  const handleExport = (format) => {
+    if (!window.confirm(`Do you want to export in ${format}?`)) return;
+    exportClientSide(format, {
+      rows: filteredPurchases,
+      columns: EXPORT_COLUMNS,
+      fileNamePrefix: "purchases_export",
+      title: "Purchases Report",
+    });
   };
 
   const confirmDelete = async () => {
@@ -930,16 +972,26 @@ const PurchasePage = () => {
               );
             } else if (vc.key === "status") {
               baseContent = (
-                <span
-                  className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeColor(p.status)}`}
-                >
-                  {p.status}
-                </span>
+                <div className="flex items-center justify-start -ml-3">
+                  <span
+                    className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeColor(p.status)}`}
+                  >
+                    {p.status}
+                  </span>
+                </div>
               );
             } else if (vc.key === "createdAt") {
               baseContent = (
                 <div className="truncate text-sm text-gray-600">
                   {p.createdAt ? new Date(p.createdAt).toLocaleDateString("en-IN") : "—"}
+                </div>
+              );
+            } else if (baseContent === undefined) {
+              const val = p[vc.key];
+              const truncated = truncateText(String(val ?? ""), 30);
+              baseContent = (
+                <div className="truncate text-sm text-gray-700 w-full" title={String(val ?? "")}>
+                  {truncated && truncated !== "—" ? <HighlightText text={truncated} query={searchTerm} /> : "—"}
                 </div>
               );
             }
@@ -1461,18 +1513,39 @@ const PurchasePage = () => {
                         <Upload className="w-4 h-4 text-gray-400" />
                         Import
                       </button>
-                      <button
-                        onClick={() => {
-                          setShowExportModal(true);
-                          setIsMoreMenuOpen(false);
-                        }}
-                        disabled={selectedPurchases.length === 0}
-                        title={selectedPurchases.length === 0 ? "Select purchases to export" : "Export selected purchases"}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <Download className="w-4 h-4 text-gray-400" />
-                        Export
-                      </button>
+                      <div className="relative" ref={exportButtonRef}>
+                        <button
+                          onClick={() => setShowExportMenu((prev) => !prev)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <Download className="w-4 h-4 text-gray-400" />
+                          Export
+                        </button>
+                        {showExportMenu && (
+                          <div className="absolute left-full top-0 ml-1 z-10 w-44 bg-white border border-gray-200 rounded-lg shadow-xl">
+                            <button
+                              onClick={() => {
+                                handleExport("excel");
+                                setShowExportMenu(false);
+                                setIsMoreMenuOpen(false);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors first:rounded-t-lg flex items-center gap-2"
+                            >
+                              Export as Excel
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleExport("pdf");
+                                setShowExportMenu(false);
+                                setIsMoreMenuOpen(false);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors last:rounded-b-lg flex items-center gap-2"
+                            >
+                              Export as PDF
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={() => {
                           setShowColumnSettings(true);
