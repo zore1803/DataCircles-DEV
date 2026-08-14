@@ -185,7 +185,7 @@ const ItemSearchSelect = ({
       quantity: 1,
       hsn: item.hsnSac || "",
       // Copied from the catalog product at pick time, same as rate/hsn —
-      // previously dropped entirely, so a tax quotation line item never
+      // previously dropped entirely, so a tax deliveryChallan line item never
       // carried its product's own GST rate.
       gstRate: item.gstRate ?? 0,
       isVariant: item.isVariant || false,
@@ -332,15 +332,15 @@ const ItemSearchSelect = ({
 
 const styles = ["Classic", "Modern", "Minimal", "Elegant"];
 
-const QuotationForm = ({
+const DeliveryChallanFormFull = ({
   deals,
   isOpen,
   onClose,
   fetchData,
-  editingQuotation,
+  editingDeliveryChallan,
   onPreview,
   // Optional. Supplied when this screen was opened as the "full width" mode of
-  // the split-view quotation panel — renders a control to go back to it.
+  // the split-view deliveryChallan panel — renders a control to go back to it.
   onExitFullWidth,
   conversionData = null,
 }) => {
@@ -350,8 +350,8 @@ const QuotationForm = ({
     dueDate: "",
     reference: "",
     receiverGSTIN: "",
-    quotationPrefix: "EST-",
-    quotationNumber: "",
+    deliveryChallanPrefix: "EST-",
+    deliveryChallanNumber: "",
     billingAddress: emptyAddress(),
     shippingAddress: emptyAddress(),
     sameAsBilling: true,
@@ -364,7 +364,7 @@ const QuotationForm = ({
     amount: 0,
     status: "Draft",
     style: "Regular",
-    isTaxQuotation: false,
+    isTaxChallan: false,
     isRoundOff: true,
     notes: "",
     terms: "",
@@ -495,7 +495,7 @@ const QuotationForm = ({
   }, [isOpen, fetchItems, fetchCompanies, fetchContacts, deals]);
 
   useEffect(() => {
-    const sourceData = editingQuotation || conversionData;
+    const sourceData = editingDeliveryChallan || conversionData;
     if (sourceData) {
       setForm({
         deal: sourceData.deal?._id || sourceData.deal || "",
@@ -505,8 +505,8 @@ const QuotationForm = ({
           : "",
         receiverGSTIN: sourceData.receiverGSTIN || "",
         reference: sourceData.reference || "",
-        quotationPrefix: sourceData.quotationPrefix || "EST-",
-        quotationNumber: sourceData.quotationNumber || "",
+        deliveryChallanPrefix: sourceData.deliveryChallanPrefix || "EST-",
+        deliveryChallanNumber: sourceData.deliveryChallanNumber || "",
         billingAddress: { ...emptyAddress(), ...(sourceData.billingAddress || {}) },
         shippingAddress: { ...emptyAddress(), ...(sourceData.shippingAddress || {}) },
         sameAsBilling:
@@ -531,7 +531,7 @@ const QuotationForm = ({
         status: sourceData.status || "Draft",
         style: sourceData.style || "Regular",
         isRoundOff: sourceData.isRoundOff !== undefined ? sourceData.isRoundOff : true,
-        isTaxQuotation: sourceData.isTaxQuotation || false,
+        isTaxChallan: sourceData.isTaxChallan || false,
         transactionType: sourceData.transactionType || "intra",
         notes: sourceData.notes || "",
         terms: sourceData.terms || "",
@@ -547,8 +547,8 @@ const QuotationForm = ({
         dueDate: "",
         receiverGSTIN: "",
         reference: "",
-        quotationPrefix: "EST-",
-        quotationNumber: "",
+        deliveryChallanPrefix: "EST-",
+        deliveryChallanNumber: "",
         billingAddress: emptyAddress(),
         shippingAddress: emptyAddress(),
         sameAsBilling: true,
@@ -557,7 +557,7 @@ const QuotationForm = ({
         amount: 0,
         status: "Draft",
         style: "Regular",
-        isTaxQuotation: false,
+        isTaxChallan: false,
         transactionType: "intra",
         notes: "",
         terms: "",
@@ -567,13 +567,13 @@ const QuotationForm = ({
       });
       setHasUnsavedChanges(false);
     }
-  }, [editingQuotation, conversionData]);
+  }, [editingDeliveryChallan, conversionData]);
 
   // Same default-signature behavior as the split-view Invoice panel
   // (InvoiceForm.jsx): fall back to the org's default signature whenever
-  // this quotation isn't already pointing at one of the saved signatures —
+  // this deliveryChallan isn't already pointing at one of the saved signatures —
   // a blank, stale, or never-set signature resolves to the default rather
-  // than nothing. A quotation that stored a still-valid custom signature
+  // than nothing. A deliveryChallan that stored a still-valid custom signature
   // keeps it.
   useEffect(() => {
     const loadSignatures = async () => {
@@ -750,7 +750,7 @@ const QuotationForm = ({
 
         if (activeType === "fixed" && activeValue > subtotalAfterItemDiscounts) {
           newDiscount.value = subtotalAfterItemDiscounts;
-          toast.error("Quotation discount cannot exceed subtotal after item discounts.");
+          toast.error("Delivery Challan discount cannot exceed subtotal after item discounts.");
         } else if (activeType === "percentage" && activeValue > 100) {
           newDiscount.value = 100;
           toast.error("Percentage discount cannot exceed 100%.");
@@ -893,7 +893,7 @@ const QuotationForm = ({
     }
 
     if (!form.date) {
-      toast.error("Quotation Date is required.");
+      toast.error("Delivery Challan Date is required.");
       setIsSubmitting(false);
       return;
     }
@@ -920,12 +920,12 @@ const QuotationForm = ({
         !item.name ||
         !item.rate ||
         !item.quantity ||
-        (form.isTaxQuotation && !item.hsn) ||
+        (form.isTaxChallan && !item.hsn) ||
         (item.discountType === "percentage" && item.discount > 100)
     );
     if (invalidItems.length > 0) {
       toast.error(
-        `Please fill in all item details (name, rate, quantity${form.isTaxQuotation ? ", and HSN/SAC" : ""
+        `Please fill in all item details (name, rate, quantity${form.isTaxChallan ? ", and HSN/SAC" : ""
         }) and ensure percentage discounts are not above 100.`
       );
       setIsSubmitting(false);
@@ -941,7 +941,7 @@ const QuotationForm = ({
     );
     if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
       toast.error(
-        "Quotation discount cannot exceed subtotal after item discounts."
+        "Delivery Challan discount cannot exceed subtotal after item discounts."
       );
       setIsSubmitting(false);
       return;
@@ -953,15 +953,15 @@ const QuotationForm = ({
         date: form.date,
         dueDate: form.dueDate,
         reference: form.reference,
-        quotationPrefix: form.quotationPrefix,
-        quotationNumber: form.quotationNumber,
+        deliveryChallanPrefix: form.deliveryChallanPrefix,
+        deliveryChallanNumber: form.deliveryChallanNumber,
         receiverGSTIN: form.receiverGSTIN,
         billingAddress: form.billingAddress,
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
         signature: form.signature,
         amount: (() => {
-          let t = form.isTaxQuotation 
-            ? computeDocument(form, "quotation").grandTotal 
+          let t = form.isTaxChallan 
+            ? computeDocument(form, "deliveryChallan").grandTotal 
             : calculateTotalAmount(form.items, form.discount);
           return form.isRoundOff ? Math.round(t) : t;
         })(),
@@ -982,16 +982,16 @@ const QuotationForm = ({
           gstRate: parseFloat(item.gstRate) || 0,
         })),
         style: form.style,
-        isTaxQuotation: form.isTaxQuotation,
+        isTaxChallan: form.isTaxChallan,
         transactionType: form.transactionType,
       };
 
-      if (editingQuotation) {
-        await API.put(`/quotations/${editingQuotation._id}`, payload);
-        toast.success("Quotation updated successfully!");
+      if (editingDeliveryChallan) {
+        await API.put(`/delivery-challans/${editingDeliveryChallan._id}`, payload);
+        toast.success("Delivery Challan updated successfully!");
       } else {
-        await API.post("/quotations", payload);
-        toast.success("Quotation created successfully!");
+        await API.post("/delivery-challans", payload);
+        toast.success("Delivery Challan created successfully!");
       }
 
       setHasUnsavedChanges(false);
@@ -1008,14 +1008,14 @@ const QuotationForm = ({
         amount: 0,
         status: "Draft",
         style: "",
-        isTaxQuotation: false,
+        isTaxChallan: false,
       });
       await fetchData();
       onClose();
     } catch (err) {
       const errorMessage = err.response?.status === 402
         ? (err.response?.data?.message || "An active subscription is required to make changes.")
-        : (err.response?.data?.error || (editingQuotation ? "Failed to update quotation" : "Failed to create quotation"));
+        : (err.response?.data?.error || (editingDeliveryChallan ? "Failed to update deliveryChallan" : "Failed to create deliveryChallan"));
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -1056,8 +1056,8 @@ const QuotationForm = ({
   
   let finalTotal = subtotalAfterItemDiscounts - invoiceDiscountAmount;
   let taxDetails = null;
-  if (form.isTaxQuotation) {
-    taxDetails = computeDocument(form, "quotation");
+  if (form.isTaxChallan) {
+    taxDetails = computeDocument(form, "deliveryChallan");
     finalTotal = taxDetails.grandTotal;
   }
   
@@ -1146,7 +1146,7 @@ const QuotationForm = ({
               <div className="flex items-center gap-4">
                 <div className="flex flex-col">
                   <h2 className="text-xl font-bold text-slate-900 flex items-center gap-1 cursor-pointer">
-                    Create Quotation <ChevronDown className="w-5 h-5 text-gray-400" />
+                    Create Delivery Challan <ChevronDown className="w-5 h-5 text-gray-400" />
                   </h2>
                   <span className="text-xs text-gray-500">Jivesh Sales</span>
                 </div>
@@ -1154,9 +1154,9 @@ const QuotationForm = ({
                 <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden h-10 bg-white">
                   <input
                     type="text"
-                    value={form.quotationPrefix}
+                    value={form.deliveryChallanPrefix}
                     onChange={(e) => {
-                      setForm((prev) => ({ ...prev, quotationPrefix: e.target.value }));
+                      setForm((prev) => ({ ...prev, deliveryChallanPrefix: e.target.value }));
                       setHasUnsavedChanges(true);
                     }}
                     className="w-20 px-3 py-2 text-sm font-semibold text-gray-700 bg-gray-50 border-r border-gray-300 focus:outline-none focus:bg-white"
@@ -1164,9 +1164,9 @@ const QuotationForm = ({
                   <input
                     type="text"
                     placeholder="1"
-                    value={form.quotationNumber}
+                    value={form.deliveryChallanNumber}
                     onChange={(e) => {
-                      setForm((prev) => ({ ...prev, quotationNumber: e.target.value }));
+                      setForm((prev) => ({ ...prev, deliveryChallanNumber: e.target.value }));
                       setHasUnsavedChanges(true);
                     }}
                     className="w-24 px-3 py-2 text-sm font-semibold text-gray-900 focus:outline-none"
@@ -1177,7 +1177,7 @@ const QuotationForm = ({
 
             {/* Right-side action pills — matched to the split-view Invoice
                 panel's header (CreateInvoicePanel in InvoiceForm.jsx) so
-                the full-width Quotation screen reads the same way. */}
+                the full-width Delivery Challan screen reads the same way. */}
             <div className="flex items-center gap-2 flex-shrink-0">
               {onExitFullWidth && (
                 <button
@@ -1192,7 +1192,7 @@ const QuotationForm = ({
               <button
                 type="button"
                 onClick={() => {}}
-                title="Quotation settings"
+                title="Delivery Challan settings"
                 className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
               >
                 <Settings className="w-3.5 h-3.5 text-[#525866]" />
@@ -1225,24 +1225,24 @@ const QuotationForm = ({
               ))}
             </select>
 
-            {/* Was read (form.isTaxQuotation gates the HSN/SAC field and its
+            {/* Was read (form.isTaxChallan gates the HSN/SAC field and its
                 required-on-submit validation) but had no control to actually
-                set it — every quotation created here was permanently
+                set it — every deliveryChallan created here was permanently
                 non-tax. */}
             <label className="flex items-center gap-2 ml-6 cursor-pointer select-none">
               <input
                 type="checkbox"
-                checked={form.isTaxQuotation}
+                checked={form.isTaxChallan}
                 onChange={(e) => {
-                  setForm((prev) => ({ ...prev, isTaxQuotation: e.target.checked }));
+                  setForm((prev) => ({ ...prev, isTaxChallan: e.target.checked }));
                   setHasUnsavedChanges(true);
                 }}
                 className="rounded text-blue-600 focus:ring-blue-500"
               />
-              <span className="text-gray-700 font-medium">Tax Quotation</span>
+              <span className="text-gray-700 font-medium">Tax Challan</span>
             </label>
 
-            {form.isTaxQuotation && (
+            {form.isTaxChallan && (
               <div className="flex items-center gap-4 ml-6 pl-6 border-l border-gray-200">
                 <label className="flex items-center gap-1.5 cursor-pointer select-none">
                   <input
@@ -1329,9 +1329,9 @@ const QuotationForm = ({
                   </div>
                 </div>
 
-                {/* Quotation Date */}
+                {/* Delivery Challan Date */}
                 <div className="md:col-span-2 space-y-2">
-                  <label className="text-sm font-semibold text-gray-700">Quotation Date</label>
+                  <label className="text-sm font-semibold text-gray-700">Document Date</label>
                   <div className="relative">
                     <input
                       type="date"
@@ -1349,7 +1349,7 @@ const QuotationForm = ({
                 {/* Validity */}
                 <div className="md:col-span-3 space-y-2">
                   <div className="flex items-center gap-1">
-                    <label className="text-sm font-semibold text-gray-700">Validity</label>
+                    <label className="text-sm font-semibold text-gray-700">Due Date</label>
                     <div className="group relative">
                       <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px] cursor-help">?</div>
                     </div>
@@ -1410,7 +1410,7 @@ const QuotationForm = ({
 
             {/* ── Billing & Shipping Address — same fields/behavior as the
                 split-view Invoice panel's address section (AddressFieldsGroup
-                from formPrimitives.jsx), so quotations round-trip these the
+                from formPrimitives.jsx), so deliveryChallans round-trip these the
                 same way invoices do. ── */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-4">
@@ -1679,7 +1679,7 @@ const QuotationForm = ({
                           More Details
                         </summary>
                         <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {form.isTaxQuotation && (
+                          {form.isTaxChallan && (
                             <div className="space-y-1">
                               <label className="text-xs text-gray-500 font-medium">HSN/SAC Code</label>
                               <input
@@ -1695,7 +1695,7 @@ const QuotationForm = ({
                               />
                             </div>
                           )}
-                          {form.isTaxQuotation && (
+                          {form.isTaxChallan && (
                             <div className="space-y-1">
                               {/* Pre-filled from the product's own GST Rate
                                   (Products & Services page) when picked, but
@@ -1966,7 +1966,7 @@ const QuotationForm = ({
                           ? "Loading signatures…"
                           : savedSignatures.length === 0
                             ? "No saved signatures yet — add them in Settings → Document Settings → Signatures."
-                            : "The default is applied to every quotation unless you pick another here."}
+                            : "The default is applied to every deliveryChallan unless you pick another here."}
                       </p>
                     </div>
                     <div className="h-[72px] flex items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50">
@@ -2014,12 +2014,12 @@ const QuotationForm = ({
                     className="h-9 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     {isSubmitting
-                      ? editingQuotation
+                      ? editingDeliveryChallan
                         ? "Updating..."
                         : "Creating..."
-                      : editingQuotation
-                        ? "Update Quotation"
-                        : "Create Quotation"}
+                      : editingDeliveryChallan
+                        ? "Update Delivery Challan"
+                        : "Create Delivery Challan"}
                     {!isSubmitting && <ChevronRight className="w-4 h-4" />}
                   </button>
                 </div>
@@ -2041,14 +2041,14 @@ const QuotationForm = ({
   );
 };
 
-export default QuotationForm;
+export default DeliveryChallanFormFull;
 
-// Thin wrapper around the shared CreateInvoicePanel for quotation type.
+// Thin wrapper around the shared CreateInvoicePanel for deliveryChallan type.
 // Used by Accounting.jsx when opening the two-pane create/edit form.
 import { CreateInvoicePanel } from "../invoice/InvoiceForm";
 
-const CreateQuotationPanel = (props) => (
-  <CreateInvoicePanel {...props} type="quotation" />
+const CreateDeliveryChallanPanel = (props) => (
+  <CreateInvoicePanel {...props} type="deliveryChallan" />
 );
 
-export { CreateQuotationPanel };
+export { CreateDeliveryChallanPanel };

@@ -27,9 +27,12 @@ import {
 } from "lucide-react";
 import API from "../services/api";
 import InvoiceForm from "../components/invoice/InvoiceForm";
+import InvoiceFormFull from "../components/invoice/InvoiceFormFull";
 import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceForm";
+import PerformaInvoiceFormFull from "../components/PerformaInvoice/PerformaInvoiceFormFull";
 import QuotationForm from "../components/quotation/QuotationForm";
 import DeliveryChallanForm from "../components/deliveryChallan/DeliveryChallanForm";
+import DeliveryChallanFormFull from "../components/deliveryChallan/DeliveryChallanFormFull";
 import InvoiceStylePreview from "../components/invoice/InvoiceStylePreview";
 import PerformaInvoiceStylePreview from "../components/PerformaInvoice/PerformaInvoiceStylePreview";
 // import QuotationStylePreview from "../components/quotation/QuotationStylePreview";
@@ -428,6 +431,9 @@ const MergedInvoiceManager = () => {
   const [previewType, setPreviewType] = useState(null);
   const [showViewer, setShowViewer] = useState(false);
   const [conversionData, setConversionData] = useState(null);
+  const [invoiceFullWidth, setInvoiceFullWidth] = useState(false);
+  const [performaFullWidth, setPerformaFullWidth] = useState(false);
+  const [challanFullWidth, setChallanFullWidth] = useState(false);
   const [viewerId, setViewerId] = useState(null);
   const [viewerType, setViewerType] = useState(null);
   const [viewerDoc, setViewerDoc] = useState(null);
@@ -1473,54 +1479,112 @@ const MergedInvoiceManager = () => {
           </div>
         </div>
         {showForm && editingType === "tax" && (
-          <InvoiceForm
-            deals={deals}
-            isOpen={showForm}
-            onClose={() => {
-              setShowForm(false);
-              setEditing(null);
-              setConversionData(null);
-              setEditingType(null);
-            }}
-            fetchData={() => fetchData("tax")}
-            editingInvoice={editing}
-            conversionData={conversionData}
-            onPreview={(formData) => {
-              if (!formData.style) {
-                toast.error("Please select an invoice style to preview.");
-                return;
-              }
-              setPreviewStyle(formData.style);
-              setPreviewType("tax");
-              setShowPreview(true);
-            }}
-          />
+          invoiceFullWidth ? (
+            <InvoiceFormFull
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setConversionData(null);
+                setEditingType(null);
+                setInvoiceFullWidth(false);
+              }}
+              fetchData={() => fetchData("tax")}
+              editingInvoice={editing}
+              conversionData={conversionData}
+              onExitFullWidth={() => setInvoiceFullWidth(false)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error("Please select an invoice style to preview.");
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("tax");
+                setShowPreview(true);
+              }}
+            />
+          ) : (
+            <InvoiceForm
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setConversionData(null);
+                setEditingType(null);
+              }}
+              fetchData={() => fetchData("tax")}
+              editingInvoice={editing}
+              conversionData={conversionData}
+              onRequestFullWidth={() => setInvoiceFullWidth(true)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error("Please select an invoice style to preview.");
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("tax");
+                setShowPreview(true);
+              }}
+            />
+          )
         )}
         {showForm && editingType === "performa" && (
-          <PerformaInvoiceForm
-            deals={deals}
-            isOpen={showForm}
-            onClose={() => {
-              setShowForm(false);
-              setEditing(null);
-              setConversionData(null);
-              setEditingType(null);
-            }}
-            fetchData={() => fetchData("performa")}
-            editingPerformaInvoice={editing}
-            conversionData={conversionData}
-            onPreview={(formData) => {
-              if (!formData.style) {
-                toast.error(
-                  "Please select a Pro Forma invoice style to preview."
-                );
-                return;
-              }
-              setPreviewStyle(formData.style);
-              setPreviewType("performa");
-              setShowPreview(true);
-            }}
-          />
+          performaFullWidth ? (
+            <PerformaInvoiceFormFull
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setConversionData(null);
+                setEditingType(null);
+                setPerformaFullWidth(false);
+              }}
+              fetchData={() => fetchData("performa")}
+              editingPerformaInvoice={editing}
+              conversionData={conversionData}
+              onExitFullWidth={() => setPerformaFullWidth(false)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error(
+                    "Please select a Pro Forma invoice style to preview."
+                  );
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("performa");
+                setShowPreview(true);
+              }}
+            />
+          ) : (
+            <PerformaInvoiceForm
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setConversionData(null);
+                setEditingType(null);
+              }}
+              fetchData={() => fetchData("performa")}
+              editingPerformaInvoice={editing}
+              conversionData={conversionData}
+              onRequestFullWidth={() => setPerformaFullWidth(true)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error(
+                    "Please select a Pro Forma invoice style to preview."
+                  );
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("performa");
+                setShowPreview(true);
+              }}
+            />
+          )
         )}
         {showForm && editingType === "quotation" && (
           <QuotationForm
@@ -1545,28 +1609,45 @@ const MergedInvoiceManager = () => {
           />
         )}
         {showForm && editingType === "deliveryChallan" && (
-          <DeliveryChallanForm
-            deals={deals}
-            isOpen={showForm}
-            onClose={() => {
-              setShowForm(false);
-              setEditing(null);
-              setEditingType(null);
-            }}
-            fetchData={() => fetchData("deliveryChallan")}
-            editingDeliveryChallan={editing}
-            onPreview={(formData) => {
-              if (!formData.style) {
-                toast.error(
-                  "Please select a Delivery Challan style to preview."
-                );
-                return;
-              }
-              setPreviewStyle(formData.style);
-              setPreviewType("deliveryChallan");
-              setShowPreview(true);
-            }}
-          />
+          challanFullWidth ? (
+            <DeliveryChallanFormFull
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+                setChallanFullWidth(false);
+              }}
+              fetchData={() => fetchData("deliveryChallan")}
+              editingDeliveryChallan={editing}
+              onExitFullWidth={() => setChallanFullWidth(false)}
+            />
+          ) : (
+            <DeliveryChallanForm
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+              }}
+              fetchData={() => fetchData("deliveryChallan")}
+              editingDeliveryChallan={editing}
+              onRequestFullWidth={() => setChallanFullWidth(true)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error(
+                    "Please select a Delivery Challan style to preview."
+                  );
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("deliveryChallan");
+                setShowPreview(true);
+              }}
+            />
+          )
         )}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-6 border-b border-gray-200">

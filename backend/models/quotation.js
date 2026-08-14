@@ -59,6 +59,7 @@ const quotationSchema = new mongoose.Schema({
   terms: { type: String, default: '' },
   style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant', 'Compact', 'Corporate', 'Vibrant', 'Mono', ''], default: '' },
   isTaxQuotation: { type: Boolean, default: false },
+  isRoundOff: { type: Boolean, default: true },
   transactionType: { type: String, enum: ['intra', 'inter'], default: 'intra' },
   signature: { type: String },
   signatureType: { type: String, enum: ['text', 'upload'], default: 'text' },

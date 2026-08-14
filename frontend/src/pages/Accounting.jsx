@@ -50,10 +50,13 @@ import { formatNumberFixed } from "../utils/numberFormatter";
 import InvoiceForm, { CreateInvoicePanel } from "../components/invoice/InvoiceForm";
 import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceForm";
 import { CreatePerformaPanel } from "../components/PerformaInvoice/PerformaInvoiceForm";
+import PerformaInvoiceFormFull from "../components/PerformaInvoice/PerformaInvoiceFormFull";
 import QuotationForm from "../components/quotation/QuotationForm";
 import { CreateQuotationPanel } from "../components/quotation/QuotationForm";
+import InvoiceFormFull from "../components/invoice/InvoiceFormFull";
 import DeliveryChallanForm from "../components/deliveryChallan/DeliveryChallanForm";
 import { CreateChallanPanel } from "../components/deliveryChallan/DeliveryChallanForm";
+import DeliveryChallanFormFull from "../components/deliveryChallan/DeliveryChallanFormFull";
 import InvoiceStylePreview from "../components/invoice/InvoiceStylePreview";
 import TemplateDrawer from "../components/invoice/TemplateDrawer";
 import useNavReset from "../hooks/useNavReset";
@@ -944,6 +947,9 @@ const Accounting = () => {
   // which carries the extended field set. Reset whenever the panel closes so a
   // later quotation always starts back in split view.
   const [quotationFullWidth, setQuotationFullWidth] = useState(false);
+  const [invoiceFullWidth, setInvoiceFullWidth] = useState(false);
+  const [performaFullWidth, setPerformaFullWidth] = useState(false);
+  const [challanFullWidth, setChallanFullWidth] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editingType, setEditingType] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -1350,7 +1356,7 @@ const Accounting = () => {
       toast.error("Source document not found. Please refresh.");
       return;
     }
-    
+
     setShowConvertModal(false);
     setOpenConvertMenu(null);
 
@@ -1448,8 +1454,8 @@ const Accounting = () => {
   // it for 300ms so a fast fetch doesn't flash the placeholders.
   const showLoadingSkeleton = useMinDelay(
     currentLoading &&
-      currentDocuments.length === 0 &&
-      !hasLoadedOnceRef.current[activeTab],
+    currentDocuments.length === 0 &&
+    !hasLoadedOnceRef.current[activeTab],
     300
   );
   useTopLoadingSignal(currentLoading);
@@ -1564,8 +1570,8 @@ const Accounting = () => {
             {searchQuery && searchQuery.trim() && doc.status
               ?.toLowerCase()
               .includes(searchQuery.trim().toLowerCase()) && (
-              <span className="absolute inset-0 rounded-lg ring-2 ring-yellow-300 pointer-events-none" />
-            )}
+                <span className="absolute inset-0 rounded-lg ring-2 ring-yellow-300 pointer-events-none" />
+              )}
           </div>
         );
 
@@ -1695,7 +1701,7 @@ const Accounting = () => {
     between buttons, rounding only on the two outer corners, and each
     border pulled left by 1px onto its neighbour so touching borders
     don't double up. Only the icons carry each action's colour. */}
-<div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
+              <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
                 <button
                   onClick={handleExportSelected}
                   className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
@@ -1774,8 +1780,8 @@ const Accounting = () => {
                 ref={(el) => (tabRefs.current[tab.key] = el)}
                 onClick={() => setActiveTab(tab.key)}
                 className={`relative z-10 flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab.key
-                    ? "text-[#0085FF]"
-                    : "text-gray-700 hover:text-gray-900"
+                  ? "text-[#0085FF]"
+                  : "text-gray-700 hover:text-gray-900"
                   }`}
               >
                 {tab.label}
@@ -1849,17 +1855,16 @@ const Accounting = () => {
                     setShowFilterMenu((v) => !v);
                   }}
                   className={`flex items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${filterStatuses[activeTab]
-                      ? "border-[#0085FF] text-[#0085FF]"
-                      : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
+                    ? "border-[#0085FF] text-[#0085FF]"
+                    : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
                     }`}
                 >
                   <SlidersHorizontal
                     strokeWidth={2.5}
-                    className={`w-4 h-4 ${
-                      filterStatuses[activeTab]
+                    className={`w-4 h-4 ${filterStatuses[activeTab]
                         ? "text-[#0085FF]"
                         : "text-gray-800"
-                    }`}
+                      }`}
                   />
                 </button>
                 {showFilterMenu && (
@@ -1878,8 +1883,8 @@ const Accounting = () => {
                           setShowFilterMenu(false);
                         }}
                         className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${filterStatuses[activeTab] === status
-                            ? "text-[#0085FF] font-medium"
-                            : "text-gray-700"
+                          ? "text-[#0085FF] font-medium"
+                          : "text-gray-700"
                           }`}
                       >
                         {status || "All Statuses"}
@@ -2028,7 +2033,7 @@ const Accounting = () => {
                             <Pin
                               size={12}
                               className="text-blue-500 fill-blue-500 flex-shrink-0 ml-1"
-                            style={{ transform: "rotate(45deg)" }}
+                              style={{ transform: "rotate(45deg)" }}
                             />
                           )}
                         </span>
@@ -2152,8 +2157,8 @@ const Accounting = () => {
                           setColumnPin(col.id, "left");
                         }}
                         className={`${itemClass} ${side === "left"
-                            ? "bg-blue-50 text-blue-700"
-                            : "text-[#161618] hover:bg-gray-50"
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-[#161618] hover:bg-gray-50"
                           }`}
                       >
                         {side === "left" ? (
@@ -2169,8 +2174,8 @@ const Accounting = () => {
                           setColumnPin(col.id, "right");
                         }}
                         className={`${itemClass} ${side === "right"
-                            ? "bg-blue-50 text-blue-700"
-                            : "text-[#161618] hover:bg-gray-50"
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-[#161618] hover:bg-gray-50"
                           }`}
                       >
                         {side === "right" ? (
@@ -2242,8 +2247,8 @@ const Accounting = () => {
                           setHiddenCols((prev) => [...prev, col.id]);
                         }}
                         className={`${itemClass} ${col.required
-                            ? "text-gray-300 cursor-not-allowed"
-                            : "text-[#161618] hover:bg-gray-50"
+                          ? "text-gray-300 cursor-not-allowed"
+                          : "text-[#161618] hover:bg-gray-50"
                           }`}
                       >
                         <EyeOff
@@ -2440,8 +2445,8 @@ const Accounting = () => {
                             isCurrent ? "Double-click to type a page number" : undefined
                           }
                           className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${isCurrent
-                              ? "bg-[#0085FF] text-white"
-                              : "bg-white border border-[#E1E4EA] text-gray-700 hover:bg-gray-50"
+                            ? "bg-[#0085FF] text-white"
+                            : "bg-white border border-[#E1E4EA] text-gray-700 hover:bg-gray-50"
                             }`}
                         >
                           {item}
@@ -2497,11 +2502,36 @@ const Accounting = () => {
             },
           };
           switch (activeTab) {
-            case "tax":        return <CreateInvoicePanel {...panelProps} type="tax" />;
+            case "tax": return invoiceFullWidth ? (
+              <InvoiceFormFull
+                deals={deals}
+                isOpen={true}
+                onClose={panelProps.onClose}
+                onExitFullWidth={() => setInvoiceFullWidth(false)}
+                fetchData={() => fetchData("tax")}
+                editingInvoice={panelProps.initialDoc}
+                conversionData={panelProps.conversionData}
+                onPreview={(formData) => {
+                  if (!formData.style) {
+                    toast.error("Please select an invoice style to preview.");
+                    return;
+                  }
+                  setPreviewStyle(formData.style);
+                  setPreviewType("tax");
+                  setShowPreview(true);
+                }}
+              />
+            ) : (
+              <CreateInvoicePanel 
+                {...panelProps} 
+                type="tax" 
+                onRequestFullWidth={() => setInvoiceFullWidth(true)}
+              />
+            );
             // Split view by default; the panel's expand button flips
             // quotationFullWidth, swapping in the full-width QuotationForm
             // (its own fixed overlay), which flips back via onExitFullWidth.
-            case "quotation":  return quotationFullWidth ? (
+            case "quotation": return quotationFullWidth ? (
               <QuotationForm
                 deals={deals}
                 isOpen={true}
@@ -2526,9 +2556,48 @@ const Accounting = () => {
                 onRequestFullWidth={() => setQuotationFullWidth(true)}
               />
             );
-            case "performa":   return <CreatePerformaPanel {...panelProps} />;
-            case "deliveryChallan": return <CreateChallanPanel {...panelProps} />;
-            default:           return null;
+            case "performa": return performaFullWidth ? (
+              <PerformaInvoiceFormFull
+                deals={deals}
+                isOpen={true}
+                onClose={panelProps.onClose}
+                onExitFullWidth={() => setPerformaFullWidth(false)}
+                fetchData={() => fetchData("performa")}
+                editingPerformaInvoice={panelProps.initialDoc}
+                conversionData={panelProps.conversionData}
+                onPreview={(formData) => {
+                  if (!formData.style) {
+                    toast.error("Please select a Pro Forma invoice style to preview.");
+                    return;
+                  }
+                  setPreviewStyle(formData.style);
+                  setPreviewType("performa");
+                  setShowPreview(true);
+                }}
+              />
+            ) : (
+              <CreatePerformaPanel 
+                {...panelProps} 
+                onRequestFullWidth={() => setPerformaFullWidth(true)}
+              />
+            );
+            case "deliveryChallan": return challanFullWidth ? (
+              <DeliveryChallanFormFull
+                deals={deals}
+                isOpen={true}
+                onClose={panelProps.onClose}
+                onExitFullWidth={() => setChallanFullWidth(false)}
+                fetchData={() => fetchData("deliveryChallan")}
+                editingDeliveryChallan={panelProps.initialDoc}
+                conversionData={panelProps.conversionData}
+              />
+            ) : (
+              <CreateChallanPanel 
+                {...panelProps} 
+                onRequestFullWidth={() => setChallanFullWidth(true)}
+              />
+            );
+            default: return null;
           }
         })()}
         {showQuickDealForm && (
@@ -2545,48 +2614,100 @@ const Accounting = () => {
 
         {/* Forms — reused as-is from the Invoices module */}
         {showForm && editingType === "tax" && (
-          <InvoiceForm
-            deals={deals}
-            isOpen={showForm}
-            onClose={() => {
-              setShowForm(false);
-              setEditing(null);
-              setEditingType(null);
-            }}
-            fetchData={() => fetchData("tax")}
-            editingInvoice={editing}
-            onPreview={(formData) => {
-              if (!formData.style) {
-                toast.error("Please select an invoice style to preview.");
-                return;
-              }
-              setPreviewStyle(formData.style);
-              setPreviewType("tax");
-              setShowPreview(true);
-            }}
-          />
+          invoiceFullWidth ? (
+            <InvoiceFormFull
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+                setInvoiceFullWidth(false);
+              }}
+              fetchData={() => fetchData("tax")}
+              editingInvoice={editing}
+              onExitFullWidth={() => setInvoiceFullWidth(false)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error("Please select an invoice style to preview.");
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("tax");
+                setShowPreview(true);
+              }}
+            />
+          ) : (
+            <InvoiceForm
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+              }}
+              fetchData={() => fetchData("tax")}
+              editingInvoice={editing}
+              onRequestFullWidth={() => setInvoiceFullWidth(true)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error("Please select an invoice style to preview.");
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("tax");
+                setShowPreview(true);
+              }}
+            />
+          )
         )}
         {showForm && editingType === "performa" && (
-          <PerformaInvoiceForm
-            deals={deals}
-            isOpen={showForm}
-            onClose={() => {
-              setShowForm(false);
-              setEditing(null);
-              setEditingType(null);
-            }}
-            fetchData={() => fetchData("performa")}
-            editingPerformaInvoice={editing}
-            onPreview={(formData) => {
-              if (!formData.style) {
-                toast.error("Please select a Pro Forma invoice style to preview.");
-                return;
-              }
-              setPreviewStyle(formData.style);
-              setPreviewType("performa");
-              setShowPreview(true);
-            }}
-          />
+          performaFullWidth ? (
+            <PerformaInvoiceFormFull
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+                setPerformaFullWidth(false);
+              }}
+              fetchData={() => fetchData("performa")}
+              editingPerformaInvoice={editing}
+              onExitFullWidth={() => setPerformaFullWidth(false)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error("Please select a Pro Forma invoice style to preview.");
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("performa");
+                setShowPreview(true);
+              }}
+            />
+          ) : (
+            <PerformaInvoiceForm
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+              }}
+              fetchData={() => fetchData("performa")}
+              editingPerformaInvoice={editing}
+              onRequestFullWidth={() => setPerformaFullWidth(true)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error("Please select a Pro Forma invoice style to preview.");
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("performa");
+                setShowPreview(true);
+              }}
+            />
+          )
         )}
         {showForm && editingType === "quotation" && (
           <QuotationForm
@@ -2611,26 +2732,34 @@ const Accounting = () => {
           />
         )}
         {showForm && editingType === "deliveryChallan" && (
-          <DeliveryChallanForm
-            deals={deals}
-            isOpen={showForm}
-            onClose={() => {
-              setShowForm(false);
-              setEditing(null);
-              setEditingType(null);
-            }}
-            fetchData={() => fetchData("deliveryChallan")}
-            editingDeliveryChallan={editing}
-            onPreview={(formData) => {
-              if (!formData.style) {
-                toast.error("Please select a Delivery Challan style to preview.");
-                return;
-              }
-              setPreviewStyle(formData.style);
-              setPreviewType("deliveryChallan");
-              setShowPreview(true);
-            }}
-          />
+          challanFullWidth ? (
+            <DeliveryChallanFormFull
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+                setChallanFullWidth(false);
+              }}
+              fetchData={() => fetchData("deliveryChallan")}
+              editingDeliveryChallan={editing}
+              onExitFullWidth={() => setChallanFullWidth(false)}
+            />
+          ) : (
+            <DeliveryChallanForm
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+              }}
+              fetchData={() => fetchData("deliveryChallan")}
+              editingDeliveryChallan={editing}
+              onRequestFullWidth={() => setChallanFullWidth(true)}
+            />
+          )
         )}
 
         {showPreview && previewType === "performa" ? (
