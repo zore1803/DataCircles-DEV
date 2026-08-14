@@ -1134,7 +1134,11 @@ exports.completeRegistration = async (req, res) => {
     } else if (req.body.orgName) {
       // User is creating a new organization
       const code = await generateUniqueCode();
-      const org = new Organization({ name: req.body.orgName, code });
+      const org = new Organization({ 
+        name: req.body.orgName, 
+        code,
+        ...(req.body.gstNumber && { gstNumber: req.body.gstNumber })
+      });
       await org.save();
       organization = org._id;
       role = "admin";

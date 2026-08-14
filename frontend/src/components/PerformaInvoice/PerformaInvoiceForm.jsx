@@ -6,7 +6,12 @@ import {
   Trash2,
   Calendar,
   FileText,
-  X,
+  ChevronLeft,
+  ChevronDown,
+  ChevronRight,
+  Inbox,
+  Settings,
+  Printer,
   Eye,
 } from "lucide-react";
 import API from "../../services/api";
@@ -14,6 +19,7 @@ import ItemForm from "../item/ItemForm";
 import QuickDealForm from "../deal/QuickDealForm";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import toast from "react-hot-toast";
+import { AddressFieldsGroup, emptyAddress, isAddressEmpty, SectionHeader } from "../invoice/formPrimitives";
 
 import SearchIcon from "../common/SearchIcon";
 // Function to convert number to words
@@ -296,6 +302,12 @@ const PerformaInvoiceForm = ({
     date: "",
     dueDate: "",
     receiverGSTIN: "",
+    billingAddress: emptyAddress(),
+    shippingAddress: emptyAddress(),
+    sameAsBilling: true,
+    notes: "",
+    terms: "",
+    signature: "",
     items: [
       {
         _id: null,
@@ -308,6 +320,7 @@ const PerformaInvoiceForm = ({
         parentItemId: null,
         discountType: "amount",
         discount: 0,
+        gstRate: 0,
       },
     ],
     discount: { type: "fixed", value: 0 },
@@ -315,10 +328,13 @@ const PerformaInvoiceForm = ({
     status: "Draft",
     style: "",
     isTaxInvoice: false,
+    transactionType: "intra",
   });
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
   const [showItemForm, setShowItemForm] = useState(false);
+  const [savedSignatures, setSavedSignatures] = useState([]);
+  const [signaturesLoading, setSignaturesLoading] = useState(false);
   const [showQuickDealForm, setShowQuickDealForm] = useState(false);
   const [localDeals, setLocalDeals] = useState(deals);
   const [companies, setCompanies] = useState([]);
@@ -345,6 +361,8 @@ const PerformaInvoiceForm = ({
   const [items, setItems] = useState([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [quickAddItem, setQuickAddItem] = useState(null);
+  const [quickAddQty, setQuickAddQty] = useState(1);
   const formRef = useRef(null);
 
   useEffect(() => {
@@ -459,6 +477,35 @@ const PerformaInvoiceForm = ({
     }
   }, [isOpen, fetchItems, fetchCompanies, fetchContacts, deals]);
 
+  // Same default-signature behavior as QuotationForm.jsx: fall back to the
+  // org's default signature whenever this document isn't already pointing
+  // at one of the saved signatures.
+  useEffect(() => {
+    const loadSignatures = async () => {
+      setSignaturesLoading(true);
+      try {
+        const res = await API.get("/document-settings/signatures");
+        const sigs = Array.isArray(res.data) ? res.data : [];
+        setSavedSignatures(sigs);
+        const defaultSig = sigs.find((s) => s.isDefault);
+        if (defaultSig) {
+          setForm((prev) => {
+            const hasSavedMatch = sigs.some((s) => s.dataUrl === prev.signature);
+            return hasSavedMatch
+              ? prev
+              : { ...prev, signature: defaultSig.dataUrl || "" };
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load signatures", error);
+        setSavedSignatures([]);
+      } finally {
+        setSignaturesLoading(false);
+      }
+    };
+    if (isOpen) loadSignatures();
+  }, [isOpen]);
+
   useEffect(() => {
     if (editingPerformaInvoice || conversionData) {
       const sourceData = editingPerformaInvoice || conversionData;
@@ -471,6 +518,15 @@ const PerformaInvoiceForm = ({
           ? sourceData.dueDate.slice(0, 10)
           : "",
         receiverGSTIN: sourceData.receiverGSTIN || "",
+        billingAddress: { ...emptyAddress(), ...(sourceData.billingAddress || {}) },
+        shippingAddress: { ...emptyAddress(), ...(sourceData.shippingAddress || {}) },
+        sameAsBilling:
+          isAddressEmpty(sourceData.shippingAddress) ||
+          JSON.stringify({ ...emptyAddress(), ...(sourceData.billingAddress || {}) }) ===
+            JSON.stringify({ ...emptyAddress(), ...(sourceData.shippingAddress || {}) }),
+        notes: sourceData.notes || "",
+        terms: sourceData.terms || "",
+        signature: sourceData.signature || "",
         items: (sourceData.items || []).map((item) => ({
           _id: item.itemId || item._id || null,
           name: item.name || "",
@@ -482,6 +538,7 @@ const PerformaInvoiceForm = ({
           parentItemId: item.parentItemId || null,
           discountType: item.discountType || "amount",
           discount: item.discount || 0,
+          gstRate: item.gstRate || 0,
         })),
         discount: sourceData.discount || {
           type: "fixed",
@@ -491,6 +548,7 @@ const PerformaInvoiceForm = ({
         status: editingPerformaInvoice ? sourceData.status : "Draft",
         style: sourceData.style || "",
         isTaxInvoice: sourceData.isTaxInvoice || false,
+        transactionType: sourceData.transactionType || "intra",
       };
       setForm(initialForm);
       setHasUnsavedChanges(false);
@@ -500,6 +558,12 @@ const PerformaInvoiceForm = ({
         date: "",
         dueDate: "",
         receiverGSTIN: "",
+        billingAddress: emptyAddress(),
+        shippingAddress: emptyAddress(),
+        sameAsBilling: true,
+        notes: "",
+        terms: "",
+        signature: "",
         items: [
           {
             _id: null,
@@ -837,6 +901,11 @@ const PerformaInvoiceForm = ({
         date: form.date,
         dueDate: form.dueDate,
         receiverGSTIN: form.receiverGSTIN,
+        billingAddress: form.billingAddress,
+        shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
+        notes: form.notes,
+        terms: form.terms,
+        signature: form.signature,
         amount: calculateTotalAmount(form.items, form.discount),
         discount: form.discount,
         status: form.status,
@@ -873,6 +942,12 @@ const PerformaInvoiceForm = ({
         date: "",
         dueDate: "",
         receiverGSTIN: "",
+        billingAddress: emptyAddress(),
+        shippingAddress: emptyAddress(),
+        sameAsBilling: true,
+        notes: "",
+        terms: "",
+        signature: "",
         items: [
           {
             _id: null,
@@ -995,41 +1070,68 @@ const PerformaInvoiceForm = ({
       )}
 
       <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
-        style={{ opacity: isSliding ? 1 : 0 }}
-        onClick={handleClose}
-      />
-      <div
         ref={formRef}
-        className={`fixed inset-y-0 right-0 z-[10000] w-full md:w-[600px] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${isSliding ? "translate-x-0" : "translate-x-full"
+        className={`fixed inset-0 z-[10000] w-full h-full bg-white overflow-y-auto transform transition-transform duration-300 ease-in-out ${isSliding ? "translate-y-0" : "translate-y-full"
           }`}
       >
-        <form onSubmit={handleSubmit} className="p-6 space-y-8">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
-              {editingPerformaInvoice
-                ? "Edit Pro Forma Invoice"
-                : "Create New Pro Forma Invoice"}
-            </h2>
-            <button
-              type="button"
-              onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-              aria-label="Close form"
-            >
-              <X className="w-6 h-6" />
-            </button>
+        <form onSubmit={handleSubmit} className="h-full flex flex-col bg-[#F8F9FA] w-full min-h-screen">
+          <div className="flex justify-between items-center px-6 py-4 bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="text-gray-500 hover:text-gray-800 transition-colors flex items-center gap-1"
+                aria-label="Close form"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                {editingPerformaInvoice
+                  ? "Edit Pro Forma Invoice"
+                  : "Create Pro Forma Invoice"}
+              </h2>
+            </div>
           </div>
 
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Select Deal *
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className="w-full">
+          <div className="flex items-center px-6 py-3 bg-white border-b border-gray-100 text-sm">
+            <span className="text-gray-500 mr-2">Style</span>
+            <select
+              value={form.style}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, style: e.target.value }));
+                setHasUnsavedChanges(true);
+              }}
+              className="font-medium text-gray-800 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
+              aria-label="Select Pro Forma invoice style"
+            >
+              <option value="">Select style...</option>
+              {styles.map((s, idx) => (
+                <option key={idx} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+            {/* Customer Details card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                <div className="md:col-span-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-sm font-semibold text-gray-700">
+                      Select Deal *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickDealForm(true)}
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center"
+                    >
+                      + Create Customer
+                    </button>
+                  </div>
+                  <div className="bg-blue-50/50 rounded-lg">
                     <SearchableDropdown
                       options={localDeals}
                       value={form.deal}
@@ -1040,98 +1142,54 @@ const PerformaInvoiceForm = ({
                       placeholder="Select Deal"
                       displayKey="title"
                       valueKey="_id"
-                      className="flex-1"
+                      className="w-full"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowQuickDealForm(true)}
-                    className="px-3 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-600 transition-all duration-200"
-                    aria-label="Add new deal"
-                  >
-                    <Plus className="w-6 h-6" />
-                  </button>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Pro Forma Invoice Style
-                </label>
-                <div className="flex items-center gap-2">
-                  <select
-                    className="w-full border-2 border-slate-200 rounded-xl p-3 bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                    value={form.style}
-                    onChange={(e) => {
-                      setForm((prev) => ({ ...prev, style: e.target.value }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    aria-label="Select Pro Forma invoice style"
-                  >
-                    <option value="">Select style...</option>
-                    {styles.map((s, idx) => (
-                      <option key={idx} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  {/* {form.style && (
-                    <button
-                      type="button"
-                      onClick={() => onPreview(form)}
-                      className="px-3 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                      aria-label="Preview Pro Forma invoice"
-                    >
-                      <Eye className="w-6 h-6" />
-                    </button>
-                  )} */}
+                <div className="md:col-span-3 space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Pro Forma Invoice Date *
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="date"
+                      className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      required
+                      value={form.date}
+                      onChange={(e) => {
+                        setForm((prev) => ({ ...prev, date: e.target.value }));
+                        setHasUnsavedChanges(true);
+                      }}
+                      aria-label="Select Pro Forma invoice date"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Pro Forma Invoice Date *
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="date"
-                    className="w-full pl-10 pr-4 py-3 border-2 border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                    required
-                    value={form.date}
-                    onChange={(e) => {
-                      setForm((prev) => ({ ...prev, date: e.target.value }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    aria-label="Select Pro Forma invoice date"
-                  />
+                <div className="md:col-span-2 space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Due Date
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="date"
+                      className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      value={form.dueDate}
+                      onChange={(e) => {
+                        setForm((prev) => ({ ...prev, dueDate: e.target.value }));
+                        setHasUnsavedChanges(true);
+                      }}
+                      aria-label="Select due date"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Due Date
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="date"
-                    className="w-full pl-10 pr-4 py-3 border-2 border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                    value={form.dueDate}
-                    onChange={(e) => {
-                      setForm((prev) => ({ ...prev, dueDate: e.target.value }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    aria-label="Select due date"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Receiver GSTIN
-                </label>
-                <div className="relative">
+                <div className="md:col-span-3 space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Receiver GSTIN
+                  </label>
                   <input
                     type="text"
                     placeholder="Enter Receiver GSTIN (e.g., 22AAAAA0000A1Z5)"
@@ -1143,14 +1201,73 @@ const PerformaInvoiceForm = ({
                       }));
                       setHasUnsavedChanges(true);
                     }}
-                    className="w-full pl-4 pr-4 py-3 border-2 border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
+                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     aria-label="Receiver GSTIN"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="space-y-4">
+            {/* Billing & Shipping Address card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-slate-800">Billing & Shipping Address</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((prev) => {
+                        const nowSame = !prev.sameAsBilling;
+                        setHasUnsavedChanges(true);
+                        return {
+                          ...prev,
+                          sameAsBilling: nowSame,
+                          shippingAddress: nowSame ? prev.billingAddress : prev.shippingAddress,
+                        };
+                      })
+                    }
+                    className="flex-shrink-0"
+                  >
+                    <span
+                      className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${form.sameAsBilling ? "bg-blue-600" : "bg-gray-200"}`}
+                    >
+                      <span
+                        className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.sameAsBilling ? "translate-x-4" : "translate-x-0"}`}
+                      />
+                    </span>
+                  </button>
+                  <span className="text-sm font-medium text-gray-700">
+                    Shipping address same as billing
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 w-full">
+                <AddressFieldsGroup
+                  label="Billing address"
+                  value={form.billingAddress}
+                  onChange={(next) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      billingAddress: next,
+                      shippingAddress: prev.sameAsBilling ? next : prev.shippingAddress,
+                    }));
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+                <AddressFieldsGroup
+                  label="Shipping address"
+                  value={form.shippingAddress}
+                  disabled={!!form.sameAsBilling}
+                  onChange={(next) => {
+                    setForm((prev) => ({ ...prev, shippingAddress: next }));
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Items card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
               <div className="flex items-center gap-2">
                 <IndianRupeeIcon className="w-5 h-5 text-slate-600" />
                 <label className="block font-semibold text-slate-700">
@@ -1385,126 +1502,191 @@ const PerformaInvoiceForm = ({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-700">
-                Invoice Discount
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  placeholder="0"
-                  min="0"
-                  step={form.discount.type === "percentage" ? "0.1" : "0.01"}
-                  value={form.discount.value}
-                  onChange={(e) => {
-                    handleDiscountChange("value", e.target.value);
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                  aria-label="Invoice discount"
-                />
-                <select
-                  value={form.discount.type}
-                  onChange={(e) => {
-                    handleDiscountChange("type", e.target.value);
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                  aria-label="Invoice discount type"
-                >
-                  <option value="fixed">₹</option>
-                  <option value="percentage">%</option>
-                </select>
-              </div>
-            </div>
+            {/* Notes / Terms / Signature / Totals */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-5">
+                <div>
+                  <SectionHeader number="01" title="Notes" />
+                  <textarea
+                    placeholder="Enter your notes, say thanks, or anything else"
+                    rows={3}
+                    value={form.notes}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, notes: e.target.value }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    className="w-full px-3 py-2 rounded-[25px] border border-gray-200 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 resize-y"
+                  />
+                </div>
 
-            <div className="space-y-2 p-6 bg-gradient-to-r from-slate-50 to-blue-50/30 rounded-xl border border-slate-200/50">
-              <div className="flex justify-between">
-                <span className="text-sm font-medium text-slate-600">
-                  Subtotal
-                </span>
-                <span className="text-sm font-medium text-slate-900">
-                  ₹{formatNumberToIndian(subtotal)}
-                </span>
+                <div>
+                  <SectionHeader number="02" title="Terms & Conditions" />
+                  <textarea
+                    placeholder="Enter terms & conditions"
+                    rows={3}
+                    value={form.terms}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, terms: e.target.value }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    className="w-full px-3 py-2 rounded-[25px] border border-gray-200 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 resize-y"
+                  />
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm font-medium text-slate-600">
-                  Item Discounts
-                </span>
-                <span className="text-sm font-medium text-red-600">
-                  - ₹{formatNumberToIndian(totalItemDiscounts)}
-                </span>
-              </div>
-              <div className="flex justify-between border-t pt-2">
-                <span className="text-sm font-medium text-slate-600">
-                  After Item Discounts
-                </span>
-                <span className="text-sm font-medium text-slate-900">
-                  <h6>₹{formatNumberToIndian(subtotalAfterItemDiscounts)}</h6>
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm font-medium text-slate-600">
-                  Invoice Discount
-                </span>
-                <span className="text-sm font-medium text-red-600">
-                  <h6>- ₹{formatNumberToIndian(invoiceDiscountAmount)}</h6>
-                </span>
-              </div>
-              <div className="flex justify-between border-t pt-2 mt-2">
-                <span className="text-lg font-bold text-slate-900">
-                  Final Total
-                </span>
-                <span className="text-lg font-bold text-slate-900">
-                  <h6>₹{formatNumberToIndian(finalTotal)}</h6>
-                </span>
-              </div>
-              <div className="text-sm text-slate-600 italic text-right mt-2">
-                {numberToWords(finalTotal)}
-              </div>
-            </div>
 
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 p-6 bg-gradient-to-r from-slate-50 to-blue-50/30 rounded-xl border border-slate-200/50">
-              <button
-                type="submit"
-                className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-700 hover:to-blue-600 text-white font-semibold px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 flex items-center gap-2"
-                disabled={isSubmitting}
-                aria-label={
-                  editingPerformaInvoice
-                    ? "Update Pro Forma invoice"
-                    : "Create Pro Forma invoice"
-                }
-              >
-                {isSubmitting ? (
-                  <>
-                    <svg
-                      className="animate-spin h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Invoice Discount
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      placeholder="0"
+                      min="0"
+                      step={form.discount.type === "percentage" ? "0.1" : "0.01"}
+                      value={form.discount.value}
+                      onChange={(e) => {
+                        handleDiscountChange("value", e.target.value);
+                        setHasUnsavedChanges(true);
+                      }}
+                      className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                      aria-label="Invoice discount"
+                    />
+                    <select
+                      value={form.discount.type}
+                      onChange={(e) => {
+                        handleDiscountChange("type", e.target.value);
+                        setHasUnsavedChanges(true);
+                      }}
+                      className="border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                      aria-label="Invoice discount type"
                     >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v8h8a8 8 0 01-8 8v-8H4z"
-                      ></path>
-                    </svg>
-                    Processing...
-                  </>
-                ) : editingPerformaInvoice ? (
-                  "Update Pro Forma Invoice"
-                ) : (
-                  "Create Pro Forma Invoice"
-                )}
-              </button>
+                      <option value="fixed">₹</option>
+                      <option value="percentage">%</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2 p-6 bg-gradient-to-r from-slate-50 to-blue-50/30 rounded-xl border border-slate-200/50">
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-slate-600">
+                      Subtotal
+                    </span>
+                    <span className="text-sm font-medium text-slate-900">
+                      ₹{formatNumberToIndian(subtotal)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-slate-600">
+                      Item Discounts
+                    </span>
+                    <span className="text-sm font-medium text-red-600">
+                      - ₹{formatNumberToIndian(totalItemDiscounts)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2">
+                    <span className="text-sm font-medium text-slate-600">
+                      After Item Discounts
+                    </span>
+                    <span className="text-sm font-medium text-slate-900">
+                      <h6>₹{formatNumberToIndian(subtotalAfterItemDiscounts)}</h6>
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-slate-600">
+                      Invoice Discount
+                    </span>
+                    <span className="text-sm font-medium text-red-600">
+                      <h6>- ₹{formatNumberToIndian(invoiceDiscountAmount)}</h6>
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2 mt-2">
+                    <span className="text-lg font-bold text-slate-900">
+                      Final Total
+                    </span>
+                    <span className="text-lg font-bold text-slate-900">
+                      <h6>₹{formatNumberToIndian(finalTotal)}</h6>
+                    </span>
+                  </div>
+                  <div className="text-sm text-slate-600 italic text-right mt-2">
+                    {numberToWords(finalTotal)}
+                  </div>
+                </div>
+
+                <div>
+                  <SectionHeader number="03" title="Signature" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <div className="relative flex items-center h-10 rounded-[25px] border border-gray-200 focus-within:border-blue-500 overflow-hidden">
+                        <select
+                          value={form.signature}
+                          onChange={(e) => {
+                            setForm((prev) => ({ ...prev, signature: e.target.value }));
+                            setHasUnsavedChanges(true);
+                          }}
+                          disabled={signaturesLoading}
+                          className="flex-1 min-w-0 h-full pl-3 pr-8 text-[13px] bg-transparent appearance-none focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          <option value="">No signature</option>
+                          {savedSignatures.map((sig) => (
+                            <option key={sig.id} value={sig.dataUrl}>
+                              {sig.name}
+                              {sig.isDefault ? " (Default)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        {signaturesLoading
+                          ? "Loading signatures…"
+                          : savedSignatures.length === 0
+                            ? "No saved signatures yet — add them in Settings → Document Settings → Signatures."
+                            : "The default is applied to every pro forma invoice unless you pick another here."}
+                      </p>
+                    </div>
+                    <div className="h-[72px] flex items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50">
+                      {form.signature ? (
+                        <img
+                          src={form.signature}
+                          alt="Selected signature"
+                          className="max-h-16 max-w-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-xs text-gray-400">No signature selected</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 z-20 w-full pt-3 pb-1 -mx-6 mt-12 flex justify-center pointer-events-none">
+              <div className="pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-5 rounded-full border border-[#E1E4EA] bg-white/95 backdrop-blur-sm pl-6 pr-2.5 py-2.5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.22)]">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold tracking-wide text-[#99A0AE] uppercase leading-none">
+                    Total
+                  </p>
+                  <p className="text-[18px] font-bold text-[#1F2937] leading-tight truncate">
+                    ₹{formatNumberToIndian(finalTotal)}
+                  </p>
+                </div>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="h-9 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {isSubmitting
+                    ? editingPerformaInvoice
+                      ? "Updating..."
+                      : "Creating..."
+                    : editingPerformaInvoice
+                      ? "Update Pro Forma Invoice"
+                      : "Create Pro Forma Invoice"}
+                  {!isSubmitting && <ChevronRight className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
           </div>
         </form>

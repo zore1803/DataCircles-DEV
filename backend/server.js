@@ -97,6 +97,9 @@ app.use('/api/deals', dealRoutes);
 const taskRoutes = require('./routes/taskRoutes');
 app.use('/api/tasks', taskRoutes);
 
+const systemSettingsRoutes = require('./routes/systemSettingsRoutes');
+app.use('/api/system-settings', systemSettingsRoutes);
+
 const invoiceRoutes = require('./routes/invoiceRoutes');
 app.use('/api/invoices', invoiceRoutes);
 

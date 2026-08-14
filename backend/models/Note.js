@@ -12,7 +12,6 @@ const noteSchema = new mongoose.Schema({
   },
   noteType: {
     type: String,
-    enum: ['Meeting Note', 'Call Note', 'General Note', 'Follow-up Note'],
     default: 'General Note',
   },
   visibility: {

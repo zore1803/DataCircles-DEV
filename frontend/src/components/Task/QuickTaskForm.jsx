@@ -25,12 +25,13 @@ import QuickCompanyForm from "../company/QuickCompanyForm";
 import QuickContactForm from "../contact/QuickContactForm";
 import QuickDealForm from "../deal/QuickDealForm";
 import QuickVendorForm from "../vendor/QuickVendorForm";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 // isOpen/onOpenChange are controlled by the parent form (a single shared
 // "which dropdown is open" key) rather than each instance owning its own
 // state — otherwise opening Status doesn't close Priority, and their option
 // lists render stacked on top of each other.
-const SingleSelectDropdown = ({ options, value, onChange, disabled, isOpen, onOpenChange }) => {
+const SingleSelectDropdown = ({ options, value, onChange, disabled, isOpen, onOpenChange, dropUp = false }) => {
   const selectedOption = options.find((opt) => opt.value === value) || options[0];
 
   return (
@@ -52,7 +53,7 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled, isOpen, onOp
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => onOpenChange(false)} />
-          <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="absolute right-0 top-[calc(100%+8px)] w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
             {options.map((option) => (
               <button
                 key={option.value}
@@ -195,11 +196,14 @@ const QuickTaskForm = ({
   const [localContacts, setLocalContacts] = useState(contacts);
   const [validationErrors, setValidationErrors] = useState({});
 
-  const statusOptions = [
-    { value: "Pending", label: "Pending", icon: Clock, className: "bg-amber-50 text-amber-600" },
-    { value: "In Progress", label: "In Progress", icon: Loader2, className: "bg-blue-50 text-blue-600" },
-    { value: "Completed", label: "Completed", icon: CheckIcon, className: "bg-emerald-50 text-emerald-600" },
-  ];
+  const { taskStatuses } = useSystemSettings();
+
+  const statusOptions = taskStatuses.map(status => {
+    if (status === "Pending") return { value: "Pending", label: "Pending", icon: Clock, className: "bg-amber-50 text-amber-600" };
+    if (status === "In Progress") return { value: "In Progress", label: "In Progress", icon: Loader2, className: "bg-blue-50 text-blue-600" };
+    if (status === "Completed") return { value: "Completed", label: "Completed", icon: CheckIcon, className: "bg-emerald-50 text-emerald-600" };
+    return { value: status, label: status, icon: Clock, className: "bg-gray-50 text-gray-600" };
+  });
 
   const priorityOptions = [
     { value: "low", label: "Low", icon: Flag, className: "bg-green-50 text-green-600" },
@@ -609,7 +613,7 @@ const QuickTaskForm = ({
               </div>
 
               {/* Meta */}
-              <div className="px-6 pb-6 space-y-6 bg-white border-t border-gray-100 pt-6">
+              <div className="px-6 pb-48 space-y-6 bg-white border-t border-gray-100 pt-6">
                 <div className="space-y-4">
                   {/* Related to (entity type) */}
                   <div className="flex items-center justify-between group">
@@ -700,6 +704,7 @@ const QuickTaskForm = ({
                       onChange={(val) => handleFormChange("status", val)}
                       isOpen={openDropdown === "status"}
                       onOpenChange={(open) => setOpenDropdown(open ? "status" : null)}
+                      dropUp={true}
                     />
                   </div>
 
@@ -715,6 +720,7 @@ const QuickTaskForm = ({
                       onChange={(val) => handleFormChange("priority", val)}
                       isOpen={openDropdown === "priority"}
                       onOpenChange={(open) => setOpenDropdown(open ? "priority" : null)}
+                      dropUp={true}
                     />
                   </div>
 

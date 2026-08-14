@@ -44,6 +44,7 @@ import {
   UserPlus
 } from "lucide-react";
 import AppToaster from "../AppToaster";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 
 import SearchIcon from "../common/SearchIcon";
@@ -1005,7 +1006,8 @@ export const NoteEditor = ({
   onSave,
   onDelete,
   loading,
-  isEditing
+  isEditing,
+  noteTypes = ["General Note", "Meeting Note", "Call Note", "Follow-up Note"]
 }) => {
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
@@ -1158,10 +1160,9 @@ export const NoteEditor = ({
                     onChange={(e) => setNoteType(e.target.value)}
                     className="bg-transparent text-xs font-semibold text-gray-700 focus:outline-none"
                   >
-                    <option value="General Note">General Note</option>
-                    <option value="Meeting Note">Meeting Note</option>
-                    <option value="Call Note">Call Note</option>
-                    <option value="Follow-up Note">Follow-up Note</option>
+                    {noteTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -1293,6 +1294,8 @@ const NoteSection = ({ companyId: propCompanyId, dealId, isQuickView }) => {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [showAllNotes, setShowAllNotes] = useState(false);
+
+  const { noteTypes } = useSystemSettings();
 
   const fetchNotes = useCallback(async () => {
     // Scope to the deal when given one, otherwise to the company.
@@ -1534,6 +1537,7 @@ const NoteSection = ({ companyId: propCompanyId, dealId, isQuickView }) => {
         onDelete={() => handleDelete(editingNoteId)}
         loading={loading}
         isEditing={!!editingNoteId}
+        noteTypes={noteTypes}
       />
 
       <NoteViewer

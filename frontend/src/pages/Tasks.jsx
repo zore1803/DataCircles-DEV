@@ -150,10 +150,9 @@ const CustomKanbanIcon = (props) => (
 );
 
 // Task Status Dropdown Component
-const StatusSelect = ({ task, onUpdate, query }) => {
+const StatusSelect = ({ task, onUpdate, query, statuses }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = React.useRef(null);
-  const statuses = ["Pending", "In Progress", "Completed"];
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -401,8 +400,11 @@ const getAncestorZoom = (el) => {
   return z || 1;
 };
 
+import { useSystemSettings } from "../hooks/useSystemSettings";
+
 function Tasks() {
   const isSearchOverlayOpen = useSearchOverlayOpen();
+  const { taskStatuses } = useSystemSettings();
   // Tab state
   const [activeTab, setActiveTab] = useState("tasks"); // "tasks" or "meetings"
   const [showKanban, setShowKanban] = useState(false);
@@ -459,8 +461,6 @@ function Tasks() {
     users: [],
   });
   // Available Task Statuses for Kanban
-  const taskStatuses = ["Pending", "In Progress", "Completed"];
-
   // Meetings state
   const [meetings, setMeetings] = useState([]);
   // Separate from the paginated `meetings` list (50/page) — the calendar view
@@ -2058,6 +2058,7 @@ function Tasks() {
               task={row.original}
               onUpdate={handleTaskStatusChange}
               query={searchTerm}
+              statuses={taskStatuses}
             />
           </div>
         ),
@@ -2108,6 +2109,7 @@ function Tasks() {
       openRowActionsId,
       rowActionsPos,
       searchTerm,
+      taskStatuses,
     ],
   );
 
@@ -2606,6 +2608,58 @@ function Tasks() {
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
+        </div>
+      </div>
+    );
+  };
+
+  const KanbanColumn = ({ status, tasks, onDrop }) => {
+    return (
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.currentTarget.classList.add("bg-gray-100");
+        }}
+        onDragLeave={(e) => {
+          e.currentTarget.classList.remove("bg-gray-100");
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.currentTarget.classList.remove("bg-gray-100");
+          const taskId = e.dataTransfer.getData("taskId");
+          onDrop(taskId, status);
+        }}
+        className="flex flex-col bg-gray-50/50 rounded-xl border border-gray-200/60 p-4 transition-colors"
+      >
+        <div className="flex items-center justify-between mb-4 px-1">
+          <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+            {status}
+            <span className="bg-white text-gray-500 text-xs py-0.5 px-2 rounded-full border border-gray-200 font-medium shadow-sm">
+              {tasks.length}
+            </span>
+          </h3>
+        </div>
+        <div className="flex-1 space-y-3 min-h-[200px]">
+          {tasks.map((task) => (
+            <KanbanCard key={task._id} task={task} />
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderKanbanBoard = () => {
+    return (
+      <div className="flex-1 h-full p-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full min-h-[600px]">
+          {taskStatuses.map((status) => (
+            <KanbanColumn
+              key={status}
+              status={status}
+              tasks={filteredTasks.filter((t) => t.status === status)}
+              onDrop={updateTaskStatus}
+            />
+          ))}
         </div>
       </div>
     );

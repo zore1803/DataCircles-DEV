@@ -1064,7 +1064,10 @@ function ProductsServices() {
           </div>
         ),
         cell: ({ row }) => (
-          <div className="flex justify-center items-center gap-1 w-full">
+          <div 
+            className="flex justify-center items-center gap-1 w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
             <input
               type="checkbox"
               checked={selectedItemsSet.has(row.original._id)}
@@ -2020,7 +2023,11 @@ function ProductsServices() {
                         table.getRowModel().rows.map((row) => (
                           <tr
                             key={row.id}
-                            className={`bg-white hover:bg-blue-50 transition-colors ${selectedItemsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                            onClick={() => {
+                              setSelectedItem(row.original);
+                              setShowDetails(true);
+                            }}
+                            className={`bg-white hover:bg-blue-50 transition-colors cursor-pointer ${selectedItemsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
                           >
                             {row.getVisibleCells().map((cell) => {
                               const colId = cell.column.id;

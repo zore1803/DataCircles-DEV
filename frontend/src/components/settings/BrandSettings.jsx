@@ -71,14 +71,14 @@ function BrandSettings() {
       newErrors.companyName = "Company name is required";
     }
 
-    if (!form?.gstin?.trim()) {
-      newErrors.gstin = "GSTIN number is required";
-    } else if (
-      !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(
-        form.gstin
-      )
-    ) {
-      newErrors.gstin = "Invalid GSTIN format (e.g., 22AAAAA0000A1Z5)";
+    if (form?.gstin?.trim()) {
+      if (
+        !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(
+          form.gstin
+        )
+      ) {
+        newErrors.gstin = "Invalid GSTIN format (e.g., 22AAAAA0000A1Z5)";
+      }
     }
 
     if (!form?.address?.trim()) {

@@ -521,48 +521,6 @@ exports.sendQuotationEmail = async (req, res) => {
   }
 };
 
-// Update Quotation Number
-exports.updateQuotationNumber = async (req, res) => {
-  try {
-    const { quotationNumber } = req.body;
-    const quotationId = req.params.id;
-
-    if (
-      !quotationNumber ||
-      typeof quotationNumber !== "string" ||
-      quotationNumber.trim() === ""
-    ) {
-      return res.status(400).json({ error: "quotationNumber is required" });
-    }
-
-    const normalized = quotationNumber.trim();
-
-    const existing = await Quotation.findOne({
-      quotationNumber: normalized,
-      organization: req.user.organization,
-      _id: { $ne: quotationId },
-    });
-
-    if (existing) {
-      return res.status(409).json({ error: "Quotation number already exists" });
-    }
-
-    const updated = await Quotation.findOneAndUpdate(
-      { _id: quotationId, organization: req.user.organization },
-      { quotationNumber: normalized },
-      { new: true }
-    );
-
-    if (!updated) {
-      return res.status(404).json({ error: "Quotation not found" });
-    }
-
-    res.json({ message: "Quotation number updated", quotation: updated });
-  } catch (err) {
-    console.error("updateQuotationNumber error:", err);
-    res.status(500).json({ error: err.message });
-  }
-};
 // Update Quotation Number (Rename QUO-XXX)
 exports.updateQuotationNumber = async (req, res) => {
   try {

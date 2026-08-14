@@ -342,6 +342,7 @@ const QuotationForm = ({
   // Optional. Supplied when this screen was opened as the "full width" mode of
   // the split-view quotation panel — renders a control to go back to it.
   onExitFullWidth,
+  conversionData = null,
 }) => {
   const [form, setForm] = useState({
     deal: "",
@@ -493,24 +494,25 @@ const QuotationForm = ({
   }, [isOpen, fetchItems, fetchCompanies, fetchContacts, deals]);
 
   useEffect(() => {
-    if (editingQuotation) {
+    const sourceData = editingQuotation || conversionData;
+    if (sourceData) {
       setForm({
-        deal: editingQuotation.deal?._id || "",
-        date: editingQuotation.date ? editingQuotation.date.slice(0, 10) : "",
-        dueDate: editingQuotation.dueDate
-          ? editingQuotation.dueDate.slice(0, 10)
+        deal: sourceData.deal?._id || sourceData.deal || "",
+        date: sourceData.date ? sourceData.date.slice(0, 10) : "",
+        dueDate: sourceData.dueDate
+          ? sourceData.dueDate.slice(0, 10)
           : "",
-        receiverGSTIN: editingQuotation.receiverGSTIN || "",
-        reference: editingQuotation.reference || "",
-        quotationPrefix: editingQuotation.quotationPrefix || "EST-",
-        quotationNumber: editingQuotation.quotationNumber || "",
-        billingAddress: { ...emptyAddress(), ...(editingQuotation.billingAddress || {}) },
-        shippingAddress: { ...emptyAddress(), ...(editingQuotation.shippingAddress || {}) },
+        receiverGSTIN: sourceData.receiverGSTIN || "",
+        reference: sourceData.reference || "",
+        quotationPrefix: sourceData.quotationPrefix || "EST-",
+        quotationNumber: sourceData.quotationNumber || "",
+        billingAddress: { ...emptyAddress(), ...(sourceData.billingAddress || {}) },
+        shippingAddress: { ...emptyAddress(), ...(sourceData.shippingAddress || {}) },
         sameAsBilling:
-          isAddressEmpty(editingQuotation.shippingAddress) ||
-          JSON.stringify({ ...emptyAddress(), ...(editingQuotation.billingAddress || {}) }) ===
-            JSON.stringify({ ...emptyAddress(), ...(editingQuotation.shippingAddress || {}) }),
-        items: editingQuotation.items.map((item) => ({
+          isAddressEmpty(sourceData.shippingAddress) ||
+          JSON.stringify({ ...emptyAddress(), ...(sourceData.billingAddress || {}) }) ===
+            JSON.stringify({ ...emptyAddress(), ...(sourceData.shippingAddress || {}) }),
+        items: (sourceData.items || []).map((item) => ({
           _id: item.itemId || null,
           name: item.name || "",
           description: item.description || "",
@@ -523,17 +525,17 @@ const QuotationForm = ({
           discountType: item.discountType || "amount",
           discount: item.discount || 0,
         })),
-        discount: editingQuotation.discount || { type: "fixed", value: 0 },
-        amount: editingQuotation.amount || 0,
-        status: editingQuotation.status || "Draft",
-        style: editingQuotation.style || "Regular",
-        isTaxQuotation: editingQuotation.isTaxQuotation || false,
-        transactionType: editingQuotation.transactionType || "intra",
-        notes: editingQuotation.notes || "",
-        terms: editingQuotation.terms || "",
-        attachments: editingQuotation.attachments || [],
-        bankDetails: editingQuotation.bankDetails || "",
-        signature: editingQuotation.signature || "",
+        discount: sourceData.discount || { type: "fixed", value: 0 },
+        amount: sourceData.amount || 0,
+        status: sourceData.status || "Draft",
+        style: sourceData.style || "Regular",
+        isTaxQuotation: sourceData.isTaxQuotation || false,
+        transactionType: sourceData.transactionType || "intra",
+        notes: sourceData.notes || "",
+        terms: sourceData.terms || "",
+        attachments: sourceData.attachments || [],
+        bankDetails: sourceData.bankDetails || "",
+        signature: sourceData.signature || "",
       });
       setHasUnsavedChanges(false);
     } else {
@@ -563,7 +565,7 @@ const QuotationForm = ({
       });
       setHasUnsavedChanges(false);
     }
-  }, [editingQuotation]);
+  }, [editingQuotation, conversionData]);
 
   // Same default-signature behavior as the split-view Invoice panel
   // (InvoiceForm.jsx): fall back to the org's default signature whenever

@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from "react";
 import API from "../../services/api";
+import ReactQuill from "react-quill-new";
+import "react-quill/dist/quill.snow.css";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 import toast from "react-hot-toast";
 import {
   X,
@@ -23,7 +26,7 @@ import {
   User as UserIcon,
 } from "lucide-react";
 
-const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
+const SingleSelectDropdown = ({ options, value, onChange, disabled, dropUp = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const selectedOption = options.find(opt => opt.value === value) || options[0];
 
@@ -49,7 +52,7 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
             className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="absolute right-0 top-[calc(100%+8px)] w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
             {options.map((option) => (
               <button
                 key={option.value}
@@ -99,9 +102,20 @@ const StatusBadge = ({ status }) => {
       border: "border-emerald-200",
       icon: <CheckCircle2 className="w-3 h-3" />,
     },
+    "In Progress": {
+      bg: "bg-blue-50",
+      text: "text-blue-700",
+      border: "border-blue-200",
+      icon: <Loader2 className="w-3 h-3" />,
+    },
   };
 
-  const config = configs[status] || configs.Pending;
+  const config = configs[status] || {
+    bg: "bg-gray-50",
+    text: "text-gray-700",
+    border: "border-gray-200",
+    icon: <Clock className="w-3 h-3" />,
+  };
 
   return (
     <div
@@ -172,11 +186,14 @@ const CompanyTaskForm = ({
   const [relatedContactId, setRelatedContactId] = useState("");
   const [relatedDealId, setRelatedDealId] = useState("");
 
-  const statusOptions = [
-    { value: 'Pending', label: 'Pending', icon: Clock, className: 'bg-amber-50 text-amber-600' },
-    { value: 'Completed', label: 'Completed', icon: CheckIcon, className: 'bg-emerald-50 text-emerald-600' },
-    { value: 'In Progress', label: 'In Progress', icon: Loader2, className: 'bg-blue-50 text-blue-600' },
-  ];
+  const { taskStatuses } = useSystemSettings();
+
+  const statusOptions = taskStatuses.map(status => {
+    if (status === 'Pending') return { value: 'Pending', label: 'Pending', icon: Clock, className: 'bg-amber-50 text-amber-600' };
+    if (status === 'Completed') return { value: 'Completed', label: 'Completed', icon: CheckIcon, className: 'bg-emerald-50 text-emerald-600' };
+    if (status === 'In Progress') return { value: 'In Progress', label: 'In Progress', icon: Loader2, className: 'bg-blue-50 text-blue-600' };
+    return { value: status, label: status, icon: Clock, className: 'bg-gray-50 text-gray-600' };
+  });
 
   const priorityOptions = [
     { value: 'low', label: 'Low', icon: Flag, className: 'bg-green-50 text-green-600' },
@@ -436,7 +453,7 @@ const CompanyTaskForm = ({
               </div>
 
               {/* Meta */}
-              <div className="px-6 pb-6 space-y-6 bg-white border-t border-gray-100 pt-6">
+              <div className="px-6 pb-48 space-y-6 bg-white border-t border-gray-100 pt-6">
                 <div className="space-y-4">
                   {/* Related to */}
                   <div className="flex items-center justify-between group">
@@ -533,6 +550,7 @@ const CompanyTaskForm = ({
                       value={form.status}
                       onChange={(val) => handleChange("status", val)}
                       disabled={!isEditMode && mode === "view"}
+                      dropUp={true}
                     />
                   </div>
 
@@ -547,6 +565,7 @@ const CompanyTaskForm = ({
                       value={form.priority}
                       onChange={(val) => handleChange("priority", val)}
                       disabled={!isEditMode && mode === "view"}
+                      dropUp={true}
                     />
                   </div>
 

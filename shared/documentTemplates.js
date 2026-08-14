@@ -192,9 +192,9 @@ export function buildUpiUri(doc, options = {}) {
   return `upi://pay?${params.toString().replace(/\+/g, "%20")}`;
 }
 
-// GST rates the CRM offers after the 2025 rate rationalisation: the standard
-// slabs (0/5/18) plus the special 40% rate that applies to select goods only.
-export const GST_RATES = [0, 5, 18, 40];
+// All standard Indian GST slabs: 0%, 5%, 12%, 18%, 28% plus the special 40%
+// rate that applies to select goods only.
+export const GST_RATES = [0, 5, 12, 18, 28, 40];
 
 /*
  * Splits a taxable amount into CGST+SGST (intra-state) or IGST (inter-state)

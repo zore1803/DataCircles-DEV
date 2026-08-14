@@ -47,13 +47,8 @@ import useMinDelay from "../../hooks/useMinDelay";
 import { applyColumnFilters } from "../../utils/advancedFilters";
 
 import SearchIcon from "../common/SearchIcon";
-const NOTE_TYPE_OPTIONS = ["General Note", "Meeting Note", "Call Note", "Follow-up Note"];
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 const NOTE_VISIBILITY_OPTIONS = ["Team", "Private"];
-const NOTE_FILTER_COLUMNS = [
-  { key: "type", label: "Type", options: NOTE_TYPE_OPTIONS },
-  { key: "year", label: "Visibility To", options: NOTE_VISIBILITY_OPTIONS },
-  { key: "contacts", label: "Author" },
-];
 
 const GridViewIcon = ({ size = 20, ...props }) => (
   <svg width={size} height={size} viewBox="12 12 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -125,6 +120,15 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
   const [viewingNote, setViewingNote] = useState(null);
   const [loading, setLoading] = useState(false);
   const [manualEditorOpen, setManualEditorOpen] = useState(false);
+  
+  const { noteTypes } = useSystemSettings();
+  
+  const NOTE_FILTER_COLUMNS = useMemo(() => [
+    { key: "type", label: "Type", options: noteTypes },
+    { key: "year", label: "Visibility To", options: NOTE_VISIBILITY_OPTIONS },
+    { key: "contacts", label: "Author" },
+  ], [noteTypes]);
+
   // Derived rather than copied into local state on a one-shot effect — a
   // copy raced the initial notes/contacts fetch (whichever re-rendered
   // first won) and could get clobbered before ever becoming visible.
@@ -457,7 +461,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
     setNoteTitle("");
     setNoteContent("");
     setTaggedContacts([]);
-    setNoteType("General Note");
+    setNoteType(noteTypes[0] || "General Note");
     setVisibility("Team");
     setManualEditorOpen(false);
     // Clears the parent's auto-open trigger too, so it doesn't reopen the
@@ -512,7 +516,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
     setTaggedContacts(
       note.taggedContacts.map((c) => ({ label: c.name, value: c._id })),
     );
-    setNoteType(note.noteType || "General Note");
+    setNoteType(note.noteType || noteTypes[0] || "General Note");
     setVisibility(note.visibility || "Team");
     setManualEditorOpen(true);
   };
@@ -544,7 +548,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
         note: note.note,
         company: id,
         taggedContacts: (note.taggedContacts || []).map((c) => c._id || c),
-        noteType: note.noteType || "General Note",
+        noteType: note.noteType || noteTypes[0] || "General Note",
         visibility: note.visibility || "Team",
       });
       toast.success("Note duplicated");
@@ -1002,6 +1006,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
               onDelete={handleDelete}
               onView={handleView}
               onDuplicate={handleDuplicate}
+              noteTypes={noteTypes}
             />
           ))}
         </div>
@@ -1229,7 +1234,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
                             className="inline-flex items-center justify-center text-xs font-medium"
                             style={{ padding: "4px 10px", borderRadius: 53, backgroundColor: "rgba(0, 133, 255, 0.1)", color: "#0085FF" }}
                           >
-                            Meeting Note
+                            {note.noteType || "General Note"}
                           </span>
                         </td>
                     ),

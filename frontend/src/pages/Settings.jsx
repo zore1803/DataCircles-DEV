@@ -45,6 +45,7 @@ import BillingCenter from "../components/settings/BillingCenter";
 import Referrals from "../components/settings/Referrals";
 import UserManagement from "./UserManagement";
 import DocumentSettings from "../components/settings/DocumentSettings";
+import SystemDefaultsSettings from "../components/settings/SystemDefaultsSettings";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -271,8 +272,20 @@ const Settings = () => {
       color: "text-teal-600",
       bgColor: "bg-teal-50",
       borderColor: "border-teal-200",
-      hoverBg: "hover:bg-teal-50",
+      hoverBg: "hover:bg-amber-50",
       component: <ItemFieldSettings />,
+      category: "Customization",
+    },
+    {
+      id: "system-defaults",
+      icon: <SettingsIcon className="w-5 h-5" />,
+      label: "System Defaults",
+      description: "Manage custom task statuses and note types",
+      color: "text-slate-600",
+      bgColor: "bg-slate-50",
+      borderColor: "border-slate-200",
+      hoverBg: "hover:bg-slate-50",
+      component: <SystemDefaultsSettings />,
       category: "Customization",
     },
     {

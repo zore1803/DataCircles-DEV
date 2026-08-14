@@ -1345,63 +1345,23 @@ const Accounting = () => {
   };
 
   const confirmConvert = async () => {
-    const sourcePath = `converter/${apiPathFor(convertDocType)}/convert-to`;
-    const targetPath =
-      convertTargetType === "tax"
-        ? "tax"
-        : convertTargetType === "performa"
-          ? "proforma"
-          : convertTargetType === "quotation"
-            ? "quotation"
-            : "delivery-challan";
-
-    // NEW PREVIEW & EDIT FLOW:
-    // If converting Quotation to Tax Invoice or Proforma Invoice,
-    // open the CreateInvoicePanel in creation mode pre-filled with quotation data.
-    if (
-      convertDocType === "quotation" &&
-      (convertTargetType === "tax" || convertTargetType === "performa")
-    ) {
-      const sourceDoc = documents[convertDocType].find((d) => d._id === convertDocId);
-      if (!sourceDoc) {
-        toast.error("Source document not found. Please refresh.");
-        return;
-      }
-      setShowConvertModal(false);
-      setOpenConvertMenu(null);
-
-      setConversionData(sourceDoc);
-      setActiveTab(convertTargetType);
-      setShowCreatePanel(true);
-
-      setConvertDocId(null);
-      setConvertDocType(null);
-      setConvertTargetType(null);
+    const sourceDoc = documents[convertDocType].find((d) => d._id === convertDocId);
+    if (!sourceDoc) {
+      toast.error("Source document not found. Please refresh.");
       return;
     }
+    
+    setShowConvertModal(false);
+    setOpenConvertMenu(null);
 
-    try {
-      setLoading((prev) => ({ ...prev, [convertDocType]: true }));
-      await API.post(`/${sourcePath}-${targetPath}/${convertDocId}`);
-      await Promise.all([
-        fetchData(convertDocType),
-        fetchData(convertTargetType),
-      ]);
-      toast.success(`Converted to ${docNameFor(convertTargetType)} successfully`);
-      setShowViewer(false);
-    } catch (err) {
-      toast.error(
-        err.response?.data?.error ||
-        `Failed to convert ${convertDocType} document`
-      );
-      console.error(`Convert ${convertDocType} document error:`, err);
-    } finally {
-      setLoading((prev) => ({ ...prev, [convertDocType]: false }));
-      setShowConvertModal(false);
-      setConvertDocId(null);
-      setConvertDocType(null);
-      setConvertTargetType(null);
-    }
+    setConversionData(sourceDoc);
+    setActiveTab(convertTargetType);
+    setShowCreatePanel(true);
+    setShowViewer(false);
+
+    setConvertDocId(null);
+    setConvertDocType(null);
+    setConvertTargetType(null);
   };
 
   const handleDownload = async (id, type) => {
@@ -2549,6 +2509,7 @@ const Accounting = () => {
                 onExitFullWidth={() => setQuotationFullWidth(false)}
                 fetchData={() => fetchData("quotation")}
                 editingQuotation={panelProps.initialDoc}
+                conversionData={panelProps.conversionData}
                 onPreview={(formData) => {
                   if (!formData.style) {
                     toast.error("Please select a Quotation style to preview.");
