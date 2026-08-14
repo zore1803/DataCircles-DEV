@@ -1,13 +1,13 @@
-require("dotenv").config();
+require("dotenv").config({ path: "../.env" });
 const dns = require('dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 const mongoose = require("mongoose");
-const Purchase = require("./models/Purchase");
-const PurchaseOrder = require("./models/PurchaseOrder");
-const Vendor = require("./models/Vendor");
-const Item = require("./models/Item");
-const Organization = require("./models/Organization");
-const User = require("./models/User");
+const Purchase = require("../models/Purchase");
+const PurchaseOrder = require("../models/PurchaseOrder");
+const Vendor = require("../models/Vendor");
+const Item = require("../models/Item");
+const Organization = require("../models/Organization");
+const User = require("../models/User");
 
 const seedPurchases = async () => {
   try {

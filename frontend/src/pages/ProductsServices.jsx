@@ -49,6 +49,7 @@ import {
 
 import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
+import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 
 // The app is rendered inside #root which carries a CSS `zoom` (0.75 on desktop).
 // getBoundingClientRect() returns UNSCALED layout coordinates, while portal overlays
@@ -331,7 +332,7 @@ function ProductsServices() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState("");
+  // filterType removed — type filtering now done via AdvancedFilterPanel rule builder.
   const [showForm, setShowForm] = useState(false);
   const [selectedItems, setSelectedItems] = useState([]);
   const selectedItemsSet = useMemo(() => new Set(selectedItems), [selectedItems]);
@@ -347,8 +348,8 @@ function ProductsServices() {
   const searchInputRef = useRef(null);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
-  const filterMenuRef = useRef(null);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [activeFilters, setActiveFilters] = useState([]);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const tableScrollRef = useRef(null);
 
@@ -422,7 +423,7 @@ function ProductsServices() {
     currentPage: 1,
     totalPages: 0,
     totalCount: 0,
-    limit: 10,
+    limit: 50,
     hasNextPage: false,
     hasPrevPage: false,
   });
@@ -433,20 +434,23 @@ function ProductsServices() {
     direction: "desc",
   });
 
-  const filterOptions = [
-    { value: "", label: "All Types" },
-    { value: "product", label: "Product" },
-    { value: "service", label: "Service" },
+  // Columns available in the rule-builder filter panel (mirrors Companies.jsx pattern).
+  const itemFilterColumns = [
+    { key: "name", label: "Item Name" },
+    { key: "type", label: "Type", options: ["product", "service"] },
+    { key: "category", label: "Category" },
+    { key: "sellingPrice", label: "Selling Price" },
+    { key: "purchasePrice", label: "Purchase Price" },
+    { key: "gstRate", label: "GST Rate" },
+    { key: "hsnSac", label: "HSN/SAC" },
+    { key: "description", label: "Description" },
   ];
 
-  // Click-outside handling for the overflow (⋮) menu and the filter popover.
+  // Click-outside handling for the overflow (⋮) menu.
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
         setIsMoreMenuOpen(false);
-      }
-      if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
-        setShowFilterMenu(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -492,7 +496,6 @@ function ProductsServices() {
     try {
       const params = new URLSearchParams({ allIds: "true" });
       if (debouncedSearchTerm.trim()) params.append("search", debouncedSearchTerm.trim());
-      if (filterType) params.append("type", filterType);
       const res = await API.get(`/items/pagination?${params.toString()}`);
       setSelectedItems(res.data.ids || []);
     } catch (err) {
@@ -529,7 +532,7 @@ function ProductsServices() {
     }
     setPagination((prev) => ({ ...prev, currentPage: 1 }));
     exitSelectionMode();
-  }, [debouncedSearchTerm, filterType]);
+  }, [debouncedSearchTerm]);
 
   // Fetch data
   useEffect(() => {
@@ -540,7 +543,6 @@ function ProductsServices() {
     pagination.limit,
     sortConfig,
     debouncedSearchTerm,
-    filterType,
   ]);
 
   const fetchItems = async () => {
@@ -556,9 +558,6 @@ function ProductsServices() {
 
       if (debouncedSearchTerm.trim()) {
         params.append("search", debouncedSearchTerm.trim());
-      }
-      if (filterType) {
-        params.append("type", filterType);
       }
 
       const res = await API.get(`/items/pagination?${params.toString()}`);
@@ -1263,8 +1262,31 @@ function ProductsServices() {
     searchTerm,
   ]);
 
+  // Client-side advanced filter — applied on top of the server-fetched page.
+  const filteredItems = useMemo(() => {
+    if (!activeFilters || activeFilters.length === 0) return items;
+    return items.filter((row) =>
+      activeFilters.every((f) => {
+        const rawVal = row[f.column];
+        const val = String(rawVal ?? "").toLowerCase().trim();
+        const filterVal = String(f.value ?? "").toLowerCase().trim();
+        switch (f.operator) {
+          case "contains": return val.includes(filterVal);
+          case "not_contains": return !val.includes(filterVal);
+          case "is": return val === filterVal;
+          case "is_not": return val !== filterVal;
+          case "in": return filterVal.split(",").map((s) => s.trim()).some((s) => val === s);
+          case "not_in": return !filterVal.split(",").map((s) => s.trim()).some((s) => val === s);
+          case "is_empty": return val === "" || rawVal == null;
+          case "is_not_empty": return val !== "" && rawVal != null;
+          default: return true;
+        }
+      }),
+    );
+  }, [items, activeFilters]);
+
   const table = useReactTable({
-    data: items,
+    data: filteredItems,
     columns: tableColumns,
     state: { columnSizing },
     onColumnSizingChange: setColumnSizing,
@@ -1651,42 +1673,23 @@ function ProductsServices() {
                   {/* Actions Group — search, filter, columns (matches the reference
                       screenshot's dedicated sliders icon), more (⋮), + Add Item. */}
                   <div className="relative flex items-center gap-2 lg:gap-4 flex-shrink-0">
-                    {/* Type filter — plain circular icon button, matching Companies/Deals */}
-                <div className="hidden lg:block relative" ref={filterMenuRef}>
-                  <button
-                    title="Filter by type"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowFilterMenu((v) => !v);
-                    }}
-                    className={`relative flex items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${filterType
+                    {/* Advanced filter button — opens AdvancedFilterPanel slide-in panel */}
+                <button
+                  onClick={() => setShowAdvancedFilters(true)}
+                  className={`hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
+                    activeFilters.length > 0
                       ? "border-[#0085FF] text-[#0085FF]"
                       : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
-                      }`}
-                  >
-                    <FilterIcon size={15} className={filterType ? "text-[#0085FF]" : "text-gray-800"} />
-                  </button>
-                  {showFilterMenu && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 animate-in fade-in zoom-in duration-200 origin-top-right"
-                    >
-                      {filterOptions.map((opt) => (
-                        <button
-                          key={opt.value || "all"}
-                          onClick={() => {
-                            setFilterType(opt.value);
-                            setShowFilterMenu(false);
-                          }}
-                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${filterType === opt.value ? "text-[#0085FF] font-medium" : "text-gray-700"
-                            }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
+                  }`}
+                  title="Filters"
+                >
+                  <FilterIcon size={15} className={activeFilters.length > 0 ? "text-[#0085FF]" : "text-gray-800"} />
+                  {activeFilters.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                      {activeFilters.length}
+                    </span>
                   )}
-                </div>
+                </button>
 
                 {/* Column Settings — dedicated icon (matches the reference
                     screenshot), opens ColumnSettingsPanel directly. */}
@@ -1706,38 +1709,38 @@ function ProductsServices() {
                     title="More options"
                   >
                     <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
-                    {filterType && (
+                    {activeFilters.length > 0 && (
                       <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
                     )}
                   </button>
                   {isMoreMenuOpen && (
                     <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
-                      <div className="lg:hidden pt-1 pb-1">
-                        {filterOptions.map((opt) => (
-                          <button
-                            key={opt.value || "all"}
-                            onClick={() => {
-                              setFilterType(opt.value);
-                              setIsMoreMenuOpen(false);
-                            }}
-                            className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 ${filterType === opt.value ? "text-[#0085FF] font-medium" : "text-gray-700"
-                              }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                        <button
-                          onClick={() => {
-                            setShowColumnSettings(true);
-                            setIsMoreMenuOpen(false);
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          <SlidersHorizontal className="w-4 h-4 text-gray-400" />
-                          Columns
-                        </button>
-                        <div className="border-t border-gray-100 my-1" />
-                      </div>
+                      {/* Mobile-only: filter + columns (desktop shows dedicated buttons) */}
+                      <button
+                        onClick={() => {
+                          setShowAdvancedFilters(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <FilterIcon size={14} className="text-gray-400" />
+                        Filters
+                        {activeFilters.length > 0 && (
+                          <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                            {activeFilters.length}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowColumnSettings(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <SlidersHorizontal className="w-4 h-4 text-gray-400" />
+                        Columns
+                      </button>
                       <button
                         onClick={() => {
                           setShowImport(true);
@@ -2038,6 +2041,18 @@ function ProductsServices() {
         selectedIds={selectedItems}
         exportUrl="/items/export-selected"
         fileName="Exported_Items.csv"
+      />
+
+      <AdvancedFilterPanel
+        isOpen={showAdvancedFilters}
+        onClose={() => setShowAdvancedFilters(false)}
+        columns={itemFilterColumns}
+        filters={activeFilters}
+        setFilters={setActiveFilters}
+        onApply={(newFilters) => setActiveFilters(newFilters)}
+        title="Filter Products & Services"
+        subtitle="Find specific items quickly"
+        emptyStateText="Add a rule to narrow down your item list."
       />
     </div>
   );

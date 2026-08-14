@@ -25,7 +25,6 @@ import {
   MoreVertical,
   Plus,
   X,
-  Filter,
   CheckSquare,
   Eye,
   EyeOff,
@@ -57,6 +56,7 @@ import {
 
 import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
+import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 
 // The app is rendered inside #root which carries a CSS `zoom` (0.75 on desktop).
 // getBoundingClientRect() returns UNSCALED layout coordinates, while portal overlays
@@ -151,7 +151,7 @@ const PurchaseOrderPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  // filterStatus removed — status filtering now done via AdvancedFilterPanel rule builder.
   const [selectedPO, setSelectedPO] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -159,20 +159,17 @@ const PurchaseOrderPage = () => {
   const searchInputRef = useRef(null);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
-  const filterMenuRef = useRef(null);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [activeFilters, setActiveFilters] = useState([]);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const tableScrollRef = useRef(null);
 
-  // Click-outside handling for the overflow (⋮) menu and the filter popover.
+  // Click-outside handling for the overflow (⋮) menu.
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
         setIsMoreMenuOpen(false);
-      }
-      if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
-        setShowFilterMenu(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -277,9 +274,14 @@ const PurchaseOrderPage = () => {
     { value: "Delivered", label: "Delivered", icon: Truck, className: "bg-blue-50 text-blue-700 border-blue-200" },
   ];
 
-  const filterOptions = [
-    { value: "", label: "All Status", icon: Filter, className: "bg-gray-50 text-gray-700 border-gray-200" },
-    ...statusOptions
+  // Columns available in the rule-builder filter panel (mirrors Companies.jsx pattern).
+  const poFilterColumns = [
+    { key: "poNumber", label: "PO Number" },
+    { key: "vendor", label: "Vendor" },
+    { key: "status", label: "Status", options: statusOptions.map((s) => s.value).filter(Boolean) },
+    { key: "totalAmount", label: "Total Amount" },
+    { key: "paymentTerms", label: "Payment Terms" },
+    { key: "notes", label: "Notes" },
   ];
 
   // Column list handed to the shared ExportModal — same shape Vendors/Companies use.
@@ -326,7 +328,6 @@ const PurchaseOrderPage = () => {
     try {
       const params = new URLSearchParams({ allIds: "true" });
       if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
-      if (filterStatus) params.append("status", filterStatus);
       const res = await API.get(`/purchase-orders/pagination?${params.toString()}`);
       setSelectedPurchaseOrders(res.data.ids || []);
     } catch (err) {
@@ -353,7 +354,7 @@ const PurchaseOrderPage = () => {
     }
     exitSelectionMode();
     setPagination((prev) => ({ ...prev, currentPage: 1 }));
-  }, [debouncedSearchTerm, filterStatus]);
+  }, [debouncedSearchTerm]);
 
   // Fetch data
   useEffect(() => {
@@ -364,7 +365,6 @@ const PurchaseOrderPage = () => {
     pagination.limit,
     sortConfig,
     debouncedSearchTerm,
-    filterStatus,
   ]);
 
   useEffect(() => {
@@ -390,7 +390,6 @@ const PurchaseOrderPage = () => {
         sortOrder: sortConfig.direction,
       });
       if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
-      if (filterStatus) params.append("status", filterStatus);
 
       const res = await API.get(
         `/purchase-orders/pagination?${params.toString()}`,
@@ -1078,8 +1077,38 @@ const PurchaseOrderPage = () => {
     searchTerm,
   ]);
 
+  // Client-side advanced filter — applied on top of the server-fetched page.
+  const filteredPurchaseOrders = useMemo(() => {
+    if (!activeFilters || activeFilters.length === 0) return purchaseOrders;
+    return purchaseOrders.filter((row) =>
+      activeFilters.every((f) => {
+        let rawVal;
+        if (f.column === "vendor") {
+          rawVal = typeof row.vendor === "object"
+            ? (row.vendor?.name || "")
+            : (row.vendor || "");
+        } else {
+          rawVal = row[f.column];
+        }
+        const val = String(rawVal ?? "").toLowerCase().trim();
+        const filterVal = String(f.value ?? "").toLowerCase().trim();
+        switch (f.operator) {
+          case "contains": return val.includes(filterVal);
+          case "not_contains": return !val.includes(filterVal);
+          case "is": return val === filterVal;
+          case "is_not": return val !== filterVal;
+          case "in": return filterVal.split(",").map((s) => s.trim()).some((s) => val === s);
+          case "not_in": return !filterVal.split(",").map((s) => s.trim()).some((s) => val === s);
+          case "is_empty": return val === "" || rawVal == null;
+          case "is_not_empty": return val !== "" && rawVal != null;
+          default: return true;
+        }
+      }),
+    );
+  }, [purchaseOrders, activeFilters]);
+
   const table = useReactTable({
-    data: purchaseOrders,
+    data: filteredPurchaseOrders,
     columns: tableColumns,
     state: { columnSizing },
     onColumnSizingChange: setColumnSizing,
@@ -1472,43 +1501,23 @@ const PurchaseOrderPage = () => {
                   {/* Actions Group — same icon set/order/border as Companies.jsx and
                       Deals.jsx: Search (above), Filter, More (⋮), New. */}
                   <div className="relative flex items-center gap-2 lg:gap-4 flex-shrink-0">
-                {/* Status filter — plain circular icon button, matching Companies/Deals */}
-                <div className="hidden lg:block relative" ref={filterMenuRef}>
-                  <button
-                    title="Filter by status"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowFilterMenu((v) => !v);
-                    }}
-                    className={`relative flex items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${filterStatus
+                {/* Advanced filter button — opens AdvancedFilterPanel slide-in panel */}
+                <button
+                  onClick={() => setShowAdvancedFilters(true)}
+                  className={`hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
+                    activeFilters.length > 0
                       ? "border-[#0085FF] text-[#0085FF]"
                       : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
-                      }`}
-                  >
-                    <FilterIcon size={15} className={filterStatus ? "text-[#0085FF]" : "text-gray-800"} />
-                  </button>
-                  {showFilterMenu && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute right-0 mt-2 w-48 max-h-72 overflow-auto bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 animate-in fade-in zoom-in duration-200 origin-top-right"
-                    >
-                      {filterOptions.map((opt) => (
-                        <button
-                          key={opt.value || "all"}
-                          onClick={() => {
-                            setFilterStatus(opt.value);
-                            setShowFilterMenu(false);
-                          }}
-                          className={`w-full flex items-center gap-2 text-left px-4 py-2 text-sm hover:bg-gray-50 ${filterStatus === opt.value ? "text-[#0085FF] font-medium" : "text-gray-700"
-                            }`}
-                        >
-                          {opt.icon && <opt.icon className="w-3.5 h-3.5" />}
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
+                  }`}
+                  title="Filters"
+                >
+                  <FilterIcon size={15} className={activeFilters.length > 0 ? "text-[#0085FF]" : "text-gray-800"} />
+                  {activeFilters.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                      {activeFilters.length}
+                    </span>
                   )}
-                </div>
+                </button>
 
                 {/* Overflow menu: filter on mobile, Export, Columns, Video Tutorial —
                     Export lives here (not a standalone button) same as Deals.jsx. */}
@@ -1519,29 +1528,28 @@ const PurchaseOrderPage = () => {
                     title="More options"
                   >
                     <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
-                    {filterStatus && (
+                    {activeFilters.length > 0 && (
                       <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
                     )}
                   </button>
                   {isMoreMenuOpen && (
                     <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
-                      <div className="lg:hidden pt-1 pb-1">
-                        {filterOptions.map((opt) => (
-                          <button
-                            key={opt.value || "all"}
-                            onClick={() => {
-                              setFilterStatus(opt.value);
-                              setIsMoreMenuOpen(false);
-                            }}
-                            className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 ${filterStatus === opt.value ? "text-[#0085FF] font-medium" : "text-gray-700"
-                              }`}
-                          >
-                            {opt.icon && <opt.icon className="w-4 h-4" />}
-                            {opt.label}
-                          </button>
-                        ))}
-                        <div className="border-t border-gray-100 my-1" />
-                      </div>
+                      {/* Mobile-only: open filter panel (desktop shows its own button) */}
+                      <button
+                        onClick={() => {
+                          setShowAdvancedFilters(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <FilterIcon size={14} className="text-gray-400" />
+                        Filters
+                        {activeFilters.length > 0 && (
+                          <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                            {activeFilters.length}
+                          </span>
+                        )}
+                      </button>
                       <button
                         onClick={() => {
                           setShowImport(true);
@@ -1840,6 +1848,18 @@ const PurchaseOrderPage = () => {
         selectedIds={selectedPurchaseOrders}
         exportUrl="/purchase-orders/export-selected"
         fileName="Exported_PurchaseOrders.csv"
+      />
+
+      <AdvancedFilterPanel
+        isOpen={showAdvancedFilters}
+        onClose={() => setShowAdvancedFilters(false)}
+        columns={poFilterColumns}
+        filters={activeFilters}
+        setFilters={setActiveFilters}
+        onApply={(newFilters) => setActiveFilters(newFilters)}
+        title="Filter Purchase Orders"
+        subtitle="Find specific purchase orders quickly"
+        emptyStateText="Add a rule to narrow down your purchase order list."
       />
     </div>
   );

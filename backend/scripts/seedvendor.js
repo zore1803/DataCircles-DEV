@@ -1,11 +1,11 @@
-require("dotenv").config();
+require("dotenv").config({ path: "../.env" });
 const dns = require('dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const mongoose = require("mongoose");
-const Vendor = require("./models/Vendor");
-const Organization = require("./models/Organization");
-const User = require("./models/User");
+const Vendor = require("../models/Vendor");
+const Organization = require("../models/Organization");
+const User = require("../models/User");
 
 const seedVendors = async () => {
   try {
