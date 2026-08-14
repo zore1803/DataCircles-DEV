@@ -995,6 +995,10 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(311px, 1fr))",
+            // Grid rows stretch every item to the row's tallest by default —
+            // without this, a short note would still render as tall as its
+            // longest neighbor in the same row instead of hugging its own content.
+            alignItems: "start",
             gap: 24,
           }}
         >

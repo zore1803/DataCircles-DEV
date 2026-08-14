@@ -1330,7 +1330,9 @@ function Dashboard() {
         {/* Spacer to offset the fixed header bar */}
         <div className="h-[72px] lg:h-16" />
 
-        {/* KPI row */}
+        {/* KPI row: Companies / Contacts / Meetings Today / Pending Tasks —
+            same card shape (icon + label/value + bottom-right trend badge)
+            as the Overview tab's KPI row. */}
         <div
           className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-6"
           style={{ marginTop: 24 }}
@@ -1346,9 +1348,11 @@ function Dashboard() {
               }}
             >
               <div className="flex flex-row items-center w-full min-w-0" style={{ gap: 14 }}>
+                {/* Mobile: plain icon, no badge/border */}
                 <div className="flex lg:hidden flex-shrink-0">
                   <Icon size={20} style={{ color: "#0085FF" }} />
                 </div>
+                {/* Desktop: original icon style */}
                 <div
                   className="hidden lg:flex box-border items-center justify-center flex-shrink-0"
                   style={{
@@ -1375,6 +1379,7 @@ function Dashboard() {
                   >
                     {value}
                   </span>
+                  {/* Trend, inline under the value on mobile */}
                   <div className="flex lg:hidden flex-row items-center w-full min-w-0" style={{ gap: 4 }}>
                     {trendUp ? (
                       <TrendingUp size={12} className="flex-shrink-0" style={{ color: "#00C950" }} />
@@ -1390,6 +1395,7 @@ function Dashboard() {
                   </div>
                 </div>
               </div>
+              {/* Trend, absolute bottom-right on desktop */}
               <div
                 className="hidden lg:flex flex-row items-center flex-shrink-0 absolute"
                 style={{ gap: 4, right: 16, bottom: 16 }}
