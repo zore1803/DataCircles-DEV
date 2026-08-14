@@ -1,16 +1,12 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import API from "../../services/api";
 import {
-  Upload,
   X,
   Plus,
   Trash2,
-  Box,
-  Barcode as BarcodeIcon,
-  RefreshCw,
-  Check,
   Type,
-  Layers,
+  FolderOpen,
+  ChevronDown,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ReactQuill from "react-quill-new";
@@ -20,15 +16,10 @@ const ItemForm = ({
   setForm,
   loading,
   setLoading,
-  setError,
-  setSuccess,
   fetchItems,
   onRequestClose,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [shouldRender, setShouldRender] = useState(true);
-  const [images, setImages] = useState([]);
-  const [imagePreviews, setImagePreviews] = useState([]);
   const [variants, setVariants] = useState(form.variants || []);
   const [showVariantForm, setShowVariantForm] = useState(false);
   const [currentVariant, setCurrentVariant] = useState({
@@ -43,27 +34,214 @@ const ItemForm = ({
   const [variantIndex, setVariantIndex] = useState(null);
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const fileInputRef = useRef(null);
   const [validationErrors, setValidationErrors] = useState({});
-  const [variantValidationErrors, setVariantValidationErrors] = useState({});
+
+  // Org-defined custom fields (configured in Settings -> Item Fields).
+  // Definitions come from /item-fields/latest; the entered values live in
+  // additionalFieldValues keyed by field name, and are flattened into the
+  // Item's additionalFields array on submit.
+  const [itemFields, setItemFields] = useState([]);
+  const [additionalFieldValues, setAdditionalFieldValues] = useState({});
+  const [expandedSections, setExpandedSections] = useState({});
 
   useEffect(() => {
-    setShouldRender(true);
-    setTimeout(() => setIsOpen(true), 10);
-    if (form._id && form.images && form.images.length > 0) {
-      setImagePreviews(
-        form.images.map((img) => `${import.meta.env.VITE_APP_API_URL}${img}`),
-      );
+    const fetchItemFields = async () => {
+      try {
+        const res = await API.get("/item-fields/latest");
+        setItemFields(res.data?.fields || []);
+      } catch {
+        // A missing/forbidden field config just means no custom fields to
+        // show — the rest of the form still works, so fail quietly.
+        setItemFields([]);
+      }
+    };
+    fetchItemFields();
+  }, []);
+
+  // Seed values from the item being edited.
+  useEffect(() => {
+    if (form.additionalFields && form.additionalFields.length > 0) {
+      const seeded = {};
+      form.additionalFields.forEach((field) => {
+        if (field?.key) seeded[field.key] = field.value;
+      });
+      setAdditionalFieldValues(seeded);
     } else {
-      setImagePreviews([]);
+      setAdditionalFieldValues({});
     }
+  }, [form._id]);
+
+  const toggleSection = (category) => {
+    setExpandedSections((prev) => ({ ...prev, [category]: !prev[category] }));
+  };
+
+  const handleAdditionalFieldChange = (fieldName, value) => {
+    setAdditionalFieldValues((prev) => ({ ...prev, [fieldName]: value }));
+    setIsFormDirty(true);
+    if (validationErrors[`additional_${fieldName}`]) {
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[`additional_${fieldName}`];
+        return newErrors;
+      });
+    }
+  };
+
+  const groupedFields = (itemFields || []).reduce((acc, fieldDef) => {
+    const category = fieldDef.category || "Uncategorized";
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(fieldDef);
+    return acc;
+  }, {});
+
+  // "Uncategorized" sorts last so named groups lead.
+  const sortedCategories = Object.keys(groupedFields).sort((a, b) => {
+    if (a === "Uncategorized") return 1;
+    if (b === "Uncategorized") return -1;
+    return a.localeCompare(b);
+  });
+
+  const renderFieldInput = (fieldDef, rawValue) => {
+    const hasError = validationErrors[`additional_${fieldDef.name}`];
+    const value = rawValue !== undefined && rawValue !== null ? rawValue : "";
+    const handleFieldChange = (newValue) => handleAdditionalFieldChange(fieldDef.name, newValue);
+
+    const typeStr = (fieldDef.type || "").toLowerCase();
+    let normalizedType = "string";
+    if (typeStr.includes("multi-line") || typeStr === "text") normalizedType = "text";
+    else if (typeStr.includes("number")) normalizedType = "number";
+    else if (typeStr.includes("dropdown")) normalizedType = "dropdown";
+    else if (typeStr.includes("url")) normalizedType = "url";
+    else if (typeStr.includes("date")) normalizedType = "date";
+    else if (typeStr.includes("multi-select") || typeStr.includes("checkbox") || typeStr === "multiselect")
+      normalizedType = "multiselect";
+
+    const baseInputClass = `w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 transition-all ${hasError ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"
+      }`;
+
+    const errorText = hasError ? <p className="text-red-500 text-xs mt-1">{hasError}</p> : null;
+
+    switch (normalizedType) {
+      case "number":
+        return (
+          <>
+            <input
+              type="number"
+              step="any"
+              value={value}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className={baseInputClass}
+              placeholder={`Enter ${fieldDef.name}`}
+            />
+            {errorText}
+          </>
+        );
+      case "dropdown":
+        return (
+          <>
+            <select
+              value={value}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className={`${baseInputClass} cursor-pointer`}
+            >
+              <option value="">Select {fieldDef.name}</option>
+              {fieldDef.options?.map((option, index) => (
+                <option key={index} value={option}>{option}</option>
+              ))}
+            </select>
+            {errorText}
+          </>
+        );
+      case "text":
+        return (
+          <>
+            <textarea
+              rows={3}
+              value={value}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className={`${baseInputClass} resize-vertical`}
+              placeholder={`Enter ${fieldDef.name}`}
+            />
+            {errorText}
+          </>
+        );
+      case "date": {
+        const formattedDate = value && String(value).includes("T") ? String(value).split("T")[0] : value;
+        return (
+          <>
+            <input
+              type="date"
+              value={formattedDate}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className={baseInputClass}
+            />
+            {errorText}
+          </>
+        );
+      }
+      case "url":
+        return (
+          <>
+            <input
+              type="url"
+              value={value}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className={baseInputClass}
+              placeholder="https://example.com"
+            />
+            {errorText}
+          </>
+        );
+      case "multiselect": {
+        const selected = Array.isArray(value) ? value : value ? String(value).split(",").map((v) => v.trim()) : [];
+        return (
+          <>
+            <div className="flex flex-wrap gap-3 border border-gray-200 rounded-lg p-3">
+              {fieldDef.options?.map((option, index) => (
+                <label key={index} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(option)}
+                    onChange={() =>
+                      handleFieldChange(
+                        selected.includes(option)
+                          ? selected.filter((v) => v !== option)
+                          : [...selected, option]
+                      )
+                    }
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  {option}
+                </label>
+              ))}
+            </div>
+            {errorText}
+          </>
+        );
+      }
+      default:
+        return (
+          <>
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => handleFieldChange(e.target.value)}
+              className={baseInputClass}
+              placeholder={`Enter ${fieldDef.name}`}
+            />
+            {errorText}
+          </>
+        );
+    }
+  };
+
+  useEffect(() => {
+    setTimeout(() => setIsOpen(true), 10);
     setVariants(form.variants || []);
     return () => {
       setIsOpen(false);
-      setImages([]);
-      setImagePreviews([]);
     };
-  }, [form._id, form.images, form.variants]);
+  }, [form._id, form.variants]);
 
   const handleClose = () => {
     if (isFormDirty) {
@@ -87,7 +265,7 @@ const ItemForm = ({
 
   const handleSaveAndExit = async () => {
     setShowConfirmDialog(false);
-    await handleSubmit({ preventDefault: () => {} }, true);
+    await handleSubmit({ preventDefault: () => {} });
   };
 
   const generateBarcode = () => {
@@ -127,10 +305,23 @@ const ItemForm = ({
     if (!form.name.trim()) errors.name = "Item name is required";
     if (form.purchasePrice < 0) errors.purchasePrice = "Invalid price";
     if (form.sellingPrice < 0) errors.sellingPrice = "Invalid price";
+
+    itemFields?.forEach((fieldDef) => {
+      if (fieldDef.required) {
+        const value = additionalFieldValues[fieldDef.name];
+        const isEmpty = Array.isArray(value)
+          ? value.length === 0
+          : !value || String(value).trim() === "";
+        if (isEmpty) {
+          errors[`additional_${fieldDef.name}`] = `${fieldDef.name} is required`;
+        }
+      }
+    });
+
     return errors;
   };
 
-  const handleSubmit = async (e, isSaveAndExit = false) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
@@ -141,7 +332,24 @@ const ItemForm = ({
 
     try {
       setLoading(true);
-      const payload = { ...form, variants };
+
+      // Flatten the entered custom-field values into the array shape the
+      // Item model stores. Multiselect arrays collapse to a comma-separated
+      // string, matching how the other modules persist them.
+      const processedAdditionalFields = (itemFields || [])
+        .map((fieldDef) => {
+          let value = additionalFieldValues[fieldDef.name] ?? "";
+          if (Array.isArray(value)) value = value.join(", ");
+          return {
+            key: fieldDef.name,
+            value,
+            type: fieldDef.type,
+            category: fieldDef.category || "Uncategorized",
+          };
+        })
+        .filter((field) => field.value !== "");
+
+      const payload = { ...form, variants, additionalFields: processedAdditionalFields };
       if (form._id) {
         await API.put(`/items/${form._id}`, payload);
         toast.success("Item updated successfully!");
@@ -226,99 +434,118 @@ const ItemForm = ({
       onClick={handleClose}
     >
       <div
-        className="bg-white w-full max-w-4xl rounded-xl shadow-2xl max-h-[90vh] flex flex-col transition-transform duration-300 transform"
+        className="bg-white w-full max-w-md rounded-xl shadow-2xl max-h-[90vh] flex flex-col transition-transform duration-300 transform"
         style={{ transform: isOpen ? "scale(100%)" : "scale(95%)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-8 py-5 border-b border-gray-100 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 font-sf">
-              {form._id ? "Edit Item" : "Create New Item"}
-            </h2>
-            <p className="text-xs text-gray-400 mt-1 font-inter">
-              Lorem ipsum dolor sit amet consectetur
-            </p>
-          </div>
+        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+          <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wide">
+            {form._id ? "Edit Item" : "Create New Item"}
+          </h2>
           <button
+            type="button"
             onClick={handleClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 font-inter custom-scrollbar">
-          {/* Title & Meta Controls */}
-          <div className="space-y-4">
-            <label className="block text-sm font-semibold text-gray-700">
-              Item Title
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 font-inter custom-scrollbar">
+          {/* Item Name */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Item Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => handleFormChange("name", e.target.value)}
-              placeholder="Item Name"
-              className={`w-full px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2 ${validationErrors.name ? "border-red-300" : "border-gray-200"}`}
+              placeholder="Enter Item Name"
+              className={`w-full px-3.5 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${validationErrors.name ? "border-red-300" : "border-gray-200"}`}
             />
+            {validationErrors.name && (
+              <p className="text-red-500 text-xs mt-1">{validationErrors.name}</p>
+            )}
+          </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Category Pill */}
-              <div className="relative group">
-                <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-full text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
-                  <Layers className="w-3.5 h-3.5" />
-                  {form.category || "Category"}
-                </div>
-                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-lg shadow-lg hidden group-hover:block z-10 p-2">
-                  <input
-                    type="text"
-                    placeholder="Enter Category"
-                    value={form.category}
-                    onChange={(e) =>
-                      handleFormChange("category", e.target.value)
-                    }
-                    className="w-full text-xs border border-gray-200 rounded p-1.5"
-                  />
-                </div>
-              </div>
+          {/* Type */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Type <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={form.type}
+              onChange={(e) => handleFormChange("type", e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+            >
+              <option value="product">Product</option>
+              <option value="service">Service</option>
+            </select>
+          </div>
 
-              {/* Active Toggle Pill */}
-              <button
-                type="button"
-                onClick={() => handleFormChange("isActive", !form.isActive)}
-                className={`flex items-center gap-2 px-3 py-1.5 border rounded-full text-xs font-medium transition-colors ${
-                  form.isActive
-                    ? "bg-green-50 text-green-700 border-green-200"
-                    : "bg-gray-50 text-gray-600 border-gray-200"
-                }`}
-              >
-                <div
-                  className={`w-2 h-2 rounded-full ${form.isActive ? "bg-green-500" : "bg-gray-400"}`}
-                />
-                {form.isActive ? "Active" : "Inactive"}
-              </button>
-
-              {/* Add Variant Button */}
+          {/* Variants */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-gray-700">
+                Variants
+              </label>
               <button
                 type="button"
                 onClick={() => setShowVariantForm(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white border border-blue-600 rounded-full text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add Variant
               </button>
-
-              <span className="text-xs text-gray-400 italic ml-2">
-                A new variant will be added to the item
-              </span>
             </div>
+            {variants.length === 0 ? (
+              <div className="w-full px-3.5 py-2.5 border border-dashed border-gray-200 rounded-lg text-xs text-gray-400 text-center">
+                No Variants Added
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {variants.map((v, i) => (
+                  <div
+                    key={i}
+                    className="flex justify-between items-center bg-gray-50 border border-gray-100 rounded-lg p-2.5"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">
+                        {v.name}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        SKU: {v.sku || "N/A"} | ₹{v.sellingPrice}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleEditVariant(i)}
+                        className="text-blue-600 hover:text-blue-700 p-1"
+                      >
+                        <Type className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveVariant(i)}
+                        className="text-red-600 hover:text-red-700 p-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-              Description of the item <span className="text-red-500">*</span>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Description
             </label>
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
               <ReactQuill
@@ -331,9 +558,9 @@ const ItemForm = ({
           </div>
 
           {/* Price Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                 Purchase Price <span className="text-red-500">*</span>
               </label>
               <input
@@ -343,12 +570,12 @@ const ItemForm = ({
                 onChange={(e) =>
                   handleFormChange("purchasePrice", e.target.value)
                 }
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter Purchase Price"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                 Selling Price <span className="text-red-500">*</span>
               </label>
               <input
@@ -358,7 +585,7 @@ const ItemForm = ({
                 onChange={(e) =>
                   handleFormChange("sellingPrice", e.target.value)
                 }
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter Selling Price"
               />
             </div>
@@ -381,21 +608,21 @@ const ItemForm = ({
 
           {/* HSN/SAC */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
               HSN/SAC Code
             </label>
             <input
               type="text"
               value={form.hsnSac}
               onChange={(e) => handleFormChange("hsnSac", e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter HSN/SAC Code"
             />
           </div>
 
           {/* Barcode */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
               Barcode
             </label>
             <div className="flex gap-2">
@@ -403,28 +630,42 @@ const ItemForm = ({
                 type="text"
                 value={form.barcode}
                 onChange={(e) => handleFormChange("barcode", e.target.value)}
-                className="flex-1 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 min-w-0 px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter or Generate Barcode"
               />
               <button
                 type="button"
                 onClick={generateBarcode}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-xs font-medium transition-colors"
+                className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-xs font-medium transition-colors"
               >
-                Generate Barcode
+                Generate
               </button>
             </div>
           </div>
 
+          {/* Category */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Category
+            </label>
+            <input
+              type="text"
+              value={form.category}
+              onChange={(e) => handleFormChange("category", e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter Item Category"
+            />
+          </div>
+
           {/* Primary Unit */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-              Primary Unit
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Primary Unit <span className="text-red-500">*</span>
             </label>
             <select
               value={form.primaryUnit}
               onChange={(e) => handleFormChange("primaryUnit", e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
             >
               <option value="OTH-OTHERS">OTH-OTHERS</option>
               <option value="PCS-PIECES">PCS-PIECES</option>
@@ -434,7 +675,64 @@ const ItemForm = ({
             </select>
           </div>
 
-          {/* Variants List (Minified) */}
+          {/* Active */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) => handleFormChange("isActive", e.target.checked)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <label className="text-sm text-gray-700 font-medium">
+              Active
+            </label>
+          </div>
+
+          {/* Custom Fields (Categorized & Collapsible) — sits after the
+              basic info above and before the stock/variants block below,
+              matching the section order used across the other modules. */}
+          {sortedCategories.length > 0 && (
+            <div className="mt-6 border-t border-gray-100 pt-6 space-y-4">
+              <h3 className="text-sm font-semibold text-gray-900">Custom Fields</h3>
+
+              {sortedCategories.map((category) => (
+                <div key={category} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(category)}
+                    className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-indigo-600" />
+                      <span className="font-bold text-gray-800 text-sm uppercase tracking-wide">{category}</span>
+                      <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-medium ml-2">
+                        {groupedFields[category].length}
+                      </span>
+                    </div>
+                    <ChevronDown
+                      className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${expandedSections[category] ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  {expandedSections[category] && (
+                    <div className="p-5 bg-white border-t border-gray-200 space-y-5">
+                      {groupedFields[category].map((fieldDef) => (
+                        <div key={fieldDef.name}>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                            {fieldDef.name}
+                            {fieldDef.required && <span className="text-red-500 ml-1">*</span>}
+                          </label>
+                          {renderFieldInput(fieldDef, additionalFieldValues[fieldDef.name])}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Stock — Variants List (Minified) */}
           {variants.length > 0 && (
             <div className="mt-6 border-t border-gray-100 pt-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">
@@ -590,6 +888,48 @@ const ItemForm = ({
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
               >
                 {variantIndex !== null ? "Update Variant" : "Add Variant"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unsaved-changes confirmation — closing (X/backdrop/Cancel) while the
+          form is dirty asks instead of silently discarding edits. */}
+      {showConfirmDialog && (
+        <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] z-[10002] flex items-center justify-center p-4">
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-gray-900 mb-2">
+              Discard unsaved changes?
+            </h3>
+            <p className="text-sm text-gray-500 mb-6">
+              You have unsaved changes to this item. Choose what to do before closing.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleSaveAndExit}
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-70"
+              >
+                {loading ? "Saving..." : form._id ? "Save Changes" : "Save Item"}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmExit}
+                className="w-full border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Discard Changes
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowConfirmDialog(false)}
+                className="w-full text-gray-500 text-xs py-1.5 hover:text-gray-700 transition-colors"
+              >
+                Keep Editing
               </button>
             </div>
           </div>

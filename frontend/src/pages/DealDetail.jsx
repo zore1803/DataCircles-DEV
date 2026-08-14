@@ -33,7 +33,9 @@ import {
 } from "lucide-react";
 
 // --- Assuming these components exist or you will map them to your Deal versions ---
-import NoteSection from "../components/contact/NoteSection";
+// Notes are company-scoped in this system, so a deal shows its company's notes
+// (which is also where the bulk "Add Note" action on the deals board writes).
+import NoteSection from "../components/company/NoteSection";
 // import DealTasksTable from "../components/deal/DealTasksTable";
 // import MeetingsTable from "../components/contact/MeetingsTable";
 // import DealCalendar from "../components/deal/DealCalendar";
@@ -545,7 +547,12 @@ function DealDetail() {
 
               <div className="p-6 min-h-[400px]">
                 {/* Note: Update these placeholder components with your actual Deal-related components if they differ from contacts */}
-                {activeTabRight === "Notes" && <NoteSection dealId={dealId} />}
+                {activeTabRight === "Notes" && (
+                  <NoteSection
+                    dealId={dealId}
+                    companyId={deal?.company?._id || deal?.company}
+                  />
+                )}
                 {activeTabRight === "Tasks" && <p className="text-gray-500 text-center py-10">Tasks integration coming soon...</p>}
                 {activeTabRight === "Meetings" && <p className="text-gray-500 text-center py-10">Meetings integration coming soon...</p>}
                 {activeTabRight === "Calendar" && <p className="text-gray-500 text-center py-10">Calendar integration coming soon...</p>}

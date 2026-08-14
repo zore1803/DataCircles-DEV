@@ -14,6 +14,15 @@ const {
 
 const requireAuth = [authMiddleware, userSyncMiddleware];
 
+// Google Meet — one-time OAuth consent that connects a shared Google account
+// for the organization. See backend/services/googleMeetService.js.
+router.get("/google/connect", requireAuth, authController.googleConnect);
+// No requireAuth here: Google redirects the raw browser back to this URL
+// with no Authorization header, so the org/user identity travels instead in
+// the signed `state` param set by googleConnect above.
+router.get("/google/callback", authController.googleCallback);
+router.get("/google/status", requireAuth, authController.googleStatus);
+
 // Email/password login
 router.post("/login", authController.login);
 

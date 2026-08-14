@@ -1,5 +1,5 @@
 import React from "react";
-import { X, Trash2, Loader2, Edit3, Video, Landmark } from "lucide-react";
+import { X, Trash2, Loader2, Edit3 } from "lucide-react";
 import toast from "react-hot-toast";
 
 const DealIcon = (props) => (
@@ -91,7 +91,6 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
     taskData?.users
       ?.map((user) => (typeof user === "object" ? user : users?.find((u) => u._id === user)))
       .filter(Boolean) || [];
-  const primaryAssignee = assignedUsers[0];
   const linkedContact = taskData.relatedEntities?.find((e) => e.entityModel === "Contact")?.entityId;
   const linkedDeal = taskData.relatedEntities?.find((e) => e.entityModel === "Deal")?.entityId;
 
@@ -103,7 +102,7 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
         onClick={onClose}
       />
       <div
-        className={`fixed dc-panel-card z-[10001] w-full sm:w-[500px] md:w-[600px] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${
           isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -184,30 +183,57 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
               className="flex flex-col items-start w-full"
               style={{ padding: 14, gap: 16, backgroundColor: "#F8FAFC", borderRadius: 14 }}
             >
-              {/* Assigned User + Status pill */}
+              {/* Assigned Users + Status pill */}
               <div className="flex flex-row items-center justify-between w-full" style={{ gap: 16 }}>
-                <div className="flex flex-row items-start" style={{ gap: 12 }}>
-                  {primaryAssignee?.profileUrl || primaryAssignee?.userData?.mainData?.profilePic ? (
-                    <img
-                      src={primaryAssignee.profileUrl || primaryAssignee.userData?.mainData?.profilePic}
-                      alt={primaryAssignee.name}
-                      className="rounded-full object-cover flex-shrink-0"
-                      style={{ width: 32, height: 32 }}
-                    />
-                  ) : (
-                    <div
-                      className="rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700 flex-shrink-0"
-                      style={{ width: 32, height: 32 }}
-                    >
-                      {primaryAssignee?.name?.charAt(0)?.toUpperCase() || "?"}
-                    </div>
-                  )}
-                  <div className="flex flex-col items-start" style={{ gap: 4 }}>
+                <div className="flex flex-row items-start min-w-0" style={{ gap: 12 }}>
+                  <div className="flex flex-row flex-shrink-0" style={{ marginLeft: 4 }}>
+                    {assignedUsers.slice(0, 3).map((user, i) => {
+                      const avatarUrl = user?.profileUrl || user?.userData?.mainData?.profilePic;
+                      return avatarUrl ? (
+                        <img
+                          key={user._id || i}
+                          src={avatarUrl}
+                          alt={user.name}
+                          className="rounded-full object-cover flex-shrink-0"
+                          style={{ width: 32, height: 32, marginLeft: -4, border: "2px solid #fff" }}
+                        />
+                      ) : (
+                        <div
+                          key={user._id || i}
+                          className="rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700 flex-shrink-0"
+                          style={{ width: 32, height: 32, marginLeft: -4, border: "2px solid #fff" }}
+                        >
+                          {user?.name?.charAt(0)?.toUpperCase() || "?"}
+                        </div>
+                      );
+                    })}
+                    {assignedUsers.length === 0 && (
+                      <div
+                        className="rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700 flex-shrink-0"
+                        style={{ width: 32, height: 32, marginLeft: -4, border: "2px solid #fff" }}
+                      >
+                        ?
+                      </div>
+                    )}
+                    {assignedUsers.length > 3 && (
+                      <div
+                        className="rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0"
+                        style={{ width: 32, height: 32, marginLeft: -4, border: "2px solid #fff" }}
+                      >
+                        +{assignedUsers.length - 3}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-start min-w-0 w-full" style={{ gap: 4 }}>
                     <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
-                      Assigned User
+                      {assignedUsers.length > 1 ? "Assigned Users" : "Assigned User"}
                     </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
-                      {primaryAssignee?.name || "Unassigned"}
+                    <span
+                      style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}
+                      className="truncate block w-full"
+                      title={assignedUsers.map((u) => u.name).join(", ")}
+                    >
+                      {assignedUsers.length > 0 ? assignedUsers.map((u) => u.name).join(", ") : "Unassigned"}
                     </span>
                   </div>
                 </div>
@@ -332,14 +358,14 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
                   >
                     {linkedContact?.name?.charAt(0)?.toUpperCase() || "?"}
                   </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
+                  <div className="flex flex-col items-start min-w-0 w-full" style={{ gap: 4 }}>
                     <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
                       Contact
                     </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }} className="truncate">
+                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }} className="truncate block w-full">
                       {linkedContact?.name || "—"}
                     </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, lineHeight: "120%", color: "#6B7280" }} className="truncate">
+                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, lineHeight: "120%", color: "#6B7280" }} className="truncate block w-full">
                       {linkedContact?.role || "—"}
                     </span>
                   </div>
@@ -351,56 +377,14 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
                   >
                     <DealIcon className="w-5 h-5" />
                   </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
+                  <div className="flex flex-col items-start min-w-0 w-full" style={{ gap: 4 }}>
                     <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
                       Deal
                     </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#0085FF" }} className="truncate">
+                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#0085FF" }} className="truncate block w-full">
                       {linkedDeal?.name || linkedDeal?.title || "—"}
                     </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, lineHeight: "120%", color: "#6B7280" }} className="truncate">
-                      —
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 2: Meeting / Invoice */}
-              <div className="flex flex-row justify-between items-center w-full" style={{ gap: 16 }}>
-                <div className="flex flex-row items-center flex-1 min-w-0" style={{ gap: 12 }}>
-                  <div
-                    className="rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ width: 32, height: 32, backgroundColor: "rgba(0, 133, 255, 0.1)" }}
-                  >
-                    <Video className="w-5 h-5" style={{ color: "#0085FF" }} />
-                  </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
-                      Meeting
-                    </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#0085FF" }} className="truncate">
-                      —
-                    </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, lineHeight: "120%", color: "#6B7280" }} className="truncate">
-                      —
-                    </span>
-                  </div>
-                </div>
-                <div className="flex flex-row items-center flex-1 min-w-0" style={{ gap: 12 }}>
-                  <div
-                    className="rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ width: 32, height: 32, backgroundColor: "rgba(97, 85, 245, 0.1)" }}
-                  >
-                    <Landmark className="w-5 h-5" style={{ color: "#6155F5" }} />
-                  </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
-                      Invoice
-                    </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#0085FF" }} className="truncate">
-                      —
-                    </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, lineHeight: "120%", color: "#6B7280" }} className="truncate">
+                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, lineHeight: "120%", color: "#6B7280" }} className="truncate block w-full">
                       —
                     </span>
                   </div>

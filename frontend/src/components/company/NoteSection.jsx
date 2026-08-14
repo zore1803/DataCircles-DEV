@@ -1,10 +1,12 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
 import Select from "react-select";
 import API from "../../services/api";
 import { useParams } from "react-router-dom";
 import toast from 'react-hot-toast';
+import { getAncestorZoom } from "../../utils/domUtils";
 import {
   StickyNote,
   Plus,
@@ -14,11 +16,11 @@ import {
   X,
   Clock,
   Eye,
+  Copy,
   Calendar,
   MoreVertical,
   Type,
   Flag,
-  Share,
   CheckCircle,
   Link2,
   Landmark,
@@ -45,90 +47,220 @@ import AppToaster from "../AppToaster";
 
 
 import SearchIcon from "../common/SearchIcon";
-// Custom Quill modules and formats configuration
+
 const QuillToolbar = () => (
-  <div id="toolbar" className="flex flex-wrap gap-2 p-3 bg-white border-b border-gray-100">
-    <div className="flex gap-1 pr-2 border-r border-gray-100">
-      <button className="ql-header w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="1">
+  <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white border-b border-gray-300 rounded-t-2xl">
+    <div className="flex gap-0.5 pr-1.5">
+      <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="1">
         <Heading1 className="w-4 h-4" />
       </button>
-      <button className="ql-header w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="2">
+      <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="2">
         <Heading2 className="w-4 h-4" />
       </button>
-      <button className="ql-header w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="3">
+      <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="3">
         <Heading3 className="w-4 h-4" />
       </button>
-      <button className="ql-header w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="4">
+      <button className="ql-header w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="4">
         <Heading4 className="w-4 h-4" />
       </button>
     </div>
 
-    <div className="flex gap-1 px-2 border-r border-gray-100">
-      <button className="ql-bold w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+    <div className="flex gap-0.5 px-1.5">
+      <button className="ql-bold w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Bold className="w-4 h-4" />
       </button>
-      <button className="ql-italic w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+      <button className="ql-italic w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Italic className="w-4 h-4" />
       </button>
-      <button className="ql-underline w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+      <button className="ql-underline w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Underline className="w-4 h-4" />
       </button>
-      <button className="ql-strike w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+      <button className="ql-strike w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Strikethrough className="w-4 h-4" />
       </button>
     </div>
 
-    <div className="flex gap-1 px-2 border-r border-gray-100">
-      <button className="ql-list w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="ordered">
+    <div className="flex gap-0.5 px-1.5">
+      <button className="ql-list w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="ordered">
         <ListOrdered className="w-4 h-4" />
       </button>
-      <button className="ql-list w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="bullet">
+      <button className="ql-list w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="bullet">
         <List className="w-4 h-4" />
       </button>
-      <button className="ql-indent w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="-1">
+      <button className="ql-indent w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="-1">
         <AlignLeft className="w-4 h-4" />
       </button>
-      <button className="ql-indent w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="+1">
+      <button className="ql-indent w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="+1">
         <AlignRight className="w-4 h-4" />
       </button>
     </div>
 
-    <div className="flex gap-1 px-2 border-r border-gray-100">
-      <button className="ql-align w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="">
+    <div className="flex gap-0.5 px-1.5">
+      <button className="ql-align w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="">
         <AlignLeft className="w-4 h-4" />
       </button>
-      <button className="ql-align w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="center">
+      <button className="ql-align w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="center">
         <AlignCenter className="w-4 h-4" />
       </button>
-      <button className="ql-align w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="right">
+      <button className="ql-align w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="right">
         <AlignRight className="w-4 h-4" />
       </button>
-      <button className="ql-align w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="justify">
+      <button className="ql-align w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="justify">
         <AlignJustify className="w-4 h-4" />
       </button>
     </div>
 
-    <div className="flex gap-1 pl-2">
-      <button className="ql-link w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+    <div className="flex gap-0.5 pl-1.5">
+      <button className="ql-link w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Link2 className="w-4 h-4" />
       </button>
-      <button className="ql-blockquote w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+      <button className="ql-blockquote w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Quote className="w-4 h-4" />
       </button>
-      <button className="ql-code-block w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+      <button className="ql-code-block w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Code className="w-4 h-4" />
       </button>
-      <button className="ql-clean w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+      <button className="ql-clean w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
         <Type className="w-4 h-4" />
       </button>
     </div>
   </div>
 );
 
-// Custom Quill modules and formats configuration
-const quillModules = {
+// Global styles for the Quill editor/viewer. Rendered by whichever
+// component (NoteEditor, NoteViewer, or the embedded NoteSection) mounts
+// first — it must NOT live only inside NoteSection's own render tree, since
+// NoteEditor/NoteViewer are also used standalone (e.g. from
+// CompanyNotesTab.jsx) without NoteSection ever mounting.
+const NoteStyles = () => (
+  <style jsx global>{`
+    /* Premium Note Editor Styles */
+    .quill,
+    .ql-toolbar.ql-snow,
+    .ql-container.ql-snow,
+    .ql-editor {
+      border: none !important;
+    }
+
+    .ql-toolbar.ql-snow {
+      padding: 0.5rem !important;
+      border-bottom: 1px solid #d1d5db !important;
+    }
+
+    .ql-container.ql-snow {
+      font-family: inherit !important;
+      border-bottom-left-radius: 1rem !important;
+      border-bottom-right-radius: 1rem !important;
+    }
+
+    .ql-editor {
+      padding: 2rem !important;
+      min-height: 400px !important;
+      font-size: 1rem !important;
+      line-height: 1.8 !important;
+      color: #374151 !important;
+      border-bottom-left-radius: 1rem !important;
+      border-bottom-right-radius: 1rem !important;
+    }
+
+    .ql-editor.ql-blank::before {
+      left: 2rem !important;
+      color: #9ca3af !important;
+      font-style: normal !important;
+      font-weight: 500 !important;
+    }
+
+    /* Toolbar Button Overrides */
+    #toolbar button {
+      border: none !important;
+      color: #6b7280 !important;
+      transition: all 0.2s !important;
+    }
+
+    #toolbar button:hover {
+      background-color: #f9fafb !important;
+      color: #111827 !important;
+    }
+
+    #toolbar button.ql-active {
+      background-color: #eff6ff !important;
+      color: #2563eb !important;
+    }
+
+    #toolbar .ql-stroke {
+      stroke: currentColor !important;
+    }
+
+    #toolbar .ql-fill {
+      fill: currentColor !important;
+    }
+
+    /* Typography */
+    .ql-editor h1 {
+      font-size: 2.25rem !important;
+      font-weight: 800 !important;
+      margin-bottom: 1rem !important;
+      border-bottom: none !important;
+    }
+    .ql-editor h2 {
+      font-size: 1.875rem !important;
+      font-weight: 700 !important;
+      margin-bottom: 0.75rem !important;
+      border-bottom: none !important;
+    }
+    .ql-editor h3 {
+      font-size: 1.5rem !important;
+      font-weight: 600 !important;
+      margin-bottom: 0.5rem !important;
+      border-bottom: none !important;
+    }
+    .ql-editor p {
+      margin-bottom: 1.25rem !important;
+    }
+
+    /* List Styling */
+    .ql-editor ol,
+    .ql-editor ul {
+      padding-left: 1.5rem !important;
+      margin-bottom: 1.25rem !important;
+    }
+
+    .ql-editor li {
+      margin-bottom: 0.5rem !important;
+    }
+
+    /* Prose styles for viewer */
+    .prose h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 0.5rem;
+    }
+    .prose h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 0.5rem;
+    }
+    .prose p {
+      line-height: 1.8;
+      color: #374151;
+      margin-bottom: 1rem;
+    }
+    .prose a,
+    .ql-editor a {
+      color: #2563eb;
+      text-decoration: underline;
+    }
+  `}</style>
+);
+
+// Base Quill modules/formats config, shared by every editor instance. The
+// "link" handler is patched per-instance in NoteEditor (see linkModalRef
+// below) so it can open our own styled dialog instead of window.prompt().
+const baseQuillModules = {
   toolbar: {
-    container: "#toolbar"
+    container: "#toolbar",
   },
   clipboard: {
     matchVisual: false,
@@ -599,6 +731,7 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
           </button>
         </div>
       </div>
+      <NoteStyles />
     </>
   );
 };
@@ -606,7 +739,10 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
 
 
 // NoteCard component
-export const NoteCard = ({ note, onEdit, onDelete, onView }) => {
+export const NoteCard = ({ note, onEdit, onDelete, onView, onDuplicate }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null);
+  const menuBtnRef = useRef(null);
   const formatFullDate = (dateString) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleDateString([], {
@@ -691,29 +827,6 @@ export const NoteCard = ({ note, onEdit, onDelete, onView }) => {
               >
                 {note.title || 'Untitled Note'}
               </h4>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                <button
-                  onClick={() => onView(note)}
-                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                  title="View"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onEdit(note)}
-                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                  title="Edit"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onDelete(note._id)}
-                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                  title="Delete"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
             </div>
 
             <div className="flex items-center" style={{ gap: 12 }}>
@@ -791,7 +904,82 @@ export const NoteCard = ({ note, onEdit, onDelete, onView }) => {
               </span>
             </div>
           </div>
-          <MoreVertical style={{ width: 20, height: 20, color: "#1C1B1F" }} />
+          <div className="relative flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              ref={menuBtnRef}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (menuOpen) {
+                  setMenuOpen(false);
+                  setMenuPos(null);
+                  return;
+                }
+                const zMenu = getAncestorZoom(document.body);
+                const MENU_W = 160;
+                const MENU_H = onDuplicate ? 148 : 110;
+                const MARGIN = 8;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const viewportH = window.innerHeight / zMenu;
+                const viewportW = window.innerWidth / zMenu;
+                let calcTop = rect.bottom / zMenu + 4;
+                calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+                let calcLeft = rect.right / zMenu - MENU_W;
+                calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                calcLeft = Math.max(calcLeft, MARGIN);
+                setMenuPos({ top: calcTop, left: calcLeft });
+                setMenuOpen(true);
+              }}
+              className="p-1 rounded hover:bg-gray-100 transition-colors"
+              title="More options"
+            >
+              <MoreVertical style={{ width: 20, height: 20, color: "#1C1B1F" }} />
+            </button>
+
+            {menuOpen && menuPos && createPortal(
+              <>
+                <div className="fixed inset-0 z-[9998]" onClick={() => { setMenuOpen(false); setMenuPos(null); }} />
+                <div
+                  style={{ position: "fixed", top: menuPos.top, left: menuPos.left }}
+                  className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    onClick={() => { setMenuOpen(false); setMenuPos(null); onView(note); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    View Note
+                  </button>
+                  <button
+                    onClick={() => { setMenuOpen(false); setMenuPos(null); onEdit(note); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Edit Note
+                  </button>
+                  {onDuplicate && (
+                    <button
+                      onClick={() => { setMenuOpen(false); setMenuPos(null); onDuplicate(note); }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                      Duplicate Note
+                    </button>
+                  )}
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <button
+                    onClick={() => { setMenuOpen(false); setMenuPos(null); onDelete(note._id); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Note
+                  </button>
+                </div>
+              </>,
+              document.body
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -821,6 +1009,9 @@ export const NoteEditor = ({
 }) => {
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkModalUrl, setLinkModalUrl] = useState("");
+  const pendingLinkRef = useRef({ quill: null, range: null });
 
   useEffect(() => {
     if (isOpen) {
@@ -831,6 +1022,42 @@ export const NoteEditor = ({
       setTimeout(() => setShouldRender(false), 300);
     }
   }, [isOpen]);
+
+  const quillModules = useMemo(() => ({
+    ...baseQuillModules,
+    toolbar: {
+      ...baseQuillModules.toolbar,
+      handlers: {
+        // Quill's default link handler silently no-ops when nothing is
+        // selected — open our own styled dialog either way, inserting the
+        // URL as the link text when there's no selection to format.
+        link(value) {
+          if (!value) {
+            this.quill.format('link', false);
+            return;
+          }
+          pendingLinkRef.current = { quill: this.quill, range: this.quill.getSelection(true) };
+          setLinkModalUrl("");
+          setLinkModalOpen(true);
+        }
+      }
+    }
+  }), []);
+
+  const confirmInsertLink = () => {
+    const suffix = linkModalUrl.trim();
+    const { quill, range } = pendingLinkRef.current;
+    if (suffix && quill && range) {
+      const url = `https://${suffix}`;
+      if (range.length === 0) {
+        quill.insertText(range.index, url, 'link', url, 'user');
+        quill.setSelection(range.index + url.length, 0, 'user');
+      } else {
+        quill.format('link', url);
+      }
+    }
+    setLinkModalOpen(false);
+  };
 
   if (!shouldRender) return null;
 
@@ -850,22 +1077,33 @@ export const NoteEditor = ({
     }),
     valueContainer: (base) => ({
       ...base,
-      padding: '0'
+      padding: '0',
+      flexWrap: 'nowrap'
     }),
     input: (base) => ({
       ...base,
       margin: '0',
       padding: '0'
+    }),
+    placeholder: (base) => ({
+      ...base,
+      whiteSpace: 'nowrap',
+      color: '#374151'
+    }),
+    singleValue: (base) => ({
+      ...base,
+      color: '#374151'
     })
   };
 
   return (
-    <div className={`fixed inset-0 z-[10001] flex items-center justify-center p-4 transition-all duration-300 ${isSliding ? "opacity-100" : "opacity-0"}`}>
+    <>
       <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-all duration-300"
+        style={{ opacity: isSliding ? 1 : 0 }}
         onClick={onClose}
       />
-      <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden relative z-10 flex flex-col transform transition-all duration-300 ${isSliding ? "scale-100 translate-y-0" : "scale-95 translate-y-4"}`}>
+      <div className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl overflow-hidden flex flex-col transform transition-transform duration-300 ease-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h3 className="text-base font-semibold text-gray-700">
@@ -893,31 +1131,51 @@ export const NoteEditor = ({
             />
 
             {/* Action Row */}
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                className="flex items-center gap-2 px-4 py-2 border border-gray-100 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                Assign
-              </button>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-xl text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-all flex-1 min-w-0">
+                  <Users className="w-4 h-4 flex-shrink-0" />
+                  <Select
+                    isMulti
+                    options={contactOptions}
+                    value={taggedContacts}
+                    onChange={setTaggedContacts}
+                    placeholder="Select Contact"
+                    styles={customSelectStyles}
+                    className="flex-1 min-w-0 whitespace-nowrap"
+                    components={{
+                      MultiValue: () => null, // Don't show chips here
+                      IndicatorSeparator: () => null,
+                      DropdownIndicator: () => null
+                    }}
+                  />
+                </div>
 
-              <div className="flex items-center gap-2 px-4 py-2 border border-gray-100 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all min-w-[200px]">
-                <Users className="w-4 h-4" />
-                <Select
-                  isMulti
-                  options={contactOptions}
-                  value={taggedContacts}
-                  onChange={setTaggedContacts}
-                  placeholder="Select Contact"
-                  styles={customSelectStyles}
-                  className="flex-1"
-                  components={{
-                    MultiValue: () => null, // Don't show chips here
-                    IndicatorSeparator: () => null,
-                    DropdownIndicator: () => null
-                  }}
-                />
+                <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-xl flex-shrink-0">
+                  <Type className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                  <select
+                    value={noteType}
+                    onChange={(e) => setNoteType(e.target.value)}
+                    className="bg-transparent text-xs font-semibold text-gray-700 focus:outline-none"
+                  >
+                    <option value="General Note">General Note</option>
+                    <option value="Meeting Note">Meeting Note</option>
+                    <option value="Call Note">Call Note</option>
+                    <option value="Follow-up Note">Follow-up Note</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-xl flex-shrink-0">
+                  <Eye className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                  <select
+                    value={visibility}
+                    onChange={(e) => setVisibility(e.target.value)}
+                    className="bg-transparent text-xs font-semibold text-gray-700 focus:outline-none"
+                  >
+                    <option value="Team">Team</option>
+                    <option value="Private">Private</option>
+                  </select>
+                </div>
               </div>
 
               <span className="text-xs text-gray-400 font-medium font-['Outfit']">
@@ -925,37 +1183,8 @@ export const NoteEditor = ({
               </span>
             </div>
 
-            {/* Note Type / Visibility Row */}
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 px-4 py-2 border border-gray-100 rounded-xl min-w-[180px]">
-                <Type className="w-4 h-4 text-gray-500" />
-                <select
-                  value={noteType}
-                  onChange={(e) => setNoteType(e.target.value)}
-                  className="w-full bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
-                >
-                  <option value="General Note">General Note</option>
-                  <option value="Meeting Note">Meeting Note</option>
-                  <option value="Call Note">Call Note</option>
-                  <option value="Follow-up Note">Follow-up Note</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2 px-4 py-2 border border-gray-100 rounded-xl min-w-[140px]">
-                <Eye className="w-4 h-4 text-gray-500" />
-                <select
-                  value={visibility}
-                  onChange={(e) => setVisibility(e.target.value)}
-                  className="w-full bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
-                >
-                  <option value="Team">Team</option>
-                  <option value="Private">Private</option>
-                </select>
-              </div>
-            </div>
-
             {/* Editor Area */}
-            <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+            <div className="border border-gray-300 rounded-2xl">
               <QuillToolbar />
               <ReactQuill
                 value={noteContent}
@@ -975,28 +1204,12 @@ export const NoteEditor = ({
               <button
                 type="button"
                 onClick={onDelete}
-                className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-100 bg-white mr-auto"
+                className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-300 bg-white mr-auto"
                 title="Delete Note"
               >
                 <Trash2 className="w-5 h-5" />
               </button>
             )}
-
-            <button
-              type="button"
-              className="p-2.5 text-gray-500 hover:bg-gray-50 rounded-xl transition-all border border-gray-100 bg-white"
-              title="Export/Share"
-            >
-              <Share className="w-5 h-5" />
-            </button>
-
-            <button
-              type="button"
-              className="p-2.5 text-gray-500 hover:bg-gray-50 rounded-xl transition-all border border-gray-100 bg-white"
-              title="Edit Mode"
-            >
-              <Edit3 className="w-5 h-5" />
-            </button>
 
             <button
               type="submit"
@@ -1009,15 +1222,63 @@ export const NoteEditor = ({
           </div>
         </form>
       </div>
-    </div>
+
+      {linkModalOpen && (
+        <div className="fixed inset-0 z-[10002] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm"
+            onClick={() => setLinkModalOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-sm bg-white rounded-2xl shadow-2xl p-5">
+            <h4 className="text-sm font-semibold text-gray-900 mb-3">Insert Link</h4>
+            <div className="flex items-center w-full px-3 py-2 border border-gray-300 rounded-lg focus-within:border-blue-400">
+              <span className="text-sm font-bold text-gray-800 flex-shrink-0">https://</span>
+              <input
+                type="text"
+                autoFocus
+                value={linkModalUrl}
+                onChange={(e) => setLinkModalUrl(e.target.value.replace(/^https?:\/\//i, ""))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); confirmInsertLink(); }
+                  if (e.key === "Escape") setLinkModalOpen(false);
+                }}
+                placeholder="example.com"
+                className="flex-1 min-w-0 text-sm text-gray-800 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setLinkModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmInsertLink}
+                disabled={!linkModalUrl.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Insert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <NoteStyles />
+    </>
   );
 };
 
 
 // Main NoteSection component
-const NoteSection = ({ companyId: propCompanyId, isQuickView }) => {
+const NoteSection = ({ companyId: propCompanyId, dealId, isQuickView }) => {
   const { id: paramCompanyId } = useParams();
-  const companyId = propCompanyId || paramCompanyId;
+  // On a deal page this is passed explicitly; the useParams fallback is the
+  // company route's :id, which must NOT be used when we're scoped to a deal.
+  const companyId = propCompanyId || (dealId ? undefined : paramCompanyId);
   const [notes, setNotes] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [noteTitle, setNoteTitle] = useState("");
@@ -1034,8 +1295,14 @@ const NoteSection = ({ companyId: propCompanyId, isQuickView }) => {
   const [showAllNotes, setShowAllNotes] = useState(false);
 
   const fetchNotes = useCallback(async () => {
+    // Scope to the deal when given one, otherwise to the company.
+    if (!dealId && !companyId) {
+      setNotes([]);
+      return;
+    }
     try {
-      const res = await API.get(`/notes/company/${companyId}`);
+      const url = dealId ? `/notes/deal/${dealId}` : `/notes/company/${companyId}`;
+      const res = await API.get(url);
       const sortedNotes = res.data.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
       );
@@ -1043,7 +1310,7 @@ const NoteSection = ({ companyId: propCompanyId, isQuickView }) => {
     } catch (err) {
       toast.error("Failed to load notes");
     }
-  }, [companyId]);
+  }, [companyId, dealId]);
 
   const fetchContacts = useCallback(async () => {
     try {
@@ -1084,6 +1351,8 @@ const NoteSection = ({ companyId: propCompanyId, isQuickView }) => {
           title: noteTitle,
           note: noteContent,
           company: companyId,
+          // Scope the note to the deal when this section is mounted on one.
+          ...(dealId ? { deal: dealId } : {}),
           taggedContacts: taggedContacts.map((c) => c.value),
           noteType,
           visibility,
@@ -1275,114 +1544,7 @@ const NoteSection = ({ companyId: propCompanyId, isQuickView }) => {
         onDelete={handleDelete}
       />
 
-      <style jsx global>{`
-        /* Premium Note Editor Styles */
-        .ql-toolbar.ql-snow {
-          border: none !important;
-          padding: 0 !important;
-        }
-
-        .ql-container.ql-snow {
-          border: none !important;
-          font-family: inherit !important;
-        }
-
-        .ql-editor {
-          padding: 2rem !important;
-          min-height: 400px !important;
-          font-size: 1rem !important;
-          line-height: 1.8 !important;
-          color: #374151 !important;
-        }
-
-        .ql-editor.ql-blank::before {
-          left: 2rem !important;
-          color: #9ca3af !important;
-          font-style: normal !important;
-          font-weight: 500 !important;
-        }
-
-        /* Toolbar Button Overrides */
-        #toolbar button {
-          border: 1px solid #f3f4f6 !important;
-          color: #6b7280 !important;
-          transition: all 0.2s !important;
-          margin-bottom: 2px !important;
-        }
-
-        #toolbar button:hover {
-          background-color: #f9fafb !important;
-          color: #111827 !important;
-          border-color: #e5e7eb !important;
-        }
-
-        #toolbar button.ql-active {
-          background-color: #eff6ff !important;
-          color: #2563eb !important;
-          border-color: #bfdbfe !important;
-        }
-
-        #toolbar .ql-stroke {
-          stroke: currentColor !important;
-        }
-
-        #toolbar .ql-fill {
-          fill: currentColor !important;
-        }
-
-        /* Typography */
-        .ql-editor h1 {
-          font-size: 2.25rem !important;
-          font-weight: 800 !important;
-          margin-bottom: 1rem !important;
-          border-bottom: none !important;
-        }
-        .ql-editor h2 {
-          font-size: 1.875rem !important;
-          font-weight: 700 !important;
-          margin-bottom: 0.75rem !important;
-          border-bottom: none !important;
-        }
-        .ql-editor h3 {
-          font-size: 1.5rem !important;
-          font-weight: 600 !important;
-          margin-bottom: 0.5rem !important;
-          border-bottom: none !important;
-        }
-        .ql-editor p {
-          margin-bottom: 1.25rem !important;
-        }
-
-        /* List Styling */
-        .ql-editor ol,
-        .ql-editor ul {
-          padding-left: 1.5rem !important;
-          margin-bottom: 1.25rem !important;
-        }
-
-        .ql-editor li {
-          margin-bottom: 0.5rem !important;
-        }
-
-        /* Prose styles for viewer */
-        .prose h1 {
-          font-size: 2rem;
-          font-weight: 800;
-          color: #111827;
-          margin-bottom: 0.5rem;
-        }
-        .prose h2 {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #111827;
-          margin-bottom: 0.5rem;
-        }
-        .prose p {
-          line-height: 1.8;
-          color: #374151;
-          margin-bottom: 1rem;
-        }
-      `}</style>
+      <NoteStyles />
     </div>
   );
 };

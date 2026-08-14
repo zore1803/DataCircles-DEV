@@ -36,6 +36,8 @@ exports.createQuotation = async (req, res) => {
       signatureType,
       discount,
       receiverGSTIN,
+      billingAddress,
+      shippingAddress,
     } = req.body;
 
     // Validate required fields
@@ -84,6 +86,23 @@ exports.createQuotation = async (req, res) => {
     });
     const quotationNumber = `QUO-${maxNumber + 1}`;
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+    let finalReceiverGSTIN = receiverGSTIN;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+      if (!finalReceiverGSTIN) {
+        finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
+
     const quotation = new Quotation({
       deal,
       quotationNumber,
@@ -98,8 +117,10 @@ exports.createQuotation = async (req, res) => {
       isTaxQuotation: isTaxQuotation || false,
       signature,
       signatureType: signatureType || "text",
-      discount,
-      receiverGSTIN,
+      discount: discount || { type: "fixed", value: 0 },
+      receiverGSTIN: finalReceiverGSTIN,
+      billingAddress: finalBillingAddress,
+      shippingAddress: finalShippingAddress,
       user: req.user.id,
       organization: req.user.organization,
     });
@@ -244,7 +265,10 @@ exports.downloadQuotation = async (req, res) => {
     // The template comes from the document's own `style` when it has one,
     // otherwise from the organization's document settings — resolved inside
     // htmlDocumentPdf, which renders the same markup as the live preview.
-    const pdfBuffer = await htmlDocumentPdf(quotation, bankDetails, orgDetails, "quotation");
+    const copyType = ["original", "duplicate", "triplicate"].includes(req.query.copyType)
+      ? req.query.copyType
+      : "original";
+    const pdfBuffer = await htmlDocumentPdf(quotation, bankDetails, orgDetails, "quotation", copyType);
 
     res.set({
       "Content-Type": "application/pdf",
@@ -297,6 +321,8 @@ exports.updateQuotation = async (req, res) => {
       signatureType,
       discount,
       receiverGSTIN,
+      billingAddress,
+      shippingAddress,
     } = req.body;
 
     const requiredFields = ["deal", "date", "amount", "status", "discount"];
@@ -319,8 +345,28 @@ exports.updateQuotation = async (req, res) => {
       }
     }
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+    let finalReceiverGSTIN = receiverGSTIN;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+      if (!finalReceiverGSTIN) {
+        finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
+
     const quotation = await Quotation.findOneAndUpdate(
-      { _id: req.params.id, organization: req.user.organization },
+      {
+        _id: req.params.id,
+        organization: req.user.organization,
+      },
       {
         deal,
         date,
@@ -335,7 +381,9 @@ exports.updateQuotation = async (req, res) => {
         signature,
         signatureType,
         discount,
-        receiverGSTIN,
+        receiverGSTIN: finalReceiverGSTIN,
+        billingAddress: finalBillingAddress,
+        shippingAddress: finalShippingAddress,
       },
       { new: true }
     );

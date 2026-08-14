@@ -214,6 +214,7 @@ const Navbar = () => {
     },
     { name: "Accounts", isHeader: true },
     { name: "Accounting", href: "/accounting", icon: Calculator },
+    { name: "Vendors", href: "/vendors", icon: Truck },
     { name: "Sales", icon: BarChart3, isDropdown: true, dropdownType: "sales" },
     {
       name: "Procurement",
@@ -221,7 +222,6 @@ const Navbar = () => {
       isDropdown: true,
       dropdownType: "procurement",
     },
-    { name: "Vendors", href: "/vendors", icon: Truck },
     {
       name: "Payments",
       icon: Wallet,
@@ -550,7 +550,7 @@ const Navbar = () => {
 
       {/* Sidebar */}
       <div
-        className={`animate-slideInLeft fixed top-0 left-0 bottom-0 overflow-y-auto overflow-x-hidden border-r border-gray-200 z-[9995] flex flex-col transition-all duration-300 ease-in-out lg:w-auto ${isMobileOpen
+        className={`animate-slideInLeft fixed top-0 left-0 bottom-0 overflow-y-auto overflow-x-hidden border-r border-[#E1E4EA] z-[9995] flex flex-col transition-all duration-300 ease-in-out lg:w-auto ${isMobileOpen
           ? "w-72 translate-x-0"
           : "w-72 -translate-x-full lg:translate-x-0"
           } ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
@@ -647,8 +647,14 @@ const Navbar = () => {
         </div>
         {/* Company switcher. Sits in the strip that carries the page toolbar's
             rule across the sidebar, so that line reads as one unbroken border
-            and the nav starts below it. Collapsed, only the avatar shows. */}
+            and the nav starts below it. Collapsed, only the avatar shows.
+            id is a measurement anchor: pages with a `position: fixed` header
+            strip (e.g. VendorDetailsPageNew.jsx) read this element's real
+            bottom edge at runtime to line their own border up with it,
+            instead of hardcoding a top offset that silently drifts out of
+            sync with this value or with the app's dynamic zoom. */}
         <div
+          id="sidebar-switcher-anchor"
           className={`relative h-16 flex-shrink-0 flex flex-col items-start justify-center border-b border-[#ECECEC] bg-white ${isHovered || isMobileOpen ? "p-3" : "px-3"
             }`}
         >

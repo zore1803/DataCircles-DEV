@@ -10,7 +10,7 @@ import { useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
-import { getPinnedBoundaryShadow } from "../utils/pinnedColumnShadow";
+import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import {
   ChevronUp,
   ChevronDown,
@@ -39,6 +39,7 @@ import {
   Pin,
   PinOff,
   EyeOff,
+  Video,
 } from "lucide-react";
 import BulkActions from "../components/BulkActions";
 import TaskDetailsModal from "../components/Task/TaskDetailsModal";
@@ -48,6 +49,7 @@ import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import VideoTutorialButton from "../components/VideoTutorialButton";
 import TaskKanbanBoard from "../components/Task/TaskKanbanBoard";
+import TaskMeetingCalendarView from "../components/Task/TaskMeetingCalendarView";
 
 import {
   useReactTable,
@@ -56,46 +58,13 @@ import {
   createColumnHelper,
 } from "@tanstack/react-table";
 import AppToaster from "../components/AppToaster";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 
 import SearchIcon from "../components/common/SearchIcon";
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-// Month/Week/Day switcher icons — mirrors the ones on the Calendar page.
-const CustomMonthIcon = (props) => (
-  <svg viewBox="20 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M25.1665 15.667V19.0003" />
-    <path d="M31.8335 15.667V19.0003" />
-    <path d="M36 28.1663V18.9997C36 18.5576 35.8244 18.1337 35.5118 17.8212C35.1993 17.5086 34.7754 17.333 34.3333 17.333H22.6667C22.2246 17.333 21.8007 17.5086 21.4882 17.8212C21.1756 18.1337 21 18.5576 21 18.9997V30.6663C21 31.1084 21.1756 31.5323 21.4882 31.8449C21.8007 32.1574 22.2246 32.333 22.6667 32.333H31.8333L36 28.1663Z" />
-    <path d="M21 22.333H36" />
-    <path d="M31 32.333V28.9997C31 28.5576 31.1756 28.1337 31.4882 27.8212C31.8007 27.5086 32.2246 27.333 32.6667 27.333H36" />
-  </svg>
-);
-
-const CustomWeekIcon = (props) => (
-  <svg viewBox="112 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M117.167 15.667V19.0003" />
-    <path d="M123.833 15.667V19.0003" />
-    <path d="M126.333 17.333H114.667C113.746 17.333 113 18.0792 113 18.9997V30.6663C113 31.5868 113.746 32.333 114.667 32.333H126.333C127.254 32.333 128 31.5868 128 30.6663V18.9997C128 18.0792 127.254 17.333 126.333 17.333Z" />
-    <path d="M113 22.333H128" />
-    <path d="M117.167 25.667H117.175" />
-    <path d="M120.5 25.667H120.508" />
-    <path d="M123.833 25.667H123.842" />
-    <path d="M117.167 29H117.175" />
-    <path d="M120.5 29H120.508" />
-    <path d="M123.833 29H123.842" />
-  </svg>
-);
-
-const CustomDayIcon = (props) => (
-  <svg viewBox="210.5 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M218.167 25.667H219V29.0003" />
-    <path d="M222.333 15.667V19.0003" />
-    <path d="M211.5 22.333H226.5" />
-    <path d="M215.667 15.667V19.0003" />
-    <path d="M224.833 17.333H213.167C212.246 17.333 211.5 18.0792 211.5 18.9997V30.6663C211.5 31.5868 212.246 32.333 213.167 32.333H224.833C225.754 32.333 226.5 31.5868 226.5 30.6663V18.9997C226.5 18.0792 225.754 17.333 224.833 17.333Z" />
-  </svg>
-);
 
 // Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>,
 // matching Companies/Contacts' search-highlighting exactly.
@@ -441,8 +410,6 @@ function Tasks() {
   const [activeTab, setActiveTab] = useState("tasks"); // "tasks" or "meetings"
   const [showKanban, setShowKanban] = useState(false);
   const [showMeetingCalendar, setShowMeetingCalendar] = useState(false);
-  const [meetingCalendarDate, setMeetingCalendarDate] = useState(new Date());
-  const [meetingCalendarView, setMeetingCalendarView] = useState("month"); // "month" | "week" | "day"
   const meetingToggleRefs = useRef({});
   const [meetingToggleIndicator, setMeetingToggleIndicator] = useState({ left: 4, width: 32 });
   useEffect(() => {
@@ -453,25 +420,38 @@ function Tasks() {
     }
   }, [showMeetingCalendar, activeTab]);
 
+  const [calendarDataLoading, setCalendarDataLoading] = useState(false);
+  const fetchCalendarData = async () => {
+    setCalendarDataLoading(true);
+    try {
+      const [meetingsRes, tasksRes] = await Promise.all([
+        API.get("/meetings/all-meetings"),
+        API.get("/tasks/all-tasks"),
+      ]);
+      setAllMeetingsForCalendar(meetingsRes.data || []);
+      setAllTasksForCalendar(tasksRes.data || []);
+    } catch (err) {
+      toast.error("Failed to load calendar data");
+    } finally {
+      setCalendarDataLoading(false);
+    }
+  };
   useEffect(() => {
-    if (!showMeetingCalendar) return;
-    let cancelled = false;
-    API.get("/meetings/all-meetings")
-      .then((res) => {
-        if (!cancelled) setAllMeetingsForCalendar(res.data || []);
-      })
-      .catch(() => {
-        if (!cancelled) toast.error("Failed to load calendar meetings");
-      });
-    return () => {
-      cancelled = true;
-    };
+    if (showMeetingCalendar) fetchCalendarData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showMeetingCalendar]);
 
   // Tasks state
   const [tasks, setTasks] = useState([]);
+  // Separate from the paginated `tasks` list (50/page) — the calendar view
+  // needs every task, not just whatever page the list happens to be on.
+  const [allTasksForCalendar, setAllTasksForCalendar] = useState([]);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editTask, setEditTask] = useState(null);
+  // Seeds the create form's date when opened via the calendar's "quick add"
+  // (a specific day cell) instead of the regular toolbar "+ Add" button.
+  const [taskFormDueDate, setTaskFormDueDate] = useState("");
+  const [meetingFormDate, setMeetingFormDate] = useState("");
   const [taskForm, setTaskForm] = useState({
     title: "",
     description: "",
@@ -516,6 +496,9 @@ function Tasks() {
 
   // Bulk Selection for Meetings
   const [selectedMeetings, setSelectedMeetings] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in entrance), same as Companies.
   const [showBulkStrip, setShowBulkStrip] = useState(false);
@@ -988,7 +971,15 @@ function Tasks() {
   // Task handlers
   const toggleTaskForm = () => {
     setEditTask(null);
+    setTaskFormDueDate("");
     setShowTaskForm((v) => !v);
+  };
+
+  // Quick-add from a calendar day cell — same create form, seeded with that day.
+  const openTaskFormForDate = (dateStr) => {
+    setEditTask(null);
+    setTaskFormDueDate(dateStr);
+    setShowTaskForm(true);
   };
 
   const resetTaskForm = () => {
@@ -1128,7 +1119,16 @@ function Tasks() {
       setSelectedMeeting(null);
       setMeetingModalMode("create");
     }
+    setMeetingFormDate("");
     setShowMeetingForm(!showMeetingForm);
+  };
+
+  // Quick-add from a calendar day cell — same create form, seeded with that day.
+  const openMeetingFormForDate = (dateStr) => {
+    setSelectedMeeting(null);
+    setMeetingModalMode("create");
+    setMeetingFormDate(dateStr);
+    setShowMeetingForm(true);
   };
 
   const handleMeetingEdit = (meeting) => {
@@ -1147,8 +1147,10 @@ function Tasks() {
         toast.success("Meeting created");
       }
       await fetchMeetings();
+      if (showMeetingCalendar) fetchCalendarData();
       setShowMeetingForm(false);
       setSelectedMeeting(null);
+      setMeetingFormDate("");
       exitSelectionMode();
     } catch (err) {
       toast.error(err.response?.data?.error || "Save failed");
@@ -1159,6 +1161,7 @@ function Tasks() {
     try {
       await API.delete(`/meetings/${id}`);
       await fetchMeetings();
+      if (showMeetingCalendar) fetchCalendarData();
       toast.success("Meeting deleted");
       exitSelectionMode();
     } catch (err) {
@@ -1188,6 +1191,7 @@ function Tasks() {
         await API.delete(`/meetings/${itemToDelete}`);
         await fetchMeetings();
       }
+      if (showMeetingCalendar) fetchCalendarData();
       toast.success(
         `${deleteType.charAt(0).toUpperCase() + deleteType.slice(1)} deleted`,
         { id: toastId },
@@ -1367,6 +1371,10 @@ function Tasks() {
   };
 
   const handleSelectTask = (taskId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedTasks((prev) =>
       prev.includes(taskId)
         ? prev.filter((id) => id !== taskId)
@@ -1375,12 +1383,37 @@ function Tasks() {
   };
 
   const handleSelectAllTasks = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedTasks((prev) =>
       prev.length === tasks.length ? [] : tasks.map((t) => t._id),
     );
   };
 
+  // Kanban column-header "select all in this column" checkbox: given that
+  // column's task ids, unions them in, or — if every one is already
+  // selected — removes just those ids, leaving other columns' selections
+  // untouched. Same handler is reused for every column.
+  const handleToggleColumnSelectTasks = (taskIds) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    setSelectedTasks((prev) => {
+      const allSelected = taskIds.every((id) => prev.includes(id));
+      return allSelected
+        ? prev.filter((id) => !taskIds.includes(id))
+        : [...new Set([...prev, ...taskIds])];
+    });
+  };
+
   const handleSelectMeeting = (meetingId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedMeetings((prev) =>
       prev.includes(meetingId)
         ? prev.filter((id) => id !== meetingId)
@@ -1389,6 +1422,10 @@ function Tasks() {
   };
 
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     if (activeTab === "tasks") {
       if (selectedTasks.length === tasks.length && tasks.length > 0) {
         setSelectedTasks([]);
@@ -2621,8 +2658,8 @@ function Tasks() {
           height: 64,
           minHeight: 64,
           maxHeight: 64,
-          background: "#FFFFFF",
-          borderBottom: "1px solid #E1E4EA",
+          background: showBulkStrip ? "#EFF6FF" : "#FFFFFF",
+          borderBottom: showBulkStrip ? "1px solid #BFDBFE" : "1px solid #E1E4EA",
           borderRadius: 0,
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
@@ -2632,32 +2669,36 @@ function Tasks() {
       >
         {showBulkStrip ? (
           <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
-            <div className="flex flex-nowrap lg:flex-wrap items-center gap-3 flex-shrink-0">
+            {/* One joined strip instead of separate pills, matching Companies: no gap
+    between buttons, rounding only on the two outer corners, and each
+    border pulled left by 1px onto its neighbour so touching borders
+    don't double up. Only the icons carry each action's colour. */}
+<div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
               <button
                 onClick={handleExport}
-                className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 text-green-600" />
                 Export
               </button>
               <button
                 onClick={() => (activeTab === "tasks" ? setShowBulkActions(true) : setShowMeetingBulkActions(true))}
-                className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Edit2 className="w-4 h-4" />
+                <Edit2 className="w-4 h-4 text-blue-600" />
                 Bulk Update
               </button>
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={bulkLoading}
-                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4 h-4 text-red-600" />
                 Delete
               </button>
               <button
                 onClick={() => (activeTab === "tasks" ? setSelectedTasks([]) : setSelectedMeetings([]))}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 Clear
               </button>
@@ -2727,6 +2768,14 @@ function Tasks() {
             }}
           >
             Meetings
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowVideoTutorial(true)}
+            className="w-7 h-7 ml-2 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 transition-all flex-shrink-0 shadow-sm"
+            title={`Watch ${activeTab === "tasks" ? "Tasks" : "Meetings"} Module Video Guide`}
+          >
+            <Video className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -3011,7 +3060,7 @@ function Tasks() {
           </div>
           <button
             onClick={() => (activeTab === "tasks" ? toggleTaskForm() : toggleMeetingForm())}
-            title="New Activity"
+            title={activeTab === "tasks" ? "New Task" : "New Meeting"}
             className="flex flex-row justify-center items-center flex-shrink-0 w-10 lg:w-[138px]"
             style={{
               padding: 12,
@@ -3032,7 +3081,7 @@ function Tasks() {
                 color: "#FFFFFF",
               }}
             >
-              New Activity
+              {activeTab === "tasks" ? "New Task" : "New Meeting"}
             </span>
           </button>
         </div>
@@ -3072,12 +3121,10 @@ function Tasks() {
                     const isLeftSticky = colId === "selection" || taskLeftPinnedKeys.includes(colId);
                     const isRightSticky = taskRightPinnedKeys.includes(colId);
                     const isSticky = isLeftSticky || isRightSticky;
-                    const isLeftBoundary = taskLastLeftPinnedKey ? colId === taskLastLeftPinnedKey : colId === "selection";
-                    const isRightBoundary = colId === taskFirstRightPinnedKey;
+                    const boundaryShadowSide = colId === taskLastLeftPinnedKey ? "left" : colId === taskFirstRightPinnedKey ? "right" : null;
                     const isDraggable = colId !== "selection" && colId !== "actions";
                     const isDragging = draggedColKey === colId;
                     const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
-                    const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
                     return (
                       <th
                         key={header.id}
@@ -3096,16 +3143,20 @@ function Tasks() {
                           left: isLeftSticky ? taskPinnedLeftOffsets[colId] ?? 0 : "auto",
                           right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isLeftSticky ? 20 : isRightSticky ? 20 : 15,
-                          opacity: isDragging ? 0.35 : 1,
-                          boxShadow: boundaryShadow || undefined,
                         }}
-                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        /* No `overflow-hidden` on the boundary cell — it would clip
+                           the shadow overlay that deliberately hangs outside it.
+                           The inner `truncate` already handles long labels. */
+                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${boundaryShadowSide ? "" : "overflow-hidden"} ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
-                        <div className="flex items-center gap-1.5 w-full min-w-0">
+                        <div className="flex items-center gap-1.5 w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                           <div className="truncate flex-1 min-w-0">
                             {flexRender(header.column.columnDef.header, header.getContext())}
                           </div>
                         </div>
+                        {boundaryShadowSide && (
+                          <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSide)} />
+                        )}
                         {header.column.getCanResize() && (
                           <div
                             data-resize-handle="true"
@@ -3159,9 +3210,7 @@ function Tasks() {
                       const isLeftSticky = colId === "selection" || taskLeftPinnedKeys.includes(colId);
                       const isRightSticky = taskRightPinnedKeys.includes(colId);
                       const isSticky = isLeftSticky || isRightSticky;
-                      const isLeftBoundary = taskLastLeftPinnedKey ? colId === taskLastLeftPinnedKey : colId === "selection";
-                      const isRightBoundary = colId === taskFirstRightPinnedKey;
-                      const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
+                      const cellBoundaryShadowSide = colId === taskLastLeftPinnedKey ? "left" : colId === taskFirstRightPinnedKey ? "right" : null;
                       return (
                         <td
                           key={cell.id}
@@ -3172,11 +3221,13 @@ function Tasks() {
                             left: isLeftSticky ? taskPinnedLeftOffsets[colId] ?? 0 : "auto",
                             right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
-                            boxShadow: cellBoundaryShadow || undefined,
                           }}
                           className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          {cellBoundaryShadowSide && (
+                            <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
+                          )}
                         </td>
                       );
                     })}
@@ -3232,12 +3283,10 @@ function Tasks() {
                     const isLeftSticky = colId === "selection" || meetingLeftPinnedKeys.includes(colId);
                     const isRightSticky = meetingRightPinnedKeys.includes(colId);
                     const isSticky = isLeftSticky || isRightSticky;
-                    const isLeftBoundary = meetingLastLeftPinnedKey ? colId === meetingLastLeftPinnedKey : colId === "selection";
-                    const isRightBoundary = colId === meetingFirstRightPinnedKey;
+                    const boundaryShadowSide = colId === meetingLastLeftPinnedKey ? "left" : colId === meetingFirstRightPinnedKey ? "right" : null;
                     const isDraggable = colId !== "selection" && colId !== "actions";
                     const isDragging = draggedColKey === colId;
                     const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
-                    const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
                     return (
                       <th
                         key={header.id}
@@ -3256,16 +3305,20 @@ function Tasks() {
                           left: isLeftSticky ? meetingPinnedLeftOffsets[colId] ?? 0 : "auto",
                           right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isLeftSticky ? 20 : isRightSticky ? 20 : 15,
-                          opacity: isDragging ? 0.35 : 1,
-                          boxShadow: boundaryShadow || undefined,
                         }}
-                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        /* No `overflow-hidden` on the boundary cell — it would clip
+                           the shadow overlay that deliberately hangs outside it.
+                           The inner `truncate` already handles long labels. */
+                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${boundaryShadowSide ? "" : "overflow-hidden"} ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
-                        <div className="flex items-center gap-1.5 w-full min-w-0">
+                        <div className="flex items-center gap-1.5 w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                           <div className="truncate flex-1 min-w-0">
                             {flexRender(header.column.columnDef.header, header.getContext())}
                           </div>
                         </div>
+                        {boundaryShadowSide && (
+                          <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSide)} />
+                        )}
                         {header.column.getCanResize() && (
                           <div
                             data-resize-handle="true"
@@ -3313,9 +3366,7 @@ function Tasks() {
                       const isLeftSticky = colId === "selection" || meetingLeftPinnedKeys.includes(colId);
                       const isRightSticky = meetingRightPinnedKeys.includes(colId);
                       const isSticky = isLeftSticky || isRightSticky;
-                      const isLeftBoundary = meetingLastLeftPinnedKey ? colId === meetingLastLeftPinnedKey : colId === "selection";
-                      const isRightBoundary = colId === meetingFirstRightPinnedKey;
-                      const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
+                      const cellBoundaryShadowSide = colId === meetingLastLeftPinnedKey ? "left" : colId === meetingFirstRightPinnedKey ? "right" : null;
                       return (
                       <td
                         key={cell.id}
@@ -3326,11 +3377,13 @@ function Tasks() {
                           left: isLeftSticky ? meetingPinnedLeftOffsets[colId] ?? 0 : "auto",
                           right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isSticky ? 10 : 1,
-                          boxShadow: cellBoundaryShadow || undefined,
                         }}
                         className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {cellBoundaryShadowSide && (
+                          <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
+                        )}
                       </td>
                       );
                     })}
@@ -3356,35 +3409,7 @@ function Tasks() {
       </>
       )}
 
-      {activeTab === "meetings" && showMeetingCalendar && (() => {
-        const year = meetingCalendarDate.getFullYear();
-        const month = meetingCalendarDate.getMonth();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const firstDay = new Date(year, month, 1).getDay();
-        const startDay = firstDay === 0 ? 6 : firstDay - 1;
-        const prevMonthDays = new Date(year, month, 0).getDate();
-
-        const calDays = [];
-        for (let i = startDay - 1; i >= 0; i--) {
-          calDays.push({ date: new Date(year, month - 1, prevMonthDays - i), isCurrent: false });
-        }
-        for (let i = 1; i <= daysInMonth; i++) {
-          calDays.push({ date: new Date(year, month, i), isCurrent: true });
-        }
-        const remaining = 42 - calDays.length;
-        for (let i = 1; i <= remaining; i++) {
-          calDays.push({ date: new Date(year, month + 1, i), isCurrent: false });
-        }
-
-        const meetingsByDate = {};
-        allMeetingsForCalendar.forEach((m) => {
-          if (!m.scheduledAt) return;
-          const key = new Date(m.scheduledAt).toDateString();
-          if (!meetingsByDate[key]) meetingsByDate[key] = [];
-          meetingsByDate[key].push(m);
-        });
-
-        return (
+      {activeTab === "meetings" && showMeetingCalendar && (
         <div
           className="top-[118px] lg:top-[128px]"
           style={{
@@ -3396,214 +3421,17 @@ function Tasks() {
             overflowY: "auto",
           }}
         >
-          <div className="box-border flex flex-col items-start flex-shrink-0 self-stretch bg-white border border-[#E1E4EA] rounded-lg" style={{ padding: 0, gap: 0 }}>
-            {/* Month nav */}
-            <div
-              className="relative box-border flex flex-row justify-between items-center flex-shrink-0 self-stretch"
-              style={{ padding: "6px 16px", width: "100%", height: 60, borderBottom: "1px solid #E0E0E1" }}
-            >
-              <div
-                className="absolute flex flex-row items-center"
-                style={{ left: "50%", top: "50%", transform: "translate(-50%, -50%)", gap: 8 }}
-              >
-                <div className="flex flex-row justify-center items-center flex-shrink-0" style={{ padding: "8px 24px", gap: 10, height: 30, borderRadius: 96 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0085FF", flexShrink: 0 }} />
-                  <span className="whitespace-nowrap" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#0085FF" }}>
-                    {allMeetingsForCalendar.length} Meeting{allMeetingsForCalendar.length !== 1 ? "s" : ""}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-row items-center flex-shrink-0" style={{ height: 32 }}>
-                <button
-                  onClick={() => {
-                    const d = new Date(meetingCalendarDate);
-                    if (meetingCalendarView === "month") d.setMonth(d.getMonth() - 1);
-                    else if (meetingCalendarView === "week") d.setDate(d.getDate() - 7);
-                    else d.setDate(d.getDate() - 1);
-                    setMeetingCalendarDate(d);
-                  }}
-                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
-                  style={{ width: 48, height: 32, border: "1px solid #E0E0E1", borderRadius: "95px 0px 0px 95px" }}
-                >
-                  <ChevronLeft size={20} style={{ color: "#111216" }} />
-                </button>
-                <div
-                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
-                  style={{ padding: "0px 16px", minWidth: 94, height: 32, borderWidth: "1px 0px", borderStyle: "solid", borderColor: "#E0E0E1" }}
-                >
-                  <span className="whitespace-nowrap" style={{ fontFamily: "'SF Pro Display', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "17px", color: "#111216" }}>
-                    {meetingCalendarView === "day"
-                      ? meetingCalendarDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-                      : meetingCalendarDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                  </span>
-                </div>
-                <button
-                  onClick={() => {
-                    const d = new Date(meetingCalendarDate);
-                    if (meetingCalendarView === "month") d.setMonth(d.getMonth() + 1);
-                    else if (meetingCalendarView === "week") d.setDate(d.getDate() + 7);
-                    else d.setDate(d.getDate() + 1);
-                    setMeetingCalendarDate(d);
-                  }}
-                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
-                  style={{ width: 48, height: 32, border: "1px solid #E0E0E1", borderRadius: "0px 95px 95px 0px" }}
-                >
-                  <ChevronRight size={20} style={{ color: "#111216" }} />
-                </button>
-              </div>
-
-              <div
-                className="box-border flex flex-row justify-center items-center flex-shrink-0"
-                style={{
-                  padding: 4,
-                  gap: 6,
-                  width: 285,
-                  height: 40,
-                  background: "#FFFFFF",
-                  border: "1px solid #E0E0E1",
-                  boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.1)",
-                  borderRadius: 96,
-                }}
-              >
-                {[
-                  { v: "month", Icon: CustomMonthIcon },
-                  { v: "week", Icon: CustomWeekIcon },
-                  { v: "day", Icon: CustomDayIcon },
-                ].map(({ v, Icon }) => (
-                  <button
-                    key={v}
-                    onClick={() => setMeetingCalendarView(v)}
-                    className="box-border flex flex-row justify-center items-center flex-1"
-                    style={{
-                      padding: "6px 12px",
-                      gap: 6,
-                      height: 32,
-                      background: meetingCalendarView === v ? "#FFFFFF" : "transparent",
-                      border: meetingCalendarView === v ? "1px solid rgba(0, 133, 255, 0.2)" : "none",
-                      boxShadow: meetingCalendarView === v ? "0px 0px 6px rgba(0, 0, 0, 0.1)" : "none",
-                      borderRadius: meetingCalendarView === v ? 96 : 4,
-                    }}
-                  >
-                    <Icon width={16} height={16} style={{ color: meetingCalendarView === v ? "#0085FF" : "#48494C", flexShrink: 0 }} />
-                    <span
-                      className="capitalize whitespace-nowrap"
-                      style={{
-                        fontFamily: "'SF Pro Display', Inter, sans-serif",
-                        fontWeight: 500,
-                        fontSize: 13,
-                        lineHeight: "17px",
-                        color: meetingCalendarView === v ? "#0085FF" : "#48494C",
-                      }}
-                    >
-                      {v}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Day-of-week header */}
-            <div className="flex flex-row items-start flex-shrink-0 self-stretch">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => (
-                <div
-                  key={day}
-                  className="box-border flex flex-row justify-center items-center flex-shrink-0"
-                  style={{
-                    padding: 16,
-                    gap: 10,
-                    width: "14.2857%",
-                    height: 40,
-                    borderWidth: i === 6 ? "0px 0px 1px 0px" : "0px 1px 1px 0px",
-                    borderStyle: "solid",
-                    borderColor: "#E0E0E1",
-                  }}
-                >
-                  <span className="whitespace-nowrap" style={{ fontFamily: "'SF Pro Display', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "17px", color: "#111216" }}>
-                    {day}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Month grid — meetings only */}
-            {Array.from({ length: 6 }).map((_, weekIdx) => {
-              const weekDays = calDays.slice(weekIdx * 7, weekIdx * 7 + 7);
-              const isCurrentWeek = weekDays.some(
-                (d) => d.date.toDateString() === meetingCalendarDate.toDateString(),
-              );
-              return (
-                <div
-                  key={weekIdx}
-                  className="flex flex-row items-start flex-shrink-0 self-stretch"
-                  style={{ background: meetingCalendarView === "week" && isCurrentWeek ? "#F5F8FF" : "transparent" }}
-                >
-                  {weekDays.map((dayObj, i) => {
-                    const dateKey = dayObj.date.toDateString();
-                    const dayMeetings = meetingsByDate[dateKey] || [];
-                    const visibleMeetings = dayMeetings.slice(0, 3);
-                    const overflowCount = dayMeetings.length - visibleMeetings.length;
-                    const isLastCol = i === 6;
-                    const isLastRow = weekIdx === 5;
-
-                    return (
-                      <div
-                        key={i}
-                        className="box-border flex flex-col items-start flex-shrink-0"
-                        style={{
-                          padding: 16,
-                          gap: 8,
-                          width: "14.2857%",
-                          height: 158,
-                          borderWidth: isLastCol
-                            ? isLastRow ? "0px" : "0px 0px 1px 0px"
-                            : isLastRow ? "0px 1px 0px 0px" : "0px 1px 1px 0px",
-                          borderStyle: "solid",
-                          borderColor: "#E0E0E1",
-                          opacity: dayObj.isCurrent ? 1 : 0.4,
-                          background:
-                            meetingCalendarView === "day" && dateKey === meetingCalendarDate.toDateString()
-                              ? "#F5F8FF"
-                              : "transparent",
-                        }}
-                      >
-                        <span style={{ fontFamily: "'SF Pro Display', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "17px", color: "#111216" }}>
-                          {dayObj.date.getDate()}
-                        </span>
-
-                        <div className="flex flex-col items-start w-full" style={{ gap: 4 }}>
-                          {visibleMeetings.map((m) => (
-                            <div
-                              key={m._id}
-                              className="box-border flex flex-row items-center justify-between w-full"
-                              style={{ padding: "10px 8px", height: 24, background: "#E7EFFF", border: "1px solid #E0E0E1", borderRadius: 4 }}
-                            >
-                              <span className="truncate" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, letterSpacing: "-0.06em", color: "#0952E7" }}>
-                                {m.title || "Meeting"}
-                              </span>
-                              <span className="whitespace-nowrap flex-shrink-0" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, letterSpacing: "-0.06em", color: "#0952E7" }}>
-                                {new Date(m.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                              </span>
-                            </div>
-                          ))}
-                          {overflowCount > 0 && (
-                            <div className="flex flex-row justify-center items-center" style={{ padding: "2px 8px", gap: 4, background: "#F5F6F6", borderRadius: 100 }}>
-                              <span style={{ fontFamily: "'SF Pro Display', Inter, sans-serif", fontWeight: 500, fontSize: 12, lineHeight: "18px", color: "#111216" }}>
-                                +{overflowCount} more
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
+          <TaskMeetingCalendarView
+            meetings={allMeetingsForCalendar}
+            tasksList={allTasksForCalendar}
+            isLoading={calendarDataLoading}
+            onMeetingClick={handleMeetingEdit}
+            onTaskClick={handleTaskView}
+            onQuickAddMeeting={openMeetingFormForDate}
+            onQuickAddTask={openTaskFormForDate}
+          />
         </div>
-        );
-      })()}
+      )}
 
       {activeTab === "tasks" && showKanban && (
         <div
@@ -3623,6 +3451,9 @@ function Tasks() {
             onItemMove={handleTaskMove}
             onCardEdit={handleTaskEdit}
             onCardDelete={(task) => handleDelete(task._id, "task")}
+            selectedItems={selectedTasks}
+            onToggleSelect={handleSelectTask}
+            onToggleColumnSelect={handleToggleColumnSelectTasks}
           />
         </div>
       )}
@@ -3633,18 +3464,24 @@ function Tasks() {
           companies={companies}
           contacts={contacts}
           editTask={editTask}
+          initialDueDate={taskFormDueDate}
           onTaskCreated={() => {
             fetchTasks();
+            if (showMeetingCalendar) fetchCalendarData();
             setShowTaskForm(false);
+            setTaskFormDueDate("");
           }}
           onTaskUpdated={() => {
             fetchTasks();
+            if (showMeetingCalendar) fetchCalendarData();
             setShowTaskForm(false);
             setEditTask(null);
+            setTaskFormDueDate("");
           }}
           onRequestClose={() => {
             setShowTaskForm(false);
             setEditTask(null);
+            setTaskFormDueDate("");
           }}
         />
       )}
@@ -3652,14 +3489,28 @@ function Tasks() {
       {showMeetingForm && (
         <AdminMeetingForm
           open={showMeetingForm}
-          onClose={() => setShowMeetingForm(false)}
-          onSubmit={handleMeetingSave}
-          initialData={selectedMeeting || {}}
+          calendarDate={meetingFormDate}
+          onClose={() => {
+            // In edit mode the form PUTs directly and only calls onClose, so
+            // refetch here or the list keeps showing the stale row.
+            const wasEditing = meetingModalMode === "view" && selectedMeeting;
+            setShowMeetingForm(false);
+            setSelectedMeeting(null);
+            setMeetingModalMode("create");
+            setMeetingFormDate("");
+            if (wasEditing) {
+              fetchMeetings();
+              if (showMeetingCalendar) fetchCalendarData();
+            }
+          }}
+          meetingData={selectedMeeting}
+          users={users}
           contacts={contacts}
           companies={companies}
           vendors={vendors}
           mode={meetingModalMode}
           onSave={handleMeetingSave}
+          onDelete={handleMeetingDelete}
         />
       )}
 
@@ -3738,9 +3589,9 @@ function Tasks() {
       <BulkActions
         isOpen={showBulkActions}
         onClose={() => setShowBulkActions(false)}
-        selectedItems={selectedTasks.map((id) =>
-          tasks.find((t) => t._id === id),
-        )}
+        selectedItems={selectedTasks
+          .map((id) => tasks.find((t) => t._id === id))
+          .filter(Boolean)}
         onBulkUpdate={handleBulkUpdateTasks}
         fieldConfig={taskFieldConfig}
         module="tasks"
@@ -3749,9 +3600,9 @@ function Tasks() {
       <BulkActions
         isOpen={showMeetingBulkActions}
         onClose={() => setShowMeetingBulkActions(false)}
-        selectedItems={selectedMeetings.map((id) =>
-          meetings.find((m) => m._id === id),
-        )}
+        selectedItems={selectedMeetings
+          .map((id) => meetings.find((m) => m._id === id))
+          .filter(Boolean)}
         onBulkUpdate={handleBulkUpdateMeetings}
         fieldConfig={meetingFieldConfig}
         module="meetings"
@@ -3843,6 +3694,13 @@ function Tasks() {
         title={activeTab === "tasks" ? "Filter Tasks" : "Filter Meetings"}
         subtitle="Find items due on a specific date"
         emptyStateText="Add a rule to narrow down the list."
+      />
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
       />
     </div>
   );

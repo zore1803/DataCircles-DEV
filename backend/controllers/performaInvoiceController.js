@@ -34,6 +34,8 @@ const createPerformaInvoice = async (req, res) => {
       signatureType,
       discount,
       receiverGSTIN,
+      billingAddress,
+      shippingAddress,
     } = req.body;
 
     // Validate required fields
@@ -90,6 +92,23 @@ const createPerformaInvoice = async (req, res) => {
     // ✅ Generate new unique proforma invoice number
     const performaInvoiceNumber = `PI-${maxPINumber + 1}`;
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+    let finalReceiverGSTIN = receiverGSTIN;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+      if (!finalReceiverGSTIN) {
+        finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
+
     const performaInvoice = new PerformaInvoice({
       deal,
       date,
@@ -104,7 +123,9 @@ const createPerformaInvoice = async (req, res) => {
       signature,
       signatureType: signatureType || "text",
       discount: discount || { type: "fixed", value: 0 },
-      receiverGSTIN,
+      receiverGSTIN: finalReceiverGSTIN,
+      billingAddress: finalBillingAddress,
+      shippingAddress: finalShippingAddress,
       performaInvoiceNumber,
       user: req.user.id,
       organization: req.user.organization,
@@ -277,7 +298,10 @@ const downloadPerformaInvoice = async (req, res) => {
         // The template comes from the document's own `style` when it has one,
     // otherwise from the organization's document settings — resolved inside
     // htmlDocumentPdf, which renders the same markup as the live preview.
-    const pdfBuffer = await htmlDocumentPdf(performaInvoice, bankDetails, OrgDetails, "performa");
+    const copyType = ["original", "duplicate", "triplicate"].includes(req.query.copyType)
+      ? req.query.copyType
+      : "original";
+    const pdfBuffer = await htmlDocumentPdf(performaInvoice, bankDetails, OrgDetails, "performa", copyType);
 
     res.set({
       "Content-Type": "application/pdf",
@@ -331,6 +355,8 @@ const updatePerformaInvoice = async (req, res) => {
       signatureType,
       discount,
       receiverGSTIN,
+      billingAddress,
+      shippingAddress,
     } = req.body;
 
     // Validate required fields
@@ -355,6 +381,23 @@ const updatePerformaInvoice = async (req, res) => {
       }
     }
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+    let finalReceiverGSTIN = receiverGSTIN;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+      if (!finalReceiverGSTIN) {
+        finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
+
     const performaInvoice = await PerformaInvoice.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -374,7 +417,9 @@ const updatePerformaInvoice = async (req, res) => {
         signature,
         signatureType,
         discount,
-        receiverGSTIN, // Added receiverGSTIN
+        receiverGSTIN: finalReceiverGSTIN,
+        billingAddress: finalBillingAddress,
+        shippingAddress: finalShippingAddress,
       },
       { new: true }
     );

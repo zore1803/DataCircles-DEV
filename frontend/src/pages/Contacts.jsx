@@ -5,7 +5,6 @@ import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { createPortal } from "react-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
-import { getPinnedBoundaryShadow } from "../utils/pinnedColumnShadow";
 import {
   Plus,
   Edit,
@@ -42,6 +41,7 @@ import {
   FileText,
   List,
   LayoutGrid,
+  Video,
 } from "lucide-react";
 import API from "../services/api";
 import ContactFolder from "../components/contact/ContactFolder";
@@ -58,6 +58,7 @@ import toast from "react-hot-toast";
 import VideoTutorialButton from "../components/VideoTutorialButton";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
+import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import { Settings } from "lucide-react"; // Add this to your lucide-react imports
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
@@ -83,6 +84,9 @@ import {
 } from "@tanstack/react-table";
 import ContactQuickView from "../components/contact/ContactQuickView";
 import AppToaster from "../components/AppToaster";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 
 import SearchIcon from "../components/common/SearchIcon";
 // Custom hook to detect mobile screen
@@ -182,6 +186,9 @@ function Contacts() {
   const [additionalValues, setAdditionalValues] = useState({});
   const [permission, setPermission] = useState("");
   const [selectedContacts, setSelectedContacts] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
   const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
@@ -217,6 +224,27 @@ function Contacts() {
       setSearchTerm(initialSearchFromUrl);
       setIsSearchExpanded(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Deep-link from Insights "Review Contacts" — a specific set of contact
+  // ids to show, dropped in sessionStorage since a full navigation
+  // (window.location.href) doesn't carry React Router state. Kept out of
+  // `activeFilters` deliberately — that state drives the visible "Filter
+  // Contacts" panel, and raw internal ids have no business showing up
+  // there as a user-facing filter chip.
+  const [insightsIdFilter, setInsightsIdFilter] = useState(null);
+  useEffect(() => {
+    const raw = sessionStorage.getItem("insightsContactIdFilter");
+    if (!raw) return;
+    sessionStorage.removeItem("insightsContactIdFilter");
+    try {
+      const ids = JSON.parse(raw);
+      if (Array.isArray(ids) && ids.length > 0) {
+        setInsightsIdFilter(ids);
+        setPagination((prev) => ({ ...prev, currentPage: 1 }));
+      }
+    } catch (_) {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [showImport, setShowImport] = useState(false);
@@ -976,6 +1004,7 @@ function Contacts() {
             return (
               <div className="flex items-center justify-between w-full group">
                 <span className="truncate flex-1 min-w-0 flex items-center gap-1.5" title={vc.label}>
+                  <span className="truncate">{vc.label}</span>
                   {pinSide && (
                     <Pin
                       size={12}
@@ -983,7 +1012,6 @@ function Contacts() {
                       style={{ transform: "rotate(45deg)" }}
                     />
                   )}
-                  <span className="truncate">{vc.label}</span>
                 </span>
 
                 <button
@@ -2035,6 +2063,10 @@ function Contacts() {
   );
 
   const handleSelectContact = (contactId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedContacts((prev) =>
       prev.includes(contactId)
         ? prev.filter((id) => id !== contactId)
@@ -2043,6 +2075,10 @@ function Contacts() {
   };
 
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     if (selectedContacts.length === contacts.length) {
       setSelectedContacts([]);
       setSelectionMode(true);
@@ -2202,6 +2238,10 @@ function Contacts() {
         params.append("advancedFilters", JSON.stringify(activeFilters));
       }
 
+      if (insightsIdFilter && insightsIdFilter.length > 0) {
+        params.append("ids", insightsIdFilter.join(","));
+      }
+
       if (activeTab !== "All") {
         switch (activeTab) {
           case "Leads":
@@ -2285,7 +2325,7 @@ function Contacts() {
     } else {
       setPagination((prev) => ({ ...prev, currentPage: 1 }));
     }
-  }, [activeFilters]);
+  }, [activeFilters, insightsIdFilter]);
 
   const handleEditContact = async (contact) => {
     try {
@@ -2511,46 +2551,50 @@ function Contacts() {
       >
         {showBulkStrip ? (
           <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-3 w-full h-full overflow-x-auto lg:overflow-visible`}>
-            <div className="flex flex-nowrap lg:flex-wrap items-center gap-3 flex-shrink-0">
+            {/* One joined strip instead of separate pills, matching Companies: no gap
+    between buttons, rounding only on the two outer corners, and each
+    border pulled left by 1px onto its neighbour so touching borders
+    don't double up. Only the icons carry each action's colour. */}
+<div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
               <button
                 onClick={() => setShowExportModal(true)}
-                className="h-10 px-4 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 text-green-600" />
                 Export
               </button>
               <button
                 onClick={() => setShowBulkNoteModal(true)}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <StickyNote className="w-4 h-4 text-emerald-600" />
                 Add Note
               </button>
               <button
                 onClick={() => setShowAddToHotlistModal(true)}
-                className="h-10 px-4 bg-white border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <FolderPlus className="w-4 h-4" />
+                <FolderPlus className="w-4 h-4 text-blue-600" />
                 Add to Folder
               </button>
               <button
                 onClick={() => setShowBulkActions(true)}
-                className="h-10 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Edit2 className="w-4 h-4" />
+                <Edit2 className="w-4 h-4 text-blue-600" />
                 Bulk Update
               </button>
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={loading}
-                className="h-10 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4 h-4 text-red-600" />
                 Delete
               </button>
               <button
                 onClick={exitSelectionMode}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Cancel
@@ -2582,7 +2626,17 @@ function Contacts() {
             <div
               className={`lg:hidden flex flex-col justify-center gap-1.5 overflow-hidden flex-shrink-0 transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
             >
-              <h1 className="m-0 leading-tight font-bold text-base text-gray-900 truncate">Contacts</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="m-0 leading-tight font-bold text-base text-gray-900 truncate">Contacts</h1>
+                <button
+                  type="button"
+                  onClick={() => setShowVideoTutorial(true)}
+                  className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 transition-all flex-shrink-0 shadow-sm"
+                  title="Watch Contacts Module Video Guide"
+                >
+                  <Video className="w-3.5 h-3.5" />
+                </button>
+              </div>
               <p className="m-0 leading-tight text-[10px] text-gray-500 font-inter truncate">
                 Manage your contacts and leads
               </p>
@@ -3093,7 +3147,7 @@ function Contacts() {
             // loads; the top progress bar reports the fetch instead.
             // No border-t: the toolbar strip right above already has its own
             // border-b, so a top border here would double up against it.
-            <div className="relative bg-white border-x border-b border-[#E1E4EA]">
+            <div className="relative bg-white border-r border-b border-[#E1E4EA]">
               <table
                 className="w-full border-separate border-spacing-0 text-left"
                 style={{
@@ -3105,6 +3159,14 @@ function Contacts() {
                   const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
                   const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
                   const allHeaders = table.getHeaderGroups()[0]?.headers || [];
+                  // Boundary = the pinned column nearest the scrollable area, in
+                  // DISPLAY order (pinnedColumns is in pin-action order, which can
+                  // differ once more than one column is pinned).
+                  const allColIds = allHeaders.map((h) => h.column.id);
+                  const leftPinnedInOrder = allColIds.filter((id) => leftPinnedKeys.includes(id));
+                  const rightPinnedInOrder = allColIds.filter((id) => rightPinnedKeys.includes(id));
+                  const lastLeftPinnedKey = leftPinnedInOrder.length > 0 ? leftPinnedInOrder[leftPinnedInOrder.length - 1] : null;
+                  const firstRightPinnedKey = rightPinnedInOrder.length > 0 ? rightPinnedInOrder[0] : null;
 
                   const pinnedLeftOffsets = {};
                   let cumulativeLeft = 0;
@@ -3125,9 +3187,6 @@ function Contacts() {
                     }
                   });
 
-                  const lastLeftPinnedKey = leftPinnedKeys.length > 0 ? leftPinnedKeys[leftPinnedKeys.length - 1] : null;
-                  const firstRightPinnedKey = rightPinnedKeys.length > 0 ? rightPinnedKeys[0] : null;
-
                   return (
                     <>
                       <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
@@ -3138,21 +3197,10 @@ function Contacts() {
                               const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                               const isRightSticky = rightPinnedKeys.includes(colId);
                               const isSticky = isLeftSticky || isRightSticky;
-                              // Only draw the heavier pin-boundary divider once a column is actually
-                              // pinned — defaulting it to the checkbox column drew it there
-                              // unconditionally, doubled up against that column's own plain
-                              // border-r (see Companies.jsx for the same fix).
-                              const isLeftBoundary = lastLeftPinnedKey === colId;
-                              const isRightBoundary = colId === firstRightPinnedKey;
+                              const boundaryShadowSide = colId === lastLeftPinnedKey ? "left" : colId === firstRightPinnedKey ? "right" : null;
                               const isDraggable = colId !== "selection";
                               const isDragging = draggedColKey === colId;
                               const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
-
-                              // Subtle inset shadow at the pinned block's boundary edge —
-                              // same treatment as the CompanyProfilePage tabs — instead of a
-                              // flat 2px border, so scrolling under a pinned column reads as
-                              // a genuinely separated layer.
-                              const boundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
 
                               return (
                                 <th
@@ -3165,12 +3213,12 @@ function Contacts() {
                                     left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                     right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                     zIndex: isSticky ? 20 : 1,
-                                    opacity: isDragging ? 0.35 : 1,
-                                    boxShadow: boundaryShadow || undefined,
                                   }}
-                                  className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} last:border-r-0 ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                                  className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] last:border-r-0 transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                                 >
-                                  <div className="flex items-center gap-1.5 w-full min-w-0">
+                                  {/* Opacity on this wrapper, not the <th>, so dragging never
+                                      dims the pinned border or its boundary shadow. */}
+                                  <div className="flex items-center gap-1.5 w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                                     <div className="min-w-0 flex-1 truncate">
                                       {flexRender(
                                         header.column.columnDef.header,
@@ -3178,6 +3226,9 @@ function Contacts() {
                                       )}
                                     </div>
                                   </div>
+                                  {boundaryShadowSide && (
+                                    <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSide)} />
+                                  )}
 
                                   {colId !== "selection" && header.column.getCanResize() && (
                                     <div
@@ -3233,15 +3284,8 @@ function Contacts() {
                                 const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
                                 const isRightSticky = rightPinnedKeys.includes(colId);
                                 const isSticky = isLeftSticky || isRightSticky;
-                                // Only draw the heavier pin-boundary divider once a column is actually
-                              // pinned — defaulting it to the checkbox column drew it there
-                              // unconditionally, doubled up against that column's own plain
-                              // border-r (see Companies.jsx for the same fix).
-                              const isLeftBoundary = lastLeftPinnedKey === colId;
-                                const isRightBoundary = colId === firstRightPinnedKey;
+                                const cellBoundaryShadowSide = colId === lastLeftPinnedKey ? "left" : colId === firstRightPinnedKey ? "right" : null;
                                 const isColDragging = draggedColKey === colId;
-
-                                const cellBoundaryShadow = getPinnedBoundaryShadow(isLeftBoundary, isRightBoundary);
 
                                 return (
                                   <td
@@ -3253,14 +3297,17 @@ function Contacts() {
                                       left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                       right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                       zIndex: isSticky ? 10 : 1,
-                                      opacity: isColDragging ? 0.35 : 1,
-                                      boxShadow: cellBoundaryShadow || undefined,
                                     }}
                                     className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                                   >
-                                    {flexRender(
-                                      cell.column.columnDef.cell,
-                                      cell.getContext(),
+                                    <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
+                                      {flexRender(
+                                        cell.column.columnDef.cell,
+                                        cell.getContext(),
+                                      )}
+                                    </div>
+                                    {cellBoundaryShadowSide && (
+                                      <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
                                     )}
                                   </td>
                                 );
@@ -3522,6 +3569,13 @@ function Contacts() {
           </div>
         </div>
       )}
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </div>
   );
 }

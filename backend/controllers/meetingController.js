@@ -12,6 +12,8 @@ const MeetingType = require("../models/MeetingType");
 const Task = require("../models/Task"); // for follow-up task
 const { google } = require("googleapis");
 const axios = require("axios");
+const { isZoomConfigured, createZoomMeeting } = require("../services/zoomService");
+const { isGoogleConfigured, createGoogleMeetEvent } = require("../services/googleMeetService");
 
 // Parses a search term as a calendar date so free-text search can match the
 // "Date & Time" column, which the UI renders as D/M/YYYY (toLocaleDateString).
@@ -355,6 +357,7 @@ exports.createMeeting = async (req, res) => {
       companyId,
       vendorId,
       participants,
+      internalParticipants,
     } = req.body;
 
     // Add the normalizeDate function (same as in createTask)
@@ -431,6 +434,40 @@ exports.createMeeting = async (req, res) => {
       }
     }
 
+    // A video-call meeting with no location set (the client didn't already
+    // fill in a link, e.g. via "Generate Link") gets a real
+    // Zoom or Google Meet link here, whichever is configured — same
+    // priority as the generate-video-link endpoint. Failures here are
+    // non-fatal — the meeting still gets created, just without a link.
+    let resolvedLocation = location;
+    if ((meetingType || "in-person") === "video-call" && !resolvedLocation) {
+      if (isZoomConfigured()) {
+        try {
+          const zoomMeeting = await createZoomMeeting({
+            topic: title,
+            startTime: normalizeDate(scheduledAt),
+            durationMinutes: duration || 60,
+          });
+          resolvedLocation = zoomMeeting.joinUrl;
+        } catch (zoomErr) {
+          console.error("Zoom meeting creation failed:", zoomErr.message);
+        }
+      }
+      if (!resolvedLocation && isGoogleConfigured()) {
+        try {
+          const googleMeeting = await createGoogleMeetEvent({
+            organizationId: req.user.organization,
+            title,
+            startTime: normalizeDate(scheduledAt),
+            durationMinutes: duration || 60,
+          });
+          if (googleMeeting) resolvedLocation = googleMeeting.joinUrl;
+        } catch (googleErr) {
+          console.error("Google Meet creation failed:", googleErr.message);
+        }
+      }
+    }
+
     const meetingData = {
       title,
       description,
@@ -438,10 +475,15 @@ exports.createMeeting = async (req, res) => {
       duration: duration || 60,
       priority: priority || "medium",
       meetingType: meetingType || "in-person",
-      location,
+      location: resolvedLocation,
       linkedTo,
       createdBy: req.user.id,
       organization: req.user.organization,
+      // Internal team is your own staff and is meaningful for every linked
+      // type — a vendor or contact meeting can have staff attending just as
+      // a company one can. Kept out of the per-type branch below so it
+      // isn't silently dropped for non-company meetings.
+      internalParticipants: internalParticipants || [],
     };
 
     // Add the appropriate reference based on linkedTo type
@@ -462,7 +504,8 @@ exports.createMeeting = async (req, res) => {
       { path: "contact", select: "name email phone" },
       { path: "company", select: "name industry" },
       { path: "vendor", select: "name email" },
-      { path: "participants", select: "name email" },
+      { path: "participants", select: "name email role" },
+      { path: "internalParticipants", select: "name email" },
       { path: "createdBy", select: "name email" },
     ]);
 
@@ -517,6 +560,64 @@ exports.createMeeting = async (req, res) => {
   } catch (error) {
     console.error("Error creating meeting:", error);
     res.status(500).json({ error: "Failed to create meeting" });
+  }
+};
+
+// POST /meetings/generate-video-link — used by the "Generate Link" button on
+// the meeting form, ahead of the meeting actually being saved. Tries Zoom
+// first (if configured), then this org's connected Google account, and
+// always 200s with provider: null on failure/not-configured rather than
+// erroring — the frontend shows a message asking to configure a provider.
+exports.generateVideoLink = async (req, res) => {
+  try {
+    const { title, scheduledAt, duration } = req.body;
+
+    if (isZoomConfigured()) {
+      try {
+        const zoomMeeting = await createZoomMeeting({
+          topic: title || "Meeting",
+          startTime: scheduledAt || undefined,
+          durationMinutes: duration || 60,
+        });
+        return res.status(200).json({
+          provider: "zoom",
+          zoomAvailable: true, // kept for older frontend builds
+          joinUrl: zoomMeeting.joinUrl,
+          meetingId: zoomMeeting.meetingId,
+        });
+      } catch (zoomErr) {
+        console.error("Error generating Zoom link:", zoomErr.message);
+        // Fall through to Google Meet rather than failing outright.
+      }
+    }
+
+    if (isGoogleConfigured()) {
+      try {
+        const googleMeeting = await createGoogleMeetEvent({
+          organizationId: req.user.organization,
+          title: title || "Meeting",
+          startTime: scheduledAt || undefined,
+          durationMinutes: duration || 60,
+        });
+        if (googleMeeting) {
+          return res.status(200).json({
+            provider: "google",
+            joinUrl: googleMeeting.joinUrl,
+            meetingId: googleMeeting.eventId,
+          });
+        }
+        // googleMeeting === null means this org hasn't connected a Google
+        // account yet (Settings > Integrations) — not an error, just
+        // nothing to use.
+      } catch (googleErr) {
+        console.error("Error generating Google Meet link:", googleErr.message);
+      }
+    }
+
+    res.status(200).json({ provider: null, zoomAvailable: false });
+  } catch (error) {
+    console.error("Error generating video link:", error.message);
+    res.status(200).json({ provider: null, zoomAvailable: false });
   }
 };
 
@@ -846,6 +947,7 @@ exports.updateMeeting = async (req, res) => {
       notes,
       outcome,
       participants,
+      internalParticipants,
     } = req.body;
 
     const meeting = await Meeting.findOne({
@@ -917,6 +1019,7 @@ exports.updateMeeting = async (req, res) => {
     if (notes) meeting.notes = notes;
     if (outcome) meeting.outcome = outcome;
     if (participants) meeting.participants = participants;
+    if (internalParticipants) meeting.internalParticipants = internalParticipants;
 
     meeting.updatedBy = req.user.id;
     await meeting.save();
@@ -926,7 +1029,8 @@ exports.updateMeeting = async (req, res) => {
       { path: "contact", select: "name email phone" },
       { path: "company", select: "name industry" },
       { path: "vendor", select: "name email" },
-      { path: "participants", select: "name email" },
+      { path: "participants", select: "name email role" },
+      { path: "internalParticipants", select: "name email" },
       { path: "createdBy", select: "name email" },
       { path: "updatedBy", select: "name email" },
     ]);
@@ -1350,6 +1454,8 @@ exports.getMeetings = async (req, res) => {
           { path: "contact", select: "name email phone" },
           { path: "company", select: "name industry" },
           { path: "vendor", select: "name email" },
+          { path: "participants", select: "name email role" },
+          { path: "internalParticipants", select: "name email" },
           { path: "createdBy", select: "name email" },
         ])
         .sort({ scheduledAt: -1 }),
@@ -1582,7 +1688,8 @@ exports.getMeetingById = async (req, res) => {
       { path: "contact", select: "name email phone company" },
       { path: "company", select: "name industry email phone" },
       { path: "vendor", select: "name email phone" },
-      { path: "participants", select: "name email" },
+      { path: "participants", select: "name email role" },
+      { path: "internalParticipants", select: "name email" },
       { path: "createdBy", select: "name email" },
     ]);
 

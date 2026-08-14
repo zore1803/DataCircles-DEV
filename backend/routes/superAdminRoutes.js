@@ -6,6 +6,7 @@ const superAdminAuth = require('../middlewares/superAdminAuth');
 const superAdminController = require('../controllers/superAdminController');
 const couponController = require('../controllers/couponController');
 const referralAdminController = require('../controllers/referralAdminController');
+const walletAdminController = require('../controllers/walletAdminController');
 
 // Super Admin Login
 router.post('/login', async (req, res) => {
@@ -99,8 +100,15 @@ router.post('/addons', superAdminAuth, superAdminController.createAddon);
 router.put('/addons/:addonId', superAdminAuth, superAdminController.updateAddon);
 router.delete('/addons/:addonId', superAdminAuth, superAdminController.deleteAddon);
 
+// Wallet & prepaid credits (independent of subscription billing above)
+router.get('/wallet/config', superAdminAuth, walletAdminController.getConfig);
+router.put('/wallet/config', superAdminAuth, walletAdminController.updateConfig);
+router.get('/organizations/:orgId/wallet', superAdminAuth, walletAdminController.getOrganizationWallet);
+router.post('/organizations/:orgId/wallet/grant', superAdminAuth, walletAdminController.grantCredits);
+
 // Coupon & discount engine management
 router.get('/coupons/organizations', superAdminAuth, couponController.searchOrganizations);
+router.get('/coupons/organizations/:organizationId/redemptions', superAdminAuth, couponController.getOrganizationRedemptions);
 router.get('/coupons', superAdminAuth, couponController.getCoupons);
 router.get('/coupons/:couponId', superAdminAuth, couponController.getCouponById);
 router.post('/coupons', superAdminAuth, couponController.createCoupon);

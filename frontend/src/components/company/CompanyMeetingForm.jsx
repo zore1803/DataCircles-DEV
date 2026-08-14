@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
@@ -34,6 +34,7 @@ const initialState = {
   location: "",
   description: "",
   participants: [],
+  internalParticipants: [],
 };
 
 const ParticipantChip = ({ user, onRemove, isRemovable = false }) => (
@@ -41,7 +42,7 @@ const ParticipantChip = ({ user, onRemove, isRemovable = false }) => (
     <User className="w-3 h-3" />
     <span>{user?.name || "Unknown"}</span>
     {isRemovable && onRemove && (
-      <button onClick={onRemove} className="hover:bg-blue-100 rounded-full p-0.5">
+      <button type="button" onClick={onRemove} className="hover:bg-blue-100 rounded-full p-0.5">
         <X className="w-3 h-3" />
       </button>
     )}
@@ -64,8 +65,11 @@ const PriorityChip = ({ priority }) => {
   );
 };
 
-const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
-  const [isOpen, setIsOpen] = useState(false);
+// isOpen/onOpenChange are controlled by the parent form (a single shared
+// "which dropdown is open" key) rather than each instance owning its own
+// state — otherwise opening Meeting Type doesn't close Priority, and their
+// option lists render stacked on top of each other.
+const SingleSelectDropdown = ({ options, value, onChange, disabled, isOpen, onOpenChange }) => {
   const selectedOption = options.find(opt => opt.value === value) || options[0];
 
   return (
@@ -73,7 +77,7 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => onOpenChange(!isOpen)}
         className={`w-full flex items-center justify-end gap-2 px-3 py-1.5 rounded-full text-xs font-semibold focus:outline-none transition-all ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'
           } ${selectedOption.className}`}
       >
@@ -85,26 +89,29 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => {
-                onChange(option.value);
-                setIsOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-gray-50 ${value === option.value ? 'bg-blue-50/50 text-blue-600' : 'text-gray-600'
-                }`}
-            >
-              <div className={`p-1.5 rounded-lg ${option.className}`}>
-                {option.icon && <option.icon className="w-3.5 h-3.5" />}
-              </div>
-              <span className="font-medium">{option.label}</span>
-              {value === option.value && <CheckCircle2 className="w-4 h-4 ml-auto text-blue-600" />}
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => onOpenChange(false)} />
+          <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
+            {options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  onChange(option.value);
+                  onOpenChange(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-gray-50 ${value === option.value ? 'bg-blue-50/50 text-blue-600' : 'text-gray-600'
+                  }`}
+              >
+                <div className={`p-1.5 rounded-lg ${option.className}`}>
+                  {option.icon && <option.icon className="w-3.5 h-3.5" />}
+                </div>
+                <span className="font-medium">{option.label}</span>
+                {value === option.value && <CheckCircle2 className="w-4 h-4 ml-auto text-blue-600" />}
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
@@ -113,6 +120,19 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
 const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placeholder = "Select participants" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const wrapperRef = useRef(null);
+
+  const openDropdown = () => {
+    setIsOpen(true);
+    // The list opens BELOW the button, so when the button itself is near
+    // the bottom of the scrollable panel, the list renders mostly/fully
+    // off-screen and needs a manual scroll to see any options. Scroll the
+    // trigger toward the top of the panel instead, right as the list
+    // opens, so the options are visible immediately.
+    requestAnimationFrame(() => {
+      wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -142,10 +162,10 @@ const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placehol
           ))}
         </div>
       )}
-      <div className="relative">
+      <div ref={wrapperRef} className="relative">
         <button
           type="button"
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => (isOpen ? setIsOpen(false) : openDropdown())}
           className="w-full flex items-center justify-between px-4 py-3 bg-white border border-gray-300 rounded-xl text-left hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <div className="flex items-center gap-2">
@@ -277,13 +297,20 @@ const CompanyMeetingForm = ({
   calendarDate,
   companyId,
   users,
+  staffUsers = [],
   onSave,
   onDelete,
   onClose,
   startInEditMode
 }) => {
   const [form, setForm] = useState(initialState);
+  // Which of the Duration/Meeting Type/Priority dropdowns is open, if any —
+  // shared so opening one closes the others instead of them stacking.
+  const [openDropdown, setOpenDropdown] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [googleStatus, setGoogleStatus] = useState(null); // { configured, connected, connectedEmail }
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
   const [existingMeetings, setExistingMeetings] = useState([]);
@@ -387,6 +414,9 @@ const CompanyMeetingForm = ({
       setShouldRender(true);
       setTimeout(() => setIsSliding(true), 10);
       fetchCompanyDetails();
+      API.get("/auth/google/status")
+        .then((res) => setGoogleStatus(res.data))
+        .catch(() => setGoogleStatus(null));
 
       if (meetingData && mode === "view") {
         const initialFormData = {
@@ -394,6 +424,7 @@ const CompanyMeetingForm = ({
           date: meetingData?.scheduledAt ? new Date(meetingData?.scheduledAt).toISOString().slice(0, 10) : "",
           time: meetingData?.scheduledAt ? new Date(meetingData?.scheduledAt).toISOString().slice(11, 16) : "09:00",
           participants: meetingData.participants?.map(p => p._id || p) || [],
+          internalParticipants: meetingData.internalParticipants?.map(p => p._id || p) || [],
         };
         setForm(initialFormData);
 
@@ -558,34 +589,35 @@ const CompanyMeetingForm = ({
         onClick={onClose}
       />
       <div
-        className={`fixed inset-0 flex items-center justify-center z-[10001] p-4 transition-all duration-300 ${isSliding ? "opacity-100 scale-100" : "opacity-0 scale-95"
-          }`}
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out overflow-hidden ${
+          isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
+        }`}
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="h-full flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-100">
-            <h3 className="text-lg font-bold text-gray-900">
+          <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50">
+            <h3 className="text-base font-bold text-gray-900">
               Add New Meeting
             </h3>
             <button
               onClick={onClose}
-              className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
             >
-              <X className="w-5 h-5 text-gray-400" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
           {/* Form Body */}
           <div className="flex-1 overflow-y-auto">
-            <form onSubmit={handleSubmit} className="flex flex-col lg:flex-row h-full">
-              {/* Left Column: Content */}
-              <div className="flex-1 p-6 space-y-8 border-r border-gray-100">
-                <div className="space-y-4">
+            <form onSubmit={handleSubmit} className="flex flex-col h-full">
+              {/* Content */}
+              <div className="p-5 space-y-6">
+                <div className="space-y-3">
                   <input
                     type="text"
                     value={form.title}
                     onChange={(e) => handleChange("title", e.target.value)}
-                    className={`w-full text-3xl font-bold border-none bg-transparent placeholder-gray-300 focus:outline-none focus:ring-0 ${errors.title ? 'text-red-600' : 'text-gray-900'
+                    className={`w-full text-2xl font-bold border-none bg-transparent placeholder-gray-300 focus:outline-none focus:ring-0 ${errors.title ? 'text-red-600' : 'text-gray-900'
                       }`}
                     placeholder="Meeting Title"
                     disabled={!isEditMode && mode === "view"}
@@ -593,77 +625,146 @@ const CompanyMeetingForm = ({
                   {errors.title && <p className="text-xs text-red-500 font-medium">*{errors.title}</p>}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700">Description</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-700">Description</label>
                   <textarea
                     value={form.description}
                     onChange={(e) => handleChange("description", e.target.value)}
-                    rows={6}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none resize-none text-sm text-gray-600"
+                    rows={5}
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none resize-none text-xs text-gray-600"
                     placeholder="Description the task objectives, requirements and important details"
                     disabled={!isEditMode && mode === "view"}
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700">Location</label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-gray-700">Location</label>
+                    <div className="flex items-center gap-3">
+                    {(isEditMode || mode === "create") && googleStatus?.configured && !googleStatus?.connected && (
+                      <button
+                        type="button"
+                        disabled={connectingGoogle}
+                        onClick={async () => {
+                          setConnectingGoogle(true);
+                          try {
+                            const res = await API.get("/auth/google/connect");
+                            if (res.data?.authUrl) {
+                              window.location.href = res.data.authUrl;
+                            } else {
+                              toast.error("Could not start Google connect flow");
+                              setConnectingGoogle(false);
+                            }
+                          } catch {
+                            toast.error("Could not start Google connect flow");
+                            setConnectingGoogle(false);
+                          }
+                        }}
+                        className="text-xs font-medium text-gray-500 hover:text-gray-700 underline disabled:opacity-50"
+                        title="One-time setup: connects a Google account so Generate Link can create real Google Meet links"
+                      >
+                        {connectingGoogle ? "Connecting…" : "Connect Google Account"}
+                      </button>
+                    )}
+                    {(isEditMode || mode === "create") && (
+                      <button
+                        type="button"
+                        disabled={generatingLink}
+                        onClick={async () => {
+                          setGeneratingLink(true);
+                          try {
+                            // Real Zoom or Google Meet link — tries Zoom
+                            // first (if configured), then this org's
+                            // connected Google account. Same link works for
+                            // staff and the external client, no login
+                            // required on either side.
+                            const res = await API.post("/meetings/generate-video-link", {
+                              title: form.title,
+                              scheduledAt: form.date ? getScheduledAt() : undefined,
+                              duration: form.duration,
+                            });
+                            if (res.data?.provider && res.data?.joinUrl) {
+                              handleChange("location", res.data.joinUrl);
+                            } else if (googleStatus?.configured && !googleStatus?.connected) {
+                              toast.error("Connect your Google account first (link above) to generate a Meet link");
+                            } else {
+                              toast.error("No video-call provider is configured yet");
+                            }
+                          } catch {
+                            toast.error("Failed to generate a video-call link");
+                          } finally {
+                            setGeneratingLink(false);
+                          }
+                          if (form.meetingType !== "video-call") handleChange("meetingType", "video-call");
+                        }}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                        {generatingLink ? "Generating…" : "Generate Link"}
+                      </button>
+                    )}
+                    </div>
+                  </div>
                   <input
                     type="text"
                     value={form.location}
                     onChange={(e) => handleChange("location", e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none text-sm text-gray-600"
-                    placeholder="Meeting Room Address"
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none text-xs text-gray-600"
+                    placeholder="Meeting Room Address or video call link"
                     disabled={!isEditMode && mode === "view"}
                   />
                 </div>
               </div>
 
-              {/* Right Column: Meta */}
-              <div className="w-full lg:w-80 p-6 space-y-6 bg-white">
+              {/* Meta */}
+              <div className="px-5 pb-5 space-y-5 bg-white border-t border-gray-100 pt-5">
                 {/* Meta Rows */}
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {/* Entity Type */}
                   <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <User className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <User className="w-3.5 h-3.5" />
                       <span>Entity Type</span>
                     </div>
-                    <div className="flex items-center gap-2 text-gray-900 text-sm font-medium">
-                      <Building className="w-4 h-4 text-gray-400" />
+                    <div className="flex items-center gap-2 text-gray-900 text-xs font-medium">
+                      <Building className="w-3.5 h-3.5 text-gray-400" />
                       <span className="capitalize">{company?.industry || "Company"}</span>
                     </div>
                   </div>
 
                   {/* Company Name */}
                   <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Building className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Building className="w-3.5 h-3.5" />
                       <span>Company</span>
                     </div>
-                    <div className="flex items-center gap-2 text-gray-900 text-sm font-medium">
+                    <div className="flex items-center gap-2 text-gray-900 text-xs font-medium">
                       <span className="truncate max-w-[150px]">{company?.name || "Company Name"}</span>
                     </div>
                   </div>
 
                   {/* Date */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Calendar className="w-4 h-4" />
-                      <span>Date</span>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-gray-600 text-xs">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>Date</span>
+                      </div>
+                      <input
+                        type="date"
+                        value={form.date || calendarDate || ""}
+                        onChange={(e) => handleChange("date", e.target.value)}
+                        disabled={!isEditMode && mode === "view"}
+                        className={`text-xs font-medium border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer ${errors.date ? 'text-red-600' : 'text-gray-900'}`}
+                      />
                     </div>
-                    <input
-                      type="date"
-                      value={form.date || calendarDate || ""}
-                      onChange={(e) => handleChange("date", e.target.value)}
-                      disabled={!isEditMode && mode === "view"}
-                      className="text-sm font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
-                    />
+                    {errors.date && <p className="text-[10px] text-red-500 font-medium text-right mt-1">{errors.date}</p>}
                   </div>
 
                   {/* Time */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Clock className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Clock className="w-3.5 h-3.5" />
                       <span>Time</span>
                     </div>
                     <input
@@ -671,14 +772,14 @@ const CompanyMeetingForm = ({
                       value={form.time}
                       onChange={(e) => handleChange("time", e.target.value)}
                       disabled={!isEditMode && mode === "view"}
-                      className="text-sm font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
+                      className="text-xs font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
                     />
                   </div>
 
                   {/* Duration */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Timer className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Timer className="w-3.5 h-3.5" />
                       <span>Duration</span>
                     </div>
                     <SingleSelectDropdown
@@ -686,14 +787,16 @@ const CompanyMeetingForm = ({
                       value={form.duration}
                       onChange={(val) => handleChange("duration", val)}
                       disabled={!isEditMode && mode === "view"}
+                      isOpen={openDropdown === "duration"}
+                      onOpenChange={(open) => setOpenDropdown(open ? "duration" : null)}
                     />
                   </div>
 
                   {/* Meeting Type */}
                   <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
                       <div className="flex items-center gap-2">
-                        <Video className="w-4 h-4" />
+                        <Video className="w-3.5 h-3.5" />
                         <span>Meeting Type</span>
                       </div>
                     </div>
@@ -702,13 +805,15 @@ const CompanyMeetingForm = ({
                       value={form.meetingType}
                       onChange={(val) => handleChange("meetingType", val)}
                       disabled={!isEditMode && mode === "view"}
+                      isOpen={openDropdown === "meetingType"}
+                      onOpenChange={(open) => setOpenDropdown(open ? "meetingType" : null)}
                     />
                   </div>
 
                   {/* Priority */}
                   <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Flag className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Flag className="w-3.5 h-3.5" />
                       <span>Priority</span>
                     </div>
                     <SingleSelectDropdown
@@ -716,20 +821,39 @@ const CompanyMeetingForm = ({
                       value={form.priority}
                       onChange={(val) => handleChange("priority", val)}
                       disabled={!isEditMode && mode === "view"}
+                      isOpen={openDropdown === "priority"}
+                      onOpenChange={(open) => setOpenDropdown(open ? "priority" : null)}
                     />
                   </div>
 
-                  {/* Participants */}
+                  {/* Internal Team — your own staff attending, kept as a
+                      separate list from Client Contacts below so Meeting
+                      Details can actually tell the two apart instead of
+                      lumping everyone under one bucket. */}
                   <div className="space-y-3 pt-2">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Users className="w-4 h-4" />
-                      <span>Participants</span>
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Internal Team</span>
+                    </div>
+                    <MultiSelectDropdown
+                      users={staffUsers}
+                      selectedUsers={form.internalParticipants}
+                      onSelectionChange={(internalParticipants) => handleChange("internalParticipants", internalParticipants)}
+                      placeholder="Add internal team members"
+                    />
+                  </div>
+
+                  {/* Client Contacts */}
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Client Contacts</span>
                     </div>
                     <MultiSelectDropdown
                       users={users}
                       selectedUsers={form.participants}
                       onSelectionChange={(participants) => handleChange("participants", participants)}
-                      placeholder="Add meeting participants"
+                      placeholder="Add client contacts"
                     />
                     {errors.participants && <p className="text-[10px] text-red-500 font-medium">{errors.participants}</p>}
                   </div>
@@ -750,13 +874,13 @@ const CompanyMeetingForm = ({
           </div>
 
           {/* Footer Actions */}
-          <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
+          <div className="p-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
             <div>
               {mode === "view" && onDelete && (
                 <button
                   type="button"
                   onClick={handleDelete}
-                  className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-100 bg-white"
+                  className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-100 bg-white"
                   title="Delete Meeting"
                 >
                   <Trash2 className="w-5 h-5" />
@@ -768,23 +892,25 @@ const CompanyMeetingForm = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-6 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+                className="px-5 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Cancel
               </button>
               {(!isEditMode && mode === "view") ? (
                 <button
+                  type="button"
                   onClick={() => setIsEditMode(true)}
-                  className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-200 transition-all flex items-center gap-2"
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-200 transition-all flex items-center gap-2"
                 >
                   <Pencil className="w-4 h-4" />
                   Edit Meeting
                 </button>
               ) : (
                 <button
+                  type="button"
                   onClick={handleSubmit}
                   disabled={loading || timeConflict}
-                  className={`px-8 py-2.5 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2 ${loading || timeConflict
+                  className={`px-6 py-2 rounded-xl text-xs font-bold shadow-lg transition-all flex items-center gap-2 ${loading || timeConflict
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200'
                     }`}

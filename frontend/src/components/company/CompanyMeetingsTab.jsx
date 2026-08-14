@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
-import { PINNED_LEFT_BOUNDARY_SHADOW, PINNED_RIGHT_BOUNDARY_SHADOW } from "../../utils/pinnedColumnShadow";
+import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   Filter,
   Plus,
@@ -13,11 +13,13 @@ import {
   ChevronDown,
   Pin,
   PinOff,
-  MoreVertical,
   AlarmClock,
   Video,
   EyeOff,
   X,
+  Eye,
+  Edit3,
+  Trash2,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
@@ -104,14 +106,24 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
   // Derived rather than copied into local state on a one-shot effect — a
   // copy raced the initial data load (whichever re-rendered first won) and
   // could get clobbered before ever becoming visible.
-  const showMeetingForm = manualMeetingFormOpen || autoOpenCreate;
+  const [editingMeeting, setEditingMeeting] = useState(null);
+  const showMeetingForm = manualMeetingFormOpen || autoOpenCreate || !!editingMeeting;
   const closeMeetingForm = () => {
+    // Editing a meeting updates it directly via API.put inside
+    // CompanyMeetingForm (there's no onUpdate callback like the Task form
+    // has), so the list needs an explicit refetch here to pick up the change.
+    if (editingMeeting) refetchMeetings();
     setManualMeetingFormOpen(false);
+    setEditingMeeting(null);
     if (autoOpenCreate) onAutoOpenCreateConsumed?.();
   };
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [editingMeeting, setEditingMeeting] = useState(null);
+  const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const [rowActionsPos, setRowActionsPos] = useState(null);
+  const rowActionsRef = useRef(null);
+  const [meetingToDelete, setMeetingToDelete] = useState(null);
+  const [deletingMeeting, setDeletingMeeting] = useState(false);
   const [viewMode, setViewMode] = useState("list");
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [leftPinned, setLeftPinned] = useState(new Set());
@@ -177,56 +189,73 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    // A single press does nothing: the column menu opens from its own chevron
-    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
-    // meant the FIRST press of every double-click popped the menu, whose
-    // full-screen backdrop then swallowed the second press — making the header
-    // effectively un-double-clickable. Drag still starts on the second press.
-    if (e.detail < 2) return;
+    // No click-count gate here, matching the Companies list page: a press plus
+    // DRAG_THRESHOLD px of movement starts the drag, at whatever speed the user
+    // moves. Gating on `e.detail` meant only a fast-enough double-click could
+    // begin a move. The threshold below is what keeps a plain click harmless,
+    // and the column menu opens from its own chevron button, never from the
+    // header background — so nothing competes with the drag for a single press.
 
-    e.preventDefault();
-    window.getSelection?.()?.removeAllRanges();
-
+    // A plain click must stay harmless, so nothing happens until the pointer
+    // has travelled DRAG_THRESHOLD px — the same deferred start the Companies
+    // list page uses. Until then no ghost is mounted and no drag state is set.
     const th = e.currentTarget;
-    const rect = th.getBoundingClientRect();
-    const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
+    let dragStarted = false;
+    let positionGhost = () => {};
+
+    const beginDrag = () => {
+      dragStarted = true;
+      e.preventDefault();
+      window.getSelection?.()?.removeAllRanges();
+      const rect = th.getBoundingClientRect();
+      const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
     
-    const previewRows = (meetings || []).slice(0, 10).map((m) => {
-      let val = m[colId];
-      if (typeof val === 'object' && val !== null) val = val?.name || val?.title || "";
-      return String(val ?? "").trim() || "—";
-    });
+      const previewRows = (meetings || []).slice(0, 10).map((m) => {
+        let val = m[colId];
+        if (typeof val === 'object' && val !== null) val = val?.name || val?.title || "";
+        return String(val ?? "").trim() || "—";
+      });
 
-    const zGhost = getAncestorZoom(document.body);
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+      const zGhost = getAncestorZoom(document.body);
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
 
-    dragOverRef.current = null;
-    setDraggedColKey(colId);
-    setDragOverColKey(null);
-    document.body.style.userSelect = "none";
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
 
-    setDragGhost({
-      label,
-      previewRows,
-      offsetX,
-      offsetY,
-      width: rect.width / zGhost,
-      height: rect.height / zGhost,
-    });
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX,
+        offsetY,
+        width: rect.width / zGhost,
+        height: rect.height / zGhost,
+      });
 
-    const positionGhost = (clientX, clientY) => {
-      const el = ghostElRef.current;
-      if (!el) return;
-      const visualTop = clientY - offsetY;
-      const visualLeft = clientX - offsetX;
-      el.style.top = `${visualTop / zGhost}px`;
-      el.style.left = `${visualLeft / zGhost}px`;
-      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      positionGhost = (clientX, clientY) => {
+        const el = ghostElRef.current;
+        if (!el) return;
+        const visualTop = clientY - offsetY;
+        const visualLeft = clientX - offsetX;
+        el.style.top = `${visualTop / zGhost}px`;
+        el.style.left = `${visualLeft / zGhost}px`;
+        el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      };
+      requestAnimationFrame(() => positionGhost(startX, startY));
     };
-    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
 
     const handleMouseMove = (moveEvent) => {
+      if (!dragStarted) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        beginDrag();
+      }
       positionGhost(moveEvent.clientX, moveEvent.clientY);
       const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
       const thAtPoint = elAtPoint?.closest("th[data-col-id]");
@@ -240,6 +269,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragStarted) return;
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) {
@@ -328,24 +358,21 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
   const getStickyStyle = (colId, isHeader = false, isSelected = false) => {
     const isPinned = leftPinned.has(colId) || rightPinned.has(colId);
     const style = stickyStyles[colId] || {};
-    
-    let borderShadows = "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA";
-    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
-    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
-    
-    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) {
-      borderShadows = `${PINNED_LEFT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
-    } else if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) {
-      borderShadows = `${PINNED_RIGHT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
-    }
-    
     return {
       ...style,
-      position: isPinned ? "sticky" : undefined,
+      position: isPinned ? "sticky" : "relative",
       zIndex: isPinned ? (isHeader ? 35 : 20) : undefined,
       backgroundColor: isPinned ? (isHeader ? "#F5F7FA" : (isSelected ? "#EFF6FF" : "#fff")) : undefined,
-      boxShadow: borderShadows,
+      boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
     };
+  };
+
+  const getBoundaryShadowSide = (colId) => {
+    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
+    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
+    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) return "left";
+    if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) return "right";
+    return null;
   };
 
   const togglePinColumn = (colId) => {
@@ -389,6 +416,22 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     if (companyId) fetchUsers();
   }, [companyId]);
 
+  // Org staff — distinct from `users` above (which, despite the name, is
+  // actually this company's client-side contacts). Meetings need both:
+  // internal team picks from staffUsers, Client Contacts picks from users.
+  const [staffUsers, setStaffUsers] = useState([]);
+  useEffect(() => {
+    const fetchStaffUsers = async () => {
+      try {
+        const res = await API.get("/auth/all-user");
+        setStaffUsers(res.data?.allUsers || []);
+      } catch (err) {
+        console.error("Failed to load staff users:", err);
+      }
+    };
+    fetchStaffUsers();
+  }, []);
+
   const refetchMeetings = async () => {
     try {
       const res = await API.get("/meetings", { params: { companyId } });
@@ -414,6 +457,21 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     }
   };
 
+  const handleMeetingComplete = async (meeting) => {
+    try {
+      await API.put(`/meetings/${meeting._id}`, { status: "completed" });
+      await refetchMeetings();
+      setSelectedMeeting((prev) => (prev && prev._id === meeting._id ? { ...prev, status: "completed" } : prev));
+      toast.success("Meeting marked as complete!");
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Failed to update meeting.");
+      }
+    }
+  };
+
   const handleMeetingDelete = async (meetingId) => {
     try {
       await API.delete(`/meetings/${meetingId}`);
@@ -434,6 +492,24 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
   const handleMeetingClick = (meeting) => {
     setSelectedMeeting(meeting);
     setIsDetailsOpen(true);
+  };
+
+  const handleEditMeeting = (meeting) => {
+    setIsDetailsOpen(false);
+    setEditingMeeting(meeting);
+  };
+
+  const handleDeleteMeetingConfirmed = async () => {
+    if (!meetingToDelete) return;
+    setDeletingMeeting(true);
+    try {
+      await handleMeetingDelete(meetingToDelete._id);
+      setMeetingToDelete(null);
+    } catch {
+      // handleMeetingDelete already surfaced a toast for the failure.
+    } finally {
+      setDeletingMeeting(false);
+    }
   };
 
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
@@ -516,7 +592,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
     });
   }, [filteredMeetings, sortConfig]);
 
-  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+  const { selectedItems, toggleItem, clearSelection, selectAll, upgradeModal } = useBulkSelection({
     items: filteredMeetings,
     onDelete: () => setShowBulkDeleteModal(true)
   });
@@ -749,8 +825,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search meetings by title, deal, or participants..."
-            className="w-full h-full pl-11 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-            style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+            className="w-full h-full pl-11 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
           />
           {searchTerm && (
             <button
@@ -820,14 +895,14 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
       {/* Meeting list or empty state */}
       {!isLoading && meetings.length === 0 ? (
         <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <Users size={28} className="mb-3 text-blue-500" />
+          <Users size={28} className="mb-3 text-gray-400" />
           <button
             type="button"
             onClick={() => setManualMeetingFormOpen(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus size={16} />
-            Add new
+            Add new meeting
           </button>
         </div>
       ) : viewMode === "list" ? (
@@ -866,6 +941,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                 {orderedColumns.map((col) => {
                   const isDragging = draggedColKey === col.id;
                   const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
+                  const boundarySide = getBoundaryShadowSide(col.id);
                   return (
                     <th
                       key={col.id}
@@ -877,7 +953,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                         opacity: isDragging ? 0.35 : 1,
                         ...getStickyStyle(col.id, true)
                       }}
-                      className={`py-2.5 font-medium text-[#525252] text-xs cursor-grab active:cursor-grabbing ${
+                      className={`py-2.5 font-medium text-[#525252] text-xs cursor-grab active:cursor-grabbing bg-[#F5F7FA] ${
                         col.firstCol ? "pl-6 pr-3" : "px-3"
                       } ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
@@ -891,12 +967,12 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               <Skeleton width="65%" height={12} />
                             ) : (
                               <div className="flex items-center gap-1.5 min-w-0 truncate">
-                                {(leftPinned.has(col.id) || rightPinned.has(col.id)) && (
-                                  <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0" style={{ transform: "rotate(45deg)" }} />
-                                )}
                                 <span className="truncate flex-1 min-w-0" title={col.label}>
                                   {col.label}
                                 </span>
+                                {(leftPinned.has(col.id) || rightPinned.has(col.id)) && (
+                                  <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0 ml-1" style={{ transform: "rotate(45deg)" }} />
+                                )}
                               </div>
                             )}
                           </div>
@@ -1006,11 +1082,13 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                         )}
                       </div>
                       <div
+                        data-resize-handle="true"
                         onMouseDown={(e) => startResize(e, col.id)}
                         className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${
                           resizingCol === col.id ? "bg-blue-500" : "bg-transparent"
                         }`}
                       />
+                      {boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />}
                     </th>
                   );
                 })}
@@ -1024,15 +1102,114 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                   numRows={listLimit}
                   rowHeight={54}
                 />
+              ) : paginatedMeetings.length === 0 ? (
+                <tr>
+                  <td colSpan={orderedColumns.length + 1} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
+                    No meetings found.
+                  </td>
+                </tr>
               ) : (
                 paginatedMeetings.map((meeting) => {
                   const isSelected = selectedItems.includes(meeting._id);
-                  const participants = meeting.participants || [];
+                  const attendees = [...(meeting.internalParticipants || []), ...(meeting.participants || [])];
                   const organizer = typeof meeting.createdBy === "object" ? meeting.createdBy : null;
+                  const isActionsOpen = openRowActionsId === meeting._id;
+                  const meetingActionsMenu = (
+                    <div className="relative flex items-center justify-center flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isActionsOpen) {
+                            setOpenRowActionsId(null);
+                            setRowActionsPos(null);
+                            return;
+                          }
+                          // rect is VISUAL px; the menu is portaled into
+                          // document.body, which paints inside the app's
+                          // dynamic <html> zoom, so rect-derived values are
+                          // divided by that zoom, the menu is centered on
+                          // the row rather than hanging off an edge, and
+                          // both axes are clamped to the viewport — same
+                          // approach as the Deals/Tasks row-actions menus.
+                          const zMenu = getAncestorZoom(document.body);
+                          const MENU_W = 170;
+                          const MENU_H = 110; // View Meeting + Edit Meeting + divider + Delete Meeting
+                          const MARGIN = 8;
+
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const viewportH = window.innerHeight / zMenu;
+                          const viewportW = window.innerWidth / zMenu;
+
+                          const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                          let calcTop = rowCenter - MENU_H / 2;
+                          calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+                          let calcLeft = rect.right / zMenu - MENU_W;
+                          calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                          calcLeft = Math.max(calcLeft, MARGIN);
+
+                          setRowActionsPos({ top: calcTop, left: calcLeft });
+                          setOpenRowActionsId(meeting._id);
+                        }}
+                        className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
+                        title="More options"
+                      >
+                        <MoreVertIcon className="w-5 h-5" />
+                      </button>
+
+                      {isActionsOpen && rowActionsPos && createPortal(
+                        <>
+                          <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+                          <div
+                            ref={rowActionsRef}
+                            style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+                            className="w-[170px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={() => {
+                                setOpenRowActionsId(null);
+                                setRowActionsPos(null);
+                                handleMeetingClick(meeting);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                              View Meeting
+                            </button>
+                            <button
+                              onClick={() => {
+                                setOpenRowActionsId(null);
+                                setRowActionsPos(null);
+                                handleEditMeeting(meeting);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                              Edit Meeting
+                            </button>
+                            <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                            <button
+                              onClick={() => {
+                                setOpenRowActionsId(null);
+                                setRowActionsPos(null);
+                                setMeetingToDelete(meeting);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Delete Meeting
+                            </button>
+                          </div>
+                        </>,
+                        document.body
+                      )}
+                    </div>
+                  );
                   const cells = {
                     title: (
-                        <td key="title" style={{ height: 60 }} className="pl-6 pr-3 truncate border-r border-b border-[#E1E4EA]">
-                          <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#222530" }} className="truncate">
+                        <td key="title" style={{ height: 60 }} className="pl-6 pr-3 border-r border-b border-[#E1E4EA]">
+                          <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#222530" }} className="truncate block">
                             <HighlightText text={meeting.title || "Untitled Meeting"} query={searchTerm} />
                           </span>
                         </td>
@@ -1081,24 +1258,24 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                     ),
                     attendees: (
                         <td key="attendees" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]">
-                          {participants.length ? (
+                          {attendees.length ? (
                             <div className="flex items-center">
-                              {participants.slice(0, 3).map((p, i) => (
+                              {attendees.slice(0, 3).map((p, i) => (
                                 <div
                                   key={p._id || i}
                                   className="rounded-full bg-gray-200 border border-white flex items-center justify-center text-[9px] font-semibold text-gray-600 flex-shrink-0"
                                   style={{ width: 24, height: 24, marginLeft: i === 0 ? 0 : -8 }}
                                 >
-                                  {p.name?.charAt(0)?.toUpperCase() || "?"}
+                                  {(p.name || "?").charAt(0).toUpperCase()}
                                 </div>
                               ))}
-                              {participants.length > 3 && (
+                              {attendees.length > 3 && (
                                 <div
                                   className="rounded-full bg-[#D9D9D9] border border-white flex items-center justify-center flex-shrink-0"
-                                  style={{ width: 24, height: 24, marginLeft: -8 }}
+                                  style={{ height: 24, padding: "0 6px", borderRadius: 12, marginLeft: -8 }}
                                 >
-                                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#78788D" }}>
-                                    +{participants.length - 3}
+                                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#78788D", whiteSpace: "nowrap" }}>
+                                    +{attendees.length - 3} more
                                   </span>
                                 </div>
                               )}
@@ -1137,7 +1314,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                     ),
                     status: (
                         <td key="status" style={{ height: 60 }} className="px-3 border-b border-[#E1E4EA]">
-                          <div className="flex items-center justify-start" style={{ gap: 8 }}>
+                          <div className="flex items-center justify-between w-full" style={{ gap: 8 }}>
                             <span
                               className="inline-flex items-center justify-center capitalize"
                               style={{
@@ -1153,16 +1330,6 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                             >
                               <HighlightText text={meeting.status || "scheduled"} query={searchTerm} />
                             </span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMeetingClick(meeting);
-                              }}
-                              className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
-                              title="More options"
-                            >
-                              <MoreVertIcon className="w-5 h-5" />
-                            </button>
                           </div>
                         </td>
                     ),
@@ -1195,27 +1362,40 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                           />
                         </div>
                       </td>
-                      {orderedColumns.map((col) => {
+                      {orderedColumns.map((col, colIdx) => {
                         const isDragging = draggedColKey === col.id;
                         const cell = cells[col.id];
                         if (!cell) return null;
-                        
+
                         const stickyStyle = getStickyStyle(col.id, false, isSelected);
                         const mergedStyle = {
                           ...cell.props.style,
                           opacity: isDragging ? 0.35 : undefined,
                           ...stickyStyle,
                         };
-                        
+
                         const cleanClassName = (cell.props.className || "")
                           .replace("border-r", "")
                           .replace("border-b", "")
                           .replace("border-[#E1E4EA]", "");
-                          
-                        return React.cloneElement(cell, {
-                          style: mergedStyle,
-                          className: cleanClassName,
-                        });
+
+                        const boundarySide = getBoundaryShadowSide(col.id);
+                        const isLastCol = colIdx === orderedColumns.length - 1;
+                        return React.cloneElement(
+                          cell,
+                          { style: mergedStyle, className: cleanClassName },
+                          <>
+                            {isLastCol ? (
+                              <div className="flex items-center justify-between w-full gap-2">
+                                {cell.props.children}
+                                {meetingActionsMenu}
+                              </div>
+                            ) : (
+                              cell.props.children
+                            )}
+                            {boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />}
+                          </>
+                        );
                       })}
                     </tr>
                   );
@@ -1309,9 +1489,15 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                 {cells.map((day, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center justify-center"
-                    style={{ width: 24, height: 24, justifySelf: "center" }}
+                    className="flex flex-col items-center justify-center"
+                    style={{ width: 24, justifySelf: "center" }}
                   >
+                    {day && meetingDays.has(day) && (
+                      <span
+                        className="flex-shrink-0"
+                        style={{ width: 6, height: 6, borderRadius: 99, background: "#0085FF", marginBottom: 2 }}
+                      />
+                    )}
                     {day && (
                       <span
                         className="flex items-center justify-center"
@@ -1324,7 +1510,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                           fontSize: 14,
                           lineHeight: "17px",
                           background: day === now.getDate() ? "#0085FF" : "transparent",
-                          color: day === now.getDate() ? "#FFFFFF" : meetingDays.has(day) ? "#0085FF" : "#333333",
+                          color: day === now.getDate() ? "#FFFFFF" : "#333333",
                         }}
                       >
                         {day}
@@ -1398,16 +1584,9 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
               .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
               .slice(0, 3);
             if (realUpcomingMeetings.length === 0) return null;
-            const upcomingMeetings =
-              realUpcomingMeetings.length === 1
-                ? [...realUpcomingMeetings, realUpcomingMeetings[0]]
-                : realUpcomingMeetings;
+            const upcomingMeetings = realUpcomingMeetings;
             return (
               <div className="relative flex-shrink-0" style={{ isolation: "isolate", width: 994 }}>
-                <div
-                  className="absolute"
-                  style={{ width: 1, top: 60, bottom: -34, left: 4, background: "#E7E7E9" }}
-                />
                 {upcomingMeetings.map((meeting, idx) => {
                   const start = new Date(meeting.scheduledAt);
                   const duration = meeting.duration || 30;
@@ -1418,12 +1597,23 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                   return (
                     <div
                       key={`${meeting._id}-${idx}`}
-                      className="flex flex-row items-center"
+                      className="relative flex flex-row items-center"
                       style={{ gap: 12, width: "100%" }}
                     >
+                      {/* Connector line: each row draws only the portion between
+                          its own top/bottom edge and its own dot's center, sized
+                          in percentages of THIS row's actual (content-driven)
+                          height — so it lines up exactly regardless of how tall
+                          any individual card renders. */}
+                      {!isFirst && (
+                        <div className="absolute" style={{ width: 1, left: 4, top: 0, height: "50%", background: "#E7E7E9" }} />
+                      )}
+                      {!isLast && (
+                        <div className="absolute" style={{ width: 1, left: 4, top: "50%", height: "50%", background: "#E7E7E9" }} />
+                      )}
                       <span
-                        className="flex-shrink-0"
-                        style={{ width: 10, height: 10, borderRadius: 9999, background: color }}
+                        className="relative flex-shrink-0"
+                        style={{ width: 10, height: 10, borderRadius: 9999, background: color, zIndex: 1 }}
                       />
                       <div
                         className="flex flex-col justify-center items-start flex-1"
@@ -1460,7 +1650,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               </span>
                             </div>
                             {(() => {
-                              const attendees = meeting.internalTeam || meeting.participants || [];
+                              const attendees = [...(meeting.internalParticipants || []), ...(meeting.participants || [])];
                               const visibleAttendees = attendees.slice(0, 3);
                               const extraAttendees = attendees.length - visibleAttendees.length;
                               if (attendees.length === 0) return null;
@@ -1492,16 +1682,16 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                                       <div
                                         className="flex items-center justify-center flex-shrink-0"
                                         style={{
-                                          width: 20,
                                           height: 20,
-                                          borderRadius: "50%",
+                                          padding: "0 6px",
+                                          borderRadius: 10,
                                           background: "#D9D9D9",
                                           border: "1px solid #FFFFFF",
                                           marginLeft: -4,
                                         }}
                                       >
-                                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, color: "#78788D" }}>
-                                          +{extraAttendees}
+                                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, color: "#78788D", whiteSpace: "nowrap" }}>
+                                          +{extraAttendees} more
                                         </span>
                                       </div>
                                     )}
@@ -1561,7 +1751,15 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                                 Organiser
                               </span>
                             </div>
-                            <MoreVertical size={16} style={{ color: "#BEBEC8", marginLeft: 12, flexShrink: 0 }} />
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleMeetingClick(meeting); }}
+                              className="flex items-center justify-center flex-shrink-0 hover:bg-gray-100 rounded-lg transition-colors"
+                              style={{ marginLeft: 12, padding: 4 }}
+                              title="View meeting"
+                            >
+                              <Eye size={16} style={{ color: "#78788D" }} />
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1613,20 +1811,19 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
               .sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt))
               .slice(0, 3);
             if (realCompletedMeetings.length === 0) return null;
-            const completedMeetings =
-              realCompletedMeetings.length === 1
-                ? [...realCompletedMeetings, realCompletedMeetings[0]]
-                : realCompletedMeetings;
+            const completedMeetings = realCompletedMeetings;
             return (
               <div className="relative flex-shrink-0" style={{ isolation: "isolate", width: 994 }}>
-                <div
-                  className="absolute"
-                  style={{ width: 1, top: 60, bottom: -34, left: 4, background: "#E7E7E9" }}
-                />
                 {isLoading ? (
                   [1, 2, 3].map((_, idx) => (
-                    <div key={idx} className="flex flex-row items-center" style={{ gap: 12, width: "100%" }}>
-                      <span className="flex-shrink-0" style={{ width: 10, height: 10, borderRadius: 9999, background: "#E1E4EA" }} />
+                    <div key={idx} className="relative flex flex-row items-center" style={{ gap: 12, width: "100%" }}>
+                      {idx !== 0 && (
+                        <div className="absolute" style={{ width: 1, left: 4, top: 0, height: "50%", background: "#E7E7E9" }} />
+                      )}
+                      {idx !== 2 && (
+                        <div className="absolute" style={{ width: 1, left: 4, top: "50%", height: "50%", background: "#E7E7E9" }} />
+                      )}
+                      <span className="relative flex-shrink-0" style={{ width: 10, height: 10, borderRadius: 9999, background: "#E1E4EA", zIndex: 1 }} />
                       <div
                         className="flex flex-col justify-center items-start flex-1"
                         style={{
@@ -1650,12 +1847,18 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                   return (
                     <div
                       key={`${meeting._id}-${idx}`}
-                      className="flex flex-row items-center"
+                      className="relative flex flex-row items-center"
                       style={{ gap: 12, width: "100%" }}
                     >
+                      {!isFirst && (
+                        <div className="absolute" style={{ width: 1, left: 4, top: 0, height: "50%", background: "#E7E7E9" }} />
+                      )}
+                      {!isLast && (
+                        <div className="absolute" style={{ width: 1, left: 4, top: "50%", height: "50%", background: "#E7E7E9" }} />
+                      )}
                       <span
-                        className="flex-shrink-0"
-                        style={{ width: 10, height: 10, borderRadius: 9999, background: color }}
+                        className="relative flex-shrink-0"
+                        style={{ width: 10, height: 10, borderRadius: 9999, background: color, zIndex: 1 }}
                       />
                       <div
                         className="flex flex-col justify-center items-start flex-1"
@@ -1692,7 +1895,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                               </span>
                             </div>
                             {(() => {
-                              const attendees = meeting.internalTeam || meeting.participants || [];
+                              const attendees = [...(meeting.internalParticipants || []), ...(meeting.participants || [])];
                               const visibleAttendees = attendees.slice(0, 3);
                               const extraAttendees = attendees.length - visibleAttendees.length;
                               if (attendees.length === 0) return null;
@@ -1724,16 +1927,16 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                                       <div
                                         className="flex items-center justify-center flex-shrink-0"
                                         style={{
-                                          width: 20,
                                           height: 20,
-                                          borderRadius: "50%",
+                                          padding: "0 6px",
+                                          borderRadius: 10,
                                           background: "#D9D9D9",
                                           border: "1px solid #FFFFFF",
                                           marginLeft: -4,
                                         }}
                                       >
-                                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, color: "#78788D" }}>
-                                          +{extraAttendees}
+                                        <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, color: "#78788D", whiteSpace: "nowrap" }}>
+                                          +{extraAttendees} more
                                         </span>
                                       </div>
                                     )}
@@ -1793,7 +1996,15 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
                                 Organiser
                               </span>
                             </div>
-                            <MoreVertical size={16} style={{ color: "#BEBEC8", marginLeft: 12, flexShrink: 0 }} />
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleMeetingClick(meeting); }}
+                              className="flex items-center justify-center flex-shrink-0 hover:bg-gray-100 rounded-lg transition-colors"
+                              style={{ marginLeft: 12, padding: 4 }}
+                              title="View meeting"
+                            >
+                              <Eye size={16} style={{ color: "#78788D" }} />
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1894,9 +2105,12 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
       {showMeetingForm && (
         <CompanyMeetingForm
           open={showMeetingForm}
-          mode="create"
+          mode={editingMeeting ? "view" : "create"}
+          startInEditMode={!!editingMeeting}
+          meetingData={editingMeeting}
           companyId={companyId}
           users={users}
+          staffUsers={staffUsers}
           onSave={handleMeetingSave}
           onDelete={handleMeetingDelete}
           onClose={closeMeetingForm}
@@ -1907,9 +2121,46 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
         open={isDetailsOpen}
         meetingData={selectedMeeting}
         users={users}
+        staffUsers={staffUsers}
         onDelete={handleMeetingDelete}
+        onEdit={handleEditMeeting}
+        onComplete={handleMeetingComplete}
         onClose={() => setIsDetailsOpen(false)}
       />
+
+      {meetingToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
+                Confirm Delete
+              </h3>
+              <p className="text-sm text-gray-500 font-inter mb-6">
+                Delete meeting "{meetingToDelete.title || "Meeting"}"? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setMeetingToDelete(null)}
+                  disabled={deletingMeeting}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteMeetingConfirmed}
+                  disabled={deletingMeeting}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {deletingMeeting ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {dragGhost && createPortal(
         <div
@@ -2002,6 +2253,7 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
           </div>
         </div>
       )}
+      {upgradeModal}
     </div>
   );
 }

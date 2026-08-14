@@ -1,5 +1,5 @@
 import React from "react";
-import { X, Trash2, Loader2, Edit3, Users, Plus, Video, CalendarX, CalendarClock } from "lucide-react";
+import { X, Trash2, Loader2, Edit3, Users, Plus, Video } from "lucide-react";
 import toast from "react-hot-toast";
 
 const CircleCheckIcon = (props) => (
@@ -11,12 +11,6 @@ const CircleCheckIcon = (props) => (
 const DealIcon = (props) => (
   <svg width="17" height="16" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
     <path d="M1.66667 15.8333C1.20833 15.8333 0.815972 15.6701 0.489583 15.3438C0.163194 15.0174 0 14.625 0 14.1667V5C0 4.54167 0.163194 4.14931 0.489583 3.82292C0.815972 3.49653 1.20833 3.33333 1.66667 3.33333H5V1.66667C5 1.20833 5.16319 0.815972 5.48958 0.489583C5.81597 0.163194 6.20833 0 6.66667 0H10C10.4583 0 10.8507 0.163194 11.1771 0.489583C11.5035 0.815972 11.6667 1.20833 11.6667 1.66667V3.33333H15C15.4583 3.33333 15.8507 3.49653 16.1771 3.82292C16.5035 4.14931 16.6667 4.54167 16.6667 5V14.1667C16.6667 14.625 16.5035 15.0174 16.1771 15.3438C15.8507 15.6701 15.4583 15.8333 15 15.8333H1.66667ZM1.66667 14.1667H15V5H1.66667V14.1667ZM6.66667 3.33333H10V1.66667H6.66667V3.33333Z" fill="#D4AA00" />
-  </svg>
-);
-
-const InvoiceIcon = (props) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M5.83333 15.5H14.1667V14H5.83333V15.5ZM5.83333 11.75H14.1667V10.25H5.83333V11.75ZM4.16667 18.3333C3.70833 18.3333 3.31597 18.1701 2.98958 17.8438C2.66319 17.5174 2.5 17.125 2.5 16.6667V3.33333C2.5 2.875 2.66319 2.48264 2.98958 2.15625C3.31597 1.82986 3.70833 1.66667 4.16667 1.66667H12.5L17.5 6.66667V16.6667C17.5 17.125 17.3368 17.5174 17.0104 17.8438C16.684 18.1701 16.2917 18.3333 15.8333 18.3333H4.16667ZM11.6667 7.5V3.33333H4.16667V16.6667H15.8333V7.5H11.6667Z" fill="#6155F5" />
   </svg>
 );
 
@@ -58,15 +52,15 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
   // Editing a completed meeting doesn't make sense — it already happened.
   const isCompleted = meetingData.status === "completed";
   const organizer = typeof meetingData.createdBy === "object" ? meetingData.createdBy : null;
-  const internalTeam =
-    users?.filter(
-      (user) =>
-        meetingData.participants?.includes(user._id) ||
-        meetingData.contact?._id === user._id ||
-        meetingData.vendor?._id === user._id ||
-        meetingData.company?._id === user._id,
-    ) || [];
-  const primaryContact = internalTeam[0];
+  // internalParticipants (your staff, ref: User) and participants (the
+  // client's contacts, ref: Contact) are now genuinely separate fields on
+  // the meeting itself — populated server-side, no need to cross-reference
+  // against a locally-fetched user/contact list here.
+  const internalTeam = meetingData.internalParticipants || [];
+  const clientContacts = meetingData.contact
+    ? [meetingData.contact]
+    : meetingData.participants || [];
+  const primaryContact = clientContacts[0];
 
   return (
     <>
@@ -76,7 +70,7 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
         onClick={onClose}
       />
       <div
-        className={`fixed dc-panel-card z-[10001] w-full sm:w-[500px] md:w-[600px] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${
           isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -125,7 +119,7 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
           {/* Title strip */}
           <div className="flex flex-col items-start" style={{ padding: 24, gap: 14 }}>
             <div className="flex flex-col items-start w-full" style={{ gap: 6 }}>
-              <div className="flex flex-row items-center w-full" style={{ gap: 40 }}>
+              <div className="flex flex-row items-center w-full" style={{ gap: 16 }}>
                 <h1
                   style={{
                     fontFamily: "Inter",
@@ -135,84 +129,67 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
                     letterSpacing: "-0.5px",
                     color: "#0E121B",
                   }}
-                  className="truncate"
+                  className="truncate flex-1 min-w-0"
                 >
                   {meetingData.title || "Untitled Meeting"}
                 </h1>
-                <div className="flex items-center flex-shrink-0" style={{ gap: 8 }}>
-                  <span
-                    className="inline-flex items-center justify-center"
-                    style={{
-                      padding: "4px 8px",
-                      borderRadius: 35,
-                      backgroundColor: "rgba(0, 133, 255, 0.1)",
-                      fontFamily: "Inter",
-                      fontWeight: 500,
-                      fontSize: 12,
-                      lineHeight: "120%",
-                      color: "#0085FF",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {meetingData.scheduledAt && new Date(meetingData.scheduledAt) < new Date() ? "Completed" : "Upcoming"}
-                  </span>
-                  <span
-                    className="inline-flex items-center justify-center capitalize"
-                    style={{
-                      padding: "4px 8px",
-                      borderRadius: 35,
-                      backgroundColor: "#EEE7FD",
-                      fontFamily: "Inter",
-                      fontWeight: 500,
-                      fontSize: 12,
-                      lineHeight: "120%",
-                      color: "#CB30E0",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {meetingData.meetingType?.replace("-", " ") || "General"}
-                  </span>
-                </div>
                 <button
-                  onClick={() => toast("Join meeting isn't available yet")}
+                  onClick={() => {
+                    const link = meetingData.location;
+                    if (link && /^https?:\/\//i.test(link)) {
+                      window.open(link, "_blank", "noopener,noreferrer");
+                    } else {
+                      toast("No meeting link set — add one from the Location field");
+                    }
+                  }}
                   className="flex items-center justify-center gap-2 flex-shrink-0 whitespace-nowrap"
                   style={{
-                    marginLeft: "auto",
-                    padding: "12px 14px",
+                    padding: "8px 14px",
                     border: "1px solid rgba(39, 112, 121, 0.3)",
                     borderRadius: 80,
                     fontFamily: "Inter",
                     fontWeight: 500,
-                    fontSize: 16,
-                    lineHeight: "20px",
+                    fontSize: 14,
+                    lineHeight: "18px",
                     color: "#1F2937",
                   }}
                 >
-                  <Video className="w-5 h-5" style={{ color: "#1C1B1F" }} />
+                  <Video className="w-4 h-4" style={{ color: "#1C1B1F" }} />
                   Join Meeting
                 </button>
               </div>
-              <div className="flex flex-row items-center w-full" style={{ gap: 6 }}>
-                {meetingData.company?.logo ? (
-                  <img
-                    src={meetingData.company.logo}
-                    alt={meetingData.company?.name}
-                    className="rounded-full object-cover flex-shrink-0"
-                    style={{ width: 16, height: 16 }}
-                  />
-                ) : (
-                  <div
-                    className="rounded-full bg-gray-200 flex items-center justify-center text-[8px] font-semibold text-gray-600 flex-shrink-0"
-                    style={{ width: 16, height: 16 }}
-                  >
-                    {meetingData.company?.name?.charAt(0)?.toUpperCase() || "?"}
-                  </div>
-                )}
+              <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
                 <span
-                  className="truncate"
-                  style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}
+                  className="inline-flex items-center justify-center"
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: 35,
+                    backgroundColor: "rgba(0, 133, 255, 0.1)",
+                    fontFamily: "Inter",
+                    fontWeight: 500,
+                    fontSize: 12,
+                    lineHeight: "120%",
+                    color: "#0085FF",
+                    whiteSpace: "nowrap",
+                  }}
                 >
-                  {meetingData.company?.name || "Company Name"}
+                  {meetingData.scheduledAt && new Date(meetingData.scheduledAt) < new Date() ? "Completed" : "Upcoming"}
+                </span>
+                <span
+                  className="inline-flex items-center justify-center capitalize"
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: 35,
+                    backgroundColor: "#EEE7FD",
+                    fontFamily: "Inter",
+                    fontWeight: 500,
+                    fontSize: 12,
+                    lineHeight: "120%",
+                    color: "#CB30E0",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {meetingData.meetingType?.replace("-", " ") || "General"}
                 </span>
               </div>
             </div>
@@ -325,6 +302,28 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
             </div>
           </div>
 
+          {/* Meeting Purpose */}
+          {meetingData.description && (
+            <div className="box-border flex flex-col items-start w-full" style={{ padding: "12px 24px" }}>
+              <div
+                className="flex flex-col items-start w-full"
+                style={{ padding: 14, gap: 16, backgroundColor: "#F8FAFC", borderRadius: 14 }}
+              >
+                <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
+                  Meeting Purpose
+                </span>
+                <p
+                  className="w-full whitespace-pre-line"
+                  style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}
+                >
+                  {meetingData.description}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div style={{ margin: "0 24px", borderBottom: "1px solid #D9D9D9" }} />
+
           {/* Organiser / Internal Team / Client Contacts */}
           <div className="flex flex-col items-start w-full" style={{ padding: "12px 24px", gap: 14 }}>
             {/* Organiser */}
@@ -429,22 +428,26 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
             <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
               Client Contacts
             </span>
-            {meetingData.contact ? (
-              <div className="flex flex-row items-center" style={{ gap: 12 }}>
-                <div
-                  className="rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0"
-                  style={{ width: 32, height: 32 }}
-                >
-                  {meetingData.contact?.name?.charAt(0)?.toUpperCase() || "?"}
-                </div>
-                <div className="flex flex-col items-start" style={{ gap: 4 }}>
-                  <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
-                    {meetingData.contact?.name}
-                  </span>
-                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
-                    {meetingData.contact?.role || "—"}
-                  </span>
-                </div>
+            {clientContacts.length > 0 ? (
+              <div className="flex flex-col items-start w-full" style={{ gap: 12 }}>
+                {clientContacts.map((contact) => (
+                  <div key={contact._id} className="flex flex-row items-center" style={{ gap: 12 }}>
+                    <div
+                      className="rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0"
+                      style={{ width: 32, height: 32 }}
+                    >
+                      {contact?.name?.charAt(0)?.toUpperCase() || "?"}
+                    </div>
+                    <div className="flex flex-col items-start" style={{ gap: 4 }}>
+                      <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
+                        {contact?.name}
+                      </span>
+                      <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+                        {contact?.role || "—"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, color: "#8D8D8E" }}>
@@ -466,26 +469,6 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
           </div>
 
           <div style={{ margin: "0 24px", borderBottom: "1px solid #D9D9D9" }} />
-
-          {/* Meeting Purpose */}
-          {meetingData.description && (
-            <div className="box-border flex flex-col items-start w-full" style={{ padding: "12px 24px" }}>
-              <div
-                className="flex flex-col items-start w-full"
-                style={{ padding: 14, gap: 16, backgroundColor: "#F8FAFC", borderRadius: 14 }}
-              >
-                <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
-                  Meeting Purpose
-                </span>
-                <p
-                  className="w-full whitespace-pre-line"
-                  style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}
-                >
-                  {meetingData.description}
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* Linked Records */}
           <div className="box-border flex flex-col items-start w-full" style={{ padding: "12px 24px", gap: 14 }}>
@@ -536,102 +519,35 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
                   </div>
                 </div>
               </div>
-
-              <div className="flex flex-row justify-start items-center w-full" style={{ gap: 16 }}>
-                <div className="flex flex-row items-center flex-1 min-w-0" style={{ gap: 12 }}>
-                  <div
-                    className="rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ width: 32, height: 32, backgroundColor: "rgba(97, 85, 245, 0.1)" }}
-                  >
-                    <InvoiceIcon className="w-5 h-5" />
-                  </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
-                      Invoice
-                    </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#0085FF" }} className="truncate">
-                      —
-                    </span>
-                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 8, lineHeight: "120%", color: "#6B7280" }} className="truncate">
-                      —
-                    </span>
-                  </div>
-                </div>
-                <div className="flex-1" />
-              </div>
             </div>
           </div>
 
-          {/* Meeting actions row */}
-          <div style={{ margin: "0 24px", borderTop: "1px solid #D9D9D9" }} />
-          <div
-            className="flex flex-row justify-center items-center w-full"
-            style={{ padding: "23px 24px", gap: 12 }}
-          >
-            <button
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="flex items-center justify-center gap-2 disabled:opacity-50 whitespace-nowrap"
-              style={{
-                padding: "12px 14px",
-                border: "1px solid rgba(205, 54, 54, 0.3)",
-                borderRadius: 80,
-                fontFamily: "Inter",
-                fontWeight: 500,
-                fontSize: 16,
-                lineHeight: "20px",
-                color: "#CD3636",
-              }}
-            >
-              {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CalendarX className="w-5 h-5" />}
-              Cancel Meeting
-            </button>
-            {!isCompleted && (
-              <button
-                onClick={() => onEdit?.(meetingData)}
-                className="flex items-center justify-center gap-2 whitespace-nowrap"
-                style={{
-                  padding: "12px 14px",
-                  border: "1px solid rgba(0, 133, 255, 0.3)",
-                  borderRadius: 80,
-                  fontFamily: "Inter",
-                  fontWeight: 500,
-                  fontSize: 16,
-                  lineHeight: "20px",
-                  color: "#0085FF",
-                }}
-              >
-                <CalendarClock className="w-5 h-5" />
-                Reschedule
-              </button>
-            )}
-          </div>
         </div>
 
         <div style={{ borderTop: "1px solid #D9D9D9" }} />
 
-        {/* Footer */}
+        {/* Footer — sized to match the compact header (23px/24px padding, ~55px tall) */}
         <div
           className="flex flex-row justify-between items-center flex-shrink-0"
-          style={{ padding: "23px 24px", gap: 10 }}
+          style={{ padding: "9px 24px", gap: 10, height: 55, boxSizing: "border-box" }}
         >
           <button
             onClick={() => (onComplete ? onComplete(meetingData) : toast("Mark as complete isn't available yet"))}
             disabled={isCompleted}
             className="flex items-center justify-center gap-2 disabled:opacity-50"
             style={{
-              padding: "12px 14px",
+              padding: "8px 14px",
               backgroundColor: "rgba(0, 201, 80, 0.05)",
               border: "1px solid rgba(28, 176, 97, 0.3)",
               borderRadius: 80,
               fontFamily: "Inter",
               fontWeight: 500,
-              fontSize: 16,
-              lineHeight: "20px",
+              fontSize: 14,
+              lineHeight: "18px",
               color: "#1CB061",
             }}
           >
-            <CircleCheckIcon className="w-5 h-5" style={{ color: "#34C759" }} />
+            <CircleCheckIcon className="w-4 h-4" style={{ color: "#34C759" }} />
             {isCompleted ? "Completed" : "Mark As Complete"}
           </button>
           {!isCompleted && (
@@ -639,13 +555,13 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
               onClick={() => onEdit?.(meetingData)}
               className="flex items-center justify-center"
               style={{
-                padding: "12px 14px",
+                padding: "8px 14px",
                 backgroundColor: "#0085FF",
                 borderRadius: 88,
                 fontFamily: "Inter",
                 fontWeight: 500,
-                fontSize: 16,
-                lineHeight: "20px",
+                fontSize: 14,
+                lineHeight: "18px",
                 color: "#FFFFFF",
               }}
             >

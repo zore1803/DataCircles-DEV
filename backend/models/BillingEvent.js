@@ -41,12 +41,21 @@ const billingEventSchema = new mongoose.Schema({
     required: true,
     enum: [
       'SUBSCRIPTION_CREATED',
+      // The real activation moment — see utils/billingEvents.js's
+      // buildEventSummary case for why this is separate from
+      // SUBSCRIPTION_CREATED (found via live QA: nothing previously marked
+      // when a CAW mandate actually got confirmed, only when it was requested).
+      'SUBSCRIPTION_ACTIVATED',
       'TRIAL_STARTED',
       'TRIAL_ENDED',
       'PLAN_UPGRADE',
       'PLAN_DOWNGRADE',
       'DOWNGRADE_SCHEDULED',
       'BILLING_CYCLE_CHANGE_SCHEDULED',
+      // Phase 3 (docs/audit/PHASE3_MONTHLY_TO_ANNUAL_PRORATION.md) — the
+      // IMMEDIATE Monthly->Annual transition, distinct from the *_SCHEDULED
+      // value above (which is the deferred non-UPI cycle-change path).
+      'BILLING_CYCLE_CHANGE_COMPLETED',
       'SCHEDULE_CANCELLED',
       'ADDON_ADDED',
       'ADDON_REMOVAL_SCHEDULED',
@@ -70,6 +79,12 @@ const billingEventSchema = new mongoose.Schema({
       'REFERRAL_REWARD_REVOKED',
       'REFERRAL_REWARD_EXPIRED',
       'REFERRAL_DISABLED',
+      // BILLING_UX_SPEC.md §5 — the REFEREE-side counterpart to
+      // REFERRAL_REWARD_EARNED. Never emitted to the referrer (who gets a
+      // Reward object + the *_REWARD_* events above instead); this is the
+      // referee's own timeline entry for their one-time immediate discount,
+      // per the one-benefit-per-participant design (§3).
+      'REFERRAL_DISCOUNT_APPLIED',
     ],
     index: true,
   },

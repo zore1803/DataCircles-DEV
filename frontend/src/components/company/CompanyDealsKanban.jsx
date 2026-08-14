@@ -1,12 +1,15 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import BulkActionBar from "../common/BulkActionBar";
+import { useSubscription } from "../../contexts/SubscriptionContext";
+import { hasMinPlan } from "../../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../subscription/UpgradeRequiredModal";
 import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
   DndContext,
   DragOverlay,
-  closestCorners,
+  closestCenter,
   useDroppable,
   useSensor,
   useSensors,
@@ -19,9 +22,18 @@ import {
   SortableContext,
   verticalListSortingStrategy,
   sortableKeyboardCoordinates,
+  defaultAnimateLayoutChanges,
 } from "@dnd-kit/sortable";
+
+// dnd-kit's default heuristic skips the reflow animation for sibling cards
+// during certain drag sequences (isSorting && !wasDragging), which is why a
+// neighbouring card would just sit there instead of sliding into the gap
+// left by the dragged one. Forcing wasDragging:true always animates it.
+const animateLayoutChanges = (args) =>
+  defaultAnimateLayoutChanges({ ...args, wasDragging: true });
 import { CSS } from "@dnd-kit/utilities";
 import { getAncestorZoom } from "../../utils/domUtils";
+import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   Filter,
   LayoutGrid,
@@ -51,9 +63,11 @@ import {
   Tag,
   IndianRupee,
   Calendar,
+  X,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
+import confetti from "canvas-confetti";
 import API from "../../services/api";
 import QuickDealForm from "../deal/QuickDealForm";
 import FilterIcon from "../common/FilterIcon";
@@ -167,21 +181,105 @@ const DEAL_CARD_CLASS =
   "box-border flex flex-col items-start bg-white border rounded-[10px] mb-3 hover:shadow-sm transition-shadow overflow-hidden";
 
 // Inner markup only — no drag wiring, no navigation. Rendered by both shells below.
-const DealCardContent = ({ deal }) => {
+// `selectSlot` is an optional node dropped in front of the title (the selection
+// checkbox on the in-list card); the drag overlay passes nothing so it stays clean.
+const DealCardContent = ({ deal, selectSlot = null, setDealToDelete }) => {
+  const navigate = useNavigate();
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [actionsPos, setActionsPos] = useState(null);
+  const actionsRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (actionsRef.current && !actionsRef.current.contains(event.target)) {
+        setIsActionsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const tagLabel = deal.company?.name || deal.company?.industry || deal.contact?.name;
   const avatarNames = [deal.contact?.name, deal.user?.name].filter(Boolean);
 
   return (
     <>
       <div className="flex flex-col items-start gap-2 w-full">
-        <div className="flex items-center justify-between w-full">
-          <span
-            className="truncate"
-            style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "14px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
-          >
-            {deal.title || "Deal Name"}
-          </span>
-          <MoreHorizontal className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
+        <div className="flex items-center justify-between w-full gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {selectSlot}
+            <span
+              className="truncate"
+              style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "14px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
+            >
+              {deal.title || "Deal Name"}
+            </span>
+          </div>
+          <div className="relative flex-shrink-0 pointer-events-auto">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (isActionsOpen) {
+                  setIsActionsOpen(false);
+                  return;
+                }
+                const zMenu = getAncestorZoom(document.body) || 1;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const viewportH = window.innerHeight / zMenu;
+                const viewportW = window.innerWidth / zMenu;
+                const MENU_W = 160;
+                const MENU_H = 110;
+
+                const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                let calcTop = rowCenter - MENU_H / 2;
+                calcTop = Math.max(8, Math.min(calcTop, viewportH - MENU_H - 8));
+                let calcLeft = rect.right / zMenu - MENU_W - 12;
+                calcLeft = Math.min(calcLeft, viewportW - MENU_W - 8);
+                calcLeft = Math.max(calcLeft, 8);
+
+                setActionsPos({ top: calcTop, left: calcLeft });
+                setIsActionsOpen(true);
+              }}
+              className="p-1 cursor-pointer hover:bg-gray-100 rounded-md transition-colors z-10"
+              title="More actions"
+            >
+              <MoreHorizontal className="w-4 h-4 text-[#BEBEC8]" />
+            </button>
+            {isActionsOpen && actionsPos && createPortal(
+              <>
+                <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); }} />
+                <div
+                  ref={actionsRef}
+                  style={{ position: "fixed", top: actionsPos.top, left: actionsPos.left }}
+                  className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                >
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); navigate(`/deals/${deal._id}`); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    View Deal
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); navigate(`/deals/${deal._id}`); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Edit Deal
+                  </button>
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); setDealToDelete && setDealToDelete(deal); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Deal
+                  </button>
+                </div>
+              </>,
+              document.body
+            )}
+          </div>
         </div>
         <span
           className="w-full"
@@ -219,31 +317,70 @@ const DealCardContent = ({ deal }) => {
 // the sensor's 8px activation constraint means a click never starts a drag, and a
 // drag never fires the link. `transition` (which useDraggable did not provide) is
 // what lets neighbouring cards glide aside instead of snapping.
-const DealCard = ({ deal }) => {
+const DealCard = React.memo(({ deal, selected = false, onToggleSelect, setDealToDelete }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: deal._id });
+    useSortable({ id: deal._id, animateLayoutChanges });
 
   const style = {
     ...DEAL_CARD_BOX,
+    position: "relative",
     transform: CSS.Transform.toString(transform),
     transition,
     // The original stays in place, faded, while the overlay follows the cursor.
     opacity: isDragging ? 0.5 : 1,
+    // Selected cards read as picked at a glance, matching the list view's row tint.
+    ...(selected ? { borderColor: "#0085FF", background: "#F5FAFF" } : null),
   };
 
+  // The checkbox re-enables pointer events for itself only (the content layer
+  // above the link is pointer-events-none). Stopping pointerdown keeps the drag
+  // sensor from grabbing the card when you tick it. Because the checkbox is NOT
+  // a descendant of the <Link> anymore, its native toggle + onChange fire
+  // normally — no preventDefault fighting the selection, which is what caused
+  // the "checked but not selected / selected but not checked" desync.
+  const selectSlot = onToggleSelect ? (
+    <span
+      className="pointer-events-auto flex items-center flex-shrink-0"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => onToggleSelect(deal._id)}
+        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+        aria-label={`Select ${deal.title || "deal"}`}
+      />
+    </span>
+  ) : null;
+
+  // The card is a positioned shell. A full-bleed <Link> underneath is the
+  // click-to-open target (kept as an anchor so middle-click / open-in-new-tab
+  // still work); the visible content sits above it but is pointer-events-none,
+  // so a plain click falls through to the link while the checkbox stays live.
   return (
-    <Link
-      to={`/deals/${deal._id}`}
+    <div
       ref={setNodeRef}
       style={style}
       {...listeners}
       {...attributes}
-      className={`${DEAL_CARD_CLASS} cursor-grab active:cursor-grabbing`}
+      className={`${DEAL_CARD_CLASS} cursor-default`}
     >
-      <DealCardContent deal={deal} />
-    </Link>
+      <Link
+        to={`/deals/${deal._id}`}
+        // Links are natively draggable in every browser — that fires the
+        // browser's own HTML5 drag-and-drop alongside dnd-kit's pointer-based
+        // synthetic drag. Killing the native one leaves dnd-kit in sole control.
+        draggable={false}
+        onDragStart={(e) => e.preventDefault()}
+        className="absolute inset-0 z-0"
+        aria-label={`Open ${deal.title || "deal"}`}
+      />
+      <div className="relative z-10 w-full flex flex-col items-start gap-4 pointer-events-none">
+        <DealCardContent deal={deal} selectSlot={selectSlot} setDealToDelete={setDealToDelete} />
+      </div>
+    </div>
   );
-};
+});
 
 // The floating preview. Deliberately a plain <div>, not a <Link>: it must never be
 // clickable or navigable, and pointer-events-none keeps it from stealing hit-testing
@@ -251,7 +388,7 @@ const DealCard = ({ deal }) => {
 const DealCardOverlay = ({ deal }) => (
   <div
     style={{ ...DEAL_CARD_BOX, cursor: "grabbing" }}
-    className={`${DEAL_CARD_CLASS} shadow-lg pointer-events-none dc-drag-wiggle`}
+    className={`${DEAL_CARD_CLASS} shadow-lg pointer-events-none`}
   >
     <DealCardContent deal={deal} />
   </div>
@@ -261,9 +398,18 @@ const DealCardOverlay = ({ deal }) => (
 // company-profile Deals tab and the standalone /deals board look identical:
 // same 340px shell, #F5F7FA header, pill counter, per-status tinted summary card
 // and week-over-week trend badge.
-const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddClick, loading = false }) => {
+const KanbanColumn = React.memo(({ status, deals, amountDeals, totalDealsCount, colorTheme = "blue", onAddClick, loading = false, selectedDeals = [], onToggleSelect, onToggleColumnSelect, setDealToDelete }) => {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
+
+  // Header select-all state for this column: fully ticked when every card here
+  // is selected, indeterminate (native dash) when only some are.
+  const allSelected = dealIds.length > 0 && dealIds.every((id) => selectedDeals.includes(id));
+  const someSelected = dealIds.some((id) => selectedDeals.includes(id));
+  const headerCbRef = useRef(null);
+  useEffect(() => {
+    if (headerCbRef.current) headerCbRef.current.indeterminate = someSelected && !allSelected;
+  }, [someSelected, allSelected]);
 
   // Deliberately computed from `amountDeals` (the column's real, committed
   // membership) rather than `deals` (which includes the live drag-over
@@ -303,6 +449,17 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
         style={{ height: "46px", padding: "0 18px", background: "#F5F7FA" }}
       >
         <div className="flex items-center gap-1.5">
+          {onToggleColumnSelect && !loading && dealIds.length > 0 && (
+            <input
+              ref={headerCbRef}
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => onToggleColumnSelect(dealIds)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+              title={`Select all in ${status}`}
+              aria-label={`Select all deals in ${status}`}
+            />
+          )}
           <span
             className="truncate"
             style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}
@@ -312,7 +469,8 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
           <span
             className="flex items-center justify-center flex-shrink-0"
             style={{
-              width: "22px",
+              minWidth: "22px",
+              padding: "0 6px",
               height: "22px",
               background: "#FFFFFF",
               border: "1px solid #E5E5EC",
@@ -326,7 +484,7 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
               color: "#161618",
             }}
           >
-            {loading ? <Skeleton width={14} height={12} /> : deals.length}
+            {loading ? <Skeleton width={14} height={12} /> : (totalDealsCount !== undefined ? `${deals.length}/${totalDealsCount}` : deals.length)}
           </span>
         </div>
         <button
@@ -390,7 +548,13 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
         <div className="min-h-[80px]">
           <SortableContext id={status} items={dealIds} strategy={verticalListSortingStrategy}>
             {deals.map((deal) => (
-              <DealCard key={deal._id} deal={deal} />
+              <DealCard
+                key={deal._id}
+                deal={deal}
+                selected={selectedDeals.includes(deal._id)}
+                onToggleSelect={onToggleSelect}
+                setDealToDelete={setDealToDelete}
+              />
             ))}
           </SortableContext>
           {/* Slack below the last card so dropping at the end of a long column
@@ -400,7 +564,7 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
       </div>
     </div>
   );
-};
+});
 
 export default function CompanyDealsKanban({
   deals,
@@ -426,6 +590,7 @@ export default function CompanyDealsKanban({
   // the DragOverlay, and it preserves the ORIGINAL status — which onDragOver
   // overwrites in `deals` as soon as the pointer crosses into another column.
   const [activeDeal, setActiveDeal] = useState(null);
+  const [celebrationDeal, setCelebrationDeal] = useState(null);
   // Which column the dragged card is currently hovered over. Kept as local
   // state instead of writing the new status into `deals` on every column
   // crossing (as before) — `deals` is owned by the parent page, so every
@@ -542,12 +707,12 @@ export default function CompanyDealsKanban({
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    // A single press does nothing: the column menu opens from its own chevron
-    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
-    // meant the FIRST press of every double-click popped the menu, whose
-    // full-screen backdrop then swallowed the second press — making the header
-    // effectively un-double-clickable. Drag still starts on the second press.
-    if (e.detail < 2) return;
+    // No click-count gate here, matching the Companies list page: a press plus
+    // DRAG_THRESHOLD px of movement starts the drag, at whatever speed the user
+    // moves. Gating on `e.detail` meant only a fast-enough double-click could
+    // begin a move. The threshold below is what keeps a plain click harmless,
+    // and the column menu opens from its own chevron button, never from the
+    // header background — so nothing competes with the drag for a single press.
 
     const th = e.currentTarget;
     const startX = e.clientX;
@@ -704,12 +869,18 @@ export default function CompanyDealsKanban({
 
   // Row selection + bulk actions
   const [selectedDeals, setSelectedDeals] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in entrance).
   const [showBulkStrip, setShowBulkStrip] = useState(false);
   const [bulkStripClosing, setBulkStripClosing] = useState(false);
   useEffect(() => {
-    const active = viewMode === "list" && selectedDeals.length > 0;
+    // Selection drives the bulk strip in BOTH views now — the kanban cards carry
+    // checkboxes too, so a board selection opens the same Update Status / Delete
+    // / Export strip the list view uses.
+    const active = selectedDeals.length > 0;
     if (active) {
       setBulkStripClosing(false);
       setShowBulkStrip(true);
@@ -726,15 +897,45 @@ export default function CompanyDealsKanban({
   const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
   const [bulkStatus, setBulkStatus] = useState("Open");
   const [bulkLoading, setBulkLoading] = useState(false);
+  // One shared modal for "add note" / "add task" to every selected deal —
+  // `bulkAddMode` is null (closed), "note", or "task".
+  const [bulkAddMode, setBulkAddMode] = useState(null);
+  const [bulkNoteText, setBulkNoteText] = useState("");
+  const [bulkTaskTitle, setBulkTaskTitle] = useState("");
+  const [bulkTaskDesc, setBulkTaskDesc] = useState("");
 
   const handleSelectAllDeals = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedDeals((prev) =>
       prev.length === paginatedDeals.length ? [] : paginatedDeals.map((d) => d._id),
     );
   };
-  const handleSelectDeal = (id) => {
+  const handleSelectDeal = useCallback((id) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedDeals((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  };
+  }, [hasBulkAccess]);
+  const handleAddDealClick = useCallback(() => setManualDealFormOpen(true), []);
+
+  // Column header select-all: if every card in the column is already selected,
+  // clicking clears just those; otherwise it adds them all to the selection.
+  const handleToggleColumnSelect = useCallback((ids) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    setSelectedDeals((prev) => {
+      const allSelected = ids.length > 0 && ids.every((id) => prev.includes(id));
+      return allSelected
+        ? prev.filter((id) => !ids.includes(id))
+        : [...new Set([...prev, ...ids])];
+    });
+  }, [hasBulkAccess]);
 
   const handleBulkDeleteDeals = async () => {
     setBulkLoading(true);
@@ -768,6 +969,53 @@ export default function CompanyDealsKanban({
     } catch (err) {
       console.error("Bulk deal status update failed:", err);
       toast.error(err.response?.data?.message || "Bulk update failed");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  // One note per selected deal, scoped to that deal (the backend also records
+  // each deal's company so company-level note views still show it).
+  const handleBulkAddNote = async () => {
+    const text = bulkNoteText.trim();
+    if (!text) return toast.error("Note cannot be empty.");
+    setBulkLoading(true);
+    try {
+      await API.post("/notes/bulk-deal-notes", { note: text, dealIds: selectedDeals });
+      toast.success(`Note added to ${selectedDeals.length} deal${selectedDeals.length !== 1 ? "s" : ""}`);
+      setBulkAddMode(null);
+      setBulkNoteText("");
+      setSelectedDeals([]);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to add note");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  // No bulk-task endpoint exists, so create one task per selected deal, each
+  // linked back to its deal via relatedEntities (entityModel "Deal").
+  const handleBulkAddTask = async () => {
+    const title = bulkTaskTitle.trim();
+    if (!title) return toast.error("Task title cannot be empty.");
+    setBulkLoading(true);
+    try {
+      await Promise.all(
+        selectedDeals.map((id) =>
+          API.post("/tasks", {
+            title,
+            description: bulkTaskDesc.trim(),
+            relatedEntities: [{ entityId: id, entityModel: "Deal" }],
+          }),
+        ),
+      );
+      toast.success(`Task added to ${selectedDeals.length} deal${selectedDeals.length !== 1 ? "s" : ""}`);
+      setBulkAddMode(null);
+      setBulkTaskTitle("");
+      setBulkTaskDesc("");
+      setSelectedDeals([]);
+    } catch (err) {
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to add task");
     } finally {
       setBulkLoading(false);
     }
@@ -813,6 +1061,79 @@ export default function CompanyDealsKanban({
     () => Object.values(colWidths).reduce((sum, w) => sum + w, 0),
     [colWidths],
   );
+
+  // Single source of truth for column order (pinned-left, then unpinned in
+  // drag order, then pinned-right) — shared by the header AND the body, so a
+  // pinned/dragged column moves the data cells along with it instead of only
+  // sliding the header label.
+  const DEAL_COLS_BASE = useMemo(
+    () => [
+      { id: "dealId", label: "Deal ID", width: 127, sortable: false },
+      { id: "title", label: "Deal Name", width: 185 },
+      { id: "contact", label: "Contact", width: 150 },
+      { id: "stage", label: "Stage", width: 131 },
+      { id: "amount", label: "Amount", width: 123 },
+      { id: "lastUpdated", label: "Last Updated", width: 171, sortable: false },
+    ],
+    [],
+  );
+  const orderedDealColumns = useMemo(() => {
+    const allCols = DEAL_COLS_BASE.filter((col) => !hiddenColumns.includes(col.id));
+    const orderRank = (id) => {
+      const idx = columnOrder.indexOf(id);
+      return idx === -1 ? columnOrder.length + allCols.findIndex((c) => c.id === id) : idx;
+    };
+    const rank = (id) => (getColumnPinSide(id) === "left" ? 0 : getColumnPinSide(id) === "right" ? 2 : 1);
+    return allCols.slice().sort((a, b) => {
+      const pinDiff = rank(a.id) - rank(b.id);
+      if (pinDiff !== 0) return pinDiff;
+      return orderRank(a.id) - orderRank(b.id);
+    });
+  }, [DEAL_COLS_BASE, hiddenColumns, columnOrder, pinnedColumns]);
+
+  // Sticky offsets + boundary shadow — same treatment as the other Company
+  // detail tabs (Contacts/Invoices/Meetings/Notes/Tasks): the selection
+  // checkbox column is always the first left-sticky column (44px wide), and
+  // the pinned boundary — the rightmost left-pinned column, or the leftmost
+  // right-pinned one — gets the soft depth-edge shadow.
+  const dealStickyStyles = useMemo(() => {
+    const map = {};
+    let leftOffset = 44;
+    for (const col of orderedDealColumns) {
+      if (getColumnPinSide(col.id) === "left") {
+        map[col.id] = { position: "sticky", left: leftOffset, zIndex: 20 };
+        leftOffset += colWidths[col.id] || col.width;
+      }
+    }
+    let rightOffset = 0;
+    for (const col of [...orderedDealColumns].reverse()) {
+      if (getColumnPinSide(col.id) === "right") {
+        map[col.id] = { position: "sticky", right: rightOffset, zIndex: 20 };
+        rightOffset += colWidths[col.id] || col.width;
+      }
+    }
+    return map;
+  }, [orderedDealColumns, pinnedColumns, colWidths]);
+
+  const getDealStickyStyle = (colId, isHeader) => {
+    const pinSide = getColumnPinSide(colId);
+    const style = dealStickyStyles[colId] || {};
+    return {
+      ...style,
+      position: pinSide ? "sticky" : "relative",
+      zIndex: pinSide ? (isHeader ? 35 : 20) : undefined,
+      backgroundColor: pinSide ? (isHeader ? "#F5F7FA" : "#fff") : undefined,
+      boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
+    };
+  };
+
+  const getDealBoundaryShadowSide = (colId) => {
+    const leftPinnedCols = orderedDealColumns.filter((c) => getColumnPinSide(c.id) === "left");
+    const rightPinnedCols = orderedDealColumns.filter((c) => getColumnPinSide(c.id) === "right");
+    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) return "left";
+    if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) return "right";
+    return null;
+  };
 
   const startResize = (e, colId) => {
     e.preventDefault();
@@ -1094,8 +1415,17 @@ export default function CompanyDealsKanban({
     );
 
     try {
-      await API.post(`/deals/${dealId}/status`, { oldStatus, newStatus });
-      toast.success("Deal status updated");
+      const response = await API.post(`/deals/${dealId}/status`, { oldStatus, newStatus });
+      const updatedDeal = response.data || { ...dragged, status: newStatus };
+      setDeals((prev) =>
+        prev.map((d) => (d._id.toString() === dealId ? updatedDeal : d)),
+      );
+      if (newStatus === "Won" && oldStatus !== "Won") {
+        setCelebrationDeal(updatedDeal);
+        toast.success(`🎉 ${updatedDeal.title} marked as Won!`, { duration: 5000, icon: "🏆" });
+      } else {
+        toast.success("Deal status updated");
+      }
     } catch (err) {
       console.error("Failed to update deal status:", err);
       toast.error("Failed to update deal status");
@@ -1118,8 +1448,47 @@ export default function CompanyDealsKanban({
     closeDealForm();
   };
 
+  const ConfettiCelebration = ({ deal, onClose }) => {
+    useEffect(() => {
+      const animationEnd = Date.now() + 5000;
+      confetti({ particleCount: 150, spread: 180, origin: { y: 0.6 }, zIndex: 99999 });
+      const interval = setInterval(() => {
+        if (Date.now() > animationEnd) { clearInterval(interval); return; }
+        confetti({ particleCount: 2, angle: 90 + (Math.random() - 0.5) * 60, spread: 80, origin: { x: Math.random(), y: Math.random() * 0.5 }, gravity: 0.4, ticks: 400, zIndex: 99999 });
+      }, 100);
+      const timeout = setTimeout(onClose, 5000);
+      return () => { clearInterval(interval); clearTimeout(timeout); };
+    }, [onClose]);
+
+    return (
+      <div className="fixed inset-0 flex items-center justify-center z-[99998] pointer-events-none p-4">
+        <div className="absolute inset-0 bg-black/5 pointer-events-auto" onClick={onClose} />
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 pointer-events-auto max-w-md w-full relative z-[99999]">
+          <div className="p-10 text-center">
+            <div className="flex justify-center mb-6">
+              <div className="bg-green-500 rounded-full w-16 h-16 flex items-center justify-center shadow-lg">
+                <svg className="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Deal Won!</h2>
+            <p className="text-base text-gray-700 mb-3 font-medium">{deal.title}</p>
+            <div className="mb-6">
+              <h6 className="text-2xl font-bold text-gray-900">₹{formatNumberToIndian(parseInt(deal.amount || 0))}</h6>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed">Great job! Keep up the amazing work! 💪</p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
+      {celebrationDeal && (
+        <ConfettiCelebration deal={celebrationDeal} onClose={() => setCelebrationDeal(null)} />
+      )}
       {/* KPI Tiles */}
       {showStats && (
         <>
@@ -1159,13 +1528,18 @@ export default function CompanyDealsKanban({
           <Skeleton width={88} height={44} shape="rounded" className="!rounded-full flex-shrink-0" />
           <Skeleton width={44} height={44} shape="circle" className="flex-shrink-0" />
         </div>
-) : showBulkStrip ? (
+      ) : showBulkStrip ? (
         <BulkActionBar
           isClosing={bulkStripClosing}
           selectedCount={selectedDeals.length}
           entityName="deal"
+          onAddNote={() => setBulkAddMode("note")}
+          onAddTask={() => setBulkAddMode("task")}
           onSelectAll={handleSelectAllAcrossPages}
-          onDeselectAll={handleDeselectAllExtra}
+          // The board shows every deal at once (no pagination), so "Deselect
+          // All" there clears the whole selection. In list view it keeps the
+          // two-tier behaviour: step back down to just the current page's rows.
+          onDeselectAll={viewMode === "board" ? () => setSelectedDeals([]) : handleDeselectAllExtra}
           onExport={handleExportSelectedDeals}
           onUpdateStatus={() => setShowBulkStatusModal(true)}
           onDelete={() => setShowBulkDeleteModal(true)}
@@ -1182,9 +1556,17 @@ export default function CompanyDealsKanban({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search deals by name, contact, or status..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              className="w-full h-full pl-10 pr-10 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <button
             onClick={() => setShowFilterPanel(true)}
@@ -1282,7 +1664,7 @@ export default function CompanyDealsKanban({
         ) : (
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={closestCenter}
             measuring={DND_MEASURING}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
@@ -1296,8 +1678,13 @@ export default function CompanyDealsKanban({
                   status={status}
                   deals={dealsByStatus[status] || []}
                   amountDeals={stableDealsByStatus[status] || []}
+                  totalDealsCount={totalCount}
                   colorTheme={status === "Won" ? "green" : status === "Lost" ? "red" : "blue"}
-                  onAddClick={() => setManualDealFormOpen(true)}
+                  onAddClick={handleAddDealClick}
+                  selectedDeals={selectedDeals}
+                  onToggleSelect={handleSelectDeal}
+                  onToggleColumnSelect={handleToggleColumnSelect}
+                  setDealToDelete={setDealToDelete}
                 />
               ))}
             </div>
@@ -1328,16 +1715,16 @@ export default function CompanyDealsKanban({
             )}
           </DndContext>
         )
-      ) : totalCount === 0 ? (
+      ) : !isLoading && deals.length === 0 ? (
         <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <Handshake size={28} className="mb-3 text-blue-500" />
+          <Handshake size={28} className="mb-3 text-gray-400" />
           <button
             type="button"
             onClick={() => setManualDealFormOpen(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus size={16} />
-            Add new
+            Add new deal
           </button>
         </div>
       ) : (
@@ -1351,7 +1738,7 @@ export default function CompanyDealsKanban({
                 className="text-sm text-left border-separate"
                 style={{ tableLayout: "fixed", width: "100%", minWidth: totalTableWidth, maxWidth: "100%", borderSpacing: 0 }}
               >
-                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-10">
+                <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30">
                   <tr>
                     {/* Page-scoped select-all: ticks exactly the rows on the CURRENT page
                         (10 per page -> 10, 50 -> 50). Distinct from the bulk strip's
@@ -1361,45 +1748,33 @@ export default function CompanyDealsKanban({
                         <input
                           type="checkbox"
                           checked={selectedDeals.length > 0 && selectedDeals.length === paginatedDeals.length}
-                          onChange={(e) => setSelectedDeals(e.target.checked ? paginatedDeals.map((d) => d._id) : [])}
+                          onChange={(e) => {
+                            if (!hasBulkAccess) {
+                              setShowUpgradeModal(true);
+                              return;
+                            }
+                            setSelectedDeals(e.target.checked ? paginatedDeals.map((d) => d._id) : []);
+                          }}
                           className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                         />
                       </div>
                     </th>
                     {(() => {
-                      const allCols = [
-                        { id: "dealId", label: "Deal ID", width: 127, sortable: false },
-                        { id: "title", label: "Deal Name", width: 185 },
-                        { id: "contact", label: "Contact", width: 150 },
-                        { id: "stage", label: "Stage", width: 131 },
-                        { id: "amount", label: "Amount", width: 123 },
-                        { id: "lastUpdated", label: "Last Updated", width: 171, sortable: false },
-                      ].filter((col) => !hiddenColumns.includes(col.id));
-                      const orderRank = (id) => {
-                        const idx = columnOrder.indexOf(id);
-                        return idx === -1 ? columnOrder.length + allCols.findIndex((c) => c.id === id) : idx;
-                      };
-                      const fallbackOrder = allCols.map((c) => c.id);
-                      return allCols
-                        .slice()
-                        .sort((a, b) => {
-                          const rank = (id) => (getColumnPinSide(id) === "left" ? 0 : getColumnPinSide(id) === "right" ? 2 : 1);
-                          const pinDiff = rank(a.id) - rank(b.id);
-                          if (pinDiff !== 0) return pinDiff;
-                          return orderRank(a.id) - orderRank(b.id);
-                        })
+                      const fallbackOrder = orderedDealColumns.map((c) => c.id);
+                      return orderedDealColumns
                         .map((col) => {
                           const isMenuOpen = openColMenuKey === col.id;
                           const pinSide = getColumnPinSide(col.id);
                           const isDragging = draggedColKey === col.id;
                           const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
+                          const boundarySide = getDealBoundaryShadowSide(col.id);
                           return (
                             <th
                               key={col.id}
                               data-col-id={col.id}
                               onMouseDown={(e) => startColumnDrag(e, col.id, col.label, fallbackOrder)}
-                              style={{ width: colWidths[col.id], height: 56, position: "relative", opacity: isDragging ? 0.35 : 1 }}
-                              className={`px-3 py-2.5 font-medium text-[#525866] text-xs border-r border-b border-[#E1E4EA] cursor-grab active:cursor-grabbing transition-colors ${isDragOver ? "bg-blue-100" : ""}`}
+                              style={{ width: colWidths[col.id], height: 56, opacity: isDragging ? 0.35 : 1, ...getDealStickyStyle(col.id, true) }}
+                              className={`px-3 py-2.5 font-medium text-[#525866] text-xs cursor-grab active:cursor-grabbing transition-colors ${isDragOver ? "bg-blue-100" : "bg-[#F5F7FA]"}`}
                             >
                               <div className="flex items-center justify-between w-full group">
                                 {/* Not clickable — a plain click on the header does nothing now.
@@ -1408,6 +1783,13 @@ export default function CompanyDealsKanban({
                                 <div className="flex items-center gap-1.5 flex-1 overflow-hidden select-none">
                                   {col.icon && <col.icon className="w-3.5 h-3.5 flex-shrink-0" />}
                                   <span className="truncate">{col.label}</span>
+                                  {pinSide && (
+                                    <Pin
+                                      size={12}
+                                      className="text-blue-500 fill-blue-500 flex-shrink-0 ml-1"
+                                      style={{ transform: "rotate(45deg)" }}
+                                    />
+                                  )}
                                 </div>
                                 <button
                                   onClick={(e) => {
@@ -1521,6 +1903,7 @@ export default function CompanyDealsKanban({
                                 className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"
                                   }`}
                               />
+                              {boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />}
                             </th>
                           );
                         });
@@ -1568,158 +1951,207 @@ export default function CompanyDealsKanban({
                               />
                             </div>
                           </td>
-                          {!hiddenColumns.includes("dealId") && (
-                            <td
-                              style={{ height: 54 }}
-                              className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left border-r border-b border-[#E1E4EA]"
-                            >
-                              <HighlightText text={dealIdShort} query={searchTerm} />
-                            </td>
-                          )}
-                          {!hiddenColumns.includes("title") && (
-                            <td style={{ height: 54 }} className="px-3 text-left border-r border-b border-[#E1E4EA]">
-                              <Link
-                                to={`/deals/${deal._id}`}
-                                className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block"
-                              >
-                                <HighlightText text={deal.title || "Deal Name"} query={searchTerm} />
-                              </Link>
-                            </td>
-                          )}
-                          {!hiddenColumns.includes("contact") && (
-                            <td
-                              style={{ height: 54 }}
-                              className="px-3 text-[14px] leading-5 font-medium text-[#222530] truncate text-left border-r border-b border-[#E1E4EA]"
-                            >
-                              <HighlightText text={deal.contact?.name || "-"} query={searchTerm} />
-                            </td>
-                          )}
-                          {!hiddenColumns.includes("stage") && (
-                            <td style={{ height: 54 }} className="px-3 border-r border-b border-[#E1E4EA]">
-                              <div className="flex items-center justify-start">
-                                <span
-                                  style={{ width: 80, height: 24, padding: "5px 12px", borderRadius: 53, ...pillStyle }}
-                                  className="inline-flex items-center justify-center text-xs font-medium"
+                          {(() => {
+                            const lastColId = orderedDealColumns[orderedDealColumns.length - 1]?.id;
+                            const dealActionsMenu = (
+                              <div className="relative flex items-center justify-center flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isActionsOpen) {
+                                      setOpenRowActionsId(null);
+                                      setRowActionsPos(null);
+                                      return;
+                                    }
+                                    // Was anchored to the raw click coordinates
+                                    // (e.clientX/Y) with no zoom correction — so
+                                    // `left: e.clientX - 160` drifted further left
+                                    // the further right on the button you happened
+                                    // to click, and drifted again under this app's
+                                    // dynamic zoom. Same fix as the main Deals
+                                    // table: anchor to the button's own rect,
+                                    // divide by ancestor zoom (the menu portals to
+                                    // document.body, which paints inside the zoom),
+                                    // center vertically on the row rather than
+                                    // hanging off its bottom edge, and clamp both
+                                    // axes to the viewport.
+                                    const zMenu = getAncestorZoom(document.body);
+                                    const MENU_W = 160;
+                                    const MENU_H = 110; // View Deal + Edit Deal + divider + Delete Deal
+                                    const MARGIN = 8;
+
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const viewportH = window.innerHeight / zMenu;
+                                    const viewportW = window.innerWidth / zMenu;
+
+                                    const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                                    let calcTop = rowCenter - MENU_H / 2;
+                                    calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+                                    let calcLeft = rect.right / zMenu - MENU_W - 12;
+                                    calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                                    calcLeft = Math.max(calcLeft, MARGIN);
+
+                                    setRowActionsPos({ top: calcTop, left: calcLeft });
+                                    setOpenRowActionsId(deal._id);
+                                  }}
+                                  className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                                  title="More actions"
                                 >
-                                  <HighlightText text={deal.status || "Open"} query={searchTerm} />
-                                </span>
-                              </div>
-                            </td>
-                          )}
-                          {!hiddenColumns.includes("amount") && (
-                            <td
-                              style={{ height: 54 }}
-                              className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left border-r border-b border-[#E1E4EA]"
-                            >
-                              <HighlightText text={`₹${(deal.amount || 0).toLocaleString("en-IN")}`} query={searchTerm} />
-                            </td>
-                          )}
-                          {!hiddenColumns.includes("lastUpdated") && (
-                            <td
-                              style={{ height: 54 }}
-                              className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap border-b border-[#E1E4EA]"
-                            >
-                              <div className="flex items-center justify-between gap-2" onMouseDown={(e) => e.stopPropagation()}>
-                                <HighlightText text={lastUpdated} query={searchTerm} />
-                                <div className="relative flex items-center justify-center flex-shrink-0">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (isActionsOpen) {
-                                        setOpenRowActionsId(null);
-                                        setRowActionsPos(null);
-                                        return;
-                                      }
-                                      // Was anchored to the raw click coordinates
-                                      // (e.clientX/Y) with no zoom correction — so
-                                      // `left: e.clientX - 160` drifted further left
-                                      // the further right on the button you happened
-                                      // to click, and drifted again under this app's
-                                      // dynamic zoom. Same fix as the main Deals
-                                      // table: anchor to the button's own rect,
-                                      // divide by ancestor zoom (the menu portals to
-                                      // document.body, which paints inside the zoom),
-                                      // center vertically on the row rather than
-                                      // hanging off its bottom edge, and clamp both
-                                      // axes to the viewport.
-                                      const zMenu = getAncestorZoom(document.body);
-                                      const MENU_W = 160;
-                                      const MENU_H = 110; // View Deal + Edit Deal + divider + Delete Deal
-                                      const MARGIN = 8;
-
-                                      const rect = e.currentTarget.getBoundingClientRect();
-                                      const viewportH = window.innerHeight / zMenu;
-                                      const viewportW = window.innerWidth / zMenu;
-
-                                      const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
-                                      let calcTop = rowCenter - MENU_H / 2;
-                                      calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
-
-                                      let calcLeft = rect.right / zMenu - MENU_W - 12;
-                                      calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
-                                      calcLeft = Math.max(calcLeft, MARGIN);
-
-                                      setRowActionsPos({ top: calcTop, left: calcLeft });
-                                      setOpenRowActionsId(deal._id);
-                                    }}
-                                    className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                                    title="More actions"
-                                  >
-                                    <MoreVertical className="w-4 h-4" />
-                                  </button>
-                                  {isActionsOpen && rowActionsPos && createPortal(
-                                    <>
-                                      <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
-                                      <div
-                                        ref={rowActionsRef}
-                                        style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-                                        className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+                                {isActionsOpen && rowActionsPos && createPortal(
+                                  <>
+                                    <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+                                    <div
+                                      ref={rowActionsRef}
+                                      style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+                                      className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                                    >
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenRowActionsId(null);
+                                          setRowActionsPos(null);
+                                          navigate(`/deals/${deal._id}`);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                                       >
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setOpenRowActionsId(null);
-                                            setRowActionsPos(null);
-                                            navigate(`/deals/${deal._id}`);
-                                          }}
-                                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                                        >
-                                          <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                                          View Deal
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setOpenRowActionsId(null);
-                                            setRowActionsPos(null);
-                                            navigate(`/deals/${deal._id}`);
-                                          }}
-                                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                                        >
-                                          <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                                          Edit Deal
-                                        </button>
-                                        <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setOpenRowActionsId(null);
-                                            setRowActionsPos(null);
-                                            setDealToDelete(deal);
-                                          }}
-                                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                          Delete Deal
-                                        </button>
-                                      </div>
-                                    </>,
-                                    document.body,
-                                  )}
-                                </div>
+                                        <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                        View Deal
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenRowActionsId(null);
+                                          setRowActionsPos(null);
+                                          navigate(`/deals/${deal._id}`);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                        Edit Deal
+                                      </button>
+                                      <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenRowActionsId(null);
+                                          setRowActionsPos(null);
+                                          setDealToDelete(deal);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        Delete Deal
+                                      </button>
+                                    </div>
+                                  </>,
+                                  document.body,
+                                )}
                               </div>
-                            </td>
-                          )}
+                            );
+
+                            return orderedDealColumns.map((col) => {
+                              const boundarySide = getDealBoundaryShadowSide(col.id);
+                              const boundaryOverlay = boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />;
+                              const isLastCol = col.id === lastColId;
+
+                              if (col.id === "dealId") {
+                                return (
+                                  <td
+                                    key={col.id}
+                                    style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
+                                    className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <HighlightText text={dealIdShort} query={searchTerm} />
+                                      {isLastCol && dealActionsMenu}
+                                    </div>
+                                    {boundaryOverlay}
+                                  </td>
+                                );
+                              }
+                              if (col.id === "title") {
+                                return (
+                                  <td key={col.id} style={{ height: 54, ...getDealStickyStyle(col.id, false) }} className="px-3 text-left">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <Link
+                                        to={`/deals/${deal._id}`}
+                                        className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block min-w-0"
+                                      >
+                                        <HighlightText text={deal.title || "Deal Name"} query={searchTerm} />
+                                      </Link>
+                                      {isLastCol && dealActionsMenu}
+                                    </div>
+                                    {boundaryOverlay}
+                                  </td>
+                                );
+                              }
+                              if (col.id === "contact") {
+                                return (
+                                  <td
+                                    key={col.id}
+                                    style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
+                                    className="px-3 text-[14px] leading-5 font-medium text-[#222530] text-left"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="truncate block min-w-0">
+                                        <HighlightText text={deal.contact?.name || "-"} query={searchTerm} />
+                                      </span>
+                                      {isLastCol && dealActionsMenu}
+                                    </div>
+                                    {boundaryOverlay}
+                                  </td>
+                                );
+                              }
+                              if (col.id === "stage") {
+                                return (
+                                  <td key={col.id} style={{ height: 54, ...getDealStickyStyle(col.id, false) }} className="px-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span
+                                        style={{ width: 80, height: 24, padding: "5px 12px", borderRadius: 53, ...pillStyle }}
+                                        className="inline-flex items-center justify-center text-xs font-medium"
+                                      >
+                                        <HighlightText text={deal.status || "Open"} query={searchTerm} />
+                                      </span>
+                                      {isLastCol && dealActionsMenu}
+                                    </div>
+                                    {boundaryOverlay}
+                                  </td>
+                                );
+                              }
+                              if (col.id === "amount") {
+                                return (
+                                  <td
+                                    key={col.id}
+                                    style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
+                                    className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap text-left"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <HighlightText text={`₹${(deal.amount || 0).toLocaleString("en-IN")}`} query={searchTerm} />
+                                      {isLastCol && dealActionsMenu}
+                                    </div>
+                                    {boundaryOverlay}
+                                  </td>
+                                );
+                              }
+                              // lastUpdated
+                              return (
+                                <td
+                                  key={col.id}
+                                  style={{ height: 54, ...getDealStickyStyle(col.id, false) }}
+                                  className="px-3 text-[14px] leading-5 font-medium text-[#525866] whitespace-nowrap"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <HighlightText text={lastUpdated} query={searchTerm} />
+                                    {isLastCol && dealActionsMenu}
+                                  </div>
+                                  {boundaryOverlay}
+                                </td>
+                              );
+                            });
+                          })()}
                         </tr>
                       );
                     })
@@ -1755,7 +2187,7 @@ export default function CompanyDealsKanban({
 
           </div>
 
-          {totalCount > 0 && (
+          {totalCount > 0 && viewMode === "list" && (
             <div
               ref={fillFooterRef}
               className="w-full bg-transparent px-4 py-3 mt-3 flex items-center justify-between sm:px-6"
@@ -1796,21 +2228,21 @@ export default function CompanyDealsKanban({
                   </select>
                 </div>
 
-                  <EditablePaginationButtons
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    hasPrevPage={hasPrevPage}
-                    hasNextPage={hasNextPage}
-                    onPageChange={handlePageChange}
-                    getPageNumbers={() => {
-                      const items = [1];
-                      if (currentPage > 2) items.push("left-dots");
-                      if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
-                      if (currentPage < totalPages - 1) items.push("right-dots");
-                      if (totalPages > 1) items.push(totalPages);
-                      return items;
-                    }}
-                  />
+                <EditablePaginationButtons
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  hasPrevPage={hasPrevPage}
+                  hasNextPage={hasNextPage}
+                  onPageChange={handlePageChange}
+                  getPageNumbers={() => {
+                    const items = [1];
+                    if (currentPage > 2) items.push("left-dots");
+                    if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
+                    if (currentPage < totalPages - 1) items.push("right-dots");
+                    if (totalPages > 1) items.push(totalPages);
+                    return items;
+                  }}
+                />
               </div>
             </div>
           )}
@@ -1887,6 +2319,70 @@ export default function CompanyDealsKanban({
         </div>
       )}
 
+      {/* Bulk Add Note / Add Task — one modal, driven by bulkAddMode. */}
+      {bulkAddMode && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden">
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-1 font-sf">
+                {bulkAddMode === "note" ? "Add Note" : "Add Task"}
+              </h3>
+              <p className="text-sm text-gray-500 font-inter mb-4">
+                {bulkAddMode === "note"
+                  ? `Adds this note to ${selectedDeals.length} selected deal${selectedDeals.length !== 1 ? "s" : ""}.`
+                  : `Creates this task on ${selectedDeals.length} selected deal${selectedDeals.length !== 1 ? "s" : ""}.`}
+              </p>
+
+              {bulkAddMode === "note" ? (
+                <textarea
+                  rows={4}
+                  value={bulkNoteText}
+                  onChange={(e) => setBulkNoteText(e.target.value)}
+                  placeholder="Write a note…"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y mb-6"
+                  autoFocus
+                />
+              ) : (
+                <div className="space-y-3 mb-6">
+                  <input
+                    type="text"
+                    value={bulkTaskTitle}
+                    onChange={(e) => setBulkTaskTitle(e.target.value)}
+                    placeholder="Task title"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                  />
+                  <textarea
+                    rows={3}
+                    value={bulkTaskDesc}
+                    onChange={(e) => setBulkTaskDesc(e.target.value)}
+                    placeholder="Description (optional)"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setBulkAddMode(null)}
+                  disabled={bulkLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={bulkAddMode === "note" ? handleBulkAddNote : handleBulkAddTask}
+                  disabled={bulkLoading}
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {bulkLoading ? "Saving..." : bulkAddMode === "note" ? "Add Note" : "Add Task"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {dealToDelete && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
@@ -1920,6 +2416,13 @@ export default function CompanyDealsKanban({
           </div>
         </div>
       )}
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </div>
   );
 }

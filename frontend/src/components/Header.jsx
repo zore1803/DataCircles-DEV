@@ -892,15 +892,19 @@ const Header = () => {
   useEffect(() => {
     const companyMatch = location.pathname.match(/^\/companies\/([^/]+)$/);
     const contactMatch = location.pathname.match(/^\/contacts\/([^/]+)$/);
-    const match = companyMatch || contactMatch;
+    const vendorMatch = location.pathname.match(/^\/vendors\/([^/]+)$/);
+    const match = companyMatch || contactMatch || vendorMatch;
     if (!match) {
       setDynamicCrumbName("");
       return;
     }
     const entityId = match[1];
     const isContact = !!contactMatch;
-    const list = isContact ? contacts : companies;
-    const endpoint = isContact ? "contacts" : "companies";
+    const isVendor = !!vendorMatch;
+    // Vendors have no preloaded list in this header (unlike companies/
+    // contacts), so they always fall through to the fetch below.
+    const list = isContact ? contacts : isVendor ? [] : companies;
+    const endpoint = isContact ? "contacts" : isVendor ? "vendors" : "companies";
     const cached = list.find((c) => c._id === entityId);
     if (cached) {
       setDynamicCrumbName(cached.name);
@@ -1353,8 +1357,11 @@ const Header = () => {
 
   if (isSuperAdmin || isSuperAdminRoute) {
     return (
-      <header className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-[9992] h-16">
-        <div className="flex items-center justify-start h-full px-4 lg:pl-10">
+      <header
+        className="fixed top-0 right-0 bg-white border-b border-gray-200 shadow-sm z-[9992] h-16 transition-all duration-300 ease-in-out"
+        style={{ left: "var(--sidebar-width, 0px)" }}
+      >
+        <div className="flex items-center justify-start h-full px-4 lg:pl-6">
           {/* Branding Section */}
           {isLoadingData ? (
             <BrandingShimmer />
@@ -1442,6 +1449,10 @@ const Header = () => {
                 Create, manage, and track all your documents
               </p>
             </div>
+          ) : location.pathname.startsWith("/insights") ? (
+            <span className="text-base font-semibold text-gray-900">
+              Insights & Analytics
+            </span>
           ) : (
             <div className="flex items-center gap-2">
               {getBreadcrumb().map((crumb, idx, arr) => {

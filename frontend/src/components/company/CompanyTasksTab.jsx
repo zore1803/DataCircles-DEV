@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
-import { PINNED_LEFT_BOUNDARY_SHADOW, PINNED_RIGHT_BOUNDARY_SHADOW } from "../../utils/pinnedColumnShadow";
+import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   Filter,
   Plus,
@@ -17,6 +17,10 @@ import {
   List,
   LayoutGrid,
   X,
+  Eye,
+  Edit3,
+  Trash2,
+  CheckCircle,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
@@ -138,6 +142,11 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
   const [editingTask, setEditingTask] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const [rowActionsPos, setRowActionsPos] = useState(null);
+  const rowActionsRef = useRef(null);
+  const [taskToDelete, setTaskToDelete] = useState(null);
+  const [deletingTask, setDeletingTask] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [leftPinned, setLeftPinned] = useState(new Set());
   const [rightPinned, setRightPinned] = useState(new Set());
@@ -200,57 +209,74 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    // A single press does nothing: the column menu opens from its own chevron
-    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
-    // meant the FIRST press of every double-click popped the menu, whose
-    // full-screen backdrop then swallowed the second press — making the header
-    // effectively un-double-clickable. Drag still starts on the second press.
-    if (e.detail < 2) return;
+    // No click-count gate here, matching the Companies list page: a press plus
+    // DRAG_THRESHOLD px of movement starts the drag, at whatever speed the user
+    // moves. Gating on `e.detail` meant only a fast-enough double-click could
+    // begin a move. The threshold below is what keeps a plain click harmless,
+    // and the column menu opens from its own chevron button, never from the
+    // header background — so nothing competes with the drag for a single press.
 
-    e.preventDefault();
-    window.getSelection?.()?.removeAllRanges();
-
+    // A plain click must stay harmless, so nothing happens until the pointer
+    // has travelled DRAG_THRESHOLD px — the same deferred start the Companies
+    // list page uses. Until then no ghost is mounted and no drag state is set.
     const th = e.currentTarget;
-    const rect = th.getBoundingClientRect();
-    const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
+    let dragStarted = false;
+    let positionGhost = () => {};
+
+    const beginDrag = () => {
+      dragStarted = true;
+      e.preventDefault();
+      window.getSelection?.()?.removeAllRanges();
+      const rect = th.getBoundingClientRect();
+      const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
     
-    const previewRows = (tasks || []).slice(0, 10).map((t) => {
-      let val = t[colId];
-      if (colId === 'assignedTo') val = val?.name || "Unassigned";
-      if (typeof val === 'object' && val !== null) val = val?.name || val?.title || "";
-      return String(val ?? "").trim() || "—";
-    });
+      const previewRows = (tasks || []).slice(0, 10).map((t) => {
+        let val = t[colId];
+        if (colId === 'assignedTo') val = val?.name || "Unassigned";
+        if (typeof val === 'object' && val !== null) val = val?.name || val?.title || "";
+        return String(val ?? "").trim() || "—";
+      });
 
-    const zGhost = getAncestorZoom(document.body);
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+      const zGhost = getAncestorZoom(document.body);
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
 
-    dragOverRef.current = null;
-    setDraggedColKey(colId);
-    setDragOverColKey(null);
-    document.body.style.userSelect = "none";
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
 
-    setDragGhost({
-      label,
-      previewRows,
-      offsetX,
-      offsetY,
-      width: rect.width / zGhost,
-      height: rect.height / zGhost,
-    });
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX,
+        offsetY,
+        width: rect.width / zGhost,
+        height: rect.height / zGhost,
+      });
 
-    const positionGhost = (clientX, clientY) => {
-      const el = ghostElRef.current;
-      if (!el) return;
-      const visualTop = clientY - offsetY;
-      const visualLeft = clientX - offsetX;
-      el.style.top = `${visualTop / zGhost}px`;
-      el.style.left = `${visualLeft / zGhost}px`;
-      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      positionGhost = (clientX, clientY) => {
+        const el = ghostElRef.current;
+        if (!el) return;
+        const visualTop = clientY - offsetY;
+        const visualLeft = clientX - offsetX;
+        el.style.top = `${visualTop / zGhost}px`;
+        el.style.left = `${visualLeft / zGhost}px`;
+        el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      };
+      requestAnimationFrame(() => positionGhost(startX, startY));
     };
-    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
 
     const handleMouseMove = (moveEvent) => {
+      if (!dragStarted) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        beginDrag();
+      }
       positionGhost(moveEvent.clientX, moveEvent.clientY);
       const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
       const thAtPoint = elAtPoint?.closest("th[data-col-id]");
@@ -264,6 +290,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragStarted) return;
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) {
@@ -322,7 +349,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
 
   const stickyStyles = useMemo(() => {
     const map = {};
-    let leftOffset = 88; // selection (44px) + lead (44px) columns
+    let leftOffset = 44; // selection column width
     for (const col of orderedColumns) {
       if (leftPinned.has(col.id)) {
         map[col.id] = {
@@ -352,24 +379,21 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
   const getStickyStyle = (colId, isHeader = false, isSelected = false) => {
     const isPinned = leftPinned.has(colId) || rightPinned.has(colId);
     const style = stickyStyles[colId] || {};
-    
-    let borderShadows = "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA";
-    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
-    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
-    
-    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) {
-      borderShadows = `${PINNED_LEFT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
-    } else if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) {
-      borderShadows = `${PINNED_RIGHT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
-    }
-    
     return {
       ...style,
-      position: isPinned ? "sticky" : undefined,
+      position: isPinned ? "sticky" : "relative",
       zIndex: isPinned ? (isHeader ? 35 : 20) : undefined,
       backgroundColor: isPinned ? (isHeader ? "#F5F7FA" : (isSelected ? "#EFF6FF" : "#fff")) : undefined,
-      boxShadow: borderShadows,
+      boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
     };
+  };
+
+  const getBoundaryShadowSide = (colId) => {
+    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
+    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
+    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) return "left";
+    if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) return "right";
+    return null;
   };
 
   // Kept so the existing header Pin button and double-click-to-pin keep working;
@@ -441,6 +465,38 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     }
   };
 
+  const handleTaskComplete = async (task) => {
+    try {
+      await API.put(`/tasks/${task._id}`, { status: "Completed" });
+      await refetchTasks();
+      setSelectedTask((prev) => (prev && prev._id === task._id ? { ...prev, status: "Completed" } : prev));
+      toast.success("Task marked as complete!");
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Failed to update task.");
+      }
+    }
+  };
+
+  // Toggle used by the checkmark next to the task title in the table, same
+  // as the global Tasks & Meetings page — Completed <-> Pending.
+  const handleToggleTaskStatus = async (task) => {
+    const nextStatus = task.status === "Completed" ? "Pending" : "Completed";
+    try {
+      await API.put(`/tasks/${task._id}/status`, { status: nextStatus });
+      await refetchTasks();
+      toast.success("Status updated");
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Update failed");
+      }
+    }
+  };
+
   const handleTaskDelete = async (taskId) => {
     try {
       await API.delete(`/tasks/${taskId}`);
@@ -455,6 +511,19 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
         toast.error(err.response?.data?.error || "Failed to delete task.");
       }
       throw err;
+    }
+  };
+
+  const handleDeleteTaskConfirmed = async () => {
+    if (!taskToDelete) return;
+    setDeletingTask(true);
+    try {
+      await handleTaskDelete(taskToDelete._id);
+      setTaskToDelete(null);
+    } catch {
+      // handleTaskDelete already surfaced a toast for the failure.
+    } finally {
+      setDeletingTask(false);
     }
   };
 
@@ -570,7 +639,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
     });
   }, [filteredTasks, sortConfig]);
 
-  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+  const { selectedItems, toggleItem, clearSelection, selectAll, upgradeModal } = useBulkSelection({
     items: filteredTasks,
     onDelete: () => setShowBulkDeleteModal(true)
   });
@@ -785,8 +854,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by tasks..."
-              className="w-full h-full pl-11 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              className="w-full h-full pl-11 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
             {searchTerm && (
               <button
@@ -829,14 +897,14 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
       {/* Task list or empty state. */}
       {!isLoading && tasks.length === 0 ? (
         <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <ListChecks size={28} className="mb-3 text-blue-500" />
+          <ListChecks size={28} className="mb-3 text-gray-400" />
           <button
             type="button"
             onClick={() => setShowTaskForm(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus size={16} />
-            Add new
+            Add new task
           </button>
         </div>
       ) : (
@@ -885,22 +953,10 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                   />
                 </div>
               </th>
-              {/* Spacer for the completion-circle column below (`__lead`). */}
-              <th
-                style={{
-                  width: 44,
-                  height: 56,
-                  position: "sticky",
-                  left: 44,
-                  zIndex: 35,
-                  backgroundColor: "#F5F7FA",
-                  boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
-                }}
-                className="px-3 py-2.5"
-              />
               {orderedColumns.map((col) => {
                 const isDragging = draggedColKey === col.id;
                 const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
+                const boundarySide = getBoundaryShadowSide(col.id);
                 return (
                   <th
                     key={col.id}
@@ -912,7 +968,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                       opacity: isDragging ? 0.35 : 1,
                       ...getStickyStyle(col.id, true)
                     }}
-                    className={`py-2.5 font-medium text-[#525252] text-xs cursor-grab active:cursor-grabbing ${
+                    className={`py-2.5 font-medium text-[#525252] text-xs cursor-grab active:cursor-grabbing bg-[#F5F7FA] ${
                       col.id === "title" ? "pl-6 pr-3" : "px-3"
                     } ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                   >
@@ -927,12 +983,12 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                               <Skeleton width="65%" height={12} />
                             ) : (
                               <div className="flex items-center gap-1.5 min-w-0 truncate">
-                                {(leftPinned.has(col.id) || rightPinned.has(col.id)) && (
-                                  <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0" style={{ transform: "rotate(45deg)" }} />
-                                )}
                                 <span className="truncate flex-1 min-w-0" title={col.label}>
                                   {col.label}
                                 </span>
+                                {(leftPinned.has(col.id) || rightPinned.has(col.id)) && (
+                                  <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0 ml-1" style={{ transform: "rotate(45deg)" }} />
+                                )}
                               </div>
                             )}
                           </div>
@@ -1040,11 +1096,13 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                       )}
                     </div>
                     <div
+                      data-resize-handle="true"
                       onMouseDown={(e) => startResize(e, col.id)}
                       className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${
                         resizingCol === col.id ? "bg-blue-500" : "bg-transparent"
                       }`}
                     />
+                    {boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />}
                   </th>
                 );
               })}
@@ -1052,21 +1110,15 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
           </thead>
           <tbody className="bg-white">
             {isLoading ? (
-              // hasCheckbox renders ONE leading <td>; the real rows now have TWO
-              // leading columns (selection checkbox + completion circle), so
-              // prepend a 44px width to keep the skeleton's column count aligned
-              // with the header and body.
               <TableSkeletonRows
-                columns={[44, ...orderedColumns.map(c => colWidths[c.id])]}
+                columns={orderedColumns.map(c => colWidths[c.id])}
                 hasCheckbox={true}
                 numRows={listLimit}
                 rowHeight={54}
               />
             ) : paginatedTasks.length === 0 ? (
               <tr>
-                {/* +2 for the two leading columns: selection checkbox and the
-                    completion circle (was +1 when selection didn't exist). */}
-                <td colSpan={orderedColumns.length + 2} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
+                <td colSpan={orderedColumns.length + 1} className="px-6 py-12 text-center text-gray-500 font-medium border-b border-[#E1E4EA]">
                   No tasks found.
                 </td>
               </tr>
@@ -1088,6 +1140,99 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                 const textDecoration = isCompleted ? "line-through" : "none";
                 const primaryAssignee = assignees[0];
                 const avatarUrl = primaryAssignee?.profileUrl || primaryAssignee?.userData?.mainData?.profilePic;
+                const isActionsOpen = openRowActionsId === task._id;
+                const taskActionsMenu = (
+                  <div className="relative flex items-center justify-center flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isActionsOpen) {
+                          setOpenRowActionsId(null);
+                          setRowActionsPos(null);
+                          return;
+                        }
+                        // rect is VISUAL px; the menu is portaled into
+                        // document.body, which paints inside the app's
+                        // dynamic <html> zoom, so rect-derived values are
+                        // divided by that zoom, the menu is centered on
+                        // the row rather than hanging off an edge, and
+                        // both axes are clamped to the viewport — same
+                        // approach as the Deals table's row-actions menu.
+                        const zMenu = getAncestorZoom(document.body);
+                        const MENU_W = 160;
+                        const MENU_H = 110; // View Task + Edit Task + divider + Delete Task
+                        const MARGIN = 8;
+
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const viewportH = window.innerHeight / zMenu;
+                        const viewportW = window.innerWidth / zMenu;
+
+                        const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                        let calcTop = rowCenter - MENU_H / 2;
+                        calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+                        let calcLeft = rect.right / zMenu - MENU_W;
+                        calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                        calcLeft = Math.max(calcLeft, MARGIN);
+
+                        setRowActionsPos({ top: calcTop, left: calcLeft });
+                        setOpenRowActionsId(task._id);
+                      }}
+                      className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
+                      title="More options"
+                    >
+                      <MoreVertIcon className="w-5 h-5" />
+                    </button>
+
+                    {isActionsOpen && rowActionsPos && createPortal(
+                      <>
+                        <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+                        <div
+                          ref={rowActionsRef}
+                          style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+                          className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            onClick={() => {
+                              setOpenRowActionsId(null);
+                              setRowActionsPos(null);
+                              handleTaskClick(task);
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                            View Task
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpenRowActionsId(null);
+                              setRowActionsPos(null);
+                              handleEditTask(task);
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                            Edit Task
+                          </button>
+                          <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                          <button
+                            onClick={() => {
+                              setOpenRowActionsId(null);
+                              setRowActionsPos(null);
+                              setTaskToDelete(task);
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete Task
+                          </button>
+                        </div>
+                      </>,
+                      document.body
+                    )}
+                  </div>
+                );
                   const cells = {
                     // Per-row selection checkbox — this is what was missing.
                     // `isSelected`/`toggleItem` already existed in this file but
@@ -1111,30 +1256,36 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                           </div>
                         </td>
                     ),
-                    __lead: (
-                        <td key="__lead" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-start">
-                            <CircleCheckIcon checked={isCompleted} className="flex-shrink-0" />
-                          </div>
-                        </td>
-                    ),
                     title: (
                         <td key="title" style={{ height: 60 }} className="pl-6 pr-3 py-3 border-r border-b border-[#E1E4EA]">
-                          <div className="flex flex-col gap-0.5">
-                            <span
-                              style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "20px", color: "#0E121B", textDecoration }}
-                              className="truncate"
+                          <div className="flex items-start gap-3 w-full overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleTaskStatus(task);
+                              }}
+                              title={isCompleted ? "Mark as pending" : "Mark as complete"}
+                              className={`flex-shrink-0 mt-0.5 p-0.5 rounded-full transition-all duration-200 ${isCompleted ? "bg-green-100 text-green-600" : "text-gray-300 hover:text-green-500 hover:bg-green-50"}`}
                             >
-                              <HighlightText text={task.title || "Untitled Task"} query={searchTerm} />
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <BriefcaseIcon className="flex-shrink-0" />
+                              <CheckCircle className="w-5 h-5" />
+                            </button>
+                            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                               <span
-                                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#8D8D8E", textDecoration }}
+                                style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "20px", color: "#0E121B", textDecoration }}
                                 className="truncate"
                               >
-                                Related to: <HighlightText text={linkedEntity?.entityId?.name || linkedEntity?.entityId?.title || "(Deal Name)"} query={searchTerm} />
+                                <HighlightText text={task.title || "Untitled Task"} query={searchTerm} />
                               </span>
+                              <div className="flex items-center gap-1">
+                                <BriefcaseIcon className="flex-shrink-0" />
+                                <span
+                                  style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#8D8D8E", textDecoration }}
+                                  className="truncate"
+                                >
+                                  Related to: <HighlightText text={linkedEntity?.entityId?.name || linkedEntity?.entityId?.title || "(Deal Name)"} query={searchTerm} />
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -1253,16 +1404,6 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                             <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "20px", color: "#525866" }} className="flex-shrink-0">
                               {progress}%
                             </span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleTaskClick(task);
-                              }}
-                              className="p-1 rounded hover:bg-gray-200 text-gray-800 flex-shrink-0"
-                              title="More options"
-                            >
-                              <MoreVertIcon className="w-5 h-5" />
-                            </button>
                           </div>
                         </td>
                     ),
@@ -1280,41 +1421,43 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
                         },
                         className: "px-3"
                       })}
-                      {React.cloneElement(cells.__lead, {
-                        style: {
-                          ...cells.__lead.props.style,
-                          position: "sticky",
-                          left: 44,
-                          zIndex: 10,
-                          backgroundColor: isSelected ? "#EFF6FF" : "#fff",
-                          boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
-                        },
-                        className: "px-3"
-                      })}
                       {/* Body cells are indexed by column id and rendered through
                           orderedColumns, so hiding or pinning a column in the header
                           moves/removes the matching cell too. Each <td> is unchanged. */}
-                      {orderedColumns.map((col) => {
+                      {orderedColumns.map((col, colIdx) => {
                         const isDragging = draggedColKey === col.id;
                         const cell = cells[col.id];
                         if (!cell) return null;
-                        
+
                         const stickyStyle = getStickyStyle(col.id, false, isSelected);
                         const mergedStyle = {
                           ...cell.props.style,
                           opacity: isDragging ? 0.35 : undefined,
                           ...stickyStyle,
                         };
-                        
+
                         const cleanClassName = (cell.props.className || "")
                           .replace("border-r", "")
                           .replace("border-b", "")
                           .replace("border-[#E1E4EA]", "");
-                          
-                        return React.cloneElement(cell, {
-                          style: mergedStyle,
-                          className: cleanClassName,
-                        });
+
+                        const boundarySide = getBoundaryShadowSide(col.id);
+                        const isLastCol = colIdx === orderedColumns.length - 1;
+                        return React.cloneElement(
+                          cell,
+                          { style: mergedStyle, className: cleanClassName },
+                          <>
+                            {isLastCol ? (
+                              <div className="flex items-center justify-between w-full gap-2">
+                                {cell.props.children}
+                                {taskActionsMenu}
+                              </div>
+                            ) : (
+                              cell.props.children
+                            )}
+                            {boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />}
+                          </>
+                        );
                       })}
                     </tr>
                   );
@@ -1415,8 +1558,43 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
         users={users}
         onDelete={handleTaskDelete}
         onEdit={handleEditTask}
+        onComplete={handleTaskComplete}
         onClose={() => setIsDetailsOpen(false)}
       />
+
+      {taskToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
+                Confirm Delete
+              </h3>
+              <p className="text-sm text-gray-500 font-inter mb-6">
+                Delete task "{taskToDelete.title || "Task"}"? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setTaskToDelete(null)}
+                  disabled={deletingTask}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteTaskConfirmed}
+                  disabled={deletingTask}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {deletingTask ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {dragGhost && createPortal(
         <div
@@ -1509,6 +1687,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
           </div>
         </div>
       )}
+      {upgradeModal}
     </div>
   );
 }

@@ -278,6 +278,13 @@ const NoteSection = ({ contactId: propContactId, isQuickView }) => {
   const [showAllNotes, setShowAllNotes] = useState(false);
 
   const fetchNotes = useCallback(async () => {
+    // No contact to scope to (e.g. this section is mounted on a deal that has
+    // no contact yet) — skip the request instead of hitting /notes/contact/
+    // undefined and spamming an error toast.
+    if (!contactId) {
+      setNotes([]);
+      return;
+    }
     try {
       const res = await API.get(`/notes/contact/${contactId}`);
       const sortedNotes = res.data.sort(
@@ -290,6 +297,10 @@ const NoteSection = ({ contactId: propContactId, isQuickView }) => {
   }, [contactId]);
 
   const fetchContact = useCallback(async () => {
+    if (!contactId) {
+      setContact(null);
+      return;
+    }
     try {
       const res = await API.get(`/contacts/${contactId}`);
       setContact(res.data);

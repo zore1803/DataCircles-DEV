@@ -1,5 +1,14 @@
 const mongoose = require('mongoose');
 
+const postalAddressSchema = new mongoose.Schema({
+  addressLine1: { type: String, default: '' },
+  addressLine2: { type: String, default: '' },
+  pincode: { type: String, default: '' },
+  city: { type: String, default: '' },
+  state: { type: String, default: '' },
+  country: { type: String, default: '' },
+}, { _id: false });
+
 const itemSchema = new mongoose.Schema({
   itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item' },
   name: { type: String, required: true },
@@ -25,6 +34,8 @@ const deliveryChallanSchema = new mongoose.Schema({
     enum: ['Draft', 'Sent', 'Delivered', 'Cancelled'], 
     required: true 
   },
+  billingAddress: { type: postalAddressSchema, default: () => ({}) },
+  shippingAddress: { type: postalAddressSchema, default: () => ({}) },
   discount: {
     type: { type: String, enum: ['fixed', 'percentage'], required: true },
     value: { type: Number, required: true, min: 0 },

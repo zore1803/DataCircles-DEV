@@ -129,7 +129,7 @@ const ItemSearchSelect = ({
     (search) => {
       clearTimeout(debounceTimeout.current);
       debounceTimeout.current = setTimeout(() => {
-        fetchItems(search);
+        Promise.resolve(fetchItems(search)).finally(() => setLoading(false));
       }, 300);
     },
     [fetchItems]
@@ -165,7 +165,7 @@ const ItemSearchSelect = ({
     setIsOpen(true);
     if (items.length === 0) {
       setLoading(true);
-      fetchItems();
+      Promise.resolve(fetchItems()).finally(() => setLoading(false));
     }
   };
 
@@ -243,13 +243,12 @@ const ItemSearchSelect = ({
                           )}
                           <div className="flex items-center gap-2 mt-2">
                             <span
-                              className={`text-xs px-2 py-1 rounded-full ${
-                                item.isVariant
+                              className={`text-xs px-2 py-1 rounded-full ${item.isVariant
                                   ? "bg-purple-100 text-purple-800"
                                   : item.type === "product"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-green-100 text-green-800"
-                              }`}
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-green-100 text-green-800"
+                                }`}
                             >
                               {item.isVariant ? "Variant" : item.type}
                             </span>
@@ -289,6 +288,7 @@ const PerformaInvoiceForm = ({
   onClose,
   fetchData,
   editingPerformaInvoice,
+  conversionData,
   onPreview,
 }) => {
   const [form, setForm] = useState({
@@ -379,21 +379,12 @@ const PerformaInvoiceForm = ({
       const itemsWithVariants = res.data
         .filter((item) => item.isActive)
         .flatMap((item) => {
-          const baseItem = {
-            _id: item._id,
-            displayName: item.name,
-            name: item.name,
-            description: item.description || "",
-            sellingPrice: item.sellingPrice,
-            hsnSac: item.hsnSac || "",
-            type: item.type,
-            category: item.category || "",
-            primaryUnit: item.primaryUnit || "OTH OTHERS",
-            isVariant: false,
-            parentItemId: null,
-          };
-          const variants =
-            item.variants?.map((variant) => ({
+          // Same variant-only logic as PurchaseForm.jsx/PurchaseOrderForm.jsx:
+          // if the item has variants, only the variants are selectable (the
+          // parent is just a grouping, not something you'd actually bill);
+          // otherwise fall back to the item itself.
+          if (item.variants && item.variants.length > 0) {
+            return item.variants.map((variant) => ({
               _id: variant._id,
               displayName: `${item.name} - ${variant.name}`,
               name: variant.name,
@@ -406,8 +397,23 @@ const PerformaInvoiceForm = ({
                 variant.primaryUnit || item.primaryUnit || "OTH OTHERS",
               isVariant: true,
               parentItemId: item._id,
-            })) || [];
-          return [baseItem, ...variants];
+            }));
+          }
+          return [
+            {
+              _id: item._id,
+              displayName: item.name,
+              name: item.name,
+              description: item.description || "",
+              sellingPrice: item.sellingPrice,
+              hsnSac: item.hsnSac || "",
+              type: item.type,
+              category: item.category || "",
+              primaryUnit: item.primaryUnit || "OTH OTHERS",
+              isVariant: false,
+              parentItemId: null,
+            },
+          ];
         });
       setItems(itemsWithVariants);
     } catch (error) {
@@ -454,18 +460,19 @@ const PerformaInvoiceForm = ({
   }, [isOpen, fetchItems, fetchCompanies, fetchContacts, deals]);
 
   useEffect(() => {
-    if (editingPerformaInvoice) {
+    if (editingPerformaInvoice || conversionData) {
+      const sourceData = editingPerformaInvoice || conversionData;
       const initialForm = {
-        deal: editingPerformaInvoice.deal?._id || "",
-        date: editingPerformaInvoice.date
-          ? editingPerformaInvoice.date.slice(0, 10)
+        deal: sourceData.deal?._id || sourceData.deal || "",
+        date: sourceData.date
+          ? sourceData.date.slice(0, 10)
           : "",
-        dueDate: editingPerformaInvoice.dueDate
-          ? editingPerformaInvoice.dueDate.slice(0, 10)
+        dueDate: sourceData.dueDate
+          ? sourceData.dueDate.slice(0, 10)
           : "",
-        receiverGSTIN: editingPerformaInvoice.receiverGSTIN || "",
-        items: editingPerformaInvoice.items.map((item) => ({
-          _id: item.itemId || null,
+        receiverGSTIN: sourceData.receiverGSTIN || "",
+        items: (sourceData.items || []).map((item) => ({
+          _id: item.itemId || item._id || null,
           name: item.name || "",
           description: item.description || "",
           rate: item.rate || "",
@@ -476,14 +483,14 @@ const PerformaInvoiceForm = ({
           discountType: item.discountType || "amount",
           discount: item.discount || 0,
         })),
-        discount: editingPerformaInvoice.discount || {
+        discount: sourceData.discount || {
           type: "fixed",
           value: 0,
         },
-        amount: editingPerformaInvoice.amount || 0,
-        status: editingPerformaInvoice.status || "Draft",
-        style: editingPerformaInvoice.style || "",
-        isTaxInvoice: editingPerformaInvoice.isTaxInvoice || false,
+        amount: sourceData.amount || 0,
+        status: editingPerformaInvoice ? sourceData.status : "Draft",
+        style: sourceData.style || "",
+        isTaxInvoice: sourceData.isTaxInvoice || false,
       };
       setForm(initialForm);
       setHasUnsavedChanges(false);
@@ -801,8 +808,7 @@ const PerformaInvoiceForm = ({
     );
     if (invalidItems.length > 0) {
       toast.error(
-        `Please fill in all item details (name, rate, quantity${
-          form.isTaxInvoice ? ", and HSN/SAC" : ""
+        `Please fill in all item details (name, rate, quantity${form.isTaxInvoice ? ", and HSN/SAC" : ""
         }) and ensure percentage discounts are not above 100.`
       );
       setIsSubmitting(false);
@@ -995,9 +1001,8 @@ const PerformaInvoiceForm = ({
       />
       <div
         ref={formRef}
-        className={`fixed inset-y-0 right-0 z-[10000] w-full md:w-[600px] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${
-          isSliding ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`fixed inset-y-0 right-0 z-[10000] w-full md:w-[600px] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${isSliding ? "translate-x-0" : "translate-x-full"
+          }`}
       >
         <form onSubmit={handleSubmit} className="p-6 space-y-8">
           <div className="flex justify-between items-center">
@@ -1206,7 +1211,7 @@ const PerformaInvoiceForm = ({
                           type="number"
                           placeholder="0"
                           min="0"
-                          step="1"
+                          step="0.01"
                           value={item.rate}
                           onChange={(e) => {
                             handleItemChange(index, "rate", e.target.value);
@@ -1247,7 +1252,7 @@ const PerformaInvoiceForm = ({
                                 placeholder="0"
                                 min="0"
                                 step={
-                                  item.discountType === "percentage" ? "1" : "1"
+                                  item.discountType === "percentage" ? "0.1" : "0.01"
                                 }
                                 value={item.discount}
                                 onChange={(e) => {
@@ -1309,7 +1314,7 @@ const PerformaInvoiceForm = ({
                               placeholder="0"
                               min="0"
                               step={
-                                item.discountType === "percentage" ? "1" : "1"
+                                item.discountType === "percentage" ? "0.1" : "0.01"
                               }
                               value={item.discount}
                               onChange={(e) => {
@@ -1389,7 +1394,7 @@ const PerformaInvoiceForm = ({
                   type="number"
                   placeholder="0"
                   min="0"
-                  step={form.discount.type === "percentage" ? "1" : "1"}
+                  step={form.discount.type === "percentage" ? "0.1" : "0.01"}
                   value={form.discount.value}
                   onChange={(e) => {
                     handleDiscountChange("value", e.target.value);
@@ -1525,3 +1530,11 @@ const PerformaInvoiceForm = ({
 };
 
 export default PerformaInvoiceForm;
+
+import { CreateInvoicePanel } from "../invoice/InvoiceForm";
+
+const CreatePerformaPanel = (props) => (
+  <CreateInvoicePanel {...props} type="performa" />
+);
+
+export { CreatePerformaPanel };

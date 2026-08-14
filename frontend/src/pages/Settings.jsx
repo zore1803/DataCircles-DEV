@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   HelpCircle,
   Workflow,
+  Package,
   Mail,
   Crown,
   Settings as SettingsIcon,
@@ -24,6 +25,7 @@ import {
   Receipt,
   Gift,
   FileText,
+  Wallet as WalletIcon,
 } from "lucide-react";
 import BankDetails from "../components/settings/BankDetails";
 import BrandSettings from "../components/settings/BrandSettings";
@@ -34,6 +36,7 @@ import ContactFieldSettings from "../components/settings/ContactFieldSettings";
 import DealFieldSettings from "../components/settings/DealFieldSettings";
 import HelpCenter from "../components/settings/HelpCenter";
 import VendorFieldSettings from "../components/settings/VendorFieldSettings";
+import ItemFieldSettings from "../components/settings/ItemFieldSettings";
 import FormsList from "../components/settings/FormsList";
 import EmailNotifications from "../components/settings/EmailNotifications";
 import SubscriptionPlans from "../components/settings/SubscriptionPlans";
@@ -41,6 +44,7 @@ import BasicSettings from "./BasicSettings";
 import logo from "/DataCircles.png";
 import BillingCenter from "../components/settings/BillingCenter";
 import Referrals from "../components/settings/Referrals";
+import Wallet from "../components/settings/Wallet";
 import UserManagement from "./UserManagement";
 import DocumentSettings from "../components/settings/DocumentSettings";
 
@@ -139,6 +143,18 @@ const Settings = () => {
       borderColor: "border-yellow-200",
       hoverBg: "hover:bg-yellow-50",
       component: <SubscriptionPlans />,
+      category: "Billing",
+    },
+    {
+      id: "wallet",
+      icon: <WalletIcon className="w-5 h-5" />,
+      label: "Wallet",
+      description: "Manage your credits and usage-based purchases",
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-50",
+      borderColor: "border-emerald-200",
+      hoverBg: "hover:bg-emerald-50",
+      component: <Wallet />,
       category: "Billing",
     },
     {
@@ -262,6 +278,18 @@ const Settings = () => {
       category: "Customization",
     },
     {
+      id: "item-fields",
+      icon: <Package className="w-5 h-5" />,
+      label: "Item Fields",
+      description: "Customize product and service fields",
+      color: "text-teal-600",
+      bgColor: "bg-teal-50",
+      borderColor: "border-teal-200",
+      hoverBg: "hover:bg-teal-50",
+      component: <ItemFieldSettings />,
+      category: "Customization",
+    },
+    {
       id: "forms",
       icon: <FileText className="w-5 h-5" />,
       label: "Forms",
@@ -353,7 +381,7 @@ const Settings = () => {
 
   if (activeSection) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-6 px-4 sm:px-6 lg:px-8">
         <div>
           {/* Enhanced Header with back button */}
           <div className="mb-8">
@@ -421,32 +449,39 @@ const Settings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div>
-        {/* Enhanced Page Header */}
-        <div className="mb-6">
-          <div className="">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div>
-                  <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                    Settings
-                  </h1>
-                  <p className="text-gray-600 text-sm md:text-base mt-2">
-                    Customize and configure your CRM system
-                  </p>
-                </div>
-              </div>
-              <div className="hidden md:flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
-                <Shield className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-semibold text-blue-700">
-                  Admin Panel
-                </span>
-              </div>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+      {/* Fixed page-header strip — same pinned-below-header treatment as
+          Companies.jsx's toolbar, so this page no longer scrolls with a
+          gutter above it. */}
+      <div
+        className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
+        style={{
+          left: "var(--sidebar-width, 0px)",
+          zIndex: 40,
+          minHeight: "64px",
+          maxHeight: "64px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div className="flex items-center justify-between w-full">
+          <div className="flex flex-col justify-center gap-1.5">
+            <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">
+              Settings
+            </h1>
+            <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
+              Customize and configure your CRM system
+            </p>
+          </div>
+          <div className="hidden md:flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+            <Shield className="w-4 h-4 text-blue-600" />
+            <span className="text-sm font-semibold text-blue-700">
+              Admin Panel
+            </span>
           </div>
         </div>
+      </div>
 
+      <div className="pt-[118px] lg:pt-[128px]">
         {/* Settings by Category */}
         <div className="space-y-8">
           {categoryOrder.map((category) => {

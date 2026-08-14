@@ -14,6 +14,8 @@ mongoose.plugin(require('./utils/changeNotifier'));
 const cors = require('cors');
 const startReminderJob = require('./utils/reminderJob');
 require('./jobs/subscriptionLifecycleJobs');
+require('./jobs/referralLifecycleJobs');
+require('./jobs/renewalLifecycleJobs');
 const swaggerUi = require('swagger-ui-express');
 const fs = require('fs');
 const YAML = require('yaml');
@@ -64,6 +66,7 @@ app.use(requestContext);
 
 const subscriptionRoutes = require("./routes/subscription");
 app.use("/api/subscription", subscriptionRoutes)
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.raw({ type: 'application/json', limit: '50mb' }));
 app.use('/uploads', express.static('uploads'));
@@ -76,6 +79,9 @@ app.use('/api/companies', companyRoutes);
 
 const contactRoutes = require('./routes/contactRoutes');
 app.use('/api/contacts', contactRoutes);
+
+const walletRoutes = require('./routes/walletRoutes');
+app.use('/api/wallet', walletRoutes);
 
 // PUBLIC, unauthenticated form-submission surface (FORMS_ARCHITECTURE.md §2.9) — org resolved from the
 // URL slug inside the service, never from req.user (there is none here). Kept as its own router so the
@@ -174,6 +180,9 @@ app.use("/api/purchase-orders", purchaseOrderRoutes);
 
 const purchaseRoutes = require("./routes/purchase");
 app.use("/api/purchases", purchaseRoutes);
+
+const itemFieldsRoutes = require('./routes/itemFields');
+app.use('/api/item-fields', itemFieldsRoutes);
 
 const itemRoutes = require("./routes/itemRoutes");
 app.use("/api/items", itemRoutes);

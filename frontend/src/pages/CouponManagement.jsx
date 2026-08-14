@@ -21,13 +21,20 @@ const EMPTY_DRAFT = {
   usageLimits: { maxRedemptions: "", maxRedemptionsPerOrganization: "" },
 };
 
-// Only lifetime/until_cancelled are enforced today (see backend Coupon model
-// comment) — the others are shown so admins know what's coming, but selecting
-// them is blocked with an explanation rather than silently doing nothing.
+// lifetime/until_cancelled/first_payment are enforced today (see backend
+// Coupon model comment + utils/couponRenewalEligibility.js) — fixed_cycles/
+// until_date are shown so admins know what's coming, but selecting them is
+// blocked with an explanation rather than silently doing nothing.
 const DURATION_OPTIONS = [
   { value: "lifetime", label: "Lifetime", enabled: true },
-  { value: "until_cancelled", label: "Until cancelled by Super Admin", enabled: true },
-  { value: "first_payment", label: "First payment only (not yet supported)", enabled: false },
+  // B1 copy fix (found via live QA): "Until cancelled by Super Admin" read as
+  // if disabling the coupon would retroactively strip the discount from
+  // customers who already redeemed it — it doesn't (Chapter 19 AD4 / Law 4:
+  // archiving/disabling only stops NEW redemptions; existing subscribers keep
+  // whatever their own appliedCoupon snapshot says, same as an archived
+  // coupon still displaying correctly on an already-subscribed org).
+  { value: "until_cancelled", label: "Recurring, until disabled (existing customers keep it either way)", enabled: true },
+  { value: "first_payment", label: "First payment only", enabled: true },
   { value: "fixed_cycles", label: "Fixed number of billing cycles (not yet supported)", enabled: false },
   { value: "until_date", label: "Until a specific date (not yet supported)", enabled: false },
 ];
@@ -518,9 +525,10 @@ const CouponManagement = () => {
               </Field>
 
               {/* Duration — how long the discount stays in effect on a
-                  subscription once applied. Only Lifetime/Until cancelled are
-                  actually enforced; the others exist so admins can see what's
-                  planned, but are blocked with an explanation if selected. */}
+                  subscription once applied. Lifetime/Until cancelled/First
+                  payment only are actually enforced; Fixed cycles/Until a
+                  date exist so admins can see what's planned, but are
+                  blocked with an explanation if selected. */}
               <Field label="Duration">
                 <select
                   value={draft.duration.type}
@@ -534,6 +542,11 @@ const CouponManagement = () => {
                 {!DURATION_OPTIONS.find((o) => o.value === draft.duration.type)?.enabled && (
                   <p className="text-xs text-amber-600 mt-1">
                     This duration isn't enforced yet — the system can't auto-revert pricing after a set period. Choose Lifetime or Until cancelled.
+                  </p>
+                )}
+                {draft.duration.type === "until_cancelled" && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Active until you disable it — disabling stops new redemptions only. Customers who already redeemed keep their discount for as long as they stay subscribed.
                   </p>
                 )}
                 {draft.duration.type === "fixed_cycles" && (

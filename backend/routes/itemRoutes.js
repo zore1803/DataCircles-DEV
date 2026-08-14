@@ -73,6 +73,14 @@ router.delete("/:id",
   itemController.deleteItem
 );
 
+// Export Selected Items
+router.post("/export-selected",
+  requireAuth,
+  subscriptionGate,
+  checkPermission("items", "readonly"),
+  itemController.exportSelectedItems
+);
+
 // Bulk Import Items
 router.post('/bulk-import', requireAuth, subscriptionGate, checkPermission('items', 'read-write'), async (req, res) => {
   try {

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from
 import API from "../../services/api";
 import CompanyMeetingForm from "./CompanyMeetingForm";
 import CompanyTaskForm from "./CompanyTaskForm";
+import MeetingDetailsModal from "./MeetingDetailsModal";
+import TaskDetailsModal from "../Task/TaskDetailsModal";
 import toast from "react-hot-toast";
 import {
   ChevronLeft,
@@ -11,11 +13,13 @@ import {
   CheckSquare,
   X,
   Calendar,
+  Loader2,
 } from "lucide-react";
 import AppToaster from "../AppToaster";
 
 import SearchIcon from "../common/SearchIcon";
-const CompactEventCard = ({ item, type, onClick }) => {
+import HighlightText from "../common/HighlightText";
+const CompactEventCard = ({ item, type, onClick, searchTerm }) => {
   const time = item.scheduledAt || item.dueDate;
   return (
     <div
@@ -32,7 +36,9 @@ const CompactEventCard = ({ item, type, onClick }) => {
       }}
       title={`${type}: ${item.title}`}
     >
-      <span className="truncate">{item.title}</span>
+      <span className="truncate">
+        <HighlightText text={item.title} query={searchTerm} />
+      </span>
       {time && (
         <span className="flex-shrink-0 opacity-70">
           {new Date(time).toLocaleTimeString("en-US", {
@@ -52,7 +58,7 @@ const QuickAddModal = ({ isOpen, onClose, onAddMeeting, onAddTask, date }) => {
   const displayDate = date ? new Date(date + "T00:00:00") : null;
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[10000] p-4">
       <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-xs border border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xl font-semibold text-gray-900">Quick Add</h3>
@@ -108,12 +114,15 @@ const ActivityListPopup = ({
   tasks,
   onMeetingClick,
   onTaskClick,
+  onAddMeeting,
+  onAddTask,
   onClose,
+  searchTerm,
 }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[10000] p-4">
       <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-sm border border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-semibold text-gray-900">
@@ -131,46 +140,62 @@ const ActivityListPopup = ({
           </button>
         </div>
         <div className="max-h-[60vh] overflow-y-auto space-y-2">
-          {meetings.length === 0 && tasks.length === 0 ? (
-            <p className="text-sm text-gray-600">No activities for this day.</p>
-          ) : (
-            <>
-              {meetings.length > 0 && (
-                <div className="mb-3">
-                  <h4 className="text-xs font-medium text-gray-700 mb-2">
-                    Meetings
-                  </h4>
-                  {meetings.map((meeting) => (
-                    <div
-                      key={meeting._id}
-                      className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
-                      onClick={() => onMeetingClick(meeting)}
-                    >
-                      <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                      <span className="truncate">{meeting.title}</span>
-                    </div>
-                  ))}
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-gray-700">Meetings</h4>
+              <button
+                onClick={() => onAddMeeting(date)}
+                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                <Plus className="w-3 h-3" />
+                Add
+              </button>
+            </div>
+            {meetings.length === 0 ? (
+              <p className="text-xs text-gray-500">No meetings scheduled.</p>
+            ) : (
+              meetings.map((meeting) => (
+                <div
+                  key={meeting._id}
+                  className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
+                  onClick={() => onMeetingClick(meeting)}
+                >
+                  <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                  <span className="truncate">
+                    <HighlightText text={meeting.title} query={searchTerm} />
+                  </span>
                 </div>
-              )}
-              {tasks.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-medium text-gray-700 mb-2">
-                    Tasks
-                  </h4>
-                  {tasks.map((task) => (
-                    <div
-                      key={task._id}
-                      className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
-                      onClick={() => onTaskClick(task)}
-                    >
-                      <CheckSquare className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                      <span className="truncate">{task.title}</span>
-                    </div>
-                  ))}
+              ))
+            )}
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-gray-700">Tasks</h4>
+              <button
+                onClick={() => onAddTask(date)}
+                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                <Plus className="w-3 h-3" />
+                Add
+              </button>
+            </div>
+            {tasks.length === 0 ? (
+              <p className="text-xs text-gray-500">No tasks scheduled.</p>
+            ) : (
+              tasks.map((task) => (
+                <div
+                  key={task._id}
+                  className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
+                  onClick={() => onTaskClick(task)}
+                >
+                  <CheckSquare className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                  <span className="truncate">
+                    <HighlightText text={task.title} query={searchTerm} />
+                  </span>
                 </div>
-              )}
-            </>
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -189,12 +214,15 @@ const CompanyCalendar = ({ companyId }) => {
   }, [viewMode]);
   const [meetings, setMeetings] = useState({});
   const [tasks, setTasks] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("create");
   const [modalType, setModalType] = useState("meeting");
   const [calendarDate, setCalendarDate] = useState(null);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [isMeetingDetailsOpen, setIsMeetingDetailsOpen] = useState(false);
+  const [isTaskDetailsOpen, setIsTaskDetailsOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [taskUsers, setTaskUsers] = useState([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -233,6 +261,7 @@ const CompanyCalendar = ({ companyId }) => {
   };
 
   const fetchData = useCallback(async () => {
+    setIsLoading(true);
     try {
       const meetingsRes = await API.get("/meetings", { params: { companyId } });
       const meetingsWithNames = await Promise.all(
@@ -270,7 +299,9 @@ const CompanyCalendar = ({ companyId }) => {
       });
       setTasks(tasksByDate);
     } catch (error) {
-      toast.error(err.response?.data?.error || "Failed to fetch calendar data");
+      toast.error(error.response?.data?.error || "Failed to fetch calendar data");
+    } finally {
+      setIsLoading(false);
     }
   }, [companyId]);
 
@@ -310,7 +341,13 @@ const CompanyCalendar = ({ companyId }) => {
   for (let d = 1; d <= daysInMonth; d++) {
     calendarDays.push({ date: new Date(year, month, d), isCurrentMonth: true });
   }
-  const extraDays = 35 - calendarDays.length;
+  // Rounds up to the next full week (35 or 42 cells) instead of a hardcoded
+  // 35 — a month that needs 6 rows (e.g. a 31-day month starting on a
+  // Saturday) was 1 cell short of a full grid, leaving the last row's
+  // remaining columns with no cell rendered at all: no border, no fill,
+  // just the single populated cell's own right border standing alone.
+  const totalCells = Math.ceil(calendarDays.length / 7) * 7;
+  const extraDays = totalCells - calendarDays.length;
   for (let d = 1; d <= extraDays; d++) {
     calendarDays.push({
       date: new Date(year, month + 1, d),
@@ -397,20 +434,74 @@ const CompanyCalendar = ({ companyId }) => {
     setQuickAddOpen(false);
   };
 
-  const handleMeetingClick = (meeting) => {
+  // "+ Add" inside the day's activity list popup — same create flow as
+  // Quick Add, just seeded with that day's date instead of quickAddDate.
+  const handleAddMeetingForDate = (date) => {
     setModalType("meeting");
-    setModalMode("view");
-    setSelectedMeeting(meeting);
+    setModalMode("create");
+    setCalendarDate(formatDateToString(date));
+    setSelectedMeeting(null);
     setModalOpen(true);
     setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
   };
 
+  const handleAddTaskForDate = (date) => {
+    setModalType("task");
+    setModalMode("create");
+    setCalendarDate(formatDateToString(date));
+    setSelectedTask(null);
+    setModalOpen(true);
+    setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
+  };
+
+  const handleMeetingClick = (meeting) => {
+    setSelectedMeeting(meeting);
+    setIsMeetingDetailsOpen(true);
+    setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
+  };
+
   const handleTaskClick = (task) => {
+    setSelectedTask(task);
+    setIsTaskDetailsOpen(true);
+    setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
+  };
+
+  const handleEditMeetingFromDetails = (meeting) => {
+    setIsMeetingDetailsOpen(false);
+    setModalType("meeting");
+    setModalMode("view");
+    setSelectedMeeting(meeting);
+    setModalOpen(true);
+  };
+
+  const handleEditTaskFromDetails = (task) => {
+    setIsTaskDetailsOpen(false);
     setModalType("task");
     setModalMode("view");
     setSelectedTask(task);
     setModalOpen(true);
-    setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
+  };
+
+  const handleMeetingComplete = async (meeting) => {
+    try {
+      await API.put(`/meetings/${meeting._id}`, { status: "completed" });
+      await fetchData();
+      setSelectedMeeting((prev) => (prev && prev._id === meeting._id ? { ...prev, status: "completed" } : prev));
+      toast.success("Meeting marked as complete!");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update meeting.");
+    }
+  };
+
+  const handleTaskComplete = async (task) => {
+    try {
+      await API.put(`/tasks/${task._id}`, { status: "Completed" });
+      await fetchData();
+      setSelectedTask((prev) => (prev && prev._id === task._id ? { ...prev, status: "Completed" } : prev));
+      toast.success("Task marked as complete!");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update task.");
+    }
   };
 
   const handleSave = async (form, type) => {
@@ -444,6 +535,8 @@ const CompanyCalendar = ({ companyId }) => {
       await API.delete(`/${type}s/${id}`);
       toast.success(`${type} deleted`, { id: loadingToast });
       setModalOpen(false);
+      setIsMeetingDetailsOpen(false);
+      setIsTaskDetailsOpen(false);
       fetchData();
     } catch (error) {
       toast.error(`Failed to delete ${type}`, { id: loadingToast });
@@ -457,18 +550,28 @@ const CompanyCalendar = ({ companyId }) => {
   };
 
   const closeModal = () => {
+    const wasEditing = modalMode === "view";
     setModalOpen(false);
     resetForm();
+    // The edit form (mode="view") does its own PUT internally and just
+    // calls onClose when done — refetch here so the calendar reflects the
+    // change, same as create does via handleSave.
+    if (wasEditing) fetchData();
   };
 
   const filteredEvents = (dayMeetings, dayTasks) => {
-    if (!searchTerm) return { meetings: dayMeetings, tasks: dayTasks };
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return { meetings: dayMeetings, tasks: dayTasks };
 
+    // A missing title used to throw here (undefined.toLowerCase()) and
+    // silently crash the whole month grid the moment a search term was
+    // typed — every day cell would just stop rendering, which is
+    // indistinguishable from "the search box doesn't work".
     const meetings = dayMeetings.filter((m) =>
-      m.title.toLowerCase().includes(searchTerm.toLowerCase())
+      (m.title || "").toLowerCase().includes(term)
     );
     const tasks = dayTasks.filter((t) =>
-      t.title.toLowerCase().includes(searchTerm.toLowerCase())
+      (t.title || "").toLowerCase().includes(term)
     );
 
     return { meetings, tasks };
@@ -533,8 +636,17 @@ const CompanyCalendar = ({ companyId }) => {
             placeholder="Search Events"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-8 lg:h-9 pl-11 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
+            className="w-full h-8 lg:h-9 pl-11 lg:pl-9 pr-8 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-[#0085FF]"
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="absolute right-2.5 lg:right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         <button
@@ -546,8 +658,15 @@ const CompanyCalendar = ({ companyId }) => {
         </button>
       </div>
 
+      {isLoading && (
+        <div className="bg-white border border-gray-200 rounded-lg flex flex-col items-center justify-center gap-2 min-h-[740px] text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+          <p className="text-sm">Loading meetings and tasks…</p>
+        </div>
+      )}
+
       {/* Calendar Grid */}
-      {viewMode === "month" && (
+      {!isLoading && viewMode === "month" && (
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
           {weekdays.map((day, index) => (
@@ -567,8 +686,17 @@ const CompanyCalendar = ({ companyId }) => {
             const { meetings: filteredMeetings, tasks: filteredTasks } =
               filteredEvents(dayMeetings, dayTasks);
 
-            const totalItems = filteredMeetings.length + filteredTasks.length;
-            const maxDisplay = 1;
+            // Combine into one ordered list (meetings first) and cap at
+            // however many chips actually fit inside the cell's fixed
+            // height, rather than the old hardcoded 1 — the rest collapse
+            // into a "+N" chip instead of overflowing the box.
+            const allDayItems = [
+              ...filteredMeetings.map((m) => ({ item: m, type: "meeting" })),
+              ...filteredTasks.map((t) => ({ item: t, type: "task" })),
+            ];
+            const totalItems = allDayItems.length;
+            const maxDisplay = 4;
+            const visibleItems = allDayItems.slice(0, maxDisplay);
             const hasMore = totalItems > maxDisplay;
             const hasHighPriority = filteredMeetings.some(
               (m) => m.priority === "high",
@@ -615,24 +743,15 @@ const CompanyCalendar = ({ companyId }) => {
                 </div>
 
                 <div className="space-y-0.5">
-                  {filteredMeetings.slice(0, 1).map((meeting) => (
+                  {visibleItems.map(({ item, type }) => (
                     <CompactEventCard
-                      key={meeting._id}
-                      item={meeting}
-                      type="meeting"
-                      onClick={handleMeetingClick}
+                      key={item._id}
+                      item={item}
+                      type={type}
+                      onClick={type === "meeting" ? handleMeetingClick : handleTaskClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
-                  {filteredTasks
-                    .slice(0, maxDisplay - filteredMeetings.slice(0, 1).length)
-                    .map((task) => (
-                      <CompactEventCard
-                        key={task._id}
-                        item={task}
-                        type="task"
-                        onClick={handleTaskClick}
-                      />
-                    ))}
                   {hasMore && (
                     <div
                       className="text-[9px] text-gray-500 px-1 py-0.5 bg-gray-100 rounded cursor-pointer hover:bg-gray-200"
@@ -658,7 +777,7 @@ const CompanyCalendar = ({ companyId }) => {
       )}
 
       {/* Week View */}
-      {viewMode === "week" && (
+      {!isLoading && viewMode === "week" && (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
             {weekDays.map((date, idx) => {
@@ -700,6 +819,7 @@ const CompanyCalendar = ({ companyId }) => {
                       item={meeting}
                       type="meeting"
                       onClick={handleMeetingClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
                   {filteredTasks.map((task) => (
@@ -708,6 +828,7 @@ const CompanyCalendar = ({ companyId }) => {
                       item={task}
                       type="task"
                       onClick={handleTaskClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
                 </div>
@@ -718,7 +839,7 @@ const CompanyCalendar = ({ companyId }) => {
       )}
 
       {/* Day View */}
-      {viewMode === "day" && (() => {
+      {!isLoading && viewMode === "day" && (() => {
         const key = currentDate.toDateString();
         const isFuture = currentDate >= today;
         const dayMeetings = meetings[key] || [];
@@ -752,7 +873,9 @@ const CompanyCalendar = ({ companyId }) => {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <Users className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{meeting.title}</span>
+                      <span className="text-sm font-medium truncate">
+                        <HighlightText text={meeting.title} query={searchTerm} />
+                      </span>
                     </div>
                     {meeting.scheduledAt && (
                       <span className="text-xs flex-shrink-0">
@@ -772,7 +895,9 @@ const CompanyCalendar = ({ companyId }) => {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <CheckSquare className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{task.title}</span>
+                      <span className="text-sm font-medium truncate">
+                        <HighlightText text={task.title} query={searchTerm} />
+                      </span>
                     </div>
                     {task.dueDate && (
                       <span className="text-xs flex-shrink-0">
@@ -805,6 +930,8 @@ const CompanyCalendar = ({ companyId }) => {
         tasks={activityPopup.tasks}
         onMeetingClick={handleMeetingClick}
         onTaskClick={handleTaskClick}
+        onAddMeeting={handleAddMeetingForDate}
+        onAddTask={handleAddTaskForDate}
         onClose={() =>
           setActivityPopup({
             isOpen: false,
@@ -819,6 +946,7 @@ const CompanyCalendar = ({ companyId }) => {
         <CompanyMeetingForm
           open={modalOpen}
           mode={modalMode}
+          startInEditMode={modalMode === "view"}
           meetingData={modalMode === "view" ? selectedMeeting : undefined}
           calendarDate={calendarDate}
           companyId={companyId}
@@ -837,6 +965,7 @@ const CompanyCalendar = ({ companyId }) => {
         <CompanyTaskForm
           open={modalOpen}
           mode={modalMode}
+          startInEditMode={modalMode === "view"}
           taskData={modalMode === "view" ? selectedTask : undefined}
           companyId={companyId}
           calendarDate={calendarDate}
@@ -849,6 +978,26 @@ const CompanyCalendar = ({ companyId }) => {
           onUpdate={onUpdate}
         />
       )}
+
+      <MeetingDetailsModal
+        open={isMeetingDetailsOpen}
+        meetingData={selectedMeeting}
+        users={users}
+        onDelete={(id) => handleDelete(id, "meeting")}
+        onEdit={handleEditMeetingFromDetails}
+        onComplete={handleMeetingComplete}
+        onClose={() => setIsMeetingDetailsOpen(false)}
+      />
+
+      <TaskDetailsModal
+        open={isTaskDetailsOpen}
+        taskData={selectedTask}
+        users={taskUsers}
+        onDelete={(id) => handleDelete(id, "task")}
+        onEdit={handleEditTaskFromDetails}
+        onComplete={handleTaskComplete}
+        onClose={() => setIsTaskDetailsOpen(false)}
+      />
     </div>
   );
 };

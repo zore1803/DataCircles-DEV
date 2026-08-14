@@ -85,7 +85,8 @@ module.exports = async function htmlDocumentPdf(
   doc,
   bankDetails,
   orgDetails,
-  type = "tax"
+  type = "tax",
+  copyType = "original"
 ) {
   const { buildDocumentHtml, DEFAULT_TEMPLATE, buildUpiUri } = await loadTemplates();
 
@@ -103,6 +104,7 @@ module.exports = async function htmlDocumentPdf(
     bankDetails,
     upiQrSvg: renderUpiQr(buildUpiUri, doc, { type, orgDetails, upiId: bankDetails?.upi }),
     upiId: bankDetails?.upi,
+    copyType,
   });
 
   // A4 at 96dpi is 794px wide; with the 16px page margins the content box is

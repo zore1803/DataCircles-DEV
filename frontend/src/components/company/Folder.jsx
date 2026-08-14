@@ -3,6 +3,11 @@ import HighlightText from "../common/HighlightText";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
+import BulkActionBar from "../common/BulkActionBar";
+import { useBulkStrip } from "../../hooks/useBulkSelection";
+import { useSubscription } from "../../contexts/SubscriptionContext";
+import { hasMinPlan } from "../../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../subscription/UpgradeRequiredModal";
 import folderIconImg from "../../assets/Folder-icon.png";
 import pdfIconImg from "../../assets/pdf-icon.png";
 import { useParams } from "react-router-dom";
@@ -617,7 +622,7 @@ const FileCard = ({ file, onView, onDelete, isLast }) => {
   );
 };
 
-const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, isFirst, isLast, isEditing, editingName, onEditingNameChange, onSaveEdit, onCancelEdit, searchTerm }) => (
+const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, isFirst, isLast, isEditing, editingName, editingError, onEditingNameChange, onSaveEdit, onCancelEdit, searchTerm }) => (
   <div className="transition-all">
     <div
       className="flex items-center justify-between gap-2"
@@ -639,19 +644,27 @@ const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, on
         )}
         <div className="flex-1 min-w-0">
           {isEditing ? (
-            <input
-              autoFocus
-              type="text"
-              value={editingName}
-              onChange={(e) => onEditingNameChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onSaveEdit();
-                if (e.key === "Escape") onCancelEdit();
-              }}
-              onBlur={onSaveEdit}
-              onClick={(e) => e.stopPropagation()}
-              className="text-sm font-medium text-gray-900 truncate bg-transparent border-b border-blue-500 focus:outline-none w-full"
-            />
+            <>
+              <input
+                autoFocus
+                type="text"
+                value={editingName}
+                onChange={(e) => onEditingNameChange(e.target.value)}
+                onKeyDown={(e) => {
+                  // Escape attempts a save too (instead of a blind discard)
+                  // so a duplicate name still shows its error, same as
+                  // Enter/blur.
+                  if (e.key === "Enter" || e.key === "Escape") onSaveEdit();
+                }}
+                onBlur={onSaveEdit}
+                onClick={(e) => e.stopPropagation()}
+                className="text-sm font-medium text-gray-900 truncate bg-transparent border-b focus:outline-none w-full"
+                style={{ borderColor: editingError ? "#EF4444" : "#3B82F6" }}
+              />
+              {editingError && (
+                <p className="text-xs mt-0.5" style={{ color: "#EF4444" }}>{editingError}</p>
+              )}
+            </>
           ) : (
             <h3 className="text-sm font-medium text-gray-900 truncate"><HighlightText text={folder.name || "Untitled"} highlight={searchTerm || ""} /></h3>
           )}
@@ -752,6 +765,7 @@ const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, on
 
 const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = "" }) => {
   const [name, setName] = useState(initialName);
+  const [error, setError] = useState("");
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
 
@@ -759,6 +773,7 @@ const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = 
     if (isOpen) {
       setShouldRender(true);
       setName(initialName);
+      setError("");
       setTimeout(() => setIsSliding(true), 10);
     } else {
       setIsSliding(false);
@@ -766,13 +781,28 @@ const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = 
     }
   }, [isOpen, initialName]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (name.trim()) {
-      onSubmit(name.trim());
-      setName("");
-      onClose();
+    if (!name.trim()) return;
+    setError("");
+    // Stays open with the typed name + an inline error on a duplicate-name
+    // conflict, rather than closing and discarding what the user typed.
+    const result = await onSubmit(name.trim());
+    if (result && result.error) {
+      // The generic "failed" sentinel means a toast was already shown for
+      // a non-duplicate-name failure (e.g. subscription gate) — close as
+      // before. A real message means a 409 duplicate-name conflict, which
+      // stays inline and keeps the modal open.
+      if (result.error !== "failed") {
+        setError(result.error);
+      } else {
+        setName("");
+        onClose();
+      }
+      return;
     }
+    setName("");
+    onClose();
   };
 
   const handleDelete = () => {
@@ -861,7 +891,7 @@ const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = 
               <input
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => { setName(e.target.value); if (error) setError(""); }}
                 placeholder="e.g. Document Assets"
                 className="self-stretch focus:outline-none focus:border-blue-400 transition-all"
                 style={{
@@ -870,7 +900,7 @@ const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = 
                   gap: 8,
                   height: 40,
                   background: "#FFFFFF",
-                  border: "1px solid #EBEBEB",
+                  border: error ? "1px solid #EF4444" : "1px solid #EBEBEB",
                   boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
                   borderRadius: 8,
                   fontFamily: "Inter Tight",
@@ -881,6 +911,11 @@ const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = 
                 }}
                 autoFocus
               />
+              {error && (
+                <p style={{ fontFamily: "Inter Tight", fontSize: 12, lineHeight: "120%", color: "#EF4444" }}>
+                  {error}
+                </p>
+              )}
             </div>
           </div>
 
@@ -1047,7 +1082,15 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   const [folders, setFolders] = useState([]);
   const [selectedFolderId, setSelectedFolderId] = useState("");
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const [folderPickerSearch, setFolderPickerSearch] = useState("");
   const [selectedFileNames, setSelectedFileNames] = useState([]);
+  const { visible: fileBulkVisible, closing: fileBulkClosing } = useBulkStrip(selectedFileNames.length);
+  // Bulk file selection requires Growth+ — same gate as the shared
+  // useBulkSelection hook used elsewhere, reimplemented here because this
+  // component manages its own selection state instead of that hook.
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [fileSearchTerm, setFileSearchTerm] = useState("");
   const [openFolderId, setOpenFolderId] = useState("");
   const [newFiles, setNewFiles] = useState([]);
@@ -1067,6 +1110,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   });
   const [inlineEditingId, setInlineEditingId] = useState(null);
   const [inlineEditingName, setInlineEditingName] = useState("");
+  const [inlineEditingError, setInlineEditingError] = useState("");
   const [linkModalOpen, setLinkModalOpen] = useState(false);
 
   useEffect(() => {
@@ -1093,14 +1137,20 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
     }
   };
 
+  // Called by the modal form. Returns { error } on a duplicate-name
+  // conflict so the modal can show it inline and stay open with what the
+  // user typed, instead of closing on every submit regardless of outcome.
   const handleModalSubmit = async (name) => {
     if (modalState.editingId) {
-      await renameFolder(modalState.editingId, name);
-    } else {
-      await createFolder(name);
+      return renameFolder(modalState.editingId, name);
     }
+    return createFolder(name);
   };
 
+  // Returns {} on success, or { error } on a duplicate-name conflict (409)
+  // without toasting — callers keep whatever input UI is open and show the
+  // message right there instead of firing a corner notification and
+  // discarding what the user typed.
   const createFolder = async (name) => {
     try {
       await API.post("/folders", {
@@ -1109,12 +1159,17 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
       });
       setRefresh(!refresh);
       toast.success("Folder created");
+      return {};
     } catch (err) {
+      if (err.response?.status === 409) {
+        return { error: err.response?.data?.error || "A folder with this name already exists" };
+      }
       if (err.response?.status === 402) {
         toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
       } else {
         toast.error(err.response?.data?.error || "Failed to create folder");
       }
+      return { error: "failed" };
     }
   };
 
@@ -1123,27 +1178,49 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
       await API.put(`/folders/${folderId}`, { name });
       setRefresh(!refresh);
       toast.success("Folder renamed");
+      return {};
     } catch (err) {
+      if (err.response?.status === 409) {
+        return { error: err.response?.data?.error || "A folder with this name already exists" };
+      }
       if (err.response?.status === 402) {
         toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
       } else {
         toast.error(err.response?.data?.error || "Failed to rename folder");
       }
+      return { error: "failed" };
     }
   };
 
   const handleInlineSave = async (id) => {
     if (!inlineEditingId) return; // Prevent double save
     const nameToSave = inlineEditingName.trim() || "Untitled Folder";
-    setInlineEditingId(null);
-    setInlineEditingName("");
-    
+    setInlineEditingError("");
+
     if (id === "NEW") {
-      await createFolder(nameToSave);
+      const result = await createFolder(nameToSave);
+      if (!result.error) {
+        setInlineEditingId(null);
+        setInlineEditingName("");
+      } else if (result.error !== "failed") {
+        // Duplicate-name conflict: keep the input open with the error
+        // shown right there so the user can just change the name and
+        // retry instead of restarting the whole creation from scratch.
+        setInlineEditingError(result.error);
+      }
     } else {
       const folder = folders.find(f => f._id === id);
       if (folder && folder.name !== nameToSave) {
-        await renameFolder(id, nameToSave);
+        const result = await renameFolder(id, nameToSave);
+        if (!result.error) {
+          setInlineEditingId(null);
+          setInlineEditingName("");
+        } else if (result.error !== "failed") {
+          setInlineEditingError(result.error);
+        }
+      } else {
+        setInlineEditingId(null);
+        setInlineEditingName("");
       }
     }
   };
@@ -1256,6 +1333,37 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
           toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
         } else {
           toast.error(err.response?.data?.error || "Failed to delete file");
+        }
+      }
+    }
+  };
+
+  const bulkDeleteFiles = async (folderId, files) => {
+    if (
+      await confirmToast(
+        "Delete Files?",
+        <>{files.length} file{files.length !== 1 ? "s" : ""} will be permanently deleted. This action cannot be undone.</>,
+        "Delete",
+        null,
+        true,
+      )
+    ) {
+      try {
+        await Promise.all(
+          files.map((file) =>
+            API.delete(`/folders/${folderId}/files`, {
+              data: { fileName: file.fileName, fileUrl: file.fileUrl },
+            })
+          )
+        );
+        setRefresh(!refresh);
+        setSelectedFileNames([]);
+        toast.success(`${files.length} file${files.length !== 1 ? "s" : ""} deleted`);
+      } catch (err) {
+        if (err.response?.status === 402) {
+          toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+        } else {
+          toast.error(err.response?.data?.error || "Failed to delete files");
         }
       }
     }
@@ -1502,6 +1610,23 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
               </div>
             </div>
 
+            {fileBulkVisible && (
+              <BulkActionBar
+                selectedCount={selectedFileNames.length}
+                entityName="file"
+                isClosing={fileBulkClosing}
+                onSelectAll={() => setSelectedFileNames(openFolder.files.map((f) => f.fileName))}
+                onDeselectAll={() => setSelectedFileNames([])}
+                onDelete={() =>
+                  bulkDeleteFiles(
+                    openFolder._id,
+                    openFolder.files.filter((f) => selectedFileNames.includes(f.fileName))
+                  )
+                }
+                onCancel={() => setSelectedFileNames([])}
+              />
+            )}
+
             {openFolder.files?.length > 0 ? (
               <div
                 className="overflow-y-auto"
@@ -1530,6 +1655,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                     }}
                     onClick={() => {
                       if (!selectedFileNames.includes(file.fileName)) {
+                        if (!hasBulkAccess) {
+                          setShowUpgradeModal(true);
+                          return;
+                        }
                         setSelectedFileNames((prev) => [...prev, file.fileName]);
                         return;
                       }
@@ -1547,6 +1676,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                       style={{ top: 8, right: 8 }}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (!hasBulkAccess) {
+                          setShowUpgradeModal(true);
+                          return;
+                        }
                         setSelectedFileNames((prev) =>
                           prev.includes(file.fileName)
                             ? prev.filter((n) => n !== file.fileName)
@@ -1634,9 +1767,17 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
               placeholder="Search folder by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-full pl-11 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              className="w-full h-full pl-11 pr-10 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <button
             onClick={() => setShowFilterPanel(true)}
@@ -1711,20 +1852,24 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
         )}
 
         {/* Folders List / Grid */}
-        {!isLoading && folderViewMode === "grid" && filteredFolders.length === 0 ? (
+        {!isLoading && folderViewMode === "grid" && folders.length === 0 ? (
           <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-            <FolderIcon className="w-7 h-7 mb-3 text-blue-500" />
+            <FolderIcon className="w-7 h-7 mb-3 text-gray-400" />
             <button
               type="button"
               onClick={() => {
                 setInlineEditingId("NEW");
                 setInlineEditingName("New Folder");
               }}
-              className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus size={16} />
-              Add new
+              Add new folder
             </button>
+          </div>
+        ) : !isLoading && folderViewMode === "grid" && filteredFolders.length === 0 ? (
+          <div className="flex items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 text-sm font-medium">
+            No folders found.
           </div>
         ) : folderViewMode === "grid" ? (
           <div
@@ -1795,20 +1940,39 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                     style={{ boxSizing: "border-box", padding: 0, height: 41 }}
                   >
                     {inlineEditingId === folder._id ? (
-                      <input
-                        autoFocus
-                        type="text"
-                        value={inlineEditingName}
-                        onChange={(e) => setInlineEditingName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleInlineSave(folder._id);
-                          if (e.key === "Escape") { setInlineEditingId(null); setInlineEditingName(""); }
-                        }}
-                        onBlur={() => handleInlineSave(folder._id)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full text-center border-b-2 border-blue-500 focus:outline-none bg-transparent px-1"
-                        style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 18, lineHeight: "22px", color: "#111216" }}
-                      />
+                      <>
+                        <input
+                          autoFocus
+                          type="text"
+                          value={inlineEditingName}
+                          onChange={(e) => { setInlineEditingName(e.target.value); if (inlineEditingError) setInlineEditingError(""); }}
+                          onKeyDown={(e) => {
+                            // Escape now attempts a save too (instead of a
+                            // blind discard) so a duplicate name still shows
+                            // its error right below, same as Enter/blur.
+                            if (e.key === "Enter" || e.key === "Escape") handleInlineSave(folder._id);
+                          }}
+                          onBlur={() => handleInlineSave(folder._id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full text-center border-b-2 focus:outline-none bg-transparent px-1"
+                          style={{
+                            fontFamily: "Inter",
+                            fontWeight: 500,
+                            fontSize: 18,
+                            lineHeight: "22px",
+                            color: "#111216",
+                            borderColor: inlineEditingError ? "#EF4444" : "#3B82F6",
+                          }}
+                        />
+                        {inlineEditingError && (
+                          <span
+                            className="w-full text-center"
+                            style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 11, lineHeight: "14px", color: "#EF4444" }}
+                          >
+                            {inlineEditingError}
+                          </span>
+                        )}
+                      </>
                     ) : (
                       <span
                         style={{
@@ -1852,9 +2016,9 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
               </div>
             ))}
           </div>
-        ) : !isLoading && filteredFolders.length === 0 ? (
+        ) : !isLoading && folders.length === 0 ? (
           <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-            <FolderIcon className="w-7 h-7 mb-3 text-blue-500" />
+            <FolderIcon className="w-7 h-7 mb-3 text-gray-400" />
             <button
               type="button"
               onClick={() =>
@@ -1864,11 +2028,15 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                   initialName: "",
                 })
               }
-              className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus size={16} />
-              Add new
+              Add new folder
             </button>
+          </div>
+        ) : !isLoading && filteredFolders.length === 0 ? (
+          <div className="flex items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 text-sm font-medium">
+            No folders found.
           </div>
         ) : (
           <div
@@ -1920,7 +2088,8 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                 onDeleteFile={deleteFile}
                 isEditing={inlineEditingId === folder._id}
                 editingName={inlineEditingName}
-                onEditingNameChange={setInlineEditingName}
+                editingError={inlineEditingError}
+                onEditingNameChange={(v) => { setInlineEditingName(v); if (inlineEditingError) setInlineEditingError(""); }}
                 onSaveEdit={() => handleInlineSave(folder._id)}
                 searchTerm={searchTerm}
                 onCancelEdit={() => {
@@ -2150,7 +2319,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                       boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
                       borderRadius: 8,
                     }}
-                    onClick={() => setFolderPickerOpen((prev) => !prev)}
+                    onClick={() => {
+                      setFolderPickerOpen((prev) => !prev);
+                      setFolderPickerSearch("");
+                    }}
                   >
                     <span
                       className="flex-1 truncate"
@@ -2176,39 +2348,73 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                           }}
                         />
                         <div
-                          className="absolute left-0 top-full mt-1 bg-white overflow-y-auto z-20"
+                          className="absolute left-0 top-full mt-1 bg-white z-20 flex flex-col"
                           style={{
                             boxSizing: "border-box",
                             width: "100%",
-                            maxHeight: 4 * 40,
                             border: "1px solid #EBEBEB",
                             borderRadius: 8,
                             boxShadow: "0px 4px 12px rgba(10, 13, 20, 0.08)",
                           }}
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          {folders.map((f) => (
-                            <div
-                              key={f._id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedFolderId(f._id);
-                                setFolderPickerOpen(false);
-                              }}
-                              className="flex items-center hover:bg-gray-50 cursor-pointer truncate"
-                              style={{
-                                boxSizing: "border-box",
-                                height: 40,
-                                padding: "10px 12px",
-                                background: f._id === selectedFolderId ? "#F5F7FA" : "#FFFFFF",
-                                fontFamily: "Inter Tight",
-                                fontWeight: 400,
-                                fontSize: 14,
-                                color: "#171717",
-                              }}
-                            >
-                              {f.name}
+                          {folders.length > 0 && (
+                            <div style={{ padding: 6, borderBottom: "1px solid #EBEBEB" }}>
+                              <input
+                                type="text"
+                                autoFocus
+                                value={folderPickerSearch}
+                                onChange={(e) => setFolderPickerSearch(e.target.value)}
+                                placeholder="Search folders..."
+                                className="w-full focus:outline-none"
+                                style={{
+                                  boxSizing: "border-box",
+                                  padding: "6px 8px",
+                                  background: "#F7F7F7",
+                                  borderRadius: 6,
+                                  fontFamily: "Inter Tight",
+                                  fontWeight: 400,
+                                  fontSize: 13,
+                                  color: "#171717",
+                                }}
+                              />
                             </div>
-                          ))}
+                          )}
+                          <div className="overflow-y-auto" style={{ maxHeight: 4 * 40 }}>
+                            {folders
+                              .filter((f) => f.name.toLowerCase().includes(folderPickerSearch.trim().toLowerCase()))
+                              .map((f) => (
+                                <div
+                                  key={f._id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedFolderId(f._id);
+                                    setFolderPickerOpen(false);
+                                  }}
+                                  className="flex items-center hover:bg-gray-50 cursor-pointer truncate"
+                                  style={{
+                                    boxSizing: "border-box",
+                                    height: 40,
+                                    padding: "10px 12px",
+                                    background: f._id === selectedFolderId ? "#F5F7FA" : "#FFFFFF",
+                                    fontFamily: "Inter Tight",
+                                    fontWeight: 400,
+                                    fontSize: 14,
+                                    color: "#171717",
+                                  }}
+                                >
+                                  {f.name}
+                                </div>
+                              ))}
+                            {folders.length > 0 && folders.filter((f) => f.name.toLowerCase().includes(folderPickerSearch.trim().toLowerCase())).length === 0 && (
+                              <div
+                                className="flex items-center justify-center"
+                                style={{ height: 40, fontFamily: "Inter Tight", fontSize: 13, color: "#A3A3A3" }}
+                              >
+                                No folders found
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </>
                     )}
@@ -2391,6 +2597,13 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
           isOpen={linkModalOpen}
           onClose={() => setLinkModalOpen(false)}
           onSubmit={handleAddLink}
+        />
+
+        <UpgradeRequiredModal
+          open={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          minPlan="growth"
+          feature="Selecting multiple files"
         />
       </div>
     </DragDropZone>

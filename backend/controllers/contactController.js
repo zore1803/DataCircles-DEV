@@ -1,4 +1,5 @@
 // controllers/contactController.js (updated to handle field types)
+const mongoose = require("mongoose");
 const Contact = require("../models/Contact");
 const Company = require("../models/Company");
 const Deal = require("../models/Deal");
@@ -113,10 +114,31 @@ const getAllContactsPaginated = async (req, res) => {
       sortBy = "name",
       sortOrder = "asc",
       advancedFilters,
+      ids,
     } = req.query;
 
     // Build query object
     const query = { organization: req.user.organization };
+
+    // Explicit id list — used for deep-linking into a specific, already
+    // computed set of contacts (e.g. from an Insights alert card) without
+    // routing internal ids through the user-facing advanced filter panel.
+    if (ids) {
+      query._id = {
+        $in: ids
+          .split(",")
+          .map((id) => id.trim())
+          .filter(Boolean)
+          .map((id) => {
+            try {
+              return new mongoose.Types.ObjectId(id);
+            } catch (_) {
+              return null;
+            }
+          })
+          .filter(Boolean),
+      };
+    }
 
     // Search functionality
     if (search) {

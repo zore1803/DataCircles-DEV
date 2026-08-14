@@ -34,7 +34,15 @@ const deleteFromS3 = async (fileUrl) => {
 exports.createFolder = async (req, res) => {
   try {
     const { name, company } = req.body;
-    await Folder.create({ name, company, user: req.user._id });
+    const trimmedName = (name || "").trim();
+    const existing = await Folder.findOne({
+      company,
+      name: { $regex: `^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+    });
+    if (existing) {
+      return res.status(409).json({ error: `A folder named "${trimmedName}" already exists` });
+    }
+    await Folder.create({ name: trimmedName, company, user: req.user._id });
     res.json({
       message: "folder created successfully"
     });
@@ -112,6 +120,22 @@ exports.getFolderById = async (req, res) => {
 // UPDATE folder (e.g., name or files)
 exports.updateFolder = async (req, res) => {
   try {
+    if (req.body.name != null) {
+      const trimmedName = req.body.name.trim();
+      const current = await Folder.findById(req.params.id);
+      if (!current) {
+        return res.status(404).json({ error: 'Folder not found' });
+      }
+      const existing = await Folder.findOne({
+        _id: { $ne: req.params.id },
+        company: current.company,
+        name: { $regex: `^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+      });
+      if (existing) {
+        return res.status(409).json({ error: `A folder named "${trimmedName}" already exists` });
+      }
+      req.body.name = trimmedName;
+    }
     const updated = await Folder.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.json(updated);
   } catch (err) {

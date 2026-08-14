@@ -13,6 +13,7 @@ import CompanyFolderTab from "../components/company/CompanyFolderTab";
 import CompanyCalendar from "../components/company/CompanyCalendar";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import toast from "react-hot-toast";
+import AppToaster from "../components/AppToaster";
 import logo from "/DataCircles.png";
 import {
   MapPin,
@@ -40,6 +41,7 @@ import {
   Calendar,
   FolderOpen,
   LayoutGrid,
+  X,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -190,16 +192,28 @@ const CompanyProfilePage = () => {
 
   // Sliding pill indicator for the section-switcher tab bar
   const tabRefs = useRef({});
+  const tabTrackRef = useRef(null);
   const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
   useLayoutEffect(() => {
-    const el = tabRefs.current[activeTab];
-    if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
-    const onResize = () => {
-      const cur = tabRefs.current[activeTab];
-      if (cur) setTabIndicator({ left: cur.offsetLeft, width: cur.offsetWidth });
+    const measure = () => {
+      const el = tabRefs.current[activeTab];
+      if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
     };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    measure();
+    // A refresh that deep-links straight into a non-default tab (e.g.
+    // ?tab=Meetings) mounts this row while the header above is still
+    // showing loading skeletons. Skeleton-to-real-content swaps change tab
+    // button widths without activeTab changing, so a ResizeObserver on the
+    // whole track re-measures whenever ANY tab's size shifts — not just on
+    // tab switches — keeping the pill glued to the right button instead of
+    // stranding it wherever it first measured.
+    const ro = new ResizeObserver(measure);
+    if (tabTrackRef.current) ro.observe(tabTrackRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
   }, [activeTab]);
 
   const [invoices, setInvoices] = useState([]);
@@ -227,6 +241,7 @@ const CompanyProfilePage = () => {
   const [showMergeModal, setShowMergeModal] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [companyFieldNames, setCompanyFieldNames] = useState([]);
   const [additionalFields, setAdditionalFields] = useState({});
@@ -245,10 +260,7 @@ const CompanyProfilePage = () => {
     (d) => d.status === "Won" || d.status === "Lost",
   ).length;
   const upcomingTasksCount = tasks.filter(
-    (t) =>
-      t.status !== "Completed" &&
-      t.dueDate &&
-      new Date(t.dueDate) >= new Date(),
+    (t) => t.status !== "Completed"
   ).length;
   const upcomingMeetingsCount = meetings.filter(
     (m) => m.scheduledAt && new Date(m.scheduledAt) >= new Date(),
@@ -506,6 +518,19 @@ const CompanyProfilePage = () => {
     return { year, month, today: today.getDate(), days };
   })();
 
+  const futureEventDays = new Set(
+    [...tasks, ...meetings]
+      .map((item) => new Date(item.dueDate || item.scheduledAt))
+      .filter(
+        (d) =>
+          !isNaN(d) &&
+          d.getFullYear() === miniCalendar.year &&
+          d.getMonth() === miniCalendar.month &&
+          d.getDate() > miniCalendar.today
+      )
+      .map((d) => d.getDate())
+  );
+
   const upcomingItems = [...tasks, ...meetings]
     .map((item) => ({
       title: item.title,
@@ -703,7 +728,14 @@ const CompanyProfilePage = () => {
 
       <div className="mx-auto">
         {/* Header Section */}
-        <div className="flex items-center justify-between mb-2 lg:mb-3">
+        {/* 48px total (40px content + mb-2) so the strip's bottom edge lands
+            on y=128 — the same line as the bottom border of the sidebar's
+            switcher section (Navbar.jsx: a 64px logo block then a 64px
+            `h-16 ... border-b` switcher, both inside a `fixed top-0` rail).
+            Detail pages start at y=80 (<main> carries lg:pt-20), so they need
+            48px here, unlike the list pages whose band is `fixed top-16 h-16`
+            and therefore 64px. */}
+        <div className="flex items-center justify-between mb-2">
           {/* LEFT: Logo + Name + Address */}
           <div className="flex items-center gap-3 min-w-0">
             {/* Prev/next through whatever company list (search/filter results)
@@ -746,7 +778,11 @@ const CompanyProfilePage = () => {
               )}
               {company ? (
                 company.address && (
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">
+                  // No mt here: the 2px gap pushed this stacked block past
+                  // the bottom border of the sidebar's switcher section
+                  // (Navbar.jsx renders that as `h-16 ... border-b`), so the
+                  // strip sat a couple of pixels below that line.
+                  <p className="text-xs text-gray-500 truncate">
                     {company.address}
                   </p>
                 )
@@ -995,7 +1031,7 @@ const CompanyProfilePage = () => {
 
         {/* Tab Row: pill tab selector */}
         <div className="flex items-center justify-between mb-4 gap-3">
-          <div className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
+          <div ref={tabTrackRef} className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
               style={{ left: tabIndicator.left, width: tabIndicator.width }}
@@ -1377,23 +1413,40 @@ const CompanyProfilePage = () => {
                         {miniCalendar.days.map((day, idx) => (
                           <div
                             key={idx}
-                            className={`text-[11px] text-center py-1 rounded-full ${day === miniCalendar.today
-                              ? "bg-blue-600 text-white font-semibold"
-                              : day
-                                ? "text-gray-700"
-                                : ""
-                              }`}
+                            className="flex flex-col items-center"
                           >
-                            {day || ""}
+                            {day && futureEventDays.has(day) && (
+                              <span className="mb-1 w-1.5 h-1.5 rounded-full bg-[#1E3A8A] flex-shrink-0"></span>
+                            )}
+                            <span
+                              className={`text-[11px] w-6 h-6 flex items-center justify-center rounded-full ${day === miniCalendar.today
+                                ? "bg-blue-600 text-white font-semibold"
+                                : day
+                                  ? "text-gray-700"
+                                  : ""
+                                }`}
+                            >
+                              {day || ""}
+                            </span>
                           </div>
                         ))}
                       </div>
                     </>
                   )}
 
-                  <h4 className="text-xs font-semibold text-gray-900 mt-4 mb-2">
-                    {showOverviewSkeleton ? <Skeleton width={70} height={12} /> : "Upcoming"}
-                  </h4>
+                  <div className="flex items-center justify-between mt-4 mb-2">
+                    <h4 className="text-xs font-semibold text-gray-900">
+                      {showOverviewSkeleton ? <Skeleton width={70} height={12} /> : "Upcoming"}
+                    </h4>
+                    {!showOverviewSkeleton && [...tasks, ...meetings].length > 4 && (
+                      <button
+                        onClick={() => setShowAllUpcoming(true)}
+                        className="text-[10px] font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        Show All
+                      </button>
+                    )}
+                  </div>
                   <div className="space-y-2">
                     {showOverviewSkeleton ? (
                       Array.from({ length: 5 }).map((_, idx) => (
@@ -1737,6 +1790,73 @@ const CompanyProfilePage = () => {
             {activeTab === "Calendar" && <CompanyCalendar companyId={id} />}
         </div>
       </div>
+      {showAllUpcoming && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">All Upcoming Events</h2>
+              <button onClick={() => setShowAllUpcoming(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {[...tasks, ...meetings]
+                .map((item) => ({
+                  title: item.title,
+                  date: new Date(item.dueDate || item.scheduledAt),
+                  overdue:
+                    item.status !== "Completed" &&
+                    (item.dueDate || item.scheduledAt) &&
+                    new Date(item.dueDate || item.scheduledAt) < new Date(),
+                  isMeeting: !!item.scheduledAt,
+                  original: item
+                }))
+                .filter((item) => !isNaN(item.date))
+                .sort((a, b) => a.date - b.date)
+                .map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50/50">
+                    <span
+                      className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${item.overdue ? "bg-red-500" : "bg-blue-500"
+                        }`}
+                    />
+                    <div className="min-w-0">
+                      <p
+                        className={`text-sm font-medium truncate ${item.overdue ? "text-red-600" : "text-gray-900"
+                          }`}
+                      >
+                        {item.title}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {item.date.toLocaleDateString("en-US", {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric"
+                        })} {item.isMeeting && " · " + item.date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                        <span className="ml-1 text-[10px] uppercase font-semibold text-gray-400">({item.isMeeting ? "Meeting" : "Task"})</span>
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              {[...tasks, ...meetings].length === 0 && (
+                <p className="text-sm text-center text-gray-500 py-4">No upcoming tasks or meetings.</p>
+              )}
+            </div>
+            <div className="p-4 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowAllUpcoming(false);
+                  setActiveTab("Meetings");
+                  setPendingCreate("meeting");
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Plus size={16} /> Add New Meeting
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <SubsidiaryModal
         companyId={id}
         isOpen={showSubsidiaryModal}
@@ -1753,6 +1873,7 @@ const CompanyProfilePage = () => {
           fetchCompanyDetails();
         }}
       />
+      <AppToaster />
     </div>
   );
 };

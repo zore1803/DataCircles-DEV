@@ -77,6 +77,19 @@ function formatDate(d) {
   return `${day} ${month} ${date.getFullYear()}`;
 }
 
+/* Renders a postalAddressSchema-shaped object (addressLine1, addressLine2,
+   city, state, pincode, country) as the multi-line text the address boxes
+   expect. Missing/empty fields are dropped rather than leaving blank lines. */
+function formatPostalAddress(addr) {
+  if (!addr) return "";
+  const cityStatePin = [addr.city, addr.state, addr.pincode]
+    .filter((v) => v && String(v).trim())
+    .join(", ");
+  return [addr.addressLine1, addr.addressLine2, cityStatePin, addr.country]
+    .filter((v) => v && String(v).trim())
+    .join("\n");
+}
+
 /* Indian-numbering words, matching the Create/Edit panel's summary line. */
 export function numberToWords(num) {
   const ones = [
@@ -179,10 +192,44 @@ export function buildUpiUri(doc, options = {}) {
   return `upi://pay?${params.toString().replace(/\+/g, "%20")}`;
 }
 
+// GST rates the CRM offers after the 2025 rate rationalisation: the standard
+// slabs (0/5/18) plus the special 40% rate that applies to select goods only.
+export const GST_RATES = [0, 5, 18, 40];
+
+/*
+ * Splits a taxable amount into CGST+SGST (intra-state) or IGST (inter-state)
+ * at the given GST rate. Kept as its own function — separate from the rest of
+ * the document math — because the CGST/SGST vs IGST choice is a distinct
+ * piece of tax logic (which pair applies depends only on transactionType,
+ * never on the item or the rest of the totals) and both the frontend live
+ * summary and this module's own item/HSN rows need the exact same split.
+ *
+ * Rule: intra-state splits the rate evenly across CGST + SGST; inter-state
+ * charges the full rate as IGST. Never both.
+ */
+export function splitGst(taxableAmount, gstRate, transactionType = "intra") {
+  const rate = Number(gstRate) || 0;
+  const amount = Number(taxableAmount) || 0;
+  const isInterState = transactionType === "inter";
+  const halfRate = rate / 2;
+  return {
+    isInterState,
+    cgstRate: isInterState ? 0 : halfRate,
+    sgstRate: isInterState ? 0 : halfRate,
+    igstRate: isInterState ? rate : 0,
+    cgst: isInterState ? 0 : (amount * halfRate) / 100,
+    sgst: isInterState ? 0 : (amount * halfRate) / 100,
+    igst: isInterState ? (amount * rate) / 100 : 0,
+  };
+}
+
 export function computeDocument(doc, type = "tax") {
   const supportsTax = type !== "deliveryChallan";
   const taxFlagKey = type === "quotation" ? "isTaxQuotation" : "isTaxInvoice";
-  const gstRate = Number(doc.gstRate) || 18;
+  const gstRate = GST_RATES.includes(Number(doc.gstRate))
+    ? Number(doc.gstRate)
+    : 18;
+  const transactionType = doc.transactionType === "inter" ? "inter" : "intra";
   const isTax = supportsTax && !!doc[taxFlagKey];
 
   const baseRows = (doc.items || []).map((it) => {
@@ -217,16 +264,22 @@ export function computeDocument(doc, type = "tax") {
 
   const rows = baseRows.map((r) => {
     const taxable = r.taxable * netFactor;
-    const igst = isTax ? (taxable * gstRate) / 100 : 0;
-    return { ...r, taxable, igst, amount: taxable + igst };
+    const gst = isTax
+      ? splitGst(taxable, gstRate, transactionType)
+      : { cgst: 0, sgst: 0, igst: 0 };
+    const tax = gst.cgst + gst.sgst + gst.igst;
+    return { ...r, taxable, ...gst, tax, amount: taxable + tax };
   });
 
   const hsnMap = {};
   rows.forEach((r) => {
     const key = r.hsn || "N/A";
-    if (!hsnMap[key]) hsnMap[key] = { taxable: 0, tax: 0, rate: gstRate };
+    if (!hsnMap[key])
+      hsnMap[key] = { taxable: 0, cgst: 0, sgst: 0, igst: 0, rate: gstRate };
     hsnMap[key].taxable += r.taxable;
-    hsnMap[key].tax += r.igst;
+    hsnMap[key].cgst += r.cgst;
+    hsnMap[key].sgst += r.sgst;
+    hsnMap[key].igst += r.igst;
   });
 
   const grandTotal = rows.reduce((s, r) => s + r.amount, 0);
@@ -234,6 +287,8 @@ export function computeDocument(doc, type = "tax") {
   return {
     isTax,
     gstRate,
+    transactionType,
+    isInterState: transactionType === "inter",
     rows,
     grossTaxable,
     documentDiscount,
@@ -241,6 +296,8 @@ export function computeDocument(doc, type = "tax") {
     discountType: docDiscount.type,
     totalQty: rows.reduce((s, r) => s + r.qty, 0),
     totalTaxable: rows.reduce((s, r) => s + r.taxable, 0),
+    totalCGST: rows.reduce((s, r) => s + r.cgst, 0),
+    totalSGST: rows.reduce((s, r) => s + r.sgst, 0),
     totalIGST: rows.reduce((s, r) => s + r.igst, 0),
     grandTotal,
     hsnRows: Object.keys(hsnMap).map((k) => ({ hsn: k, ...hsnMap[k] })),
@@ -458,6 +515,10 @@ const TEMPLATE_CSS = {
 }
 .dcsheet.t-Elegant .dc-label { font-weight: normal; color: var(--accent); text-transform: uppercase; font-size: 9px; letter-spacing: 1px; }
 .dcsheet.t-Elegant .dc-grand { border-top: 3px double var(--accent); margin-top: 6px; font-weight: normal; }
+/* The double rule reads as a formal ledger divider above two GST lines
+   (CGST + SGST); with only one tax line (IGST) it looks like a mistake, so
+   collapse it to a plain single rule for that case. */
+.dcsheet.t-Elegant .dc-totals-right.dc-tax-single .dc-grand { border-top: 1px solid var(--line); }
 .dcsheet.t-Elegant .dc-sign-line { border-top-color: var(--accent); }
 `,
 
@@ -611,7 +672,19 @@ export function buildDocumentHtml(doc, options = {}) {
     // Pre-encoded UPI QR (see buildUpiUri) and the VPA to print under it.
     upiQrSvg,
     upiId,
+    // Which physical copy this render represents — the standard Indian GST
+    // invoice practice of printing "ORIGINAL FOR RECIPIENT" / "DUPLICATE FOR
+    // TRANSPORTER" / "TRIPLICATE FOR SUPPLIER" as the only difference between
+    // otherwise-identical copies of the same document.
+    copyType = "original",
   } = options;
+
+  const COPY_TYPE_LABEL = {
+    original: "ORIGINAL FOR RECIPIENT",
+    duplicate: "DUPLICATE FOR TRANSPORTER",
+    triplicate: "TRIPLICATE FOR SUPPLIER",
+  };
+  const copySubtitle = COPY_TYPE_LABEL[copyType] || COPY_TYPE_LABEL.original;
 
   const tpl = DOCUMENT_TEMPLATES.includes(template) ? template : DEFAULT_TEMPLATE;
   const org = orgDetails || {};
@@ -635,6 +708,24 @@ export function buildDocumentHtml(doc, options = {}) {
   const notes = (doc.notes ?? "").trim();
   const terms = (doc.terms ?? "").trim();
 
+  // Tax-off documents show no GST/CGST/SGST/IGST anywhere — no columns, no
+  // totals rows, no HSN tax summary — regardless of whether a GSTIN happens
+  // to be on file; only doc.isTaxInvoice/isTaxQuotation (t.isTax) decides.
+  // When tax IS on: intra-state documents split GST into CGST + SGST (two
+  // columns); inter-state ones charge the full rate as IGST (one column) —
+  // never both, per splitGst(). The item table, its column count and the
+  // HSN summary below all follow whichever pair applies to this document.
+  const taxCols = t.isTax ? (t.isInterState ? 1 : 2) : 0;
+  const itemColCount = 6 + taxCols + 1; // #, Item, HSN, Rate, Qty, Taxable, [tax cols], Amount
+
+  const itemTaxCells = (r) => {
+    if (!t.isTax) return "";
+    return t.isInterState
+      ? `<td class="r">${r.igst > 0 ? `${fmt(r.igst)} (${t.gstRate}%)` : ""}</td>`
+      : `<td class="r">${r.cgst > 0 ? `${fmt(r.cgst)} (${t.gstRate / 2}%)` : ""}</td>
+        <td class="r">${r.sgst > 0 ? `${fmt(r.sgst)} (${t.gstRate / 2}%)` : ""}</td>`;
+  };
+
   const itemRows = t.rows.length
     ? t.rows
         .map(
@@ -650,22 +741,33 @@ export function buildDocumentHtml(doc, options = {}) {
         <td class="r">${fmt(r.rate)}</td>
         <td class="r nowrap">${r.qty} BOX</td>
         <td class="r">${fmt(r.taxable)}</td>
-        <td class="r">${r.igst > 0 ? `${fmt(r.igst)} (${t.gstRate}%)` : ""}</td>
+        ${itemTaxCells(r)}
         <td class="r">${fmt(r.amount)}</td>
       </tr>`
         )
         .join("")
-    : `<tr><td class="c" colspan="8">&nbsp;</td></tr>`;
+    : `<tr><td class="c" colspan="${itemColCount}">&nbsp;</td></tr>`;
 
   const hsnRows = t.hsnRows
-    .map(
-      (r) => `
+    .map((r) =>
+      t.isInterState
+        ? `
       <tr>
         <td class="c">${esc(r.hsn)}</td>
         <td class="c">${fmt(r.taxable)}</td>
         <td class="c">${r.rate}%</td>
-        <td class="r">${fmt(r.tax)}</td>
-        <td class="c">${fmt(r.tax)}</td>
+        <td class="r">${fmt(r.igst)}</td>
+        <td class="c">${fmt(r.igst)}</td>
+      </tr>`
+        : `
+      <tr>
+        <td class="c">${esc(r.hsn)}</td>
+        <td class="c">${fmt(r.taxable)}</td>
+        <td class="c">${r.rate / 2}%</td>
+        <td class="r">${fmt(r.cgst)}</td>
+        <td class="c">${r.rate / 2}%</td>
+        <td class="r">${fmt(r.sgst)}</td>
+        <td class="c">${fmt(r.cgst + r.sgst)}</td>
       </tr>`
     )
     .join("");
@@ -707,7 +809,7 @@ export function buildDocumentHtml(doc, options = {}) {
     </div>
     <div class="dc-title-block">
       <div class="dc-title">${t.isTax ? `TAX ${esc(docLabel)}` : esc(docLabel)}</div>
-      <div class="dc-subtitle">ORIGINAL FOR RECIPIENT</div>
+      <div class="dc-subtitle">${copySubtitle}</div>
     </div>
   </div>
 
@@ -717,8 +819,9 @@ export function buildDocumentHtml(doc, options = {}) {
       <div class="dc-label">${esc(dealName)}</div>
       <div>GSTIN: ${esc(doc.receiverGSTIN || "")}</div>
       <div class="dc-label dc-mt">Billing address:</div>
-      <div class="dc-addr-box"></div>
+      <div class="dc-addr-box dc-addr">${esc(formatPostalAddress(doc.billingAddress))}</div>
       <div class="dc-label">Shipping address:</div>
+      <div class="dc-addr-box dc-addr">${esc(formatPostalAddress(doc.shippingAddress))}</div>
     </div>
     <div class="dc-metagrid">
       <div class="dc-mcell"><span>${esc(docLabel)} #:</span><b>${esc(docNumber || "—")}</b></div>
@@ -740,7 +843,13 @@ export function buildDocumentHtml(doc, options = {}) {
         <th class="r" style="width:60px;">Rate/Item</th>
         <th class="r nowrap" style="width:56px;">Qty</th>
         <th class="r" style="width:74px;">Taxable Value</th>
-        <th class="r" style="width:74px;">IGST</th>
+        ${
+          !t.isTax
+            ? ""
+            : t.isInterState
+              ? `<th class="r" style="width:74px;">IGST</th>`
+              : `<th class="r" style="width:74px;">CGST</th><th class="r" style="width:74px;">SGST</th>`
+        }
         <th class="r" style="width:80px;">Amount</th>
       </tr>
     </thead>
@@ -762,36 +871,75 @@ export function buildDocumentHtml(doc, options = {}) {
         ${qrBlock}
       </div>
     </div>
-    <div class="dc-totals-right">
+    <div class="dc-totals-right ${!t.isTax ? "" : t.isInterState ? "dc-tax-single" : "dc-tax-split"}">
       <div class="dc-trow"><span class="dc-label">Taxable Amount</span><span>&#8377;${fmt(t.grossTaxable)}</span></div>
       ${discountRow}
-      <div class="dc-trow sep"><span class="dc-label">IGST ${t.gstRate}%</span><span>&#8377;${fmt(t.totalIGST)}</span></div>
+      ${
+        !t.isTax
+          ? ""
+          : t.isInterState
+            ? `<div class="dc-trow sep"><span class="dc-label">IGST ${t.gstRate}%</span><span>&#8377;${fmt(t.totalIGST)}</span></div>`
+            : `<div class="dc-trow sep"><span class="dc-label">CGST ${t.gstRate / 2}%</span><span>&#8377;${fmt(t.totalCGST)}</span></div>
+      <div class="dc-trow"><span class="dc-label">SGST ${t.gstRate / 2}%</span><span>&#8377;${fmt(t.totalSGST)}</span></div>`
+      }
       <div class="dc-grand"><span>Total</span><span>&#8377;${fmt(t.grandTotal)}</span></div>
-      <div class="dc-paid"><span class="dc-tick">&#10003;</span><span>Amount Paid</span></div>
+      ${
+        doc.status === "Paid"
+          ? `<div class="dc-paid"><span class="dc-tick">&#10003;</span><span>Amount Paid</span></div>`
+          : ""
+      }
     </div>
   </div>
 
-  <table class="dc-hsn">
+  ${
+    // Purely a tax breakdown table — nothing to summarize when tax is off.
+    !t.isTax
+      ? ""
+      : `<table class="dc-hsn">
     <thead>
-      <tr>
+      ${
+        t.isInterState
+          ? `<tr>
         <th rowspan="2">HSN/SAC</th>
         <th rowspan="2">Taxable Value</th>
         <th colspan="2" class="c">Integrated Tax</th>
         <th rowspan="2">Total Tax Amount</th>
       </tr>
-      <tr><th class="c">Rate</th><th class="c">Amount</th></tr>
+      <tr><th class="c">Rate</th><th class="c">Amount</th></tr>`
+          : `<tr>
+        <th rowspan="2">HSN/SAC</th>
+        <th rowspan="2">Taxable Value</th>
+        <th colspan="2" class="c">Central Tax</th>
+        <th colspan="2" class="c">State Tax</th>
+        <th rowspan="2">Total Tax Amount</th>
+      </tr>
+      <tr><th class="c">Rate</th><th class="c">Amount</th><th class="c">Rate</th><th class="c">Amount</th></tr>`
+      }
     </thead>
     <tbody>
       ${hsnRows}
-      <tr class="tot">
+      ${
+        t.isInterState
+          ? `<tr class="tot">
         <td class="r">TOTAL</td>
         <td class="c">${fmt(t.totalTaxable)}</td>
         <td></td>
         <td class="r">${fmt(t.totalIGST)}</td>
         <td class="c">${fmt(t.totalIGST)}</td>
-      </tr>
+      </tr>`
+          : `<tr class="tot">
+        <td class="r">TOTAL</td>
+        <td class="c">${fmt(t.totalTaxable)}</td>
+        <td></td>
+        <td class="r">${fmt(t.totalCGST)}</td>
+        <td></td>
+        <td class="r">${fmt(t.totalSGST)}</td>
+        <td class="c">${fmt(t.totalCGST + t.totalSGST)}</td>
+      </tr>`
+      }
     </tbody>
-  </table>
+  </table>`
+  }
 
   <div class="dc-footer">
     <div class="dc-notes">

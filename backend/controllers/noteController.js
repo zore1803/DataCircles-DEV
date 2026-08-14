@@ -1,13 +1,15 @@
 const Note = require('../models/Note');
 const Contact = require("../models/Contact");
+const Deal = require("../models/Deal");
 // CREATE Note
 exports.createNote = async (req, res) => {
   try {
-    const { title, note, company, taggedContacts = [], noteType, visibility } = req.body;
+    const { title, note, company, deal, taggedContacts = [], noteType, visibility } = req.body;
     const newNote = await Note.create({
       title,
       note,
       company,
+      deal: deal || undefined,
       taggedContacts,
       noteType,
       visibility,
@@ -134,6 +136,70 @@ exports.getNotesByContact = async (req, res) => {
     res.json(notes);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch notes' });
+  }
+};
+
+// GET all notes for a single deal
+exports.getNotesByDeal = async (req, res) => {
+  try {
+    const notes = await Note.find({
+      deal: req.params.dealId,
+      organization: req.user.organization
+    })
+      .populate('taggedContacts', 'name email phone avatar')
+      .populate('company', 'name industry')
+      .populate('user', 'name email profileUrl userData.mainData.profilePic')
+      .sort({ createdAt: -1 });
+    res.json(notes);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch notes' });
+  }
+};
+
+// Bulk-create the same note on many deals at once. Each note is scoped to its
+// deal and also records that deal's company, so company-level views still see it.
+exports.createBulkDealNotes = async (req, res) => {
+  try {
+    const { title, note, dealIds, taggedContacts = [] } = req.body;
+
+    if (!dealIds || dealIds.length === 0) {
+      return res.status(400).json({ error: 'No deals selected' });
+    }
+    if (!note || note.trim() === '' || note === '<p><br></p>') {
+      return res.status(400).json({ error: 'Note content cannot be empty' });
+    }
+
+    // Each note needs a company (required on the model), so resolve every
+    // deal's company up front; deals without one are skipped.
+    const deals = await Deal.find({
+      _id: { $in: dealIds },
+      organization: req.user.organization
+    }).select('_id company');
+
+    const notesToCreate = deals
+      .filter((d) => d.company)
+      .map((d) => ({
+        title,
+        note,
+        deal: d._id,
+        company: d.company,
+        taggedContacts,
+        user: req.user._id,
+        organization: req.user.organization
+      }));
+
+    if (notesToCreate.length === 0) {
+      return res.status(400).json({ error: 'Selected deals have no company to attach a note to' });
+    }
+
+    const createdNotes = await Note.insertMany(notesToCreate);
+    res.status(201).json({
+      message: `Successfully created ${createdNotes.length} notes`,
+      notes: createdNotes
+    });
+  } catch (err) {
+    console.error("Bulk deal note creation error:", err);
+    res.status(500).json({ error: 'Failed to create bulk notes', details: err.message });
   }
 };
 

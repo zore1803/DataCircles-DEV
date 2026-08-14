@@ -421,7 +421,7 @@ const AllTasks = () => {
   }
 
   return (
-    <div className="bg-white min-h-screen">
+    <div className="bg-white min-h-screen -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-6 px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-bold text-3xl text-slate-900">All Tasks</h1>

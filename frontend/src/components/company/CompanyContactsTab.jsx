@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
-import { PINNED_LEFT_BOUNDARY_SHADOW, PINNED_RIGHT_BOUNDARY_SHADOW } from "../../utils/pinnedColumnShadow";
+import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import { Link } from "react-router-dom";
 import API from "../../services/api";
 import toast from "react-hot-toast";
@@ -151,7 +151,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
     });
   }, [filteredContacts, sortConfig]);
 
-  const { selectedItems, toggleItem, clearSelection, selectAll } = useBulkSelection({
+  const { selectedItems, toggleItem, clearSelection, selectAll, upgradeModal } = useBulkSelection({
     items: filteredContacts,
     onDelete: () => setShowBulkDeleteModal(true)
   });
@@ -247,56 +247,73 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
-    // A single press does nothing: the column menu opens from its own chevron
-    // button, not from anywhere in the header. Opening it here on `e.detail === 1`
-    // meant the FIRST press of every double-click popped the menu, whose
-    // full-screen backdrop then swallowed the second press — making the header
-    // effectively un-double-clickable. Drag still starts on the second press.
-    if (e.detail < 2) return;
+    // No click-count gate here, matching the Companies list page: a press plus
+    // DRAG_THRESHOLD px of movement starts the drag, at whatever speed the user
+    // moves. Gating on `e.detail` meant only a fast-enough double-click could
+    // begin a move. The threshold below is what keeps a plain click harmless,
+    // and the column menu opens from its own chevron button, never from the
+    // header background — so nothing competes with the drag for a single press.
 
-    e.preventDefault();
-    window.getSelection?.()?.removeAllRanges();
-
+    // A plain click must stay harmless, so nothing happens until the pointer
+    // has travelled DRAG_THRESHOLD px — the same deferred start the Companies
+    // list page uses. Until then no ghost is mounted and no drag state is set.
     const th = e.currentTarget;
-    const rect = th.getBoundingClientRect();
-    const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
+    let dragStarted = false;
+    let positionGhost = () => {};
+
+    const beginDrag = () => {
+      dragStarted = true;
+      e.preventDefault();
+      window.getSelection?.()?.removeAllRanges();
+      const rect = th.getBoundingClientRect();
+      const label = BASE_COLUMNS.find((vc) => vc.id === colId)?.label || colId;
     
-    const previewRows = (contacts || []).slice(0, 10).map((c) => {
-      let val = getContactFieldValue(c, colId);
-      if (typeof val === 'object' && val !== null) val = val?.name || "";
-      return String(val ?? "").trim() || "—";
-    });
+      const previewRows = (contacts || []).slice(0, 10).map((c) => {
+        let val = getContactFieldValue(c, colId);
+        if (typeof val === 'object' && val !== null) val = val?.name || "";
+        return String(val ?? "").trim() || "—";
+      });
 
-    const zGhost = getAncestorZoom(document.body);
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+      const zGhost = getAncestorZoom(document.body);
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
 
-    dragOverRef.current = null;
-    setDraggedColKey(colId);
-    setDragOverColKey(null);
-    document.body.style.userSelect = "none";
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
 
-    setDragGhost({
-      label,
-      previewRows,
-      offsetX,
-      offsetY,
-      width: rect.width / zGhost,
-      height: rect.height / zGhost,
-    });
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX,
+        offsetY,
+        width: rect.width / zGhost,
+        height: rect.height / zGhost,
+      });
 
-    const positionGhost = (clientX, clientY) => {
-      const el = ghostElRef.current;
-      if (!el) return;
-      const visualTop = clientY - offsetY;
-      const visualLeft = clientX - offsetX;
-      el.style.top = `${visualTop / zGhost}px`;
-      el.style.left = `${visualLeft / zGhost}px`;
-      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      positionGhost = (clientX, clientY) => {
+        const el = ghostElRef.current;
+        if (!el) return;
+        const visualTop = clientY - offsetY;
+        const visualLeft = clientX - offsetX;
+        el.style.top = `${visualTop / zGhost}px`;
+        el.style.left = `${visualLeft / zGhost}px`;
+        el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / zGhost}px`;
+      };
+      requestAnimationFrame(() => positionGhost(startX, startY));
     };
-    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
 
     const handleMouseMove = (moveEvent) => {
+      if (!dragStarted) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        beginDrag();
+      }
       positionGhost(moveEvent.clientX, moveEvent.clientY);
       const elAtPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
       const thAtPoint = elAtPoint?.closest("th[data-col-id]");
@@ -310,6 +327,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragStarted) return;
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) {
@@ -395,24 +413,26 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
   const getStickyStyle = (colId, isHeader = false, isSelected = false) => {
     const isPinned = leftPinned.has(colId) || rightPinned.has(colId);
     const style = stickyStyles[colId] || {};
-    
-    let borderShadows = "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA";
-    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
-    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
-    
-    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) {
-      borderShadows = `${PINNED_LEFT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
-    } else if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) {
-      borderShadows = `${PINNED_RIGHT_BOUNDARY_SHADOW}, inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA`;
-    }
-    
     return {
       ...style,
-      position: isPinned ? "sticky" : undefined,
+      position: isPinned ? "sticky" : "relative",
       zIndex: isPinned ? (isHeader ? 35 : 20) : undefined,
       backgroundColor: isPinned ? (isHeader ? "#F5F7FA" : (isSelected ? "#EFF6FF" : "#fff")) : undefined,
-      boxShadow: borderShadows,
+      boxShadow: "inset -1px 0 0 #E1E4EA, inset 0 -1px 0 #E1E4EA",
     };
+  };
+
+  // Which side (if any) gets the soft depth-edge shadow — the boundary cell
+  // of the pinned block itself (last left-pinned column / first right-pinned
+  // one), same rule and same shared overlay as the main Companies list, so a
+  // pinned column here reads identically instead of using the old inward
+  // inset-shadow variant.
+  const getBoundaryShadowSide = (colId) => {
+    const leftPinnedCols = orderedColumns.filter(c => leftPinned.has(c.id));
+    const rightPinnedCols = orderedColumns.filter(c => rightPinned.has(c.id));
+    if (leftPinnedCols.length > 0 && leftPinnedCols[leftPinnedCols.length - 1].id === colId) return "left";
+    if (rightPinnedCols.length > 0 && rightPinnedCols[0].id === colId) return "right";
+    return null;
   };
 
   const startResize = (e, colId) => {
@@ -581,8 +601,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by contact by name, email, or phone..."
-              className="w-full h-full pl-10 pr-10 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              className="w-full h-full pl-10 pr-10 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
             {searchTerm && (
               <button
@@ -654,14 +673,14 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
 
       {!isLoading && contacts.length === 0 ? (
         <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <Users size={28} className="mb-3 text-blue-500" />
+          <Users size={28} className="mb-3 text-gray-400" />
           <button
             type="button"
             onClick={() => setManualContactFormOpen(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus size={16} />
-            Add new
+            Add new contact
           </button>
         </div>
       ) : (
@@ -703,18 +722,19 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                 {orderedColumns.map((col) => {
                   const isDragging = draggedColKey === col.id;
                   const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
+                  const boundarySide = getBoundaryShadowSide(col.id);
                   return (
                     <th
                       key={col.id}
                       data-col-id={col.id}
                       onMouseDown={(e) => startColumnDrag(e, col.id)}
-                      style={{ 
-                        width: colWidths[col.id], 
-                        height: 56, 
+                      style={{
+                        width: colWidths[col.id],
+                        height: 56,
                         opacity: isDragging ? 0.35 : 1,
                         ...getStickyStyle(col.id, true)
                       }}
-                      className={`px-3 py-2.5 font-medium text-[#525866] text-xs cursor-grab active:cursor-grabbing ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                      className={`px-3 py-2.5 font-medium text-[#525866] text-xs cursor-grab active:cursor-grabbing bg-[#F5F7FA] ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
                       <div className={`flex items-center justify-between w-full group ${isLoading ? "[&_button]:invisible" : ""}`}>
                         {/* Header label swaps to a skeleton bar on the same flag as the
@@ -724,12 +744,12 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                           <Skeleton width="65%" height={12} />
                         ) : (
                           <div className="flex items-center gap-1.5 min-w-0 truncate">
-                            {(leftPinned.has(col.id) || rightPinned.has(col.id)) && (
-                              <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0" style={{ transform: "rotate(45deg)" }} />
-                            )}
                             <span className="truncate flex-1 min-w-0" title={col.label}>
                               {col.label}
                             </span>
+                            {(leftPinned.has(col.id) || rightPinned.has(col.id)) && (
+                              <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0 ml-1" style={{ transform: "rotate(45deg)" }} />
+                            )}
                           </div>
                         )}
                         <button
@@ -833,10 +853,12 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                       )}
 
                       <div
+                        data-resize-handle="true"
                         onMouseDown={(e) => startResize(e, col.id)}
                         className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400 z-10 ${resizingCol === col.id ? "bg-blue-500" : "bg-transparent"}`}
                       />
                     </div>
+                    {boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />}
                   </th>
                 );
               })}
@@ -889,50 +911,79 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                         opacity: isDragging ? 0.35 : 1,
                         ...getStickyStyle(col.id, false, isSelected),
                       };
-                      
+                      const boundarySide = getBoundaryShadowSide(col.id);
+                      const boundaryOverlay = boundarySide && <div style={getPinnedBoundaryOverlayStyle(boundarySide)} />;
+                      const isLastCol = col.id === orderedColumns[orderedColumns.length - 1]?.id;
+                      // Was a MoreVertical button with no onClick — a dead control.
+                      // Replaced with a direct link to the same contact detail route
+                      // the Name cell already uses (/contacts/:id), so a row can be
+                      // opened from here without depending on which column is last.
+                      const openContactButton = (
+                        <Link
+                          to={`/contacts/${contact._id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                          title="Open contact details"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </Link>
+                      );
+
                       if (col.id === "name") {
                         return (
                           <td key={col.id} style={cellStyle} className="px-3 text-left">
-                            <div className="flex items-center space-x-3 truncate w-full">
-                              <div className="flex-shrink-0">
-                                <ProfilePicture contact={contact} />
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center space-x-3 truncate min-w-0">
+                                <div className="flex-shrink-0">
+                                  <ProfilePicture contact={contact} />
+                                </div>
+                                <Link
+                                  to={`/contacts/${contact._id}`}
+                                  className="text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-all duration-150 ease-out"
+                                  title={contact.name}
+                                >
+                                  <HighlightText text={contact.name} query={searchTerm} />
+                                </Link>
                               </div>
-                              <Link
-                                to={`/contacts/${contact._id}`}
-                                className="text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-all duration-150 ease-out"
-                                title={contact.name}
-                              >
-                                <HighlightText text={contact.name} query={searchTerm} />
-                              </Link>
+                              {isLastCol && openContactButton}
                             </div>
+                            {boundaryOverlay}
                           </td>
                         );
                       }
                       if (col.id === "email") {
                         return (
-                          <td key={col.id} style={cellStyle} className="px-3 text-left truncate" title={contact.email}>
-                            <a
-                              href={`mailto:${contact.email}`}
-                              className="text-[14px] leading-5 font-medium text-blue-600 hover:underline transition-colors"
-                            >
-                              <HighlightText text={contact.email} query={searchTerm} />
-                            </a>
+                          <td key={col.id} style={cellStyle} className="px-3 text-left" title={contact.email}>
+                            <div className="flex items-center justify-between gap-2">
+                              <a
+                                href={`mailto:${contact.email}`}
+                                className="text-[14px] leading-5 font-medium text-blue-600 hover:underline transition-colors truncate block min-w-0"
+                              >
+                                <HighlightText text={contact.email} query={searchTerm} />
+                              </a>
+                              {isLastCol && openContactButton}
+                            </div>
+                            {boundaryOverlay}
                           </td>
                         );
                       }
                       if (col.id === "phone") {
                         return (
                           <td key={col.id} style={cellStyle} className="px-3 text-left whitespace-nowrap" title={contact.phone}>
-                            {contact.phone ? (
-                              <a
-                                href={`tel:${contact.phone}`}
-                                className="text-[14px] leading-5 font-medium text-blue-600 hover:underline transition-colors"
-                              >
-                                <HighlightText text={contact.phone} query={searchTerm} />
-                              </a>
-                            ) : (
-                              <span className="text-[14px] leading-5 font-medium text-gray-400">—</span>
-                            )}
+                            <div className="flex items-center justify-between gap-2">
+                              {contact.phone ? (
+                                <a
+                                  href={`tel:${contact.phone}`}
+                                  className="text-[14px] leading-5 font-medium text-blue-600 hover:underline transition-colors"
+                                >
+                                  <HighlightText text={contact.phone} query={searchTerm} />
+                                </a>
+                              ) : (
+                                <span className="text-[14px] leading-5 font-medium text-gray-400">—</span>
+                              )}
+                              {isLastCol && openContactButton}
+                            </div>
+                            {boundaryOverlay}
                           </td>
                         );
                       }
@@ -941,16 +992,22 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                           <td
                             key={col.id}
                             style={cellStyle}
-                            className="px-3 text-[14px] leading-5 font-medium text-[#525866] truncate text-left"
+                            className="px-3 text-[14px] leading-5 font-medium text-[#525866] text-left"
                           >
-                            <HighlightText text={contact.role} query={searchTerm} />
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate block min-w-0">
+                                <HighlightText text={contact.role} query={searchTerm} />
+                              </span>
+                              {isLastCol && openContactButton}
+                            </div>
+                            {boundaryOverlay}
                           </td>
                         );
                       }
                       if (col.id === "status") {
                         return (
                           <td key={col.id} style={cellStyle} className="px-3">
-                            <div className="relative flex items-center justify-start">
+                            <div className="flex items-center justify-between gap-2">
                               <span
                                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getBadgeColor(
                                   contact.stageStatus || contact.lifecycleStage
@@ -958,19 +1015,9 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                               >
                                 <HighlightText text={contact.stageStatus || contact.lifecycleStage || "New"} query={searchTerm} />
                               </span>
-                              {/* Was a MoreVertical button with no onClick — a dead control.
-                                  Replaced with a direct link to the same contact detail route
-                                  the Name cell already uses (/contacts/:id), so a row can be
-                                  opened from here without depending on which column is visible. */}
-                              <Link
-                                to={`/contacts/${contact._id}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="absolute right-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                                title="Open contact details"
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                              </Link>
+                              {isLastCol && openContactButton}
                             </div>
+                            {boundaryOverlay}
                           </td>
                         );
                       }
@@ -1090,6 +1137,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
           </div>
         </div>
       )}
+      {upgradeModal}
     </div>
   );
 }
