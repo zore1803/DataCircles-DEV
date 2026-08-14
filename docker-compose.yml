@@ -38,5 +38,18 @@ services:
       - crm-backend
     restart: unless-stopped
 
+  # Exposes crm-backend over HTTPS via a free Cloudflare quick tunnel — no
+  # domain or cert setup needed. The assigned https://*.trycloudflare.com
+  # url appears in `docker compose logs crm-tunnel` and changes every time
+  # this container restarts, so this is meant to unblock Auth0's
+  # secure-origin requirement quickly, not as a stable long-term URL.
+  crm-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: crm-tunnel
+    command: tunnel --url http://crm-backend:5000
+    depends_on:
+      - crm-backend
+    restart: unless-stopped
+
 volumes:
   crm-redis-data:
