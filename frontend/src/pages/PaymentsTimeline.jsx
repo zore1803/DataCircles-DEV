@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { 
   X, ChevronDown, ChevronUp, MoreVertical, Pencil, Trash2, Eye, EyeOff,
   SlidersHorizontal, Plus, Download, Share2, Edit2,
@@ -69,7 +70,12 @@ const cellTextFor = (colId, doc) => {
 
 /* ─── Component ─────────────────────────────────────────────────────── */
 export default function PaymentsTimeline() {
+  const navigate = useNavigate();
   const [documents, setDocuments] = useState([]);
+  const [accountsSummary, setAccountsSummary] = useState([]);
+
+  const walletSummary = useMemo(() => accountsSummary.find(a => a.type === "wallet"), [accountsSummary]);
+  const bankSummaries = useMemo(() => accountsSummary.filter(a => a.type === "bank"), [accountsSummary]);
   const [pagination, setPagination] = useState({
     currentPage: 1, limit: 10, totalCount: 0, totalPages: 0,
     hasNextPage: false, hasPrevPage: false
@@ -230,6 +236,7 @@ export default function PaymentsTimeline() {
 
       const res = await API.get(`/payments-timeline?${params.toString()}`);
       setDocuments(res.data.documents || []);
+      if (res.data.accountsSummary) setAccountsSummary(res.data.accountsSummary);
       if (res.data.pagination) setPagination(res.data.pagination);
     } catch (err) {
       toast.error("Failed to load transactions timeline");
@@ -610,11 +617,59 @@ export default function PaymentsTimeline() {
         className="fixed right-0 h-16 px-6 flex items-center justify-between border-b border-[#E1E4EA] bg-white top-[54px] lg:top-16"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
       >
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Payments Timeline</h1>
-          <span className="px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
-            {pagination.totalCount} total
-          </span>
+        <div className="flex-1 flex items-center gap-4 min-w-0 pr-4">
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex-shrink-0">Payments Timeline</h1>
+
+          {/* Scrollable Container for all Individual Cards */}
+          <div 
+            className="flex-1 flex items-center gap-4 overflow-x-auto h-full py-1 min-w-0"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {/* Wallet Balance Card */}
+            {(() => {
+              const balance = walletSummary ? Number(walletSummary.currentBalance) : 0;
+              const isNegative = balance < 0;
+              return (
+                <div 
+                  onClick={() => navigate("/settings/wallet")}
+                  className="hidden sm:flex items-center gap-2.5 px-3.5 h-12 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg hover:border-blue-400 hover:bg-blue-50/10 hover:shadow-sm cursor-pointer transition-all whitespace-nowrap flex-shrink-0"
+                  title="View Wallet Settings"
+                >
+                  <span className={`w-2 h-2 rounded-full ${isNegative ? "bg-red-500 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
+                  <span className="text-base text-black font-bold uppercase tracking-wider">Wallet:</span>
+                  <span className={`text-lg font-bold ${isNegative ? "text-red-600" : "text-emerald-600"}`}>
+                    ₹{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              );
+            })()}
+
+            {/* Individual Bank Account Cards */}
+            {bankSummaries.length > 0 ? (
+              bankSummaries.map((bank) => {
+                const balance = Number(bank.currentBalance);
+                const isNegative = balance < 0;
+                return (
+                  <div 
+                    key={bank.id} 
+                    onClick={() => navigate("/settings/bank")}
+                    className="hidden sm:flex items-center gap-2.5 px-3.5 h-12 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg hover:border-purple-400 hover:bg-purple-50/10 hover:shadow-sm cursor-pointer transition-all whitespace-nowrap flex-shrink-0"
+                    title="View Bank Settings"
+                  >
+                    <span className={`w-2 h-2 rounded-full ${isNegative ? "bg-red-500 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
+                    <span className="text-base text-black font-bold uppercase tracking-wider">{bank.title}:</span>
+                    <span className={`text-lg font-bold ${isNegative ? "text-red-600" : "text-emerald-600"}`}>
+                      ₹{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="hidden sm:flex items-center gap-2.5 px-3.5 h-12 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-xs whitespace-nowrap flex-shrink-0">
+                <span className="text-lg font-medium text-[#94A3B8]">No active banks</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">

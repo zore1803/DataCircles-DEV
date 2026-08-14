@@ -291,6 +291,14 @@ const BankDetails = () => {
                       </p>
                     </div>
                   )}
+                  {bank.currentBalance !== undefined && (
+                    <div>
+                      <span className="font-semibold text-gray-500">Current Balance</span>
+                      <p className={`mt-0.5 font-bold ${Number(bank.currentBalance) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        ₹{Number(bank.currentBalance).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {bank.notes && (

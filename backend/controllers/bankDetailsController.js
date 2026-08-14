@@ -1,5 +1,9 @@
 const BankDetails = require("../models/BankDetails");
 const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
+const Payment = require("../models/Payment");
+const Invoice = require("../models/Invoice");
+const Purchase = require("../models/Purchase");
+const SubscriptionPayment = require("../models/SubscriptionPayment.js");
 
 const clearOtherDefaults = async (organizationId, exceptId = null) => {
   const query = { organization: organizationId, isDefault: true };
@@ -50,8 +54,9 @@ exports.getLatestBankDetails = async (req, res) => {
 
 exports.getAllBankDetails = async (req, res) => {
   try {
+    const orgId = req.user.organization;
     const { search } = req.query;
-    let query = { organization: req.user.organization };
+    let query = { organization: orgId };
 
     if (search) {
       query.$or = [
@@ -64,7 +69,69 @@ exports.getAllBankDetails = async (req, res) => {
     }
 
     const banks = await BankDetails.find(query).sort({ isDefault: -1, updatedAt: -1 });
-    res.json(banks);
+
+    const [payments, invoices, purchases, subPayments] = await Promise.all([
+      Payment.find({ organization: orgId }),
+      Invoice.find({ organization: orgId }),
+      Purchase.find({ organization: orgId }),
+      SubscriptionPayment.find({ organization: orgId }),
+    ]);
+
+    const formattedPayments = payments.map((p) => ({
+      amount: p.amount,
+      direction: p.direction,
+      bank: p.bank || "",
+      date: p.paymentDate,
+    }));
+
+    const formattedInvoices = invoices.map((inv) => ({
+      amount: inv.amount,
+      direction: "IN",
+      bank: "",
+      date: inv.date || inv.createdAt,
+    }));
+
+    const formattedPurchases = purchases.map((pur) => ({
+      amount: pur.grandTotal || pur.subtotal,
+      direction: "OUT",
+      bank: "",
+      date: pur.purchaseDate || pur.createdAt,
+    }));
+
+    const formattedSubs = subPayments.map((sub) => ({
+      amount: sub.amount,
+      direction: "OUT",
+      bank: "",
+      date: sub.createdAt,
+    }));
+
+    const allTransactions = [
+      ...formattedPayments,
+      ...formattedInvoices,
+      ...formattedPurchases,
+      ...formattedSubs
+    ];
+
+    const banksWithBalances = banks.map((b) => {
+      const bankName = b.bank || "Bank Account";
+      const opening = Number(b.openingBalance) || 0;
+
+      const bankTx = allTransactions.filter((t) => {
+        if (!t.bank) return false;
+        const bName = t.bank.toLowerCase();
+        return bName.includes(bankName.toLowerCase()) || bName.includes((b.accountNumber || "").toLowerCase());
+      });
+
+      const inSum = bankTx.filter((t) => t.direction === "IN").reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+      const outSum = bankTx.filter((t) => t.direction === "OUT").reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+      const currentBalance = opening + inSum - outSum;
+
+      const bankObj = b.toObject();
+      bankObj.currentBalance = currentBalance;
+      return bankObj;
+    });
+
+    res.json(banksWithBalances);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

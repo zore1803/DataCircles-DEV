@@ -3,6 +3,8 @@ const Vendor = require("../models/Vendor");
 const Invoice = require("../models/Invoice");
 const Purchase = require("../models/Purchase");
 const SubscriptionPayment = require("../models/SubscriptionPayment.js");
+const BankDetails = require("../models/BankDetails");
+const Wallet = require("../models/Wallet");
 
 exports.getPaymentsTimeline = async (req, res) => {
   try {
@@ -24,7 +26,7 @@ exports.getPaymentsTimeline = async (req, res) => {
     }
 
     // Fetch from all relevant collections concurrently
-    const [payments, invoices, purchases, subPayments] = await Promise.all([
+    const [payments, invoices, purchases, subPayments, bankAccounts, wallet] = await Promise.all([
       Payment.find({ organization: orgId }).populate("vendor", "name companyName"),
       Invoice.find({ organization: orgId }).populate({
         path: "deal",
@@ -34,7 +36,9 @@ exports.getPaymentsTimeline = async (req, res) => {
         ]
       }),
       Purchase.find({ organization: orgId }).populate("vendor", "name companyName"),
-      SubscriptionPayment.find({ organization: orgId })
+      SubscriptionPayment.find({ organization: orgId }),
+      BankDetails.find({ organization: orgId }),
+      Wallet.findOne({ organization: orgId })
     ]);
 
     const formattedPayments = payments.map((p) => ({
@@ -194,8 +198,52 @@ exports.getPaymentsTimeline = async (req, res) => {
     const endIndex = page * limit;
     const paginatedTransactions = allTransactions.slice(startIndex, endIndex);
 
+    // Compute account balances (Wallet + Banks)
+    // 1. Bank balances: opening balance + sum(IN) - sum(OUT) for payments assigned to that bank
+    const bankSummaries = bankAccounts.map((b) => {
+      const bankName = b.bank || "Bank Account";
+      const accNumber = b.accountNumber ? `•••• ${b.accountNumber.slice(-4)}` : "";
+      const opening = Number(b.openingBalance) || 0;
+
+      // Filter all transactions linked to this bank
+      const bankTx = allTransactions.filter((t) => {
+        if (!t.bank) return false;
+        const bName = t.bank.toLowerCase();
+        return bName.includes(bankName.toLowerCase()) || bName.includes((b.accountNumber || "").toLowerCase());
+      });
+
+      const inSum = bankTx.filter((t) => t.direction === "IN").reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+      const outSum = bankTx.filter((t) => t.direction === "OUT").reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+      const currentBalance = opening + inSum - outSum;
+
+      return {
+        id: b._id,
+        type: "bank",
+        title: bankName,
+        accountNumber: accNumber,
+        accountHolder: b.accountHolder || "",
+        openingBalance: opening,
+        currentBalance,
+        isDefault: b.isDefault || false
+      };
+    });
+
+    // 2. Wallet balance
+    const walletBalance = wallet ? Number(wallet.balance) || 0 : 0;
+    const walletSummary = {
+      id: wallet ? wallet._id : "wallet-card",
+      type: "wallet",
+      title: "DataCircles Wallet",
+      accountNumber: "Prepaid Credits",
+      currentBalance: walletBalance,
+      credits: wallet ? wallet.credits || 0 : 0
+    };
+
+    const accountsSummary = [walletSummary, ...bankSummaries];
+
     res.json({
       documents: paginatedTransactions,
+      accountsSummary,
       pagination: {
         currentPage: page,
         limit,
