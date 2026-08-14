@@ -21,12 +21,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-WORKDIR /app
+# Built with the repo root as build context (not just backend/) so that
+# ../../shared/documentTemplates.js (imported by backend/utils/htmlDocumentPdf.js)
+# resolves inside the image. WORKDIR mirrors the repo layout so those
+# relative paths still work at runtime.
+WORKDIR /app/backend
 
-COPY package*.json ./
+COPY backend/package*.json ./
 RUN npm install --omit=dev
 
-COPY . .
+COPY backend/. .
+COPY shared /app/shared
 
 EXPOSE 5000
 

@@ -10,7 +10,9 @@ services:
     restart: unless-stopped
 
   crm-backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: crm-backend
     env_file:
       - ./backend/.env
@@ -22,7 +24,8 @@ services:
 
   crm-frontend:
     build:
-      context: ./frontend
+      context: .
+      dockerfile: frontend/Dockerfile
       args:
         VITE_APP_API_URL: ${VITE_APP_API_URL}
         VITE_APP_AUTH0_DOMAIN: ${VITE_APP_AUTH0_DOMAIN}
