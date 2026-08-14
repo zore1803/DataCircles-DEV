@@ -8,6 +8,8 @@ const OPERATORS = [
   { value: "not_contains", label: "Does not contain" },
   { value: "is", label: "Is exact" },
   { value: "is_not", label: "Is not" },
+  { value: "greater_than", label: "Greater than (>)" },
+  { value: "less_than", label: "Less than (<)" },
   { value: "in", label: "In (comma separated)" },
   { value: "not_in", label: "Not in (comma separated)" },
   { value: "is_empty", label: "Is empty" },
@@ -368,12 +370,14 @@ export default function AdvancedFilterPanel({
 
         <div className="p-5 border-t border-gray-200 flex gap-3 bg-white">
           <button
+            type="button"
             onClick={handleClear}
             className="flex-1 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
           >
             Clear All
           </button>
           <button
+            type="button"
             onClick={handleApply}
             className="flex-[2] py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
           >

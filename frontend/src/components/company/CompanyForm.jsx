@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
-import { Twitter, Linkedin, Facebook, FolderOpen, ChevronDown } from "lucide-react";
+import { Twitter, Linkedin, Facebook, FolderOpen, ChevronDown, Edit2, Trash2, MinusSquare, X } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 const CompanyForm = ({
   form,
@@ -550,29 +550,43 @@ const CompanyForm = ({
         {/* Responsive form container */}
         <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
           {/* Header */}
-          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0 bg-white">
-            <h2 className="text-[24px] font-bold text-[#111216]">
+          <div className="relative flex items-center justify-end px-6 py-[23px] border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="absolute left-1/2 -translate-x-1/2 text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {form._id ? "Edit Company" : "Create New Company"}
             </h2>
+            {form._id && (
+              <>
+                <button
+                  type="button"
+                  title="Edit"
+                  className="w-5 h-5 flex items-center justify-center text-[#0085FF] hover:opacity-70 transition-opacity"
+                >
+                  <Edit2 className="w-[18px] h-[18px]" strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  title="Delete"
+                  className="w-5 h-5 flex items-center justify-center text-[#F60000] hover:opacity-70 transition-opacity"
+                >
+                  <Trash2 className="w-[18px] h-[18px]" strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  title="Select"
+                  className="w-5 h-5 flex items-center justify-center text-[#1C1B1F]/30 hover:opacity-70 transition-opacity"
+                >
+                  <MinusSquare className="w-[18px] h-[18px]" strokeWidth={2} />
+                </button>
+              </>
+            )}
             <button
               type="button"
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
               aria-label="Close"
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
 

@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
+import { X, Paperclip, Twitter, Linkedin, Instagram, Facebook } from "lucide-react";
+import { FaWhatsapp } from "react-icons/fa";
 import API from "../../services/api";
 import CustomDropdown from "../common/CustomDropdown";
 import toast from "react-hot-toast";
@@ -24,6 +26,13 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
     website: "",
     gstin: "", // Added gstin field
     profilePicture: null,
+    socialMedia: {
+      twitter: "",
+      linkedin: "",
+      instagram: "",
+      facebook: "",
+      whatsapp: "",
+    },
   });
   const [additionalFields, setAdditionalFields] = useState({});
   const [fieldDefinitions, setFieldDefinitions] = useState([]);
@@ -47,10 +56,15 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
     setProfilePicturePreview(url);
     return () => URL.revokeObjectURL(url);
   }, [form.profilePicture]);
+  // Set when the user clears a picture via the X on the preview — hides the
+  // company's already-uploaded logo even though editCompany still has it,
+  // until a new file is picked (which naturally takes over via the preview).
+  const [removeExistingLogo, setRemoveExistingLogo] = useState(false);
   // Edit mode starts with the company's already-uploaded picture; a freshly
   // picked file (above) takes over from it once one is chosen.
   const profilePictureDisplayUrl =
-    profilePicturePreview || (isEditing ? editCompany?.profilePicture : null);
+    profilePicturePreview ||
+    (isEditing && !removeExistingLogo ? editCompany?.profilePicture : null);
 
   useEffect(() => {
     setShouldRender(true);
@@ -65,6 +79,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
   // Pre-fill when editing an existing company so edit and create share one form.
   useEffect(() => {
     if (!editCompany) return;
+    setRemoveExistingLogo(false);
     setForm({
       name: editCompany.name || "",
       industry: editCompany.industry || "",
@@ -76,6 +91,14 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
       website: editCompany.website || "",
       gstin: editCompany.gstin || "",
       profilePicture: null,
+      socialMedia: {
+        twitter: "",
+        linkedin: "",
+        instagram: "",
+        facebook: "",
+        whatsapp: "",
+        ...(editCompany.socialMedia || {}),
+      },
     });
     const pf = {};
     (editCompany.additionalFields || []).forEach((f) => {
@@ -158,7 +181,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             step="any"
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
+            className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
             required={fieldDef.required}
           />
         );
@@ -171,7 +194,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             onChange={(newValue) => handleFieldChange(newValue)}
             placeholder={`Select ${fieldDef.name}`}
             required={fieldDef.required}
-            buttonClassName={`w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-left flex items-center justify-between transition-all bg-white font-inter ${value ? "text-gray-900 font-medium" : "text-[#A0A0A0]"}`}
+            buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${value ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
           />
         );
 
@@ -181,7 +204,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             rows={3}
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#E0E0E1] rounded-[25px] px-4 py-3 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter resize-vertical"
+            className="w-full border border-[#1F2937]/10 rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter resize-vertical"
             required={fieldDef.required}
           />
         );
@@ -192,7 +215,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             type="date"
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
+            className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
             required={fieldDef.required}
           />
         );
@@ -203,7 +226,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             type="url"
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter placeholder:text-[#A0A0A0]"
+            className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter placeholder:text-[#1F2937] placeholder:opacity-50"
             required={fieldDef.required}
             placeholder="https://example.com"
           />
@@ -220,7 +243,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                 return (
                   <label
                     key={index}
-                    className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded-xl px-4 py-3 transition-colors border border-transparent hover:border-[#E0E0E1]"
+                    className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded-full px-3 h-8 transition-colors border border-transparent hover:border-[#1F2937]/10"
                   >
                     <input
                       type="checkbox"
@@ -236,9 +259,9 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                         }
                         handleFieldChange(newValues);
                       }}
-                      className="w-4 h-4 text-blue-600 border-[#E0E0E1] rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-blue-600 border-[#1F2937]/10 rounded focus:ring-blue-500"
                     />
-                    <span className="text-[14px] text-gray-900 font-medium font-inter">{option}</span>
+                    <span className="text-[12px] text-[#1F2937] font-medium font-inter">{option}</span>
                   </label>
                 );
               })}
@@ -257,7 +280,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             type="text"
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
+            className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
             required={fieldDef.required}
           />
         );
@@ -315,6 +338,11 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
     payload.append("shippingAddresses", JSON.stringify(shippingPayload));
     payload.append("website", form.website);
     payload.append("gstin", form.gstin); // Added gstin to payload
+    payload.append("socialMedia[twitter]", form.socialMedia.twitter || "");
+    payload.append("socialMedia[linkedin]", form.socialMedia.linkedin || "");
+    payload.append("socialMedia[instagram]", form.socialMedia.instagram || "");
+    payload.append("socialMedia[facebook]", form.socialMedia.facebook || "");
+    payload.append("socialMedia[whatsapp]", form.socialMedia.whatsapp || "");
 
     const processedAdditionalFields = fieldDefinitions
       .map((fieldDef) => {
@@ -386,6 +414,14 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
     setIsFormDirty(true);
   };
 
+  const handleSocialMediaChange = (platform, value) => {
+    setForm((prev) => ({
+      ...prev,
+      socialMedia: { ...prev.socialMedia, [platform]: value },
+    }));
+    setIsFormDirty(true);
+  };
+
   // Update one field of the single billing address. Any shipping address that
   // is set to "same as billing" mirrors the change.
   const handleBillingChange = (field, value) => {
@@ -448,9 +484,9 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
   // Shared 6-field address grid, reused by billing and each shipping address.
   const renderAddressGrid = (address, onFieldChange, disabled) => {
     const inputCls =
-      "w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] disabled:bg-gray-50 disabled:text-gray-400";
+      "w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:bg-gray-50 disabled:text-gray-400";
     const ddCls = (val) =>
-      `w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-left flex items-center justify-between transition-all bg-white font-inter disabled:bg-gray-50 disabled:text-gray-400 ${val ? "text-gray-900" : "text-[#A0A0A0]"}`;
+      `w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter disabled:bg-gray-50 disabled:text-gray-400 ${val ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`;
     return (
       <fieldset disabled={disabled} className={`space-y-3 ${disabled ? "opacity-70" : ""}`}>
         <input
@@ -561,104 +597,116 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
         `}
       >
         <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
-          {/* Sticky header — compact, matching the note editor card */}
-          <div className="flex justify-between items-center flex-shrink-0 p-4 border-b border-gray-100">
-            <h3 className="text-base font-semibold text-gray-700">
+          {/* Sticky header — matches the CompanyForm header spec */}
+          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {isEditing ? "Edit Company" : "Create New Company"}
-            </h3>
+            </h2>
             <button
               type="button"
               onClick={handleClose}
-              className="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
               aria-label="Close"
             >
-              <svg
-                className="w-5 h-5 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
 
           {/* Scrollable body */}
           <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 space-y-6">
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Select Profile Picture <span className="text-red-500">*</span>
+              <label className="block text-[12px] font-medium text-[#161618] mb-2 tracking-[-0.05em]">
+                Company Logo <span className="text-[#FF4935]">*</span>
               </label>
               <div className="flex items-center gap-3">
-                {/* The filename text field this replaced told you nothing
-                    useful — the image itself is the confirmation. No fixed
-                    box: the tile sizes to the image (capped so a huge photo
-                    can't blow out the modal) instead of squeezing a tall or
-                    wide image down into a small square. */}
-                <div className="relative flex-shrink-0 inline-block rounded-xl border border-[#E0E0E1] bg-[#F9F9FB] overflow-hidden">
-                  <input
-                    ref={profilePictureInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      handleFormChange("profilePicture", e.target.files[0]);
-                    }}
-                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                    // Only required when there's no picture yet — a browser
-                    // can't pre-populate a file input with the company's
-                    // already-uploaded image, so requiring it unconditionally
-                    // forced a re-upload on every edit even though one was
-                    // already on file (and showing right here as a preview).
-                    required={!profilePictureDisplayUrl}
-                  />
-                  {profilePictureDisplayUrl ? (
-                    <img
-                      src={profilePictureDisplayUrl}
-                      alt="Company"
-                      className="block max-h-32 max-w-[260px] w-auto h-auto object-contain"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 flex items-center justify-center text-[10px] text-[#A0A0A0] text-center px-1">
-                      No image
-                    </div>
-                  )}
+                {/* Pill-shaped "chosen file" field — shows the filename once
+                    picked (or the current company logo's name while editing),
+                    otherwise the "Choose a file" placeholder. */}
+                <div
+                  onClick={() => profilePictureInputRef.current?.click()}
+                  className="flex-1 flex items-center px-3 h-8 rounded-full border border-[#1F2937]/10 cursor-pointer"
+                >
+                  <span className="text-[12px] leading-5 text-[#1F2937] opacity-50 truncate">
+                    {form.profilePicture?.name ||
+                      (profilePictureDisplayUrl ? "Current logo" : "Choose a file")}
+                  </span>
                 </div>
-                {/* The tile above already opens the picker (it's the
-                    invisible input overlaying it) — this button was a dead
-                    click, doing nothing when pressed. Wired to trigger the
-                    same picker so it actually does what it looks like it
-                    should. */}
+                {/* Circular attach button — opens the file picker (the actual
+                    <input type=file> is hidden and triggered via the ref, same
+                    as before). */}
                 <button
                   type="button"
                   onClick={() => profilePictureInputRef.current?.click()}
-                  className="bg-[#F2F2F7] text-[#111216] px-8 rounded-[25px] h-11 text-[14px] font-medium hover:bg-gray-200 transition-colors"
+                  title="Upload company logo"
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
                 >
-                  Upload
+                  <Paperclip className="w-[18px] h-[18px] text-white" strokeWidth={2} />
                 </button>
+                <input
+                  ref={profilePictureInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    handleFormChange("profilePicture", e.target.files[0]);
+                  }}
+                  className="hidden"
+                  // Only required when there's no picture yet — a browser
+                  // can't pre-populate a file input with the company's
+                  // already-uploaded image, so requiring it unconditionally
+                  // forced a re-upload on every edit even though one was
+                  // already on file (and showing right here as a preview).
+                  required={!profilePictureDisplayUrl}
+                />
               </div>
+              <p className="text-[12px] font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">PNG, JPEG upto 5MB</p>
+              {/* Preview of the selected/current logo, since the pill field
+                  above only shows a filename, not the image itself. The X
+                  clears whichever picture is showing — a freshly picked file,
+                  or (while editing) the company's already-uploaded one — so
+                  the user can pick a different one or leave it blank. */}
+              {profilePictureDisplayUrl && (
+                <div className="relative mt-2 inline-block">
+                  <img
+                    src={profilePictureDisplayUrl}
+                    alt="Company"
+                    className="block max-h-20 max-w-[160px] w-auto h-auto object-contain rounded-lg border border-[#E0E0E1]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleFormChange("profilePicture", null);
+                      setRemoveExistingLogo(true);
+                      if (profilePictureInputRef.current) {
+                        profilePictureInputRef.current.value = "";
+                      }
+                    }}
+                    title="Remove logo"
+                    aria-label="Remove logo"
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-white border border-[#E0E0E1] shadow-sm flex items-center justify-center text-[#1C1B1F] hover:bg-gray-50 transition-colors"
+                  >
+                    <X className="w-3 h-3" strokeWidth={2.5} />
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Company Name <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Company Name <span className="text-[#FF4935]">*</span>
               </label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                 required
                 placeholder="Enter Company Name"
               />
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Industry
               </label>
               <CustomDropdown
@@ -667,28 +715,27 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                 onChange={(value) => handleFormChange("industry", value)}
                 placeholder="Select Industry"
                 searchable
-                buttonClassName={`w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-left flex items-center justify-between transition-all bg-white font-inter ${form.industry ? "text-gray-900 font-medium" : "text-[#A0A0A0]"}`}
+                buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${form.industry ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
               />
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                GSTIN <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                GSTIN
               </label>
               <input
                 type="text"
                 value={form.gstin}
                 onChange={(e) => handleFormChange("gstin", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
-                placeholder="GSTIN-1234567890"
-                required
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                placeholder="eg., 22ABCDE1234F1Z5"
               />
             </div>
 
             {/* Billing Address (single — GST is calculated from its state) */}
             <div>
-              <label className="block text-[14px] font-bold text-[#111216] mb-3">
-                Billing Address <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Billing Address <span className="text-[#FF4935]">*</span>
               </label>
               {renderAddressGrid(
                 form.billingAddress,
@@ -701,9 +748,9 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             {form.shippingAddresses.map((ship, index) => (
               <div key={index}>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="block text-[14px] font-bold text-[#111216]">
+                  <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em]">
                     Shipping Address{form.shippingAddresses.length > 1 ? ` ${index + 1}` : ""}{" "}
-                    <span className="text-red-500">*</span>
+                    <span className="text-[#FF4935]">*</span>
                   </label>
                   <div className="flex items-center gap-3">
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -745,14 +792,18 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             </button>
 
             {fieldDefinitions.length > 0 && (
-              <div className="pt-4 space-y-6">
-                <h3 className="text-[16px] font-bold text-[#111216]">
-                  Custom Fields
-                </h3>
+              <div className="pt-4 space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                  <h3 className="flex-shrink-0 text-[14px] font-medium leading-[120%] text-[#1F2937]">
+                    Custom Fields
+                  </h3>
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                </div>
                 {fieldDefinitions.map((fieldDef) => (
                   <div key={fieldDef.name}>
-                    <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                      {fieldDef.name} {fieldDef.required && <span className="text-red-500">*</span>}
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                      {fieldDef.name} {fieldDef.required && <span className="text-[#FF4935]">*</span>}
                     </label>
                     {renderFieldInput(
                       fieldDef,
@@ -764,16 +815,16 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             )}
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Website <span className="text-red-500">*</span>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Website <span className="text-[#FF4935]">*</span>
               </label>
               {/* "https://" is a fixed prefix, not part of the typed value — only
                   the domain is editable, so nobody has to type the scheme. An
                   existing website (from editing a company) that already has a
                   protocol keeps it stripped here for display and re-added on
                   change; one saved without a protocol is treated the same way. */}
-              <div className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 flex items-center gap-0.5 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
-                <span className="text-[14px] text-[#A0A0A0] flex-shrink-0">
+              <div className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 flex items-center gap-0.5 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
+                <span className="text-[12px] text-[#1F2937] opacity-50 flex-shrink-0">
                   https://
                 </span>
                 <input
@@ -785,26 +836,115 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                       `https://${e.target.value.replace(/^https?:\/\//i, "")}`
                     )
                   }
-                  className="flex-1 min-w-0 h-full text-[14px] text-gray-900 focus:outline-none placeholder:text-[#A0A0A0] bg-transparent"
+                  className="flex-1 min-w-0 h-full text-[12px] text-[#1F2937] focus:outline-none placeholder:text-[#1F2937] placeholder:opacity-50 bg-transparent"
                   placeholder="www.company.com"
                   required
                 />
               </div>
             </div>
 
+            {/* Social Media Links — icon + pill input per platform, matching
+                the spec's Frame 198 layout. */}
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="flex-1 h-px bg-[#D9D9D9]" />
+                <h3 className="flex-shrink-0 text-[14px] font-medium leading-[120%] text-[#1F2937]">
+                  Social Media Links
+                </h3>
+                <span className="flex-1 h-px bg-[#D9D9D9]" />
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="flex items-center gap-2 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    <span className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
+                      <Twitter className="w-[18px] h-[18px]" strokeWidth={2} />
+                    </span>
+                    X (Twitter)
+                  </label>
+                  <input
+                    type="url"
+                    value={form.socialMedia.twitter}
+                    onChange={(e) => handleSocialMediaChange("twitter", e.target.value)}
+                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                    placeholder="https://x.com/vendorname"
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    <span className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
+                      <Linkedin className="w-[18px] h-[18px]" strokeWidth={2} />
+                    </span>
+                    LinkedIn
+                  </label>
+                  <input
+                    type="url"
+                    value={form.socialMedia.linkedin}
+                    onChange={(e) => handleSocialMediaChange("linkedin", e.target.value)}
+                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                    placeholder="https://linkedin.com/vendorname"
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    <span className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
+                      <Instagram className="w-[18px] h-[18px]" strokeWidth={2} />
+                    </span>
+                    Instagram
+                  </label>
+                  <input
+                    type="url"
+                    value={form.socialMedia.instagram}
+                    onChange={(e) => handleSocialMediaChange("instagram", e.target.value)}
+                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                    placeholder="https://instagram.com/vendorname"
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    <span className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
+                      <Facebook className="w-[18px] h-[18px]" strokeWidth={2} />
+                    </span>
+                    Facebook
+                  </label>
+                  <input
+                    type="url"
+                    value={form.socialMedia.facebook}
+                    onChange={(e) => handleSocialMediaChange("facebook", e.target.value)}
+                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                    placeholder="https://facebook.com/vendorname"
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    <span className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
+                      <FaWhatsapp className="w-[18px] h-[18px]" />
+                    </span>
+                    WhatsApp Number
+                  </label>
+                  <input
+                    type="text"
+                    value={form.socialMedia.whatsapp}
+                    onChange={(e) => handleSocialMediaChange("whatsapp", e.target.value)}
+                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                    placeholder="+91 1234567890"
+                  />
+                </div>
+              </div>
+            </div>
+
           </div>
 
           {/* Sticky footer — compact, matching the note editor card */}
-          <div className="flex-shrink-0 p-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={handleClose}
-              className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors"
+              className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
-              className="px-6 py-2.5 bg-[#0C4FCD] text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               type="submit"
               disabled={loading}
             >
