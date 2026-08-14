@@ -1937,6 +1937,33 @@ const docNameFor = (type) =>
         ? "Quotation"
         : "Delivery Challan";
 
+const SETTINGS_KEY = {
+  tax: "invoice",
+  performa: "proformaInvoice",
+  quotation: "quote",
+  deliveryChallan: "deliveryChallan",
+};
+
+const getNumericPart = (str) => {
+  if (!str) return "";
+  const match = str.match(/\d+/);
+  return match ? match[0] : "";
+};
+
+const formatDocNumber = (prefix, number, suffix) => {
+  const p = (prefix || "").trim();
+  const s = (suffix || "").trim();
+  const n = (number || "").toString().trim();
+  if (!n) {
+    if (p && s) return `${p}-${s}`;
+    return p || s || "";
+  }
+  const pSep = p && !p.endsWith("-") ? `${p}-` : p;
+  const sSep = s && !s.startsWith("-") ? `-${s}` : s;
+  return `${pSep}${n}${sSep}`;
+};
+
+
 // Single source of truth for the template list — the same one the renderer and
 // the PDF generator use, so a template added there shows up here automatically.
 /* The "Add Invoice" experience for the Invoices tab: details on the left,
@@ -2195,6 +2222,10 @@ const CreateInvoicePanel = ({
         // Keep numbering in sync with edits made in the drawer's Numbering tab.
         if (docSettingsRes.status === "fulfilled") {
           const d = docSettingsRes.value.data || {};
+          const settingsKey = SETTINGS_KEY[type] || "invoice";
+          const newPrefix = d.documentTypeSettings?.[settingsKey]?.prefix || "";
+          const newSuffix = d.documentTypeSettings?.[settingsKey]?.suffix || "";
+
           setDocSettings((prev) => ({
             ...prev,
             invoicePrefix: d.invoicePrefix || "INV-",
@@ -2204,6 +2235,16 @@ const CreateInvoicePanel = ({
             nextInvoiceNumber: d.nextInvoiceNumber || 1,
             documentTypeSettings: d.documentTypeSettings || prev.documentTypeSettings,
           }));
+
+          if (isEditing) {
+            const numPart = getNumericPart(docNumber || initialDoc?.[numberKey] || "");
+            const updated = formatDocNumber(newPrefix, numPart, newSuffix);
+            setDocNumber(updated);
+          } else {
+            const numPart = type === "tax" ? (d.nextInvoiceNumber || 1) : "0001";
+            const updated = formatDocNumber(newPrefix, numPart, newSuffix);
+            setDocNumber(updated);
+          }
         }
       } catch (err) {
         console.error("Fetch branding/bank error:", err);
@@ -2270,22 +2311,37 @@ const CreateInvoicePanel = ({
     const loadDocSettings = async () => {
       try {
         const res = await API.get("/document-settings");
+        const d = res.data || {};
+        const settingsKey = SETTINGS_KEY[type] || "invoice";
+        const documentTypeSettings = d.documentTypeSettings || {
+          invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] },
+          quote: { prefix: "QT", suffix: "", prefixes: ["QT", "QTN"], suffixes: [] },
+          proformaInvoice: { prefix: "PI", suffix: "", prefixes: ["PI", "PFI"], suffixes: [] },
+          deliveryChallan: { prefix: "DC", suffix: "", prefixes: ["DC"], suffixes: [] },
+        };
         setDocSettings({
-          invoicePrefix: res.data?.invoicePrefix || "INV-",
-          invoiceSuffix: res.data?.invoiceSuffix || "",
-          invoicePrefixes: res.data?.invoicePrefixes || ["INV-"],
-          invoiceSuffixes: res.data?.invoiceSuffixes || [],
-          nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
-          defaultNotes: res.data?.defaultNotes || "",
-          defaultTerms: res.data?.defaultTerms || "",
-          documentTypeSettings: res.data?.documentTypeSettings || { invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] } },
+          invoicePrefix: d.invoicePrefix || "INV-",
+          invoiceSuffix: d.invoiceSuffix || "",
+          invoicePrefixes: d.invoicePrefixes || ["INV-"],
+          invoiceSuffixes: d.invoiceSuffixes || [],
+          nextInvoiceNumber: d.nextInvoiceNumber || 1,
+          defaultNotes: d.defaultNotes || "",
+          defaultTerms: d.defaultTerms || "",
+          documentTypeSettings,
         });
         setForm((prev) => ({
           ...prev,
-          invoicePrefix: res.data?.invoicePrefix || "INV-",
-          invoiceSuffix: res.data?.invoiceSuffix || "",
-          nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
+          invoicePrefix: d.invoicePrefix || "INV-",
+          invoiceSuffix: d.invoiceSuffix || "",
+          nextInvoiceNumber: d.nextInvoiceNumber || 1,
         }));
+        if (!isEditing) {
+          const initialPrefix = documentTypeSettings[settingsKey]?.prefix || "";
+          const initialSuffix = documentTypeSettings[settingsKey]?.suffix || "";
+          const numPart = type === "tax" ? (d.nextInvoiceNumber || 1) : "0001";
+          const initial = formatDocNumber(initialPrefix, numPart, initialSuffix);
+          setDocNumber(initial);
+        }
       } catch (error) {
         console.error("Failed to load document settings", error);
       }
@@ -2682,7 +2738,7 @@ const CreateInvoicePanel = ({
                 </>
               ) : (
                 <h2 className="text-xl font-bold text-[#1F2937] truncate">
-                  {isEditing ? `Edit ${docName}` : `Create New ${docName}`}
+                  Create New {docName}{docNumber ? ` #${docNumber}` : ""}
                 </h2>
               )}
             </div>
