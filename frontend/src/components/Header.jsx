@@ -941,7 +941,7 @@ const Header = () => {
     "/purchase": "Purchases",
     "/purchase-order": "Purchase Orders",
     "/purchase-return": "Purchase Return",
-    "/payments-timeline": "Timeline",
+    "/payments-timeline": "Payments Timeline",
     "/journals": "Journals",
     "/expenses": "Expenses",
     "/indirect-income": "Indirect Income",

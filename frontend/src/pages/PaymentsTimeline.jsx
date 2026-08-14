@@ -9,6 +9,7 @@ import {
 import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
+import BankLogo from "../components/BankLogo";
 import API from "../services/api";
 import toast from "react-hot-toast";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
@@ -75,9 +76,50 @@ export default function PaymentsTimeline() {
   const [accountsSummary, setAccountsSummary] = useState([]);
 
   const walletSummary = useMemo(() => accountsSummary.find(a => a.type === "wallet"), [accountsSummary]);
-  const bankSummaries = useMemo(() => accountsSummary.filter(a => a.type === "bank"), [accountsSummary]);
+  const cashSummary   = useMemo(() => accountsSummary.find(a => a.type === "cash"),   [accountsSummary]);
+  const bankSummaries = useMemo(() => accountsSummary.filter(a => a.type === "bank"),  [accountsSummary]);
+
+  // ----- Funds filter state (which accounts to include in total) -----------
+  const [filterOpen, setFilterOpen] = useState(false);
+  // Default select all accounts (wallet + cash + all banks)
+  const defaultSelected = useMemo(() => {
+    const ids = [];
+    if (walletSummary?.id) ids.push(walletSummary.id);
+    if (cashSummary?.id)   ids.push(cashSummary.id);
+    ids.push(...bankSummaries.map(b => b.id));
+    return ids;
+  }, [walletSummary, cashSummary, bankSummaries]);
+  const [selectedAccountIds, setSelectedAccountIds] = useState([]);
+
+  // Ensure selectedAccountIds is populated after data loads
+  useEffect(() => {
+    if (defaultSelected.length && selectedAccountIds.length === 0) {
+      setSelectedAccountIds(defaultSelected);
+    }
+  }, [defaultSelected, selectedAccountIds.length]);
+
+  // Compute total for selected accounts only
+  const filteredTotal = useMemo(() => {
+    let total = 0;
+    if (selectedAccountIds.includes(walletSummary?.id)) {
+      total += Number(walletSummary?.currentBalance ?? 0);
+    }
+    if (cashSummary && selectedAccountIds.includes(cashSummary.id)) {
+      total += Number(cashSummary.currentBalance ?? 0);
+    }
+    bankSummaries.forEach(b => {
+      if (selectedAccountIds.includes(b.id)) total += Number(b.currentBalance ?? 0);
+    });
+    return total;
+  }, [selectedAccountIds, walletSummary, cashSummary, bankSummaries]);
+  const totalAvailableFunds = useMemo(() => {
+    const walletBal = walletSummary ? Number(walletSummary.currentBalance) : 0;
+    const cashBal   = cashSummary   ? Number(cashSummary.currentBalance)   : 0;
+    const banksBal  = bankSummaries.reduce((sum, b) => sum + (Number(b.currentBalance) || 0), 0);
+    return walletBal + cashBal + banksBal;
+  }, [walletSummary, cashSummary, bankSummaries]);
   const [pagination, setPagination] = useState({
-    currentPage: 1, limit: 10, totalCount: 0, totalPages: 0,
+    currentPage: 1, limit: 50, totalCount: 0, totalPages: 0,
     hasNextPage: false, hasPrevPage: false
   });
   const [showLoadingSkeleton, setShowLoadingSkeleton] = useState(true);
@@ -113,6 +155,29 @@ export default function PaymentsTimeline() {
   const [dragGhost,      setDragGhost]      = useState(null);
   const dragOverRef = useRef(null);
   const ghostElRef  = useRef(null);
+  const filterBtnRef = useRef(null);
+  const cardsScrollRef = useRef(null);
+  const [filterDropdownPos, setFilterDropdownPos] = useState(null);
+  const [canScrollLeft,  setCanScrollLeft]  = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Update scroll button visibility whenever cards scroll
+  const updateScrollButtons = useCallback(() => {
+    const el = cardsScrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    const el = cardsScrollRef.current;
+    if (!el) return;
+    updateScrollButtons();
+    el.addEventListener("scroll", updateScrollButtons);
+    const ro = new ResizeObserver(updateScrollButtons);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", updateScrollButtons); ro.disconnect(); };
+  }, [updateScrollButtons, accountsSummary]);
 
   /* row selection */
   const [selectedIds, setSelectedIds] = useState([]);
@@ -614,62 +679,224 @@ export default function PaymentsTimeline() {
 
       {/* ── Fixed header bar ─────────────────────────────────────────────────────── */}
       <div
-        className="fixed right-0 h-16 px-6 flex items-center justify-between border-b border-[#E1E4EA] bg-white top-[54px] lg:top-16"
+        className="fixed right-0 h-36 px-6 flex items-center justify-between border-b border-[#E1E4EA] bg-white top-[54px] lg:top-16"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
       >
-        <div className="flex-1 flex items-center gap-4 min-w-0 pr-4">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex-shrink-0">Payments Timeline</h1>
+        <div className="flex-1 flex items-center gap-2 min-w-0 pr-4">
+
+          {/* Left scroll button */}
+          <button
+            onClick={() => cardsScrollRef.current?.scrollBy({ left: -260, behavior: "smooth" })}
+            className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-[#E2E8F0] bg-white shadow-sm text-gray-500 hover:text-blue-600 hover:border-blue-400 transition-all ${canScrollLeft ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+            aria-label="Scroll cards left"
+          >
+            <ChevronLeft size={15} />
+          </button>
 
           {/* Scrollable Container for all Individual Cards */}
-          <div 
+          <div
+            ref={cardsScrollRef}
             className="flex-1 flex items-center gap-4 overflow-x-auto h-full py-1 min-w-0"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
-            {/* Wallet Balance Card */}
+            {/* ── CARD: Total Available Funds ──────────────────────────────── */}
+            {(() => {
+              const isNegative = filteredTotal < 0;
+              const activeCount = selectedAccountIds.length;
+              const totalCount = (walletSummary ? 1 : 0) + bankSummaries.length;
+              return (
+                <div className="relative hidden sm:flex flex-col justify-between w-[230px] h-[116px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 hover:border-blue-400 hover:shadow-sm transition-all">
+                  {/* Top row: icon + label + filter button */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      <span className="text-sm text-gray-500 font-semibold uppercase tracking-wide leading-none">Total Funds</span>
+                    </div>
+                    {/* Inline filter button */}
+                    <button
+                      ref={filterBtnRef}
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (filterOpen) {
+                          setFilterOpen(false);
+                          setFilterDropdownPos(null);
+                        } else {
+                          const rect = filterBtnRef.current?.getBoundingClientRect();
+                          if (rect) setFilterDropdownPos({ top: rect.bottom + 6, left: rect.left });
+                          setFilterOpen(true);
+                        }
+                      }}
+                      className={`flex items-center justify-center w-7 h-7 rounded-lg border transition-all flex-shrink-0 ${filterOpen ? "bg-blue-50 border-blue-400 text-blue-600" : "bg-white border-[#E2E8F0] text-gray-400 hover:border-blue-400 hover:text-blue-600"}`}
+                      title="Filter accounts"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L14 14.414V19a1 1 0 01-1.447.894l-4-2A1 1 0 018 17V14.414L3.293 6.707A1 1 0 013 6V4z" /></svg>
+                    </button>
+                  </div>
+                  {/* Bottom: amount */}
+                  <span className={`text-2xl font-semibold tracking-tight leading-none ${isNegative ? "text-red-600" : "text-emerald-600"}`}>
+                    ₹{filteredTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  {/* Filter count badge */}
+                  {activeCount < totalCount && (
+                    <span className="absolute top-2 right-9 text-[9px] font-bold text-blue-500">{activeCount}/{totalCount}</span>
+                  )}
+                  {/* Filter dropdown — portalled to body to escape overflow-x-auto clipping */}
+                  {filterOpen && filterDropdownPos && createPortal(
+                    <>
+                      <div className="fixed inset-0 z-[98]" onClick={() => { setFilterOpen(false); setFilterDropdownPos(null); }} />
+                      <div
+                        className="fixed z-[99] min-w-[260px] bg-white border border-gray-200 rounded-xl shadow-xl p-3"
+                        style={{ top: filterDropdownPos.top, left: filterDropdownPos.left }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-between mb-2 px-1">
+                          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Include in Total</p>
+                          <button className="text-[11px] font-semibold text-blue-500 hover:underline" onClick={() => setSelectedAccountIds(defaultSelected)}>Select all</button>
+                        </div>
+                        {walletSummary && (
+                          <label className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" checked={selectedAccountIds.includes(walletSummary?.id)} onChange={e => { const c = e.target.checked; setSelectedAccountIds(prev => c ? [...prev, walletSummary?.id] : prev.filter(id => id !== walletSummary?.id)); }} className="h-4 w-4 rounded accent-blue-500" />
+                            <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-sm font-bold text-gray-900">Wallet</span>
+                              <span className="text-[11px] text-gray-400">Prepaid Credits</span>
+                            </div>
+                          </label>
+                        )}
+                        {cashSummary && (
+                          <label className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" checked={selectedAccountIds.includes(cashSummary.id)} onChange={e => { const c = e.target.checked; setSelectedAccountIds(prev => c ? [...prev, cashSummary.id] : prev.filter(id => id !== cashSummary.id)); }} className="h-4 w-4 rounded accent-blue-500" />
+                            <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-sm font-bold text-gray-900">Cash</span>
+                              <span className="text-[11px] text-gray-400">Physical Cash</span>
+                            </div>
+                          </label>
+                        )}
+                        {bankSummaries.map(bank => (
+                          <label key={bank.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" checked={selectedAccountIds.includes(bank.id)} onChange={e => { const c = e.target.checked; setSelectedAccountIds(prev => c ? [...prev, bank.id] : prev.filter(id => id !== bank.id)); }} className="h-4 w-4 rounded accent-blue-500" />
+                            <BankLogo bankName={bank.title} size={32} className="flex-shrink-0 rounded-lg overflow-hidden" />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-sm font-bold text-gray-900 whitespace-nowrap">{bank.title}</span>
+                              {bank.accountNumber && <span className="text-[11px] text-gray-400">{bank.accountNumber}</span>}
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </>,
+                    document.body
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── CARD: Wallet ─────────────────────────────────────────────── */}
             {(() => {
               const balance = walletSummary ? Number(walletSummary.currentBalance) : 0;
               const isNegative = balance < 0;
               return (
-                <div 
+                <div
                   onClick={() => navigate("/settings/wallet")}
-                  className="hidden sm:flex items-center gap-2.5 px-3.5 h-12 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg hover:border-blue-400 hover:bg-blue-50/10 hover:shadow-sm cursor-pointer transition-all whitespace-nowrap flex-shrink-0"
+                  className="hidden sm:flex flex-col justify-between w-[230px] h-[116px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 hover:border-violet-400 hover:bg-violet-50/10 hover:shadow-sm cursor-pointer transition-all"
                   title="View Wallet Settings"
                 >
-                  <span className={`w-2 h-2 rounded-full ${isNegative ? "bg-red-500 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
-                  <span className="text-base text-black font-bold uppercase tracking-wider">Wallet:</span>
-                  <span className={`text-lg font-bold ${isNegative ? "text-red-600" : "text-emerald-600"}`}>
+                  {/* Top row: icon + name + sub-label */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-base font-bold text-gray-900 leading-tight">Wallet</span>
+                      <span className="text-xs text-gray-400 leading-tight">Prepaid Credits</span>
+                    </div>
+                    <span className={`w-2 h-2 rounded-full ml-auto flex-shrink-0 ${isNegative ? "bg-red-500 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
+                  </div>
+                  {/* Bottom: amount */}
+                  <span className={`text-2xl font-semibold tracking-tight leading-none ${isNegative ? "text-red-600" : "text-emerald-600"}`}>
                     ₹{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               );
             })()}
 
-            {/* Individual Bank Account Cards */}
+            {/* ── CARD: Cash ───────────────────────────────────────────────── */}
+            {cashSummary && (() => {
+              const balance = Number(cashSummary.currentBalance);
+              const isNegative = balance < 0;
+              return (
+                <div
+                  className="hidden sm:flex flex-col justify-between w-[230px] h-[116px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 hover:border-green-400 hover:bg-green-50/10 hover:shadow-sm transition-all"
+                  title="Cash Transactions"
+                >
+                  {/* Top row: icon + name + sub-label */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-base font-bold text-gray-900 leading-tight">Cash</span>
+                      <span className="text-xs text-gray-400 leading-tight">Physical Cash</span>
+                    </div>
+                    <span className={`w-2 h-2 rounded-full ml-auto flex-shrink-0 ${isNegative ? "bg-red-500 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
+                  </div>
+                  {/* Bottom: amount */}
+                  <span className={`text-2xl font-semibold tracking-tight leading-none ${isNegative ? "text-red-600" : "text-emerald-600"}`}>
+                    ₹{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              );
+            })()}
+
+            {/* ── CARDS: Individual Banks ───────────────────────────────────── */}
             {bankSummaries.length > 0 ? (
               bankSummaries.map((bank) => {
                 const balance = Number(bank.currentBalance);
                 const isNegative = balance < 0;
                 return (
-                  <div 
-                    key={bank.id} 
+                  <div
+                    key={bank.id}
                     onClick={() => navigate("/settings/bank")}
-                    className="hidden sm:flex items-center gap-2.5 px-3.5 h-12 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg hover:border-purple-400 hover:bg-purple-50/10 hover:shadow-sm cursor-pointer transition-all whitespace-nowrap flex-shrink-0"
+                    className="hidden sm:flex flex-col justify-between w-[230px] h-[116px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 hover:border-blue-400 hover:bg-blue-50/10 hover:shadow-sm cursor-pointer transition-all"
                     title="View Bank Settings"
                   >
-                    <span className={`w-2 h-2 rounded-full ${isNegative ? "bg-red-500 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
-                    <span className="text-base text-black font-bold uppercase tracking-wider">{bank.title}:</span>
-                    <span className={`text-lg font-bold ${isNegative ? "text-red-600" : "text-emerald-600"}`}>
+                    {/* Top row: logo + name + account number */}
+                    <div className="flex items-center gap-2">
+                      <BankLogo bankName={bank.title} size={32} className="flex-shrink-0 rounded-lg overflow-hidden" />
+                      <div className="flex flex-col">
+                        <span className="text-base font-bold text-gray-900 leading-tight whitespace-nowrap">{bank.title}</span>
+                        <span className="text-xs text-gray-400 leading-tight">
+                          {bank.accountNumber || "Bank Account"}
+                        </span>
+                      </div>
+                      <span className={`w-2 h-2 rounded-full ml-auto flex-shrink-0 ${isNegative ? "bg-red-500 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
+                    </div>
+                    {/* Bottom: amount left-aligned */}
+                    <span className={`text-2xl font-semibold tracking-tight leading-none ${isNegative ? "text-red-600" : "text-emerald-600"}`}>
                       ₹{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 );
               })
             ) : (
-              <div className="hidden sm:flex items-center gap-2.5 px-3.5 h-12 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-xs whitespace-nowrap flex-shrink-0">
-                <span className="text-lg font-medium text-[#94A3B8]">No active banks</span>
+              <div className="hidden sm:flex flex-col justify-center w-[230px] h-[116px] flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4">
+                <span className="text-sm font-medium text-[#94A3B8]">No active banks</span>
               </div>
             )}
           </div>
+
+          {/* Right scroll button */}
+          <button
+            onClick={() => cardsScrollRef.current?.scrollBy({ left: 260, behavior: "smooth" })}
+            className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-[#E2E8F0] bg-white shadow-sm text-gray-500 hover:text-blue-600 hover:border-blue-400 transition-all ${canScrollRight ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+            aria-label="Scroll cards right"
+          >
+            <ChevronRight size={15} />
+          </button>
         </div>
 
         <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
@@ -737,7 +964,7 @@ export default function PaymentsTimeline() {
       {stripVisible && (
         <div
           className="fixed right-0 px-6 z-[40]"
-          style={{ left: "var(--sidebar-width, 0px)", top: 126, paddingTop: 4, paddingBottom: 4 }}
+          style={{ left: "var(--sidebar-width, 0px)", top: 166, paddingTop: 4, paddingBottom: 4 }}
         >
           <BulkActionBar
             selectedCount={selectedIds.length}
@@ -763,7 +990,7 @@ export default function PaymentsTimeline() {
         style={{
           left: "var(--sidebar-width, 0px)",
           bottom: 64,
-          top: stripVisible ? 178 : 130,
+          top: stripVisible ? 256 : 208,
         }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">

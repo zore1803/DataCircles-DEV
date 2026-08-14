@@ -252,7 +252,7 @@ const Navbar = () => {
   ];
 
   const paymentsChildren = [
-    { name: "Timeline", href: "/payments-timeline" },
+    { name: "Payments Timeline", href: "/payments-timeline" },
     { name: "Journals", href: "/journals" },
     { name: "Expenses", href: "/expenses" },
     { name: "Indirect Income", href: "/indirect-income" },

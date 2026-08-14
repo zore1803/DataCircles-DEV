@@ -239,7 +239,19 @@ exports.getPaymentsTimeline = async (req, res) => {
       credits: wallet ? wallet.credits || 0 : 0
     };
 
-    const accountsSummary = [walletSummary, ...bankSummaries];
+    // 3. Cash balance: all Payment records with paymentType === "Cash"
+    const cashTx = payments.filter((p) => p.paymentType === "Cash");
+    const cashIn  = cashTx.filter((p) => p.direction === "IN" ).reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+    const cashOut = cashTx.filter((p) => p.direction === "OUT").reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+    const cashSummary = {
+      id: "cash-card",
+      type: "cash",
+      title: "Cash",
+      accountNumber: "Physical Cash",
+      currentBalance: cashIn - cashOut,
+    };
+
+    const accountsSummary = [walletSummary, cashSummary, ...bankSummaries];
 
     res.json({
       documents: paginatedTransactions,
