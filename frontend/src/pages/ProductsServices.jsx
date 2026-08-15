@@ -26,6 +26,7 @@ import {
 import toast from "react-hot-toast";
 import BulkActions from "../components/BulkActions";
 import ItemForm from "../components/item/ItemForm";
+import QuickItemDrawer from "../components/item/QuickItemDrawer";
 import ImportItems from "../components/item/ImportItems";
 import ExportModal from "../components/common/ExportModal";
 import { exportClientSide } from "../utils/clientExport";
@@ -358,6 +359,7 @@ function ProductsServices() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   // filterType removed — type filtering now done via AdvancedFilterPanel rule builder.
   const [showForm, setShowForm] = useState(false);
+  const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [selectedItems, setSelectedItems] = useState([]);
   const selectedItemsSet = useMemo(() => new Set(selectedItems), [selectedItems]);
   const [showBulkActions, setShowBulkActions] = useState(false);
@@ -1551,7 +1553,7 @@ function ProductsServices() {
         />
       )}
 
-      {/* Form Modal */}
+      {/* Edit Form Modal (ItemForm kept for editing existing items) */}
       {showForm && (
         <ItemForm
           form={form}
@@ -1564,6 +1566,16 @@ function ProductsServices() {
           setError={(msg) => toast.error(msg)}
         />
       )}
+
+      {/* Quick Create Drawer */}
+      <QuickItemDrawer
+        isOpen={showQuickCreate}
+        onClose={() => setShowQuickCreate(false)}
+        onSaved={() => {
+          fetchItems();
+          setShowQuickCreate(false);
+        }}
+      />
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
@@ -1863,6 +1875,7 @@ function ProductsServices() {
                   )}
                 </div>
 
+                {/* Temp comparison button — opens old ItemForm */}
                 <button
                   onClick={() => {
                     setForm({
@@ -1882,6 +1895,15 @@ function ProductsServices() {
                     });
                     setShowForm(true);
                   }}
+                  className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-gray-100 text-gray-700 text-sm font-medium rounded-full hover:bg-gray-200 focus:outline-none cursor-pointer transition-colors flex-shrink-0 border border-gray-300"
+                  title="Old Create Item"
+                >
+                  <Plus className="w-4 h-4 flex-shrink-0" />
+                  <span>Old</span>
+                </button>
+
+                <button
+                  onClick={() => setShowQuickCreate(true)}
                   className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
                   title="Add Item"
                 >

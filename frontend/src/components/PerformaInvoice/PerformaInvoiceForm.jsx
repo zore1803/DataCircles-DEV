@@ -629,7 +629,7 @@ const PerformaInvoiceForm = ({
       if (discount.type === "percentage") {
         return (subtotalAfterItemDiscounts * discount.value) / 100;
       }
-      return discount.value;
+      return parseFloat(discount.value) || 0;
     }
     return 0;
   };

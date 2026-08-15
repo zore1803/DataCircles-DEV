@@ -365,7 +365,8 @@ const QuotationForm = ({
     status: "Draft",
     style: "Regular",
     isTaxQuotation: false,
-    isRoundOff: true,
+    isRoundOff: false,
+    hideTotals: false,
     notes: "",
     terms: "",
     attachments: [],
@@ -530,7 +531,8 @@ const QuotationForm = ({
         amount: sourceData.amount || 0,
         status: sourceData.status || "Draft",
         style: sourceData.style || "Regular",
-        isRoundOff: sourceData.isRoundOff !== undefined ? sourceData.isRoundOff : true,
+        isRoundOff: sourceData.isRoundOff !== undefined ? sourceData.isRoundOff : false,
+        hideTotals: sourceData.hideTotals || false,
         isTaxQuotation: sourceData.isTaxQuotation || false,
         transactionType: sourceData.transactionType || "intra",
         notes: sourceData.notes || "",
@@ -642,7 +644,7 @@ const QuotationForm = ({
       if (discount.type === "percentage") {
         return (subtotalAfterItemDiscounts * discount.value) / 100;
       }
-      return discount.value;
+      return parseFloat(discount.value) || 0;
     }
     return 0;
   };
@@ -1864,18 +1866,18 @@ const QuotationForm = ({
                     <div className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-2">
                         <span className="text-gray-600 font-medium">Round Off</span>
-                        <div className="relative">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer" 
-                            checked={form.isRoundOff} 
+                        <label className="relative cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={form.isRoundOff}
                             onChange={(e) => {
                               setForm(prev => ({ ...prev, isRoundOff: e.target.checked }));
                               setHasUnsavedChanges(true);
                             }}
                           />
                           <div className="w-8 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
-                        </div>
+                        </label>
                       </div>
                       <span className="text-gray-900 font-semibold">{formatNumberFixed(roundOffAmount)}</span>
                     </div>
@@ -1906,13 +1908,21 @@ const QuotationForm = ({
 
                     <div className="flex justify-between items-center text-sm pt-1">
                       <span className="text-gray-500">Total Discount</span>
-                      <span className="text-gray-600 font-medium">₹{formatNumberFixed(totalItemDiscounts + invoiceDiscountAmount)}</span>
+                      <span className="text-gray-600 font-medium">₹{formatNumberFixed(totalItemDiscounts + invoiceDiscountAmount - roundOffAmount)}</span>
                     </div>
 
                     <div className="flex justify-end gap-2 text-xs pt-1">
                       <label className="flex items-center gap-1.5 cursor-pointer text-gray-500">
                         Hide Totals
-                        <input type="checkbox" className="rounded text-blue-600 focus:ring-blue-500" />
+                        <input
+                          type="checkbox"
+                          className="rounded text-blue-600 focus:ring-blue-500"
+                          checked={form.hideTotals}
+                          onChange={(e) => {
+                            setForm((p) => ({ ...p, hideTotals: e.target.checked }));
+                            setHasUnsavedChanges(true);
+                          }}
+                        />
                       </label>
                     </div>
                     

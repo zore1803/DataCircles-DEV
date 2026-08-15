@@ -1,61 +1,143 @@
 import React, { useState, useEffect } from "react";
 import {
   X,
-  Wand2,
   Plus,
   ChevronRight,
   Lock,
+  Paperclip,
+  Trash2,
+  Edit2,
 } from "lucide-react";
 import ReactQuill from "react-quill-new";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 
+const TABS = ["Details", "Price Lists", "Attachments"];
+
 // onSaved(item) fires after the item is actually created in the backend —
 // callers use it to refresh their item list / picker, same as ItemForm's
 // fetchItems callback.
+const BLANK_FORM = {
+  name: "",
+  sellingPrice: "",
+  sellingPriceTax: "without Tax",
+  taxPercent: "0",
+  taxType: "(0% CGST & 0% SGST, 0% IGST)",
+  primaryUnit: "",
+  hsnSac: "",
+  purchasePrice: "",
+  purchasePriceTax: "with Tax",
+  barcode: "",
+  category: "",
+  description: "",
+  openingQuantity: "0",
+  openingPurchasePrice: "0",
+  openingStockValue: "0",
+  discountValue: "0",
+  discountType: "percentage",
+  lowStockAlert: "0",
+  showInOnlineStore: true,
+  notForSale: false,
+};
+
+const BLANK_VARIANT = {
+  name: "",
+  sku: "",
+  attributes: {},
+  purchasePrice: 0,
+  sellingPrice: 0,
+  stock: 0,
+  isActive: true,
+};
+
 export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
   const [type, setType] = useState("Product");
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [activeTab, setActiveTab] = useState("Details");
 
-  // Same source the full ItemForm's category picker would use.
+  // Form State
+  const [form, setForm] = useState(BLANK_FORM);
+
+  // Variant state
+  const [variants, setVariants] = useState([]);
+  const [showVariantForm, setShowVariantForm] = useState(false);
+  const [currentVariant, setCurrentVariant] = useState(BLANK_VARIANT);
+  const [variantIndex, setVariantIndex] = useState(null);
+
   useEffect(() => {
     if (!isOpen) return;
+    setActiveTab("Details");
+    setShowMoreDetails(false);
+    setType("Product");
+    setForm(BLANK_FORM);
+    setVariants([]);
+    setShowVariantForm(false);
+    setCurrentVariant(BLANK_VARIANT);
+    setVariantIndex(null);
     API.get("/items/categories")
       .then((res) => setCategories(res.data || []))
       .catch((err) => console.error("Failed to load item categories:", err));
   }, [isOpen]);
 
-  // Form State
-  const [form, setForm] = useState({
-    name: "",
-    sellingPrice: "",
-    sellingPriceTax: "without Tax",
-    taxPercent: "0",
-    taxType: "(0% CGST & 0% SGST, 0% IGST)",
-    primaryUnit: "",
-    hsnSac: "",
-    purchasePrice: "",
-    purchasePriceTax: "with Tax",
-    barcode: "",
-    category: "",
-    description: "",
-    // Opening Stock and More Details fields below aren't in the Item
-    // backend schema yet — they're UI-only for now (matched to the
-    // reference layout) and don't go into the create payload.
-    openingQuantity: "0",
-    openingPurchasePrice: "0",
-    openingStockValue: "0",
-    discountValue: "0",
-    discountType: "percentage",
-    lowStockAlert: "0",
-    showInOnlineStore: true,
-    notForSale: false,
-  });
-
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleVariantChange = (e) => {
+    const { name, value, type: inputType, checked } = e.target;
+    setCurrentVariant((prev) => ({
+      ...prev,
+      [name]:
+        inputType === "checkbox"
+          ? checked
+          : name === "stock" || name.includes("Price")
+          ? value === "" ? "" : parseFloat(value)
+          : value,
+    }));
+  };
+
+  const generateVariantSku = () => {
+    const base = form.name
+      ? form.name.replace(/[^a-zA-Z]/g, "").substring(0, 3).toUpperCase() || "ITM"
+      : "ITM";
+    const attrValues = Object.values(currentVariant.attributes || {}).filter((v) => v.trim());
+    const attrPart = attrValues.length
+      ? "-" + attrValues.map((v) => v.replace(/[^a-zA-Z0-9]/g, "").substring(0, 3).toUpperCase()).join("-")
+      : "-" + Math.random().toString(36).substring(2, 7).toUpperCase();
+    setCurrentVariant((prev) => ({ ...prev, sku: base + attrPart }));
+  };
+
+  const handleAddVariant = () => {
+    if (!currentVariant.name.trim()) {
+      toast.error("Variant name is required");
+      return;
+    }
+    const updated =
+      variantIndex !== null
+        ? variants.map((v, i) => (i === variantIndex ? currentVariant : v))
+        : [...variants, currentVariant];
+    setVariants(updated);
+    setShowVariantForm(false);
+    setCurrentVariant(BLANK_VARIANT);
+    setVariantIndex(null);
+  };
+
+  const handleEditVariant = (index) => {
+    setCurrentVariant(variants[index]);
+    setVariantIndex(index);
+    setShowVariantForm(true);
+  };
+
+  const handleRemoveVariant = (index) => {
+    setVariants((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const generateBarcode = () => {
+    const ts = Date.now();
+    const rnd = Math.floor(Math.random() * 10000);
+    handleChange("barcode", `${ts}${rnd}`.slice(-12));
   };
 
   // Maps this drawer's fields onto the Item model's shape (see ItemForm.jsx),
@@ -81,6 +163,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
         primaryUnit: form.primaryUnit || "OTH OTHERS",
         images: [],
         isActive: true,
+        variants,
       };
       const res = await API.post("/items", payload);
       toast.success("Item added successfully!");
@@ -96,477 +179,464 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
 
   if (!isOpen) return null;
 
+  /* shared input style matching old ItemForm exactly */
+  const inp = "w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400";
+  const lbl = "block text-xs font-semibold text-gray-700 mb-1.5";
+
   return (
     <div className="fixed inset-0 z-[100005] flex justify-end">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Drawer */}
-      <div className="relative w-full max-w-[900px] bg-[#F9FAFB] h-full flex flex-col shadow-2xl animate-slide-in-right transform transition-transform duration-300">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 flex-shrink-0">
-          <div className="flex items-center gap-3">
+      <div className="relative w-full max-w-[860px] bg-[#F9FAFB] h-full flex flex-col shadow-2xl">
+        {/* ── Header ── */}
+        <div className="bg-white border-b border-gray-100 flex-shrink-0">
+          <div className="flex items-center justify-between px-6 py-4">
+            <div className="flex items-center gap-3">
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Add Item</h2>
+            </div>
             <button
-              onClick={onClose}
-              className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-[#0085FF] hover:bg-blue-600 text-white text-sm font-semibold px-5 py-2 rounded-full transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <X className="w-5 h-5" />
+              {saving ? "Adding…" : "Add Item"}
             </button>
-            <h2 className="text-xl font-bold text-gray-900">Add Item</h2>
           </div>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-5 py-2 bg-[#2563EB] text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {saving ? "Adding..." : "Add Item"}
-          </button>
+
+          {/* Tabs */}
+          <div className="flex items-center px-6 gap-0">
+            {TABS.map((tab) => {
+              const locked = tab !== "Details";
+              const isActive = activeTab === tab;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => !locked && setActiveTab(tab)}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                    isActive ? "border-blue-600 text-blue-600"
+                    : locked  ? "border-transparent text-gray-400 cursor-not-allowed"
+                              : "border-transparent text-gray-500 hover:text-gray-800"
+                  }`}
+                >
+                  {tab === "Attachments" && <Paperclip className="w-3.5 h-3.5" />}
+                  {tab}
+                  {locked && <Lock className="w-3 h-3" />}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Basic Details */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[13px] font-bold text-gray-800">Basic Details</h3>
-              <button className="flex items-center gap-1 text-[13px] font-medium text-gray-500 hover:text-gray-700">
-                <Plus className="w-4 h-4" /> Add Custom Fields
+        {/* ── Scrollable body ── */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+
+          {/* ── Basic Details card ── */}
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <span className="text-sm font-bold text-gray-900">Basic Details</span>
+              <button className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700">
+                <Plus className="w-3.5 h-3.5" /> Add Custom Fields
               </button>
             </div>
 
-            {/* Product / Service Toggle */}
-            <div className="inline-flex p-0.5 bg-gray-100 rounded-lg mb-5 border border-gray-200">
-              <button
-                onClick={() => setType("Product")}
-                className={`px-6 py-1.5 text-[13px] font-medium rounded-md transition-colors ${
-                  type === "Product"
-                    ? "bg-[#2563EB] text-white shadow"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Product
-              </button>
-              <button
-                onClick={() => setType("Service")}
-                className={`px-6 py-1.5 text-[13px] font-medium rounded-md transition-colors ${
-                  type === "Service"
-                    ? "bg-[#2563EB] text-white shadow"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Service
-              </button>
-            </div>
-
-            {/* Product Name */}
-            <div className="mb-5">
-              <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                <span className="text-red-500">*</span>Product Name
-              </label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => handleChange("name", e.target.value)}
-                placeholder="Enter Item Name"
-                className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-gray-400"
-              />
-            </div>
-
-            {/* Selling Price & Tax */}
-            <div className="grid grid-cols-2 gap-5 mb-5">
-              <div>
-                <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                  Selling Price
-                </label>
-                <div className="flex border border-gray-300 rounded-md focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden">
-                  <div className="flex items-center justify-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 font-medium">
-                    ₹
-                  </div>
-                  <input
-                    type="number"
-                    value={form.sellingPrice}
-                    onChange={(e) => handleChange("sellingPrice", e.target.value)}
-                    placeholder="Enter Selling Price"
-                    className="flex-1 h-10 px-3 text-[13px] focus:outline-none placeholder:text-gray-400 min-w-0"
-                  />
-                  <select
-                    value={form.sellingPriceTax}
-                    onChange={(e) => handleChange("sellingPriceTax", e.target.value)}
-                    className="h-10 px-2 bg-gray-50 border-l border-gray-300 text-[13px] text-gray-600 focus:outline-none"
+            <div className="px-5 py-5 space-y-5">
+              {/* Product / Service toggle */}
+              <div className="inline-flex p-0.5 bg-gray-100 rounded-lg border border-gray-200">
+                {["Product", "Service"].map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setType(t)}
+                    className={`px-6 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                      type === t ? "bg-[#0085FF] text-white shadow" : "text-gray-600 hover:text-gray-900"
+                    }`}
                   >
-                    <option value="without Tax">without Tax</option>
-                    <option value="with Tax">with Tax</option>
-                  </select>
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              {/* Item Name */}
+              <div>
+                <label className={lbl}>Item Name <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => handleChange("name", e.target.value)}
+                  placeholder="Enter Item Name"
+                  className={inp}
+                />
+              </div>
+
+              {/* Selling Price + Tax % */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={lbl}>Selling Price</label>
+                  <div className="flex border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+                    <span className="flex items-center px-3 bg-gray-50 border-r border-gray-200 text-gray-500 text-sm">₹</span>
+                    <input
+                      type="number"
+                      value={form.sellingPrice}
+                      onChange={(e) => handleChange("sellingPrice", e.target.value)}
+                      onWheel={(e) => e.target.blur()}
+                      placeholder="0"
+                      className="flex-1 px-3 py-2.5 text-sm focus:outline-none min-w-0 bg-white"
+                    />
+                    <select
+                      value={form.sellingPriceTax}
+                      onChange={(e) => handleChange("sellingPriceTax", e.target.value)}
+                      className="px-2 py-2.5 bg-gray-50 border-l border-gray-200 text-xs text-gray-600 focus:outline-none"
+                    >
+                      <option value="without Tax">without Tax</option>
+                      <option value="with Tax">with Tax</option>
+                    </select>
+                  </div>
+                  <p className="mt-1 text-[11px] text-gray-500">Exclusive of Taxes</p>
                 </div>
-                <div className="mt-1.5 text-[11px] font-semibold text-gray-700">
-                  Exclusive of Taxes
+
+                <div>
+                  <label className={lbl}>Tax % <span className="text-red-500">*</span></label>
+                  <div className="flex border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 bg-white">
+                    <input
+                      type="number"
+                      value={form.taxPercent}
+                      onChange={(e) => handleChange("taxPercent", e.target.value)}
+                      onWheel={(e) => e.target.blur()}
+                      className="w-14 px-3 py-2.5 text-sm focus:outline-none"
+                    />
+                    <select
+                      value={form.taxType}
+                      onChange={(e) => handleChange("taxType", e.target.value)}
+                      className="flex-1 px-2 py-2.5 bg-white border-l border-gray-200 text-xs text-gray-600 focus:outline-none truncate"
+                    >
+                      <option value="(0% CGST & 0% SGST, 0% IGST)">(0% CGST & 0% SGST, 0% IGST)</option>
+                      <option value="(5% CGST & 5% SGST, 5% IGST)">(5% CGST & 5% SGST, 5% IGST)</option>
+                      <option value="(6% CGST & 6% SGST, 12% IGST)">(6% CGST & 6% SGST, 12% IGST)</option>
+                      <option value="(9% CGST & 9% SGST, 18% IGST)">(9% CGST & 9% SGST, 18% IGST)</option>
+                      <option value="(14% CGST & 14% SGST, 28% IGST)">(14% CGST & 14% SGST, 28% IGST)</option>
+                    </select>
+                  </div>
+                  <p className="mt-1 text-[11px] text-blue-600 cursor-pointer hover:underline">Zero Rated (Default)</p>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                  <span className="text-red-500">*</span>Tax %
-                </label>
-                <div className="flex border border-gray-300 rounded-md focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden bg-white">
-                  <input
-                    type="number"
-                    value={form.taxPercent}
-                    onChange={(e) => handleChange("taxPercent", e.target.value)}
-                    className="w-16 h-10 px-3 text-[13px] focus:outline-none min-w-0"
-                  />
-                  <select
-                    value={form.taxType}
-                    onChange={(e) => handleChange("taxType", e.target.value)}
-                    className="flex-1 h-10 px-2 bg-white text-[13px] text-gray-600 focus:outline-none truncate"
-                  >
-                    <option value="(0% CGST & 0% SGST, 0% IGST)">
-                      (0% CGST & 0% SGST, 0% IGST)
-                    </option>
-                    <option value="(9% CGST & 9% SGST, 18% IGST)">
-                      (9% CGST & 9% SGST, 18% IGST)
-                    </option>
-                  </select>
-                </div>
-                <div className="mt-1.5 text-[11px] font-medium text-blue-600 hover:underline cursor-pointer">
-                  Zero Rated (Default)
-                </div>
-              </div>
-            </div>
-
-            {/* Primary Unit */}
-            <div className="w-1/2 pr-2.5">
-              <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                Primary Unit
-              </label>
-              <input
-                type="text"
-                value={form.primaryUnit}
-                onChange={(e) => handleChange("primaryUnit", e.target.value)}
-                className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Additional Information */}
-          <div>
-            <h3 className="text-[13px] font-bold text-gray-600 uppercase tracking-wider mb-3">
-              Additional Information <span className="font-normal text-gray-400">OPTIONAL</span>
-            </h3>
-
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-5">
-              {/* Row 1 */}
-              <div className="grid grid-cols-2 gap-5">
+              {/* Purchase Price + Primary Unit */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                    HSN/SAC
-                  </label>
-                  <input
-                    type="text"
-                    value={form.hsnSac}
-                    onChange={(e) => handleChange("hsnSac", e.target.value)}
-                    placeholder="HSN/SAC"
-                    className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-gray-400"
-                  />
-                  <div className="mt-1.5 text-[11px] font-medium text-blue-600 hover:underline cursor-pointer">
-                    Click here to check GST approved HSN/SAC codes.
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                    Purchase Price
-                  </label>
-                  <div className="flex border border-gray-300 rounded-md focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden bg-white">
+                  <label className={lbl}>Purchase Price</label>
+                  <div className="flex border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+                    <span className="flex items-center px-3 bg-gray-50 border-r border-gray-200 text-gray-500 text-sm">₹</span>
                     <input
                       type="number"
                       value={form.purchasePrice}
                       onChange={(e) => handleChange("purchasePrice", e.target.value)}
-                      className="flex-1 h-10 px-3 text-[13px] focus:outline-none min-w-0"
+                      onWheel={(e) => e.target.blur()}
+                      placeholder="0"
+                      className="flex-1 px-3 py-2.5 text-sm focus:outline-none bg-white"
                     />
                     <select
                       value={form.purchasePriceTax}
                       onChange={(e) => handleChange("purchasePriceTax", e.target.value)}
-                      className="h-10 px-2 bg-gray-50 border-l border-gray-300 text-[13px] text-gray-600 focus:outline-none"
+                      className="px-2 py-2.5 bg-gray-50 border-l border-gray-200 text-xs text-gray-600 focus:outline-none"
                     >
                       <option value="with Tax">with Tax</option>
                       <option value="without Tax">without Tax</option>
                     </select>
                   </div>
                 </div>
+
+                <div>
+                  <label className={lbl}>Primary Unit</label>
+                  <select
+                    value={form.primaryUnit}
+                    onChange={(e) => handleChange("primaryUnit", e.target.value)}
+                    className={inp + " appearance-none cursor-pointer"}
+                  >
+                    <option value="">Select Unit</option>
+                    <option value="OTH OTHERS">OTH — OTHERS</option>
+                    <option value="PCS PIECES">PCS — PIECES</option>
+                    <option value="NOS NUMBERS">NOS — NUMBERS</option>
+                    <option value="KGS KILOGRAMS">KGS — KILOGRAMS</option>
+                    <option value="GMS GRAMS">GMS — GRAMS</option>
+                    <option value="LTR LITRES">LTR — LITRES</option>
+                    <option value="MTR METRES">MTR — METRES</option>
+                    <option value="BOX BOX">BOX — BOX</option>
+                    <option value="PKT PACKET">PKT — PACKET</option>
+                    <option value="SET SET">SET — SET</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Row 2 */}
-              <div className="grid grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                    Barcode
-                  </label>
-                  <div className="flex border border-gray-300 rounded-md focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden bg-white">
-                    <input
-                      type="text"
-                      value={form.barcode}
-                      onChange={(e) => handleChange("barcode", e.target.value)}
-                      placeholder="2273546838467"
-                      className="flex-1 h-10 px-3 text-[13px] focus:outline-none placeholder:text-gray-300 min-w-0"
-                    />
-                    <button className="flex items-center gap-1.5 h-10 px-4 bg-gray-50 border-l border-gray-300 text-[13px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors">
-                      <Wand2 className="w-4 h-4 text-gray-500" /> Auto Generate
+              {/* ── Variants ── */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className={lbl + " mb-0"}>Variants</label>
+                  {!showVariantForm && (
+                    <button
+                      type="button"
+                      onClick={() => { setCurrentVariant(BLANK_VARIANT); setVariantIndex(null); setShowVariantForm(true); }}
+                      className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Variant
                     </button>
+                  )}
+                </div>
+
+                {showVariantForm && (
+                  <div className="border border-gray-200 rounded-xl bg-white mb-3 shadow-sm">
+                    <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                      <span className="text-sm font-semibold text-gray-900">
+                        {variantIndex !== null ? "Edit Variant" : "Add Variant"}
+                      </span>
+                      <button type="button" onClick={() => { setShowVariantForm(false); setCurrentVariant(BLANK_VARIANT); setVariantIndex(null); }} className="text-gray-400 hover:text-gray-600">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <label className={lbl}>Variant Name <span className="text-red-500">*</span></label>
+                        <input type="text" name="name" value={currentVariant.name} onChange={handleVariantChange} placeholder="Enter Variant Name" className={inp} />
+                      </div>
+                      <div>
+                        <label className={lbl}>SKU</label>
+                        <div className="flex gap-2">
+                          <input type="text" name="sku" value={currentVariant.sku} onChange={handleVariantChange} placeholder="Enter or Generate SKU" className={inp} />
+                          <button type="button" onClick={generateVariantSku} className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-4 py-2.5 rounded-full transition-colors whitespace-nowrap">Generate</button>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className={lbl + " mb-0"}>Attributes</label>
+                          <button type="button" onClick={() => setCurrentVariant((p) => ({ ...p, attributes: { ...p.attributes, "": "" } }))} className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
+                            <Plus className="w-3.5 h-3.5" /> Add Attribute
+                          </button>
+                        </div>
+                        {Object.keys(currentVariant.attributes || {}).length > 0 && (
+                          <div className="space-y-2">
+                            {Object.entries(currentVariant.attributes).map(([key, val], idx) => (
+                              <div key={idx} className="flex gap-2 items-center">
+                                <input type="text" value={key} onChange={(e) => { const nk = e.target.value; setCurrentVariant((p) => { const a = { ...p.attributes }; const v = a[key]; delete a[key]; a[nk] = v; return { ...p, attributes: a }; }); }} placeholder="Name (e.g. color)" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                <input type="text" value={val} onChange={(e) => setCurrentVariant((p) => ({ ...p, attributes: { ...p.attributes, [key]: e.target.value } }))} placeholder="Value (e.g. Red)" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                <button type="button" onClick={() => setCurrentVariant((p) => { const a = { ...p.attributes }; delete a[key]; return { ...p, attributes: a }; })} className="text-red-500 hover:text-red-600 p-1"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className={lbl}>Purchase Price <span className="text-red-500">*</span></label>
+                          <input type="number" name="purchasePrice" min="0" value={currentVariant.purchasePrice} onChange={handleVariantChange} onWheel={(e) => e.target.blur()} placeholder="0" className={inp} />
+                        </div>
+                        <div>
+                          <label className={lbl}>Selling Price <span className="text-red-500">*</span></label>
+                          <input type="number" name="sellingPrice" min="0" value={currentVariant.sellingPrice} onChange={handleVariantChange} onWheel={(e) => e.target.blur()} placeholder="0" className={inp} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className={lbl}>Stock</label>
+                        <input type="number" name="stock" min="0" value={currentVariant.stock} onChange={handleVariantChange} onWheel={(e) => e.target.blur()} className={inp} />
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <input type="checkbox" id="vActive" name="isActive" checked={currentVariant.isActive !== false} onChange={(e) => setCurrentVariant((p) => ({ ...p, isActive: e.target.checked }))} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                        <label htmlFor="vActive" className="text-sm font-medium text-gray-900 cursor-pointer">Active</label>
+                      </div>
+                      <div className="flex gap-3 pt-2">
+                        <button type="button" onClick={() => { setShowVariantForm(false); setCurrentVariant(BLANK_VARIANT); setVariantIndex(null); }} className="flex-1 border border-red-200 text-red-500 font-medium rounded-full hover:bg-red-50 py-2.5 text-sm transition-colors">Cancel</button>
+                        <button type="button" onClick={handleAddVariant} className="flex-1 bg-[#0085FF] hover:bg-blue-600 text-white font-semibold rounded-full py-2.5 text-sm transition-colors shadow-sm">{variantIndex !== null ? "Update Variant" : "Add Variant"}</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {!showVariantForm && variants.length === 0 && (
+                  <div className="px-4 py-3 border border-dashed border-gray-200 rounded-xl text-xs text-gray-400 text-center">No Variants Added</div>
+                )}
+                {!showVariantForm && variants.length > 0 && (
+                  <div className="space-y-2">
+                    {variants.map((v, i) => (
+                      <div key={i} className="flex justify-between items-center bg-gray-50 border border-gray-100 rounded-lg p-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">{v.name}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">SKU: {v.sku || "N/A"} · ₹{v.sellingPrice} · Stock: {v.stock}</div>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0 ml-3">
+                          <button type="button" onClick={() => handleEditVariant(i)} className="text-blue-600 hover:text-blue-700 p-1.5 rounded hover:bg-blue-50 transition-colors"><Edit2 className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => handleRemoveVariant(i)} className="text-red-600 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Additional Information card ── */}
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Additional Information</span>
+              <span className="ml-2 text-xs text-gray-400">Optional</span>
+            </div>
+            <div className="px-5 py-5 space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={lbl}>HSN/SAC</label>
+                  <input type="text" value={form.hsnSac} onChange={(e) => handleChange("hsnSac", e.target.value)} placeholder="Enter HSN/SAC Code" className={inp} />
+                  <p className="mt-1 text-[11px] text-blue-600 cursor-pointer hover:underline">Click here to check GST approved HSN/SAC codes.</p>
+                </div>
+                <div>
+                  <label className={lbl}>Category</label>
+                  <input type="text" list="qid-categories" value={form.category} onChange={(e) => handleChange("category", e.target.value)} placeholder="Select or type a category" className={inp} />
+                  <datalist id="qid-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={lbl}>Barcode</label>
+                  <div className="flex gap-2">
+                    <input type="text" value={form.barcode} onChange={(e) => handleChange("barcode", e.target.value)} placeholder="Enter or Generate Barcode" className={inp} />
+                    <button type="button" onClick={generateBarcode} className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap">Generate</button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                    Category
-                  </label>
-                  {/* Text input + datalist so an existing category (fetched
-                      from GET /items/categories) can be picked, or a new one
-                      typed in — a plain <select> can't offer both. */}
-                  <input
-                    type="text"
-                    list="quick-item-categories"
-                    value={form.category}
-                    onChange={(e) => handleChange("category", e.target.value)}
-                    placeholder="Select or type a category"
-                    className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white placeholder:text-gray-400"
-                  />
-                  <datalist id="quick-item-categories">
-                    {categories.map((cat) => (
-                      <option key={cat} value={cat} />
-                    ))}
-                  </datalist>
+                  <label className={lbl}>Description</label>
+                  <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
+                    <ReactQuill
+                      theme="snow"
+                      value={form.description}
+                      onChange={(val) => handleChange("description", val)}
+                      placeholder="Add product description…"
+                      className="h-[90px] [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-100 [&_.ql-container]:border-none text-sm"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Images */}
+              {/* Images upload placeholder */}
               <div>
-                <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                  Product Images & Videos
-                </label>
-                <div className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-xl bg-[#FAFAFA] flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 hover:border-gray-400 transition-colors cursor-pointer mb-2">
-                  <Plus className="w-5 h-5 mb-1" />
-                  <span className="text-[12px] font-medium">Upload</span>
-                </div>
-                <p className="text-[11px] text-gray-500 leading-snug">
-                  Upload up to 10 files (3MB per image, 50MB per video).<br/>
-                  Images: 1024×1024 recommended. Videos: 9:16 or 1:1 (min 1000×1000px).
-                </p>
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                  Description
-                </label>
-                <div className="border border-gray-300 rounded-md bg-white overflow-hidden">
-                  <ReactQuill
-                    theme="snow"
-                    value={form.description}
-                    onChange={(val) => handleChange("description", val)}
-                    placeholder="Add product description here..."
-                    className="h-28 [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-200 [&_.ql-container]:border-none text-[13px]"
-                  />
+                <label className={lbl}>Product Images &amp; Videos</label>
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 hover:border-gray-300 cursor-pointer transition-colors">
+                    <Plus className="w-5 h-5 mb-1" />
+                    <span className="text-[11px] font-medium">Upload</span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 leading-relaxed">Up to 10 files · 3 MB/image · 50 MB/video<br />Images: 1024×1024 recommended</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Opening Stock */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[13px] font-bold text-gray-600 uppercase tracking-wider">
-                Opening Stock <span className="font-normal text-gray-400">OPTIONAL</span>
-              </h3>
-              <button
-                type="button"
-                disabled
-                title="Upgrade to track batches"
-                className="flex items-center gap-1.5 text-[12px] font-medium text-gray-400 cursor-not-allowed"
-              >
-                <Lock className="w-3.5 h-3.5" /> Add batches
+          {/* ── Opening Stock card ── */}
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Opening Stock</span>
+                <span className="ml-2 text-xs text-gray-400">Optional</span>
+              </div>
+              <button type="button" disabled title="Upgrade to track batches" className="flex items-center gap-1 text-xs font-medium text-gray-400 cursor-not-allowed">
+                <Lock className="w-3 h-3" /> Add batches
               </button>
             </div>
-
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-              <div className="grid grid-cols-2 gap-5">
+            <div className="px-5 py-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                    Opening Quantity
-                  </label>
-                  <input
-                    type="number"
-                    value={form.openingQuantity}
-                    onChange={(e) => handleChange("openingQuantity", e.target.value)}
-                    className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                  <div className="mt-1.5 text-[11px] text-gray-500">
-                    *Quantity of the product available in your existing inventory
-                  </div>
+                  <label className={lbl}>Opening Quantity</label>
+                  <input type="number" min="0" value={form.openingQuantity} onChange={(e) => handleChange("openingQuantity", e.target.value)} onWheel={(e) => e.target.blur()} className={inp} />
+                  <p className="mt-1 text-[11px] text-gray-400">Quantity available in your existing inventory</p>
                 </div>
                 <div>
-                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                    Opening Purchase Price (with tax)
-                  </label>
-                  <input
-                    type="number"
-                    value={form.openingPurchasePrice}
-                    onChange={(e) => handleChange("openingPurchasePrice", e.target.value)}
-                    className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
+                  <label className={lbl}>Opening Purchase Price (with tax)</label>
+                  <input type="number" min="0" value={form.openingPurchasePrice} onChange={(e) => handleChange("openingPurchasePrice", e.target.value)} onWheel={(e) => e.target.blur()} className={inp} />
                 </div>
               </div>
-
-              <div className="mt-5 w-1/2 pr-2.5">
-                <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                  Opening Stock Value (with tax)
-                </label>
-                <input
-                  type="number"
-                  value={form.openingStockValue}
-                  onChange={(e) => handleChange("openingStockValue", e.target.value)}
-                  className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
+              <div className="w-1/2 pr-2">
+                <label className={lbl}>Opening Stock Value (with tax)</label>
+                <input type="number" min="0" value={form.openingStockValue} onChange={(e) => handleChange("openingStockValue", e.target.value)} onWheel={(e) => e.target.blur()} className={inp} />
               </div>
             </div>
           </div>
 
-          {/* More Details */}
-          <div className="border border-[#FDE3CC] bg-[#FFF8F1] rounded-xl overflow-hidden">
-            <div
-              className="p-4 flex items-start gap-2 cursor-pointer"
-              onClick={() => setShowMoreDetails(!showMoreDetails)}
-            >
-              <ChevronRight className={`w-5 h-5 text-gray-600 transition-transform flex-shrink-0 mt-0.5 ${showMoreDetails ? "rotate-90" : ""}`} />
+          {/* ── More Details collapsible ── */}
+          <div className="border border-[#FDE3CC] bg-[#FFF8F1] rounded-2xl overflow-hidden">
+            <button type="button" className="w-full p-4 flex items-center gap-3 text-left" onClick={() => setShowMoreDetails(!showMoreDetails)}>
+              <ChevronRight className={`w-4 h-4 text-gray-500 transition-transform flex-shrink-0 ${showMoreDetails ? "rotate-90" : ""}`} />
               <div>
-                <h4 className="text-[14px] font-bold text-gray-900 mb-1">More Details?</h4>
-                <p className="text-[12px] text-gray-700">
-                  Cess, Show Online Discount, Inventory tracking, Low stock alerts etc..
-                </p>
+                <p className="text-sm font-bold text-gray-900">More Details?</p>
+                <p className="text-xs text-gray-500 mt-0.5">Cess, Online Store visibility, Low stock alerts, Discount settings…</p>
               </div>
-            </div>
+            </button>
             {showMoreDetails && (
-              <div className="p-5 border-t border-[#FDE3CC] bg-white grid grid-cols-2 gap-x-5 gap-y-5">
-                {/* Discount */}
+              <div className="border-t border-[#FDE3CC] bg-white px-5 py-5 grid grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                    Discount
-                  </label>
-                  <div className="flex border border-gray-300 rounded-md focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden bg-white">
-                    <input
-                      type="number"
-                      min="0"
-                      value={form.discountValue}
-                      onChange={(e) => handleChange("discountValue", e.target.value)}
-                      className="flex-1 h-10 px-3 text-[13px] focus:outline-none min-w-0"
-                    />
-                    <select
-                      value={form.discountType}
-                      onChange={(e) => handleChange("discountType", e.target.value)}
-                      className="h-10 px-2 bg-gray-50 border-l border-gray-300 text-[13px] text-gray-600 focus:outline-none"
-                    >
-                      <option value="percentage">Percentage (%)</option>
-                      <option value="amount">Amount</option>
+                  <label className={lbl}>Discount</label>
+                  <div className="flex border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 bg-white">
+                    <input type="number" min="0" value={form.discountValue} onChange={(e) => handleChange("discountValue", e.target.value)} className="flex-1 px-3 py-2.5 text-sm focus:outline-none" />
+                    <select value={form.discountType} onChange={(e) => handleChange("discountType", e.target.value)} className="px-2 py-2.5 bg-gray-50 border-l border-gray-200 text-xs text-gray-600 focus:outline-none">
+                      <option value="percentage">% Percentage</option>
+                      <option value="amount">₹ Amount</option>
                     </select>
                   </div>
-                  <p className="mt-1.5 text-[11px] text-gray-500 leading-snug">
-                    Discount will be calculated based on the selected option. In Online Store, discount will be shown as per the selected option.
-                  </p>
+                  <p className="mt-1 text-[11px] text-gray-400">Applied in Online Store and invoices.</p>
                 </div>
 
-                {/* Max Discount % Allowed — premium/locked */}
                 <div>
-                  <label className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-700 mb-1.5">
-                    Max Discount % Allowed <Lock className="w-3 h-3 text-gray-400" />
-                  </label>
-                  <input
-                    type="text"
-                    disabled
-                    placeholder="eg. 10"
-                    className="w-full h-10 px-3 border border-gray-200 rounded-md text-[13px] bg-gray-100 text-gray-400 placeholder:text-gray-400 cursor-not-allowed"
-                  />
-                  <p className="mt-1.5 text-[11px] text-gray-500 leading-snug">
-                    Upgrade to set a per-product discount limit. You can configure the company-level setting <span className="text-blue-600 hover:underline cursor-pointer">here</span>.
-                  </p>
+                  <label className={lbl + " flex items-center gap-1"}>Max Discount % <Lock className="w-3 h-3 text-gray-400" /></label>
+                  <input type="text" disabled placeholder="e.g. 10" className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-100 text-gray-400 cursor-not-allowed" />
+                  <p className="mt-1 text-[11px] text-gray-400">Upgrade to set per-product discount limits.</p>
                 </div>
 
-                {/* Low Stock Alert */}
                 <div>
-                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                    Low Stock Alert at
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.lowStockAlert}
-                    onChange={(e) => handleChange("lowStockAlert", e.target.value)}
-                    className="w-full h-10 px-3 border border-gray-300 rounded-md text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                  <p className="mt-1.5 text-[11px] text-gray-500 leading-snug">
-                    You will be notified once the stock reaches the minimum stock qty. (BETA)
-                  </p>
+                  <label className={lbl}>Low Stock Alert at</label>
+                  <input type="number" min="0" value={form.lowStockAlert} onChange={(e) => handleChange("lowStockAlert", e.target.value)} onWheel={(e) => e.target.blur()} className={inp} />
+                  <p className="mt-1 text-[11px] text-gray-400">Get notified when stock falls to this level.</p>
                 </div>
 
-                {/* Show in Online Store */}
                 <div>
-                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                    Show in Online Store
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handleChange("showInOnlineStore", !form.showInOnlineStore)}
-                    className="flex-shrink-0"
-                  >
-                    <span
-                      className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${form.showInOnlineStore ? "bg-green-500" : "bg-gray-300"}`}
-                    >
-                      <span
-                        className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.showInOnlineStore ? "translate-x-4" : "translate-x-0"}`}
-                      />
+                  <label className={lbl}>Show in Online Store</label>
+                  <button type="button" onClick={() => handleChange("showInOnlineStore", !form.showInOnlineStore)} className="flex items-center gap-2 mt-1">
+                    <span className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${form.showInOnlineStore ? "bg-green-500" : "bg-gray-300"}`}>
+                      <span className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.showInOnlineStore ? "translate-x-4" : "translate-x-0"}`} />
                     </span>
+                    <span className="text-sm text-gray-600">{form.showInOnlineStore ? "Visible" : "Hidden"}</span>
                   </button>
-                  <p className="mt-1.5 text-[11px] text-gray-500 leading-snug">
-                    Show or hide the product in catalogue/ online store
-                  </p>
+                  <p className="mt-1.5 text-[11px] text-gray-400">Show/hide in catalogue or online store.</p>
                 </div>
 
-                {/* Not For Sale */}
                 <div className="col-span-2">
-                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
-                    Not For Sale
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handleChange("notForSale", !form.notForSale)}
-                    className="flex-shrink-0"
-                  >
-                    <span
-                      className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${form.notForSale ? "bg-green-500" : "bg-gray-300"}`}
-                    >
-                      <span
-                        className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.notForSale ? "translate-x-4" : "translate-x-0"}`}
-                      />
+                  <label className={lbl}>Not For Sale</label>
+                  <button type="button" onClick={() => handleChange("notForSale", !form.notForSale)} className="flex items-center gap-2 mt-1">
+                    <span className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${form.notForSale ? "bg-green-500" : "bg-gray-300"}`}>
+                      <span className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.notForSale ? "translate-x-4" : "translate-x-0"}`} />
                     </span>
+                    <span className="text-sm text-gray-600">{form.notForSale ? "Hidden from sale" : "Available for sale"}</span>
                   </button>
-                  <p className="mt-1.5 text-[11px] text-gray-500 leading-snug">
-                    Hides the item for sale and shows only while making a purchase. eg. Office equipment
-                  </p>
+                  <p className="mt-1.5 text-[11px] text-gray-400">Hides the item from sale (e.g. office equipment).</p>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="pb-10" />
+          <div className="pb-8" />
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 bg-white border-t border-gray-200 flex-shrink-0">
+        {/* ── Footer ── */}
+        <div className="flex items-center justify-between px-6 py-4 bg-white border-t border-gray-100 flex-shrink-0">
+          <button type="button" onClick={onClose} className="px-5 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-full hover:bg-gray-50 transition-colors">
+            Cancel
+          </button>
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
-            className="px-6 py-2.5 bg-[#2563EB] text-white text-[13px] font-semibold rounded-md hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            className="px-8 py-2 bg-[#0085FF] hover:bg-blue-600 text-white text-sm font-semibold rounded-full transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {saving ? "Adding..." : "Add Item"}
+            {saving ? "Adding…" : "Add Item"}
           </button>
         </div>
       </div>

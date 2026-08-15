@@ -36,6 +36,7 @@ export const blankItem = () => ({
   parentItemId: null,
   discountType: "amount",
   discount: 0,
+  gstRate: 0,
 });
 
 // Same shape as the backend's postalAddressSchema (Invoice/ProformaInvoice/

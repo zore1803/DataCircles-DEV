@@ -365,9 +365,10 @@ const InvoiceFormFull = ({
     status: "Draft",
     style: "Regular",
     isTaxInvoice: false,
-        gstRate: 18,
-        transactionType: "intra",
-    isRoundOff: true,
+    gstRate: 18,
+    transactionType: "intra",
+    isRoundOff: false,
+    hideTotals: false,
     notes: "",
     terms: "",
     attachments: [],
@@ -532,7 +533,8 @@ const InvoiceFormFull = ({
         amount: sourceData.amount || 0,
         status: sourceData.status || "Draft",
         style: sourceData.style || "Regular",
-        isRoundOff: sourceData.isRoundOff !== undefined ? sourceData.isRoundOff : true,
+        isRoundOff: sourceData.isRoundOff !== undefined ? sourceData.isRoundOff : false,
+        hideTotals: sourceData.hideTotals || false,
         isTaxInvoice: sourceData.isTaxInvoice || false,
         transactionType: sourceData.transactionType || "intra",
         notes: sourceData.notes || "",
@@ -561,7 +563,6 @@ const InvoiceFormFull = ({
         style: "Regular",
         isTaxInvoice: false,
         gstRate: 18,
-        transactionType: "intra",
         transactionType: "intra",
         notes: "",
         terms: "",
@@ -646,7 +647,7 @@ const InvoiceFormFull = ({
       if (discount.type === "percentage") {
         return (subtotalAfterItemDiscounts * discount.value) / 100;
       }
-      return discount.value;
+      return parseFloat(discount.value) || 0;
     }
     return 0;
   };
@@ -1567,9 +1568,10 @@ const InvoiceFormFull = ({
                 <>
               {/* Column Headers */}
               <div className="grid grid-cols-12 gap-4 pb-2 border-b border-gray-100 text-xs font-semibold text-gray-500">
-                <div className="col-span-4">Product Name</div>
+                <div className="col-span-3">Product Name</div>
                 <div className="col-span-2 text-center">Quantity</div>
                 <div className="col-span-2 text-right">Unit Price</div>
+                <div className="col-span-1 text-center">GST %</div>
                 <div className="col-span-2 text-center">Discount</div>
                 <div className="col-span-2 text-right">Total</div>
               </div>
@@ -1586,7 +1588,7 @@ const InvoiceFormFull = ({
 
                       <div className="grid grid-cols-12 gap-4 items-start">
                         {/* Product Name (Plain Input instead of Search) */}
-                        <div className="col-span-4">
+                        <div className="col-span-3">
                           <input
                             type="text"
                             value={item.name || ""}
@@ -1631,6 +1633,24 @@ const InvoiceFormFull = ({
                             className="w-full text-right text-sm border border-gray-200 rounded-lg px-2 py-2.5 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                             required
                           />
+                        </div>
+
+                        {/* GST % */}
+                        <div className="col-span-1">
+                          <select
+                            value={item.gstRate ?? 0}
+                            onChange={(e) => {
+                              handleItemChange(index, "gstRate", parseFloat(e.target.value));
+                              setHasUnsavedChanges(true);
+                            }}
+                            className="w-full text-center text-sm border border-gray-200 rounded-lg px-1 py-2.5 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                          >
+                            <option value={0}>0%</option>
+                            <option value={5}>5%</option>
+                            <option value={12}>12%</option>
+                            <option value={18}>18%</option>
+                            <option value={28}>28%</option>
+                          </select>
                         </div>
 
                         {/* Discount */}
@@ -1872,18 +1892,18 @@ const InvoiceFormFull = ({
                     <div className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-2">
                         <span className="text-gray-600 font-medium">Round Off</span>
-                        <div className="relative">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer" 
-                            checked={form.isRoundOff} 
+                        <label className="relative cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={form.isRoundOff}
                             onChange={(e) => {
                               setForm(prev => ({ ...prev, isRoundOff: e.target.checked }));
                               setHasUnsavedChanges(true);
                             }}
                           />
                           <div className="w-8 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
-                        </div>
+                        </label>
                       </div>
                       <span className="text-gray-900 font-semibold">{formatNumberFixed(roundOffAmount)}</span>
                     </div>
@@ -1914,13 +1934,21 @@ const InvoiceFormFull = ({
 
                     <div className="flex justify-between items-center text-sm pt-1">
                       <span className="text-gray-500">Total Discount</span>
-                      <span className="text-gray-600 font-medium">₹{formatNumberFixed(totalItemDiscounts + invoiceDiscountAmount)}</span>
+                      <span className="text-gray-600 font-medium">₹{formatNumberFixed(totalItemDiscounts + invoiceDiscountAmount - roundOffAmount)}</span>
                     </div>
 
                     <div className="flex justify-end gap-2 text-xs pt-1">
                       <label className="flex items-center gap-1.5 cursor-pointer text-gray-500">
                         Hide Totals
-                        <input type="checkbox" className="rounded text-blue-600 focus:ring-blue-500" />
+                        <input
+                          type="checkbox"
+                          className="rounded text-blue-600 focus:ring-blue-500"
+                          checked={form.hideTotals}
+                          onChange={(e) => {
+                            setForm((p) => ({ ...p, hideTotals: e.target.checked }));
+                            setHasUnsavedChanges(true);
+                          }}
+                        />
                       </label>
                     </div>
                     
