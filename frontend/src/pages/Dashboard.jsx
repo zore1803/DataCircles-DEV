@@ -51,7 +51,6 @@ const HighlightText = ({ text, query }) => {
           part
         ),
       )}
-      )}
     </>
   );
 };
