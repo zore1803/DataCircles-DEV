@@ -16,7 +16,11 @@ const systemSettingsSchema = new mongoose.Schema(
     noteTypes: {
       type: [String],
       default: ['General Note', 'Meeting Note', 'Call Note', 'Follow-up Note'],
-    }
+    },
+    meetingTypes: {
+      type: [String],
+      default: ['General Meeting', 'Client Call', 'Demo', 'Follow-up'],
+    },
   },
   { timestamps: true }
 );

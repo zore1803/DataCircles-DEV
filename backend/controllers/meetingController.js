@@ -351,6 +351,7 @@ exports.createMeeting = async (req, res) => {
       duration,
       priority,
       meetingType,
+      meetingCategory,
       location,
       linkedTo,
       contactId,
@@ -471,10 +472,11 @@ exports.createMeeting = async (req, res) => {
     const meetingData = {
       title,
       description,
-      scheduledAt: normalizeDate(scheduledAt), // ✅ Apply normalization here
+      scheduledAt: normalizeDate(scheduledAt),
       duration: duration || 60,
       priority: priority || "medium",
       meetingType: meetingType || "in-person",
+      meetingCategory: meetingCategory || "",
       location: resolvedLocation,
       linkedTo,
       createdBy: req.user.id,
@@ -943,6 +945,7 @@ exports.updateMeeting = async (req, res) => {
       priority,
       status,
       meetingType,
+      meetingCategory,
       location,
       notes,
       outcome,
@@ -1015,6 +1018,7 @@ exports.updateMeeting = async (req, res) => {
     if (priority) meeting.priority = priority;
     if (status) meeting.status = status;
     if (meetingType) meeting.meetingType = meetingType;
+    if (meetingCategory !== undefined) meeting.meetingCategory = meetingCategory;
     if (location) meeting.location = location;
     if (notes) meeting.notes = notes;
     if (outcome) meeting.outcome = outcome;

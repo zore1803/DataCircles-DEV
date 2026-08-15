@@ -1,26 +1,31 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Lock, Loader2, Timer, FileText, Settings2, Edit3, X, Check } from "lucide-react";
+import { Plus, Trash2, Lock, Loader2, Timer, FileText, Settings2, Edit3, X, Check, CalendarDays } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 
 const DEFAULT_TASK_STATUSES = ["Pending", "In Progress", "Completed"];
 const DEFAULT_NOTE_TYPES = ["General Note", "Meeting Note", "Call Note", "Follow-up Note"];
+const DEFAULT_MEETING_TYPES = ["General Meeting", "Client Call", "Demo", "Follow-up"];
 
 function SystemDefaultsSettings() {
   const [taskStatuses, setTaskStatuses] = useState([]);
   const [noteTypes, setNoteTypes] = useState([]);
+  const [meetingTypes, setMeetingTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   // New items state
   const [newTaskStatus, setNewTaskStatus] = useState("");
   const [newNoteType, setNewNoteType] = useState("");
+  const [newMeetingType, setNewMeetingType] = useState("");
 
   // Edit states
   const [editingTaskIndex, setEditingTaskIndex] = useState(null);
   const [editTaskValue, setEditTaskValue] = useState("");
   const [editingNoteIndex, setEditingNoteIndex] = useState(null);
   const [editNoteValue, setEditNoteValue] = useState("");
+  const [editingMeetingIndex, setEditingMeetingIndex] = useState(null);
+  const [editMeetingValue, setEditMeetingValue] = useState("");
 
   useEffect(() => {
     fetchSettings();
@@ -33,9 +38,11 @@ function SystemDefaultsSettings() {
       // ensure defaults are present
       const fetchedStatuses = res.data?.taskStatuses || DEFAULT_TASK_STATUSES;
       const fetchedNotes = res.data?.noteTypes || DEFAULT_NOTE_TYPES;
-      
+      const fetchedMeetings = res.data?.meetingTypes || DEFAULT_MEETING_TYPES;
+
       setTaskStatuses(fetchedStatuses);
       setNoteTypes(fetchedNotes);
+      setMeetingTypes(fetchedMeetings);
     } catch (err) {
       console.error(err);
       toast.error("Failed to load system settings");
@@ -120,6 +127,50 @@ function SystemDefaultsSettings() {
     setEditingTaskIndex(null);
   };
 
+  const updateMeetingTypes = async (newTypes) => {
+    try {
+      setIsSaving(true);
+      const res = await API.put("/system-settings/meeting-types", { meetingTypes: newTypes });
+      setMeetingTypes(res.data.meetingTypes);
+      toast.success("Meeting types updated");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to update meeting types");
+      fetchSettings();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAddMeetingType = (e) => {
+    e.preventDefault();
+    if (!newMeetingType.trim()) return;
+    if (meetingTypes.includes(newMeetingType.trim())) {
+      toast.error("Meeting type already exists");
+      return;
+    }
+    const updated = [...meetingTypes, newMeetingType.trim()];
+    setNewMeetingType("");
+    updateMeetingTypes(updated);
+  };
+
+  const handleRemoveMeetingType = (type) => {
+    if (DEFAULT_MEETING_TYPES.includes(type)) return;
+    const updated = meetingTypes.filter(t => t !== type);
+    updateMeetingTypes(updated);
+  };
+
+  const handleEditMeetingSave = (index) => {
+    if (!editMeetingValue.trim()) return;
+    if (meetingTypes.includes(editMeetingValue.trim()) && editMeetingValue.trim() !== meetingTypes[index]) {
+      toast.error("Meeting type already exists");
+      return;
+    }
+    const updated = [...meetingTypes];
+    updated[index] = editMeetingValue.trim();
+    updateMeetingTypes(updated);
+    setEditingMeetingIndex(null);
+  };
+
   const handleEditNoteSave = (index) => {
     if (!editNoteValue.trim()) return;
     if (noteTypes.includes(editNoteValue.trim()) && editNoteValue.trim() !== noteTypes[index]) {
@@ -154,12 +205,12 @@ function SystemDefaultsSettings() {
           </div>
           <div className="flex-1">
             <h3 className="text-xl font-bold text-gray-900">System Defaults</h3>
-            <p className="text-sm text-gray-500 mt-1">Customize the dropdown options available when creating Tasks and Notes.</p>
+            <p className="text-sm text-gray-500 mt-1">Customize the dropdown options available when creating Tasks, Notes, and Meetings.</p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         
         {/* Task Statuses Card */}
         <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-4 sm:p-6 h-fit">
@@ -362,6 +413,110 @@ function SystemDefaultsSettings() {
                       </div>
                     )}
                   </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Meeting Types Card */}
+        <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-4 sm:p-6 h-fit">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
+            <div className="bg-emerald-100 p-2 rounded-lg">
+              <CalendarDays className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-gray-900">Meeting Types</h3>
+            </div>
+            <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-emerald-200">
+              {meetingTypes.length} Total
+            </span>
+          </div>
+
+          <form onSubmit={handleAddMeetingType} className="flex gap-2 mb-6">
+            <input
+              type="text"
+              value={newMeetingType}
+              onChange={(e) => setNewMeetingType(e.target.value)}
+              placeholder="Add custom meeting type (e.g. Board Review)"
+              className="flex-1 px-4 py-2 text-sm border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              disabled={isSaving}
+            />
+            <button
+              type="submit"
+              disabled={isSaving || !newMeetingType.trim()}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Add
+            </button>
+          </form>
+
+          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+            {meetingTypes.map((type, index) => {
+              const isDefault = DEFAULT_MEETING_TYPES.includes(type);
+              const isEditing = editingMeetingIndex === index;
+              return (
+                <div key={index} className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50 hover:border-emerald-300 transition-all">
+                  {isEditing ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editMeetingValue}
+                        onChange={(e) => setEditMeetingValue(e.target.value)}
+                        className="flex-1 px-3 py-1.5 text-sm border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleEditMeetingSave(index)}
+                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
+                      >
+                        <Check className="w-3 h-3" /> Save
+                      </button>
+                      <button
+                        onClick={() => setEditingMeetingIndex(null)}
+                        className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
+                      >
+                        <X className="w-3 h-3" /> Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                          <span className="font-bold text-gray-900">{type}</span>
+                          {isDefault ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-full border border-gray-300">
+                              <Lock className="w-3 h-3" /> System Default
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-200">
+                              Custom Type
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {!isDefault && (
+                        <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
+                          <button
+                            type="button"
+                            onClick={() => { setEditingMeetingIndex(index); setEditMeetingValue(type); }}
+                            disabled={isSaving}
+                            className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg font-semibold text-xs border border-blue-200 transition-colors disabled:opacity-50"
+                          >
+                            <Edit3 className="w-3 h-3" /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMeetingType(type)}
+                            disabled={isSaving}
+                            className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg font-semibold text-xs border border-red-200 transition-colors disabled:opacity-50"
+                          >
+                            <Trash2 className="w-3 h-3" /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               );

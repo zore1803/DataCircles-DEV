@@ -10,5 +10,6 @@ router.use(protect, userSync);
 router.get('/', systemSettingsController.getSystemSettings);
 router.put('/task-statuses', systemSettingsController.updateTaskStatuses);
 router.put('/note-types', systemSettingsController.updateNoteTypes);
+router.put('/meeting-types', systemSettingsController.updateMeetingTypes);
 
 module.exports = router;

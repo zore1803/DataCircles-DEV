@@ -2117,6 +2117,7 @@ const CreateInvoicePanel = ({
                 }))
               : [blankItem()],
           discount: sourceDoc.discount || { type: "fixed", value: 0 },
+          isRoundOff: sourceDoc.isRoundOff !== undefined ? sourceDoc.isRoundOff : true,
           notes: sourceDoc.notes || "",
           terms: sourceDoc.terms || "",
           signature: sourceDoc.signature || "",
@@ -2140,6 +2141,7 @@ const CreateInvoicePanel = ({
           nextInvoiceNumber: 1,
           items: [blankItem()],
           discount: { type: "fixed", value: 0 },
+          isRoundOff: true,
           notes: "",
           terms: "",
           signature: "",
@@ -2194,6 +2196,8 @@ const CreateInvoicePanel = ({
   const numberSuffix = docNumber.slice(numberPrefix.length);
   const [numberDraft, setNumberDraft] = useState(null); // null = not editing
   const [savingNumber, setSavingNumber] = useState(false);
+  const [quickAddId, setQuickAddId] = useState(null);
+  const [quickAddQty, setQuickAddQty] = useState(1);
 
   const saveDocNumber = async () => {
     const suffix = (numberDraft || "").trim();
@@ -2446,6 +2450,32 @@ const CreateInvoicePanel = ({
         p.items.length === 1 ? [blankItem()] : p.items.filter((_, i) => i !== index),
     }));
 
+  const handleAddToBill = () => {
+    if (!quickAddId) return toast.error("Search and select a product first.");
+    const picked = catalogue.find((c) => c._id === quickAddId);
+    if (!picked) return toast.error("Product not found in catalogue.");
+    const newItem = {
+      _id: picked._id,
+      name: picked.name,
+      description: picked.description ? picked.description.replace(/<[^>]*>/g, "").trim() : "",
+      rate: picked.sellingPrice ?? 0,
+      quantity: parseInt(quickAddQty) || 1,
+      hsn: picked.hsnSac || "",
+      isVariant: picked.isVariant || false,
+      parentItemId: picked.parentItemId || null,
+      discountType: "amount",
+      discount: 0,
+      showDescription: false,
+      gstRate: picked.gstRate || form.gstRate || 18,
+    };
+    setForm((p) => {
+      const isBlank = p.items.length === 1 && !p.items[0].name && !p.items[0]._id;
+      return { ...p, items: isBlank ? [newItem] : [...p.items, newItem] };
+    });
+    setQuickAddId(null);
+    setQuickAddQty(1);
+  };
+
   // Same breakdown as InvoiceForm.jsx: line total -> per-item discount ->
   // subtotal after item discounts -> invoice-level discount -> GST -> final.
   const lineTotal = (item) =>
@@ -2477,7 +2507,13 @@ const CreateInvoicePanel = ({
     ? splitGst(netTaxable, form.gstRate, form.transactionType)
     : { cgst: 0, sgst: 0, igst: 0, isInterState: false };
   const taxAmount = gstSplit.cgst + gstSplit.sgst + gstSplit.igst;
-  const finalTotal = netTaxable + taxAmount;
+  let finalTotal = netTaxable + taxAmount;
+  let roundOffAmount = 0;
+  if (form.isRoundOff) {
+    const rounded = Math.round(finalTotal);
+    roundOffAmount = rounded - finalTotal;
+    finalTotal = rounded;
+  }
 
   const money = (n) =>
     `₹${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -2522,6 +2558,7 @@ const CreateInvoicePanel = ({
         transactionType: form.transactionType,
         gstRate: form.gstRate,
         discount: form.discount,
+        isRoundOff: form.isRoundOff,
         notes: form.notes,
         terms: form.terms,
         signature: form.signature,
@@ -3392,132 +3429,193 @@ const CreateInvoicePanel = ({
               </div>
             </div>
           ) : (
-            /* ── Invoice / Proforma / Challan — existing responsive card/row layout ── */
+            /* ── Invoice / Proforma / Challan — full-width-style table ── */
             <>
-            <div className="w-full flex flex-col gap-2 @2xl:gap-0 mb-1">
-              {/* Column header — only shown in the wide (row/list) layout. */}
-              <div
-                className={`hidden @2xl:grid @2xl:items-center gap-2 px-2 pb-1 text-[11px] font-medium text-[#525866] ${itemRowCols}`}
-              >
-                <span>Item</span>
-                {form.isTaxInvoice && <span>HSN</span>}
-                <span>Rate (₹)</span>
-                <span>Qty</span>
-                <span>Discount</span>
+            {/* Quick-add bar: search the catalogue, set qty, click "Add to Bill" */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-3 mb-3 bg-[#F0F6FF] border border-[#BFDBFE] rounded-xl">
+              <div className="flex-1 min-w-0">
+                <PickerSelect
+                  value={quickAddId}
+                  options={catalogue.map((c) => ({ value: c._id, label: c.displayName }))}
+                  placeholder="Search items or variants to add…"
+                  onSelect={(o) => setQuickAddId(o.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Qty"
+                  value={quickAddQty}
+                  onChange={(e) => setQuickAddQty(e.target.value)}
+                  onWheel={(e) => e.target.blur()}
+                  className="w-20 h-10 text-center text-[13px] rounded-[25px] border border-[#E1E4EA] focus:outline-none focus:border-[#0085FF] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddToBill}
+                  className="h-10 px-4 flex items-center gap-1.5 bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium rounded-[25px] transition-colors whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add to Bill
+                </button>
+              </div>
+            </div>
+
+            {form.items.length === 0 || (form.items.length === 1 && !form.items[0].name && !form.items[0]._id) ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <Inbox className="w-10 h-10 text-[#C1C9D2] mb-3" strokeWidth={1.5} />
+                <p className="text-[13px] text-[#99A0AE] mb-3">
+                  Search for a product above and click "Add to Bill" to get started.
+                </p>
+              </div>
+            ) : (
+              <>
+              {/* Column headers */}
+              <div className="grid gap-3 pb-2 border-b border-[#E1E4EA] text-[11px] font-semibold text-[#525866] uppercase tracking-wide"
+                style={{ gridTemplateColumns: "1fr 72px 88px 110px 80px 28px" }}>
+                <span>Product</span>
+                <span className="text-center">Qty</span>
+                <span className="text-right">Rate (₹)</span>
+                <span className="text-center">Discount</span>
                 <span className="text-right">Amount</span>
                 <span />
               </div>
 
-              {form.items.map((item, index) => {
-                const numInput =
-                  "w-full h-10 px-2.5 rounded-[25px] border border-[#E1E4EA] text-[13px] focus:outline-none focus:border-[#0085FF] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
-                const txtInput =
-                  "w-full h-10 px-2.5 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF]";
-                const lbl =
-                  "text-[11px] font-medium text-[#525866] mb-1 block @2xl:hidden";
-                const hasDescription = item.showDescription || !!item.description;
-                return (
-                  <div
-                    key={index}
-                    className="border border-[#E1E4EA] rounded-lg bg-white p-3 @2xl:border-0 @2xl:border-b @2xl:rounded-none @2xl:p-0 @2xl:last:border-b-0"
-                  >
-                  <div
-                    className={`grid grid-cols-1 @md:grid-cols-2 gap-x-3 gap-y-2 @2xl:items-center @2xl:gap-2 @2xl:px-2 @2xl:py-1.5 ${itemRowCols}`}
-                  >
-                    <div className="flex items-center justify-between mb-1 @md:col-span-2 @2xl:hidden">
-                      <span className="text-[12px] font-semibold text-[#1F2937]">Item {index + 1}</span>
-                      <button type="button" onClick={() => removeItem(index)} title="Remove item" disabled={form.items.length === 1} className="w-7 h-7 flex items-center justify-center text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="@md:col-span-2 @2xl:col-span-1 min-w-0">
-                      <label className={lbl}>Item</label>
-                      <PickerSelect
-                        value={item._id}
-                        options={catalogue.map((c) => ({ value: c._id, label: c.displayName }))}
-                        placeholder="Search items or variants"
-                        onSelect={(o) => {
-                          const picked = catalogue.find((c) => c._id === o.value);
-                          if (!picked) return;
-                          updateItem(index, { _id: picked._id, name: picked.name, description: stripHtml(picked.description), rate: picked.sellingPrice ?? "", hsn: picked.hsnSac || "", isVariant: picked.isVariant, parentItemId: picked.parentItemId });
-                        }}
-                      />
-                    </div>
-                    {form.isTaxInvoice && (
-                      <div className="min-w-0">
-                        <label className={lbl}>HSN / SAC</label>
-                        <input value={item.hsn} onChange={(e) => updateItem(index, { hsn: e.target.value })} placeholder="HSN" className={txtInput} />
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <label className={lbl}>Rate (₹)</label>
-                      <input type="number" min="0" step="0.01" value={item.rate} onChange={(e) => updateItem(index, { rate: e.target.value })} placeholder="0.00" className={numInput} />
-                    </div>
-                    <div className="min-w-0">
-                      <label className={lbl}>Qty</label>
-                      <input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(index, { quantity: e.target.value })} placeholder="1" className={numInput} />
-                    </div>
-                    <div className="min-w-0">
-                      <label className={lbl}>Discount</label>
-                      <div className="flex items-center gap-1.5">
+              {/* Item rows */}
+              <div className="space-y-0 mt-1">
+                {form.items.filter((it) => it.name || it._id).map((item, index) => {
+                  const realIndex = form.items.indexOf(item);
+                  const rowAmt = lineTotal(item) - itemDiscountAmount(item);
+                  return (
+                    <div key={realIndex} className="py-2.5 border-b border-[#F0F1F3] last:border-b-0">
+                      <div className="grid gap-3 items-center"
+                        style={{ gridTemplateColumns: "1fr 72px 88px 110px 80px 28px" }}>
+                        {/* Product name — editable text, pre-filled from catalogue */}
                         <input
-                          type="number" min="0" step={item.discountType === "percentage" ? "0.1" : "0.01"} value={item.discount}
-                          onChange={(e) => {
-                            const rawValue = e.target.value;
-                            const parsed = parseFloat(rawValue) || 0;
-                            const base = lineTotal(item);
-                            let clamped = rawValue;
-                            if (item.discountType === "amount" && parsed > base) { clamped = base; toast.error("Item discount cannot exceed item total."); }
-                            else if (item.discountType === "percentage" && parsed > 100) { clamped = 100; toast.error("Percentage discount cannot exceed 100%."); }
-                            updateItem(index, { discount: clamped });
-                          }}
-                          placeholder="0" className={`${numInput} flex-1 min-w-0`}
+                          type="text"
+                          value={item.name || ""}
+                          onChange={(e) => updateItem(realIndex, { name: e.target.value })}
+                          placeholder="Product name"
+                          className="w-full text-[13px] font-medium text-[#1F2937] bg-transparent px-1 py-1 focus:outline-none focus:bg-[#F8F9FB] focus:ring-1 focus:ring-[#E1E4EA] rounded transition-colors"
                         />
-                        <select value={item.discountType} onChange={(e) => updateItem(index, { discountType: e.target.value })} className="h-10 px-1.5 rounded-[25px] border border-[#E1E4EA] text-[13px] text-gray-700 bg-white focus:outline-none focus:border-[#0085FF] flex-shrink-0">
-                          <option value="amount">₹</option>
-                          <option value="percentage">%</option>
-                        </select>
+                        {/* Qty */}
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => updateItem(realIndex, { quantity: e.target.value })}
+                          onWheel={(e) => e.target.blur()}
+                          placeholder="1"
+                          className="w-full text-center text-[13px] border border-[#E1E4EA] rounded-lg px-2 py-2 bg-[#F8F9FB] focus:bg-white focus:outline-none focus:border-[#0085FF] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        {/* Rate */}
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.rate}
+                          onChange={(e) => updateItem(realIndex, { rate: e.target.value })}
+                          onWheel={(e) => e.target.blur()}
+                          placeholder="0.00"
+                          className="w-full text-right text-[13px] border border-[#E1E4EA] rounded-lg px-2 py-2 bg-[#F8F9FB] focus:bg-white focus:outline-none focus:border-[#0085FF] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        {/* Discount */}
+                        <div className="flex items-center border border-[#E1E4EA] rounded-lg bg-[#F8F9FB] focus-within:bg-white focus-within:border-[#0085FF] overflow-hidden">
+                          <input
+                            type="number"
+                            min="0"
+                            step={item.discountType === "percentage" ? "0.1" : "0.01"}
+                            value={item.discount}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const parsed = parseFloat(raw) || 0;
+                              const base = lineTotal(item);
+                              let clamped = raw;
+                              if (item.discountType === "amount" && parsed > base) { clamped = base; toast.error("Item discount cannot exceed item total."); }
+                              else if (item.discountType === "percentage" && parsed > 100) { clamped = 100; toast.error("Percentage discount cannot exceed 100%."); }
+                              updateItem(realIndex, { discount: clamped });
+                            }}
+                            onWheel={(e) => e.target.blur()}
+                            placeholder="0"
+                            className="flex-1 min-w-0 w-full text-center text-[13px] px-2 py-2 bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <select
+                            value={item.discountType}
+                            onChange={(e) => updateItem(realIndex, { discountType: e.target.value })}
+                            className="text-[11px] font-semibold border-l border-[#E1E4EA] bg-[#F0F1F3] px-1 py-2 focus:outline-none cursor-pointer"
+                          >
+                            <option value="amount">₹</option>
+                            <option value="percentage">%</option>
+                          </select>
+                        </div>
+                        {/* Row total */}
+                        <span className="text-right text-[13px] font-semibold text-[#1F2937] tabular-nums">
+                          {money(rowAmt)}
+                        </span>
+                        {/* Delete */}
+                        <button
+                          type="button"
+                          onClick={() => removeItem(realIndex)}
+                          className="w-7 h-7 flex items-center justify-center text-[#C1C9D2] hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                    </div>
-                    <span className="hidden @2xl:block text-right text-[13px] font-semibold text-[#1F2937] pr-1">
-                      {money(lineTotal(item) - itemDiscountAmount(item))}
-                    </span>
-                    <button type="button" onClick={() => removeItem(index)} title="Remove item" disabled={form.items.length === 1} className="hidden @2xl:flex w-8 h-8 items-center justify-center text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                    <div className="flex items-center justify-between border-t border-[#E1E4EA] mt-2 pt-2 @md:col-span-2 @2xl:hidden">
-                      <span className="text-[12px] text-[#525866]">Amount</span>
-                      <span className="text-[14px] font-semibold text-[#1F2937]">{money(lineTotal(item) - itemDiscountAmount(item))}</span>
-                    </div>
-                  </div>
-                  <div className="mt-2 @2xl:mt-0 @2xl:px-2 @2xl:pb-2">
-                    {hasDescription ? (
-                      <textarea rows={2} autoFocus={item.showDescription && !item.description} value={item.description}
-                        onChange={(e) => updateItem(index, { description: e.target.value })}
-                        onBlur={() => { if (!item.description) updateItem(index, { showDescription: false }); }}
-                        placeholder="Describe this item — appears under its name on the document"
-                        className="w-full px-2.5 py-2 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
-                      />
-                    ) : (
-                      <button type="button" onClick={() => updateItem(index, { showDescription: true })} className="inline-flex items-center gap-1 text-[12px] font-medium text-[#0085FF] hover:underline">
-                        <Plus className="w-3 h-3" />
-                        Add description
-                      </button>
-                    )}
-                  </div>
-                  </div>
-                );
-              })}
-            </div>
 
-            <button
-              type="button"
-              onClick={addItem}
-              className="w-full h-10 min-h-[40px] flex-shrink-0 flex items-center justify-center gap-2 rounded-lg bg-white border border-[#0085FF]/20 text-sm font-medium text-[#0085FF] hover:bg-blue-50 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Another Item
-            </button>
+                      {/* Expandable details: HSN, GST Rate (tax only), Description */}
+                      <details className="mt-1.5 group/d">
+                        <summary className="text-[11px] font-semibold text-[#0085FF] cursor-pointer list-none flex items-center gap-1 w-max select-none">
+                          <ChevronRight className="w-3 h-3 transition-transform group-open/d:rotate-90" />
+                          More Details
+                        </summary>
+                        <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {supportsTax && form.isTaxInvoice && (
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[10px] font-medium text-[#525866]">HSN/SAC Code</label>
+                              <input
+                                type="text"
+                                placeholder="Enter HSN/SAC code"
+                                value={item.hsn}
+                                onChange={(e) => updateItem(realIndex, { hsn: e.target.value })}
+                                className="w-full text-[12px] border-b border-[#E1E4EA] px-1 py-1 focus:outline-none focus:border-[#0085FF] bg-transparent"
+                              />
+                            </div>
+                          )}
+                          {supportsTax && form.isTaxInvoice && (
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[10px] font-medium text-[#525866]">GST Rate (%)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.5"
+                                placeholder="0"
+                                value={item.gstRate ?? form.gstRate ?? 18}
+                                onChange={(e) => updateItem(realIndex, { gstRate: e.target.value })}
+                                onWheel={(e) => e.target.blur()}
+                                className="w-full text-[12px] border-b border-[#E1E4EA] px-1 py-1 focus:outline-none focus:border-[#0085FF] bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                            </div>
+                          )}
+                          <div className={`flex flex-col gap-1 ${supportsTax && form.isTaxInvoice ? "" : "sm:col-span-2"}`}>
+                            <label className="text-[10px] font-medium text-[#525866]">Description</label>
+                            <textarea
+                              rows={2}
+                              placeholder="Item description…"
+                              value={item.description}
+                              onChange={(e) => updateItem(realIndex, { description: e.target.value })}
+                              className="w-full resize-none text-[12px] text-[#525866] border-b border-[#E1E4EA] px-1 py-1 focus:outline-none focus:border-[#0085FF] bg-transparent"
+                            />
+                          </div>
+                        </div>
+                      </details>
+                    </div>
+                  );
+                })}
+              </div>
+              </>
+            )}
             </>
           )}
           </>
@@ -3699,6 +3797,24 @@ const CreateInvoicePanel = ({
                 <div className="flex justify-between text-red-500">
                   <span>Invoice Discount</span>
                   <span>- {money(invoiceDiscountAmount)}</span>
+                </div>
+                {/* Round off toggle */}
+                <div className="flex items-center justify-between py-1">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm((p) => ({ ...p, isRoundOff: !p.isRoundOff }))}
+                      className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${form.isRoundOff ? "bg-[#0085FF]" : "bg-[#C1C9D2]"}`}
+                    >
+                      <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${form.isRoundOff ? "translate-x-4" : "translate-x-0.5"}`} />
+                    </button>
+                    <span className="text-[12px] text-gray-600">Round Off</span>
+                  </div>
+                  {form.isRoundOff && roundOffAmount !== 0 && (
+                    <span className={`text-[12px] font-medium ${roundOffAmount > 0 ? "text-green-600" : "text-red-500"}`}>
+                      {roundOffAmount > 0 ? "+" : ""}{money(roundOffAmount)}
+                    </span>
+                  )}
                 </div>
                 {form.isTaxInvoice && (
                   gstSplit.isInterState ? (

@@ -197,6 +197,10 @@ const meetingSchema = new mongoose.Schema(
       enum: ["in-person", "video-call", "phone-call"],
       default: "in-person",
     },
+    meetingCategory: {
+      type: String,
+      default: "",
+    },
     location: {
       type: String,
       trim: true,

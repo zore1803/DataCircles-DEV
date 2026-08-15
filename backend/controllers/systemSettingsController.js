@@ -3,6 +3,7 @@ const SystemSettings = require('../models/SystemSettings');
 // Default locked arrays
 const DEFAULT_TASK_STATUSES = ['Pending', 'In Progress', 'Completed'];
 const DEFAULT_NOTE_TYPES = ['General Note', 'Meeting Note', 'Call Note', 'Follow-up Note'];
+const DEFAULT_MEETING_TYPES = ['General Meeting', 'Client Call', 'Demo', 'Follow-up'];
 
 // Get system settings for the organization
 exports.getSystemSettings = async (req, res) => {
@@ -47,6 +48,35 @@ exports.updateTaskStatuses = async (req, res) => {
   } catch (error) {
     console.error('Error updating task statuses:', error);
     res.status(500).json({ message: 'Error updating task statuses', error: error.message });
+  }
+};
+
+// Update meeting types
+exports.updateMeetingTypes = async (req, res) => {
+  try {
+    const { meetingTypes } = req.body;
+
+    if (!Array.isArray(meetingTypes)) {
+      return res.status(400).json({ message: 'Meeting types must be an array' });
+    }
+
+    const missingDefaults = DEFAULT_MEETING_TYPES.filter(t => !meetingTypes.includes(t));
+    if (missingDefaults.length > 0) {
+      return res.status(400).json({ message: `Cannot remove default meeting types: ${missingDefaults.join(', ')}` });
+    }
+
+    let settings = await SystemSettings.findOne({ organization: req.user.organization });
+    if (!settings) {
+      settings = new SystemSettings({ organization: req.user.organization });
+    }
+
+    settings.meetingTypes = meetingTypes;
+    await settings.save();
+
+    res.json(settings);
+  } catch (error) {
+    console.error('Error updating meeting types:', error);
+    res.status(500).json({ message: 'Error updating meeting types', error: error.message });
   }
 };
 

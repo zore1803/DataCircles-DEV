@@ -806,6 +806,30 @@ const PerformaInvoiceForm = ({
     setShowItemForm(true);
   };
 
+  // Quick-add bar above the item table: search a product, set its quantity,
+  // "Add to Bill" drops it straight into form.items — separate from the
+  // per-row inline search each existing row also has.
+  const handleAddToBill = () => {
+    if (!quickAddItem) {
+      toast.error("Search and select a product first.");
+      return;
+    }
+    const newItem = { ...quickAddItem, quantity: parseInt(quickAddQty) || 1 };
+    setForm((prev) => {
+      const isBlankStarterRow =
+        prev.items.length === 1 && !prev.items[0].name && !prev.items[0]._id;
+      const newItems = isBlankStarterRow ? [newItem] : [...prev.items, newItem];
+      return {
+        ...prev,
+        items: newItems,
+        amount: calculateTotalAmount(newItems, prev.discount),
+      };
+    });
+    setQuickAddItem(null);
+    setQuickAddQty(1);
+    setHasUnsavedChanges(true);
+  };
+
   const handleDealCreated = (newDeal) => {
     setLocalDeals((prev) => [...prev, newDeal]);
     setForm((prev) => ({ ...prev, deal: newDeal._id }));
@@ -1273,6 +1297,42 @@ const PerformaInvoiceForm = ({
                 <label className="block font-semibold text-slate-700">
                   Pro Forma Invoice Items
                 </label>
+              </div>
+
+              {/* Quick-add bar */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3 mb-5 bg-blue-50/60 border border-blue-100 rounded-xl">
+                <div className="flex-1 min-w-0">
+                  <ItemSearchSelect
+                    value={quickAddItem}
+                    onSelect={(itemData) => setQuickAddItem(itemData)}
+                    onAddNew={handleOpenItemForm}
+                    allowAddNew={false}
+                    showSelectedValue={false}
+                    excludeIds={form.items.map((i) => i._id).filter(Boolean)}
+                    fetchItems={fetchItems}
+                    items={items}
+                    setItems={setItems}
+                  />
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Qty"
+                    value={quickAddQty}
+                    onChange={(e) => setQuickAddQty(e.target.value)}
+                    onWheel={(e) => e.target.blur()}
+                    className="w-20 border border-blue-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddToBill}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add to Bill
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4">

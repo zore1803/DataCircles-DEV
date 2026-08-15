@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
   X,
   Calendar,
@@ -31,6 +32,7 @@ const initialState = {
   duration: 60,
   priority: "medium",
   meetingType: "in-person",
+  meetingCategory: "",
   location: "",
   description: "",
   participants: [],
@@ -304,6 +306,7 @@ const CompanyMeetingForm = ({
   startInEditMode
 }) => {
   const [form, setForm] = useState(initialState);
+  const { meetingTypes } = useSystemSettings();
   // Which of the Duration/Meeting Type/Priority dropdowns is open, if any —
   // shared so opening one closes the others instead of them stacking.
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -808,6 +811,25 @@ const CompanyMeetingForm = ({
                       isOpen={openDropdown === "meetingType"}
                       onOpenChange={(open) => setOpenDropdown(open ? "meetingType" : null)}
                     />
+                  </div>
+
+                  {/* Meeting Category */}
+                  <div className="flex items-center justify-between group">
+                    <div className="flex items-center gap-2 text-gray-600 text-xs">
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Category</span>
+                    </div>
+                    <select
+                      value={form.meetingCategory}
+                      onChange={(e) => handleChange("meetingCategory", e.target.value)}
+                      disabled={!isEditMode && mode === "view"}
+                      className="text-xs font-semibold text-gray-700 bg-transparent focus:outline-none border-none disabled:opacity-60"
+                    >
+                      <option value="">— Select —</option>
+                      {meetingTypes.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Priority */}

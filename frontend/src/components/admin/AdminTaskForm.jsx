@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
   X, Calendar, Clock, CheckCircle2, Save, Edit3, Trash2, Loader2,
   FileText, User, Users, AlertCircle, Plus, Building2, Truck
@@ -172,6 +173,7 @@ const AdminTaskForm = ({
   const [form, setForm] = useState(initialState);
   const [loading, setLoading] = useState(false);
   const [isSliding, setIsSliding] = useState(false);
+  const { taskStatuses } = useSystemSettings();
   const [shouldRender, setShouldRender] = useState(false);
   const [errors, setErrors] = useState({});
   const [showUserSelector, setShowUserSelector] = useState(false);
@@ -589,8 +591,9 @@ const AdminTaskForm = ({
                     onChange={(e) => handleChange("status", e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="Pending">Pending</option>
-                    <option value="Completed">Completed</option>
+                    {taskStatuses.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
                   </select>
                 </FormField>
 
