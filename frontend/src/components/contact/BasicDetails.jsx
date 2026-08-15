@@ -556,13 +556,13 @@ const BasicDetails = ({ contact, company, deals, contactFieldList = [], onContac
     }
 
     // VALIDATION 2: Prevent re-assigning to the current owner
-    if (data.user?._id === newOwnerId) {
+    if (contact.user?._id === newOwnerId) {
       setIsOwnerDropdownOpen(false);
       return;
     }
 
     try {
-      await API.put(`/companies/${data._id}`, { user: newOwnerId });
+      await API.put(`/contacts/${contact._id}`, { user: newOwnerId });
       toast.success("Owner reassigned successfully.");
       setIsOwnerDropdownOpen(false);
       window.location.reload();

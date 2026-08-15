@@ -239,7 +239,7 @@ const ContactCalendar = ({ contactId }) => {
       });
       setTasks(tasksByDate);
     } catch (error) {
-      toast.error(err.response?.data?.error || "Failed to fetch calendar data");
+      toast.error(error.response?.data?.error || "Failed to fetch calendar data");
     }
   }, [contactId]);
 

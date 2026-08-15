@@ -1968,11 +1968,11 @@ function Deals() {
   // counterpart: it doesn't clear the selection outright (that's "Cancel")
   // — it steps back down to only the rows on the current page.
   const handleSelectAllAcrossPages = () => {
-    setSelectedRows(sortedTableDeals.map((deal) => deal._id));
+    setSelectedDeals(sortedTableDeals.map((deal) => deal._id));
   };
 
   const handleDeselectAllExtra = () => {
-    setSelectedRows(paginatedTableDeals.map((deal) => deal._id));
+    setSelectedDeals(paginatedTableDeals.map((deal) => deal._id));
   };
 
   // Kanban column-header "select all in this column" checkbox: given that
@@ -1980,7 +1980,7 @@ function Deals() {
   // selected — removes just those ids, leaving other columns' selections
   // untouched. Same handler is reused for every column.
   const handleToggleColumnSelect = useCallback((dealIds) => {
-    setSelectedRows((prev) => {
+    setSelectedDeals((prev) => {
       const allSelected = dealIds.every((id) => prev.includes(id));
       return allSelected
         ? prev.filter((id) => !dealIds.includes(id))
@@ -2319,7 +2319,7 @@ function Deals() {
               <button
                 onClick={() => {
                   setSelectionMode(false);
-                  setSelectedRows([]);
+                  setSelectedDeals([]);
                 }}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
@@ -2330,7 +2330,7 @@ function Deals() {
             <div className="flex items-center gap-3 flex-shrink-0">
               <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
               <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
-                {selectedRows.length} deal{selectedRows.length !== 1 ? "s" : ""} selected
+                {selectedDeals.length} deal{selectedDeals.length !== 1 ? "s" : ""} selected
               </span>
               <button
                 onClick={handleSelectAllAcrossPages}
@@ -2834,8 +2834,8 @@ function Deals() {
                       onQuickView={setQuickViewDealId}
                       isStale={isStale}
                       loading={showKanbanSkeleton}
-                      selectedDeals={selectedRows}
-                      onToggleSelect={handleRowSelect}
+                      selectedDeals={selectedDeals}
+                      onToggleSelect={handleSelectDeal}
                       onToggleColumnSelect={handleToggleColumnSelect}
                     />
                   );
@@ -2862,9 +2862,9 @@ function Deals() {
                 <DealsTable
                   scrollContainerRef={tableScrollRef}
                   sortedTableDeals={paginatedTableDeals}
-                  selectedRows={selectedRows}
+                  selectedRows={selectedDeals}
                   handleSelectAll={handleSelectAll}
-                  handleRowSelect={handleRowSelect}
+                  handleRowSelect={handleSelectDeal}
                   handleRowMouseDown={handleRowMouseDown}
                   handleRowMouseUp={handleRowMouseUp}
                   handleRowTouchStart={handleRowTouchStart}
@@ -3027,7 +3027,7 @@ function Deals() {
               isOpen={showBulkActions}
               onClose={() => setShowBulkActions(false)}
               selectedItems={sortedTableDeals.filter((d) =>
-                selectedRows.includes(d._id),
+                selectedDeals.includes(d._id),
               )}
               onBulkUpdate={handleBulkUpdateDeals}
               fieldConfig={dealFieldConfig}
@@ -3039,7 +3039,7 @@ function Deals() {
               isOpen={showExportModal}
               onClose={() => setShowExportModal(false)}
               columns={exportColumns}
-              selectedIds={selectedRows}
+              selectedIds={selectedDeals}
               exportUrl="/deals/export-selected"
               fileName="Exported_Deals.csv"
             />
@@ -3057,7 +3057,7 @@ function Deals() {
                     </h3>
                     <p className="text-sm text-gray-500 font-inter mb-6">
                       Are you sure you want to delete{" "}
-                      <strong>{selectedRows.length}</strong> deals? This action
+                      <strong>{selectedDeals.length}</strong> deals? This action
                       cannot be undone.
                     </p>
                     <div className="flex gap-3 justify-center">
@@ -3070,7 +3070,7 @@ function Deals() {
                       </button>
                       <button
                         onClick={async () => {
-                          await handleBulkDeleteDeals(selectedRows);
+                          await handleBulkDeleteDeals(selectedDeals);
                           setShowBulkDeleteModal(false);
                         }}
                         disabled={loading}

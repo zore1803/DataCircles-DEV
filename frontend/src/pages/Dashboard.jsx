@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ResponsiveContainer, ComposedChart, XAxis, YAxis, Area, Line, CartesianGrid } from "recharts";
-import { TrendingUp, TrendingDown, MoreVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2, Pin, PinOff, EyeOff, Download, X, CheckSquare } from "lucide-react";
+import { TrendingUp, TrendingDown, MoreVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2, Pin, PinOff, EyeOff, Download, X, CheckSquare, Building2, Users, Video, ListChecks } from "lucide-react";
 import FilterIcon from "../components/common/FilterIcon";
 import DataTable from "../components/common/DataTable";
 import InvoiceQuickView from "../components/invoice/InvoiceQuickView";
@@ -51,13 +51,7 @@ const HighlightText = ({ text, query }) => {
           part
         ),
       )}
-      
-      <UpgradeRequiredModal
-        open={showUpgradeModal}
-        onClose={() => setShowUpgradeModal(false)}
-        minPlan="growth"
-        feature="Selecting multiple rows"
-      />
+      )}
     </>
   );
 };
@@ -2957,6 +2951,13 @@ function Dashboard() {
           </div>
         </div>
       </div>
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </div>
   );
 }

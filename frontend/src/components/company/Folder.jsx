@@ -322,12 +322,6 @@ const ConfirmModal = ({ title, description, confirmLabel, extra, requireCheck, o
             {confirmLabel}
           </button>
         </div>
-        <UpgradeRequiredModal
-          open={showUpgradeModal}
-          onClose={() => setShowUpgradeModal(false)}
-          minPlan="growth"
-          feature="Selecting multiple files"
-        />
       </div>
     </div>
   );
@@ -1093,7 +1087,8 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   const { subscription } = useSubscription();
   const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [fileBulkVisible, setFileBulkVisible] = useState(false);
+  const [selectedFileNames, setSelectedFileNames] = useState([]);
+  const { visible: fileBulkVisible, closing: fileBulkClosing } = useBulkStrip(selectedFileNames.length);
   const [fileSearchTerm, setFileSearchTerm] = useState("");
   const [openFolderId, setOpenFolderId] = useState("");
   const [newFiles, setNewFiles] = useState([]);
@@ -2615,6 +2610,13 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
           isOpen={linkModalOpen}
           onClose={() => setLinkModalOpen(false)}
           onSubmit={handleAddLink}
+        />
+
+        <UpgradeRequiredModal
+          open={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          minPlan="growth"
+          feature="Selecting multiple files"
         />
       </div>
     </DragDropZone>

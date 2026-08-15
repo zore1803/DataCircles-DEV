@@ -45,6 +45,7 @@ import { createPortal } from "react-dom";
 import API from "../services/api";
 import SearchIcon from "../components/common/SearchIcon";
 import AppToaster from "../components/AppToaster";
+import toast from "react-hot-toast";
 import { useSubscription } from "../contexts/SubscriptionContext";
 import { hasMinPlan } from "../utils/subscriptionHelpers";
 import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
