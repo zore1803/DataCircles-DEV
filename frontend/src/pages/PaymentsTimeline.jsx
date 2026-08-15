@@ -18,7 +18,7 @@ import BulkActionBar from "../components/common/BulkActionBar";
 import { useBulkStrip } from "../hooks/useBulkSelection";
 import * as XLSX from "xlsx";
 
-/* ΓöÇΓöÇΓöÇ Column definitions ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+/* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
   selection: 60,
   "payment-id": 160,
@@ -39,7 +39,7 @@ const ALL_COLUMNS = [
   { id: "date",       key: "date",       label: "Date"             },
 ];
 
-/* ΓöÇΓöÇΓöÇ Shared resize handle (same as Accounting.jsx pattern) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+/* ─── Shared resize handle (same as Accounting.jsx pattern) ─────────── */
 const ColumnResizeHandle = React.memo(({ colId, onResizeStart }) => (
   <div
     data-resize-handle="true"
@@ -56,7 +56,7 @@ const cellTextFor = (colId, doc) => {
   switch (colId) {
     case "payment-id": return doc["payment-id"] || "";
     case "party":      return doc.party || "";
-    case "amount":     return doc.amount != null ? `Γé╣${Number(doc.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "";
+    case "amount":     return doc.amount != null ? `₹${Number(doc.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "";
     case "direction":  return doc.direction === "IN" ? "Credit" : "Debit";
     case "type":       return doc.type || "";
     case "date":       return doc.date ? new Date(doc.date).toLocaleString() : "";
@@ -64,7 +64,7 @@ const cellTextFor = (colId, doc) => {
   }
 };
 
-/* ΓöÇΓöÇΓöÇ Component ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+/* ─── Component ─────────────────────────────────────────────────────── */
 export default function PaymentsTimeline() {
   const [documents, setDocuments] = useState([]);
   const [pagination, setPagination] = useState({
@@ -163,7 +163,7 @@ export default function PaymentsTimeline() {
     });
   }, []);
 
-  /* ΓöÇΓöÇ orderedColumns (mirrors Accounting.jsx pattern) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── orderedColumns (mirrors Accounting.jsx pattern) ─────────────── */
   const orderedColumns = useMemo(
     () => columnOrder
       .map(id => ALL_COLUMNS.find(c => c.id === id))
@@ -175,7 +175,7 @@ export default function PaymentsTimeline() {
     [columnOrder, pinnedCols, hiddenCols]
   );
 
-  /* ΓöÇΓöÇ sticky offset map (same as Accounting.jsx) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── sticky offset map (same as Accounting.jsx) ─────────────────── */
   const stickyStyles = useMemo(() => {
     const map = {};
     let leftOffset = colWidths.selection;
@@ -197,14 +197,14 @@ export default function PaymentsTimeline() {
 
   const stickyStyleFor = useCallback(colId => stickyStyles[colId] || {}, [stickyStyles]);
 
-  /* ΓöÇΓöÇ close menus on outside click ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── close menus on outside click ───────────────────────────────── */
   useEffect(() => {
     const handle = () => { setShowFilterMenu(false); setOpenActionMenuId(null); };
     document.addEventListener("click", handle);
     return () => document.removeEventListener("click", handle);
   }, []);
 
-  /* ΓöÇΓöÇ data fetching ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── data fetching ───────────────────────────────────────────────── */
   const fetchData = useCallback(async () => {
     setShowLoadingSkeleton(true);
     try {
@@ -230,7 +230,7 @@ export default function PaymentsTimeline() {
     }
   }, [pagination.currentPage, pagination.limit, searchQuery, activeFilters]);
 
-  /* ΓöÇΓöÇ fetch ALL record IDs from DB for global Select All ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── fetch ALL record IDs from DB for global Select All ─────────── */
   const fetchAllIds = useCallback(async () => {
     const tid = toast.loading("Selecting all records...");
     try {
@@ -261,7 +261,7 @@ export default function PaymentsTimeline() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  /* ΓöÇΓöÇ sorted docs ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── sorted docs ─────────────────────────────────────── */
   const filteredDocs = useMemo(() => {
     let list = [...documents];
 
@@ -292,7 +292,7 @@ export default function PaymentsTimeline() {
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
 
-  /* ΓöÇΓöÇ Export to Excel function ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── Export to Excel function ───────────────────────────────────── */
   const handleExportExcel = useCallback((itemsToExport) => {
     const list = Array.isArray(itemsToExport) ? itemsToExport : [itemsToExport];
     if (!list.length) {
@@ -303,7 +303,7 @@ export default function PaymentsTimeline() {
     const exportData = list.map(item => ({
       "Transaction ID": item["payment-id"] || item._id || "N/A",
       "Party / Entity": item.party || "N/A",
-      "Amount (Γé╣)": item.amount !== undefined ? item.amount : 0,
+      "Amount (₹)": item.amount !== undefined ? item.amount : 0,
       "Direction": item.direction === "IN" ? "Credit (IN)" : "Debit (OUT)",
       "Type": item.type || item.paymentType || item.source || "N/A",
       "Date": item.date ? new Date(item.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "N/A",
@@ -333,11 +333,11 @@ export default function PaymentsTimeline() {
     toast.success(`Exported ${list.length} item(s) to ${filename}`);
   }, []);
 
-  /* ΓöÇΓöÇ pagination ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── pagination ─────────────────────────────────────────────────── */
   const handlePageChange  = newPage   => { if (newPage > 0 && newPage <= pagination.totalPages) setPagination(p => ({ ...p, currentPage: newPage })); };
   const handleLimitChange = newLimit  => setPagination(p => ({ ...p, limit: newLimit, currentPage: 1 }));
 
-  /* ΓöÇΓöÇ Column resize (same pattern as Accounting.jsx) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── Column resize (same pattern as Accounting.jsx) ─────────────── */
   const startColumnResize = useCallback((e, colId) => {
     if (e.button !== 0) return;
     e.stopPropagation();
@@ -360,7 +360,7 @@ export default function PaymentsTimeline() {
     <ColumnResizeHandle colId={colId} onResizeStart={startColumnResize} />
   ), []);
 
-  /* ΓöÇΓöÇ Column drag-reorder (exact clone of Accounting.jsx) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── Column drag-reorder (exact clone of Accounting.jsx) ─────────── */
   const handleColumnReorder = useCallback((draggedKey, targetKey) => {
     if (!draggedKey || draggedKey === targetKey) return;
     setColumnOrder(prev => {
@@ -458,7 +458,7 @@ export default function PaymentsTimeline() {
     document.addEventListener("mouseup",   handleMouseUp);
   };
 
-  /* ΓöÇΓöÇ Action menu ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── Action menu ─────────────────────────────────────────────────── */
   const renderActionMenu = doc => {
     const isOpen = openActionMenuId === doc._id;
     return (
@@ -530,12 +530,12 @@ export default function PaymentsTimeline() {
     );
   };
 
-  /* ΓöÇΓöÇ Cell renderer ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── Cell renderer ───────────────────────────────────────────────── */
   const renderCell = (colId, doc, isRightmost) => {
     let content;
     switch (colId) {
       case "amount":
-        content = `Γé╣${Number(doc.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        content = `₹${Number(doc.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         break;
       case "date":
         content = doc.date ? new Date(doc.date).toLocaleString() : "";
@@ -569,7 +569,7 @@ export default function PaymentsTimeline() {
     );
   };
 
-  /* ΓöÇΓöÇ Pagination items ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ── Pagination items ────────────────────────────────────────────── */
   const paginationItems = useMemo(() => {
     const items = [];
     const { currentPage, totalPages } = pagination;
@@ -582,11 +582,11 @@ export default function PaymentsTimeline() {
     return items;
   }, [pagination]);
 
-  /* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  /* ─────────────────────────────────────────────────────────────────── */
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-[#FAFBFC]">
 
-      {/* ΓöÇΓöÇ Fixed header bar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ── Fixed header bar ─────────────────────────────────────────────────────── */}
       <div
         className="fixed right-0 h-16 px-6 flex items-center justify-between border-b border-[#E1E4EA] bg-white top-[54px] lg:top-16"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
@@ -599,7 +599,7 @@ export default function PaymentsTimeline() {
         </div>
 
         <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
-          {/* Search ΓÇö expands in place from the icon */}
+          {/* Search — expands in place from the icon */}
           <div
             className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"} max-w-full flex-shrink-0`}
           >
@@ -659,7 +659,7 @@ export default function PaymentsTimeline() {
         </div>
       </div>
 
-      {/* ΓöÇΓöÇ BulkActionBar ΓÇö floats between title bar and table when rows are selected ΓöÇΓöÇ */}
+      {/* ── BulkActionBar — floats between title bar and table when rows are selected ── */}
       {stripVisible && (
         <div
           className="fixed right-0 px-6 z-[40]"
@@ -683,7 +683,7 @@ export default function PaymentsTimeline() {
         </div>
       )}
 
-      {/* ΓöÇΓöÇ Full-bleed table (matches Accounting.jsx layout) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ── Full-bleed table (matches Accounting.jsx layout) ──────── */}
       <div
         className="fixed right-0 overflow-x-auto overflow-y-auto bg-white"
         style={{
@@ -805,7 +805,7 @@ export default function PaymentsTimeline() {
         </table>
       </div>
 
-      {/* ΓöÇΓöÇ Drag ghost portal (exact copy of Accounting.jsx) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ── Drag ghost portal (exact copy of Accounting.jsx) ──────── */}
       {dragGhost && createPortal(
         <div
           ref={ghostElRef}
@@ -834,7 +834,7 @@ export default function PaymentsTimeline() {
         document.body
       )}
 
-      {/* ΓöÇΓöÇ Pagination bar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ── Pagination bar ────────────────────────────────────────── */}
       <div
         className="fixed bottom-0 right-0 h-16 bg-white border-t border-[#E1E4EA] flex items-center justify-between px-6 z-40"
         style={{ left: "var(--sidebar-width, 0px)" }}
@@ -934,7 +934,7 @@ export default function PaymentsTimeline() {
         </div>
       </div>
 
-      {/* ΓöÇΓöÇ Shared Column Header Options Menu (Pin Left/Right, Sort, Filter, Hide) ΓöÇΓöÇ */}
+      {/* ── Shared Column Header Options Menu (Pin Left/Right, Sort, Filter, Hide) ── */}
       {openColumnMenuKey &&
         columnMenuPos &&
         createPortal(
@@ -1028,7 +1028,7 @@ export default function PaymentsTimeline() {
         onSuccess={() => fetchData()}
       />
 
-      {/* ΓöÇΓöÇ Custom Delete Warning Modal ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ── Custom Delete Warning Modal ───────────────────────────── */}
       {deleteConfirmState.isOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
@@ -1100,7 +1100,7 @@ export default function PaymentsTimeline() {
         </div>
       )}
 
-      {/* ΓöÇΓöÇ Advanced Filter Panel (same as Companies.jsx) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ── Advanced Filter Panel (same as Companies.jsx) ─────────────── */}
       <AdvancedFilterPanel
         isOpen={showAdvancedFilters}
         onClose={() => setShowAdvancedFilters(false)}

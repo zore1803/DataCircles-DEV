@@ -72,15 +72,15 @@ const loadingMessages = [
 
   "Smart insights are just a few seconds away!",
 
-  "LetΓÇÖs turn your CRM data into meaningful growth.",
+  "Let’s turn your CRM data into meaningful growth.",
 
-  "Analyzing deals, invoices, and customers ΓÇö hang tight!",
+  "Analyzing deals, invoices, and customers — hang tight!",
 
   "Your analytics dashboard is getting smarter!",
 
   "Insights that help you make data-backed decisions.",
 
-  "Numbers that speak ΓÇö visuals that inspire.",
+  "Numbers that speak — visuals that inspire.",
 ];
 
 // Select a random message
@@ -127,7 +127,7 @@ const Insights = () => {
   };
 
   const truncateText = (text, maxLength = 30) => {
-    if (!text) return "ΓÇö";
+    if (!text) return "—";
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + "...";
   };
@@ -403,7 +403,7 @@ const Insights = () => {
       });
     });
 
-    // Daily trends ΓÇö one bucket per calendar day, spanning from the
+    // Daily trends — one bucket per calendar day, spanning from the
     // earliest record on file up to today (used by the "Revenue vs Business
     // Spends" chart, which scrolls horizontally across the whole range
     // instead of being capped at a fixed window).
@@ -415,7 +415,7 @@ const Insights = () => {
     let rangeStart;
     let rangeEnd;
     if (dateRange.startDate && dateRange.endDate) {
-      // A date filter is active on the strip ΓÇö the chart's window should
+      // A date filter is active on the strip — the chart's window should
       // match it exactly instead of silently expanding to today.
       rangeStart = new Date(dateRange.startDate);
       rangeStart.setHours(0, 0, 0, 0);
@@ -679,7 +679,7 @@ const Insights = () => {
         headers = ["Title", "Value", "Stage", "Company", "Close Date"];
         data = filteredDeals.map((deal) => [
           deal.title,
-          `Γé╣${deal.amount || 0}`,
+          `₹${deal.amount || 0}`,
           deal.status || "",
           deal.company?.name || "",
           deal.closeDate ? new Date(deal.closeDate).toLocaleDateString() : "",
@@ -694,7 +694,7 @@ const Insights = () => {
           vendor.phone || "",
           vendor.company || "",
           vendor.gstin || "",
-          `Γé╣${vendor.balance || 0}`,
+          `₹${vendor.balance || 0}`,
         ]);
         break;
 
@@ -710,7 +710,7 @@ const Insights = () => {
           po.poNumber,
           po.vendor?.name || "",
           new Date(po.orderDate).toLocaleDateString(),
-          `Γé╣${po.totalAmount || 0}`,
+          `₹${po.totalAmount || 0}`,
           po.status || "",
         ]);
         break;
@@ -727,7 +727,7 @@ const Insights = () => {
           purchase.purchaseNumber,
           purchase.vendor?.name || "",
           new Date(purchase.purchaseDate).toLocaleDateString(),
-          `Γé╣${purchase.totalAmount || 0}`,
+          `₹${purchase.totalAmount || 0}`,
           purchase.status || "",
         ]);
         break;
@@ -744,7 +744,7 @@ const Insights = () => {
         data = filteredInvoices.map((invoice) => [
           invoice.invoiceNumber,
           invoice.deal?.title || "",
-          `Γé╣${invoice.amount || 0}`,
+          `₹${invoice.amount || 0}`,
           invoice.status || "",
           new Date(invoice.date).toLocaleDateString(),
           invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "",
@@ -918,7 +918,7 @@ const Insights = () => {
         icon: <Briefcase className="w-4 h-4" />,
         iconBg: "bg-blue-100 text-blue-600",
         title: `Deal Moved to ${deal.status || "Update"}`,
-        subtitle: [deal.title, deal.company?.name].filter(Boolean).join(" ΓÇó "),
+        subtitle: [deal.title, deal.company?.name].filter(Boolean).join(" • "),
         at,
       });
     });
@@ -968,8 +968,8 @@ const Insights = () => {
         iconBg: isOverdue ? "bg-red-100 text-red-600" : "bg-teal-100 text-teal-600",
         title: isOverdue
           ? `Invoice #${invoice.invoiceNumber} is overdue`
-          : `Invoice #${invoice.invoiceNumber} ΓÇö ${invoice.status}`,
-        subtitle: `Γé╣${formatNumberToIndian(invoice.amount || 0)}`,
+          : `Invoice #${invoice.invoiceNumber} — ${invoice.status}`,
+        subtitle: `₹${formatNumberToIndian(invoice.amount || 0)}`,
         at,
       });
     });
@@ -997,7 +997,7 @@ const Insights = () => {
       minute: "2-digit",
       hour12: true,
     });
-    return `${datePart} ΓÇó ${timePart}`;
+    return `${datePart} • ${timePart}`;
   };
 
   const dailyTrendsRawMax = Math.max(
@@ -1006,12 +1006,12 @@ const Insights = () => {
   );
   // Round up to a "nice" step (multiple of 1000) so 5 evenly-spaced ticks
   // (0, step, 2*step, ...) land on clean numbers AND each one rounds to a
-  // distinct "Xk" label ΓÇö a step below 1000 made adjacent ticks (e.g. 500 &
+  // distinct "Xk" label — a step below 1000 made adjacent ticks (e.g. 500 &
   // 1000) collapse onto the same displayed "1k".
   const dailyTrendsStep = Math.ceil(dailyTrendsRawMax / 4 / 1000) * 1000 || 1000;
   const dailyTrendsYMax = dailyTrendsStep * 4;
   const dailyTrendsTicks = [0, 1, 2, 3, 4].map((i) => i * dailyTrendsStep);
-  const formatDailyTrendsTick = (v) => (v === 0 ? "Γé╣0" : `Γé╣${Math.round(v / 1000)}k`);
+  const formatDailyTrendsTick = (v) => (v === 0 ? "₹0" : `₹${Math.round(v / 1000)}k`);
   // Every 5th day's date label, but always force the last entry (today) in
   // too, so the active/current date is never skipped off the right edge.
   const dailyTrendsDateTicks = chartData.dailyTrends
@@ -1028,7 +1028,7 @@ const Insights = () => {
   useEffect(() => {
     const el = trendsScrollRef.current;
     if (el) el.scrollLeft = el.scrollWidth;
-    // Re-run whenever the Overview tab becomes active again ΓÇö the scroll
+    // Re-run whenever the Overview tab becomes active again — the scroll
     // container unmounts/remounts on tab switch (losing its scroll
     // position), so scrolling only on data-length change isn't enough to
     // land back on today after navigating away and back.
@@ -1073,7 +1073,7 @@ const Insights = () => {
           />
           <StatCard
             title="Total Deal Value"
-            value={`Γé╣${formatNumberToIndian(
+            value={`₹${formatNumberToIndian(
               filteredData.filteredDeals.reduce(
                 (sum, deal) => sum + (deal.amount || 0),
                 0
@@ -1086,7 +1086,7 @@ const Insights = () => {
           />
           <StatCard
             title="Total Purchases"
-            value={`Γé╣${formatNumberToIndian(
+            value={`₹${formatNumberToIndian(
               filteredData.filteredPurchases.reduce(
                 (sum, purchase) => sum + (purchase.totalAmount || 0),
                 0
@@ -1107,7 +1107,7 @@ const Insights = () => {
           />
           <StatCard
             title="Total Invoice Value"
-            value={`Γé╣${formatNumberToIndian(
+            value={`₹${formatNumberToIndian(
               filteredData.filteredInvoices.reduce(
                 (sum, inv) => sum + (inv.amount || 0),
                 0
@@ -1124,7 +1124,7 @@ const Insights = () => {
       {/* Charts */}
       <div>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Monthly Trends ΓÇö spans the same width as the first 3 KPI cards */}
+          {/* Monthly Trends — spans the same width as the first 3 KPI cards */}
           <div className="lg:col-span-3 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
               <div className="flex items-center gap-3">
@@ -1180,7 +1180,7 @@ const Insights = () => {
                 </ResponsiveContainer>
               </div>
 
-              {/* Scrollable X-axis ΓÇö pans across the full data range instead of
+              {/* Scrollable X-axis — pans across the full data range instead of
                   being capped to a fixed window. */}
               <div
                 ref={trendsScrollRef}
@@ -1268,7 +1268,7 @@ const Insights = () => {
             </div>
           </div>
 
-          {/* Business Activity ΓÇö remaining 1-column width, matching the 4th KPI card */}
+          {/* Business Activity — remaining 1-column width, matching the 4th KPI card */}
           <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col">
             <h3 className="text-base font-bold text-gray-900 mb-4">
               Business Activity
@@ -1363,7 +1363,7 @@ const Insights = () => {
           const pipelineStageColors = ["#0085FF", "#0C4FCD", "#2E7D32", "#D97706", "#E82222", "#00C950"];
 
           // Monthly Invoiced / Collected / Outstanding for the Revenue &
-          // Collections chart ΓÇö 12 buckets by calendar month (all years
+          // Collections chart — 12 buckets by calendar month (all years
           // merged into one, same convention as the earlier monthlyTrends).
           const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
           const revenueCollectionsData = monthLabels.map((label, idx) => {
@@ -1451,7 +1451,7 @@ const Insights = () => {
                       <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
                         <span className="text-sm text-gray-500">Avg Deal Size</span>
                         <span className="text-sm font-semibold text-gray-900">
-                          Γé╣{formatNumberToIndian(Math.round(avgDealSize))}
+                          ₹{formatNumberToIndian(Math.round(avgDealSize))}
                         </span>
                       </div>
                     </div>
@@ -1497,7 +1497,7 @@ const Insights = () => {
                           tickLine={false}
                           axisLine={false}
                           width={40}
-                          tickFormatter={(v) => (v === 0 ? "Γé╣0" : `Γé╣${(v / 100000).toFixed(0)}L`)}
+                          tickFormatter={(v) => (v === 0 ? "₹0" : `₹${(v / 100000).toFixed(0)}L`)}
                           tick={{ fontSize: 10, fontFamily: "Inter", fill: "#525252" }}
                         />
                         <Tooltip
@@ -1522,7 +1522,7 @@ const Insights = () => {
                                       <div>
                                         <p className="text-[11px] text-gray-500 leading-tight">{r.label}</p>
                                         <p className="text-xs font-medium text-gray-900 leading-tight">
-                                          Γé╣{formatNumberToIndian(Math.round(r.value))}
+                                          ₹{formatNumberToIndian(Math.round(r.value))}
                                         </p>
                                       </div>
                                     </div>
@@ -1551,7 +1551,7 @@ const Insights = () => {
                   <p className="text-sm text-gray-400 py-10 text-center">No deals yet</p>
                 ) : (
                   <>
-                    {/* Segmented bar ΓÇö one block per stage, sized by share of total */}
+                    {/* Segmented bar — one block per stage, sized by share of total */}
                     <div className="flex flex-row items-stretch gap-0.5 h-10 rounded-lg overflow-hidden mb-4">
                       {stageEntries.map(([stage, count], idx) => (
                         <div
@@ -1800,7 +1800,7 @@ const Insights = () => {
             color: sourceColors[idx % sourceColors.length],
           }));
 
-          // Contact Commercial Impact heatmap ΓÇö deal value tied to contacts,
+          // Contact Commercial Impact heatmap — deal value tied to contacts,
           // bucketed by day-of-week x the last 6 weeks, using each deal's
           // amount as the "impact" intensity for the day it was created.
           const impactWeeks = 6;
@@ -1843,10 +1843,10 @@ const Insights = () => {
           const avgDealInfluenced =
             dealsWithContact.length > 0 ? pipelineInfluenced / dealsWithContact.length : 0;
           const formatCr = (v) => {
-            if (v >= 1e7) return `Γé╣${(v / 1e7).toFixed(1)} Cr`;
-            if (v >= 1e5) return `Γé╣${(v / 1e5).toFixed(1)} L`;
-            if (v >= 1e3) return `Γé╣${(v / 1e3).toFixed(1)}k`;
-            return `Γé╣${Math.round(v)}`;
+            if (v >= 1e7) return `₹${(v / 1e7).toFixed(1)} Cr`;
+            if (v >= 1e5) return `₹${(v / 1e5).toFixed(1)} L`;
+            if (v >= 1e3) return `₹${(v / 1e3).toFixed(1)}k`;
+            return `₹${Math.round(v)}`;
           };
           const dealsForScatter = dealsWithContact.filter((d) => d.createdAt);
           const scatterAmountMax = Math.max(1, ...dealsForScatter.map((d) => d.amount || 0));
@@ -1942,7 +1942,7 @@ const Insights = () => {
                           return (
                             <div className="bg-white border border-gray-200 rounded-md shadow-lg p-2 text-xs">
                               <p className="font-medium text-gray-900">{p.title || "Deal"}</p>
-                              <p className="text-gray-500">{formatCr(p.amount)} ΓÇó {p.tier} ΓÇó {p.stage}</p>
+                              <p className="text-gray-500">{formatCr(p.amount)} • {p.tier} • {p.stage}</p>
                             </div>
                           );
                         }}
@@ -1952,7 +1952,7 @@ const Insights = () => {
                         shape={(props) => {
                           const { cx, cy, payload } = props;
                           // Anchor the square's bottom edge at the data point
-                          // instead of centering on it ΓÇö with a Γé╣0 y-axis
+                          // instead of centering on it — with a ₹0 y-axis
                           // floor, a centered square for a near-zero amount
                           // would render half below the x-axis line.
                           return (
@@ -2017,7 +2017,7 @@ const Insights = () => {
                         {row.map((value, colIdx) => (
                           <div
                             key={colIdx}
-                            title={`Γé╣${formatNumberToIndian(Math.round(value))}`}
+                            title={`₹${formatNumberToIndian(Math.round(value))}`}
                             className="flex-1 rounded"
                             style={{
                               height: 20,
@@ -2139,7 +2139,7 @@ const Insights = () => {
             dealsByContactId[cid].push(d);
           });
 
-          // Card 1: Contact Alerts ΓÇö real, computed from contacts + their deals.
+          // Card 1: Contact Alerts — real, computed from contacts + their deals.
           const contactsWithAnyDeal = filteredData.filteredContacts.filter(
             (c) => dealsByContactId[c._id]?.length > 0,
           );
@@ -2181,10 +2181,10 @@ const Insights = () => {
             .flat()
             .reduce((sum, inv) => sum + (inv.amount || 0), 0);
           const formatCrAlert = (v) => {
-            if (v >= 1e7) return `Γé╣${(v / 1e7).toFixed(1)} Cr`;
-            if (v >= 1e5) return `Γé╣${(v / 1e5).toFixed(1)} L`;
-            if (v >= 1e3) return `Γé╣${(v / 1e3).toFixed(1)}k`;
-            return `Γé╣${Math.round(v)}`;
+            if (v >= 1e7) return `₹${(v / 1e7).toFixed(1)} Cr`;
+            if (v >= 1e5) return `₹${(v / 1e5).toFixed(1)} L`;
+            if (v >= 1e3) return `₹${(v / 1e3).toFixed(1)}k`;
+            return `₹${Math.round(v)}`;
           };
           // "Review Contacts" deep-links into /contacts pre-filtered to
           // exactly the ids shown in that alert row.
@@ -2244,7 +2244,7 @@ const Insights = () => {
           const industryMaxCount = Math.max(1, ...industryEntries.map(([, v]) => v.count));
           const industryColors = ["#0085FF", "#0C4FCD", "#2E7D32", "#D97706", "#E82222", "#00C950"];
 
-          // Card 3: Recent Contact Activity ΓÇö deals, invoices, meetings, and
+          // Card 3: Recent Contact Activity — deals, invoices, meetings, and
           // tasks tied to a contact, merged into one timeline.
           const contactActivity = [];
           filteredData.filteredDeals
@@ -2522,7 +2522,7 @@ const Insights = () => {
         100
     );
 
-    // KPI row ΓÇö same StatCard pattern used on the Contacts tab.
+    // KPI row — same StatCard pattern used on the Contacts tab.
     const companyIdsWithDeals = new Set(
       filteredData.filteredDeals.filter((d) => d.company).map((d) => d.company._id || d.company),
     );
@@ -2656,8 +2656,8 @@ const Insights = () => {
       companySourceData.reduce((sum, entry) => sum + entry.value, 0),
     );
 
-    // Deal Velocity by Company ΓÇö one bubble per company: X = avg deal
-    // size, Y = avg deal age in days (time since each deal was opened ΓÇö
+    // Deal Velocity by Company — one bubble per company: X = avg deal
+    // size, Y = avg deal age in days (time since each deal was opened —
     // using every deal rather than only Won ones, since Won-only cycle
     // time is mostly same-day in this dataset and wouldn't show any real
     // spread), bubble size = total Won revenue generated by that company.
@@ -2692,14 +2692,14 @@ const Insights = () => {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 15);
     // Give every bubble a visible minimum size, then scale up by revenue
-    // share ΓÇö a company with zero Won revenue still renders as a small
+    // share — a company with zero Won revenue still renders as a small
     // dot instead of disappearing or looking identical to the rest.
     const velocityRevenueMax = Math.max(1, ...velocityPoints.map((p) => p.revenue));
     velocityPoints.forEach((p) => {
       p.bubbleSize = 50 + Math.round((p.revenue / velocityRevenueMax) * 1800);
     });
 
-    // Top Revenue Generating Companies ΓÇö total revenue per company across
+    // Top Revenue Generating Companies — total revenue per company across
     // Won deals + invoiced amounts, ranked descending.
     const revenueByCompanyId = {};
     filteredData.filteredDeals.forEach((d) => {
@@ -2709,14 +2709,14 @@ const Insights = () => {
       revenueByCompanyId[cid] = (revenueByCompanyId[cid] || 0) + (d.amount || 0);
     });
     filteredData.filteredInvoices.forEach((inv) => {
-      // Invoices don't carry a company reference directly ΓÇö only their deal,
+      // Invoices don't carry a company reference directly — only their deal,
       // whose `company` field is an unpopulated ObjectId string.
       const dealCompany = inv.deal?.company;
       const cid = dealCompany?._id || dealCompany;
       if (!cid) return;
       revenueByCompanyId[cid] = (revenueByCompanyId[cid] || 0) + (inv.amount || 0);
     });
-    // Pipeline Contribution by Company ΓÇö Open pipeline value (blue) vs Won
+    // Pipeline Contribution by Company — Open pipeline value (blue) vs Won
     // pipeline value (green) per company, ranked by combined total.
     const pipelineByCompanyId = {};
     Object.entries(dealsByCompanyId).forEach(([companyId, deals]) => {
@@ -2743,7 +2743,7 @@ const Insights = () => {
     const topRevenueColors = ["#0085FF", "#34C759", "#8E62EF", "#2A2726", "#D97706", "#FC9C32"];
     const topRevenueCompaniesAll = Object.entries(revenueByCompanyId)
       .map(([companyId, revenue]) => {
-        // Fall back to the unfiltered `companies` list ΓÇö a company can be
+        // Fall back to the unfiltered `companies` list — a company can be
         // excluded from `filteredCompanies` by the date-range filter while
         // still having deals/invoices in range, which would otherwise show
         // as "Unknown".
@@ -2762,7 +2762,7 @@ const Insights = () => {
         ).length;
         return {
           name: company?.name || "Unknown",
-          industry: company?.industry || "ΓÇö",
+          industry: company?.industry || "—",
           lastActive: lastActiveTime > 0 ? new Date(lastActiveTime) : null,
           activeDeals,
           revenue,
@@ -2801,7 +2801,7 @@ const Insights = () => {
           />
           <StatCard
             title="Avg. Deal Size"
-            value={`Γé╣${formatNumberToIndian(Math.round(avgDealSizeCompanies))}`}
+            value={`₹${formatNumberToIndian(Math.round(avgDealSizeCompanies))}`}
             icon={<IndianRupee className="w-6 h-6" />}
             color="text-emerald-600"
             change={avgDealSizeChange}
@@ -2835,7 +2835,7 @@ const Insights = () => {
                   dataKey="dealSize"
                   type="number"
                   name="Deal Size"
-                  tickFormatter={(v) => (v === 0 ? "Γé╣0" : `Γé╣${(v / 1000).toFixed(0)}k`)}
+                  tickFormatter={(v) => (v === 0 ? "₹0" : `₹${(v / 1000).toFixed(0)}k`)}
                   tick={{ fontSize: 10, fill: "#1F2937" }}
                   tickLine={false}
                   axisLine={{ stroke: "rgba(31,41,55,0.3)" }}
@@ -2859,9 +2859,9 @@ const Insights = () => {
                       <div className="bg-white border border-gray-200 rounded-md shadow-lg p-2 text-xs">
                         <p className="font-medium text-gray-900">{p.name}</p>
                         <p className="text-gray-500">
-                          {p.cycle}d avg age ΓÇó Γé╣{formatNumberToIndian(p.dealSize)} avg deal
+                          {p.cycle}d avg age • ₹{formatNumberToIndian(p.dealSize)} avg deal
                         </p>
-                        <p className="text-gray-500">Γé╣{formatNumberToIndian(p.revenue)} revenue</p>
+                        <p className="text-gray-500">₹{formatNumberToIndian(p.revenue)} revenue</p>
                       </div>
                     );
                   }}
@@ -2881,7 +2881,7 @@ const Insights = () => {
           )}
         </div>
 
-        {/* Companies by Industry ΓÇö same size/style/proportion as the
+        {/* Companies by Industry — same size/style/proportion as the
             Contacts tab's Contact Acquisition Sources donut (1fr of a
             2fr_1fr grid). */}
         <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
@@ -2958,7 +2958,7 @@ const Insights = () => {
         </div>
         </div>
 
-        {/* Placeholder row ΓÇö content TBD */}
+        {/* Placeholder row — content TBD */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-4 items-stretch">
           {/* Pipeline Contribution by Company */}
           <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[400px] flex flex-col">
@@ -2996,7 +2996,7 @@ const Insights = () => {
                             style={{ width: `${openPct}%`, background: "#0085FF" }}
                           >
                             <span className="text-[8px] font-medium text-white px-1 truncate">
-                              Γé╣{formatNumberToIndian(c.open)}
+                              ₹{formatNumberToIndian(c.open)}
                             </span>
                           </div>
                         )}
@@ -3006,13 +3006,13 @@ const Insights = () => {
                             style={{ width: `${wonPct}%`, background: "#34C759" }}
                           >
                             <span className="text-[8px] font-medium text-white px-1 truncate">
-                              Γé╣{formatNumberToIndian(c.won)}
+                              ₹{formatNumberToIndian(c.won)}
                             </span>
                           </div>
                         )}
                       </div>
                       <span className="text-xs font-medium text-[#1F1F21] w-20 text-right flex-shrink-0">
-                        Γé╣{formatNumberToIndian(c.total)}
+                        ₹{formatNumberToIndian(c.total)}
                       </span>
                     </div>
                   );
@@ -3074,13 +3074,13 @@ const Insights = () => {
                           <span className="text-xs text-[#525866]">
                             {c.lastActive
                               ? c.lastActive.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })
-                              : "ΓÇö"}
+                              : "—"}
                           </span>
                           <span />
                           <span className="text-xs text-[#525866]">{c.activeDeals}</span>
                           <span />
                           <span className="text-xs font-medium text-[#1F1F21] text-right">
-                            Γé╣{formatNumberToIndian(c.revenue)}
+                            ₹{formatNumberToIndian(c.revenue)}
                           </span>
                         </div>
                       ))}
@@ -3326,7 +3326,7 @@ const Insights = () => {
                   Total Pipeline Value
                 </p>
                 <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  Γé╣{formatNumberToIndian(totalValue)}
+                  ₹{formatNumberToIndian(totalValue)}
                 </h6>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -3343,7 +3343,7 @@ const Insights = () => {
                   Average Deal Size
                 </p>
                 <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  Γé╣{formatNumberToIndian(Math.round(averageDealValue))}
+                  ₹{formatNumberToIndian(Math.round(averageDealValue))}
                 </h6>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -3385,7 +3385,7 @@ const Insights = () => {
                   {wonDeals.length}
                 </p>
                 <h6 className="text-sm text-green-600 mt-1">
-                  Γé╣{formatNumberToIndian(wonValue)} ΓÇó{" "}
+                  ₹{formatNumberToIndian(wonValue)} •{" "}
                   {((wonValue / totalValue) * 100).toFixed(1)}% of value
                 </h6>
               </div>
@@ -3404,7 +3404,7 @@ const Insights = () => {
                   {openDeals.length}
                 </p>
                 <h6 className="text-sm text-blue-600 mt-1">
-                  Γé╣{formatNumberToIndian(openValue)} ΓÇó{" "}
+                  ₹{formatNumberToIndian(openValue)} •{" "}
                   {((openValue / totalValue) * 100).toFixed(1)}% of value
                 </h6>
               </div>
@@ -3423,7 +3423,7 @@ const Insights = () => {
                   {lostDeals.length}
                 </p>
                 <h6 className="text-sm text-red-600 mt-1">
-                  Γé╣{formatNumberToIndian(lostValue)} ΓÇó {lossRate.toFixed(1)}%
+                  ₹{formatNumberToIndian(lostValue)} • {lossRate.toFixed(1)}%
                   loss rate
                 </h6>
               </div>
@@ -3461,7 +3461,7 @@ const Insights = () => {
                 </Pie>
                 <Tooltip
                   formatter={(value, name, props) => [
-                    `${value} deals (Γé╣${formatNumberToIndian(
+                    `${value} deals (₹${formatNumberToIndian(
                       props.payload.amount
                     )})`,
                     name,
@@ -3565,10 +3565,10 @@ const Insights = () => {
                       {user.lostDeals}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
-                      <h6>Γé╣{formatNumberToIndian(user.totalValue)}</h6>
+                      <h6>₹{formatNumberToIndian(user.totalValue)}</h6>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold">
-                      <h6>Γé╣{formatNumberToIndian(user.wonValue)}</h6>
+                      <h6>₹{formatNumberToIndian(user.wonValue)}</h6>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
@@ -3612,12 +3612,12 @@ const Insights = () => {
                         {companyName}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {data.count} deals ΓÇó {data.won} won
+                        {data.count} deals • {data.won} won
                       </p>
                     </div>
                     <div className="text-right">
                       <h6 className="text-sm font-bold text-gray-900">
-                        Γé╣{formatNumberToIndian(data.amount)}
+                        ₹{formatNumberToIndian(data.amount)}
                       </h6>
                       <p className="text-xs text-gray-500">
                         {((data.amount / totalValue) * 100).toFixed(1)}%
@@ -3649,12 +3649,12 @@ const Insights = () => {
                         {deal.title}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {deal.company?.name || "No company"} ΓÇó {deal.user?.name}
+                        {deal.company?.name || "No company"} • {deal.user?.name}
                       </p>
                     </div>
                     <div className="text-right">
                       <h6 className="text-sm font-bold text-gray-900">
-                        Γé╣{formatNumberToIndian(deal.amount || 0)}
+                        ₹{formatNumberToIndian(deal.amount || 0)}
                       </h6>
                       <div className="mt-1">{getStatusBadge(deal.status)}</div>
                     </div>
@@ -3680,7 +3680,7 @@ const Insights = () => {
               </p>
               <p className="text-sm text-indigo-600 mt-1">
                 Total Value:
-                <h6>Γé╣{formatNumberToIndian(dealsThisMonthValue)}</h6> ΓÇó{" "}
+                <h6>₹{formatNumberToIndian(dealsThisMonthValue)}</h6> •{" "}
                 {((dealsThisMonthCount / totalDeals) * 100).toFixed(1)}% of all
                 deals
               </p>
@@ -3813,7 +3813,7 @@ const Insights = () => {
                   Total Outstanding
                 </p>
                 <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  Γé╣{formatNumberToIndian(totalBalance)}
+                  ₹{formatNumberToIndian(totalBalance)}
                 </h6>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -3830,7 +3830,7 @@ const Insights = () => {
                   Average Balance
                 </p>
                 <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  Γé╣{formatNumberToIndian(Math.round(averageBalance))}
+                  ₹{formatNumberToIndian(Math.round(averageBalance))}
                 </h6>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -4027,7 +4027,7 @@ const Insights = () => {
                     </div>
                     <div className="text-right">
                       <h6 className="text-sm font-bold text-gray-900">
-                        Γé╣{formatNumberToIndian(vendor.balance || 0)}
+                        ₹{formatNumberToIndian(vendor.balance || 0)}
                       </h6>
                       {vendor.gstin && (
                         <p className="text-xs text-gray-500 font-mono">
@@ -4331,7 +4331,7 @@ const Insights = () => {
                   Total PO Amount
                 </p>
                 <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  Γé╣{formatNumberToIndian(totalAmount)}
+                  ₹{formatNumberToIndian(totalAmount)}
                 </h6>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -4348,7 +4348,7 @@ const Insights = () => {
                   Average PO Value
                 </p>
                 <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  Γé╣{formatNumberToIndian(Math.round(averagePOAmount))}
+                  ₹{formatNumberToIndian(Math.round(averagePOAmount))}
                 </h6>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -4391,7 +4391,7 @@ const Insights = () => {
                 </p>
                 <p className="text-sm text-blue-600 mt-1 flex">
                   <h6>
-                    Γé╣{formatNumberToIndian(posThisMonthAmount)} ΓÇó{" "}
+                    ₹{formatNumberToIndian(posThisMonthAmount)} •{" "}
                     {((posThisMonthAmount / totalAmount) * 100).toFixed(1)}%
                   </h6>{" "}
                   of total
@@ -4414,7 +4414,7 @@ const Insights = () => {
                 </p>
                 <p className="text-sm text-yellow-600 mt-1 flex">
                   <h6>
-                    Γé╣{pendingPOsAmount.toLocaleString()} ΓÇó{" "}
+                    ₹{pendingPOsAmount.toLocaleString()} •{" "}
                     {((pendingPOsCount / totalPOs) * 100).toFixed(1)}%
                   </h6>{" "}
                   of total
@@ -4442,7 +4442,7 @@ const Insights = () => {
                   </span>
                 </div>
                 <h6 className="text-2xl font-bold text-gray-900">
-                  Γé╣{data.amount.toLocaleString()}
+                  ₹{data.amount.toLocaleString()}
                 </h6>
                 <div className="mt-3 bg-gray-200 rounded-full h-2 overflow-hidden">
                   <div
@@ -4451,7 +4451,7 @@ const Insights = () => {
                   />
                 </div>
                 <p className="text-xs text-gray-600 mt-2">
-                  {((data.count / totalPOs) * 100).toFixed(1)}% of orders ΓÇó{" "}
+                  {((data.count / totalPOs) * 100).toFixed(1)}% of orders •{" "}
                   {((data.amount / totalAmount) * 100).toFixed(1)}% of value
                 </p>
               </div>
@@ -4486,7 +4486,7 @@ const Insights = () => {
                     </div>
                     <div className="text-right">
                       <h6 className="text-sm font-bold text-gray-900">
-                        Γé╣{data.amount.toLocaleString()}
+                        ₹{data.amount.toLocaleString()}
                       </h6>
                       <p className="text-xs text-gray-500">
                         {((data.amount / totalAmount) * 100).toFixed(1)}%
@@ -4518,13 +4518,13 @@ const Insights = () => {
                         {po.poNumber}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {po.vendor?.name || "Unknown vendor"} ΓÇó{" "}
+                        {po.vendor?.name || "Unknown vendor"} •{" "}
                         {new Date(po.orderDate).toLocaleDateString()}
                       </p>
                     </div>
                     <div className="text-right">
                       <h6 className="text-sm font-bold text-gray-900">
-                        Γé╣{(po.totalAmount || 0).toLocaleString()}
+                        ₹{(po.totalAmount || 0).toLocaleString()}
                       </h6>
                       <div className="mt-1">{getStatusBadge(po.status)}</div>
                     </div>
@@ -4556,7 +4556,7 @@ const Insights = () => {
                         {po.poNumber}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {po.vendor?.name || "Unknown vendor"} ΓÇó{" "}
+                        {po.vendor?.name || "Unknown vendor"} •{" "}
                         {new Date(po.orderDate).toLocaleDateString()}
                       </p>
                     </div>
@@ -4564,7 +4564,7 @@ const Insights = () => {
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <h6 className="text-sm font-bold text-gray-900">
-                        Γé╣{(po.totalAmount || 0).toLocaleString()}
+                        ₹{(po.totalAmount || 0).toLocaleString()}
                       </h6>
                     </div>
                     {getStatusBadge(po.status)}
@@ -4606,7 +4606,7 @@ const Insights = () => {
                           {data.count} POs
                         </span>
                         <h6 className="text-sm font-semibold text-gray-900">
-                          Γé╣{data.amount.toLocaleString()}
+                          ₹{data.amount.toLocaleString()}
                         </h6>
                       </div>
                     </div>
@@ -4766,7 +4766,7 @@ const Insights = () => {
                   Total Amount
                 </p>
                 <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  Γé╣{totalAmount.toLocaleString()}
+                  ₹{totalAmount.toLocaleString()}
                 </h6>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -4783,7 +4783,7 @@ const Insights = () => {
                   Average Purchase
                 </p>
                 <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  Γé╣{Math.round(averagePurchaseAmount).toLocaleString()}
+                  ₹{Math.round(averagePurchaseAmount).toLocaleString()}
                 </h6>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -4842,7 +4842,7 @@ const Insights = () => {
                   Amount This Month
                 </p>
                 <p className="text-3xl font-bold text-green-900 mt-1">
-                  Γé╣{purchasesThisMonthAmount.toLocaleString()}
+                  ₹{purchasesThisMonthAmount.toLocaleString()}
                 </p>
                 <p className="text-sm text-green-600 mt-1">
                   {((purchasesThisMonthAmount / totalAmount) * 100).toFixed(1)}%
@@ -4871,7 +4871,7 @@ const Insights = () => {
                   </span>
                 </div>
                 <h6 className="text-2xl font-bold text-gray-900">
-                  Γé╣{data.amount.toLocaleString()}
+                  ₹{data.amount.toLocaleString()}
                 </h6>
                 <div className="mt-3 bg-gray-200 rounded-full h-2 overflow-hidden">
                   <div
@@ -4915,7 +4915,7 @@ const Insights = () => {
                     </div>
                     <div className="text-right">
                       <h6 className="text-sm font-bold text-gray-900">
-                        Γé╣{data.amount.toLocaleString()}
+                        ₹{data.amount.toLocaleString()}
                       </h6>
                       <p className="text-xs text-gray-500">
                         {((data.amount / totalAmount) * 100).toFixed(1)}%
@@ -4947,13 +4947,13 @@ const Insights = () => {
                         {purchase.purchaseNumber}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {purchase.vendor?.name || "Unknown vendor"} ΓÇó{" "}
+                        {purchase.vendor?.name || "Unknown vendor"} •{" "}
                         {new Date(purchase.purchaseDate).toLocaleDateString()}
                       </p>
                     </div>
                     <div className="text-right">
                       <h6 className="text-sm font-bold text-gray-900">
-                        Γé╣{(purchase.totalAmount || 0).toLocaleString()}
+                        ₹{(purchase.totalAmount || 0).toLocaleString()}
                       </h6>
                       {getStatusBadge(purchase.status)}
                     </div>
@@ -4995,7 +4995,7 @@ const Insights = () => {
                           {data.count} purchases
                         </span>
                         <h6 className="text-sm font-semibold text-gray-900">
-                          Γé╣{data.amount.toLocaleString()}
+                          ₹{data.amount.toLocaleString()}
                         </h6>
                       </div>
                     </div>
@@ -5208,7 +5208,7 @@ const Insights = () => {
                   Total Invoice Value
                 </p>
                 <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  Γé╣{totalAmount.toLocaleString()}
+                  ₹{totalAmount.toLocaleString()}
                 </h6>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -5225,7 +5225,7 @@ const Insights = () => {
                   Average Invoice
                 </p>
                 <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  Γé╣{Math.round(averageInvoiceAmount).toLocaleString()}
+                  ₹{Math.round(averageInvoiceAmount).toLocaleString()}
                 </h6>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -5245,7 +5245,7 @@ const Insights = () => {
                   {collectionRate.toFixed(1)}%
                 </p>
                 <h6 className="text-xs text-gray-500 mt-1">
-                  Γé╣{paidAmount.toLocaleString()} collected
+                  ₹{paidAmount.toLocaleString()} collected
                 </h6>
               </div>
               <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
@@ -5271,7 +5271,7 @@ const Insights = () => {
                   {paidInvoices.length}
                 </p>
                 <h6 className="text-sm text-green-600 mt-1">
-                  Γé╣{paidAmount.toLocaleString()} ΓÇó{" "}
+                  ₹{paidAmount.toLocaleString()} •{" "}
                   {((paidAmount / totalAmount) * 100).toFixed(1)}% of total
                 </h6>
               </div>
@@ -5292,7 +5292,7 @@ const Insights = () => {
                   {pendingInvoices.length}
                 </p>
                 <h6 lassName="text-sm text-yellow-600 mt-1">
-                  Γé╣{pendingAmount.toLocaleString()} ΓÇó{" "}
+                  ₹{pendingAmount.toLocaleString()} •{" "}
                   {((pendingAmount / totalAmount) * 100).toFixed(1)}% of total
                 </h6>
               </div>
@@ -5313,7 +5313,7 @@ const Insights = () => {
                   {overdueInvoices.length}
                 </p>
                 <h6 className="text-sm text-red-600 mt-1">
-                  Γé╣{overdueAmount.toLocaleString()} ΓÇó Immediate attention needed
+                  ₹{overdueAmount.toLocaleString()} • Immediate attention needed
                 </h6>
               </div>
             </div>
@@ -5350,7 +5350,7 @@ const Insights = () => {
                 </Pie>
                 <Tooltip
                   formatter={(value, name, props) => [
-                    `${value} invoices (Γé╣${props.payload.amount.toLocaleString()})`,
+                    `${value} invoices (₹${props.payload.amount.toLocaleString()})`,
                     name,
                   ]}
                 />
@@ -5384,7 +5384,7 @@ const Insights = () => {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
-                <Tooltip formatter={(value) => `Γé╣${value.toLocaleString()}`} />
+                <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} />
                 <Legend />
                 <Bar dataKey="Total" fill="#3b82f6" />
                 <Bar dataKey="Paid" fill="#10b981" />
@@ -5415,12 +5415,12 @@ const Insights = () => {
                         {dealTitle}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {data.count} invoices ΓÇó {data.paid} paid
+                        {data.count} invoices • {data.paid} paid
                       </p>
                     </div>
                     <div className="text-right">
                       <h6 className="text-sm font-bold text-gray-900">
-                        Γé╣{data.amount.toLocaleString()}
+                        ₹{data.amount.toLocaleString()}
                       </h6>
                       <h6 className="text-xs text-gray-500">
                         {((data.amount / totalAmount) * 100).toFixed(1)}%
@@ -5452,13 +5452,13 @@ const Insights = () => {
                         {invoice.invoiceNumber}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {invoice.deal?.title || "No deal"} ΓÇó{" "}
+                        {invoice.deal?.title || "No deal"} •{" "}
                         {new Date(invoice.date).toLocaleDateString()}
                       </p>
                     </div>
                     <div className="text-right">
                       <h6 className="text-sm font-bold text-gray-900">
-                        Γé╣{(invoice.amount || 0).toLocaleString()}
+                        ₹{(invoice.amount || 0).toLocaleString()}
                       </h6>
                       <div className="mt-1">
                         {getStatusBadge(invoice.status)}
@@ -5492,10 +5492,10 @@ const Insights = () => {
                         {invoice.invoiceNumber}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {invoice.deal?.title || "No deal"} ΓÇó Issued:{" "}
+                        {invoice.deal?.title || "No deal"} • Issued:{" "}
                         {new Date(invoice.date).toLocaleDateString()}
                         {invoice.dueDate &&
-                          ` ΓÇó Due: ${new Date(
+                          ` • Due: ${new Date(
                             invoice.dueDate
                           ).toLocaleDateString()}`}
                       </p>
@@ -5504,7 +5504,7 @@ const Insights = () => {
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <h6 className="text-sm font-bold text-gray-900">
-                        Γé╣{(invoice.amount || 0).toLocaleString()}
+                        ₹{(invoice.amount || 0).toLocaleString()}
                       </h6>
                     </div>
                     {getStatusBadge(invoice.status)}
@@ -5530,7 +5530,7 @@ const Insights = () => {
               </p>
               <p className="text-sm text-indigo-600 mt-1">
                 Total Value:{" "}
-                <h6>Γé╣{invoicesThisMonthAmount.toLocaleString()}</h6> ΓÇó{" "}
+                <h6>₹{invoicesThisMonthAmount.toLocaleString()}</h6> •{" "}
                 {((invoicesThisMonthCount / totalInvoices) * 100).toFixed(1)}%
                 of all invoices
               </p>
@@ -5565,7 +5565,7 @@ const Insights = () => {
         boxSizing: "border-box",
       }}
     >
-      {/* Fixed strip ΓÇö same pinned-below-header treatment as Companies.jsx's
+      {/* Fixed strip — same pinned-below-header treatment as Companies.jsx's
           toolbar. Title text lives in the top navbar (Header.jsx) instead;
           this strip is just the spacer bar. */}
       <div
