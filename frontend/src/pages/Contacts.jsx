@@ -84,6 +84,9 @@ import {
 } from "@tanstack/react-table";
 import ContactQuickView from "../components/contact/ContactQuickView";
 import AppToaster from "../components/AppToaster";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 
 import SearchIcon from "../components/common/SearchIcon";
 // Custom hook to detect mobile screen
@@ -189,6 +192,10 @@ function Contacts() {
   const [editingPage, setEditingPage] = useState(false);
   const [pageInput, setPageInput] = useState("");
   const [showBulkActions, setShowBulkActions] = useState(false);
+  // Bulk row selection requires Growth+
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [editContact, setEditContact] = useState(null);
@@ -342,17 +349,6 @@ function Contacts() {
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
-
-    // REMOVED: an `if (e.detail === 1) { …open the column menu… return; }` block.
-    // It was broken three ways at once. (1) It referenced openColMenuKey /
-    // setOpenColMenuKey / setColMenuPos, which don't exist in this file — the
-    // state here is openColumnMenuKey / setColumnMenuPos — so it threw a
-    // ReferenceError on every header mousedown. (2) Because it threw (and
-    // because it `return`ed early), the movement-threshold drag logic below
-    // never got its mousemove/mouseup listeners attached, so column reordering
-    // could not start. (3) Its position maths was unzoomed and duplicated the
-    // chevron button's own correct, zoom-corrected calculation. The menu opens
-    // solely from that button; a plain click on the header now does nothing.
 
     const th = e.currentTarget;
     const startX = e.clientX;
@@ -771,7 +767,7 @@ function Contacts() {
 
   const columnHelper = createColumnHelper();
 
-  // The server now returns contacts already sorted starred-first (via the
+  // The server now returns contacts already starred-first (via the
   // /contacts/pagination aggregation), so no client-side re-sort is needed.
   const sortedContacts = contacts;
 
@@ -2036,6 +2032,10 @@ function Contacts() {
   );
 
   const handleSelectContact = (contactId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedContacts((prev) =>
       prev.includes(contactId)
         ? prev.filter((id) => id !== contactId)
@@ -2044,6 +2044,10 @@ function Contacts() {
   };
 
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     if (selectedContacts.length === contacts.length) {
       setSelectedContacts([]);
       setSelectionMode(true);

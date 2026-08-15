@@ -10,6 +10,7 @@ const noteSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // Open string — supports custom note types configured in SystemDefaultsSettings
   noteType: {
     type: String,
     default: 'General Note',
@@ -37,6 +38,21 @@ const noteSchema = new mongoose.Schema({
       ref: 'Contact',
     },
   ],
+  // Additional deals/invoices linked from the note editor's "Link Deal" /
+  // "Link Invoice" fields — separate from the single `deal` above, which
+  // scopes the note itself to one deal (e.g. when created from a deal page).
+  taggedDeals: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Deal',
+    },
+  ],
+  taggedInvoices: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Invoice',
+    },
+  ],
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -50,3 +66,4 @@ const noteSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = mongoose.model('Note', noteSchema);
+

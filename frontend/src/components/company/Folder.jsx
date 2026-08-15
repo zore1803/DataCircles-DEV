@@ -5,6 +5,9 @@ import { createPortal } from "react-dom";
 import API from "../../services/api";
 import BulkActionBar from "../common/BulkActionBar";
 import { useBulkStrip } from "../../hooks/useBulkSelection";
+import { useSubscription } from "../../contexts/SubscriptionContext";
+import { hasMinPlan } from "../../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../subscription/UpgradeRequiredModal";
 import folderIconImg from "../../assets/Folder-icon.png";
 import pdfIconImg from "../../assets/pdf-icon.png";
 import { useParams } from "react-router-dom";
@@ -319,6 +322,12 @@ const ConfirmModal = ({ title, description, confirmLabel, extra, requireCheck, o
             {confirmLabel}
           </button>
         </div>
+        <UpgradeRequiredModal
+          open={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          minPlan="growth"
+          feature="Selecting multiple files"
+        />
       </div>
     </div>
   );
@@ -1080,8 +1089,11 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   const [selectedFolderId, setSelectedFolderId] = useState("");
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [folderPickerSearch, setFolderPickerSearch] = useState("");
-  const [selectedFileNames, setSelectedFileNames] = useState([]);
-  const { visible: fileBulkVisible, closing: fileBulkClosing } = useBulkStrip(selectedFileNames.length);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [fileBulkVisible, setFileBulkVisible] = useState(false);
   const [fileSearchTerm, setFileSearchTerm] = useState("");
   const [openFolderId, setOpenFolderId] = useState("");
   const [newFiles, setNewFiles] = useState([]);
@@ -1125,6 +1137,29 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
       onFoldersChange?.(res.data || []);
     } catch (err) {
       toast.error("Failed to fetch folders");
+    }
+  };
+
+  const handleToggleSelectOne = (id) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAll = (filteredFiles = [], filteredFolders = []) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    const allIds = [...filteredFiles.map((f) => f.id), ...filteredFolders.map((f) => f._id)];
+    if (selectedIds.length === allIds.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(allIds);
     }
   };
 

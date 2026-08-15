@@ -43,8 +43,11 @@ import {
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
-import toast from "react-hot-toast";
+import SearchIcon from "../components/common/SearchIcon";
 import AppToaster from "../components/AppToaster";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 import HighlightText from "../components/common/HighlightText";
 import { formatNumberFixed } from "../utils/numberFormatter";
 import InvoiceForm, { CreateInvoicePanel } from "../components/invoice/InvoiceForm";
@@ -71,7 +74,6 @@ import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 
-import SearchIcon from "../components/common/SearchIcon";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 /* Drops the organization's saved boilerplate (Settings → document defaults)
    into a notes/terms box, so the same footer text doesn't have to be retyped
@@ -932,6 +934,9 @@ const Accounting = () => {
 
   // UI state
   const [selectedIds, setSelectedIds] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [editPanelDoc, setEditPanelDoc] = useState(null);
   const [conversionData, setConversionData] = useState(null);
@@ -1183,6 +1188,10 @@ const Accounting = () => {
   };
 
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedIds((prev) =>
       prev.length === currentDocuments.length && currentDocuments.length > 0
         ? []
@@ -1191,6 +1200,10 @@ const Accounting = () => {
   };
 
   const handleSelectOne = (id) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
@@ -2935,6 +2948,13 @@ const Accounting = () => {
           }}
         />
       </div>
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </>
   );
 };

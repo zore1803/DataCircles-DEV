@@ -27,6 +27,13 @@ const app = express();
 console.log("JWT Secret Check:", process.env.SUPER_ADMIN_JWT_SECRET ? "LOADED" : "MISSING");
 
 // Enhanced CORS configuration
+// ALLOWED_ORIGINS (comma-separated) lets a new deploy target (e.g. a fresh
+// Vercel project URL) be whitelisted via env var alone, no code change/rebuild needed.
+const extraOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 const corsOptions = {
   origin: [
     "https://crm-frontend-flax-tau.vercel.app",
@@ -38,6 +45,7 @@ const corsOptions = {
     "https://app.datacircles.in",
     "https://data-circles-crm-dev.vercel.app",
     "https://data-circles-dev.vercel.app",
+    ...extraOrigins,
   ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
@@ -79,6 +87,9 @@ app.use('/api/companies', companyRoutes);
 
 const contactRoutes = require('./routes/contactRoutes');
 app.use('/api/contacts', contactRoutes);
+
+const walletRoutes = require('./routes/walletRoutes');
+app.use('/api/wallet', walletRoutes);
 
 // PUBLIC, unauthenticated form-submission surface (FORMS_ARCHITECTURE.md §2.9) — org resolved from the
 // URL slug inside the service, never from req.user (there is none here). Kept as its own router so the

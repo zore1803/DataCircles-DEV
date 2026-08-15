@@ -52,6 +52,9 @@ import ExportModal from "../components/common/ExportModal";
 
 import SearchIcon from "../components/common/SearchIcon";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 function useOutsideClick(ref, callback) {
   useEffect(() => {
     function handleClickOutside(event) {
@@ -120,6 +123,10 @@ function Vendors() {
   const [editVendor, setEditVendor] = useState(null);
   const [selectedVendors, setSelectedVendors] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
+  // Bulk row selection requires Growth+
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -880,6 +887,10 @@ function Vendors() {
   // handleSelectAllAcrossPages below — so a stray click on the header
   // checkbox can't silently select hundreds of off-screen rows.
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     if (selectedVendors.length === vendors.length && vendors.length > 0) {
       setSelectedVendors([]);
     } else {
@@ -914,6 +925,10 @@ function Vendors() {
   };
 
   const handleSelectVendor = (vendorId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedVendors((prev) =>
       prev.includes(vendorId)
         ? prev.filter((id) => id !== vendorId)
@@ -1929,6 +1944,13 @@ function Vendors() {
         selectedIds={selectedVendors}
         exportUrl="/vendors/export-selected"
         fileName="Exported_Vendors.csv"
+      />
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
       />
     </>
   );

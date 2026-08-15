@@ -1875,32 +1875,6 @@ function ProductsServices() {
                   )}
                 </div>
 
-                {/* Temp comparison button — opens old ItemForm */}
-                <button
-                  onClick={() => {
-                    setForm({
-                      type: "product",
-                      name: "",
-                      description: "",
-                      purchasePrice: 0,
-                      sellingPrice: 0,
-                      taxInclusive: true,
-                      hsnSac: "",
-                      barcode: "",
-                      category: "",
-                      primaryUnit: "OTH-OTHERS",
-                      images: [],
-                      isActive: true,
-                      variants: [],
-                    });
-                    setShowForm(true);
-                  }}
-                  className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-gray-100 text-gray-700 text-sm font-medium rounded-full hover:bg-gray-200 focus:outline-none cursor-pointer transition-colors flex-shrink-0 border border-gray-300"
-                  title="Old Create Item"
-                >
-                  <Plus className="w-4 h-4 flex-shrink-0" />
-                  <span>Old</span>
-                </button>
 
                 <button
                   onClick={() => setShowQuickCreate(true)}

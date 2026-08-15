@@ -2,18 +2,23 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { 
   X, ChevronDown, ChevronUp, MoreVertical, Pencil, Trash2, Eye, EyeOff,
-  SlidersHorizontal, Plus, Download, Share2, 
+  SlidersHorizontal, Plus, Download, Share2, Edit2,
   ChevronLeft, ChevronRight, Pin, PinOff, FileText
 } from "lucide-react";
 import SearchIcon from "../components/common/SearchIcon";
+import FilterIcon from "../components/common/FilterIcon";
+import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import API from "../services/api";
 import toast from "react-hot-toast";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import PaymentFormModal from "../components/payments/PaymentFormModal";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { getAncestorZoom } from "../utils/domUtils";
+import BulkActionBar from "../components/common/BulkActionBar";
+import { useBulkStrip } from "../hooks/useBulkSelection";
+import * as XLSX from "xlsx";
 
-/* ─── Column definitions ───────────────────────────────────────────── */
+/* ΓöÇΓöÇΓöÇ Column definitions ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 const DEFAULT_COL_WIDTHS = {
   selection: 60,
   "payment-id": 160,
@@ -26,15 +31,15 @@ const DEFAULT_COL_WIDTHS = {
 const MIN_COL_WIDTH = 60;
 
 const ALL_COLUMNS = [
-  { id: "payment-id", label: "Transaction ID" },
-  { id: "party",     label: "Party / Entity"  },
-  { id: "amount",    label: "Amount"           },
-  { id: "direction", label: "Direction"        },
-  { id: "type",      label: "Type"             },
-  { id: "date",      label: "Date"             },
+  { id: "payment-id", key: "payment-id", label: "Transaction ID" },
+  { id: "party",      key: "party",      label: "Party / Entity"  },
+  { id: "amount",     key: "amount",     label: "Amount"           },
+  { id: "direction",  key: "direction",  label: "Direction"        },
+  { id: "type",       key: "type",       label: "Type"             },
+  { id: "date",       key: "date",       label: "Date"             },
 ];
 
-/* ─── Shared resize handle (same as Accounting.jsx pattern) ─────────── */
+/* ΓöÇΓöÇΓöÇ Shared resize handle (same as Accounting.jsx pattern) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 const ColumnResizeHandle = React.memo(({ colId, onResizeStart }) => (
   <div
     data-resize-handle="true"
@@ -51,7 +56,7 @@ const cellTextFor = (colId, doc) => {
   switch (colId) {
     case "payment-id": return doc["payment-id"] || "";
     case "party":      return doc.party || "";
-    case "amount":     return doc.amount != null ? `₹${Number(doc.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "";
+    case "amount":     return doc.amount != null ? `Γé╣${Number(doc.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "";
     case "direction":  return doc.direction === "IN" ? "Credit" : "Debit";
     case "type":       return doc.type || "";
     case "date":       return doc.date ? new Date(doc.date).toLocaleString() : "";
@@ -59,7 +64,7 @@ const cellTextFor = (colId, doc) => {
   }
 };
 
-/* ─── Component ─────────────────────────────────────────────────────── */
+/* ΓöÇΓöÇΓöÇ Component ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 export default function PaymentsTimeline() {
   const [documents, setDocuments] = useState([]);
   const [pagination, setPagination] = useState({
@@ -89,6 +94,9 @@ export default function PaymentsTimeline() {
   const [companies, setCompanies]               = useState([]);
   const [partyFilter, setPartyFilter]           = useState("");
   const [directionFilter, setDirectionFilter]   = useState("");
+  const [typeFilter, setTypeFilter]             = useState("");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [activeFilters, setActiveFilters]       = useState([]);
 
   /* drag-reorder state (mirror of Accounting.jsx) */
   const [draggedColKey,  setDraggedColKey]  = useState(null);
@@ -99,11 +107,17 @@ export default function PaymentsTimeline() {
 
   /* row selection */
   const [selectedIds, setSelectedIds] = useState([]);
+  const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedIds.length);
 
   /* misc UI */
   const [showFilterMenu,    setShowFilterMenu]    = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [editingPaymentItem, setEditingPaymentItem] = useState(null);
   const [openActionMenuId,  setOpenActionMenuId]  = useState(null);
+  const [actionMenuPos,     setActionMenuPos]     = useState(null);
+  const [deleteConfirmState, setDeleteConfirmState] = useState({ isOpen: false, type: "single", target: null });
+  const [editingPage, setEditingPage] = useState(false);
+  const [pageInput, setPageInput] = useState("");
 
   /* Fetch companies list for Party filter */
   useEffect(() => {
@@ -149,7 +163,7 @@ export default function PaymentsTimeline() {
     });
   }, []);
 
-  /* ── orderedColumns (mirrors Accounting.jsx pattern) ─────────────── */
+  /* ΓöÇΓöÇ orderedColumns (mirrors Accounting.jsx pattern) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
   const orderedColumns = useMemo(
     () => columnOrder
       .map(id => ALL_COLUMNS.find(c => c.id === id))
@@ -161,7 +175,7 @@ export default function PaymentsTimeline() {
     [columnOrder, pinnedCols, hiddenCols]
   );
 
-  /* ── sticky offset map (same as Accounting.jsx) ─────────────────── */
+  /* ΓöÇΓöÇ sticky offset map (same as Accounting.jsx) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
   const stickyStyles = useMemo(() => {
     const map = {};
     let leftOffset = colWidths.selection;
@@ -183,19 +197,29 @@ export default function PaymentsTimeline() {
 
   const stickyStyleFor = useCallback(colId => stickyStyles[colId] || {}, [stickyStyles]);
 
-  /* ── close menus on outside click ───────────────────────────────── */
+  /* ΓöÇΓöÇ close menus on outside click ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
   useEffect(() => {
     const handle = () => { setShowFilterMenu(false); setOpenActionMenuId(null); };
     document.addEventListener("click", handle);
     return () => document.removeEventListener("click", handle);
   }, []);
 
-  /* ── data fetching ───────────────────────────────────────────────── */
+  /* ΓöÇΓöÇ data fetching ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
   const fetchData = useCallback(async () => {
     setShowLoadingSkeleton(true);
     try {
-      const partyParam = partyFilter ? `&party=${encodeURIComponent(partyFilter)}` : "";
-      const res = await API.get(`/payments-timeline?page=${pagination.currentPage}&limit=${pagination.limit}${partyParam}`);
+      const params = new URLSearchParams();
+      params.append("page", pagination.currentPage);
+      params.append("limit", pagination.limit);
+      if (searchQuery) params.append("search", searchQuery);
+
+      // Pass all active filters as JSON string to backend
+      const validRules = (activeFilters || []).filter(f => f.column && (f.value !== "" || ["is_empty", "is_not_empty"].includes(f.operator)));
+      if (validRules.length > 0) {
+        params.append("rules", JSON.stringify(validRules));
+      }
+
+      const res = await API.get(`/payments-timeline?${params.toString()}`);
       setDocuments(res.data.documents || []);
       if (res.data.pagination) setPagination(res.data.pagination);
     } catch (err) {
@@ -204,30 +228,45 @@ export default function PaymentsTimeline() {
     } finally {
       setShowLoadingSkeleton(false);
     }
-  }, [pagination.currentPage, pagination.limit, partyFilter]);
+  }, [pagination.currentPage, pagination.limit, searchQuery, activeFilters]);
 
-  useEffect(() => { fetchData(); }, [pagination.currentPage, pagination.limit, partyFilter]);
+  /* ΓöÇΓöÇ fetch ALL record IDs from DB for global Select All ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  const fetchAllIds = useCallback(async () => {
+    const tid = toast.loading("Selecting all records...");
+    try {
+      const params = new URLSearchParams();
+      params.append("page", 1);
+      params.append("limit", 99999);
+      if (searchQuery) params.append("search", searchQuery);
 
-  /* ── filtered and sorted docs ─────────────────────────────────────── */
-  const filteredDocs = useMemo(() => {
-    let list = documents.filter(doc => {
-      const term = searchQuery.toLowerCase();
-      const matchesSearch = (doc["payment-id"] || "").toLowerCase().includes(term) ||
-                            (doc.party || "").toLowerCase().includes(term);
-      if (!matchesSearch) return false;
-
-      if (partyFilter && doc.party !== partyFilter) return false;
-
-      if (directionFilter) {
-        if (directionFilter === "Credit" && doc.direction !== "IN") return false;
-        if (directionFilter === "Debit" && doc.direction !== "OUT") return false;
+      const validRules = (activeFilters || []).filter(f => f.column && (f.value !== "" || ["is_empty", "is_not_empty"].includes(f.operator)));
+      if (validRules.length > 0) {
+        params.append("rules", JSON.stringify(validRules));
       }
 
-      return true;
-    });
+      const res = await API.get(`/payments-timeline?${params.toString()}`);
+      const allDocs = res.data.documents || [];
+      setSelectedIds(allDocs.map(d => d._id));
+      toast.success(`Selected all ${allDocs.length} record(s).`, { id: tid });
+    } catch (err) {
+      toast.error("Failed to fetch all records", { id: tid });
+      console.error(err);
+    }
+  }, [searchQuery, activeFilters]);
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+  }, [searchQuery, activeFilters]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  /* ΓöÇΓöÇ sorted docs ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  const filteredDocs = useMemo(() => {
+    let list = [...documents];
 
     if (sortConfig.key) {
-      list = [...list].sort((a, b) => {
+      list.sort((a, b) => {
         let valA = a[sortConfig.key];
         let valB = b[sortConfig.key];
         if (sortConfig.key === "party") {
@@ -243,7 +282,7 @@ export default function PaymentsTimeline() {
     }
 
     return list;
-  }, [documents, searchQuery, partyFilter, directionFilter, sortConfig]);
+  }, [documents, sortConfig]);
 
   const handleSelectAll = e =>
     setSelectedIds(e.target.checked ? filteredDocs.map(d => d._id) : []);
@@ -253,11 +292,52 @@ export default function PaymentsTimeline() {
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
 
-  /* ── pagination ─────────────────────────────────────────────────── */
+  /* ΓöÇΓöÇ Export to Excel function ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+  const handleExportExcel = useCallback((itemsToExport) => {
+    const list = Array.isArray(itemsToExport) ? itemsToExport : [itemsToExport];
+    if (!list.length) {
+      toast.error("No entries selected for export");
+      return;
+    }
+
+    const exportData = list.map(item => ({
+      "Transaction ID": item["payment-id"] || item._id || "N/A",
+      "Party / Entity": item.party || "N/A",
+      "Amount (Γé╣)": item.amount !== undefined ? item.amount : 0,
+      "Direction": item.direction === "IN" ? "Credit (IN)" : "Debit (OUT)",
+      "Type": item.type || item.paymentType || item.source || "N/A",
+      "Date": item.date ? new Date(item.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "N/A",
+      "Bank Account": item.bank || "N/A",
+      "Notes": item.notes || ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Payments Timeline");
+
+    // Dynamic column width adjustment
+    const colWidths = [
+      { wch: 22 }, // Transaction ID
+      { wch: 26 }, // Party
+      { wch: 15 }, // Amount
+      { wch: 15 }, // Direction
+      { wch: 16 }, // Type
+      { wch: 18 }, // Date
+      { wch: 22 }, // Bank
+      { wch: 30 }, // Notes
+    ];
+    worksheet["!cols"] = colWidths;
+
+    const filename = `Payments_Timeline_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+    toast.success(`Exported ${list.length} item(s) to ${filename}`);
+  }, []);
+
+  /* ΓöÇΓöÇ pagination ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
   const handlePageChange  = newPage   => { if (newPage > 0 && newPage <= pagination.totalPages) setPagination(p => ({ ...p, currentPage: newPage })); };
   const handleLimitChange = newLimit  => setPagination(p => ({ ...p, limit: newLimit, currentPage: 1 }));
 
-  /* ── Column resize (same pattern as Accounting.jsx) ─────────────── */
+  /* ΓöÇΓöÇ Column resize (same pattern as Accounting.jsx) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
   const startColumnResize = useCallback((e, colId) => {
     if (e.button !== 0) return;
     e.stopPropagation();
@@ -280,7 +360,7 @@ export default function PaymentsTimeline() {
     <ColumnResizeHandle colId={colId} onResizeStart={startColumnResize} />
   ), []);
 
-  /* ── Column drag-reorder (exact clone of Accounting.jsx) ─────────── */
+  /* ΓöÇΓöÇ Column drag-reorder (exact clone of Accounting.jsx) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
   const handleColumnReorder = useCallback((draggedKey, targetKey) => {
     if (!draggedKey || draggedKey === targetKey) return;
     setColumnOrder(prev => {
@@ -331,7 +411,7 @@ export default function PaymentsTimeline() {
 
       const rect = th.getBoundingClientRect();
       const col  = ALL_COLUMNS.find(c => c.id === colId);
-      const previewRows = documents.slice(0, 5).map(doc => cellTextFor(colId, doc));
+      const previewRows = documents.map(doc => cellTextFor(colId, doc));
 
       dragState.zGhost  = getAncestorZoom(document.body);
       dragState.offsetX = startX - rect.left;
@@ -378,64 +458,84 @@ export default function PaymentsTimeline() {
     document.addEventListener("mouseup",   handleMouseUp);
   };
 
-  /* ── Action menu ─────────────────────────────────────────────────── */
+  /* ΓöÇΓöÇ Action menu ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
   const renderActionMenu = doc => {
     const isOpen = openActionMenuId === doc._id;
     return (
       <div className="relative flex-shrink-0 flex items-center">
         <button
-          onClick={e => { e.stopPropagation(); setOpenActionMenuId(isOpen ? null : doc._id); }}
+          onClick={e => {
+            e.stopPropagation();
+            if (isOpen) {
+              setOpenActionMenuId(null);
+              setActionMenuPos(null);
+            } else {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setActionMenuPos({ top: rect.top + rect.height / 2, right: window.innerWidth - rect.left + 4 });
+              setOpenActionMenuId(doc._id);
+            }
+          }}
           className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
         >
           <MoreVertical size={15} />
         </button>
-        {isOpen && (
-          <div
-            className="absolute right-8 top-1/2 -translate-y-1/2 w-40 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-[60] overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              onClick={() => { setOpenActionMenuId(null); toast.success("View details coming soon!"); }}>
-              <Eye className="w-4 h-4 text-gray-400" /> View
-            </button>
-            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              onClick={() => { setOpenActionMenuId(null); toast.success("Edit coming soon!"); }}>
-              <Pencil className="w-4 h-4 text-gray-400" /> Edit
-            </button>
-            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              onClick={() => { setOpenActionMenuId(null); toast.success("Download coming soon!"); }}>
-              <Download className="w-4 h-4 text-gray-400" /> Download
-            </button>
-            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              onClick={() => { setOpenActionMenuId(null); toast.success("Share coming soon!"); }}>
-              <Share2 className="w-4 h-4 text-gray-400" /> Share
-            </button>
-            <div className="h-px bg-gray-100 my-1" />
-            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-              onClick={() => {
-                setOpenActionMenuId(null);
-                if (doc.source === "Payment") {
-                  API.delete(`/vendors/${doc.vendor}/payments/${doc._id}`)
-                    .then(() => fetchData())
-                    .catch(() => toast.error("Failed to delete"));
-                } else {
-                  toast.error(`Cannot delete ${doc.source} from timeline.`);
-                }
-              }}>
-              <Trash2 className="w-4 h-4 text-red-500" /> Delete
-            </button>
-          </div>
+        {isOpen && actionMenuPos && createPortal(
+          <>
+            {/* Invisible backdrop to close menu on click-outside */}
+            <div className="fixed inset-0 z-[59]" onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); }} />
+            <div
+              className="fixed w-40 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-[60] overflow-hidden"
+              style={{ top: actionMenuPos.top, right: actionMenuPos.right, transform: "translateY(-50%)" }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); toast.success("View details coming soon!"); }}>
+                <Eye className="w-4 h-4 text-gray-400" /> View
+              </button>
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+                onClick={() => {
+                  setOpenActionMenuId(null);
+                  setActionMenuPos(null);
+                  setEditingPaymentItem(doc);
+                  setIsPaymentModalOpen(true);
+                }}>
+                <Pencil className="w-4 h-4 text-gray-400" /> Edit
+              </button>
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+                onClick={() => {
+                  setOpenActionMenuId(null);
+                  setActionMenuPos(null);
+                  handleExportExcel(doc);
+                }}>
+                <Download className="w-4 h-4 text-gray-400" /> Download
+              </button>
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); toast.success("Share coming soon!"); }}>
+                <Share2 className="w-4 h-4 text-gray-400" /> Share
+              </button>
+              <div className="h-px bg-gray-100 my-1" />
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+                onClick={() => {
+                  setOpenActionMenuId(null);
+                  setActionMenuPos(null);
+                  setDeleteConfirmState({ isOpen: true, type: "single", target: doc });
+                }}>
+                <Trash2 className="w-4 h-4 text-red-500" /> Delete
+              </button>
+            </div>
+          </>,
+          document.body
         )}
       </div>
     );
   };
 
-  /* ── Cell renderer ───────────────────────────────────────────────── */
+  /* ΓöÇΓöÇ Cell renderer ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
   const renderCell = (colId, doc, isRightmost) => {
     let content;
     switch (colId) {
       case "amount":
-        content = `₹${Number(doc.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        content = `Γé╣${Number(doc.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         break;
       case "date":
         content = doc.date ? new Date(doc.date).toLocaleString() : "";
@@ -469,7 +569,7 @@ export default function PaymentsTimeline() {
     );
   };
 
-  /* ── Pagination items ────────────────────────────────────────────── */
+  /* ΓöÇΓöÇ Pagination items ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
   const paginationItems = useMemo(() => {
     const items = [];
     const { currentPage, totalPages } = pagination;
@@ -482,13 +582,13 @@ export default function PaymentsTimeline() {
     return items;
   }, [pagination]);
 
-  /* ─────────────────────────────────────────────────────────────────── */
+  /* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-[#FAFBFC]">
 
-      {/* ── Fixed header bar (matches Accounting.jsx) ─────────────── */}
+      {/* ΓöÇΓöÇ Fixed header bar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
       <div
-        className="fixed right-0 h-[72px] px-6 flex items-center justify-between border-b border-[#E1E4EA] bg-white top-[54px] lg:top-16"
+        className="fixed right-0 h-16 px-6 flex items-center justify-between border-b border-[#E1E4EA] bg-white top-[54px] lg:top-16"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
       >
         <div className="flex items-center gap-4">
@@ -499,12 +599,12 @@ export default function PaymentsTimeline() {
         </div>
 
         <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
-          {/* Search — expands in place from the icon, matching Accounting */}
+          {/* Search ΓÇö expands in place from the icon */}
           <div
-            className={`relative h-11 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-11"} max-w-full flex-shrink-0`}
+            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"} max-w-full flex-shrink-0`}
           >
             <SearchIcon
-              className="absolute left-3.5 text-[#525866] w-4 h-4 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2"
+              className="absolute left-3 text-[#525866] w-4 h-4 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2"
               onClick={() => { setIsSearchExpanded(true); searchInputRef.current?.focus(); }}
             />
             <input
@@ -515,7 +615,7 @@ export default function PaymentsTimeline() {
               onFocus={() => setIsSearchExpanded(true)}
               onBlur={() => { if (!searchQuery) setIsSearchExpanded(false); }}
               placeholder="Search by ID or party..."
-              className={`w-full h-full bg-transparent rounded-full pl-11 pr-9 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+              className={`w-full h-full bg-transparent rounded-full pl-9 pr-9 text-[14px] leading-[20px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
             />
             {isSearchExpanded && searchQuery && (
               <button
@@ -531,48 +631,66 @@ export default function PaymentsTimeline() {
           </div>
 
           {/* Filter Button */}
-          <div className="relative flex-shrink-0">
-            <button
-              title="Filter"
-              onClick={e => { e.stopPropagation(); setShowFilterMenu(v => !v); }}
-              className={`flex items-center justify-center w-11 h-11 rounded-full border transition-colors bg-white ${showFilterMenu ? "border-[#0085FF] text-[#0085FF]" : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"}`}
-            >
-              <SlidersHorizontal size={18} strokeWidth={2} className={showFilterMenu ? "text-[#0085FF]" : "text-[#1F2937]"} />
-            </button>
-            {showFilterMenu && (
-              <div
-                onClick={e => e.stopPropagation()}
-                className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-50"
-              >
-                {["", "Credit", "Debit", "Invoice", "Purchase", "Subscription", "Payment"].map(opt => (
-                  <button
-                    key={opt || "all"}
-                    onClick={() => setShowFilterMenu(false)}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    {opt || "All Types"}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Add Button — same style as Accounting (rounded-full, 44 h, 146 min-w) */}
           <button
-            onClick={() => setIsPaymentModalOpen(true)}
-            style={{ minWidth: 146, height: 44, padding: 12, gap: 6, background: "#0085FF", borderRadius: 96 }}
-            className="flex flex-row justify-center items-center hover:bg-blue-600 transition-colors flex-shrink-0 ml-1"
+            type="button"
+            onClick={() => setShowAdvancedFilters(true)}
+            className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors bg-white cursor-pointer flex-shrink-0"
+            title="Filters"
           >
-            <Plus size={18} className="text-white flex-shrink-0" />
-            <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">Add Payment</span>
+            <FilterIcon size={16} />
+            {activeFilters.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                {activeFilters.length}
+              </span>
+            )}
+          </button>
+
+          {/* Add Button */}
+          <button
+            onClick={() => {
+              setEditingPaymentItem(null);
+              setIsPaymentModalOpen(true);
+            }}
+            className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 transition-colors flex-shrink-0 ml-1 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 flex-shrink-0 text-white" />
+            <span className="whitespace-nowrap">Add Payment</span>
           </button>
         </div>
       </div>
 
-      {/* ── Full-bleed table (matches Accounting.jsx layout) ──────── */}
+      {/* ΓöÇΓöÇ BulkActionBar ΓÇö floats between title bar and table when rows are selected ΓöÇΓöÇ */}
+      {stripVisible && (
+        <div
+          className="fixed right-0 px-6 z-[40]"
+          style={{ left: "var(--sidebar-width, 0px)", top: 126, paddingTop: 4, paddingBottom: 4 }}
+        >
+          <BulkActionBar
+            selectedCount={selectedIds.length}
+            entityName="payment"
+            isClosing={stripClosing}
+            onSelectAll={fetchAllIds}
+            onDeselectAll={() => setSelectedIds([])}
+            onExport={() => {
+              const selectedDocs = documents.filter(doc => selectedIds.includes(doc._id));
+              handleExportExcel(selectedDocs.length > 0 ? selectedDocs : selectedIds.map(id => ({ _id: id })));
+            }}
+            onDelete={() => {
+              setDeleteConfirmState({ isOpen: true, type: "bulk", target: selectedIds });
+            }}
+            onCancel={() => setSelectedIds([])}
+          />
+        </div>
+      )}
+
+      {/* ΓöÇΓöÇ Full-bleed table (matches Accounting.jsx layout) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
       <div
-        className="fixed right-0 overflow-x-auto overflow-y-auto bg-white top-[126px] lg:top-[136px]"
-        style={{ left: "var(--sidebar-width, 0px)", bottom: 64 }}
+        className="fixed right-0 overflow-x-auto overflow-y-auto bg-white"
+        style={{
+          left: "var(--sidebar-width, 0px)",
+          bottom: 64,
+          top: stripVisible ? 178 : 130,
+        }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-[#F5F7FA] sticky top-0 z-20">
@@ -687,7 +805,7 @@ export default function PaymentsTimeline() {
         </table>
       </div>
 
-      {/* ── Drag ghost portal (exact copy of Accounting.jsx) ──────── */}
+      {/* ΓöÇΓöÇ Drag ghost portal (exact copy of Accounting.jsx) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
       {dragGhost && createPortal(
         <div
           ref={ghostElRef}
@@ -716,7 +834,7 @@ export default function PaymentsTimeline() {
         document.body
       )}
 
-      {/* ── Pagination bar ────────────────────────────────────────── */}
+      {/* ΓöÇΓöÇ Pagination bar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
       <div
         className="fixed bottom-0 right-0 h-16 bg-white border-t border-[#E1E4EA] flex items-center justify-between px-6 z-40"
         style={{ left: "var(--sidebar-width, 0px)" }}
@@ -737,7 +855,7 @@ export default function PaymentsTimeline() {
             onChange={e => handleLimitChange(parseInt(e.target.value))}
             className="border border-gray-300 rounded-md text-sm py-1 pl-2 pr-6 focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
           >
-            {[10, 25, 50, 100].map(val => <option key={val} value={val}>{val} / page</option>)}
+            {[10, 25, 50, 100].map(val => <option key={val} value={val}>{val} per page</option>)}
           </select>
         </div>
 
@@ -750,19 +868,61 @@ export default function PaymentsTimeline() {
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          {paginationItems.map((item, idx) =>
-            item === "left-dots" || item === "right-dots"
-              ? <span key={`${item}-${idx}`} className="px-2 text-gray-400">…</span>
-              : (
+          {(() => {
+            const commitPage = () => {
+              const val = parseInt(pageInput, 10);
+              if (!isNaN(val) && val >= 1 && val <= pagination.totalPages) {
+                handlePageChange(val);
+              }
+              setEditingPage(false);
+            };
+
+            return paginationItems.map((item, idx) => {
+              if (item === "left-dots" || item === "right-dots") {
+                return (
+                  <span key={`${item}-${idx}`} className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none">
+                    ....
+                  </span>
+                );
+              }
+              const isCurrent = item === pagination.currentPage;
+              if (isCurrent && editingPage) {
+                return (
+                  <input
+                    key="page-edit"
+                    autoFocus
+                    type="number"
+                    min={1}
+                    max={pagination.totalPages}
+                    value={pageInput}
+                    onChange={e => setPageInput(e.target.value)}
+                    onBlur={commitPage}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") commitPage();
+                      if (e.key === "Escape") setEditingPage(false);
+                    }}
+                    className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                );
+              }
+              return (
                 <button
                   key={item}
                   onClick={() => handlePageChange(item)}
-                  className={`w-8 h-8 rounded-full text-sm font-medium transition-colors ${pagination.currentPage === item ? "bg-[#0085FF] text-white" : "text-gray-700 hover:bg-gray-100"}`}
+                  onDoubleClick={() => {
+                    if (isCurrent) {
+                      setPageInput(String(pagination.currentPage));
+                      setEditingPage(true);
+                    }
+                  }}
+                  title={isCurrent ? "Double-click to type a page number" : undefined}
+                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors cursor-pointer ${isCurrent ? "bg-[#0085FF] text-white" : "bg-white border border-[#E1E4EA] text-gray-700 hover:bg-gray-50"}`}
                 >
                   {item}
                 </button>
-              )
-          )}
+              );
+            });
+          })()}
 
           <button
             onClick={() => handlePageChange(pagination.currentPage + 1)}
@@ -774,7 +934,7 @@ export default function PaymentsTimeline() {
         </div>
       </div>
 
-      {/* ── Shared Column Header Options Menu (Pin Left/Right, Sort, Filter, Hide) ── */}
+      {/* ΓöÇΓöÇ Shared Column Header Options Menu (Pin Left/Right, Sort, Filter, Hide) ΓöÇΓöÇ */}
       {openColumnMenuKey &&
         columnMenuPos &&
         createPortal(
@@ -838,64 +998,7 @@ export default function PaymentsTimeline() {
                     >
                       <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                       Sort Descending
-                    </button>
-
-                    {/* Party Company Filter list if Party column */}
-                    {col.id === "party" && (
-                      <>
-                        <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-                        <div className="px-2 py-1 text-[11px] font-bold text-gray-400 uppercase">Filter by Company</div>
-                        <div className="max-h-36 overflow-y-auto flex flex-col gap-0.5 no-scrollbar">
-                          <button
-                            onClick={() => { closeColumnMenu(); setPartyFilter(""); }}
-                            className={`${itemClass} ${!partyFilter ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
-                          >
-                            All Companies
-                          </button>
-                          {companies.map(c => {
-                            const name = c.companyName || c.name || (typeof c === "string" ? c : "");
-                            if (!name) return null;
-                            return (
-                              <button
-                                key={c._id || name}
-                                onClick={() => { closeColumnMenu(); setPartyFilter(name); }}
-                                className={`${itemClass} ${partyFilter === name ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
-                              >
-                                {name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-
-                    {/* Direction Filter if Direction column */}
-                    {col.id === "direction" && (
-                      <>
-                        <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-                        <div className="px-2 py-1 text-[11px] font-bold text-gray-400 uppercase">Filter Direction</div>
-                        <button
-                          onClick={() => { closeColumnMenu(); setDirectionFilter(""); }}
-                          className={`${itemClass} ${!directionFilter ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
-                        >
-                          All Directions
-                        </button>
-                        <button
-                          onClick={() => { closeColumnMenu(); setDirectionFilter("Credit"); }}
-                          className={`${itemClass} ${directionFilter === "Credit" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
-                        >
-                          Credit (IN)
-                        </button>
-                        <button
-                          onClick={() => { closeColumnMenu(); setDirectionFilter("Debit"); }}
-                          className={`${itemClass} ${directionFilter === "Debit" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
-                        >
-                          Debit (OUT)
-                        </button>
-                      </>
-                    )}
-
-                    <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                    </button>                    <div className="w-full border-t border-[#F1F1F5] my-0.5" />
 
                     <button
                       onClick={() => {
@@ -917,8 +1020,97 @@ export default function PaymentsTimeline() {
 
       <PaymentFormModal
         isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
+        editItem={editingPaymentItem}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setEditingPaymentItem(null);
+        }}
         onSuccess={() => fetchData()}
+      />
+
+      {/* ΓöÇΓöÇ Custom Delete Warning Modal ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {deleteConfirmState.isOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-red-600 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Confirm Deletion
+                </h3>
+                <p className="text-xs text-gray-500">This action cannot be undone.</p>
+              </div>
+            </div>
+            
+            <p className="text-sm text-gray-600 mb-6">
+              {deleteConfirmState.type === "single" ? (
+                <>Are you sure you want to delete this <strong className="text-gray-800">{deleteConfirmState.target?.source?.toLowerCase() || "payment"}</strong> entry?</>
+              ) : (
+                <>Are you sure you want to delete <strong className="text-gray-800">{deleteConfirmState.target?.length || 0}</strong> selected entry(ies) from the database?</>
+              )}
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmState({ isOpen: false, type: "single", target: null })}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const { type, target } = deleteConfirmState;
+                  setDeleteConfirmState({ isOpen: false, type: "single", target: null });
+                  if (type === "single" && target) {
+                    try {
+                      await API.delete(`/payments-timeline/${target._id}?source=${encodeURIComponent(target.source)}`);
+                      toast.success("Deleted successfully");
+                      fetchData();
+                    } catch (err) {
+                      toast.error("Failed to delete");
+                    }
+                  } else if (type === "bulk" && Array.isArray(target)) {
+                    try {
+                      let count = 0;
+                      for (const id of target) {
+                        const doc = documents.find(d => d._id === id);
+                        if (doc) {
+                          await API.delete(`/payments-timeline/${doc._id}?source=${encodeURIComponent(doc.source)}`);
+                          count++;
+                        }
+                      }
+                      toast.success(`Deleted ${count} entry(ies).`);
+                      setSelectedIds([]);
+                      fetchData();
+                    } catch {
+                      toast.error("Failed to delete selected items");
+                    }
+                  }
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors shadow-sm cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ΓöÇΓöÇ Advanced Filter Panel (same as Companies.jsx) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      <AdvancedFilterPanel
+        isOpen={showAdvancedFilters}
+        onClose={() => setShowAdvancedFilters(false)}
+        columns={ALL_COLUMNS}
+        filters={activeFilters}
+        setFilters={setActiveFilters}
+        onApply={(newFilters) => setActiveFilters(newFilters)}
+        title="Filter Transactions"
+        subtitle="Find specific transactions quickly"
+        emptyStateText="Add a rule to narrow down your payments timeline."
       />
     </div>
   );

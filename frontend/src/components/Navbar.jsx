@@ -157,6 +157,17 @@ const Navbar = () => {
     }
   }, []);
 
+  // Keep --sidebar-width in sync with hover/mobile state so the main content
+  // area shifts correctly and never gets covered by the expanded sidebar.
+  useEffect(() => {
+    if (window.innerWidth >= 1024) {
+      document.documentElement.style.setProperty(
+        "--sidebar-width",
+        isHovered ? "256px" : "64px"
+      );
+    }
+  }, [isHovered]);
+
   useEffect(() => {
     const toggle = () => setIsMobileOpen((prev) => !prev);
     window.addEventListener("toggle-mobile-sidebar", toggle);

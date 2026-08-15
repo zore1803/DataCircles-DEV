@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import BulkActionBar from "../common/BulkActionBar";
+import { useSubscription } from "../../contexts/SubscriptionContext";
+import { hasMinPlan } from "../../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../subscription/UpgradeRequiredModal";
 import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
@@ -866,6 +869,9 @@ export default function CompanyDealsKanban({
 
   // Row selection + bulk actions
   const [selectedDeals, setSelectedDeals] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in entrance).
   const [showBulkStrip, setShowBulkStrip] = useState(false);
@@ -899,25 +905,37 @@ export default function CompanyDealsKanban({
   const [bulkTaskDesc, setBulkTaskDesc] = useState("");
 
   const handleSelectAllDeals = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedDeals((prev) =>
       prev.length === paginatedDeals.length ? [] : paginatedDeals.map((d) => d._id),
     );
   };
   const handleSelectDeal = useCallback((id) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedDeals((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }, []);
+  }, [hasBulkAccess]);
   const handleAddDealClick = useCallback(() => setManualDealFormOpen(true), []);
 
   // Column header select-all: if every card in the column is already selected,
   // clicking clears just those; otherwise it adds them all to the selection.
   const handleToggleColumnSelect = useCallback((ids) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedDeals((prev) => {
       const allSelected = ids.length > 0 && ids.every((id) => prev.includes(id));
       return allSelected
         ? prev.filter((id) => !ids.includes(id))
         : [...new Set([...prev, ...ids])];
     });
-  }, []);
+  }, [hasBulkAccess]);
 
   const handleBulkDeleteDeals = async () => {
     setBulkLoading(true);
@@ -1223,6 +1241,10 @@ export default function CompanyDealsKanban({
   // counterpart: it doesn't clear the selection outright — it steps back
   // down to only the rows on the current page.
   const handleSelectAllAcrossPages = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedDeals(sortedDeals.map((d) => d._id));
   };
 
@@ -1730,7 +1752,7 @@ export default function CompanyDealsKanban({
                         <input
                           type="checkbox"
                           checked={selectedDeals.length > 0 && selectedDeals.length === paginatedDeals.length}
-                          onChange={(e) => setSelectedDeals(e.target.checked ? paginatedDeals.map((d) => d._id) : [])}
+                          onChange={handleSelectAllDeals}
                           className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                         />
                       </div>
@@ -2392,6 +2414,13 @@ export default function CompanyDealsKanban({
           </div>
         </div>
       )}
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </div>
   );
 }

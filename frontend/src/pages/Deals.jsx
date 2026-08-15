@@ -78,12 +78,12 @@ import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import ExportModal from "../components/common/ExportModal";
 import DealQuickView from "../components/deal/DealQuickView";
-// Add these to your existing lucide-react imports:
-
-// Add these to your component imports:
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import AppToaster from "../components/AppToaster";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -841,13 +841,21 @@ function Deals() {
   const [showImport, setShowImport] = useState(false);
   const [staleDays, setStaleDays] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedRows, setSelectedRows] = useState([]);
+  const [selectedDeals, setSelectedDeals] = useState([]);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Bulk row selection requires Growth+
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in-left entrance).
   const [showBulkStrip, setShowBulkStrip] = useState(false);
   const [bulkStripClosing, setBulkStripClosing] = useState(false);
   useEffect(() => {
-    if (selectedRows.length > 0) {
+    if (selectedDeals.length > 0) {
       setBulkStripClosing(false);
       setShowBulkStrip(true);
     } else if (showBulkStrip) {
@@ -858,7 +866,7 @@ function Deals() {
       }, 300);
       return () => clearTimeout(t);
     }
-  }, [selectedRows.length]);
+  }, [selectedDeals.length]);
   const [activeDeal, setActiveDeal] = useState(null);
   const [sortConfig, setSortConfig] = useState({
     key: null,
@@ -880,7 +888,6 @@ function Deals() {
   // Add these states at the top of your Deals component
   const [selectionMode, setSelectionMode] = useState(false);
   const [longPressTimer, setLongPressTimer] = useState(null);
-  const [showBulkActions, setShowBulkActions] = useState(false);
   const [users, setUsers] = useState([]);
   // Write-only outside handleDragOver (nothing in the render tree reads it) —
   // a ref instead of state, so tracking it doesn't force a full-board
@@ -895,7 +902,6 @@ function Deals() {
   const [dragOverStatus, setDragOverStatus] = useState(null);
 
   const [showExportModal, setShowExportModal] = useState(false);
-  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
 
   // 👉 NEW: Column Settings State & Logic
   const [showColumnSettings, setShowColumnSettings] = useState(false);
@@ -971,9 +977,7 @@ function Deals() {
   const handleRowMouseDown = (dealId) => {
     const timer = setTimeout(() => {
       setSelectionMode(true);
-      if (!selectedRows.includes(dealId)) {
-        setSelectedRows([...selectedRows, dealId]);
-      }
+      handleSelectDeal(dealId);
     }, 500); // 500ms for long press
     setLongPressTimer(timer);
   };
@@ -999,7 +1003,7 @@ function Deals() {
     try {
       await Promise.all(itemIds.map((id) => API.delete(`/deals/${id}`)));
       await fetchDeals();
-      setSelectedRows([]);
+      setSelectedDeals([]);
       setSelectionMode(false);
       toast.success(`Successfully deleted ${itemIds.length} deals`);
     } catch (err) {
@@ -1019,7 +1023,7 @@ function Deals() {
         }),
       );
       await fetchDeals();
-      setSelectedRows([]);
+      setSelectedDeals([]);
       setSelectionMode(false);
       toast.success(`Successfully updated ${itemIds.length} deals`);
     } catch (err) {
@@ -1449,8 +1453,8 @@ function Deals() {
       setDeals((prevDeals) =>
         prevDeals.filter((deal) => deal._id !== dealToDelete),
       );
-      // Remove from selected rows if it was selected
-      setSelectedRows((prev) => prev.filter((id) => id !== dealToDelete));
+      // Remove from selected deals if it was selected
+      setSelectedDeals((prev) => prev.filter((id) => id !== dealToDelete));
       toast.success("Deal deleted successfully!", {
         id: loadingToast,
         style: {
@@ -1848,8 +1852,8 @@ function Deals() {
   // NEW: Calculate statistics for all deals or selected deals
   const dealStatistics = useMemo(() => {
     const dealsToCalculate =
-      selectedRows.length > 0
-        ? sortedTableDeals.filter((deal) => selectedRows.includes(deal._id))
+      selectedDeals.length > 0
+        ? sortedTableDeals.filter((deal) => selectedDeals.includes(deal._id))
         : sortedTableDeals;
 
     const totalPipeline = dealsToCalculate.reduce(
@@ -1928,25 +1932,33 @@ function Deals() {
       totalLost,
       averageDealSize,
       avgClosingDays,
-      isFiltered: selectedRows.length > 0,
+      isFiltered: selectedDeals.length > 0,
     };
-  }, [sortedTableDeals, selectedRows]);
+  }, [sortedTableDeals, selectedDeals]);
 
   // NEW: Handle row selection
-  const handleRowSelect = useCallback((dealId) => {
-    setSelectedRows((prev) =>
+  const handleSelectDeal = useCallback((dealId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    setSelectedDeals((prev) =>
       prev.includes(dealId) ? prev.filter((id) => id !== dealId) : [...prev, dealId]
     );
-  }, []);
+  }, [hasBulkAccess]);
 
   // NEW: Handle select all
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     const pageIds = paginatedTableDeals.map((deal) => deal._id);
-    const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedRows.includes(id));
+    const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedDeals.includes(id));
     if (allPageSelected) {
-      setSelectedRows((prev) => prev.filter((id) => !pageIds.includes(id)));
+      setSelectedDeals((prev) => prev.filter((id) => !pageIds.includes(id)));
     } else {
-      setSelectedRows((prev) => [...new Set([...prev, ...pageIds])]);
+      setSelectedDeals((prev) => [...new Set([...prev, ...pageIds])]);
     }
   };
 

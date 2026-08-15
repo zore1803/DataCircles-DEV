@@ -120,6 +120,9 @@ export const hasValidPendingUpdate = (subscription) => {
 //                     |                  | term end -> resubscribe fresh)
 export const PLAN_PRIORITY = { starter: 1, growth: 2, business: 3 };
 
+export const hasMinPlan = (planName, minPlan) =>
+  (PLAN_PRIORITY[planName] || 0) >= (PLAN_PRIORITY[minPlan] || 0);
+
 export const resolveBaseCardAction = (currentSub, selectedPlanId, selectedCycle) => {
   const cycleChanged = currentSub.billingCycle !== selectedCycle;
   if (cycleChanged) {

@@ -25,6 +25,7 @@ import {
   Receipt,
   Gift,
   FileText,
+  Wallet as WalletIcon,
 } from "lucide-react";
 import BankDetails from "../components/settings/BankDetails";
 import BrandSettings from "../components/settings/BrandSettings";
@@ -43,6 +44,7 @@ import BasicSettings from "./BasicSettings";
 import logo from "/DataCircles.png";
 import BillingCenter from "../components/settings/BillingCenter";
 import Referrals from "../components/settings/Referrals";
+import Wallet from "../components/settings/Wallet";
 import UserManagement from "./UserManagement";
 import DocumentSettings from "../components/settings/DocumentSettings";
 import SystemDefaultsSettings from "../components/settings/SystemDefaultsSettings";
@@ -143,6 +145,18 @@ const Settings = () => {
       borderColor: "border-yellow-200",
       hoverBg: "hover:bg-yellow-50",
       component: <SubscriptionPlans />,
+      category: "Billing",
+    },
+    {
+      id: "wallet",
+      icon: <WalletIcon className="w-5 h-5" />,
+      label: "Wallet",
+      description: "Manage your credits and usage-based purchases",
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-50",
+      borderColor: "border-emerald-200",
+      hoverBg: "hover:bg-emerald-50",
+      component: <Wallet />,
       category: "Billing",
     },
     {
