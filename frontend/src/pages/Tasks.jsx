@@ -2670,22 +2670,6 @@ function Tasks() {
     );
   };
 
-  const renderKanbanBoard = () => {
-    return (
-      <div className="flex-1 h-full p-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full min-h-[600px]">
-          {taskStatuses.map((status) => (
-            <KanbanColumn
-              key={status}
-              status={status}
-              tasks={filteredTasks.filter((t) => t.status === status)}
-              onDrop={updateTaskStatus}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div

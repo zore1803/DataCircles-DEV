@@ -234,14 +234,15 @@ const GSTINHelper = ({ form, setForm, setError }) => {
       return;
     }
 
+    const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
     if (!gstinRegex.test(gstin)) {
       setError("Invalid GSTIN format. Please check the number.");
       return;
     }
 
-    setGstinLoading(true);
+    setLoading(true);
     setError("");
-    setGstinData(null);
+    setGstinInfo(null);
 
     try {
       const response = await fetch(
@@ -275,7 +276,7 @@ const GSTINHelper = ({ form, setForm, setError }) => {
       ) {
         const gst = data.data.result.gstin_details;
 
-        setGstinData(gst);
+        setGstinInfo(gst);
 
         // Auto-fill vendor form based on GSTIN
         setForm((prev) => ({
@@ -301,7 +302,7 @@ const GSTINHelper = ({ form, setForm, setError }) => {
       console.error("GSTIN fetch error:", err);
       setError("Failed to fetch GSTIN details: " + err.message);
     } finally {
-      setGstinLoading(false);
+      setLoading(false);
     }
   };
 

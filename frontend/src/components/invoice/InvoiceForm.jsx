@@ -778,7 +778,7 @@ const InvoiceForm = ({
   const handleDealCreated = (newDeal) => {
     setLocalDeals((prev) => [...prev, newDeal]);
     setForm((prev) => ({ ...prev, deal: newDeal._id }));
-    setIsFormDirty(true);
+    setHasUnsavedChanges(true);
     setShowQuickDealForm(false);
   };
 
