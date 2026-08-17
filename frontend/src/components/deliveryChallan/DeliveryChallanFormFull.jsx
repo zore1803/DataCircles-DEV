@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
-import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 import {
   Plus,
   IndianRupeeIcon,
@@ -331,6 +330,8 @@ const ItemSearchSelect = ({
   );
 };
 
+const styles = ["Classic", "Modern", "Minimal", "Elegant"];
+
 const DeliveryChallanFormFull = ({
   deals,
   isOpen,
@@ -343,18 +344,7 @@ const DeliveryChallanFormFull = ({
   onExitFullWidth,
   conversionData = null,
   defaultDueDateDays = null,
-  defaultNotesByType = {},
-  defaultTermsByType = {},
-  defaultNotesFlat = "",
-  defaultTermsFlat = "",
 }) => {
-  const defaultNotesForNewChallan = defaultNotesByType.deliveryChallan !== undefined
-    ? defaultNotesByType.deliveryChallan
-    : (defaultNotesFlat || PREDEFINED_NOTES.deliveryChallan || "");
-  const defaultTermsForNewChallan = defaultTermsByType.deliveryChallan !== undefined
-    ? defaultTermsByType.deliveryChallan
-    : (defaultTermsFlat || PREDEFINED_TERMS.deliveryChallan || "");
-
   const [form, setForm] = useState({
     deal: "",
     date: "",
@@ -374,7 +364,7 @@ const DeliveryChallanFormFull = ({
     discount: { type: "fixed", value: 0 },
     amount: 0,
     status: "Draft",
-    isTaxChallan: false,
+    style: "Regular",
     isRoundOff: true,
     notes: "",
     terms: "",
@@ -539,8 +529,8 @@ const DeliveryChallanFormFull = ({
         discount: sourceData.discount || { type: "fixed", value: 0 },
         amount: sourceData.amount || 0,
         status: sourceData.status || "Draft",
+        style: sourceData.style || "Regular",
         isRoundOff: sourceData.isRoundOff !== undefined ? sourceData.isRoundOff : true,
-        isTaxChallan: sourceData.isTaxChallan || false,
         transactionType: sourceData.transactionType || "intra",
         notes: sourceData.notes || "",
         terms: sourceData.terms || "",
@@ -565,10 +555,10 @@ const DeliveryChallanFormFull = ({
         discount: { type: "fixed", value: 0 },
         amount: 0,
         status: "Draft",
-        isTaxChallan: false,
+        style: "Regular",
         transactionType: "intra",
-        notes: defaultNotesForNewChallan,
-        terms: defaultTermsForNewChallan,
+        notes: "",
+        terms: "",
         attachments: [],
         bankDetails: "",
         signature: "",
@@ -890,9 +880,9 @@ const DeliveryChallanFormFull = ({
     return gstinRegex.test(gstin);
   };
 
-  const submitDeliveryChallan = async (statusValue) => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setIsSubmitting(true);
-    const isDraft = statusValue === 'Draft';
 
     if (!form.deal) {
       toast.error("Deal is required.");
@@ -923,19 +913,16 @@ const DeliveryChallanFormFull = ({
       return;
     }
 
-    if (!isDraft) {
-      const invalidItems = form.items.filter(
+    const invalidItems = form.items.filter(
       (item) =>
         !item.name ||
         !item.rate ||
         !item.quantity ||
-        (form.isTaxChallan && !item.hsn) ||
         (item.discountType === "percentage" && item.discount > 100)
     );
     if (invalidItems.length > 0) {
       toast.error(
-        `Please fill in all item details (name, rate, quantity${form.isTaxChallan ? ", and HSN/SAC" : ""
-        }) and ensure percentage discounts are not above 100.`
+        `Please fill in all item details (name, rate, quantity) and ensure percentage discounts are not above 100.`
       );
       setIsSubmitting(false);
       return;
@@ -949,12 +936,11 @@ const DeliveryChallanFormFull = ({
       form.discount
     );
     if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
-        toast.error(
-          "Delivery Challan discount cannot exceed subtotal after item discounts."
-        );
-        setIsSubmitting(false);
-        return;
-      }
+      toast.error(
+        "Delivery Challan discount cannot exceed subtotal after item discounts."
+      );
+      setIsSubmitting(false);
+      return;
     }
 
     try {
@@ -970,14 +956,12 @@ const DeliveryChallanFormFull = ({
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
         signature: form.signature,
         amount: (() => {
-          let t = form.isTaxChallan 
-            ? computeDocument(form, "deliveryChallan").grandTotal 
-            : calculateTotalAmount(form.items, form.discount);
+          let t = calculateTotalAmount(form.items, form.discount);
           return form.isRoundOff ? Math.round(t) : t;
         })(),
         isRoundOff: form.isRoundOff,
         discount: form.discount,
-        status: statusValue,
+        status: form.status,
         items: form.items.map((item) => ({
           itemId: item._id,
           name: item.name,
@@ -991,16 +975,16 @@ const DeliveryChallanFormFull = ({
           discount: parseFloat(item.discount),
           gstRate: parseFloat(item.gstRate) || 0,
         })),
-        isTaxChallan: form.isTaxChallan,
+        style: form.style,
         transactionType: form.transactionType,
       };
 
       if (editingDeliveryChallan) {
         await API.put(`/delivery-challans/${editingDeliveryChallan._id}`, payload);
-        toast.success(isDraft ? "Saved as draft!" : "Delivery Challan updated successfully!");
+        toast.success("Delivery Challan updated successfully!");
       } else {
         await API.post("/delivery-challans", payload);
-        toast.success(isDraft ? "Saved as draft!" : "Delivery Challan created successfully!");
+        toast.success("Delivery Challan created successfully!");
       }
 
       setHasUnsavedChanges(false);
@@ -1016,7 +1000,7 @@ const DeliveryChallanFormFull = ({
         discount: { type: "fixed", value: 0 },
         amount: 0,
         status: "Draft",
-        isTaxChallan: false,
+        style: "",
       });
       await fetchData();
       onClose();
@@ -1037,17 +1021,11 @@ const DeliveryChallanFormFull = ({
   };
 
   const handleSaveAndExit = async () => {
-    await submitDeliveryChallan('Pending');
+    await handleSubmit(new Event("submit"));
     if (!toastMessage.includes("Failed")) {
       setShowConfirmDialog(false);
       onClose();
     }
-  };
-
-  const handleSaveDraft = () => submitDeliveryChallan('Draft');
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    submitDeliveryChallan(form.status || 'Draft');
   };
 
   const handleClose = () => {
@@ -1070,10 +1048,6 @@ const DeliveryChallanFormFull = ({
   
   let finalTotal = subtotalAfterItemDiscounts - invoiceDiscountAmount;
   let taxDetails = null;
-  if (form.isTaxChallan) {
-    taxDetails = computeDocument(form, "deliveryChallan");
-    finalTotal = taxDetails.grandTotal;
-  }
   
   let roundOffAmount = 0;
   if (form.isRoundOff) {
@@ -1213,65 +1187,32 @@ const DeliveryChallanFormFull = ({
                 Settings
               </button>
               <button
-                type="button"
-                onClick={handleSaveDraft}
+                type="submit"
                 disabled={isSubmitting}
                 className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
                 <FileText className="w-3.5 h-3.5" />
-                {isSubmitting ? "Saving..." : "Save as Draft"}
+                Save as Draft
               </button>
             </div>
           </div>
 
           <div className="flex items-center px-6 py-3 bg-white border-b border-gray-100 text-sm">
-            {/* Was read (form.isTaxChallan gates the HSN/SAC field and its
-                required-on-submit validation) but had no control to actually
-                set it — every deliveryChallan created here was permanently
-                non-tax. */}
-            <label className="flex items-center gap-2 ml-6 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={form.isTaxChallan}
-                onChange={(e) => {
-                  setForm((prev) => ({ ...prev, isTaxChallan: e.target.checked }));
-                  setHasUnsavedChanges(true);
-                }}
-                className="rounded text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-gray-700 font-medium">Tax Challan</span>
-            </label>
+            <span className="text-gray-500 mr-2">Type</span>
+            <select
+              value={form.style}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, style: e.target.value }));
+                setHasUnsavedChanges(true);
+              }}
+              className="font-medium text-gray-800 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
+            >
+              <option value="Regular">Regular</option>
+              {styles.map((s, idx) => (
+                <option key={idx} value={s}>{s}</option>
+              ))}
+            </select>
 
-            {form.isTaxChallan && (
-              <div className="flex items-center gap-4 ml-6 pl-6 border-l border-gray-200">
-                <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <input
-                    type="radio"
-                    name="transactionType"
-                    checked={form.transactionType === "intra"}
-                    onChange={() => {
-                      setForm(prev => ({ ...prev, transactionType: "intra" }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-700 font-medium text-xs">Intra-State (CGST+SGST)</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <input
-                    type="radio"
-                    name="transactionType"
-                    checked={form.transactionType === "inter"}
-                    onChange={() => {
-                      setForm(prev => ({ ...prev, transactionType: "inter" }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-700 font-medium text-xs">Inter-State (IGST)</span>
-                </label>
-              </div>
-            )}
           </div>
 
           <div className="p-6 space-y-6 flex-1 overflow-y-auto">
@@ -1342,10 +1283,9 @@ const DeliveryChallanFormFull = ({
                         const newDate = e.target.value;
                         setForm((prev) => {
                           let newDueDate = prev.dueDate;
-                          if (!editingDeliveryChallan && !prev.dueDate) {
-                            const offsetDays = defaultDueDateDays ?? 30;
+                          if (!editingDeliveryChallan && !prev.dueDate && newDate) {
                             const d = new Date(newDate);
-                            d.setDate(d.getDate() + offsetDays);
+                            d.setDate(d.getDate() + (defaultDueDateDays ?? 30));
                             newDueDate = d.toISOString().split("T")[0];
                           }
                           return { ...prev, date: newDate, dueDate: newDueDate };
@@ -1689,44 +1629,39 @@ const DeliveryChallanFormFull = ({
                           More Details
                         </summary>
                         <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {form.isTaxChallan && (
-                            <div className="space-y-1">
-                              <label className="text-xs text-gray-500 font-medium">HSN/SAC Code</label>
-                              <input
-                                type="text"
-                                placeholder="Enter HSN/SAC code"
-                                value={item.hsn}
-                                onChange={(e) => {
-                                  handleItemChange(index, "hsn", e.target.value);
-                                  setHasUnsavedChanges(true);
-                                }}
-                                className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
-                                required
-                              />
-                            </div>
-                          )}
-                          {form.isTaxChallan && (
-                            <div className="space-y-1">
-                              {/* Pre-filled from the product's own GST Rate
-                                  (Products & Services page) when picked, but
-                                  editable here in case this line needs a
-                                  different rate. */}
-                              <label className="text-xs text-gray-500 font-medium">GST Rate (%)</label>
-                              <input
-                                type="number" onWheel={(e) => e.target.blur()}
-                                min="0"
-                                max="100"
-                                step="0.5"
-                                placeholder="0"
-                                value={item.gstRate}
-                                onChange={(e) => {
-                                  handleItemChange(index, "gstRate", e.target.value);
-                                  setHasUnsavedChanges(true);
-                                }}
-                                className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
-                              />
-                            </div>
-                          )}
+                          <div className="space-y-1">
+                            <label className="text-xs text-gray-500 font-medium">HSN/SAC Code</label>
+                            <input
+                              type="text"
+                              placeholder="Enter HSN/SAC code"
+                              value={item.hsn}
+                              onChange={(e) => {
+                                handleItemChange(index, "hsn", e.target.value);
+                                setHasUnsavedChanges(true);
+                              }}
+                              className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            {/* Pre-filled from the product's own GST Rate
+                                (Products & Services page) when picked, but
+                                editable here in case this line needs a
+                                different rate. */}
+                            <label className="text-xs text-gray-500 font-medium">GST Rate (%)</label>
+                            <input
+                              type="number" onWheel={(e) => e.target.blur()}
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              placeholder="0"
+                              value={item.gstRate}
+                              onChange={(e) => {
+                                handleItemChange(index, "gstRate", e.target.value);
+                                setHasUnsavedChanges(true);
+                              }}
+                              className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
+                            />
+                          </div>
                           <div className="space-y-1 md:col-span-2">
                             <label className="text-xs text-gray-500 font-medium">Item Description</label>
                             <textarea
@@ -1890,24 +1825,6 @@ const DeliveryChallanFormFull = ({
                       <span className="text-gray-900 font-semibold">{formatNumberFixed(roundOffAmount)}</span>
                     </div>
 
-                    {taxDetails && form.transactionType === "intra" && (
-                      <>
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600 font-medium">CGST</span>
-                          <span className="text-gray-900 font-medium">₹{formatNumberFixed(taxDetails.totalCGST)}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600 font-medium">SGST</span>
-                          <span className="text-gray-900 font-medium">₹{formatNumberFixed(taxDetails.totalSGST)}</span>
-                        </div>
-                      </>
-                    )}
-                    {taxDetails && form.transactionType === "inter" && (
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-600 font-medium">IGST</span>
-                        <span className="text-gray-900 font-medium">₹{formatNumberFixed(taxDetails.totalIGST)}</span>
-                      </div>
-                    )}
 
                     <div className="flex justify-between items-center pt-2">
                       <span className="text-lg font-bold text-gray-900">Total Amount</span>

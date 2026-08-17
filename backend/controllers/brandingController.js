@@ -78,10 +78,10 @@ exports.getBrandingByOrganization = async (req, res) => {
 // POST update branding for organization
 exports.createOrUpdateBranding = async (req, res) => {
   try {
-    const { companyName, gstin, address, email, mobile, colors } = req.body;
+    const { companyName, gstin, address, state, email, mobile, colors } = req.body;
     const logoFile = req.files && req.files['logo'] && req.files['logo'][0];
     const signatureFile = req.files && req.files['signature'] && req.files['signature'][0];
-    
+
     const logoUrlFile = logoFile ? `https://${process.env.CLOUDFRONT_DOMAIN}/${logoFile.key}` : undefined;
     const signatureUrlFile = signatureFile ? `https://${process.env.CLOUDFRONT_DOMAIN}/${signatureFile.key}` : undefined;
 
@@ -105,10 +105,10 @@ exports.createOrUpdateBranding = async (req, res) => {
       return res.status(400).json({ error: 'Mobile number must be 10 digits' });
     }
 
-    let branding = await Branding.findOne({ 
-      organization: req.user.organization 
+    let branding = await Branding.findOne({
+      organization: req.user.organization
     });
-    
+
     if (!branding) {
       branding = new Branding({
         organization: req.user.organization
@@ -134,6 +134,7 @@ exports.createOrUpdateBranding = async (req, res) => {
     branding.companyName = companyName;
     branding.gstin = gstin;
     branding.address = address;
+    branding.state = state || '';
     branding.email = email;
     branding.mobile = mobile;
     branding.colors = JSON.parse(colors);
@@ -163,10 +164,10 @@ exports.createOrUpdateBranding = async (req, res) => {
 // PUT update specific branding by ID (admin only)
 exports.updateBrandingById = async (req, res) => {
   try {
-    const { companyName, gstin, address, email, mobile, colors } = req.body;
+    const { companyName, gstin, address, state, email, mobile, colors } = req.body;
     const logoFile = req.files && req.files['logo'] && req.files['logo'][0];
     const signatureFile = req.files && req.files['signature'] && req.files['signature'][0];
-    
+
     const logoUrlFile = logoFile ? `https://${process.env.CLOUDFRONT_DOMAIN}/${logoFile.key}` : undefined;
     const signatureUrlFile = signatureFile ? `https://${process.env.CLOUDFRONT_DOMAIN}/${signatureFile.key}` : undefined;
 
@@ -190,9 +191,9 @@ exports.updateBrandingById = async (req, res) => {
       return res.status(400).json({ error: 'Mobile number must be 10 digits' });
     }
 
-    const existingBranding = await Branding.findOne({ 
+    const existingBranding = await Branding.findOne({
       _id: req.params.id,
-      organization: req.user.organization 
+      organization: req.user.organization
     });
 
     if (!existingBranding) {
@@ -219,6 +220,7 @@ exports.updateBrandingById = async (req, res) => {
       companyName,
       gstin,
       address,
+      state: state || '',
       email,
       mobile,
       colors: JSON.parse(colors)
@@ -329,17 +331,17 @@ exports.checkInvoiceBrandingStatus = async (req, res) => {
 // Create or update partial branding (no validation)
 exports.createOrUpdatePartialBranding = async (req, res) => {
   try {
-    const { companyName, gstin, address, email, mobile, colors } = req.body;
+    const { companyName, gstin, address, state, email, mobile, colors } = req.body;
     const logoFile = req.files && req.files['logo'] && req.files['logo'][0];
     const signatureFile = req.files && req.files['signature'] && req.files['signature'][0];
-    
+
     const logoUrlFile = logoFile ? `https://${process.env.CLOUDFRONT_DOMAIN}/${logoFile.key}` : undefined;
     const signatureUrlFile = signatureFile ? `https://${process.env.CLOUDFRONT_DOMAIN}/${signatureFile.key}` : undefined;
 
-    let branding = await Branding.findOne({ 
-      organization: req.user.organization 
+    let branding = await Branding.findOne({
+      organization: req.user.organization
     });
-    
+
     if (!branding) {
       branding = new Branding({
         organization: req.user.organization
@@ -366,6 +368,7 @@ exports.createOrUpdatePartialBranding = async (req, res) => {
     if (companyName !== undefined) branding.companyName = companyName;
     if (gstin !== undefined) branding.gstin = gstin;
     if (address !== undefined) branding.address = address;
+    if (state !== undefined) branding.state = state;
     if (email !== undefined) branding.email = email;
     if (mobile !== undefined) branding.mobile = mobile;
     if (colors !== undefined) branding.colors = JSON.parse(colors);

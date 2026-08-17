@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import { useNavigate } from "react-router-dom";
+import { INDIA_STATES } from "../../constants/addressOptions";
 import {
   Save,
   Upload,
@@ -25,6 +26,7 @@ function BrandSettings() {
     companyName: "",
     gstin: "",
     address: "",
+    state: "",
     email: "",
     mobile: "",
     logoUrl: "",
@@ -215,6 +217,7 @@ function BrandSettings() {
       formData.append("companyName", form.companyName);
       formData.append("gstin", form.gstin);
       formData.append("address", form.address);
+      formData.append("state", form.state || "");
       formData.append("email", form.email);
       formData.append("mobile", form.mobile);
       formData.append("colors", JSON.stringify(form.colors));
@@ -437,6 +440,24 @@ function BrandSettings() {
                   {errors.address}
                 </p>
               )}
+            </div>
+
+            {/* State */}
+            <div className="mt-6">
+              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                Seller State (for GST)
+              </label>
+              <select
+                value={form.state || ""}
+                onChange={(e) => setForm({ ...form, state: e.target.value })}
+                className="w-full px-4 py-2.5 border-2 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all border-gray-300 hover:border-gray-400"
+              >
+                <option value="">Select state...</option>
+                {INDIA_STATES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-gray-500">Used to auto-detect Intra/Inter state for GST</p>
             </div>
           </div>
 

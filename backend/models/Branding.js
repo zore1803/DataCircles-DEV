@@ -4,6 +4,7 @@ const brandingSchema = new mongoose.Schema({
   companyName: String,
   gstin: String,
   address: String,
+  state: { type: String, default: '' },
   email: String,
   mobile: String,
   logoUrl: String,

@@ -673,7 +673,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
 
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                GSTIN <span className="text-red-500">*</span>
+                GSTIN
               </label>
               <input
                 type="text"
@@ -681,7 +681,6 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                 onChange={(e) => handleFormChange("gstin", e.target.value)}
                 className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
                 placeholder="GSTIN-1234567890"
-                required
               />
             </div>
 

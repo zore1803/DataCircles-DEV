@@ -5,6 +5,7 @@ const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
+const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -35,6 +36,8 @@ exports.createDeliveryChallan = async (req, res) => {
       discount,
       billingAddress,
       shippingAddress,
+      deliveryChallanPrefix,
+      deliveryChallanNumber: clientDeliveryChallanNumber,
     } = req.body;
 
     // Validate required fields
@@ -65,23 +68,32 @@ exports.createDeliveryChallan = async (req, res) => {
       }
     }
 
-    // Generate unique delivery challan number
-    const extractNumber = (number) => {
-      const match = number?.match(/^DC-(\d+)$/);
-      return match ? parseInt(match[1], 10) : 0;
-    };
-    const deliveryChallans = await DeliveryChallan.find({
-      organization: req.user.organization,
-      deliveryChallanNumber: { $regex: /^DC-\d+$/ },
-    })
-      .select("deliveryChallanNumber")
-      .session(session);
-    let maxNumber = 0;
-    deliveryChallans.forEach((dc) => {
-      const num = extractNumber(dc.deliveryChallanNumber);
-      if (num > maxNumber) maxNumber = num;
-    });
-    const deliveryChallanNumber = `DC-${maxNumber + 1}`;
+    // Delivery challan number: Document Settings' configured prefix
+    // (documentTypeSettings.deliveryChallan.prefix) is the source of truth
+    // when the client doesn't send one. Previously this type had no
+    // prefix-acceptance at all — every challan was hardcoded "DC-N"
+    // regardless of what Settings said. Numbering is scoped to the resolved
+    // prefix specifically, so switching prefixes restarts (or resumes)
+    // cleanly instead of continuing another prefix's sequence.
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const finalDCPrefix = (deliveryChallanPrefix && deliveryChallanPrefix.trim()) || documentSettings.documentTypeSettings?.deliveryChallan?.prefix || "DC-";
+    const finalDCSuffix = (documentSettings.documentTypeSettings?.deliveryChallan?.suffix || "").toString().trim();
+    let deliveryChallanNumber;
+    try {
+      deliveryChallanNumber = await resolveDocumentNumber({
+        Model: DeliveryChallan,
+        numberField: "deliveryChallanNumber",
+        organization: req.user.organization,
+        prefix: finalDCPrefix,
+        suffix: finalDCSuffix,
+        providedNumber: clientDeliveryChallanNumber && String(clientDeliveryChallanNumber).trim() ? clientDeliveryChallanNumber : null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
 
     const dealDoc = await Deal.findById(deal).populate('company');
     let finalBillingAddress = billingAddress;
@@ -549,11 +561,22 @@ exports.bulkUpdateSignature = async (req, res) => {
     if (!ids || !ids.length) {
       return res.status(400).json({ error: "ids are required" });
     }
-    await DeliveryChallan.updateMany(
-      { _id: { $in: ids }, organization: req.user.organization },
-      { signature: signature || "", signatureType: signatureType || "text" }
-    );
-    res.json({ message: `Updated signature for ${ids.length} delivery challans` });
+    const challans = await DeliveryChallan.find({ _id: { $in: ids }, organization: req.user.organization }, '_id');
+    const validIds = challans.map(c => c._id.toString());
+    const failedIds = ids.filter(id => !validIds.includes(id));
+    
+    if (validIds.length > 0) {
+      await DeliveryChallan.updateMany(
+        { _id: { $in: validIds } },
+        { signature: signature || "", signatureType: signatureType || "text" }
+      );
+    }
+    
+    res.json({
+      message: `Updated signature for ${validIds.length} delivery challans`,
+      successfulIds: validIds,
+      failedIds
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

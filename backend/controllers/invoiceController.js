@@ -6,7 +6,7 @@ const Branding = require("../models/Branding");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
 const DocumentSettings = require("../models/DocumentSettings");
-const { getDocumentSettingsForOrganization, resolveInvoiceNumber } = require("../utils/documentNumbering");
+const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
 
 const calculateItemAmount = (item) => {
   const rate = parseFloat(item.rate) || 0;
@@ -164,31 +164,29 @@ const createInvoice = async (req, res) => {
     const explicitNumber = typeof invoiceNumber === "string" && invoiceNumber.trim()
       ? Number(invoiceNumber.trim())
       : null;
-    const nextNumberFromSettings = Number.isFinite(Number(nextInvoiceNumber))
-      ? Number(nextInvoiceNumber)
-      : documentSettings.nextInvoiceNumber;
 
-    const lastInvoice = await Invoice.findOne({ organization: req.user.organization }).sort({ createdAt: -1 }).lean();
-    const lastInvoiceNumber = lastInvoice?.invoiceNumber || null;
-
-    const resolvedInvoiceNumber = resolveInvoiceNumber({
-      settings: {
-        ...documentSettings,
-        invoicePrefix: invoicePrefix ?? documentSettings.invoicePrefix,
-        invoiceSuffix: invoiceSuffix ?? documentSettings.invoiceSuffix,
-        nextInvoiceNumber: nextNumberFromSettings,
-      },
+    // Document Settings is the source of truth for the prefix when the
+    // client doesn't send one. Numbering is scoped to THIS prefix specifically
+    // (resolveDocumentNumber only looks at invoices whose number already
+    // starts with it) so switching prefixes in Settings always restarts (or
+    // resumes) cleanly instead of continuing the old prefix's sequence.
+    const effectivePrefix = (invoicePrefix ?? documentSettings.invoicePrefix ?? "").toString().trim() || "INV-";
+    const effectiveSuffix = (invoiceSuffix ?? documentSettings.documentTypeSettings?.invoice?.suffix ?? documentSettings.invoiceSuffix ?? "").toString().trim();
+    const finalInvoiceNumber = await resolveDocumentNumber({
+      Model: Invoice,
+      numberField: "invoiceNumber",
+      organization: req.user.organization,
+      prefix: effectivePrefix,
+      suffix: effectiveSuffix,
       providedNumber: Number.isFinite(explicitNumber) ? explicitNumber : null,
-      lastInvoiceNumber,
+      session,
     });
-
-    const finalInvoiceNumber = resolvedInvoiceNumber.invoiceNumber;
     const nextNumberForSettings = Number.isFinite(explicitNumber)
       ? explicitNumber + 1
-      : resolvedInvoiceNumber.nextInvoiceNumber;
+      : (parseInt(finalInvoiceNumber.match(/(\d+)$/)?.[1], 10) || 0) + 1;
 
     const settingsUpdate = {
-      invoicePrefix: invoicePrefix ?? documentSettings.invoicePrefix,
+      invoicePrefix: effectivePrefix,
       invoiceSuffix: invoiceSuffix ?? documentSettings.invoiceSuffix,
       nextInvoiceNumber: nextNumberForSettings,
     };
@@ -848,11 +846,22 @@ const bulkUpdateSignature = async (req, res) => {
     if (!ids || !ids.length) {
       return res.status(400).json({ error: "ids are required" });
     }
-    await Invoice.updateMany(
-      { _id: { $in: ids }, organization: req.user.organization },
-      { signature: signature || "", signatureType: signatureType || "text" }
-    );
-    res.json({ message: `Updated signature for ${ids.length} invoices` });
+    const invoices = await Invoice.find({ _id: { $in: ids }, organization: req.user.organization }, '_id');
+    const validIds = invoices.map(inv => inv._id.toString());
+    const failedIds = ids.filter(id => !validIds.includes(id));
+    
+    if (validIds.length > 0) {
+      await Invoice.updateMany(
+        { _id: { $in: validIds } },
+        { signature: signature || "", signatureType: signatureType || "text" }
+      );
+    }
+    
+    res.json({
+      message: `Updated signature for ${validIds.length} invoices`,
+      successfulIds: validIds,
+      failedIds
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

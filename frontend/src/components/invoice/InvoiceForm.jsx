@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
-import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 import {
   Plus,
   IndianRupeeIcon,
@@ -322,20 +321,7 @@ const InvoiceForm = ({
   conversionData,
   onPreview,
   defaultDueDateDays = null,
-  defaultNotesByType = {},
-  defaultTermsByType = {},
-  defaultNotesFlat = "",
-  defaultTermsFlat = "",
 }) => {
-  // byType wins when the org has customized it (even to blank); otherwise
-  // fall back to the legacy flat default, then to bundled starter copy.
-  const defaultNotesForNewInvoice = defaultNotesByType.tax !== undefined
-    ? defaultNotesByType.tax
-    : (defaultNotesFlat || PREDEFINED_NOTES.tax || "");
-  const defaultTermsForNewInvoice = defaultTermsByType.tax !== undefined
-    ? defaultTermsByType.tax
-    : (defaultTermsFlat || PREDEFINED_TERMS.tax || "");
-
   const [form, setForm] = useState({
     deal: "",
     date: "",
@@ -364,7 +350,7 @@ const InvoiceForm = ({
     amount: 0,
     status: "Draft",
     style: "",
-    isTaxInvoice: false,
+    isTaxInvoice: true,
     isRoundOff: false,
     hideTotals: false,
     billingAddress: emptyAddress(),
@@ -381,6 +367,7 @@ const InvoiceForm = ({
   const [showItemForm, setShowItemForm] = useState(false);
   const [showQuickDealForm, setShowQuickDealForm] = useState(false);
   const [localDeals, setLocalDeals] = useState(deals);
+  const [sellerState, setSellerState] = useState("");
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [itemForm, setItemForm] = useState({
@@ -819,9 +806,9 @@ const InvoiceForm = ({
     return gstinRegex.test(gstin);
   };
 
-  const submitInvoice = async (statusValue) => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setIsSubmitting(true);
-    const isDraft = statusValue === "Draft";
 
     // Validate required fields
     if (!form.deal) {
@@ -840,69 +827,51 @@ const InvoiceForm = ({
       return;
     }
 
-    // The backend rejects a document with zero items unconditionally, even
-    // for drafts, so this check can't live inside the isDraft-skipped block
-    // below — otherwise a draft with no items reaches the backend and comes
-    // back as a raw, confusing "Items array is required" error instead of a
-    // friendly one shown here.
-    const hasAnyItem = form.items.some((item) => item.name && item.name.trim());
-    if (!hasAnyItem) {
-      setToastMessage("Add at least one item before saving this invoice.");
+    // Validate GSTIN format
+    if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
+      setToastMessage(
+        "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
+      );
       setTimeout(() => setToastMessage(""), 3000);
       setIsSubmitting(false);
       return;
     }
 
-    // A quick draft only needs enough to identify the document; full GSTIN and
-    // item validation apply once it's actually being created for real.
-    if (!isDraft) {
-      // Validate GSTIN format
-      if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
-        setToastMessage(
-          "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
-        );
-        setTimeout(() => setToastMessage(""), 3000);
-        setIsSubmitting(false);
-        return;
-      }
+    // Validate items
+    const invalidItems = form.items.filter(
+      (item) =>
+        !item.name ||
+        !item.rate ||
+        !item.quantity ||
+        (form.isTaxInvoice && !item.hsn) ||
+        (item.discountType === "percentage" && item.discount > 100)
+    );
+    if (invalidItems.length > 0) {
+      setToastMessage(`Item not found`);
+      setTimeout(() => setToastMessage(""), 3000);
+      setIsSubmitting(false);
+      return;
+    }
 
-      // Validate items
-      const invalidItems = form.items.filter(
-        (item) =>
-          !item.name ||
-          !item.rate ||
-          !item.quantity ||
-          (form.isTaxInvoice && !item.hsn) ||
-          (item.discountType === "percentage" && item.discount > 100)
+    const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
+      form.items
+    );
+    const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
+      subtotalAfterItemDiscounts,
+      form.discount
+    );
+    if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
+      setToastMessage(
+        "Invoice discount cannot exceed subtotal after item discounts."
       );
-      if (invalidItems.length > 0) {
-        setToastMessage(`Item not found`);
-        setTimeout(() => setToastMessage(""), 3000);
-        setIsSubmitting(false);
-        return;
-      }
-
-      const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
-        form.items
-      );
-      const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
-        subtotalAfterItemDiscounts,
-        form.discount
-      );
-      if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
-        setToastMessage(
-          "Invoice discount cannot exceed subtotal after item discounts."
-        );
-        setTimeout(() => setToastMessage(""), 3000);
-        setIsSubmitting(false);
-        return;
-      }
+      setTimeout(() => setToastMessage(""), 3000);
+      setIsSubmitting(false);
+      return;
     }
 
     try {
       const payload = {
         ...form,
-        status: statusValue,
         billingAddress: form.billingAddress,
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
         amount: form.isTaxInvoice
@@ -966,12 +935,12 @@ const InvoiceForm = ({
         amount: 0,
         status: "Draft",
         style: "",
-        isTaxInvoice: false,
+        isTaxInvoice: true,
         billingAddress: emptyAddress(),
         shippingAddress: emptyAddress(),
         sameAsBilling: true,
-        notes: defaultNotesForNewInvoice,
-        terms: defaultTermsForNewInvoice,
+        notes: "",
+        terms: "",
         signature: "",
       });
       await fetchData();
@@ -999,17 +968,11 @@ const InvoiceForm = ({
   };
 
   const handleSaveAndExit = async () => {
-    await submitInvoice("Pending");
+    await handleSubmit(new Event("submit"));
     if (!toastMessage.includes("Failed")) {
       setShowConfirmDialog(false);
       onClose();
     }
-  };
-
-  const handleSaveDraft = () => submitInvoice("Draft");
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    submitInvoice(form.status || "Draft");
   };
 
   const handleClose = () => {
@@ -1048,7 +1011,7 @@ const InvoiceForm = ({
         amount: sourceData.amount || 0,
         status: editingInvoice ? sourceData.status : "Draft",
         style: sourceData.style || "",
-        isTaxInvoice: sourceData.isTaxInvoice || false,
+        isTaxInvoice: true,
         billingAddress: { ...emptyAddress(), ...(sourceData.billingAddress || {}) },
         shippingAddress: { ...emptyAddress(), ...(sourceData.shippingAddress || {}) },
         sameAsBilling:
@@ -1087,12 +1050,12 @@ const InvoiceForm = ({
         amount: 0,
         status: "Draft",
         style: "",
-        isTaxInvoice: false,
+        isTaxInvoice: true,
         billingAddress: emptyAddress(),
         shippingAddress: emptyAddress(),
         sameAsBilling: true,
-        notes: defaultNotesForNewInvoice,
-        terms: defaultTermsForNewInvoice,
+        notes: "",
+        terms: "",
         signature: "",
       };
       setForm(initialForm);
@@ -1108,6 +1071,7 @@ const InvoiceForm = ({
       fetchCompanies();
       fetchContacts();
       setLocalDeals(deals);
+      API.get("/branding").then(r => setSellerState((r.data?.state || "").trim().toLowerCase())).catch(() => {});
 
       // Fetch saved signatures and auto-select default for new invoices
       const fetchSignatures = async () => {
@@ -1262,8 +1226,7 @@ const InvoiceForm = ({
                 </button>
               )}
               <button
-                type="button"
-                onClick={handleSaveDraft}
+                type="submit"
                 disabled={isSubmitting}
                 className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
@@ -1315,7 +1278,11 @@ const InvoiceForm = ({
                       options={formattedDeals}
                       value={form.deal}
                       onChange={(value) => {
-                        setForm((prev) => ({ ...prev, deal: value }));
+                        const selectedDeal = localDeals.find((d) => d._id === value);
+                        const company = selectedDeal?.company;
+                        const customerState = (company?.billingAddress?.state || '').trim().toLowerCase();
+                        const autoType = (sellerState && customerState && sellerState !== customerState) ? 'inter' : 'intra';
+                        setForm((prev) => ({ ...prev, deal: value, transactionType: autoType }));
                         setHasUnsavedChanges(true);
                       }}
                       placeholder="Search and select deal"
@@ -1337,10 +1304,9 @@ const InvoiceForm = ({
                       const newDate = e.target.value;
                       setForm((prev) => {
                         let newDueDate = prev.dueDate;
-                        if (!editingInvoice && !prev.dueDate) {
-                          const offsetDays = defaultDueDateDays ?? 30;
+                        if (!editingInvoice && !prev.dueDate && newDate) {
                           const d = new Date(newDate);
-                          d.setDate(d.getDate() + offsetDays);
+                          d.setDate(d.getDate() + (defaultDueDateDays ?? 30));
                           newDueDate = d.toISOString().split("T")[0];
                         }
                         return { ...prev, date: newDate, dueDate: newDueDate };
@@ -1368,9 +1334,9 @@ const InvoiceForm = ({
                         type="button"
                         className="text-[11px] font-medium px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors"
                         onClick={() => {
-                          const base = form.date ? new Date(form.date) : new Date();
-                          base.setDate(base.getDate() + days);
-                          setForm(prev => ({ ...prev, dueDate: base.toISOString().split('T')[0] }));
+                          const newDate = new Date();
+                          newDate.setDate(newDate.getDate() + days);
+                          setForm(prev => ({ ...prev, dueDate: newDate.toISOString().split('T')[0] }));
                           setHasUnsavedChanges(true);
                         }}
                       >
@@ -1380,29 +1346,6 @@ const InvoiceForm = ({
                   </div>
                 </div>
 
-                <div className="md:col-span-3 flex items-start pt-7">
-                  <label className="flex items-center gap-3 cursor-pointer select-none">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setForm((prev) => ({
-                          ...prev,
-                          isTaxInvoice: !prev.isTaxInvoice,
-                        }));
-                        setHasUnsavedChanges(true);
-                      }}
-                      className="flex-shrink-0"
-                    >
-                      <span className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${form.isTaxInvoice ? "bg-blue-600" : "bg-gray-200"}`}>
-                        <span className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.isTaxInvoice ? "translate-x-4" : "translate-x-0"}`} />
-                      </span>
-                    </button>
-                    <div>
-                      <span className="text-sm font-semibold text-gray-700 block">Enable Tax Invoice</span>
-                      <span className="text-xs text-gray-400">Include GST and tax details</span>
-                    </div>
-                  </label>
-                </div>
               </div>
             </div>
 
@@ -1484,31 +1427,6 @@ const InvoiceForm = ({
                         setHasUnsavedChanges(true);
                       }}
                     />
-                  </div>
-                  <div className="md:col-span-4 space-y-2">
-                    <label className="text-sm font-semibold text-gray-700">Transaction Type</label>
-                    <div className="flex items-center gap-4 pt-1">
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                        <input
-                          type="radio"
-                          name="transactionType"
-                          checked={form.transactionType === "intra"}
-                          onChange={() => handleTaxChange("transactionType", "intra")}
-                          className="text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-gray-700 font-medium text-xs">Intra-State (CGST+SGST)</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                        <input
-                          type="radio"
-                          name="transactionType"
-                          checked={form.transactionType === "inter"}
-                          onChange={() => handleTaxChange("transactionType", "inter")}
-                          className="text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-gray-700 font-medium text-xs">Inter-State (IGST)</span>
-                      </label>
-                    </div>
                   </div>
                   <div className="md:col-span-2 space-y-2">
                     <label className="text-sm font-semibold text-gray-700">GST Rate (%)</label>
@@ -2149,6 +2067,7 @@ const CreateInvoicePanel = ({
   // preview pane in place. Quotations use this; other types leave it unset.
   onRequestFullWidth,
   type = "tax",
+  defaultDueDateDays = null,
 }) => {
   const isEditing = !!initialDoc;
   // Per-type capabilities. Delivery challans have no GSTIN / tax / HSN; the
@@ -2228,7 +2147,7 @@ const CreateInvoicePanel = ({
           billingAddress: emptyAddress(),
           shippingAddress: emptyAddress(),
           sameAsBilling: true,
-          isTaxInvoice: false,
+          isTaxInvoice: true,
           transactionType: "intra",
           gstRate: 18,
           invoicePrefix: "INV-",
@@ -2472,53 +2391,22 @@ const CreateInvoicePanel = ({
     const loadDocSettings = async () => {
       try {
         const res = await API.get("/document-settings");
-        const d = res.data || {};
         setDocSettings({
-          invoicePrefix: d.invoicePrefix || "INV-",
-          invoiceSuffix: d.invoiceSuffix || "",
-          invoicePrefixes: d.invoicePrefixes || ["INV-"],
-          invoiceSuffixes: d.invoiceSuffixes || [],
-          nextInvoiceNumber: d.nextInvoiceNumber || 1,
-          defaultNotes: d.defaultNotes || "",
-          defaultTerms: d.defaultTerms || "",
-          defaultDueDateDays: d.defaultDueDateDays,
-          documentTypeSettings: d.documentTypeSettings || { invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] } },
+          invoicePrefix: res.data?.invoicePrefix || "INV-",
+          invoiceSuffix: res.data?.invoiceSuffix || "",
+          invoicePrefixes: res.data?.invoicePrefixes || ["INV-"],
+          invoiceSuffixes: res.data?.invoiceSuffixes || [],
+          nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
+          defaultNotes: res.data?.defaultNotes || "",
+          defaultTerms: res.data?.defaultTerms || "",
+          documentTypeSettings: res.data?.documentTypeSettings || { invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] } },
         });
-        setForm((prev) => {
-          let newDueDate = prev.dueDate;
-          if (!isEditing && !prev.dueDate && prev.date) {
-            const offsetDays = d.defaultDueDateDays ?? 30;
-            const dateObj = new Date(prev.date);
-            dateObj.setDate(dateObj.getDate() + offsetDays);
-            newDueDate = dateObj.toISOString().split("T")[0];
-          }
-          // Same "type has neither a per-type value nor a flat default"
-          // fallback used in Settings → Document Settings, so a brand new
-          // document opens with ready-to-use copy instead of blank boxes.
-          const notesByType = d.defaultNotesByType || {};
-          const termsByType = d.defaultTermsByType || {};
-          let newNotes = prev.notes;
-          if (!isEditing && !prev.notes) {
-            newNotes = notesByType[type] !== undefined
-              ? notesByType[type]
-              : (d.defaultNotes || PREDEFINED_NOTES[type] || "");
-          }
-          let newTerms = prev.terms;
-          if (!isEditing && !prev.terms) {
-            newTerms = termsByType[type] !== undefined
-              ? termsByType[type]
-              : (d.defaultTerms || PREDEFINED_TERMS[type] || "");
-          }
-          return {
-            ...prev,
-            invoicePrefix: d.invoicePrefix || "INV-",
-            invoiceSuffix: d.invoiceSuffix || "",
-            nextInvoiceNumber: d.nextInvoiceNumber || 1,
-            dueDate: newDueDate,
-            notes: newNotes,
-            terms: newTerms,
-          };
-        });
+        setForm((prev) => ({
+          ...prev,
+          invoicePrefix: res.data?.invoicePrefix || "INV-",
+          invoiceSuffix: res.data?.invoiceSuffix || "",
+          nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
+        }));
       } catch (error) {
         console.error("Failed to load document settings", error);
       }
@@ -3166,10 +3054,9 @@ const CreateInvoicePanel = ({
                       const newDate = e.target.value;
                       setForm((prev) => {
                         let newDueDate = prev.dueDate;
-                        if (!isEditing && !prev.dueDate) {
-                          const offsetDays = docSettings?.defaultDueDateDays ?? 30;
+                        if (!isEditing && !prev.dueDate && newDate) {
                           const d = new Date(newDate);
-                          d.setDate(d.getDate() + offsetDays);
+                          d.setDate(d.getDate() + (defaultDueDateDays ?? 30));
                           newDueDate = d.toISOString().split("T")[0];
                         }
                         return { ...prev, date: newDate, dueDate: newDueDate };
@@ -3313,34 +3200,6 @@ const CreateInvoicePanel = ({
               </div>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <FieldLabel>Tax Invoice</FieldLabel>
-              <div className="flex items-center gap-2.5 h-8">
-                <button
-                  type="button"
-                  onClick={() => setField("isTaxInvoice", !form.isTaxInvoice)}
-                  className="flex-shrink-0"
-                >
-                  <span
-                    className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${form.isTaxInvoice ? "bg-[#0085FF]" : "bg-[#E1E4EA]"
-                      }`}
-                  >
-                    <span
-                      className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.isTaxInvoice ? "translate-x-4" : "translate-x-0"
-                        }`}
-                    />
-                  </span>
-                </button>
-                <div className="flex flex-col">
-                  <span className="text-[12px] font-medium text-[#1F2937]">
-                    Enable Tax Invoice
-                  </span>
-                  <span className="text-[10px] text-[#99A0AE]">
-                    Include GST and tax details in this invoice
-                  </span>
-                </div>
-              </div>
-            </div>
 
             {form.isTaxInvoice && (
               <>

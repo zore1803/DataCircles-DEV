@@ -54,6 +54,7 @@ import {
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
+import { PDFDocument } from "pdf-lib";
 import toast from "react-hot-toast";
 import AppToaster from "../components/AppToaster";
 import SearchIcon from "../components/common/SearchIcon";
@@ -66,6 +67,7 @@ import PerformaInvoiceFormFull from "../components/PerformaInvoice/PerformaInvoi
 import QuotationForm from "../components/quotation/QuotationForm";
 import ShareModal from "../components/common/ShareModal";
 import RecordPaymentModal from "../components/common/RecordPaymentModal";
+import ChangeSignatureModal from "../components/common/ChangeSignatureModal";
 import { CreateQuotationPanel } from "../components/quotation/QuotationForm";
 import InvoiceFormFull from "../components/invoice/InvoiceFormFull";
 import DeliveryChallanForm from "../components/deliveryChallan/DeliveryChallanForm";
@@ -123,6 +125,14 @@ const statusOptions = [
   "Delivered",
   "Void",
 ];
+
+const STATUS_OPTIONS_BY_TAB = {
+  tax:            ["Draft", "Sent", "Paid", "Unpaid", "Void"],
+  performa:       ["Draft", "Sent", "Accepted", "Rejected", "Void"],
+  quotation:      ["Draft", "Sent", "Accepted", "Rejected", "Void"],
+  deliveryChallan:["Draft", "Sent", "Delivered", "Void"],
+};
+const statusOptionsForTab = (tab) => STATUS_OPTIONS_BY_TAB[tab] || statusOptions;
 
 const apiPathFor = (type) =>
   type === "tax"
@@ -889,6 +899,11 @@ const Accounting = () => {
   const [defaultTermsByType, setDefaultTermsByType] = useState({});
   const [defaultNotesFlat, setDefaultNotesFlat] = useState("");
   const [defaultTermsFlat, setDefaultTermsFlat] = useState("");
+  // Per-document-type numbering config (prefix/suffix/next number) from
+  // Settings → Document Settings, keyed by invoice/quote/proformaInvoice/
+  // deliveryChallan — the single source of truth the create screens should
+  // read their starting prefix from, instead of each hardcoding its own.
+  const [documentTypeSettings, setDocumentTypeSettings] = useState({});
   // Named template libraries loaded from Settings → Message Templates. Each
   // entry is {id, name, ...content, isDefault}; the share menu picks the
   // default automatically when there's only one, or lets the user choose
@@ -939,9 +954,24 @@ const Accounting = () => {
   const [bulkShowMoreMenu, setBulkShowMoreMenu] = useState(false);
   const [bulkConvertMenuOpen, setBulkConvertMenuOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [changeSignatureModalOpen, setChangeSignatureModalOpen] = useState(false);
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState(null);
   const [bulkEmailAddress, setBulkEmailAddress] = useState("");
+  const [bulkEmailSubject, setBulkEmailSubject] = useState("");
+  const [bulkEmailBody, setBulkEmailBody] = useState("");
+  const emailBodyRef = useRef(null);
+
+  useEffect(() => {
+    if (emailBodyRef.current) {
+      const htmlValue = bulkEmailBody.includes('<') ? bulkEmailBody : bulkEmailBody.replace(/\n/g, '<br/>');
+      if (emailBodyRef.current.innerHTML !== htmlValue) {
+        emailBodyRef.current.innerHTML = htmlValue;
+      }
+    }
+  }, [bulkEmailBody]);
+  const [bulkEmailTemplateOpen, setBulkEmailTemplateOpen] = useState(false);
   const [bulkEmailSending, setBulkEmailSending] = useState(false);
+  const [bulkEmailProgress, setBulkEmailProgress] = useState({ sent: 0, total: 0 });
   const [shareMenu, setShareMenu] = useState(null); // { doc, type, x, y }
   const [emailCompose, setEmailCompose] = useState(null); // { doc, type }
   const [emailComposeTo, setEmailComposeTo] = useState("");
@@ -1101,9 +1131,17 @@ const Accounting = () => {
       setDefaultTermsByType(res.data?.defaultTermsByType || {});
       setDefaultNotesFlat(res.data?.defaultNotes || "");
       setDefaultTermsFlat(res.data?.defaultTerms || "");
-      setWaTemplatesList(Array.isArray(res.data?.whatsappTemplates) ? res.data.whatsappTemplates : []);
-      setSmsTemplatesList(Array.isArray(res.data?.smsTemplates) ? res.data.smsTemplates : []);
-      setEmailTemplatesList(Array.isArray(res.data?.emailTemplates) ? res.data.emailTemplates : []);
+      setDocumentTypeSettings(res.data?.documentTypeSettings || {});
+      // Build single-item template lists from the saved template fields so
+      // the share-menu's openChannel() always sends the user's custom text.
+      const waLine1 = res.data?.whatsappLine1 || "Thanks for your business!";
+      const waLine2 = res.data?.whatsappLine2 || "";
+      setWaTemplatesList([{ line1: waLine1, line2: waLine2 }]);
+      const smsTpl = res.data?.smsTemplate;
+      setSmsTemplatesList(smsTpl ? [{ body: smsTpl }] : []);
+      const emailSubj = res.data?.emailSubjectTemplate;
+      const emailBody = res.data?.emailBodyTemplate;
+      setEmailTemplatesList((emailSubj || emailBody) ? [{ subject: emailSubj || "", body: emailBody || "" }] : []);
       if (brandingRes?.data?.companyName) setShareCompanyName(brandingRes.data.companyName);
     } catch (err) {
       console.error("Failed to load doc settings in accounting", err);
@@ -1298,70 +1336,238 @@ const Accounting = () => {
 
   const handleBulkDownloadPdf = async () => {
     if (selectedIds.length === 0) return;
-    const type = activeTab;
-    toast(`Downloading ${selectedIds.length} PDF${selectedIds.length !== 1 ? "s" : ""}...`);
-    for (const id of selectedIds) {
-      try {
-        const response = await API.get(`/${apiPathFor(type)}/download/${id}`, {
-          responseType: "blob",
-        });
-        const url = window.URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${docNameFor(type)}-${id}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      } catch {
-        toast.error(`Failed to download PDF for ${id}`);
+    const path = apiPathFor(activeTab);
+    const docName = docNameFor(activeTab);
+    const toastId = "bulk-download";
+    try {
+      setLoading((prev) => ({ ...prev, [activeTab]: true }));
+      // Loading toast has no auto-dismiss — it stays until we explicitly replace it
+      toast.loading(
+        `Merging ${selectedIds.length} PDF${selectedIds.length !== 1 ? "s" : ""}… please wait`,
+        { id: toastId, duration: Infinity }
+      );
+      const merged = await PDFDocument.create();
+      for (const id of selectedIds) {
+        const res = await API.get(`/${path}/download/${id}`, { responseType: "arraybuffer" });
+        const src = await PDFDocument.load(res.data);
+        const pages = await merged.copyPages(src, src.getPageIndices());
+        pages.forEach((p) => merged.addPage(p));
       }
+      const bytes = await merged.save();
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${docName.replace(/ /g, "-")}-Bulk-${selectedIds.length}-docs.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      // Success toast stays for 6 s so the user sees it even after the save dialog appears
+      toast.success(
+        `✓ Merged PDF downloaded (${selectedIds.length} doc${selectedIds.length !== 1 ? "s" : ""})`,
+        { id: toastId, duration: 6000 }
+      );
+    } catch (err) {
+      toast.error(`Failed to download: ${err.message}`, { id: toastId, duration: 8000 });
+    } finally {
+      setLoading((prev) => ({ ...prev, [activeTab]: false }));
     }
+  };
+
+  const openBulkEmail = () => {
+    const tpl = emailTemplatesList[0];
+    const dname = docNameFor(activeTab);
+    setBulkEmailAddress("");
+    setBulkEmailSubject(tpl?.subject || `${dname} from ${shareCompanyName || "us"}`);
+    setBulkEmailBody(tpl?.body || `Hi {customerName},\n\nPlease find your ${dname} #{number}.\n\nView online: {link}\n\nThank you for your business!\n\n${shareCompanyName || ""}`);
+    setBulkEmailTemplateOpen(false);
+    setBulkEmailProgress({ sent: 0, total: selectedIds.length });
+    setShowBulkEmailModal(true);
   };
 
   const handleBulkSendEmail = async () => {
     if (selectedIds.length === 0) return;
     const type = activeTab;
     setBulkEmailSending(true);
-    const results = await Promise.allSettled(
-      selectedIds.map((id) =>
-        API.post(`/${apiPathFor(type)}/${id}/email`, { email: bulkEmailAddress })
-      )
-    );
-    const failed = results.filter((r) => r.status === "rejected").length;
-    if (failed === 0) {
-      toast.success(`Sent ${results.length} email${results.length !== 1 ? "s" : ""}`);
-    } else {
-      toast.error(`Failed to send ${failed} of ${selectedIds.length} emails`);
+    setBulkEmailProgress({ sent: 0, total: selectedIds.length });
+    let sent = 0;
+    let failed = 0;
+    // Send one at a time so we can show live progress and personalise per-doc
+    const docList = documents[type] || [];
+    for (const id of selectedIds) {
+      try {
+        const doc = docList.find((d) => d._id === id);
+        const cname = doc?.deal?.contactPerson || doc?.deal?.title || "Customer";
+        const num = doc ? doc[numberKeyFor(type)] : "";
+        const link = `${window.location.origin}/view/${apiPathFor(type)}/${id}`;
+        const amt = doc?.amount != null ? `₹${Number(doc.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "";
+        const fill = (s) => (s || "")
+          .replace(/{customerName}/g, cname)
+          .replace(/{docType}/g, docNameFor(type))
+          .replace(/{number}/g, num || "—")
+          .replace(/{amount}/g, amt)
+          .replace(/{link}/g, link)
+          .replace(/{company}/g, shareCompanyName || "");
+        // Prefer explicit override, else fall back to the deal's contact email
+        const toEmail = bulkEmailAddress.trim() || doc?.deal?.contact?.email || doc?.deal?.company?.email || doc?.deal?.email || "";
+        if (!toEmail) { failed++; setBulkEmailProgress((p) => ({ ...p, sent: p.sent + 1 })); continue; }
+        await API.post(`/public/${apiPathFor(type)}/${id}/email`, {
+          email: toEmail,
+          subject: fill(bulkEmailSubject),
+          body: fill(bulkEmailBody),
+        });
+        sent++;
+      } catch {
+        failed++;
+      }
+      setBulkEmailProgress((p) => ({ ...p, sent: p.sent + 1 }));
     }
     setBulkEmailSending(false);
     setShowBulkEmailModal(false);
     setBulkEmailAddress("");
+    setBulkEmailTemplateOpen(false);
+    if (failed === 0) {
+      toast.success(`✓ Sent ${sent} email${sent !== 1 ? "s" : ""}`);
+    } else if (sent > 0) {
+      toast.error(`Sent ${sent}, failed ${failed} (no email address found for some)`);
+    } else {
+      toast.error("All emails failed — check recipient addresses");
+    }
   };
 
-  const handleBulkConvertToInvoice = async () => {
+  const handleBulkConvert = async (targetType) => {
     if (selectedIds.length === 0) return;
+    const isQuotation = activeTab === "quotation";
+    const targetName = targetType === "tax" ? "invoice" : "pro forma invoice";
+    const sourceName = isQuotation ? "quotation" : "pro forma invoice";
+    
     const confirmed = window.confirm(
-      `Convert ${selectedIds.length} quotation${selectedIds.length !== 1 ? "s" : ""} to invoice${selectedIds.length !== 1 ? "s" : ""}? Each quotation will become a separate invoice and its status will be set to Void.`
+      `Convert ${selectedIds.length} ${sourceName}${selectedIds.length !== 1 ? "s" : ""} to ${targetName}${selectedIds.length !== 1 ? "s" : ""}? Each ${sourceName} will become a separate ${targetName} and its status will be set to Void.`
     );
     if (!confirmed) return;
-    // Must run sequentially — parallel transactions conflict on the shared INV counter document
-    let failed = 0;
-    for (const id of selectedIds) {
-      try {
-        await API.post(`/converter/quotations/convert-to-tax/${id}`);
-      } catch {
-        failed++;
+
+    try {
+      setLoading((prev) => ({ ...prev, [activeTab]: true }));
+      const endpoint = activeTab === "quotation" 
+        ? (targetType === "tax" ? "/converter/quotations/bulk-convert-to-tax" : "/converter/quotations/bulk-convert-to-proforma")
+        : "/converter/performa-invoices/bulk-convert-to-tax"; // Only performa -> tax is supported
+        
+      const res = await API.post(endpoint, { ids: selectedIds });
+      const { successfulIds, failedIds } = res.data;
+      
+      await fetchData(activeTab);
+      await fetchData(targetType);
+      setSelectedIds([]);
+      
+      if (failedIds && failedIds.length > 0) {
+        toast.error(`Failed to convert ${failedIds.length} documents. Converted ${successfulIds.length}.`);
+      } else {
+        toast.success(`Successfully converted ${successfulIds.length} documents.`);
       }
+    } catch (error) {
+      toast.error(`Bulk conversion failed: ${error.response?.data?.message || error.message}`);
+    } finally {
+      setLoading((prev) => ({ ...prev, [activeTab]: false }));
     }
-    await fetchData("quotation");
-    await fetchData("tax");
-    setSelectedIds([]);
-    const succeeded = selectedIds.length - failed;
-    if (failed === 0) {
-      toast.success(`Converted ${succeeded} quotation${succeeded !== 1 ? "s" : ""} to invoice${succeeded !== 1 ? "s" : ""}`);
-    } else {
-      toast.error(`Failed to convert ${failed} of ${selectedIds.length} quotations`);
+  };
+
+  const handleBulkPrint = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkShowMoreMenu(false);
+    const toastId = "bulk-print";
+    try {
+      setLoading((prev) => ({ ...prev, [activeTab]: true }));
+      // Loading toast stays visible until the print dialog actually appears
+      toast.loading(
+        `Preparing ${selectedIds.length} page${selectedIds.length !== 1 ? "s" : ""} for print… please wait`,
+        { id: toastId, duration: Infinity }
+      );
+      const path = apiPathFor(activeTab);
+      const merged = await PDFDocument.create();
+      for (const id of selectedIds) {
+        const res = await API.get(`/${path}/download/${id}`, { responseType: "arraybuffer" });
+        const src = await PDFDocument.load(res.data);
+        const pages = await merged.copyPages(src, src.getPageIndices());
+        pages.forEach((p) => merged.addPage(p));
+      }
+      const bytes = await merged.save();
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      // Open in new tab — the browser's native PDF viewer has a Print button,
+      // and we also call print() so it pops up immediately.
+      const win = window.open(url, "_blank");
+      if (win) {
+        win.addEventListener("load", () => {
+          // Replace loading toast only after print dialog is triggered
+          toast.success(
+            `✓ Print dialog ready (${selectedIds.length} doc${selectedIds.length !== 1 ? "s" : ""})`,
+            { id: toastId, duration: 6000 }
+          );
+          win.print();
+          setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+        });
+      } else {
+        // Popup blocked — fall back to triggering via an iframe
+        const iframe = document.createElement("iframe");
+        iframe.style.display = "none";
+        iframe.src = url;
+        document.body.appendChild(iframe);
+        iframe.onload = () => {
+          toast.success(
+            `✓ Print dialog ready (${selectedIds.length} doc${selectedIds.length !== 1 ? "s" : ""})`,
+            { id: toastId, duration: 6000 }
+          );
+          iframe.contentWindow.print();
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+            window.URL.revokeObjectURL(url);
+          }, 60000);
+        };
+      }
+    } catch (err) {
+      toast.error(`Failed to generate print PDF: ${err.message}`, { id: toastId, duration: 8000 });
+    } finally {
+      setLoading((prev) => ({ ...prev, [activeTab]: false }));
+    }
+  };
+
+  const handleRemoveSignature = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkShowMoreMenu(false);
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to remove the signature from ${selectedIds.length} documents?`
+    );
+    if (!confirmed) return;
+
+    try {
+      setLoading((prev) => ({ ...prev, [activeTab]: true }));
+      let endpoint = "";
+      if (activeTab === "tax") endpoint = "/invoices/bulk-signature";
+      else if (activeTab === "quotation") endpoint = "/quotations/bulk-signature";
+      else if (activeTab === "performa") endpoint = "/performa-invoices/bulk-signature";
+      else if (activeTab === "deliveryChallan") endpoint = "/delivery-challans/bulk-signature";
+
+      const res = await API.put(endpoint, {
+        ids: selectedIds,
+        signature: "",
+        signatureType: "text"
+      });
+
+      const { successfulIds, failedIds } = res.data;
+      if (failedIds && failedIds.length > 0) {
+        toast.error(`Failed to remove signature from ${failedIds.length} documents. Removed from ${successfulIds.length}.`);
+      } else {
+        toast.success(`Successfully removed signature from ${successfulIds?.length || selectedIds.length} documents.`);
+      }
+      
+      await fetchData(activeTab);
+      setSelectedIds([]);
+    } catch (error) {
+      toast.error(`Failed to remove signature: ${error.response?.data?.error || error.message}`);
+    } finally {
+      setLoading((prev) => ({ ...prev, [activeTab]: false }));
     }
   };
 
@@ -1615,12 +1821,25 @@ const Accounting = () => {
           </span>
         );
 
-      case "amount":
+      case "amount": {
+        const paidSoFar = (doc.payments || []).reduce((s, p) => s + (p.amount || 0), 0);
+        const due = (doc.amount || 0) - paidSoFar;
+        const isPartial = paidSoFar > 0 && due > 0 && activeTab === "tax";
         return (
-          <span className="text-sm font-semibold text-gray-900">
-            ₹<HighlightText text={formatNumberFixed(doc.amount)} query={searchQuery} />
-          </span>
+          <div>
+            <span className="text-sm font-semibold text-gray-900">
+              ₹<HighlightText text={formatNumberFixed(doc.amount)} query={searchQuery} />
+            </span>
+            {isPartial && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className="inline-flex items-center text-[10px] font-semibold text-orange-600 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5">
+                  Due ₹{formatNumberFixed(due)}
+                </span>
+              </div>
+            )}
+          </div>
         );
+      }
 
       case "status":
         return (
@@ -1824,18 +2043,47 @@ const Accounting = () => {
                   className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <Download className="w-4 h-4 text-indigo-600" />
-                  Download PDFs
+                  Download PDF
                 </button>
                 <button
-                  onClick={() => setShowBulkEmailModal(true)}
+                  onClick={openBulkEmail}
                   className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <Mail className="w-4 h-4 text-blue-600" />
                   Send Email
                 </button>
                 {activeTab === "quotation" && (
+                  <div className="relative flex items-center">
+                    <button
+                      onClick={() => setBulkConvertMenuOpen(!bulkConvertMenuOpen)}
+                      className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                    >
+                      <Repeat className="w-4 h-4 text-green-600" />
+                      Convert To
+                    </button>
+                    {bulkConvertMenuOpen && (
+                      <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 shadow-xl rounded-lg z-50 overflow-hidden">
+                        <button
+                          onClick={() => { setBulkConvertMenuOpen(false); handleBulkConvert("performa"); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
+                        >
+                          <Repeat className="w-4 h-4 text-orange-500" />
+                          Pro Forma Invoice
+                        </button>
+                        <button
+                          onClick={() => { setBulkConvertMenuOpen(false); handleBulkConvert("tax"); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                        >
+                          <Repeat className="w-4 h-4 text-green-600" />
+                          Tax Invoice
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {activeTab === "performa" && (
                   <button
-                    onClick={handleBulkConvertToInvoice}
+                    onClick={() => handleBulkConvert("tax")}
                     className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                   >
                     <Repeat className="w-4 h-4 text-green-600" />
@@ -1852,31 +2100,22 @@ const Accounting = () => {
                   </button>
                   {bulkShowMoreMenu && (
                     <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 shadow-xl rounded-lg z-50 overflow-hidden">
-                      {activeTab === "tax" && (
-                        <button
-                          onClick={() => { setBulkShowMoreMenu(false); toast.error("Record Payment coming soon"); }}
-                          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
-                        >
-                          <IndianRupee className="w-4 h-4 text-emerald-600" />
-                          Record Payment
-                        </button>
-                      )}
                       <button
-                        onClick={() => { setBulkShowMoreMenu(false); toast.error("Print coming soon"); }}
+                        onClick={handleBulkPrint}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
                       >
                         <Printer className="w-4 h-4 text-gray-600" />
                         Print
                       </button>
                       <button
-                        onClick={() => { setBulkShowMoreMenu(false); toast.error("Change Signature coming soon"); }}
+                        onClick={() => { setBulkShowMoreMenu(false); setChangeSignatureModalOpen(true); }}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
                       >
                         <PenTool className="w-4 h-4 text-purple-600" />
                         Change Signature
                       </button>
                       <button
-                        onClick={() => { setBulkShowMoreMenu(false); toast.error("Remove Signature coming soon"); }}
+                        onClick={handleRemoveSignature}
                         className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors border-b border-gray-100"
                       >
                         <Eraser className="w-4 h-4 text-red-600" />
@@ -2658,6 +2897,7 @@ const Accounting = () => {
             initialDoc: editPanelDoc,
             conversionData,
             defaultDueDateDays,
+            documentTypeSettings,
             onFullView: (doc) => handleView(doc, activeTab),
             onClose: () => {
               setShowCreatePanel(false);
@@ -2694,6 +2934,7 @@ const Accounting = () => {
                 conversionData={panelProps.conversionData}
                 defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
+              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -2729,6 +2970,7 @@ const Accounting = () => {
                 conversionData={panelProps.conversionData}
                 defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
+              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -2760,6 +3002,7 @@ const Accounting = () => {
                 conversionData={panelProps.conversionData}
                 defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
+              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -2791,6 +3034,7 @@ const Accounting = () => {
                 conversionData={panelProps.conversionData}
                 defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
+              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -2833,6 +3077,7 @@ const Accounting = () => {
               editingInvoice={editing}
               defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
+              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -2860,6 +3105,7 @@ const Accounting = () => {
               editingInvoice={editing}
               defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
+              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -2891,6 +3137,7 @@ const Accounting = () => {
               editingPerformaInvoice={editing}
               defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
+              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -2918,6 +3165,7 @@ const Accounting = () => {
               editingPerformaInvoice={editing}
               defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
+              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -2947,6 +3195,7 @@ const Accounting = () => {
             editingQuotation={editing}
             defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
+              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -2976,6 +3225,7 @@ const Accounting = () => {
               editingDeliveryChallan={editing}
               defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
+              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -2994,6 +3244,7 @@ const Accounting = () => {
               editingDeliveryChallan={editing}
               defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
+              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -3123,7 +3374,7 @@ const Accounting = () => {
                 className="w-full mb-6 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
               >
                 <option value="">Select status…</option>
-                {statusOptions.map((opt) => (
+                {statusOptionsForTab(activeTab).map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
@@ -3541,50 +3792,182 @@ const Accounting = () => {
             </div>
           </div>
         )}
-        {showBulkEmailModal && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100003]">
-            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="bg-blue-100 p-2 rounded-lg">
-                  <Mail className="w-5 h-5 text-blue-600" />
+        {showBulkEmailModal && (() => {
+          const dname = docNameFor(activeTab);
+          const closeBulkEmail = () => { setShowBulkEmailModal(false); setBulkEmailAddress(""); setBulkEmailTemplateOpen(false); };
+          const applyBulkTemplate = (key) => {
+            if (key === "standard") {
+              setBulkEmailSubject(`${dname} from ${shareCompanyName || "us"}`);
+              setBulkEmailBody(`Hi {customerName},\n\nPlease find attached your ${dname} #{number}.\n\nYou can also view it online: {link}\n\nThank you for your business!`);
+            } else if (key === "reminder") {
+              setBulkEmailSubject(`Reminder: ${dname} #{number} pending`);
+              setBulkEmailBody(`Hi {customerName},\n\nThis is a friendly reminder that your ${dname} #{number} is awaiting your review.\n\nView it here: {link}\n\nPlease feel free to reach out if you have any questions.\n\nBest regards`);
+            } else if (key === "followup") {
+              setBulkEmailSubject(`Following up on ${dname} #{number}`);
+              setBulkEmailBody(`Hi {customerName},\n\nI wanted to follow up regarding ${dname} #{number} shared earlier.\n\nView / Download: {link}\n\nLooking forward to hearing from you.`);
+            } else {
+              const saved = emailTemplatesList.find((t) => t.id === key);
+              if (saved) { setBulkEmailSubject(saved.subject || ""); setBulkEmailBody(saved.body || ""); }
+            }
+            setBulkEmailTemplateOpen(false);
+          };
+          return (
+            <>
+              <div className="fixed inset-0 bg-black/20 z-[100011]" onClick={closeBulkEmail} />
+              <div className="fixed right-0 top-0 bottom-0 w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <button onClick={closeBulkEmail} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                      <X className="w-4 h-4 text-gray-500" />
+                    </button>
+                    <div>
+                      <h2 className="text-base font-semibold text-gray-900">Send Email</h2>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        <span className="font-semibold text-blue-600">{selectedIds.length}</span> {dname}{selectedIds.length !== 1 ? "s" : ""} selected
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={bulkEmailSending}
+                      onClick={handleBulkSendEmail}
+                      className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                    >
+                      {bulkEmailSending ? (
+                        <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> {bulkEmailProgress.sent}/{bulkEmailProgress.total}</>
+                      ) : (
+                        `Send to ${selectedIds.length}`
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <h2 className="text-xl font-bold text-gray-900">Send Email</h2>
+
+                {/* From */}
+                <div className="flex items-center px-5 py-3 border-b border-gray-100">
+                  <span className="w-16 text-sm text-gray-500 shrink-0">From</span>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="bg-green-600 text-white rounded-full w-6 h-6 text-[10px] font-bold flex items-center justify-center shrink-0">DC</div>
+                    <span className="text-sm text-gray-800 truncate">noreply@datacircles.in</span>
+                    <Lock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  </div>
+                </div>
+
+                {/* To */}
+                <div className="flex items-center px-5 py-3 border-b border-gray-100">
+                  <span className="w-16 text-sm text-gray-500 shrink-0">To</span>
+                  <input
+                    type="email"
+                    value={bulkEmailAddress}
+                    onChange={(e) => setBulkEmailAddress(e.target.value)}
+                    placeholder="Override (leave blank to use each contact's email)"
+                    className="flex-1 text-sm text-gray-900 outline-none placeholder-gray-300"
+                  />
+                </div>
+
+                {/* Subject */}
+                <div className="flex items-center px-5 py-3 border-b border-gray-100">
+                  <span className="w-16 text-sm text-gray-500 shrink-0">Subject</span>
+                  <input
+                    type="text"
+                    value={bulkEmailSubject}
+                    onChange={(e) => setBulkEmailSubject(e.target.value)}
+                    className="flex-1 text-sm font-medium text-gray-900 outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center gap-0.5 px-4 py-2 border-b border-gray-100 bg-gray-50">
+                  {[
+                    { icon: <Bold className="w-3.5 h-3.5" />, title: "Bold", command: "bold" },
+                    { icon: <Italic className="w-3.5 h-3.5" />, title: "Italic", command: "italic" },
+                    { icon: <Underline className="w-3.5 h-3.5" />, title: "Underline", command: "underline" },
+                    { icon: <Strikethrough className="w-3.5 h-3.5" />, title: "Strikethrough", command: "strikeThrough" },
+                    { icon: <ListOrdered className="w-3.5 h-3.5" />, title: "Ordered list", command: "insertOrderedList" },
+                    { icon: <List className="w-3.5 h-3.5" />, title: "Unordered list", command: "insertUnorderedList" },
+                  ].map(({ icon, title, command }) => (
+                    <button
+                      key={title}
+                      title={title}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        document.execCommand(command, false, null);
+                        if (emailBodyRef.current) emailBodyRef.current.focus();
+                        if (emailBodyRef.current) setBulkEmailBody(emailBodyRef.current.innerHTML);
+                      }}
+                      className="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors"
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                  <div className="flex-1" />
+                  {/* Template picker */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setBulkEmailTemplateOpen((p) => !p)}
+                      className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                    >
+                      + Add template <ChevronDown className="w-3 h-3" />
+                    </button>
+                    {bulkEmailTemplateOpen && (
+                      <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg w-64 z-10 py-1">
+                        {[
+                          ...emailTemplatesList.map((tpl) => ({
+                            key: tpl.id,
+                            label: tpl.name || "Custom Template",
+                            desc: "From Document Settings",
+                          })),
+                          { key: "standard", label: "Standard", desc: "Thank you for your business" },
+                          { key: "reminder", label: "Reminder", desc: "Document pending review" },
+                          { key: "followup", label: "Follow-up", desc: "Check in on document" },
+                        ].map(({ key, label, desc }) => (
+                          <button key={key} onClick={() => applyBulkTemplate(key)} className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors">
+                            <p className="text-sm font-medium text-gray-800">{label}</p>
+                            <p className="text-xs text-gray-400">{desc}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Placeholder hint */}
+                <div className="px-5 py-2 bg-blue-50 border-b border-blue-100">
+                  <p className="text-[10px] text-blue-600">
+                    <span className="font-semibold">Placeholders</span> — filled per document when sending:{" "}
+                    <code>{"{customerName}"} {"{number}"} {"{amount}"} {"{link}"} {"{docType}"}</code>
+                  </p>
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto px-5 pt-4 pb-4 bg-white">
+                  <div
+                    ref={emailBodyRef}
+                    contentEditable
+                    onInput={(e) => setBulkEmailBody(e.currentTarget.innerHTML)}
+                    onBlur={(e) => setBulkEmailBody(e.currentTarget.innerHTML)}
+                    className="w-full text-sm text-gray-800 outline-none min-h-[150px] cursor-text"
+                    style={{ whiteSpace: "pre-wrap" }}
+                  />
+                </div>
+
+                {/* Bottom send */}
+                <div className="px-5 py-4 border-t border-gray-200">
+                  <button
+                    disabled={bulkEmailSending}
+                    onClick={handleBulkSendEmail}
+                    className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    {bulkEmailSending ? (
+                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending {bulkEmailProgress.sent} / {bulkEmailProgress.total}…</>
+                    ) : (
+                      <><Mail className="w-4 h-4" /> Send Email to {selectedIds.length} {dname}{selectedIds.length !== 1 ? "s" : ""}</>
+                    )}
+                  </button>
+                </div>
               </div>
-              <p className="text-sm text-gray-600 mb-4">
-                Send <strong>{selectedIds.length}</strong> selected{" "}
-                {docNameFor(activeTab)}
-                {selectedIds.length !== 1 ? "s" : ""} via email. Leave blank to use each document's contact email.
-              </p>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Recipient Email (optional override)
-              </label>
-              <input
-                type="email"
-                value={bulkEmailAddress}
-                onChange={(e) => setBulkEmailAddress(e.target.value)}
-                placeholder="override@example.com"
-                className="w-full mb-6 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-              />
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => { setShowBulkEmailModal(false); setBulkEmailAddress(""); }}
-                  disabled={bulkEmailSending}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleBulkSendEmail}
-                  disabled={bulkEmailSending}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
-                >
-                  <Mail className="w-4 h-4" />
-                  {bulkEmailSending ? "Sending..." : "Send"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+            </>
+          );
+        })()}
         <ConvertConfirmModal
           isOpen={showConvertModal}
           onClose={() => setShowConvertModal(false)}
@@ -3613,12 +3996,25 @@ const Accounting = () => {
             setSelectedInvoiceForPayment(null);
           }}
           invoice={selectedInvoiceForPayment}
-          onSuccess={() => {
-            setPaymentModalOpen(false);
-            setSelectedInvoiceForPayment(null);
-            fetchData();
+          onSuccess={(updatedInvoice) => {
+            // Keep selectedInvoiceForPayment in sync so the modal's History
+            // tab shows fresh data if the user records another partial payment.
+            if (updatedInvoice) setSelectedInvoiceForPayment(updatedInvoice);
+            fetchData("tax");
           }}
         />
+
+        <ChangeSignatureModal
+          isOpen={changeSignatureModalOpen}
+          onClose={() => setChangeSignatureModalOpen(false)}
+          selectedIds={selectedIds}
+          activeTab={activeTab}
+          onSuccess={() => {
+            fetchData(activeTab);
+            setSelectedIds([]);
+          }}
+        />
+
       </div>
     </>
   );

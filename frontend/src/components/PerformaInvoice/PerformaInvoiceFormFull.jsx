@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
-import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 import {
   Plus,
   IndianRupeeIcon,
@@ -331,6 +330,8 @@ const ItemSearchSelect = ({
   );
 };
 
+const styles = ["Classic", "Modern", "Minimal", "Elegant"];
+
 const PerformaInvoiceFormFull = ({
   deals,
   isOpen,
@@ -343,18 +344,7 @@ const PerformaInvoiceFormFull = ({
   onExitFullWidth,
   conversionData = null,
   defaultDueDateDays = null,
-  defaultNotesByType = {},
-  defaultTermsByType = {},
-  defaultNotesFlat = "",
-  defaultTermsFlat = "",
 }) => {
-  const defaultNotesForNewPerforma = defaultNotesByType.performa !== undefined
-    ? defaultNotesByType.performa
-    : (defaultNotesFlat || PREDEFINED_NOTES.performa || "");
-  const defaultTermsForNewPerforma = defaultTermsByType.performa !== undefined
-    ? defaultTermsByType.performa
-    : (defaultTermsFlat || PREDEFINED_TERMS.performa || "");
-
   const [form, setForm] = useState({
     deal: "",
     date: "",
@@ -374,7 +364,8 @@ const PerformaInvoiceFormFull = ({
     discount: { type: "fixed", value: 0 },
     amount: 0,
     status: "Draft",
-    isTaxInvoice: false,
+    style: "Regular",
+    isTaxInvoice: true,
     isRoundOff: true,
     notes: "",
     terms: "",
@@ -391,6 +382,7 @@ const PerformaInvoiceFormFull = ({
   const [signaturesLoading, setSignaturesLoading] = useState(false);
   const [showQuickDealForm, setShowQuickDealForm] = useState(false);
   const [localDeals, setLocalDeals] = useState(deals);
+  const [sellerState, setSellerState] = useState("");
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -498,6 +490,7 @@ const PerformaInvoiceFormFull = ({
       fetchCompanies();
       fetchContacts();
       setLocalDeals(deals);
+      API.get("/branding").then(r => setSellerState((r.data?.state || "").trim().toLowerCase())).catch(() => {});
     } else {
       setIsSliding(false);
       setTimeout(() => setShouldRender(false), 300);
@@ -539,8 +532,9 @@ const PerformaInvoiceFormFull = ({
         discount: sourceData.discount || { type: "fixed", value: 0 },
         amount: sourceData.amount || 0,
         status: sourceData.status || "Draft",
+        style: sourceData.style || "Regular",
         isRoundOff: sourceData.isRoundOff !== undefined ? sourceData.isRoundOff : true,
-        isTaxInvoice: sourceData.isTaxInvoice || false,
+        isTaxInvoice: true,
         transactionType: sourceData.transactionType || "intra",
         notes: sourceData.notes || "",
         terms: sourceData.terms || "",
@@ -565,10 +559,11 @@ const PerformaInvoiceFormFull = ({
         discount: { type: "fixed", value: 0 },
         amount: 0,
         status: "Draft",
-        isTaxInvoice: false,
+        style: "Regular",
+        isTaxInvoice: true,
         transactionType: "intra",
-        notes: defaultNotesForNewPerforma,
-        terms: defaultTermsForNewPerforma,
+        notes: "",
+        terms: "",
         attachments: [],
         bankDetails: "",
         signature: "",
@@ -890,9 +885,9 @@ const PerformaInvoiceFormFull = ({
     return gstinRegex.test(gstin);
   };
 
-  const submitPerformaInvoice = async (statusValue) => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setIsSubmitting(true);
-    const isDraft = statusValue === 'Draft';
 
     if (!form.deal) {
       toast.error("Deal is required.");
@@ -906,59 +901,53 @@ const PerformaInvoiceFormFull = ({
       return;
     }
 
-    // items starts empty (no blank starter row), and the backend rejects an
-    // empty items array unconditionally — even for drafts — so this can't
-    // live inside the isDraft-skipped block below. Otherwise a draft with no
-    // items reaches the backend and comes back as a raw, confusing "Items
-    // array is required" error instead of a friendly one shown here.
+    if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
+      toast.error(
+        "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
+    // items now starts empty (no blank starter row) so this has to be
+    // checked explicitly — an empty array otherwise sails right through
+    // the invalidItems filter below since filtering nothing finds nothing.
     if (form.items.length === 0) {
       toast.error("Add at least one product or service.");
       setIsSubmitting(false);
       return;
     }
 
-    // A quick draft only needs enough to identify the document; full GSTIN and
-    // item validation apply once it's actually being created for real.
-    if (!isDraft) {
-      if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
-        toast.error(
-          "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
-        );
-        setIsSubmitting(false);
-        return;
-      }
+    const invalidItems = form.items.filter(
+      (item) =>
+        !item.name ||
+        !item.rate ||
+        !item.quantity ||
+        (form.isTaxInvoice && !item.hsn) ||
+        (item.discountType === "percentage" && item.discount > 100)
+    );
+    if (invalidItems.length > 0) {
+      toast.error(
+        `Please fill in all item details (name, rate, quantity${form.isTaxInvoice ? ", and HSN/SAC" : ""
+        }) and ensure percentage discounts are not above 100.`
+      );
+      setIsSubmitting(false);
+      return;
+    }
 
-      const invalidItems = form.items.filter(
-        (item) =>
-          !item.name ||
-          !item.rate ||
-          !item.quantity ||
-          (form.isTaxInvoice && !item.hsn) ||
-          (item.discountType === "percentage" && item.discount > 100)
+    const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
+      form.items
+    );
+    const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
+      subtotalAfterItemDiscounts,
+      form.discount
+    );
+    if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
+      toast.error(
+        "Performa Invoice discount cannot exceed subtotal after item discounts."
       );
-      if (invalidItems.length > 0) {
-        toast.error(
-          `Please fill in all item details (name, rate, quantity${form.isTaxInvoice ? ", and HSN/SAC" : ""
-          }) and ensure percentage discounts are not above 100.`
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
-      const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
-        form.items
-      );
-      const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
-        subtotalAfterItemDiscounts,
-        form.discount
-      );
-      if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
-        toast.error(
-          "Performa Invoice discount cannot exceed subtotal after item discounts."
-        );
-        setIsSubmitting(false);
-        return;
-      }
+      setIsSubmitting(false);
+      return;
     }
 
     try {
@@ -981,7 +970,7 @@ const PerformaInvoiceFormFull = ({
         })(),
         isRoundOff: form.isRoundOff,
         discount: form.discount,
-        status: statusValue,
+        status: form.status,
         items: form.items.map((item) => ({
           itemId: item._id,
           name: item.name,
@@ -995,16 +984,17 @@ const PerformaInvoiceFormFull = ({
           discount: parseFloat(item.discount),
           gstRate: parseFloat(item.gstRate) || 0,
         })),
+        style: form.style,
         isTaxInvoice: form.isTaxInvoice,
         transactionType: form.transactionType,
       };
 
       if (editingPerformaInvoice) {
         await API.put(`/performa-invoices/${editingPerformaInvoice._id}`, payload);
-        toast.success(isDraft ? "Saved as draft!" : "Performa Invoice updated successfully!");
+        toast.success("Performa Invoice updated successfully!");
       } else {
         await API.post("/performa-invoices", payload);
-        toast.success(isDraft ? "Saved as draft!" : "Performa Invoice created successfully!");
+        toast.success("Performa Invoice created successfully!");
       }
 
       setHasUnsavedChanges(false);
@@ -1020,7 +1010,8 @@ const PerformaInvoiceFormFull = ({
         discount: { type: "fixed", value: 0 },
         amount: 0,
         status: "Draft",
-        isTaxInvoice: false,
+        style: "",
+        isTaxInvoice: true,
       });
       await fetchData();
       onClose();
@@ -1041,17 +1032,11 @@ const PerformaInvoiceFormFull = ({
   };
 
   const handleSaveAndExit = async () => {
-    await submitPerformaInvoice('Pending');
+    await handleSubmit(new Event("submit"));
     if (!toastMessage.includes("Failed")) {
       setShowConfirmDialog(false);
       onClose();
     }
-  };
-
-  const handleSaveDraft = () => submitPerformaInvoice('Draft');
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    submitPerformaInvoice(form.status || 'Draft');
   };
 
   const handleClose = () => {
@@ -1217,65 +1202,32 @@ const PerformaInvoiceFormFull = ({
                 Settings
               </button>
               <button
-                type="button"
-                onClick={handleSaveDraft}
+                type="submit"
                 disabled={isSubmitting}
                 className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
                 <FileText className="w-3.5 h-3.5" />
-                {isSubmitting ? "Saving..." : "Save as Draft"}
+                Save as Draft
               </button>
             </div>
           </div>
 
           <div className="flex items-center px-6 py-3 bg-white border-b border-gray-100 text-sm">
-            {/* Was read (form.isTaxInvoice gates the HSN/SAC field and its
-                required-on-submit validation) but had no control to actually
-                set it — every performaInvoice created here was permanently
-                non-tax. */}
-            <label className="flex items-center gap-2 ml-6 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={form.isTaxInvoice}
-                onChange={(e) => {
-                  setForm((prev) => ({ ...prev, isTaxInvoice: e.target.checked }));
-                  setHasUnsavedChanges(true);
-                }}
-                className="rounded text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-gray-700 font-medium">Tax Invoice</span>
-            </label>
+            <span className="text-gray-500 mr-2">Type</span>
+            <select
+              value={form.style}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, style: e.target.value }));
+                setHasUnsavedChanges(true);
+              }}
+              className="font-medium text-gray-800 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
+            >
+              <option value="Regular">Regular</option>
+              {styles.map((s, idx) => (
+                <option key={idx} value={s}>{s}</option>
+              ))}
+            </select>
 
-            {form.isTaxInvoice && (
-              <div className="flex items-center gap-4 ml-6 pl-6 border-l border-gray-200">
-                <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <input
-                    type="radio"
-                    name="transactionType"
-                    checked={form.transactionType === "intra"}
-                    onChange={() => {
-                      setForm(prev => ({ ...prev, transactionType: "intra" }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-700 font-medium text-xs">Intra-State (CGST+SGST)</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <input
-                    type="radio"
-                    name="transactionType"
-                    checked={form.transactionType === "inter"}
-                    onChange={() => {
-                      setForm(prev => ({ ...prev, transactionType: "inter" }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-700 font-medium text-xs">Inter-State (IGST)</span>
-                </label>
-              </div>
-            )}
           </div>
 
           <div className="p-6 space-y-6 flex-1 overflow-y-auto">
@@ -1316,12 +1268,15 @@ const PerformaInvoiceFormFull = ({
                           company && !isAddressEmpty(company.shippingAddresses?.[0])
                             ? { ...emptyAddress(), ...company.shippingAddresses[0] }
                             : emptyAddress();
+                        const customerState = (company?.billingAddress?.state || '').trim().toLowerCase();
+                        const autoType = (sellerState && customerState && sellerState !== customerState) ? 'inter' : 'intra';
                         setForm((prev) => ({
                           ...prev,
                           deal: value,
                           receiverGSTIN: company?.gstin || "",
                           billingAddress: nextBilling,
                           shippingAddress: prev.sameAsBilling ? nextBilling : nextShipping,
+                          transactionType: autoType,
                         }));
                         setHasUnsavedChanges(true);
                       }}
@@ -1346,10 +1301,9 @@ const PerformaInvoiceFormFull = ({
                         const newDate = e.target.value;
                         setForm((prev) => {
                           let newDueDate = prev.dueDate;
-                          if (!editingPerformaInvoice && !prev.dueDate) {
-                            const offsetDays = defaultDueDateDays ?? 30;
+                          if (!editingPerformaInvoice && !prev.dueDate && newDate) {
                             const d = new Date(newDate);
-                            d.setDate(d.getDate() + offsetDays);
+                            d.setDate(d.getDate() + (defaultDueDateDays ?? 30));
                             newDueDate = d.toISOString().split("T")[0];
                           }
                           return { ...prev, date: newDate, dueDate: newDueDate };

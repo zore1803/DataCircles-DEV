@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
-import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 import {
   Plus,
   IndianRupeeIcon,
@@ -331,6 +330,8 @@ const ItemSearchSelect = ({
   );
 };
 
+const styles = ["Classic", "Modern", "Minimal", "Elegant"];
+
 const InvoiceFormFull = ({
   deals,
   isOpen,
@@ -343,18 +344,7 @@ const InvoiceFormFull = ({
   onExitFullWidth,
   conversionData = null,
   defaultDueDateDays = null,
-  defaultNotesByType = {},
-  defaultTermsByType = {},
-  defaultNotesFlat = "",
-  defaultTermsFlat = "",
 }) => {
-  const defaultNotesForNewInvoice = defaultNotesByType.tax !== undefined
-    ? defaultNotesByType.tax
-    : (defaultNotesFlat || PREDEFINED_NOTES.tax || "");
-  const defaultTermsForNewInvoice = defaultTermsByType.tax !== undefined
-    ? defaultTermsByType.tax
-    : (defaultTermsFlat || PREDEFINED_TERMS.tax || "");
-
   const [form, setForm] = useState({
     deal: "",
     date: "",
@@ -374,7 +364,8 @@ const InvoiceFormFull = ({
     discount: { type: "fixed", value: 0 },
     amount: 0,
     status: "Draft",
-    isTaxInvoice: false,
+    style: "Regular",
+    isTaxInvoice: true,
     gstRate: 18,
     transactionType: "intra",
     isRoundOff: false,
@@ -394,6 +385,7 @@ const InvoiceFormFull = ({
   const [signaturesLoading, setSignaturesLoading] = useState(false);
   const [showQuickDealForm, setShowQuickDealForm] = useState(false);
   const [localDeals, setLocalDeals] = useState(deals);
+  const [sellerState, setSellerState] = useState("");
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -501,6 +493,7 @@ const InvoiceFormFull = ({
       fetchCompanies();
       fetchContacts();
       setLocalDeals(deals);
+      API.get("/branding").then(r => setSellerState((r.data?.state || "").trim().toLowerCase())).catch(() => {});
     } else {
       setIsSliding(false);
       setTimeout(() => setShouldRender(false), 300);
@@ -542,9 +535,10 @@ const InvoiceFormFull = ({
         discount: sourceData.discount || { type: "fixed", value: 0 },
         amount: sourceData.amount || 0,
         status: sourceData.status || "Draft",
+        style: sourceData.style || "Regular",
         isRoundOff: sourceData.isRoundOff !== undefined ? sourceData.isRoundOff : false,
         hideTotals: sourceData.hideTotals || false,
-        isTaxInvoice: sourceData.isTaxInvoice || false,
+        isTaxInvoice: true,
         transactionType: sourceData.transactionType || "intra",
         notes: sourceData.notes || "",
         terms: sourceData.terms || "",
@@ -569,11 +563,12 @@ const InvoiceFormFull = ({
         discount: { type: "fixed", value: 0 },
         amount: 0,
         status: "Draft",
-        isTaxInvoice: false,
+        style: "Regular",
+        isTaxInvoice: true,
         gstRate: 18,
         transactionType: "intra",
-        notes: defaultNotesForNewInvoice,
-        terms: defaultTermsForNewInvoice,
+        notes: "",
+        terms: "",
         attachments: [],
         bankDetails: "",
         signature: "",
@@ -660,6 +655,18 @@ const InvoiceFormFull = ({
     return 0;
   };
 
+  const calculateTotalAmount = useCallback((items, discount, gstRate = 18, transactionType = "intra") => {
+    const subtotalAfterItemDiscounts =
+      calculateSubtotalAfterItemDiscounts(items);
+    const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
+      subtotalAfterItemDiscounts,
+      discount
+    );
+    const netTaxable = subtotalAfterItemDiscounts - invoiceDiscountAmount;
+    const totalTax = netTaxable * (gstRate / 100);
+    return netTaxable + totalTax;
+  }, []);
+
   const handleItemChange = (index, field, value) => {
     setForm((prev) => {
       const newItems = [...prev.items];
@@ -716,7 +723,7 @@ const InvoiceFormFull = ({
       return {
         ...prev,
         items: newItems,
-        amount: computeDocument({ ...prev, items: newItems }, "invoice").grandTotal,
+        amount: calculateTotalAmount(newItems, prev.discount),
       };
     });
     setHasUnsavedChanges(true);
@@ -763,7 +770,7 @@ const InvoiceFormFull = ({
       return {
         ...prev,
         discount: newDiscount,
-        amount: computeDocument({ ...prev, discount: newDiscount }, "invoice").grandTotal,
+        amount: calculateTotalAmount(prev.items, newDiscount),
       };
     });
     setHasUnsavedChanges(true);
@@ -782,7 +789,7 @@ const InvoiceFormFull = ({
       return {
         ...prev,
         items: newItems,
-        amount: computeDocument({ ...prev, items: newItems }, "invoice").grandTotal,
+        amount: calculateTotalAmount(newItems, prev.discount),
       };
     });
     setHasUnsavedChanges(true);
@@ -820,7 +827,7 @@ const InvoiceFormFull = ({
       return {
         ...prev,
         items: newItems,
-        amount: computeDocument({ ...prev, items: newItems }, "invoice").grandTotal,
+        amount: calculateTotalAmount(newItems, prev.discount),
       };
     });
     setHasUnsavedChanges(true);
@@ -842,7 +849,7 @@ const InvoiceFormFull = ({
       return {
         ...prev,
         items: newItems,
-        amount: computeDocument({ ...prev, items: newItems }, "invoice").grandTotal,
+        amount: calculateTotalAmount(newItems, prev.discount),
       };
     });
     setQuickAddItem(null);
@@ -856,7 +863,7 @@ const InvoiceFormFull = ({
       return {
         ...prev,
         items: newItems,
-        amount: computeDocument({ ...prev, items: newItems }, "invoice").grandTotal,
+        amount: calculateTotalAmount(newItems, prev.discount),
       };
     });
     setHasUnsavedChanges(true);
@@ -885,9 +892,9 @@ const InvoiceFormFull = ({
     return gstinRegex.test(gstin);
   };
 
-  const submitInvoice = async (statusValue) => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setIsSubmitting(true);
-    const isDraft = statusValue === "Draft";
 
     if (!form.deal) {
       toast.error("Deal is required.");
@@ -901,59 +908,53 @@ const InvoiceFormFull = ({
       return;
     }
 
-    // items starts empty (no blank starter row), and the backend rejects an
-    // empty items array unconditionally — even for drafts — so this can't
-    // live inside the isDraft-skipped block below. Otherwise a draft with no
-    // items reaches the backend and comes back as a raw, confusing "Items
-    // array is required" error instead of a friendly one shown here.
+    if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
+      toast.error(
+        "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
+    // items now starts empty (no blank starter row) so this has to be
+    // checked explicitly — an empty array otherwise sails right through
+    // the invalidItems filter below since filtering nothing finds nothing.
     if (form.items.length === 0) {
       toast.error("Add at least one product or service.");
       setIsSubmitting(false);
       return;
     }
 
-    // A quick draft only needs enough to identify the document; full GSTIN and
-    // item validation apply once it's actually being created for real.
-    if (!isDraft) {
-      if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
-        toast.error(
-          "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
-        );
-        setIsSubmitting(false);
-        return;
-      }
+    const invalidItems = form.items.filter(
+      (item) =>
+        !item.name ||
+        !item.rate ||
+        !item.quantity ||
+        (form.isTaxInvoice && !item.hsn) ||
+        (item.discountType === "percentage" && item.discount > 100)
+    );
+    if (invalidItems.length > 0) {
+      toast.error(
+        `Please fill in all item details (name, rate, quantity${form.isTaxInvoice ? ", and HSN/SAC" : ""
+        }) and ensure percentage discounts are not above 100.`
+      );
+      setIsSubmitting(false);
+      return;
+    }
 
-      const invalidItems = form.items.filter(
-        (item) =>
-          !item.name ||
-          !item.rate ||
-          !item.quantity ||
-          (form.isTaxInvoice && !item.hsn) ||
-          (item.discountType === "percentage" && item.discount > 100)
+    const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
+      form.items
+    );
+    const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
+      subtotalAfterItemDiscounts,
+      form.discount
+    );
+    if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
+      toast.error(
+        "Invoice discount cannot exceed subtotal after item discounts."
       );
-      if (invalidItems.length > 0) {
-        toast.error(
-          `Please fill in all item details (name, rate, quantity${form.isTaxInvoice ? ", and HSN/SAC" : ""
-          }) and ensure percentage discounts are not above 100.`
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
-      const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
-        form.items
-      );
-      const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
-        subtotalAfterItemDiscounts,
-        form.discount
-      );
-      if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
-        toast.error(
-          "Invoice discount cannot exceed subtotal after item discounts."
-        );
-        setIsSubmitting(false);
-        return;
-      }
+      setIsSubmitting(false);
+      return;
     }
 
     try {
@@ -969,15 +970,14 @@ const InvoiceFormFull = ({
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
         signature: form.signature,
         amount: (() => {
-          // computeDocument already gates GST on form.isTaxInvoice internally
-          // (zeroes it out when off), so a single call here is correct for
-          // both tax and non-tax invoices — no separate flat-rate branch needed.
-          let t = computeDocument(form, "invoice").grandTotal;
+          let t = form.isTaxInvoice 
+            ? computeDocument(form, "invoice").grandTotal 
+            : calculateTotalAmount(form.items, form.discount);
           return form.isRoundOff ? Math.round(t) : t;
         })(),
         isRoundOff: form.isRoundOff,
         discount: form.discount,
-        status: statusValue,
+        status: form.status,
         items: form.items.map((item) => ({
           itemId: item._id,
           name: item.name,
@@ -991,6 +991,7 @@ const InvoiceFormFull = ({
           discount: parseFloat(item.discount),
           gstRate: parseFloat(item.gstRate) || 0,
         })),
+        style: form.style,
         isTaxInvoice: form.isTaxInvoice,
         transactionType: form.transactionType,
       };
@@ -1017,7 +1018,7 @@ const InvoiceFormFull = ({
         amount: 0,
         status: "Draft",
         style: "",
-        isTaxInvoice: false,
+        isTaxInvoice: true,
         gstRate: 18,
         transactionType: "intra",
       });
@@ -1040,17 +1041,11 @@ const InvoiceFormFull = ({
   };
 
   const handleSaveAndExit = async () => {
-    await submitInvoice("Pending");
+    await handleSubmit(new Event("submit"));
     if (!toastMessage.includes("Failed")) {
       setShowConfirmDialog(false);
       onClose();
     }
-  };
-
-  const handleSaveDraft = () => submitInvoice("Draft");
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    submitInvoice(form.status || "Draft");
   };
 
   const handleClose = () => {
@@ -1216,8 +1211,7 @@ const InvoiceFormFull = ({
                 Settings
               </button>
               <button
-                type="button"
-                onClick={handleSaveDraft}
+                type="submit"
                 disabled={isSubmitting}
                 className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
@@ -1228,53 +1222,21 @@ const InvoiceFormFull = ({
           </div>
 
           <div className="flex items-center px-6 py-3 bg-white border-b border-gray-100 text-sm">
-            {/* Was read (form.isTaxInvoice gates the HSN/SAC field and its
-                required-on-submit validation) but had no control to actually
-                set it — every invoice created here was permanently
-                non-tax. */}
-            <label className="flex items-center gap-2 ml-6 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={form.isTaxInvoice}
-                onChange={(e) => {
-                  setForm((prev) => ({ ...prev, isTaxInvoice: e.target.checked }));
-                  setHasUnsavedChanges(true);
-                }}
-                className="rounded text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-gray-700 font-medium">Tax Invoice</span>
-            </label>
+            <span className="text-gray-500 mr-2">Type</span>
+            <select
+              value={form.style}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, style: e.target.value }));
+                setHasUnsavedChanges(true);
+              }}
+              className="font-medium text-gray-800 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
+            >
+              <option value="Regular">Regular</option>
+              {styles.map((s, idx) => (
+                <option key={idx} value={s}>{s}</option>
+              ))}
+            </select>
 
-            {form.isTaxInvoice && (
-              <div className="flex items-center gap-4 ml-6 pl-6 border-l border-gray-200">
-                <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <input
-                    type="radio"
-                    name="transactionType"
-                    checked={form.transactionType === "intra"}
-                    onChange={() => {
-                      setForm(prev => ({ ...prev, transactionType: "intra" }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-700 font-medium text-xs">Intra-State (CGST+SGST)</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <input
-                    type="radio"
-                    name="transactionType"
-                    checked={form.transactionType === "inter"}
-                    onChange={() => {
-                      setForm(prev => ({ ...prev, transactionType: "inter" }));
-                      setHasUnsavedChanges(true);
-                    }}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-700 font-medium text-xs">Inter-State (IGST)</span>
-                </label>
-              </div>
-            )}
           </div>
 
           <div className="p-6 space-y-6 flex-1 overflow-y-auto">
@@ -1315,12 +1277,15 @@ const InvoiceFormFull = ({
                           company && !isAddressEmpty(company.shippingAddresses?.[0])
                             ? { ...emptyAddress(), ...company.shippingAddresses[0] }
                             : emptyAddress();
+                        const customerState = (company?.billingAddress?.state || '').trim().toLowerCase();
+                        const autoType = (sellerState && customerState && sellerState !== customerState) ? 'inter' : 'intra';
                         setForm((prev) => ({
                           ...prev,
                           deal: value,
                           receiverGSTIN: company?.gstin || "",
                           billingAddress: nextBilling,
                           shippingAddress: prev.sameAsBilling ? nextBilling : nextShipping,
+                          transactionType: autoType,
                         }));
                         setHasUnsavedChanges(true);
                       }}
@@ -1345,10 +1310,9 @@ const InvoiceFormFull = ({
                         const newDate = e.target.value;
                         setForm((prev) => {
                           let newDueDate = prev.dueDate;
-                          if (!editingInvoice && !prev.dueDate) {
-                            const offsetDays = defaultDueDateDays ?? 30;
+                          if (!editingInvoice && !prev.dueDate && newDate) {
                             const d = new Date(newDate);
-                            d.setDate(d.getDate() + offsetDays);
+                            d.setDate(d.getDate() + (defaultDueDateDays ?? 30));
                             newDueDate = d.toISOString().split("T")[0];
                           }
                           return { ...prev, date: newDate, dueDate: newDueDate };
@@ -1386,9 +1350,9 @@ const InvoiceFormFull = ({
                         type="button"
                         className="text-[11px] font-medium px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors"
                         onClick={() => {
-                          const base = form.date ? new Date(form.date) : new Date();
-                          base.setDate(base.getDate() + days);
-                          setForm(prev => ({ ...prev, dueDate: base.toISOString().split('T')[0] }));
+                          const newDate = new Date();
+                          newDate.setDate(newDate.getDate() + days);
+                          setForm(prev => ({ ...prev, dueDate: newDate.toISOString().split('T')[0] }));
                           setHasUnsavedChanges(true);
                         }}
                       >

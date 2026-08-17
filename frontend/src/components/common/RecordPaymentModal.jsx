@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, IndianRupee, CreditCard, Calendar, FileText, CheckCircle2, Clock } from "lucide-react";
 import API from "../../services/api";
+import toast from "react-hot-toast";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
 
 const PAYMENT_METHODS = ["UPI", "Cash", "Net Banking", "NEFT", "RTGS", "IMPS", "Cheque", "Card", "Other"];
@@ -8,10 +9,15 @@ const PAYMENT_METHODS = ["UPI", "Cash", "Net Banking", "NEFT", "RTGS", "IMPS", "
 const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("record"); // "record" | "history"
-  
-  // Calculate existing payment state
-  const totalPaid = (invoice?.payments || []).reduce((sum, p) => sum + p.amount, 0);
-  const totalAmount = invoice?.amount || 0;
+  // Local copy of the invoice so payment history updates immediately within
+  // the same modal open (without needing a full page refresh).
+  const [localInvoice, setLocalInvoice] = useState(invoice);
+
+  useEffect(() => { setLocalInvoice(invoice); }, [invoice]);
+
+  // Calculate existing payment state from the live local copy
+  const totalPaid = (localInvoice?.payments || []).reduce((sum, p) => sum + p.amount, 0);
+  const totalAmount = localInvoice?.amount || 0;
   const amountDue = totalAmount - totalPaid;
 
   const [formData, setFormData] = useState({
@@ -23,17 +29,20 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   });
 
   useEffect(() => {
-    if (isOpen && invoice) {
-      const due = invoice.amount - (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0);
+    if (isOpen && localInvoice) {
+      const due = localInvoice.amount - (localInvoice.payments || []).reduce((sum, p) => sum + p.amount, 0);
       setFormData(prev => ({
         ...prev,
-        amount: due > 0 ? due.toString() : ""
+        amount: due > 0 ? due.toString() : "",
+        paymentDate: new Date().toISOString().split('T')[0],
+        reference: "",
+        notes: "",
       }));
       setActiveTab("record");
     }
-  }, [isOpen, invoice]);
+  }, [isOpen, invoice]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!isOpen || !invoice) return null;
+  if (!isOpen || !localInvoice) return null;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -43,36 +52,62 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const paymentAmount = parseFloat(formData.amount);
-    
+
     if (isNaN(paymentAmount) || paymentAmount <= 0) {
-      alert("Please enter a valid amount greater than 0");
+      toast.error("Please enter a valid amount greater than 0");
       return;
     }
-    
+
     if (paymentAmount > amountDue) {
-      alert(`Payment amount cannot exceed the remaining balance of ₹${formatNumberToIndian(amountDue)}`);
+      toast.error(`Payment cannot exceed the remaining balance of ₹${formatNumberToIndian(amountDue)}`);
       return;
     }
 
     setLoading(true);
     try {
-      await API.post(`/invoices/${invoice._id}/payments`, {
+      const res = await API.post(`/invoices/${localInvoice._id}/payments`, {
         amount: paymentAmount,
         paymentDate: formData.paymentDate,
         paymentMethod: formData.paymentMethod,
         reference: formData.reference,
-        notes: formData.notes
+        notes: formData.notes,
       });
-      onSuccess();
+
+      const updatedInvoice = res.data?.invoice;
+
+      // Update local copy immediately so history tab and due amount reflect
+      // the new payment without waiting for the parent list to re-fetch.
+      if (updatedInvoice) setLocalInvoice(updatedInvoice);
+
+      const remaining = updatedInvoice
+        ? updatedInvoice.amount - (updatedInvoice.payments || []).reduce((s, p) => s + p.amount, 0)
+        : 0;
+
+      if (remaining <= 0) {
+        toast.success(`✓ Payment of ₹${formatNumberToIndian(paymentAmount)} recorded — Invoice fully paid!`);
+        onSuccess(updatedInvoice);
+        onClose();
+      } else {
+        // Partial payment — stay open, show history, reset form for next payment
+        toast.success(`✓ ₹${formatNumberToIndian(paymentAmount)} recorded — ₹${formatNumberToIndian(remaining)} still due`);
+        setFormData(prev => ({
+          ...prev,
+          amount: remaining.toString(),
+          reference: "",
+          notes: "",
+        }));
+        setActiveTab("history");
+        onSuccess(updatedInvoice);
+      }
     } catch (error) {
-      alert(error.response?.data?.error || "Failed to record payment");
+      toast.error(error.response?.data?.error || "Failed to record payment");
     } finally {
       setLoading(false);
     }
   };
 
   const renderHistory = () => {
-    if (!invoice.payments || invoice.payments.length === 0) {
+    if (!localInvoice.payments || localInvoice.payments.length === 0) {
       return (
         <div className="py-8 text-center text-gray-500 flex flex-col items-center">
           <Clock className="w-8 h-8 text-gray-300 mb-2" />
@@ -83,7 +118,7 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
 
     return (
       <div className="space-y-3 mt-4 max-h-[300px] overflow-y-auto pr-2">
-        {invoice.payments.slice().reverse().map((payment, idx) => (
+        {localInvoice.payments.slice().reverse().map((payment, idx) => (
           <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -117,7 +152,7 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Record Payment</h2>
-            <p className="text-sm text-gray-500">{invoice.invoiceNumber}</p>
+            <p className="text-sm text-gray-500">{localInvoice.invoiceNumber}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
             <X className="w-5 h-5" />
@@ -141,29 +176,53 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
             }`}
           >
             History
-            {invoice.payments?.length > 0 && (
+            {localInvoice.payments?.length > 0 && (
               <span className="bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs font-semibold">
-                {invoice.payments.length}
+                {localInvoice.payments.length}
               </span>
             )}
           </button>
         </div>
 
         <div className="px-6 py-4 flex-1 overflow-y-auto">
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-              <p className="text-xs font-medium text-gray-500 mb-1">Total Amount</p>
-              <p className="text-sm font-semibold text-gray-900">₹{formatNumberToIndian(totalAmount)}</p>
+          {/* Summary — 3 cards + progress bar */}
+          <div className="mb-6 space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                <p className="text-[10px] font-medium text-gray-500 mb-1">Total</p>
+                <p className="text-sm font-bold text-gray-900">₹{formatNumberToIndian(totalAmount)}</p>
+              </div>
+              <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+                <p className="text-[10px] font-medium text-emerald-600 mb-1">Paid</p>
+                <p className="text-sm font-bold text-emerald-700">₹{formatNumberToIndian(totalPaid)}</p>
+              </div>
+              <div className={`p-3 rounded-lg border ${amountDue > 0 ? 'bg-orange-50 border-orange-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                <p className={`text-[10px] font-medium mb-1 ${amountDue > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>
+                  {amountDue > 0 ? 'Due' : 'Settled'}
+                </p>
+                <p className={`text-sm font-bold ${amountDue > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>
+                  ₹{formatNumberToIndian(Math.max(0, amountDue))}
+                </p>
+              </div>
             </div>
-            <div className={`p-3 rounded-lg border ${amountDue > 0 ? 'bg-orange-50 border-orange-100' : 'bg-emerald-50 border-emerald-100'}`}>
-              <p className={`text-xs font-medium mb-1 ${amountDue > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>
-                {amountDue > 0 ? 'Amount Due' : 'Fully Paid'}
-              </p>
-              <p className={`text-sm font-semibold ${amountDue > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>
-                ₹{formatNumberToIndian(amountDue)}
-              </p>
-            </div>
+            {/* Payment progress bar */}
+            {totalAmount > 0 && (
+              <div>
+                <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                  <span>{totalPaid > 0 ? `${Math.round((totalPaid / totalAmount) * 100)}% paid` : "Not yet paid"}</span>
+                  {amountDue > 0 && <span>₹{formatNumberToIndian(amountDue)} remaining</span>}
+                </div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(100, (totalPaid / totalAmount) * 100)}%`,
+                      backgroundColor: amountDue <= 0 ? "#10b981" : "#3b82f6",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {activeTab === "record" ? (

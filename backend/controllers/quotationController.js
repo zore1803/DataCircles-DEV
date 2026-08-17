@@ -5,6 +5,7 @@ const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
+const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -71,43 +72,31 @@ exports.createQuotation = async (req, res) => {
       }
     }
 
-    // Quotation number: respects a client-supplied prefix/number (the
-    // header's Prefix/Number boxes) instead of always forcing "QUO-N".
-    // With an explicit number, that exact value is used (after a
-    // uniqueness check); without one, auto-generate the next number for
-    // THIS prefix specifically, so switching prefixes doesn't collide with
-    // or continue another prefix's sequence.
-    const finalPrefix = (quotationPrefix && quotationPrefix.trim()) || "QUO-";
+    // Quotation number: Document Settings' configured prefix
+    // (documentTypeSettings.quote.prefix) is the source of truth when the
+    // client doesn't send one — previously this fell back to a hardcoded
+    // "QUO-" that never matched what Settings actually said. Numbering is
+    // scoped to the resolved prefix specifically, so switching prefixes
+    // restarts (or resumes) cleanly instead of continuing another prefix's
+    // sequence.
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const finalPrefix = (quotationPrefix && quotationPrefix.trim()) || documentSettings.documentTypeSettings?.quote?.prefix || "QT-";
+    const finalSuffix = (documentSettings.documentTypeSettings?.quote?.suffix || "").toString().trim();
     let quotationNumber;
-    if (clientQuotationNumber && String(clientQuotationNumber).trim()) {
-      quotationNumber = `${finalPrefix}${String(clientQuotationNumber).trim()}`;
-      const duplicate = await Quotation.findOne({
+    try {
+      quotationNumber = await resolveDocumentNumber({
+        Model: Quotation,
+        numberField: "quotationNumber",
         organization: req.user.organization,
-        quotationNumber,
-      }).session(session);
-      if (duplicate) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          error: `Quotation number "${quotationNumber}" is already in use.`,
-        });
-      }
-    } else {
-      const escapedPrefix = finalPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const numberRegex = new RegExp(`^${escapedPrefix}(\\d+)$`);
-      const quotations = await Quotation.find({
-        organization: req.user.organization,
-        quotationNumber: { $regex: numberRegex },
-      })
-        .select("quotationNumber")
-        .session(session);
-      let maxNumber = 0;
-      quotations.forEach((q) => {
-        const match = q.quotationNumber.match(numberRegex);
-        const num = match ? parseInt(match[1], 10) : 0;
-        if (num > maxNumber) maxNumber = num;
+        prefix: finalPrefix,
+        suffix: finalSuffix,
+        providedNumber: clientQuotationNumber && String(clientQuotationNumber).trim() ? clientQuotationNumber : null,
+        session,
       });
-      quotationNumber = `${finalPrefix}${maxNumber + 1}`;
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
     }
 
     const dealDoc = await Deal.findById(deal).populate('company');
@@ -599,11 +588,22 @@ exports.bulkUpdateSignature = async (req, res) => {
     if (!ids || !ids.length) {
       return res.status(400).json({ error: "ids are required" });
     }
-    await Quotation.updateMany(
-      { _id: { $in: ids }, organization: req.user.organization },
-      { signature: signature || "", signatureType: signatureType || "text" }
-    );
-    res.json({ message: `Updated signature for ${ids.length} quotations` });
+    const quotations = await Quotation.find({ _id: { $in: ids }, organization: req.user.organization }, '_id');
+    const validIds = quotations.map(q => q._id.toString());
+    const failedIds = ids.filter(id => !validIds.includes(id));
+    
+    if (validIds.length > 0) {
+      await Quotation.updateMany(
+        { _id: { $in: validIds } },
+        { signature: signature || "", signatureType: signatureType || "text" }
+      );
+    }
+    
+    res.json({
+      message: `Updated signature for ${validIds.length} quotations`,
+      successfulIds: validIds,
+      failedIds
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

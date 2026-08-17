@@ -1165,6 +1165,7 @@ exports.completeRegistration = async (req, res) => {
       branding.companyName = req.body.orgName;
       branding.colors = { primary: "#ffffff", secondary: "#000000" };
       branding.organization = organization;
+      if (req.body.gstNumber) branding.gstin = req.body.gstNumber;
       await branding.save();
 
       const kanbanBoard = new KanbanBoard({

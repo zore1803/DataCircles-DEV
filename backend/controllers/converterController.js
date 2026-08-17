@@ -712,3 +712,163 @@ exports.convertDeliveryChallanToQuotation = async (req, res) => {
     res.status(500).json({ message: `Failed to convert delivery challan: ${error.message}` });
   }
 };
+exports.bulkConvertQuotationToTaxInvoice = async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: 'ids array required' });
+  
+  const successfulIds = [];
+  const failedIds = [];
+  
+  for (const id of ids) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const quotation = await Quotation.findOne({ _id: id, organization: req.user.organization }).session(session);
+      if (!quotation) {
+        throw new Error('Quotation not found or unauthorized');
+      }
+
+      const invoiceNumber = await generateDocumentNumber('INV', quotation.organization, session);
+
+      const newId = new mongoose.Types.ObjectId();
+      const invoiceData = {
+        ...quotation.toObject(),
+        _id: newId,
+        invoiceNumber,
+        isTaxInvoice: quotation.isTaxQuotation,
+        createdAt: undefined,
+        updatedAt: undefined,
+      };
+      delete invoiceData.quotationNumber;
+
+      const requiredFields = ['deal', 'invoiceNumber', 'date', 'amount', 'user', 'organization', 'status', 'discount'];
+      const validationError = validateRequiredFields(invoiceData, requiredFields, invoiceData.items);
+      if (validationError) {
+        throw new Error(validationError);
+      }
+
+      const invoice = new Invoice(invoiceData);
+      await invoice.save({ session });
+
+      quotation.status = 'Void';
+      await quotation.save({ session });
+
+      await session.commitTransaction();
+      session.endSession();
+      successfulIds.push(id);
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      failedIds.push(id);
+    }
+  }
+  
+  res.status(200).json({ successfulIds, failedIds });
+};
+
+exports.bulkConvertQuotationToProforma = async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: 'ids array required' });
+  
+  const successfulIds = [];
+  const failedIds = [];
+  
+  for (const id of ids) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const quotation = await Quotation.findOne({ _id: id, organization: req.user.organization }).session(session);
+      if (!quotation) {
+        throw new Error('Quotation not found or unauthorized');
+      }
+
+      const performaInvoiceNumber = await generateDocumentNumber('PI', quotation.organization, session);
+
+      const newId = new mongoose.Types.ObjectId();
+      const proformaData = {
+        ...quotation.toObject(),
+        _id: newId,
+        performaInvoiceNumber,
+        isTaxInvoice: quotation.isTaxQuotation,
+        createdAt: undefined,
+        updatedAt: undefined,
+      };
+      delete proformaData.quotationNumber;
+
+      const requiredFields = ['deal', 'performaInvoiceNumber', 'date', 'amount', 'user', 'organization', 'status', 'discount'];
+      const validationError = validateRequiredFields(proformaData, requiredFields, proformaData.items);
+      if (validationError) {
+        throw new Error(validationError);
+      }
+
+      const proformaInvoice = new ProformaInvoice(proformaData);
+      await proformaInvoice.save({ session });
+
+      quotation.status = 'Void';
+      await quotation.save({ session });
+
+      await session.commitTransaction();
+      session.endSession();
+      successfulIds.push(id);
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      failedIds.push(id);
+    }
+  }
+  
+  res.status(200).json({ successfulIds, failedIds });
+};
+
+exports.bulkConvertProformaToTaxInvoice = async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: 'ids array required' });
+  
+  const successfulIds = [];
+  const failedIds = [];
+  
+  for (const id of ids) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const proformaInvoice = await ProformaInvoice.findOne({ _id: id, organization: req.user.organization }).session(session);
+      if (!proformaInvoice) {
+        throw new Error('Proforma Invoice not found or unauthorized');
+      }
+
+      const invoiceNumber = await generateDocumentNumber('INV', proformaInvoice.organization, session);
+
+      const newId = new mongoose.Types.ObjectId();
+      const invoiceData = {
+        ...proformaInvoice.toObject(),
+        _id: newId,
+        invoiceNumber,
+        isTaxInvoice: proformaInvoice.items.some(item => item.hsn && item.hsn.trim() !== ''),
+        createdAt: undefined,
+        updatedAt: undefined,
+      };
+      delete invoiceData.performaInvoiceNumber;
+
+      const requiredFields = ['deal', 'invoiceNumber', 'date', 'amount', 'user', 'organization', 'status', 'discount'];
+      const validationError = validateRequiredFields(invoiceData, requiredFields, invoiceData.items);
+      if (validationError) {
+        throw new Error(validationError);
+      }
+
+      const invoice = new Invoice(invoiceData);
+      await invoice.save({ session });
+
+      await ProformaInvoice.findByIdAndDelete(id).session(session);
+
+      await session.commitTransaction();
+      session.endSession();
+      successfulIds.push(id);
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      failedIds.push(id);
+    }
+  }
+  
+  res.status(200).json({ successfulIds, failedIds });
+};

@@ -247,6 +247,69 @@ function resolveInvoiceNumber({ settings, providedNumber = null, lastInvoiceNumb
   };
 }
 
+// Shared, prefix-scoped "what's the next number" resolver — one implementation
+// for all 4 document types instead of each controller reimplementing its own
+// (and, in Invoice's case, getting it wrong: the old logic looked at
+// whichever document was created most recently *regardless of prefix*, so
+// changing the configured prefix from INV- to SALES- after INV-47 existed
+// would produce SALES-48 instead of restarting at SALES-1).
+//
+// A document only counts toward "the last number for this prefix" if its
+// number actually starts with the CURRENT prefix — so switching prefixes
+// always restarts (or resumes, if documents already exist under the new
+// prefix) cleanly, matching the configured prefix rather than the org's
+// numbering history as a whole.
+async function resolveNextNumberForPrefix({ Model, numberField, organization, prefix, session }) {
+  const normalizedPrefix = (prefix || '').toString().trim() || DEFAULT_PREFIX;
+  const escapedPrefix = normalizedPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Optional dash covers both "INV-" (already ends in -) and "QT"/"PI"/"DC"
+  // (no trailing dash in their own default) style prefixes uniformly.
+  // The trailing (?:-.+)? allows a suffix like "-26-27" so existing numbered
+  // docs are still found when a suffix is configured.
+  const pattern = new RegExp(`^${escapedPrefix}-?(\\d+)(?:-.+)?$`);
+
+  let query = Model.find({ organization, [numberField]: { $regex: pattern } }).select(numberField);
+  if (session) query = query.session(session);
+  const docs = await query.lean();
+
+  let maxNumber = 0;
+  docs.forEach((doc) => {
+    const match = String(doc[numberField] || '').match(pattern);
+    const num = match ? parseInt(match[1], 10) : 0;
+    if (num > maxNumber) maxNumber = num;
+  });
+
+  return maxNumber + 1;
+}
+
+// Builds the final number for a document create call, handling both cases:
+// the client supplied an explicit number (validated for prefix-scoped
+// uniqueness), or none was supplied (auto-generated from the prefix-scoped
+// max). Always returns a fully-formed "PREFIX-N" string via buildInvoiceNumber
+// so every document type gets identical separator handling. Pass the create
+// call's transaction `session` through so the uniqueness/max-number reads see
+// a consistent snapshot with the rest of that request.
+async function resolveDocumentNumber({ Model, numberField, organization, prefix, suffix = '', providedNumber, session }) {
+  const normalizedPrefix = (prefix || '').toString().trim() || DEFAULT_PREFIX;
+  const normalizedSuffix = (suffix || '').toString().trim();
+
+  if (providedNumber !== null && providedNumber !== undefined && providedNumber !== '') {
+    const number = buildInvoiceNumber({ prefix: normalizedPrefix, number: providedNumber, suffix: normalizedSuffix });
+    let query = Model.findOne({ organization, [numberField]: number });
+    if (session) query = query.session(session);
+    const existing = await query.lean();
+    if (existing) {
+      const err = new Error(`${number} is already in use.`);
+      err.code = 'DUPLICATE_NUMBER';
+      throw err;
+    }
+    return number;
+  }
+
+  const nextNumber = await resolveNextNumberForPrefix({ Model, numberField, organization, prefix: normalizedPrefix, session });
+  return buildInvoiceNumber({ prefix: normalizedPrefix, number: nextNumber, suffix: normalizedSuffix });
+}
+
 async function getDocumentSettingsForOrganization(organizationId) {
   if (!organizationId) {
     return normalizeInvoiceNumberSettings({});
@@ -374,6 +437,8 @@ module.exports = {
   buildInvoiceNumber,
   normalizeInvoiceNumberSettings,
   resolveInvoiceNumber,
+  resolveNextNumberForPrefix,
+  resolveDocumentNumber,
   getDocumentSettingsForOrganization,
   saveDocumentSettingsForOrganization,
   seedTemplateLibrariesFromLegacy,
