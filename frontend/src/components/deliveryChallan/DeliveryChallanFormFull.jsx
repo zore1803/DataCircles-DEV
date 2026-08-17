@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
+import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 import {
   Plus,
   IndianRupeeIcon,
@@ -342,7 +343,18 @@ const DeliveryChallanFormFull = ({
   onExitFullWidth,
   conversionData = null,
   defaultDueDateDays = null,
+  defaultNotesByType = {},
+  defaultTermsByType = {},
+  defaultNotesFlat = "",
+  defaultTermsFlat = "",
 }) => {
+  const defaultNotesForNewChallan = defaultNotesByType.deliveryChallan !== undefined
+    ? defaultNotesByType.deliveryChallan
+    : (defaultNotesFlat || PREDEFINED_NOTES.deliveryChallan || "");
+  const defaultTermsForNewChallan = defaultTermsByType.deliveryChallan !== undefined
+    ? defaultTermsByType.deliveryChallan
+    : (defaultTermsFlat || PREDEFINED_TERMS.deliveryChallan || "");
+
   const [form, setForm] = useState({
     deal: "",
     date: "",
@@ -555,8 +567,8 @@ const DeliveryChallanFormFull = ({
         status: "Draft",
         isTaxChallan: false,
         transactionType: "intra",
-        notes: "",
-        terms: "",
+        notes: defaultNotesForNewChallan,
+        terms: defaultTermsForNewChallan,
         attachments: [],
         bankDetails: "",
         signature: "",

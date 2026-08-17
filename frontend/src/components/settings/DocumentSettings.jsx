@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import API from "../../services/api";
 import { Save, FileText, PenSquare, Eye, Plus, Trash2, CheckCircle, ShieldCheck, Edit3, MessageCircle, MessageSquare, Mail, Lock } from "lucide-react";
 import SignatureModal from "./SignatureModal";
+import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 
 const documentTypeMeta = [
   { key: "invoice", label: "Invoice" },
@@ -10,6 +11,16 @@ const documentTypeMeta = [
   { key: "proformaInvoice", label: "Proforma Invoice" },
   { key: "deliveryChallan", label: "Delivery Challan" },
 ];
+
+// Notes/Terms are stored server-side keyed by the document's own type string
+// (tax | performa | quotation | deliveryChallan — see backend DocumentSettings
+// model), not the numbering tab's keys above, so map between the two.
+const FOOTER_TYPE_KEY = {
+  invoice: "tax",
+  quote: "quotation",
+  proformaInvoice: "performa",
+  deliveryChallan: "deliveryChallan",
+};
 
 const createDefaultDocumentTypeSettings = () => ({
   invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] },
@@ -23,6 +34,8 @@ function DocumentSettings() {
     nextInvoiceNumber: 1,
     defaultNotes: "",
     defaultTerms: "",
+    defaultNotesByType: {},
+    defaultTermsByType: {},
     defaultDueDateDays: "",
     documentTypeSettings: createDefaultDocumentTypeSettings(),
   });
@@ -82,10 +95,33 @@ function DocumentSettings() {
         setWhatsappTemplates(Array.isArray(res.data?.whatsappTemplates) ? res.data.whatsappTemplates : []);
         setSmsTemplates(Array.isArray(res.data?.smsTemplates) ? res.data.smsTemplates : []);
         setEmailTemplates(Array.isArray(res.data?.emailTemplates) ? res.data.emailTemplates : []);
+
+        // Seed sensible copy for any document type that has neither a
+        // per-type value nor the legacy flat default — so a fresh org sees
+        // ready-to-use text instead of blank boxes, without us silently
+        // overwriting anything the org already saved.
+        const incomingNotesByType = res.data?.defaultNotesByType || {};
+        const incomingTermsByType = res.data?.defaultTermsByType || {};
+        const flatNotes = res.data?.defaultNotes || "";
+        const flatTerms = res.data?.defaultTerms || "";
+        const seededNotesByType = { ...incomingNotesByType };
+        const seededTermsByType = { ...incomingTermsByType };
+        Object.keys(FOOTER_TYPE_KEY).forEach((tabKey) => {
+          const footerKey = FOOTER_TYPE_KEY[tabKey];
+          if (incomingNotesByType[footerKey] === undefined && !flatNotes) {
+            seededNotesByType[footerKey] = PREDEFINED_NOTES[footerKey] || "";
+          }
+          if (incomingTermsByType[footerKey] === undefined && !flatTerms) {
+            seededTermsByType[footerKey] = PREDEFINED_TERMS[footerKey] || "";
+          }
+        });
+
         setForm({
           nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
-          defaultNotes: res.data?.defaultNotes || "",
-          defaultTerms: res.data?.defaultTerms || "",
+          defaultNotes: flatNotes,
+          defaultTerms: flatTerms,
+          defaultNotesByType: seededNotesByType,
+          defaultTermsByType: seededTermsByType,
           defaultDueDateDays: res.data?.defaultDueDateDays || "",
           documentTypeSettings: {
             invoice: normalizeSection("invoice", { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] }),
@@ -120,6 +156,8 @@ function DocumentSettings() {
         nextInvoiceNumber: Number(form.nextInvoiceNumber) || 1,
         defaultNotes: form.defaultNotes,
         defaultTerms: form.defaultTerms,
+        defaultNotesByType: form.defaultNotesByType,
+        defaultTermsByType: form.defaultTermsByType,
         defaultDueDateDays: form.defaultDueDateDays ? Number(form.defaultDueDateDays) : null,
       });
       toast.success("Document settings updated");
@@ -435,47 +473,68 @@ function DocumentSettings() {
               })()}
             </div>
 
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
-              <div>
-                <h4 className="text-sm font-semibold text-gray-800">Default Notes &amp; Terms</h4>
-                <p className="text-sm text-gray-500">
-                  Saved once here, then inserted with one click while creating a document.
-                </p>
-              </div>
+            {(() => {
+              const footerKey = FOOTER_TYPE_KEY[activeDocumentType];
+              const activeLabel = documentTypeMeta.find((item) => item.key === activeDocumentType)?.label || "";
+              const notesOverride = form.defaultNotesByType[footerKey];
+              const termsOverride = form.defaultTermsByType[footerKey];
+              const notesValue = notesOverride ?? form.defaultNotes ?? "";
+              const termsValue = termsOverride ?? form.defaultTerms ?? "";
+              const setNotes = (value) =>
+                setForm((prev) => ({
+                  ...prev,
+                  defaultNotesByType: { ...prev.defaultNotesByType, [footerKey]: value },
+                }));
+              const setTerms = (value) =>
+                setForm((prev) => ({
+                  ...prev,
+                  defaultTermsByType: { ...prev.defaultTermsByType, [footerKey]: value },
+                }));
 
-              <label className="flex flex-col gap-2 text-sm">
-                <span className="font-medium text-gray-700">Notes</span>
-                <textarea
-                  rows={3}
-                  value={form.defaultNotes}
-                  onChange={(e) => setForm((prev) => ({ ...prev, defaultNotes: e.target.value }))}
-                  placeholder="Thank you for the business!"
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 resize-y"
-                />
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="font-medium text-gray-700">Default Due Date (Days)</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={form.defaultDueDateDays}
-                  onChange={(e) => setForm((prev) => ({ ...prev, defaultDueDateDays: e.target.value }))}
-                  placeholder="e.g., 15"
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500"
-                />
-              </label>
+              return (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-800">Default Notes &amp; Terms — {activeLabel}</h4>
+                    <p className="text-sm text-gray-500">
+                      Saved per document type, then inserted with one click while creating a {activeLabel.toLowerCase()}.
+                    </p>
+                  </div>
 
-              <label className="flex flex-col gap-1.5">
-                <span className="font-medium text-gray-700">Terms and Conditions</span>
-                <textarea
-                  rows={4}
-                  value={form.defaultTerms}
-                  onChange={(e) => setForm((prev) => ({ ...prev, defaultTerms: e.target.value }))}
-                  placeholder={"1. Goods once sold cannot be taken back or exchanged.\n2. Subject to local jurisdiction."}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 resize-y"
-                />
-              </label>
-            </div>
+                  <label className="flex flex-col gap-2 text-sm">
+                    <span className="font-medium text-gray-700">Notes</span>
+                    <textarea
+                      rows={3}
+                      value={notesValue}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Thank you for the business!"
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 resize-y"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="font-medium text-gray-700">Default Due Date (Days)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={form.defaultDueDateDays}
+                      onChange={(e) => setForm((prev) => ({ ...prev, defaultDueDateDays: e.target.value }))}
+                      placeholder="e.g., 15"
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="font-medium text-gray-700">Terms and Conditions</span>
+                    <textarea
+                      rows={4}
+                      value={termsValue}
+                      onChange={(e) => setTerms(e.target.value)}
+                      placeholder={"1. Goods once sold cannot be taken back or exchanged.\n2. Subject to local jurisdiction."}
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 resize-y"
+                    />
+                  </label>
+                </div>
+              );
+            })()}
 
             <button
               type="submit"

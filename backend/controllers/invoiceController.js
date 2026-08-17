@@ -858,6 +858,71 @@ const bulkUpdateSignature = async (req, res) => {
   }
 };
 
+const recordPayment = async (req, res) => {
+  try {
+    const { amount, paymentDate, paymentMethod, reference, notes } = req.body;
+    const paymentAmount = parseFloat(amount);
+
+    if (isNaN(paymentAmount) || paymentAmount <= 0) {
+      return res.status(400).json({ error: "Payment amount must be greater than 0" });
+    }
+
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    // Calculate total already paid
+    const totalPaid = (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0);
+    const amountDue = invoice.amount - totalPaid;
+
+    if (amountDue <= 0) {
+      return res.status(400).json({ error: "Invoice is already fully paid" });
+    }
+
+    if (paymentAmount > amountDue) {
+      return res.status(400).json({ error: `Payment amount (${paymentAmount}) cannot exceed amount due (${amountDue})` });
+    }
+
+    // Add new payment
+    const newPayment = {
+      amount: paymentAmount,
+      paymentDate: paymentDate || new Date(),
+      paymentMethod: paymentMethod || "UPI",
+      reference: reference || "",
+      notes: notes || "",
+      recordedBy: req.user._id,
+      recordedAt: new Date()
+    };
+
+    invoice.payments = invoice.payments || [];
+    invoice.payments.push(newPayment);
+
+    // Update status if fully paid
+    const newTotalPaid = totalPaid + paymentAmount;
+    if (newTotalPaid >= invoice.amount) {
+      invoice.status = "Paid";
+    } else if (invoice.status === "Sent" || invoice.status === "Unpaid" || invoice.status === "Overdue" || invoice.status === "Draft") {
+       // Optional: change status to partially paid if they have that status. Usually they don't, so we leave it or set to "Partially Paid".
+       // The UI usually relies on standard status. Let's not change it to something unexpected unless needed.
+    }
+
+    await invoice.save();
+
+    res.status(200).json({
+      message: "Payment recorded successfully",
+      invoice
+    });
+  } catch (error) {
+    console.error("Error recording payment:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createInvoice,
   getAllInvoices,
@@ -870,6 +935,7 @@ module.exports = {
   sendInvoiceEmail,
   bulkUpdateStatus,
   bulkUpdateSignature,
+  recordPayment,
   getInvoicesByCompany,
   getCompanyInvoiceSummary,
   updateInvoiceNumber,

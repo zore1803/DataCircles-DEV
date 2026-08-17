@@ -134,4 +134,13 @@ router.post(
   invoiceController.bulkUpdateSignature
 );
 
+router.post(
+  "/:id/payments",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.recordPayment
+);
+
 module.exports = router;

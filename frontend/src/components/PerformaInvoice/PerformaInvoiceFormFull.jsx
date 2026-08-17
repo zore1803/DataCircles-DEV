@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
+import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 import {
   Plus,
   IndianRupeeIcon,
@@ -342,7 +343,18 @@ const PerformaInvoiceFormFull = ({
   onExitFullWidth,
   conversionData = null,
   defaultDueDateDays = null,
+  defaultNotesByType = {},
+  defaultTermsByType = {},
+  defaultNotesFlat = "",
+  defaultTermsFlat = "",
 }) => {
+  const defaultNotesForNewPerforma = defaultNotesByType.performa !== undefined
+    ? defaultNotesByType.performa
+    : (defaultNotesFlat || PREDEFINED_NOTES.performa || "");
+  const defaultTermsForNewPerforma = defaultTermsByType.performa !== undefined
+    ? defaultTermsByType.performa
+    : (defaultTermsFlat || PREDEFINED_TERMS.performa || "");
+
   const [form, setForm] = useState({
     deal: "",
     date: "",
@@ -555,8 +567,8 @@ const PerformaInvoiceFormFull = ({
         status: "Draft",
         isTaxInvoice: false,
         transactionType: "intra",
-        notes: "",
-        terms: "",
+        notes: defaultNotesForNewPerforma,
+        terms: defaultTermsForNewPerforma,
         attachments: [],
         bankDetails: "",
         signature: "",

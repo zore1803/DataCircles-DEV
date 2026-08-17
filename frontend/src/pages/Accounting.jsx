@@ -65,6 +65,7 @@ import { CreatePerformaPanel } from "../components/PerformaInvoice/PerformaInvoi
 import PerformaInvoiceFormFull from "../components/PerformaInvoice/PerformaInvoiceFormFull";
 import QuotationForm from "../components/quotation/QuotationForm";
 import ShareModal from "../components/common/ShareModal";
+import RecordPaymentModal from "../components/common/RecordPaymentModal";
 import { CreateQuotationPanel } from "../components/quotation/QuotationForm";
 import InvoiceFormFull from "../components/invoice/InvoiceFormFull";
 import DeliveryChallanForm from "../components/deliveryChallan/DeliveryChallanForm";
@@ -881,6 +882,13 @@ const Accounting = () => {
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [defaultDueDateDays, setDefaultDueDateDays] = useState(null);
+  // Notes/Terms boilerplate from Settings → Document Settings, keyed by
+  // document type (tax | performa | quotation | deliveryChallan), with the
+  // legacy flat fields as a fallback for orgs that haven't set per-type text.
+  const [defaultNotesByType, setDefaultNotesByType] = useState({});
+  const [defaultTermsByType, setDefaultTermsByType] = useState({});
+  const [defaultNotesFlat, setDefaultNotesFlat] = useState("");
+  const [defaultTermsFlat, setDefaultTermsFlat] = useState("");
   // Named template libraries loaded from Settings → Message Templates. Each
   // entry is {id, name, ...content, isDefault}; the share menu picks the
   // default automatically when there's only one, or lets the user choose
@@ -929,6 +937,9 @@ const Accounting = () => {
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [showBulkEmailModal, setShowBulkEmailModal] = useState(false);
   const [bulkShowMoreMenu, setBulkShowMoreMenu] = useState(false);
+  const [bulkConvertMenuOpen, setBulkConvertMenuOpen] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState(null);
   const [bulkEmailAddress, setBulkEmailAddress] = useState("");
   const [bulkEmailSending, setBulkEmailSending] = useState(false);
   const [shareMenu, setShareMenu] = useState(null); // { doc, type, x, y }
@@ -1086,6 +1097,10 @@ const Accounting = () => {
       if (res.data && res.data.defaultDueDateDays != null) {
         setDefaultDueDateDays(res.data.defaultDueDateDays);
       }
+      setDefaultNotesByType(res.data?.defaultNotesByType || {});
+      setDefaultTermsByType(res.data?.defaultTermsByType || {});
+      setDefaultNotesFlat(res.data?.defaultNotes || "");
+      setDefaultTermsFlat(res.data?.defaultTerms || "");
       setWaTemplatesList(Array.isArray(res.data?.whatsappTemplates) ? res.data.whatsappTemplates : []);
       setSmsTemplatesList(Array.isArray(res.data?.smsTemplates) ? res.data.smsTemplates : []);
       setEmailTemplatesList(Array.isArray(res.data?.emailTemplates) ? res.data.emailTemplates : []);
@@ -1739,6 +1754,18 @@ const Accounting = () => {
                 </div>
               )}
             </div>
+            {activeTab === "tax" && doc.status !== "Paid" && (
+              <button
+                title="Record Payment"
+                onClick={() => {
+                  setSelectedInvoiceForPayment(doc);
+                  setPaymentModalOpen(true);
+                }}
+                className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+              >
+                <IndianRupee className="w-4 h-4" />
+              </button>
+            )}
             <button
               title="Delete"
               onClick={() => handleDelete(doc._id, activeTab)}
@@ -2666,6 +2693,10 @@ const Accounting = () => {
                 editingInvoice={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
                 defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
                 onPreview={(formData) => {
                   if (!formData.style) {
                     toast.error("Please select an invoice style to preview.");
@@ -2697,6 +2728,10 @@ const Accounting = () => {
                 editingQuotation={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
                 defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
                 onPreview={(formData) => {
                   if (!formData.style) {
                     toast.error("Please select a Quotation style to preview.");
@@ -2724,6 +2759,10 @@ const Accounting = () => {
                 editingPerformaInvoice={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
                 defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
                 onPreview={(formData) => {
                   if (!formData.style) {
                     toast.error("Please select a Pro Forma invoice style to preview.");
@@ -2751,6 +2790,10 @@ const Accounting = () => {
                 editingDeliveryChallan={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
                 defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
               />
             ) : (
               <CreateChallanPanel
@@ -2789,6 +2832,10 @@ const Accounting = () => {
               fetchData={() => fetchData("tax")}
               editingInvoice={editing}
               defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
               onExitFullWidth={() => setInvoiceFullWidth(false)}
               onPreview={(formData) => {
                 if (!formData.style) {
@@ -2812,6 +2859,10 @@ const Accounting = () => {
               fetchData={() => fetchData("tax")}
               editingInvoice={editing}
               defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
               onRequestFullWidth={() => setInvoiceFullWidth(true)}
               onPreview={(formData) => {
                 if (!formData.style) {
@@ -2839,6 +2890,10 @@ const Accounting = () => {
               fetchData={() => fetchData("performa")}
               editingPerformaInvoice={editing}
               defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
               onExitFullWidth={() => setPerformaFullWidth(false)}
               onPreview={(formData) => {
                 if (!formData.style) {
@@ -2862,6 +2917,10 @@ const Accounting = () => {
               fetchData={() => fetchData("performa")}
               editingPerformaInvoice={editing}
               defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
               onRequestFullWidth={() => setPerformaFullWidth(true)}
               onPreview={(formData) => {
                 if (!formData.style) {
@@ -2887,6 +2946,10 @@ const Accounting = () => {
             fetchData={() => fetchData("quotation")}
             editingQuotation={editing}
             defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
             onPreview={(formData) => {
               if (!formData.style) {
                 toast.error("Please select a Quotation style to preview.");
@@ -2912,6 +2975,10 @@ const Accounting = () => {
               fetchData={() => fetchData("deliveryChallan")}
               editingDeliveryChallan={editing}
               defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
               onExitFullWidth={() => setChallanFullWidth(false)}
             />
           ) : (
@@ -2926,6 +2993,10 @@ const Accounting = () => {
               fetchData={() => fetchData("deliveryChallan")}
               editingDeliveryChallan={editing}
               defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
               onRequestFullWidth={() => setChallanFullWidth(true)}
             />
           )
@@ -3529,13 +3600,23 @@ const Accounting = () => {
           }}
           onComplete={() => {
             if (pendingInvoiceCreation) {
-              // Same two-pane panel the "Add [Document]" button opens when
-              // branding is already complete — branding-gated tax invoices
-              // now land in the same place as every other create/edit flow.
               setEditPanelDoc(null);
               setShowCreatePanel(true);
               setPendingInvoiceCreation(false);
             }
+          }}
+        />
+        <RecordPaymentModal
+          isOpen={paymentModalOpen}
+          onClose={() => {
+            setPaymentModalOpen(false);
+            setSelectedInvoiceForPayment(null);
+          }}
+          invoice={selectedInvoiceForPayment}
+          onSuccess={() => {
+            setPaymentModalOpen(false);
+            setSelectedInvoiceForPayment(null);
+            fetchData();
           }}
         />
       </div>

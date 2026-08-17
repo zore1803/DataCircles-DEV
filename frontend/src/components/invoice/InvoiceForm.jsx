@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
+import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 import {
   Plus,
   IndianRupeeIcon,
@@ -321,7 +322,20 @@ const InvoiceForm = ({
   conversionData,
   onPreview,
   defaultDueDateDays = null,
+  defaultNotesByType = {},
+  defaultTermsByType = {},
+  defaultNotesFlat = "",
+  defaultTermsFlat = "",
 }) => {
+  // byType wins when the org has customized it (even to blank); otherwise
+  // fall back to the legacy flat default, then to bundled starter copy.
+  const defaultNotesForNewInvoice = defaultNotesByType.tax !== undefined
+    ? defaultNotesByType.tax
+    : (defaultNotesFlat || PREDEFINED_NOTES.tax || "");
+  const defaultTermsForNewInvoice = defaultTermsByType.tax !== undefined
+    ? defaultTermsByType.tax
+    : (defaultTermsFlat || PREDEFINED_TERMS.tax || "");
+
   const [form, setForm] = useState({
     deal: "",
     date: "",
@@ -956,8 +970,8 @@ const InvoiceForm = ({
         billingAddress: emptyAddress(),
         shippingAddress: emptyAddress(),
         sameAsBilling: true,
-        notes: "",
-        terms: "",
+        notes: defaultNotesForNewInvoice,
+        terms: defaultTermsForNewInvoice,
         signature: "",
       });
       await fetchData();
@@ -1077,8 +1091,8 @@ const InvoiceForm = ({
         billingAddress: emptyAddress(),
         shippingAddress: emptyAddress(),
         sameAsBilling: true,
-        notes: "",
-        terms: "",
+        notes: defaultNotesForNewInvoice,
+        terms: defaultTermsForNewInvoice,
         signature: "",
       };
       setForm(initialForm);
@@ -2478,12 +2492,31 @@ const CreateInvoicePanel = ({
             dateObj.setDate(dateObj.getDate() + offsetDays);
             newDueDate = dateObj.toISOString().split("T")[0];
           }
+          // Same "type has neither a per-type value nor a flat default"
+          // fallback used in Settings → Document Settings, so a brand new
+          // document opens with ready-to-use copy instead of blank boxes.
+          const notesByType = d.defaultNotesByType || {};
+          const termsByType = d.defaultTermsByType || {};
+          let newNotes = prev.notes;
+          if (!isEditing && !prev.notes) {
+            newNotes = notesByType[type] !== undefined
+              ? notesByType[type]
+              : (d.defaultNotes || PREDEFINED_NOTES[type] || "");
+          }
+          let newTerms = prev.terms;
+          if (!isEditing && !prev.terms) {
+            newTerms = termsByType[type] !== undefined
+              ? termsByType[type]
+              : (d.defaultTerms || PREDEFINED_TERMS[type] || "");
+          }
           return {
             ...prev,
             invoicePrefix: d.invoicePrefix || "INV-",
             invoiceSuffix: d.invoiceSuffix || "",
             nextInvoiceNumber: d.nextInvoiceNumber || 1,
             dueDate: newDueDate,
+            notes: newNotes,
+            terms: newTerms,
           };
         });
       } catch (error) {

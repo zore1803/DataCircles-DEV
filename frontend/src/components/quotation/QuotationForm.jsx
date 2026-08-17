@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { CreateInvoicePanel } from "../invoice/InvoiceForm";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
+import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 import {
   Plus,
   IndianRupeeIcon,
@@ -343,7 +344,18 @@ const QuotationForm = ({
   onExitFullWidth,
   conversionData = null,
   defaultDueDateDays = null,
+  defaultNotesByType = {},
+  defaultTermsByType = {},
+  defaultNotesFlat = "",
+  defaultTermsFlat = "",
 }) => {
+  const defaultNotesForNewQuotation = defaultNotesByType.quotation !== undefined
+    ? defaultNotesByType.quotation
+    : (defaultNotesFlat || PREDEFINED_NOTES.quotation || "");
+  const defaultTermsForNewQuotation = defaultTermsByType.quotation !== undefined
+    ? defaultTermsByType.quotation
+    : (defaultTermsFlat || PREDEFINED_TERMS.quotation || "");
+
   const [form, setForm] = useState({
     deal: "",
     date: "",
@@ -558,8 +570,8 @@ const QuotationForm = ({
         status: "Draft",
         isTaxQuotation: false,
         transactionType: "intra",
-        notes: "",
-        terms: "",
+        notes: defaultNotesForNewQuotation,
+        terms: defaultTermsForNewQuotation,
         attachments: [],
         bankDetails: "",
         signature: "",
