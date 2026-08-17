@@ -58,6 +58,7 @@ const createInvoice = async (req, res) => {
       discount,
       status,
       items,
+      style,
       notes,
       terms,
       isTaxInvoice,
@@ -67,6 +68,7 @@ const createInvoice = async (req, res) => {
       transactionType,
       gstRate,
       invoicePrefix,
+      invoiceSuffix,
       invoiceNumber,
       nextInvoiceNumber,
       billingAddress,
@@ -159,42 +161,41 @@ const createInvoice = async (req, res) => {
     //   return res.status(400).json({ error: "Provided amount does not match calculated amount" });
     // }
 
+    // Invoice number: Document Settings' configured prefix
+    // (documentTypeSettings.invoice.prefix) is the source of truth when the
+    // client doesn't send one. Numbering is scoped to the resolved prefix
+    // specifically (via resolveDocumentNumber, shared with the other 3
+    // document types) so switching prefixes restarts/resumes cleanly instead
+    // of continuing whichever prefix happened to be used most recently.
     const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
-    const hasCustomInvoiceDetails = typeof invoicePrefix !== "undefined" || typeof invoiceSuffix !== "undefined" || typeof nextInvoiceNumber !== "undefined";
+    const effectivePrefix = (invoicePrefix ?? documentSettings.documentTypeSettings?.invoice?.prefix ?? documentSettings.invoicePrefix ?? "").toString().trim() || "INV-";
+    const effectiveSuffix = (invoiceSuffix ?? documentSettings.documentTypeSettings?.invoice?.suffix ?? documentSettings.invoiceSuffix ?? "").toString().trim();
     const explicitNumber = typeof invoiceNumber === "string" && invoiceNumber.trim()
-      ? Number(invoiceNumber.trim())
+      ? invoiceNumber.trim()
       : null;
 
-    // Document Settings is the source of truth for the prefix when the
-    // client doesn't send one. Numbering is scoped to THIS prefix specifically
-    // (resolveDocumentNumber only looks at invoices whose number already
-    // starts with it) so switching prefixes in Settings always restarts (or
-    // resumes) cleanly instead of continuing the old prefix's sequence.
-    const effectivePrefix = (invoicePrefix ?? documentSettings.invoicePrefix ?? "").toString().trim() || "INV-";
-    const effectiveSuffix = (invoiceSuffix ?? documentSettings.documentTypeSettings?.invoice?.suffix ?? documentSettings.invoiceSuffix ?? "").toString().trim();
-    const finalInvoiceNumber = await resolveDocumentNumber({
-      Model: Invoice,
-      numberField: "invoiceNumber",
-      organization: req.user.organization,
-      prefix: effectivePrefix,
-      suffix: effectiveSuffix,
-      providedNumber: Number.isFinite(explicitNumber) ? explicitNumber : null,
-      session,
-    });
-    const nextNumberForSettings = Number.isFinite(explicitNumber)
-      ? explicitNumber + 1
-      : (parseInt(finalInvoiceNumber.match(/(\d+)$/)?.[1], 10) || 0) + 1;
+    let finalInvoiceNumber;
+    try {
+      finalInvoiceNumber = await resolveDocumentNumber({
+        Model: Invoice,
+        numberField: "invoiceNumber",
+        organization: req.user.organization,
+        prefix: effectivePrefix,
+        suffix: effectiveSuffix,
+        providedNumber: explicitNumber,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
 
-    const settingsUpdate = {
-      invoicePrefix: effectivePrefix,
-      invoiceSuffix: invoiceSuffix ?? documentSettings.invoiceSuffix,
-      nextInvoiceNumber: nextNumberForSettings,
-    };
-
+    const hasCustomInvoiceDetails = typeof invoicePrefix !== "undefined" || typeof invoiceSuffix !== "undefined";
     if (hasCustomInvoiceDetails || !documentSettings || !documentSettings.invoicePrefix) {
       await DocumentSettings.findOneAndUpdate(
         { organization: req.user.organization },
-        { $set: settingsUpdate },
+        { $set: { invoicePrefix: effectivePrefix, invoiceSuffix: invoiceSuffix ?? documentSettings.invoiceSuffix } },
         { upsert: true, new: true, session }
       );
     }
@@ -224,6 +225,7 @@ const createInvoice = async (req, res) => {
       discount,
       status,
       items,
+      style,
       notes,
       terms,
       isTaxInvoice,
@@ -256,10 +258,6 @@ const getAllInvoices = async (req, res) => {
   try {
     const { search } = req.query;
     let query = { organization: req.user.organization };
-
-    if (req.ownOnly) {
-      query.user = req.user._id;
-    }
 
     if (search) {
       query.$or = [
@@ -389,10 +387,6 @@ const getAllInvoicesPaginated = async (req, res) => {
     // Build query object
     const query = { organization: req.user.organization };
 
-    if (req.ownOnly) {
-      query.user = req.user._id;
-    }
-
     // Search functionality
     if (search) {
       const matchingDeals = await Deal.find(
@@ -496,8 +490,9 @@ const downloadInvoice = async (req, res) => {
     const OrgDetails = await Branding.findOne({
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
-    // The template is resolved from the organization's document settings
-    // inside htmlDocumentPdf, which renders the same markup as the live preview.
+        // The template comes from the document's own `style` when it has one,
+    // otherwise from the organization's document settings — resolved inside
+    // htmlDocumentPdf, which renders the same markup as the live preview.
     const copyType = ["original", "duplicate", "triplicate"].includes(req.query.copyType)
       ? req.query.copyType
       : "original";
@@ -544,6 +539,7 @@ const updateInvoice = async (req, res) => {
       discount,
       status,
       items,
+      style,
       notes,
       terms,
       isTaxInvoice,
@@ -652,6 +648,7 @@ const updateInvoice = async (req, res) => {
         discount,
         status,
         items,
+        style,
         notes,
         terms,
         isTaxInvoice,
@@ -702,6 +699,46 @@ const updateStatus = async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+// Bulk status/signature updates — Quotation, Proforma Invoice, and Delivery
+// Challan controllers already had these (used by the Accounting page's bulk
+// toolbar); Invoice was the one document type missing them.
+const bulkUpdateStatus = async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    if (!ids || !ids.length || !status) {
+      return res.status(400).json({ error: "ids and status are required" });
+    }
+    await Invoice.updateMany(
+      { _id: { $in: ids }, organization: req.user.organization },
+      { status }
+    );
+    res.json({ message: `Updated ${ids.length} invoices to status: ${status}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const bulkUpdateSignature = async (req, res) => {
+  try {
+    const { ids, signature, signatureType } = req.body;
+    if (!ids || !ids.length) {
+      return res.status(400).json({ error: "ids are required" });
+    }
+    const docs = await Invoice.find({ _id: { $in: ids }, organization: req.user.organization }, '_id');
+    const validIds = docs.map(d => d._id.toString());
+    const failedIds = ids.filter(id => !validIds.includes(id));
+    if (validIds.length > 0) {
+      await Invoice.updateMany(
+        { _id: { $in: validIds } },
+        { signature: signature || "", signatureType: signatureType || "text" }
+      );
+    }
+    res.json({ message: `Updated signature for ${validIds.length} invoices`, successfulIds: validIds, failedIds });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 // controllers/invoiceController.js (append near other handlers)
@@ -768,25 +805,58 @@ exports.getInvoices = async (req, res) => {
   }
 };
 
-const sendInvoiceEmail = async (req, res) => {
+const bulkEmailGrouped = async (req, res) => {
   try {
     const nodemailer = require("nodemailer");
-    const invoice = await Invoice.findOne({
-      _id: req.params.id,
-      organization: req.user.organization,
-    })
-      .populate({ path: "deal", populate: ["contact", "company"] })
-      .populate("items.itemId");
-
-    if (!invoice) {
-      return res.status(404).json({ error: "Invoice not found" });
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids array is required" });
     }
 
+    // Deduplicate IDs so one invoice can't appear twice in a group
+    const uniqueIds = [...new Set(ids.map(String))];
+
+    // Fetch all invoices in one query, scoped to the organisation for security
+    const invoices = await Invoice.find({
+      _id: { $in: uniqueIds },
+      organization: req.user.organization,
+    })
+      .populate({ path: "deal", populate: { path: "company" } })
+      .populate("items.itemId");
+
+    // Group invoices by customer email; collect ones we can't send
+    const emailMap = {};
+    const skippedIds = [];
+    const skippedReasons = [];
+
+    for (const invoice of invoices) {
+      if (!invoice.deal) {
+        skippedIds.push(invoice._id.toString());
+        skippedReasons.push({ id: invoice._id.toString(), reason: "no deal linked" });
+        continue;
+      }
+      const email = invoice.deal?.company?.email;
+      if (!email) {
+        skippedIds.push(invoice._id.toString());
+        skippedReasons.push({ id: invoice._id.toString(), reason: "no email" });
+        continue;
+      }
+      if (!emailMap[email]) {
+        emailMap[email] = {
+          email,
+          customerName: invoice.deal?.company?.name || invoice.deal?.title || email,
+          invoices: [],
+        };
+      }
+      emailMap[email].invoices.push(invoice);
+    }
+
+    // Fetch org/bank details once and reuse across all groups
     const bankDetails = await getDefaultBankDetails(req.user.organization);
     const Branding = require("../models/Branding");
-    const orgDetails = await Branding.findOne({ organization: req.user.organization }).sort({ updatedAt: -1 });
-
-    const pdfBuffer = await htmlDocumentPdf(invoice, bankDetails, orgDetails, "tax");
+    const orgDetails = await Branding.findOne({
+      organization: req.user.organization,
+    }).sort({ updatedAt: -1 });
 
     const transporter = nodemailer.createTransport({
       service: "gmail",
@@ -796,139 +866,121 @@ const sendInvoiceEmail = async (req, res) => {
       },
     });
 
-    const recipient = invoice.deal?.email || req.body.email;
-    if (!recipient) {
-      return res.status(400).json({ error: "No recipient email address available" });
+    const successfulIds = [];
+    const failedIds = [];
+
+    // Send one email per customer group
+    for (const group of Object.values(emailMap)) {
+      const attachments = [];
+      const pdfFailedInGroup = [];
+
+      for (const inv of group.invoices) {
+        try {
+          const pdfBuffer = await htmlDocumentPdf(inv, bankDetails, orgDetails, "tax");
+          attachments.push({
+            filename: `Invoice-${inv.invoiceNumber}.pdf`,
+            content: pdfBuffer,
+            contentType: "application/pdf",
+          });
+        } catch (pdfErr) {
+          console.error(
+            `Failed to generate PDF for invoice ${inv._id}:`,
+            pdfErr.message
+          );
+          pdfFailedInGroup.push(inv._id.toString());
+          failedIds.push(inv._id.toString());
+        }
+      }
+
+      // If every attachment failed, skip sending the email for this group
+      if (attachments.length === 0) continue;
+
+      try {
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: group.email,
+          subject: `Your Invoices from ${orgDetails?.companyName || "Us"}`,
+          text: `Dear ${group.customerName},\n\nPlease find attached your invoice(s).\n\nBest regards,\n${orgDetails?.companyName || ""}`,
+          attachments,
+        });
+        // Mark the invoices whose PDFs were generated as successful
+        for (const inv of group.invoices) {
+          if (!pdfFailedInGroup.includes(inv._id.toString())) {
+            successfulIds.push(inv._id.toString());
+          }
+        }
+      } catch (mailErr) {
+        console.error(`Failed to send email to ${group.email}:`, mailErr.message);
+        for (const inv of group.invoices) {
+          if (!pdfFailedInGroup.includes(inv._id.toString())) {
+            failedIds.push(inv._id.toString());
+          }
+        }
+      }
     }
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: recipient,
-      subject: `Invoice ${invoice.invoiceNumber}`,
-      text: `Dear ${invoice.deal?.contactPerson || "Customer"},\n\nPlease find attached the invoice.\n\nBest regards,\nYour Company`,
-      attachments: [
-        {
-          filename: `Invoice-${invoice.invoiceNumber}.pdf`,
-          content: pdfBuffer,
-          contentType: "application/pdf",
-        },
-      ],
-    });
-
-    invoice.status = "Sent";
-    await invoice.save();
-
-    res.json({ message: "Invoice emailed successfully" });
+    res.json({ successfulIds, failedIds, skippedIds, skippedReasons });
   } catch (error) {
-    res.status(500).json({ error: `Failed to send invoice email: ${error.message}` });
+    res.status(500).json({ error: `Failed to send grouped emails: ${error.message}` });
   }
 };
 
-const bulkUpdateStatus = async (req, res) => {
-  try {
-    const { ids, status } = req.body;
-    if (!ids || !ids.length || !status) {
-      return res.status(400).json({ error: "ids and status are required" });
-    }
-    await Invoice.updateMany(
-      { _id: { $in: ids }, organization: req.user.organization },
-      { status }
-    );
-    res.json({ message: `Updated ${ids.length} invoices to status: ${status}` });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-const bulkUpdateSignature = async (req, res) => {
-  try {
-    const { ids, signature, signatureType } = req.body;
-    if (!ids || !ids.length) {
-      return res.status(400).json({ error: "ids are required" });
-    }
-    const invoices = await Invoice.find({ _id: { $in: ids }, organization: req.user.organization }, '_id');
-    const validIds = invoices.map(inv => inv._id.toString());
-    const failedIds = ids.filter(id => !validIds.includes(id));
-    
-    if (validIds.length > 0) {
-      await Invoice.updateMany(
-        { _id: { $in: validIds } },
-        { signature: signature || "", signatureType: signatureType || "text" }
-      );
-    }
-    
-    res.json({
-      message: `Updated signature for ${validIds.length} invoices`,
-      successfulIds: validIds,
-      failedIds
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-const recordPayment = async (req, res) => {
+// POST /api/invoices/:id/payments — record a payment against an invoice.
+// The `payments` sub-schema already exists on the Invoice model; this was
+// the missing piece — no route/controller ever pushed to it, so every
+// "Save Payment" click hit a 404 and surfaced as "Failed to record payment".
+const addInvoicePayment = async (req, res) => {
   try {
     const { amount, paymentDate, paymentMethod, reference, notes } = req.body;
-    const paymentAmount = parseFloat(amount);
 
-    if (isNaN(paymentAmount) || paymentAmount <= 0) {
-      return res.status(400).json({ error: "Payment amount must be greater than 0" });
+    const parsedAmount = parseFloat(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: "A valid payment amount greater than 0 is required." });
     }
 
     const invoice = await Invoice.findOne({
       _id: req.params.id,
       organization: req.user.organization,
     });
-
     if (!invoice) {
       return res.status(404).json({ error: "Invoice not found" });
     }
 
-    // Calculate total already paid
-    const totalPaid = (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0);
-    const amountDue = invoice.amount - totalPaid;
-
-    if (amountDue <= 0) {
-      return res.status(400).json({ error: "Invoice is already fully paid" });
+    const alreadyPaid = (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0);
+    const amountDue = invoice.amount - alreadyPaid;
+    if (parsedAmount > amountDue + 0.01) {
+      return res.status(400).json({ error: `Payment cannot exceed the remaining balance of ₹${amountDue.toFixed(2)}.` });
     }
 
-    if (paymentAmount > amountDue) {
-      return res.status(400).json({ error: `Payment amount (${paymentAmount}) cannot exceed amount due (${amountDue})` });
-    }
-
-    // Add new payment
-    const newPayment = {
-      amount: paymentAmount,
-      paymentDate: paymentDate || new Date(),
+    invoice.payments.push({
+      amount: parsedAmount,
+      paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
       paymentMethod: paymentMethod || "UPI",
       reference: reference || "",
       notes: notes || "",
       recordedBy: req.user._id,
-      recordedAt: new Date()
-    };
+      recordedAt: new Date(),
+    });
 
-    invoice.payments = invoice.payments || [];
-    invoice.payments.push(newPayment);
-
-    // Update status if fully paid
-    const newTotalPaid = totalPaid + paymentAmount;
-    if (newTotalPaid >= invoice.amount) {
+    // Fully paid off → reflect it on the document's own status, same as the
+    // manual status dropdown would, so the list/board view doesn't need a
+    // separate signal to know this invoice is settled.
+    const newTotalPaid = alreadyPaid + parsedAmount;
+    if (newTotalPaid >= invoice.amount - 0.01) {
       invoice.status = "Paid";
-    } else if (invoice.status === "Sent" || invoice.status === "Unpaid" || invoice.status === "Overdue" || invoice.status === "Draft") {
-       // Optional: change status to partially paid if they have that status. Usually they don't, so we leave it or set to "Partially Paid".
-       // The UI usually relies on standard status. Let's not change it to something unexpected unless needed.
+    } else if (newTotalPaid > 0) {
+      invoice.status = "Partially Paid";
     }
 
-    await invoice.save();
+    // Recording a payment only touches `payments` and `status` — validating
+    // the whole document would fail on unrelated legacy fields (e.g. an
+    // older invoice with a `signatureType` value from before the enum was
+    // tightened) that have nothing to do with this payment.
+    await invoice.save({ validateModifiedOnly: true });
 
-    res.status(200).json({
-      message: "Payment recorded successfully",
-      invoice
-    });
+    res.json({ message: "Payment recorded successfully", invoice });
   } catch (error) {
-    console.error("Error recording payment:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: `Failed to record payment: ${error.message}` });
   }
 };
 
@@ -941,11 +993,11 @@ module.exports = {
   deleteInvoice,
   updateInvoice,
   updateStatus,
-  sendInvoiceEmail,
   bulkUpdateStatus,
   bulkUpdateSignature,
-  recordPayment,
   getInvoicesByCompany,
   getCompanyInvoiceSummary,
   updateInvoiceNumber,
+  bulkEmailGrouped,
+  addInvoicePayment,
 };

@@ -38,6 +38,9 @@ const createPerformaInvoice = async (req, res) => {
       receiverGSTIN,
       billingAddress,
       shippingAddress,
+      performaInvoicePrefix,
+      performaInvoiceSuffix,
+      performaInvoiceNumber: clientPerformaInvoiceNumber,
     } = req.body;
 
     // Validate required fields
@@ -69,8 +72,13 @@ const createPerformaInvoice = async (req, res) => {
     }
 
     const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
-    const finalPIPrefix = documentSettings.documentTypeSettings?.proformaInvoice?.prefix || "PI-";
-    const finalPISuffix = (documentSettings.documentTypeSettings?.proformaInvoice?.suffix || "").toString().trim();
+    // Same client-first, Document-Settings-fallback precedence the other three
+    // document types use: a prefix/number typed into the form wins, otherwise
+    // documentTypeSettings.proformaInvoice supplies it. Previously the client's
+    // prefix and number were ignored entirely, so the form's numbering boxes
+    // were editable but had no effect on the saved document.
+    const finalPIPrefix = (performaInvoicePrefix && performaInvoicePrefix.trim()) || documentSettings.documentTypeSettings?.proformaInvoice?.prefix || "PI-";
+    const finalPISuffix = (performaInvoiceSuffix ?? documentSettings.documentTypeSettings?.proformaInvoice?.suffix ?? "").toString().trim();
     let performaInvoiceNumber;
     try {
       performaInvoiceNumber = await resolveDocumentNumber({
@@ -79,7 +87,7 @@ const createPerformaInvoice = async (req, res) => {
         organization: req.user.organization,
         prefix: finalPIPrefix,
         suffix: finalPISuffix,
-        providedNumber: null,
+        providedNumber: clientPerformaInvoiceNumber && String(clientPerformaInvoiceNumber).trim() ? clientPerformaInvoiceNumber : null,
         session,
       });
     } catch (numErr) {

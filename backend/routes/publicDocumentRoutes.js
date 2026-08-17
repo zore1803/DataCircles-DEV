@@ -125,7 +125,7 @@ router.get('/:type/:id/download', async (req, res) => {
 router.post('/:type/:id/email', async (req, res) => {
   try {
     const { type, id } = req.params;
-    const { email, subject, body } = req.body;
+    const { email, cc, bcc, subject, body } = req.body;
 
     if (!email) return res.status(400).json({ error: 'Recipient email is required' });
     if (!MODELS[type]) return res.status(400).json({ error: 'Invalid document type' });
@@ -147,10 +147,24 @@ router.post('/:type/:id/email', async (req, res) => {
     const docNum = doc[numKey] || '';
     const filename = `${docName.replace(/ /g, '-')}-${docNum}.pdf`;
 
+    const htmlBody = body || `Please find attached your ${docName}.`;
+    // The compose panel sends rich-text HTML; SendGrid still wants a
+    // plain-text fallback for clients that don't render HTML, so strip tags
+    // for the `text` field rather than sending markup as literal text.
+    const textBody = htmlBody.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
+    // Cc/Bcc arrive as a comma-separated string from the compose panel;
+    // SendGrid wants an array (or undefined, not an empty one).
+    const toList = (raw) => (raw || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const ccList = toList(cc);
+    const bccList = toList(bcc);
+
     await sendGridMail({
       to: email,
+      cc: ccList.length ? ccList : undefined,
+      bcc: bccList.length ? bccList : undefined,
       subject: subject || `${docName} ${docNum}`,
-      text: body || `Please find attached your ${docName}.`,
+      text: textBody,
+      html: htmlBody,
       attachments: [
         {
           // Puppeteer's page.pdf() returns a Uint8Array (not a Node Buffer,

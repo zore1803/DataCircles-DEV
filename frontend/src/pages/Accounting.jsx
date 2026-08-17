@@ -18,6 +18,7 @@ import {
   Pencil,
   Eye,
   Download,
+  Send,
   Trash2,
   Repeat,
   X,
@@ -42,22 +43,25 @@ import {
   Printer,
   PenTool,
   Eraser,
-  Lock,
-  Bold,
-  Italic,
-  Underline,
-  Strikethrough,
-  List,
-  ListOrdered,
-  Link2,
   Layers,
+  Lock,
+  Bold as BoldIcon,
+  Italic as ItalicIcon,
+  Underline as UnderlineIcon,
+  Strikethrough as StrikethroughIcon,
+  ListOrdered,
+  List as ListIcon,
+  Link as LinkIcon,
 } from "lucide-react";
 import { createPortal } from "react-dom";
-import API from "../services/api";
 import { PDFDocument } from "pdf-lib";
-import toast from "react-hot-toast";
-import AppToaster from "../components/AppToaster";
+import API from "../services/api";
 import SearchIcon from "../components/common/SearchIcon";
+import AppToaster from "../components/AppToaster";
+import toast from "react-hot-toast";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 import HighlightText from "../components/common/HighlightText";
 import { formatNumberFixed } from "../utils/numberFormatter";
 import InvoiceForm, { CreateInvoicePanel } from "../components/invoice/InvoiceForm";
@@ -65,9 +69,6 @@ import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceFo
 import { CreatePerformaPanel } from "../components/PerformaInvoice/PerformaInvoiceForm";
 import PerformaInvoiceFormFull from "../components/PerformaInvoice/PerformaInvoiceFormFull";
 import QuotationForm from "../components/quotation/QuotationForm";
-import ShareModal from "../components/common/ShareModal";
-import RecordPaymentModal from "../components/common/RecordPaymentModal";
-import ChangeSignatureModal from "../components/common/ChangeSignatureModal";
 import { CreateQuotationPanel } from "../components/quotation/QuotationForm";
 import InvoiceFormFull from "../components/invoice/InvoiceFormFull";
 import DeliveryChallanForm from "../components/deliveryChallan/DeliveryChallanForm";
@@ -76,8 +77,11 @@ import DeliveryChallanFormFull from "../components/deliveryChallan/DeliveryChall
 import InvoiceStylePreview from "../components/invoice/InvoiceStylePreview";
 import TemplateDrawer from "../components/invoice/TemplateDrawer";
 import useNavReset from "../hooks/useNavReset";
+import RecordPaymentModal from "../components/common/RecordPaymentModal";
 import PerformaInvoiceStylePreview from "../components/PerformaInvoice/PerformaInvoiceStylePreview";
 import QuickBrandingModal from "../components/invoice/QuickBrandingModal";
+import BulkEmailGroupedModal from "../components/common/BulkEmailGroupedModal";
+import BulkSignatureModal from "../components/common/BulkSignatureModal";
 import QuickDealForm from "../components/deal/QuickDealForm";
 import { getAncestorZoom } from "../utils/domUtils";
 import { exportToCSV } from "../utils/exportToCSV";
@@ -119,20 +123,13 @@ const TABS = [
 const statusOptions = [
   "Draft",
   "Sent",
+  "Partially Paid",
   "Paid",
   "Accepted",
   "Rejected",
   "Delivered",
   "Void",
 ];
-
-const STATUS_OPTIONS_BY_TAB = {
-  tax:            ["Draft", "Sent", "Paid", "Unpaid", "Void"],
-  performa:       ["Draft", "Sent", "Accepted", "Rejected", "Void"],
-  quotation:      ["Draft", "Sent", "Accepted", "Rejected", "Void"],
-  deliveryChallan:["Draft", "Sent", "Delivered", "Void"],
-};
-const statusOptionsForTab = (tab) => STATUS_OPTIONS_BY_TAB[tab] || statusOptions;
 
 const apiPathFor = (type) =>
   type === "tax"
@@ -170,6 +167,36 @@ const docNameFor = (type) =>
         ? "Quotation"
         : "Delivery Challan";
 
+// Intended accounting conversion directions — one-way only, no reverse or
+// arbitrary conversions. Same rules drive both the single-document Convert
+// menu and Bulk Convert:
+//   Quotation -> Pro Forma Invoice
+//   Quotation -> Invoice
+//   Pro Forma Invoice -> Invoice
+//   Invoice -> Delivery Challan
+//   Delivery Challan -> (nothing)
+const CONVERSION_TARGETS_BY_TYPE = {
+  quotation: ["performa", "tax"],
+  performa: ["tax"],
+  tax: ["deliveryChallan"],
+  deliveryChallan: [],
+};
+const getConversionTargets = (type) => CONVERSION_TARGETS_BY_TYPE[type] || [];
+
+// Plain-text template bodies (saved templates, built-in fallbacks) use \n for
+// line breaks; the email compose panel's body is a rich-text (HTML) editor,
+// so newlines need to become <br> for them to actually show up as breaks.
+const textToEmailHtml = (text) => (text || "").replace(/\n/g, "<br>");
+
+// Maps a valid (sourceType -> targetType) conversion to its backend bulk
+// endpoint. Only the 4 directions above exist server-side — anything else
+// isn't offered in the UI so this map never needs a fallback.
+const BULK_CONVERT_ENDPOINT = {
+  quotation: { performa: "/converter/quotations/bulk-convert-to-proforma", tax: "/converter/quotations/bulk-convert-to-tax" },
+  performa: { tax: "/converter/performa-invoices/bulk-convert-to-tax" },
+  tax: { deliveryChallan: "/converter/invoices/bulk-convert-to-delivery-challan" },
+};
+
 const pluralNameFor = (type) =>
   type === "tax"
     ? "Invoices"
@@ -188,7 +215,7 @@ const DEFAULT_COL_WIDTHS = {
   dueDate: 170,
   amount: 170,
   status: 170,
-  actions: 230,
+  actions: 260,
 };
 const MIN_COL_WIDTH = 60;
 
@@ -262,6 +289,8 @@ const getStatusBadgeColor = (status) => {
       return "bg-blue-100 text-blue-800 border-blue-200";
     case "paid":
       return "bg-green-100 text-green-800 border-green-200";
+    case "partially paid":
+      return "bg-orange-100 text-orange-800 border-orange-200";
     case "accepted":
       return "bg-green-100 text-green-800 border-green-200";
     case "rejected":
@@ -358,12 +387,12 @@ const InvoiceViewer = ({
   type,
   onEdit,
   onDownload,
+  onSend,
   doc,
   onConvert,
 }) => {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [openConvertMenu, setOpenConvertMenu] = useState(null);
-  const [showShareModal, setShowShareModal] = useState(false);
   // Standard Indian GST invoice practice: the same document is printed as
   // three otherwise-identical copies, distinguished only by this label —
   // "ORIGINAL FOR RECIPIENT" for the customer, "DUPLICATE FOR TRANSPORTER"
@@ -456,17 +485,94 @@ const InvoiceViewer = ({
               >
                 <Download className="w-4 h-4" />
               </button>
+              <button
+                title="Send"
+                onClick={onSend}
+                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+              >
+                <Send className="w-4 h-4" />
+              </button>
               <div className="relative">
                 <button
                   title="Share"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setShowShareModal(true);
+                    setOpenConvertMenu(openConvertMenu === "share" ? null : "share");
                   }}
                   className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                 >
                   <Share2 className="w-4 h-4" />
                 </button>
+                {openConvertMenu === "share" && (
+                  <div className="absolute right-0 mt-1 w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div className="py-1">
+                      {[
+                        {
+                          label: "WhatsApp",
+                          icon: MessageCircle,
+                          iconClass: "text-green-600",
+                          onClick: () => {
+                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
+                            const text = `${title} #${docNumber || ""}\n${url}`;
+                            window.open(
+                              `https://wa.me/?text=${encodeURIComponent(text)}`,
+                              "_blank",
+                              "noopener,noreferrer"
+                            );
+                          },
+                        },
+                        {
+                          label: "Email",
+                          icon: Mail,
+                          iconClass: "text-blue-600",
+                          onClick: () => {
+                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
+                            const subject = `${title} #${docNumber || ""}`;
+                            window.location.href = `mailto:?subject=${encodeURIComponent(
+                              subject
+                            )}&body=${encodeURIComponent(url)}`;
+                          },
+                        },
+                        {
+                          label: "SMS",
+                          icon: MessageSquare,
+                          iconClass: "text-indigo-600",
+                          onClick: () => {
+                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
+                            const text = `${title} #${docNumber || ""} - ${url}`;
+                            window.location.href = `sms:?body=${encodeURIComponent(text)}`;
+                          },
+                        },
+                        {
+                          label: "Copy Link",
+                          icon: Copy,
+                          iconClass: "text-gray-600",
+                          onClick: async () => {
+                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              toast.success("Link copied to clipboard");
+                            } catch {
+                              toast.error("Failed to copy link");
+                            }
+                          },
+                        },
+                      ].map((option) => (
+                        <button
+                          key={option.label}
+                          onClick={() => {
+                            option.onClick();
+                            setOpenConvertMenu(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                        >
+                          <option.icon className={`w-4 h-4 ${option.iconClass}`} />
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="relative">
                 <button
@@ -532,13 +638,6 @@ const InvoiceViewer = ({
           )}
         </div>
       </div>
-      <ShareModal
-        isOpen={showShareModal}
-        onClose={() => setShowShareModal(false)}
-        documentLink={`${window.location.origin}/view/${apiPathFor(type)}/${id}`}
-        documentType={title}
-        documentNumber={docNumber}
-      />
     </div>
   );
 };
@@ -574,6 +673,46 @@ const Accounting = () => {
     hasPrevPage: false,
   };
 
+  const [deals, setDeals] = useState([]);
+  const [documentTypeSettings, setDocumentTypeSettings] = useState({});
+  const [defaultDueDateDays, setDefaultDueDateDays] = useState(null);
+  // Notes/Terms boilerplate from Settings → Document Settings, keyed by
+  // document type (tax | performa | quotation | deliveryChallan), with the
+  // legacy flat fields as a fallback for orgs that haven't set per-type text.
+  const [defaultNotesByType, setDefaultNotesByType] = useState({});
+  const [defaultTermsByType, setDefaultTermsByType] = useState({});
+  const [defaultNotesFlat, setDefaultNotesFlat] = useState("");
+  const [defaultTermsFlat, setDefaultTermsFlat] = useState("");
+  // Named template libraries loaded from Settings → Message Templates. Each
+  // entry is {id, name, ...content, isDefault}; the share menu picks the
+  // default automatically when there's only one, or lets the user choose
+  // when there are several.
+  const [waTemplatesList, setWaTemplatesList] = useState([]);
+  const [smsTemplatesList, setSmsTemplatesList] = useState([]);
+  const [emailTemplatesList, setEmailTemplatesList] = useState([]);
+  const [shareCompanyName, setShareCompanyName] = useState("");
+  const [brandSignatureUrl, setBrandSignatureUrl] = useState("");
+  // Which channel's template picker is expanded inside the share dropdown,
+  // or null to show the main WhatsApp/Email/SMS/Copy-Link list.
+  const [shareMenuChannel, setShareMenuChannel] = useState(null);
+  const [shareMenu, setShareMenu] = useState(null); // { doc, type, x, y }
+  const [emailCompose, setEmailCompose] = useState(null); // { doc, type }
+  const [emailComposeTo, setEmailComposeTo] = useState("");
+  const [emailComposeCc, setEmailComposeCc] = useState("");
+  const [emailComposeBcc, setEmailComposeBcc] = useState("");
+  const [showEmailCc, setShowEmailCc] = useState(false);
+  const [showEmailBcc, setShowEmailBcc] = useState(false);
+  const [emailComposeSubject, setEmailComposeSubject] = useState("");
+  const [emailComposeBody, setEmailComposeBody] = useState(""); // HTML, kept in sync with the rich-text editor's innerHTML
+  const [emailComposeSending, setEmailComposeSending] = useState(false);
+  const [emailTemplateOpen, setEmailTemplateOpen] = useState(false);
+  const [emailPreviewMode, setEmailPreviewMode] = useState(false);
+  const emailBodyEditorRef = useRef(null);
+  const EMAIL_FROM_ADDRESS = "noreply@datacircles.in";
+  const [smsCompose, setSmsCompose] = useState(null); // { doc, type }
+  const [smsComposeTo, setSmsComposeTo] = useState("");
+  const [smsComposeBody, setSmsComposeBody] = useState("");
+  const [smsComposeSending, setSmsComposeSending] = useState(false);
   const [documents, setDocuments] = useState({
     tax: [],
     performa: [],
@@ -884,37 +1023,15 @@ const Accounting = () => {
 
   // UI state
   const [selectedIds, setSelectedIds] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [editPanelDoc, setEditPanelDoc] = useState(null);
   const [conversionData, setConversionData] = useState(null);
   const [showQuickDealForm, setShowQuickDealForm] = useState(false);
-  const [deals, setDeals] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
-  const [defaultDueDateDays, setDefaultDueDateDays] = useState(null);
-  // Notes/Terms boilerplate from Settings → Document Settings, keyed by
-  // document type (tax | performa | quotation | deliveryChallan), with the
-  // legacy flat fields as a fallback for orgs that haven't set per-type text.
-  const [defaultNotesByType, setDefaultNotesByType] = useState({});
-  const [defaultTermsByType, setDefaultTermsByType] = useState({});
-  const [defaultNotesFlat, setDefaultNotesFlat] = useState("");
-  const [defaultTermsFlat, setDefaultTermsFlat] = useState("");
-  // Per-document-type numbering config (prefix/suffix/next number) from
-  // Settings → Document Settings, keyed by invoice/quote/proformaInvoice/
-  // deliveryChallan — the single source of truth the create screens should
-  // read their starting prefix from, instead of each hardcoding its own.
-  const [documentTypeSettings, setDocumentTypeSettings] = useState({});
-  // Named template libraries loaded from Settings → Message Templates. Each
-  // entry is {id, name, ...content, isDefault}; the share menu picks the
-  // default automatically when there's only one, or lets the user choose
-  // when there are several.
-  const [waTemplatesList, setWaTemplatesList] = useState([]);
-  const [smsTemplatesList, setSmsTemplatesList] = useState([]);
-  const [emailTemplatesList, setEmailTemplatesList] = useState([]);
-  const [shareCompanyName, setShareCompanyName] = useState("");
-  // Which channel's template picker is expanded inside the share dropdown,
-  // or null to show the main WhatsApp/Email/SMS/Copy-Link list.
-  const [shareMenuChannel, setShareMenuChannel] = useState(null);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const searchInputRef = useRef(null);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -948,41 +1065,17 @@ const Accounting = () => {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false);
+  const [showBulkSignatureModal, setShowBulkSignatureModal] = useState(false);
+  const [bulkSignatureLoading, setBulkSignatureLoading] = useState(false);
+  const [showBulkEmailGroupedModal, setShowBulkEmailGroupedModal] = useState(false);
   const [bulkUpdateStatus, setBulkUpdateStatus] = useState("");
   const [bulkUpdating, setBulkUpdating] = useState(false);
-  const [showBulkEmailModal, setShowBulkEmailModal] = useState(false);
   const [bulkShowMoreMenu, setBulkShowMoreMenu] = useState(false);
   const [bulkConvertMenuOpen, setBulkConvertMenuOpen] = useState(false);
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [changeSignatureModalOpen, setChangeSignatureModalOpen] = useState(false);
-  const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState(null);
-  const [bulkEmailAddress, setBulkEmailAddress] = useState("");
-  const [bulkEmailSubject, setBulkEmailSubject] = useState("");
-  const [bulkEmailBody, setBulkEmailBody] = useState("");
-  const emailBodyRef = useRef(null);
-
-  useEffect(() => {
-    if (emailBodyRef.current) {
-      const htmlValue = bulkEmailBody.includes('<') ? bulkEmailBody : bulkEmailBody.replace(/\n/g, '<br/>');
-      if (emailBodyRef.current.innerHTML !== htmlValue) {
-        emailBodyRef.current.innerHTML = htmlValue;
-      }
-    }
-  }, [bulkEmailBody]);
-  const [bulkEmailTemplateOpen, setBulkEmailTemplateOpen] = useState(false);
-  const [bulkEmailSending, setBulkEmailSending] = useState(false);
-  const [bulkEmailProgress, setBulkEmailProgress] = useState({ sent: 0, total: 0 });
-  const [shareMenu, setShareMenu] = useState(null); // { doc, type, x, y }
-  const [emailCompose, setEmailCompose] = useState(null); // { doc, type }
-  const [emailComposeTo, setEmailComposeTo] = useState("");
-  const [emailComposeSubject, setEmailComposeSubject] = useState("");
-  const [emailComposeBody, setEmailComposeBody] = useState("");
-  const [emailComposeSending, setEmailComposeSending] = useState(false);
-  const [emailTemplateOpen, setEmailTemplateOpen] = useState(false);
-  const [smsCompose, setSmsCompose] = useState(null); // { doc, type }
-  const [smsComposeTo, setSmsComposeTo] = useState("");
-  const [smsComposeBody, setSmsComposeBody] = useState("");
-  const [smsComposeSending, setSmsComposeSending] = useState(false);
+  const [bulkConverting, setBulkConverting] = useState(false);
+  const [bulkSignatureUpdating, setBulkSignatureUpdating] = useState(false);
+  const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [bulkPrinting, setBulkPrinting] = useState(false);
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in-left entrance) — same as
   // the Companies page.
@@ -1005,6 +1098,8 @@ const Accounting = () => {
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [convertDocId, setConvertDocId] = useState(null);
   const [convertDocType, setConvertDocType] = useState(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState(null);
   const [convertTargetType, setConvertTargetType] = useState(null);
 
   // Clicking "Accounting" in the sidebar while already here should come back to
@@ -1124,6 +1219,7 @@ const Accounting = () => {
         API.get("/branding").catch(() => null),
       ]);
       const res = settingsRes;
+      setDocumentTypeSettings(res.data?.documentTypeSettings || {});
       if (res.data && res.data.defaultDueDateDays != null) {
         setDefaultDueDateDays(res.data.defaultDueDateDays);
       }
@@ -1131,18 +1227,11 @@ const Accounting = () => {
       setDefaultTermsByType(res.data?.defaultTermsByType || {});
       setDefaultNotesFlat(res.data?.defaultNotes || "");
       setDefaultTermsFlat(res.data?.defaultTerms || "");
-      setDocumentTypeSettings(res.data?.documentTypeSettings || {});
-      // Build single-item template lists from the saved template fields so
-      // the share-menu's openChannel() always sends the user's custom text.
-      const waLine1 = res.data?.whatsappLine1 || "Thanks for your business!";
-      const waLine2 = res.data?.whatsappLine2 || "";
-      setWaTemplatesList([{ line1: waLine1, line2: waLine2 }]);
-      const smsTpl = res.data?.smsTemplate;
-      setSmsTemplatesList(smsTpl ? [{ body: smsTpl }] : []);
-      const emailSubj = res.data?.emailSubjectTemplate;
-      const emailBody = res.data?.emailBodyTemplate;
-      setEmailTemplatesList((emailSubj || emailBody) ? [{ subject: emailSubj || "", body: emailBody || "" }] : []);
+      setWaTemplatesList(Array.isArray(res.data?.whatsappTemplates) ? res.data.whatsappTemplates : []);
+      setSmsTemplatesList(Array.isArray(res.data?.smsTemplates) ? res.data.smsTemplates : []);
+      setEmailTemplatesList(Array.isArray(res.data?.emailTemplates) ? res.data.emailTemplates : []);
       if (brandingRes?.data?.companyName) setShareCompanyName(brandingRes.data.companyName);
+      if (brandingRes?.data?.signatureUrl) setBrandSignatureUrl(brandingRes.data.signatureUrl);
     } catch (err) {
       console.error("Failed to load doc settings in accounting", err);
     }
@@ -1225,6 +1314,10 @@ const Accounting = () => {
   };
 
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedIds((prev) =>
       prev.length === currentDocuments.length && currentDocuments.length > 0
         ? []
@@ -1233,9 +1326,42 @@ const Accounting = () => {
   };
 
   const handleSelectOne = (id) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  };
+
+  const handleBulkSignatureUpdate = async (signatureData, isRemove = false) => {
+    if (selectedIds.length === 0) return;
+    const type = activeTab;
+    try {
+      setBulkSignatureLoading(true);
+      setShowBulkSignatureModal(false);
+      setBulkShowMoreMenu(false);
+      
+      const payload = {
+        ids: selectedIds,
+        signature: signatureData || "",
+        signatureType: signatureData ? "image" : "text"
+      };
+
+      await API.post(`/${apiPathFor(type)}/bulk-signature`, payload);
+      
+      toast.success(
+        `${selectedIds.length} ${docNameFor(type)}${selectedIds.length !== 1 ? "s" : ""} signature ${isRemove ? 'removed' : 'updated'} successfully`
+      );
+      
+      setSelectedIds([]);
+      await fetchData(type);
+    } catch (err) {
+      toast.error(err.response?.data?.error || `Failed to ${isRemove ? 'remove' : 'update'} signatures`);
+    } finally {
+      setBulkSignatureLoading(false);
+    }
   };
 
   // Bulk delete every selected document on the active tab. There's no
@@ -1334,240 +1460,158 @@ const Accounting = () => {
     }
   };
 
-  const handleBulkDownloadPdf = async () => {
-    if (selectedIds.length === 0) return;
-    const path = apiPathFor(activeTab);
-    const docName = docNameFor(activeTab);
-    const toastId = "bulk-download";
-    try {
-      setLoading((prev) => ({ ...prev, [activeTab]: true }));
-      // Loading toast has no auto-dismiss — it stays until we explicitly replace it
-      toast.loading(
-        `Merging ${selectedIds.length} PDF${selectedIds.length !== 1 ? "s" : ""}… please wait`,
-        { id: toastId, duration: Infinity }
-      );
-      const merged = await PDFDocument.create();
-      for (const id of selectedIds) {
-        const res = await API.get(`/${path}/download/${id}`, { responseType: "arraybuffer" });
-        const src = await PDFDocument.load(res.data);
-        const pages = await merged.copyPages(src, src.getPageIndices());
-        pages.forEach((p) => merged.addPage(p));
-      }
-      const bytes = await merged.save();
-      const blob = new Blob([bytes], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${docName.replace(/ /g, "-")}-Bulk-${selectedIds.length}-docs.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      // Success toast stays for 6 s so the user sees it even after the save dialog appears
-      toast.success(
-        `✓ Merged PDF downloaded (${selectedIds.length} doc${selectedIds.length !== 1 ? "s" : ""})`,
-        { id: toastId, duration: 6000 }
-      );
-    } catch (err) {
-      toast.error(`Failed to download: ${err.message}`, { id: toastId, duration: 8000 });
-    } finally {
-      setLoading((prev) => ({ ...prev, [activeTab]: false }));
-    }
-  };
-
-  const openBulkEmail = () => {
-    const tpl = emailTemplatesList[0];
-    const dname = docNameFor(activeTab);
-    setBulkEmailAddress("");
-    setBulkEmailSubject(tpl?.subject || `${dname} from ${shareCompanyName || "us"}`);
-    setBulkEmailBody(tpl?.body || `Hi {customerName},\n\nPlease find your ${dname} #{number}.\n\nView online: {link}\n\nThank you for your business!\n\n${shareCompanyName || ""}`);
-    setBulkEmailTemplateOpen(false);
-    setBulkEmailProgress({ sent: 0, total: selectedIds.length });
-    setShowBulkEmailModal(true);
-  };
-
-  const handleBulkSendEmail = async () => {
-    if (selectedIds.length === 0) return;
+  // Fetches every selected document's PDF and merges them into one combined
+  // PDF via pdf-lib, so bulk download/print produce a single file instead of
+  // N separate ones. Returns the merged bytes, or null (after toasting) if
+  // nothing could be included.
+  const mergeSelectedDocumentsPdf = async () => {
     const type = activeTab;
-    setBulkEmailSending(true);
-    setBulkEmailProgress({ sent: 0, total: selectedIds.length });
-    let sent = 0;
-    let failed = 0;
-    // Send one at a time so we can show live progress and personalise per-doc
-    const docList = documents[type] || [];
+    const merged = await PDFDocument.create();
+    let failedCount = 0;
     for (const id of selectedIds) {
       try {
-        const doc = docList.find((d) => d._id === id);
-        const cname = doc?.deal?.contactPerson || doc?.deal?.title || "Customer";
-        const num = doc ? doc[numberKeyFor(type)] : "";
-        const link = `${window.location.origin}/view/${apiPathFor(type)}/${id}`;
-        const amt = doc?.amount != null ? `₹${Number(doc.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "";
-        const fill = (s) => (s || "")
-          .replace(/{customerName}/g, cname)
-          .replace(/{docType}/g, docNameFor(type))
-          .replace(/{number}/g, num || "—")
-          .replace(/{amount}/g, amt)
-          .replace(/{link}/g, link)
-          .replace(/{company}/g, shareCompanyName || "");
-        // Prefer explicit override, else fall back to the deal's contact email
-        const toEmail = bulkEmailAddress.trim() || doc?.deal?.contact?.email || doc?.deal?.company?.email || doc?.deal?.email || "";
-        if (!toEmail) { failed++; setBulkEmailProgress((p) => ({ ...p, sent: p.sent + 1 })); continue; }
-        await API.post(`/public/${apiPathFor(type)}/${id}/email`, {
-          email: toEmail,
-          subject: fill(bulkEmailSubject),
-          body: fill(bulkEmailBody),
+        const response = await API.get(`/${apiPathFor(type)}/download/${id}`, {
+          responseType: "arraybuffer",
         });
-        sent++;
-      } catch {
-        failed++;
+        const src = await PDFDocument.load(response.data);
+        const copiedPages = await merged.copyPages(src, src.getPageIndices());
+        copiedPages.forEach((page) => merged.addPage(page));
+      } catch (err) {
+        failedCount += 1;
+        console.error(`Failed to fetch/merge PDF for ${id}`, err);
       }
-      setBulkEmailProgress((p) => ({ ...p, sent: p.sent + 1 }));
     }
-    setBulkEmailSending(false);
-    setShowBulkEmailModal(false);
-    setBulkEmailAddress("");
-    setBulkEmailTemplateOpen(false);
-    if (failed === 0) {
-      toast.success(`✓ Sent ${sent} email${sent !== 1 ? "s" : ""}`);
-    } else if (sent > 0) {
-      toast.error(`Sent ${sent}, failed ${failed} (no email address found for some)`);
-    } else {
-      toast.error("All emails failed — check recipient addresses");
+    if (failedCount > 0) {
+      toast.error(
+        `${failedCount} of ${selectedIds.length} document${selectedIds.length !== 1 ? "s" : ""} could not be included.`
+      );
     }
+    if (merged.getPageCount() === 0) {
+      toast.error("Couldn't generate a combined PDF.");
+      return null;
+    }
+    return merged.save();
   };
 
-  const handleBulkConvert = async (targetType) => {
+  const handleBulkDownloadPdf = async () => {
     if (selectedIds.length === 0) return;
-    const isQuotation = activeTab === "quotation";
-    const targetName = targetType === "tax" ? "invoice" : "pro forma invoice";
-    const sourceName = isQuotation ? "quotation" : "pro forma invoice";
-    
-    const confirmed = window.confirm(
-      `Convert ${selectedIds.length} ${sourceName}${selectedIds.length !== 1 ? "s" : ""} to ${targetName}${selectedIds.length !== 1 ? "s" : ""}? Each ${sourceName} will become a separate ${targetName} and its status will be set to Void.`
-    );
-    if (!confirmed) return;
-
+    const count = selectedIds.length;
+    setBulkDownloading(true);
+    // A single loading toast, updated in place (by id) rather than a
+    // fire-and-forget one that auto-dismisses on its own timer — it should
+    // stay on screen for the whole merge and only resolve once the file has
+    // actually been handed to the browser to download.
+    // AppToaster sets a global 5s duration for every toast type, including
+    // "loading" ones (which react-hot-toast otherwise never auto-dismisses)
+    // — without this override the loading toast was vanishing 5s in, mid-
+    // merge, regardless of how long the actual work took.
+    const toastId = toast.loading(`Merging ${count} document${count !== 1 ? "s" : ""} into one PDF...`, { duration: Infinity });
     try {
-      setLoading((prev) => ({ ...prev, [activeTab]: true }));
-      const endpoint = activeTab === "quotation" 
-        ? (targetType === "tax" ? "/converter/quotations/bulk-convert-to-tax" : "/converter/quotations/bulk-convert-to-proforma")
-        : "/converter/performa-invoices/bulk-convert-to-tax"; // Only performa -> tax is supported
-        
-      const res = await API.post(endpoint, { ids: selectedIds });
-      const { successfulIds, failedIds } = res.data;
-      
-      await fetchData(activeTab);
-      await fetchData(targetType);
-      setSelectedIds([]);
-      
-      if (failedIds && failedIds.length > 0) {
-        toast.error(`Failed to convert ${failedIds.length} documents. Converted ${successfulIds.length}.`);
-      } else {
-        toast.success(`Successfully converted ${successfulIds.length} documents.`);
+      const bytes = await mergeSelectedDocumentsPdf();
+      if (!bytes) {
+        toast.dismiss(toastId);
+        return;
       }
-    } catch (error) {
-      toast.error(`Bulk conversion failed: ${error.response?.data?.message || error.message}`);
+      const url = window.URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${docNameFor(activeTab)}s-merged-${count}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${count} document${count !== 1 ? "s" : ""} as one PDF`, { id: toastId });
+    } catch (err) {
+      console.error("Bulk download error", err);
+      toast.error("Failed to download the merged PDF.", { id: toastId });
     } finally {
-      setLoading((prev) => ({ ...prev, [activeTab]: false }));
+      setBulkDownloading(false);
     }
   };
 
+  // Merges the selection into one PDF, loads it into a hidden iframe, and
+  // triggers the browser's native print dialog on that iframe — so printing
+  // multiple documents produces one combined print job instead of N
+  // separate ones (or N popup windows).
   const handleBulkPrint = async () => {
     if (selectedIds.length === 0) return;
-    setBulkShowMoreMenu(false);
-    const toastId = "bulk-print";
+    const count = selectedIds.length;
+    setBulkPrinting(true);
+    // Same persistent, id-updated toast as bulk download — stays visible
+    // through the merge and only resolves once the print dialog has
+    // actually been opened (or failed to).
+    const toastId = toast.loading(`Merging ${count} document${count !== 1 ? "s" : ""} for printing...`, { duration: Infinity });
     try {
-      setLoading((prev) => ({ ...prev, [activeTab]: true }));
-      // Loading toast stays visible until the print dialog actually appears
-      toast.loading(
-        `Preparing ${selectedIds.length} page${selectedIds.length !== 1 ? "s" : ""} for print… please wait`,
-        { id: toastId, duration: Infinity }
-      );
-      const path = apiPathFor(activeTab);
-      const merged = await PDFDocument.create();
-      for (const id of selectedIds) {
-        const res = await API.get(`/${path}/download/${id}`, { responseType: "arraybuffer" });
-        const src = await PDFDocument.load(res.data);
-        const pages = await merged.copyPages(src, src.getPageIndices());
-        pages.forEach((p) => merged.addPage(p));
+      const bytes = await mergeSelectedDocumentsPdf();
+      if (!bytes) {
+        toast.dismiss(toastId);
+        return;
       }
-      const bytes = await merged.save();
-      const blob = new Blob([bytes], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
-      // Open in new tab — the browser's native PDF viewer has a Print button,
-      // and we also call print() so it pops up immediately.
-      const win = window.open(url, "_blank");
-      if (win) {
-        win.addEventListener("load", () => {
-          // Replace loading toast only after print dialog is triggered
-          toast.success(
-            `✓ Print dialog ready (${selectedIds.length} doc${selectedIds.length !== 1 ? "s" : ""})`,
-            { id: toastId, duration: 6000 }
-          );
-          win.print();
-          setTimeout(() => window.URL.revokeObjectURL(url), 60000);
-        });
-      } else {
-        // Popup blocked — fall back to triggering via an iframe
-        const iframe = document.createElement("iframe");
-        iframe.style.display = "none";
-        iframe.src = url;
-        document.body.appendChild(iframe);
-        iframe.onload = () => {
-          toast.success(
-            `✓ Print dialog ready (${selectedIds.length} doc${selectedIds.length !== 1 ? "s" : ""})`,
-            { id: toastId, duration: 6000 }
-          );
+      const url = window.URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      iframe.onload = () => {
+        try {
+          iframe.contentWindow.focus();
           iframe.contentWindow.print();
-          setTimeout(() => {
-            document.body.removeChild(iframe);
-            window.URL.revokeObjectURL(url);
-          }, 60000);
-        };
-      }
+          toast.success(`Ready to print ${count} document${count !== 1 ? "s" : ""}`, { id: toastId });
+        } catch (err) {
+          console.error("Bulk print error", err);
+          toast.error("Couldn't open the print dialog — try downloading instead.", { id: toastId });
+        } finally {
+          setBulkPrinting(false);
+        }
+        // Give the print dialog time to open before cleaning up — removing
+        // the iframe too early can cancel the print job in some browsers.
+        setTimeout(() => {
+          iframe.remove();
+          window.URL.revokeObjectURL(url);
+        }, 60000);
+      };
+      iframe.src = url;
+      document.body.appendChild(iframe);
     } catch (err) {
-      toast.error(`Failed to generate print PDF: ${err.message}`, { id: toastId, duration: 8000 });
-    } finally {
-      setLoading((prev) => ({ ...prev, [activeTab]: false }));
+      console.error("Bulk print error", err);
+      toast.error("Failed to prepare the merged PDF for printing.", { id: toastId });
+      setBulkPrinting(false);
     }
   };
 
-  const handleRemoveSignature = async () => {
+
+
+  // Bulk conversion is restricted to the same one-way directions as the
+  // single-document Convert menu (see CONVERSION_TARGETS_BY_TYPE) — the
+  // endpoint map only has entries for those, so there's no path to a reverse
+  // or arbitrary conversion here.
+  const handleBulkConvert = async (targetType) => {
     if (selectedIds.length === 0) return;
-    setBulkShowMoreMenu(false);
-    
-    const confirmed = window.confirm(
-      `Are you sure you want to remove the signature from ${selectedIds.length} documents?`
-    );
-    if (!confirmed) return;
+    const endpoint = BULK_CONVERT_ENDPOINT[activeTab]?.[targetType];
+    if (!endpoint) return;
 
+    setBulkConvertMenuOpen(false);
+    setBulkConverting(true);
     try {
-      setLoading((prev) => ({ ...prev, [activeTab]: true }));
-      let endpoint = "";
-      if (activeTab === "tax") endpoint = "/invoices/bulk-signature";
-      else if (activeTab === "quotation") endpoint = "/quotations/bulk-signature";
-      else if (activeTab === "performa") endpoint = "/performa-invoices/bulk-signature";
-      else if (activeTab === "deliveryChallan") endpoint = "/delivery-challans/bulk-signature";
-
-      const res = await API.put(endpoint, {
-        ids: selectedIds,
-        signature: "",
-        signatureType: "text"
-      });
-
-      const { successfulIds, failedIds } = res.data;
-      if (failedIds && failedIds.length > 0) {
-        toast.error(`Failed to remove signature from ${failedIds.length} documents. Removed from ${successfulIds.length}.`);
-      } else {
-        toast.success(`Successfully removed signature from ${successfulIds?.length || selectedIds.length} documents.`);
+      const res = await API.post(endpoint, { ids: selectedIds });
+      const successCount = res.data?.successfulIds?.length || 0;
+      const failCount = res.data?.failedIds?.length || 0;
+      if (successCount > 0) {
+        toast.success(`${successCount} ${docNameFor(activeTab)}${successCount !== 1 ? "s" : ""} converted to ${docNameFor(targetType)}`);
       }
-      
-      await fetchData(activeTab);
+      if (failCount > 0) {
+        toast.error(`${failCount} ${docNameFor(activeTab)}${failCount !== 1 ? "s" : ""} could not be converted`);
+      }
       setSelectedIds([]);
+      fetchData(activeTab);
+      fetchData(targetType);
     } catch (error) {
-      toast.error(`Failed to remove signature: ${error.response?.data?.error || error.message}`);
+      toast.error(error.response?.data?.message || "Bulk conversion failed");
     } finally {
-      setLoading((prev) => ({ ...prev, [activeTab]: false }));
+      setBulkConverting(false);
     }
   };
 
@@ -1638,6 +1682,23 @@ const Accounting = () => {
 
     setShowConvertModal(false);
     setOpenConvertMenu(null);
+
+    // Open the target's create form in whichever view (split vs full-width)
+    // the source type was last shown in, so converting a document doesn't
+    // unexpectedly switch the user to a different layout.
+    const sourceIsFullWidth = {
+      tax: invoiceFullWidth,
+      quotation: quotationFullWidth,
+      performa: performaFullWidth,
+      deliveryChallan: challanFullWidth,
+    }[convertDocType];
+    const setTargetFullWidth = {
+      tax: setInvoiceFullWidth,
+      quotation: setQuotationFullWidth,
+      performa: setPerformaFullWidth,
+      deliveryChallan: setChallanFullWidth,
+    }[convertTargetType];
+    setTargetFullWidth?.(!!sourceIsFullWidth);
 
     setConversionData(sourceDoc);
     setActiveTab(convertTargetType);
@@ -1822,19 +1883,17 @@ const Accounting = () => {
         );
 
       case "amount": {
-        const paidSoFar = (doc.payments || []).reduce((s, p) => s + (p.amount || 0), 0);
-        const due = (doc.amount || 0) - paidSoFar;
-        const isPartial = paidSoFar > 0 && due > 0 && activeTab === "tax";
+        const paidSoFar = (doc.payments || []).reduce((sum, p) => sum + p.amount, 0);
+        const dueAmount = doc.amount - paidSoFar;
+        const showDue = activeTab === "tax" && paidSoFar > 0 && dueAmount > 0.01;
         return (
           <div>
             <span className="text-sm font-semibold text-gray-900">
               ₹<HighlightText text={formatNumberFixed(doc.amount)} query={searchQuery} />
             </span>
-            {isPartial && (
-              <div className="flex items-center gap-1 mt-0.5">
-                <span className="inline-flex items-center text-[10px] font-semibold text-orange-600 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5">
-                  Due ₹{formatNumberFixed(due)}
-                </span>
+            {showDue && (
+              <div className="text-[11px] font-medium text-orange-600 mt-0.5">
+                ₹{formatNumberFixed(dueAmount)} due
               </div>
             )}
           </div>
@@ -1870,6 +1929,18 @@ const Accounting = () => {
       case "actions":
         return (
           <div className="flex items-center gap-1">
+            {activeTab === "tax" && doc.status !== "Paid" && (
+              <button
+                title="Record Payment"
+                onClick={() => {
+                  setSelectedInvoiceForPayment(doc);
+                  setPaymentModalOpen(true);
+                }}
+                className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+              >
+                <IndianRupee className="w-4 h-4" />
+              </button>
+            )}
             <button
               title="View"
               onClick={() => handleView(doc, activeTab)}
@@ -1892,15 +1963,14 @@ const Accounting = () => {
               <Download className="w-4 h-4" />
             </button>
             <button
-              title="Share"
+              title="Share via WhatsApp/Email/SMS"
               onClick={(e) => {
                 e.stopPropagation();
                 const rect = e.currentTarget.getBoundingClientRect();
                 const zoom = parseFloat(document.documentElement.style.zoom) || 1;
-                // Convert visual pixels → CSS pixels (undo zoom), then right-align dropdown
                 const cssRight = rect.right / zoom;
                 const cssBottom = rect.bottom / zoom;
-                const DROPDOWN_W = 208; // w-52 = 13rem = 208px
+                const DROPDOWN_W = 208;
                 setShareMenu({
                   doc,
                   type: activeTab,
@@ -1924,16 +1994,26 @@ const Accounting = () => {
                     return;
                   }
                   const rect = e.currentTarget.getBoundingClientRect();
+                  // getBoundingClientRect() reports coordinates in the page's
+                  // zoomed layout space, but a `position: fixed` element is
+                  // placed in real CSS pixels — without dividing out the
+                  // app's CSS zoom (same correction the Share dropdown uses),
+                  // the menu lands offset from the button at any zoom level
+                  // other than 100%.
+                  const zoom = parseFloat(document.documentElement.style.zoom) || 1;
+                  const cssTop = rect.top / zoom;
+                  const cssBottom = rect.bottom / zoom;
+                  const cssRight = rect.right / zoom;
                   const MENU_WIDTH = 240;
                   const MENU_HEIGHT = 160;
                   // Open leftward so the menu never runs off the right edge,
                   // and flip above the button when it would overflow the bottom.
-                  const left = Math.max(8, rect.right - MENU_WIDTH);
+                  const left = Math.max(8, cssRight - MENU_WIDTH);
                   const openUp =
-                    rect.bottom + MENU_HEIGHT > window.innerHeight;
+                    cssBottom + MENU_HEIGHT > window.innerHeight;
                   const top = openUp
-                    ? rect.top - MENU_HEIGHT - 4
-                    : rect.bottom + 4;
+                    ? cssTop - MENU_HEIGHT - 4
+                    : cssBottom + 4;
                   setConvertMenuPos({ top, left });
                   setOpenConvertMenu(doc._id);
                 }}
@@ -1973,18 +2053,6 @@ const Accounting = () => {
                 </div>
               )}
             </div>
-            {activeTab === "tax" && doc.status !== "Paid" && (
-              <button
-                title="Record Payment"
-                onClick={() => {
-                  setSelectedInvoiceForPayment(doc);
-                  setPaymentModalOpen(true);
-                }}
-                className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-              >
-                <IndianRupee className="w-4 h-4" />
-              </button>
-            )}
             <button
               title="Delete"
               onClick={() => handleDelete(doc._id, activeTab)}
@@ -2003,6 +2071,22 @@ const Accounting = () => {
   return (
     <>
       <AppToaster />
+
+      {/* Slim indeterminate bar pinned to the very top of the viewport while
+          a bulk merge (download or print) is running — the toast alone can
+          get lost in a long list, this is the "is something happening"
+          signal that's visible no matter where on the page you're looking. */}
+      {(bulkDownloading || bulkPrinting) && (
+        <div className="fixed top-0 left-0 right-0 h-1 z-[100025] bg-blue-100 overflow-hidden">
+          <div className="h-full w-1/3 bg-blue-600 animate-[bulkProgress_1.1s_ease-in-out_infinite]" />
+          <style>{`
+            @keyframes bulkProgress {
+              0% { transform: translateX(-100%); }
+              100% { transform: translateX(300%); }
+            }
+          `}</style>
+        </div>
+      )}
 
       <div className="bg-[#F9FAFB] min-h-screen -mx-4 sm:-mx-6 lg:-mx-8 -mt-6">
         {/* Bulk selection strip — overlays the toolbar when rows are selected,
@@ -2040,55 +2124,55 @@ const Accounting = () => {
                 </button>
                 <button
                   onClick={handleBulkDownloadPdf}
-                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  disabled={bulkDownloading}
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
                 >
-                  <Download className="w-4 h-4 text-indigo-600" />
-                  Download PDF
+                  {bulkDownloading ? (
+                    <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 text-indigo-600" />
+                  )}
+                  Download Merged PDF
                 </button>
-                <button
-                  onClick={openBulkEmail}
-                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
-                >
-                  <Mail className="w-4 h-4 text-blue-600" />
-                  Send Email
-                </button>
-                {activeTab === "quotation" && (
+                {activeTab === "tax" && (
+                  <button
+                    onClick={() => setShowBulkEmailGroupedModal(true)}
+                    className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  >
+                    <Mail className="w-4 h-4 text-blue-600" />
+                    Send Email (Grouped)
+                  </button>
+                )}
+                {getConversionTargets(activeTab).length > 0 && (
                   <div className="relative flex items-center">
                     <button
-                      onClick={() => setBulkConvertMenuOpen(!bulkConvertMenuOpen)}
-                      className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                      onClick={() => setBulkConvertMenuOpen((p) => !p)}
+                      disabled={bulkConverting}
+                      className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
                     >
-                      <Repeat className="w-4 h-4 text-green-600" />
-                      Convert To
+                      {bulkConverting ? (
+                        <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Repeat className="w-4 h-4 text-orange-600" />
+                      )}
+                      Convert
                     </button>
                     {bulkConvertMenuOpen && (
-                      <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 shadow-xl rounded-lg z-50 overflow-hidden">
-                        <button
-                          onClick={() => { setBulkConvertMenuOpen(false); handleBulkConvert("performa"); }}
-                          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
-                        >
-                          <Repeat className="w-4 h-4 text-orange-500" />
-                          Pro Forma Invoice
-                        </button>
-                        <button
-                          onClick={() => { setBulkConvertMenuOpen(false); handleBulkConvert("tax"); }}
-                          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
-                        >
-                          <Repeat className="w-4 h-4 text-green-600" />
-                          Tax Invoice
-                        </button>
+                      <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 shadow-xl rounded-lg z-50 overflow-hidden">
+                        {getConversionTargets(activeTab).map((targetType) => (
+                          <button
+                            key={targetType}
+                            onClick={() => handleBulkConvert(targetType)}
+                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                          >
+                            <Repeat className="w-4 h-4 text-orange-600" />
+                            Convert to{" "}
+                            {targetType === "tax" ? "Tax Invoice" : docNameFor(targetType)}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
-                )}
-                {activeTab === "performa" && (
-                  <button
-                    onClick={() => handleBulkConvert("tax")}
-                    className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
-                  >
-                    <Repeat className="w-4 h-4 text-green-600" />
-                    Convert to Invoice
-                  </button>
                 )}
                 <div className="relative flex items-center">
                   <button
@@ -2100,25 +2184,43 @@ const Accounting = () => {
                   </button>
                   {bulkShowMoreMenu && (
                     <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 shadow-xl rounded-lg z-50 overflow-hidden">
+                      {activeTab === "tax" && (
+                        <button
+                          onClick={() => { setBulkShowMoreMenu(false); toast.error("Record Payment coming soon"); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
+                        >
+                          <IndianRupee className="w-4 h-4 text-emerald-600" />
+                          Record Payment
+                        </button>
+                      )}
                       <button
-                        onClick={handleBulkPrint}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
+                        onClick={() => { setBulkShowMoreMenu(false); handleBulkPrint(); }}
+                        disabled={bulkPrinting}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100 disabled:opacity-50"
                       >
                         <Printer className="w-4 h-4 text-gray-600" />
                         Print
                       </button>
                       <button
-                        onClick={() => { setBulkShowMoreMenu(false); setChangeSignatureModalOpen(true); }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
+                        onClick={() => { setBulkShowMoreMenu(false); setShowBulkSignatureModal(true); }}
+                        disabled={bulkSignatureLoading}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100 disabled:opacity-50"
                       >
-                        <PenTool className="w-4 h-4 text-purple-600" />
+                        <PenTool className="w-4 h-4 text-blue-600" />
                         Change Signature
                       </button>
                       <button
-                        onClick={handleRemoveSignature}
-                        className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors border-b border-gray-100"
+                        onClick={() => { 
+                          if(window.confirm(`Are you sure you want to remove the signature from ${selectedIds.length} documents?`)) {
+                            handleBulkSignatureUpdate("", true);
+                          } else {
+                            setBulkShowMoreMenu(false);
+                          }
+                        }}
+                        disabled={bulkSignatureLoading}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100 disabled:opacity-50"
                       >
-                        <Eraser className="w-4 h-4 text-red-600" />
+                        <X className="w-4 h-4 text-red-600" />
                         Remove Signature
                       </button>
                       <button
@@ -2281,8 +2383,8 @@ const Accounting = () => {
                   <SlidersHorizontal
                     strokeWidth={2.5}
                     className={`w-4 h-4 ${filterStatuses[activeTab]
-                      ? "text-[#0085FF]"
-                      : "text-gray-800"
+                        ? "text-[#0085FF]"
+                        : "text-gray-800"
                       }`}
                   />
                 </button>
@@ -2891,13 +2993,17 @@ const Accounting = () => {
         {/* Two-pane create/edit screen — each document type uses its own
             thin wrapper around the shared CreateInvoicePanel. */}
         {showCreatePanel && (() => {
-          const panelKey = `${activeTab}-${editPanelDoc?._id || "new"}`;
           const panelProps = {
+            key: `${activeTab}-${editPanelDoc?._id || "new"}`,
             deals,
             initialDoc: editPanelDoc,
             conversionData,
             defaultDueDateDays,
             documentTypeSettings,
+            defaultNotesByType,
+            defaultTermsByType,
+            defaultNotesFlat,
+            defaultTermsFlat,
             onFullView: (doc) => handleView(doc, activeTab),
             onClose: () => {
               setShowCreatePanel(false);
@@ -2932,12 +3038,12 @@ const Accounting = () => {
                 fetchData={() => fetchData("tax")}
                 editingInvoice={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
+                documentTypeSettings={documentTypeSettings}
                 defaultDueDateDays={defaultDueDateDays}
-              defaultNotesByType={defaultNotesByType}
-              documentTypeSettings={documentTypeSettings}
-              defaultTermsByType={defaultTermsByType}
-              defaultNotesFlat={defaultNotesFlat}
-              defaultTermsFlat={defaultTermsFlat}
+                defaultNotesByType={defaultNotesByType}
+                defaultTermsByType={defaultTermsByType}
+                defaultNotesFlat={defaultNotesFlat}
+                defaultTermsFlat={defaultTermsFlat}
                 onPreview={(formData) => {
                   if (!formData.style) {
                     toast.error("Please select an invoice style to preview.");
@@ -2949,10 +3055,9 @@ const Accounting = () => {
                 }}
               />
             ) : (
-              <CreateInvoicePanel
-                key={panelKey}
-                {...panelProps}
-                type="tax"
+              <CreateInvoicePanel 
+                {...panelProps} 
+                type="tax" 
                 onRequestFullWidth={() => setInvoiceFullWidth(true)}
               />
             );
@@ -2968,12 +3073,12 @@ const Accounting = () => {
                 fetchData={() => fetchData("quotation")}
                 editingQuotation={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
+                documentTypeSettings={documentTypeSettings}
                 defaultDueDateDays={defaultDueDateDays}
-              defaultNotesByType={defaultNotesByType}
-              documentTypeSettings={documentTypeSettings}
-              defaultTermsByType={defaultTermsByType}
-              defaultNotesFlat={defaultNotesFlat}
-              defaultTermsFlat={defaultTermsFlat}
+                defaultNotesByType={defaultNotesByType}
+                defaultTermsByType={defaultTermsByType}
+                defaultNotesFlat={defaultNotesFlat}
+                defaultTermsFlat={defaultTermsFlat}
                 onPreview={(formData) => {
                   if (!formData.style) {
                     toast.error("Please select a Quotation style to preview.");
@@ -2986,7 +3091,6 @@ const Accounting = () => {
               />
             ) : (
               <CreateQuotationPanel
-                key={panelKey}
                 {...panelProps}
                 onRequestFullWidth={() => setQuotationFullWidth(true)}
               />
@@ -3000,12 +3104,12 @@ const Accounting = () => {
                 fetchData={() => fetchData("performa")}
                 editingPerformaInvoice={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
+                documentTypeSettings={documentTypeSettings}
                 defaultDueDateDays={defaultDueDateDays}
-              defaultNotesByType={defaultNotesByType}
-              documentTypeSettings={documentTypeSettings}
-              defaultTermsByType={defaultTermsByType}
-              defaultNotesFlat={defaultNotesFlat}
-              defaultTermsFlat={defaultTermsFlat}
+                defaultNotesByType={defaultNotesByType}
+                defaultTermsByType={defaultTermsByType}
+                defaultNotesFlat={defaultNotesFlat}
+                defaultTermsFlat={defaultTermsFlat}
                 onPreview={(formData) => {
                   if (!formData.style) {
                     toast.error("Please select a Pro Forma invoice style to preview.");
@@ -3017,9 +3121,8 @@ const Accounting = () => {
                 }}
               />
             ) : (
-              <CreatePerformaPanel
-                key={panelKey}
-                {...panelProps}
+              <CreatePerformaPanel 
+                {...panelProps} 
                 onRequestFullWidth={() => setPerformaFullWidth(true)}
               />
             );
@@ -3032,17 +3135,16 @@ const Accounting = () => {
                 fetchData={() => fetchData("deliveryChallan")}
                 editingDeliveryChallan={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
+                documentTypeSettings={documentTypeSettings}
                 defaultDueDateDays={defaultDueDateDays}
-              defaultNotesByType={defaultNotesByType}
-              documentTypeSettings={documentTypeSettings}
-              defaultTermsByType={defaultTermsByType}
-              defaultNotesFlat={defaultNotesFlat}
-              defaultTermsFlat={defaultTermsFlat}
+                defaultNotesByType={defaultNotesByType}
+                defaultTermsByType={defaultTermsByType}
+                defaultNotesFlat={defaultNotesFlat}
+                defaultTermsFlat={defaultTermsFlat}
               />
             ) : (
-              <CreateChallanPanel
-                key={panelKey}
-                {...panelProps}
+              <CreateChallanPanel 
+                {...panelProps} 
                 onRequestFullWidth={() => setChallanFullWidth(true)}
               />
             );
@@ -3075,13 +3177,13 @@ const Accounting = () => {
               }}
               fetchData={() => fetchData("tax")}
               editingInvoice={editing}
+              onExitFullWidth={() => setInvoiceFullWidth(false)}
+              documentTypeSettings={documentTypeSettings}
               defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
-              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
-              onExitFullWidth={() => setInvoiceFullWidth(false)}
               onPreview={(formData) => {
                 if (!formData.style) {
                   toast.error("Please select an invoice style to preview.");
@@ -3104,8 +3206,8 @@ const Accounting = () => {
               fetchData={() => fetchData("tax")}
               editingInvoice={editing}
               defaultDueDateDays={defaultDueDateDays}
-              defaultNotesByType={defaultNotesByType}
               documentTypeSettings={documentTypeSettings}
+              defaultNotesByType={defaultNotesByType}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -3135,13 +3237,13 @@ const Accounting = () => {
               }}
               fetchData={() => fetchData("performa")}
               editingPerformaInvoice={editing}
+              onExitFullWidth={() => setPerformaFullWidth(false)}
+              documentTypeSettings={documentTypeSettings}
               defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
-              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
-              onExitFullWidth={() => setPerformaFullWidth(false)}
               onPreview={(formData) => {
                 if (!formData.style) {
                   toast.error("Please select a Pro Forma invoice style to preview.");
@@ -3164,8 +3266,8 @@ const Accounting = () => {
               fetchData={() => fetchData("performa")}
               editingPerformaInvoice={editing}
               defaultDueDateDays={defaultDueDateDays}
-              defaultNotesByType={defaultNotesByType}
               documentTypeSettings={documentTypeSettings}
+              defaultNotesByType={defaultNotesByType}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -3193,12 +3295,12 @@ const Accounting = () => {
             }}
             fetchData={() => fetchData("quotation")}
             editingQuotation={editing}
+            documentTypeSettings={documentTypeSettings}
             defaultDueDateDays={defaultDueDateDays}
-              defaultNotesByType={defaultNotesByType}
-              documentTypeSettings={documentTypeSettings}
-              defaultTermsByType={defaultTermsByType}
-              defaultNotesFlat={defaultNotesFlat}
-              defaultTermsFlat={defaultTermsFlat}
+            defaultNotesByType={defaultNotesByType}
+            defaultTermsByType={defaultTermsByType}
+            defaultNotesFlat={defaultNotesFlat}
+            defaultTermsFlat={defaultTermsFlat}
             onPreview={(formData) => {
               if (!formData.style) {
                 toast.error("Please select a Quotation style to preview.");
@@ -3223,13 +3325,13 @@ const Accounting = () => {
               }}
               fetchData={() => fetchData("deliveryChallan")}
               editingDeliveryChallan={editing}
+              onExitFullWidth={() => setChallanFullWidth(false)}
+              documentTypeSettings={documentTypeSettings}
               defaultDueDateDays={defaultDueDateDays}
               defaultNotesByType={defaultNotesByType}
-              documentTypeSettings={documentTypeSettings}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
-              onExitFullWidth={() => setChallanFullWidth(false)}
             />
           ) : (
             <DeliveryChallanForm
@@ -3243,8 +3345,8 @@ const Accounting = () => {
               fetchData={() => fetchData("deliveryChallan")}
               editingDeliveryChallan={editing}
               defaultDueDateDays={defaultDueDateDays}
-              defaultNotesByType={defaultNotesByType}
               documentTypeSettings={documentTypeSettings}
+              defaultNotesByType={defaultNotesByType}
               defaultTermsByType={defaultTermsByType}
               defaultNotesFlat={defaultNotesFlat}
               defaultTermsFlat={defaultTermsFlat}
@@ -3302,6 +3404,7 @@ const Accounting = () => {
             handleEdit(viewerDoc, viewerType);
           }}
           onDownload={() => handleDownload(viewerId, viewerType)}
+          onSend={() => handleSend(viewerId, viewerType)}
           onConvert={(targetType) =>
             handleConvert(viewerId, viewerType, targetType)
           }
@@ -3374,7 +3477,7 @@ const Accounting = () => {
                 className="w-full mb-6 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
               >
                 <option value="">Select status…</option>
-                {statusOptionsForTab(activeTab).map((opt) => (
+                {statusOptions.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
@@ -3400,6 +3503,59 @@ const Accounting = () => {
             </div>
           </div>
         )}
+        <ConvertConfirmModal
+          isOpen={showConvertModal}
+          onClose={() => setShowConvertModal(false)}
+          onConfirm={confirmConvert}
+          docType={convertDocType}
+          targetType={convertTargetType}
+        />
+        <RecordPaymentModal
+          isOpen={paymentModalOpen}
+          onClose={() => {
+            setPaymentModalOpen(false);
+            setSelectedInvoiceForPayment(null);
+          }}
+          invoice={selectedInvoiceForPayment}
+          onSuccess={() => {
+            setPaymentModalOpen(false);
+            setSelectedInvoiceForPayment(null);
+            fetchData("tax");
+          }}
+        />
+        <QuickBrandingModal
+          isOpen={showBrandingModal}
+          onClose={() => {
+            setShowBrandingModal(false);
+            setPendingInvoiceCreation(false);
+          }}
+          onComplete={() => {
+            if (pendingInvoiceCreation) {
+              // Same two-pane panel the "Add [Document]" button opens when
+              // branding is already complete — branding-gated tax invoices
+              // now land in the same place as every other create/edit flow.
+              setEditPanelDoc(null);
+              setShowCreatePanel(true);
+              setPendingInvoiceCreation(false);
+            }
+          }}
+        />
+
+        <BulkEmailGroupedModal
+          isOpen={showBulkEmailGroupedModal}
+          onClose={() => setShowBulkEmailGroupedModal(false)}
+          selectedIds={selectedIds}
+          documents={documents["tax"] || []}
+          onSuccess={() => {
+            setSelectedIds([]);
+            fetchData("tax");
+          }}
+        />
+        <BulkSignatureModal
+          isOpen={showBulkSignatureModal}
+          onClose={() => setShowBulkSignatureModal(false)}
+          onConfirm={(dataUrl) => handleBulkSignatureUpdate(dataUrl, false)}
+        />
         {shareMenu && createPortal(
           <>
             <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
@@ -3445,7 +3601,7 @@ const Accounting = () => {
                     send: (tpl) => {
                       setEmailComposeTo(d.deal?.contact?.email || d.deal?.company?.email || d.deal?.email || "");
                       setEmailComposeSubject(buildEmailSubject(tpl));
-                      setEmailComposeBody(buildEmailBody(tpl));
+                      setEmailComposeBody(textToEmailHtml(buildEmailBody(tpl)));
                       setEmailCompose({ doc: d, type: t });
                       closeMenu();
                     },
@@ -3497,7 +3653,7 @@ const Accounting = () => {
                   { label: "WhatsApp", icon: <MessageCircle className="w-4 h-4 text-green-600" />, onClick: () => openChannel("whatsapp") },
                   { label: "Email", icon: <Mail className="w-4 h-4 text-blue-600" />, onClick: () => openChannel("email") },
                   { label: "SMS", icon: <MessageSquare className="w-4 h-4 text-purple-600" />, onClick: () => openChannel("sms") },
-                  { label: "Copy Link", icon: <Copy className="w-4 h-4 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => { }); toast.success("Link copied"); closeMenu(); } },
+                  { label: "Copy Link", icon: <Copy className="w-4 h-4 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
                 ];
                 return items.map(({ label, icon, onClick }) => (
                   <button
@@ -3531,18 +3687,29 @@ const Accounting = () => {
             .replace(/{company}/g, shareCompanyName || "");
           const applyTemplate = (key) => {
             const saved = emailTemplatesList.find((tpl) => tpl.id === key);
+            let nextSubject;
+            let nextBody;
             if (saved) {
-              setEmailComposeSubject(fillEmailTpl(saved.subject || ""));
-              setEmailComposeBody(fillEmailTpl(saved.body || ""));
+              nextSubject = fillEmailTpl(saved.subject || "");
+              nextBody = textToEmailHtml(fillEmailTpl(saved.body || ""));
             } else if (key === "standard") {
-              setEmailComposeSubject(`${dname} ${dnum || ""}`);
-              setEmailComposeBody(`Hi ${cname},\n\nPlease find attached your ${dname}${dnum ? ` #${dnum}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`);
+              nextSubject = `${dname} ${dnum || ""}`;
+              nextBody = textToEmailHtml(`Hi ${cname},\n\nPlease find attached your ${dname}${dnum ? ` #${dnum}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`);
             } else if (key === "reminder") {
-              setEmailComposeSubject(`Reminder: ${dname} ${dnum || ""} pending`);
-              setEmailComposeBody(`Hi ${cname},\n\nThis is a friendly reminder that your ${dname}${dnum ? ` #${dnum}` : ""} is awaiting your review.\n\nView it here: ${link}\n\nPlease feel free to reach out if you have any questions.\n\nBest regards`);
+              nextSubject = `Reminder: ${dname} ${dnum || ""} pending`;
+              nextBody = textToEmailHtml(`Hi ${cname},\n\nThis is a friendly reminder that your ${dname}${dnum ? ` #${dnum}` : ""} is awaiting your review.\n\nView it here: ${link}\n\nPlease feel free to reach out if you have any questions.\n\nBest regards`);
             } else if (key === "followup") {
-              setEmailComposeSubject(`Following up on ${dname} ${dnum || ""}`);
-              setEmailComposeBody(`Hi ${cname},\n\nI wanted to follow up regarding ${dname}${dnum ? ` #${dnum}` : ""} shared earlier.\n\nView / Download: ${link}\n\nLooking forward to hearing from you.`);
+              nextSubject = `Following up on ${dname} ${dnum || ""}`;
+              nextBody = textToEmailHtml(`Hi ${cname},\n\nI wanted to follow up regarding ${dname}${dnum ? ` #${dnum}` : ""} shared earlier.\n\nView / Download: ${link}\n\nLooking forward to hearing from you.`);
+            }
+            setEmailComposeSubject(nextSubject);
+            setEmailComposeBody(nextBody);
+            // The body editor is an uncontrolled contentEditable (React can't
+            // own its innerHTML without breaking cursor position while
+            // typing), so template application has to push the new HTML into
+            // the live DOM node directly, not just into state.
+            if (emailBodyEditorRef.current) {
+              emailBodyEditorRef.current.innerHTML = nextBody;
             }
             setEmailTemplateOpen(false);
           };
@@ -3552,25 +3719,52 @@ const Accounting = () => {
             try {
               await API.post(`/public/${apiPathFor(emailCompose.type)}/${emailCompose.doc._id}/email`, {
                 email: emailComposeTo,
+                cc: emailComposeCc,
+                bcc: emailComposeBcc,
                 subject: emailComposeSubject,
                 body: emailComposeBody,
               });
               toast.success("Email sent successfully");
               setEmailCompose(null);
               setEmailComposeTo("");
+              setEmailComposeCc("");
+              setEmailComposeBcc("");
+              setShowEmailCc(false);
+              setShowEmailBcc(false);
               setEmailComposeSubject("");
               setEmailComposeBody("");
-            } catch {
-              toast.error("Failed to send email");
+              setEmailPreviewMode(false);
+            } catch (err) {
+              toast.error(err.response?.data?.error || "Failed to send email");
             } finally {
               setEmailComposeSending(false);
             }
           };
+          // execCommand is deprecated but still the simplest way to drive a
+          // handful of basic rich-text commands (bold/italic/underline/lists)
+          // against a contentEditable div without pulling in an editor library.
+          const execCmd = (cmd, value = null) => {
+            emailBodyEditorRef.current?.focus();
+            document.execCommand(cmd, false, value);
+            setEmailComposeBody(emailBodyEditorRef.current?.innerHTML || "");
+          };
+          const insertLink = () => {
+            const url = window.prompt("Enter URL");
+            if (url) execCmd("createLink", url);
+          };
+          const toolbarButtons = [
+            { icon: <BoldIcon className="w-3.5 h-3.5" />, title: "Bold", onClick: () => execCmd("bold") },
+            { icon: <ItalicIcon className="w-3.5 h-3.5" />, title: "Italic", onClick: () => execCmd("italic") },
+            { icon: <UnderlineIcon className="w-3.5 h-3.5" />, title: "Underline", onClick: () => execCmd("underline") },
+            { icon: <StrikethroughIcon className="w-3.5 h-3.5" />, title: "Strikethrough", onClick: () => execCmd("strikeThrough") },
+            { icon: <ListOrdered className="w-3.5 h-3.5" />, title: "Numbered list", onClick: () => execCmd("insertOrderedList") },
+            { icon: <ListIcon className="w-3.5 h-3.5" />, title: "Bulleted list", onClick: () => execCmd("insertUnorderedList") },
+            { icon: <LinkIcon className="w-3.5 h-3.5" />, title: "Insert link", onClick: insertLink },
+          ];
           return (
             <>
               <div className="fixed inset-0 bg-black/20 z-[100011]" onClick={() => { setEmailCompose(null); setEmailTemplateOpen(false); }} />
               <div className="fixed right-0 top-0 bottom-0 w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col" onClick={(e) => e.stopPropagation()}>
-                {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
                   <div className="flex items-center gap-3">
                     <button onClick={() => setEmailCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
@@ -3579,8 +3773,11 @@ const Accounting = () => {
                     <h2 className="text-base font-semibold text-gray-900">Send Email</h2>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button className="px-4 py-1.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                      Preview
+                    <button
+                      onClick={() => setEmailPreviewMode((p) => !p)}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      {emailPreviewMode ? "Edit" : "Preview"}
                     </button>
                     <button
                       disabled={!emailComposeTo || emailComposeSending}
@@ -3590,78 +3787,118 @@ const Accounting = () => {
                       {emailComposeSending ? (
                         <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
                       ) : (
-                        "Send Email"
+                        <><Mail className="w-4 h-4" /> Send Email</>
                       )}
                     </button>
                   </div>
                 </div>
-
-                {/* From */}
-                <div className="flex items-center px-5 py-3 border-b border-gray-100">
-                  <span className="w-16 text-sm text-gray-500 shrink-0">From</span>
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <div className="bg-green-600 text-white rounded-full w-6 h-6 text-[10px] font-bold flex items-center justify-center shrink-0">DC</div>
-                    <span className="text-sm text-gray-800 truncate">noreply@datacircles.in</span>
-                    <Lock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-xs font-medium text-gray-500">From</span>
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1.5 text-gray-600">
+                        <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-semibold flex items-center justify-center">
+                          DC
+                        </span>
+                        {EMAIL_FROM_ADDRESS}
+                        <Lock className="w-3 h-3 text-gray-400" />
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {!showEmailCc && (
+                          <button
+                            type="button"
+                            onClick={() => setShowEmailCc(true)}
+                            className="px-2 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                          >
+                            Cc
+                          </button>
+                        )}
+                        {!showEmailBcc && (
+                          <button
+                            type="button"
+                            onClick={() => setShowEmailBcc(true)}
+                            className="px-2 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                          >
+                            Bcc
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 ml-2 shrink-0">
-                    <button className="px-2.5 py-0.5 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50 transition-colors">Cc</button>
-                    <button className="px-2.5 py-0.5 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50 transition-colors">Bcc</button>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+                    <input
+                      type="email"
+                      value={emailComposeTo}
+                      onChange={(e) => setEmailComposeTo(e.target.value)}
+                      placeholder="recipient@example.com"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                    />
                   </div>
-                </div>
-
-                {/* To */}
-                <div className="flex items-center px-5 py-3 border-b border-gray-100">
-                  <span className="w-16 text-sm text-gray-500 shrink-0">To</span>
-                  <input
-                    type="email"
-                    value={emailComposeTo}
-                    onChange={(e) => setEmailComposeTo(e.target.value)}
-                    placeholder="recipient@example.com"
-                    className="flex-1 text-sm text-gray-900 outline-none placeholder-gray-300"
-                  />
-                </div>
-
-                {/* Subject */}
-                <div className="flex items-center px-5 py-3 border-b border-gray-100">
-                  <span className="w-16 text-sm text-gray-500 shrink-0">Subject</span>
-                  <input
-                    type="text"
-                    value={emailComposeSubject}
-                    onChange={(e) => setEmailComposeSubject(e.target.value)}
-                    className="flex-1 text-sm font-medium text-gray-900 outline-none"
-                  />
-                </div>
-
-                {/* Formatting toolbar */}
-                <div className="flex items-center gap-0.5 px-4 py-2 border-b border-gray-100 bg-gray-50">
-                  {[
-                    { icon: <Bold className="w-3.5 h-3.5" />, title: "Bold" },
-                    { icon: <Italic className="w-3.5 h-3.5" />, title: "Italic" },
-                    { icon: <Underline className="w-3.5 h-3.5" />, title: "Underline" },
-                    { icon: <Strikethrough className="w-3.5 h-3.5" />, title: "Strikethrough" },
-                  ].map(({ icon, title }) => (
-                    <button key={title} title={title} className="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors">{icon}</button>
-                  ))}
-                  <div className="w-px h-4 bg-gray-300 mx-1" />
-                  {[
-                    { icon: <ListOrdered className="w-3.5 h-3.5" />, title: "Ordered list" },
-                    { icon: <List className="w-3.5 h-3.5" />, title: "Unordered list" },
-                    { icon: <Link2 className="w-3.5 h-3.5" />, title: "Link" },
-                  ].map(({ icon, title }) => (
-                    <button key={title} title={title} className="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors">{icon}</button>
-                  ))}
-                  <div className="flex-1" />
-                  {/* Template picker */}
+                  {showEmailCc && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-medium text-gray-500">Cc</label>
+                        <button
+                          type="button"
+                          onClick={() => { setShowEmailCc(false); setEmailComposeCc(""); }}
+                          className="text-xs font-medium text-gray-400 hover:text-gray-600"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={emailComposeCc}
+                        onChange={(e) => setEmailComposeCc(e.target.value)}
+                        placeholder="comma-separated addresses"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  )}
+                  {showEmailBcc && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-medium text-gray-500">Bcc</label>
+                        <button
+                          type="button"
+                          onClick={() => { setShowEmailBcc(false); setEmailComposeBcc(""); }}
+                          className="text-xs font-medium text-gray-400 hover:text-gray-600"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={emailComposeBcc}
+                        onChange={(e) => setEmailComposeBcc(e.target.value)}
+                        placeholder="comma-separated addresses"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Subject</label>
+                    <input
+                      type="text"
+                      value={emailComposeSubject}
+                      onChange={(e) => setEmailComposeSubject(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
                   <div className="relative">
-                    <button
-                      onClick={() => setEmailTemplateOpen((p) => !p)}
-                      className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                    >
-                      + Add template <ChevronDown className="w-3 h-3" />
-                    </button>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-gray-500">Body</label>
+                      <button
+                        type="button"
+                        onClick={() => setEmailTemplateOpen((p) => !p)}
+                        className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      >
+                        + Add template <ChevronDown className="w-3 h-3" />
+                      </button>
+                    </div>
                     {emailTemplateOpen && (
-                      <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg w-64 z-10 py-1">
+                      <div className="absolute right-0 top-6 bg-white border border-gray-200 rounded-lg shadow-lg w-64 z-10 py-1">
                         {[
                           ...emailTemplatesList.map((tpl) => ({
                             key: tpl.id,
@@ -3683,28 +3920,54 @@ const Accounting = () => {
                         ))}
                       </div>
                     )}
+                    {emailPreviewMode ? (
+                      <div
+                        className="w-full min-h-[220px] px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                        dangerouslySetInnerHTML={{ __html: emailComposeBody }}
+                      />
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-0.5 border border-gray-200 border-b-0 rounded-t-lg bg-gray-50 px-1.5 py-1">
+                          {toolbarButtons.map(({ icon, title, onClick }) => (
+                            <button
+                              key={title}
+                              type="button"
+                              title={title}
+                              // Mousedown (not click) so the editor's text
+                              // selection survives — a click first steals
+                              // focus/selection away from the contentEditable.
+                              onMouseDown={(e) => { e.preventDefault(); onClick(); }}
+                              className="p-1.5 text-gray-600 hover:bg-gray-200 rounded transition-colors"
+                            >
+                              {icon}
+                            </button>
+                          ))}
+                        </div>
+                        <div
+                          ref={(el) => {
+                            emailBodyEditorRef.current = el;
+                            if (el && el.dataset.init !== "true") {
+                              el.innerHTML = emailComposeBody;
+                              el.dataset.init = "true";
+                            }
+                          }}
+                          contentEditable
+                          suppressContentEditableWarning
+                          onInput={(e) => setEmailComposeBody(e.currentTarget.innerHTML)}
+                          className="w-full min-h-[220px] px-3 py-2 border border-gray-200 rounded-b-lg text-sm focus:outline-none focus:border-blue-500 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                        />
+                      </>
+                    )}
                   </div>
                 </div>
-
-                {/* Body */}
-                <div className="flex-1 overflow-hidden flex flex-col px-5 pt-4">
-                  <textarea
-                    value={emailComposeBody}
-                    onChange={(e) => setEmailComposeBody(e.target.value)}
-                    placeholder="Write your message here…"
-                    className="flex-1 w-full text-sm text-gray-800 outline-none resize-none placeholder-gray-300"
-                  />
-                </div>
-
-                {/* Bottom send */}
-                <div className="px-5 py-4 border-t border-gray-200">
+                <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100 bg-white">
                   <button
                     disabled={!emailComposeTo || emailComposeSending}
                     onClick={doSend}
-                    className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                    className="w-full px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
                   >
                     {emailComposeSending ? (
-                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                      <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
                     ) : (
                       <><Mail className="w-4 h-4" /> Send Email</>
                     )}
@@ -3717,7 +3980,6 @@ const Accounting = () => {
         {smsCompose && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100011]" onClick={() => setSmsCompose(null)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-              {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                 <div className="flex items-center gap-3">
                   <div className="bg-purple-100 p-2 rounded-lg">
@@ -3732,9 +3994,7 @@ const Accounting = () => {
                   <X className="w-4 h-4 text-gray-500" />
                 </button>
               </div>
-              {/* Body */}
               <div className="px-6 py-5 space-y-4">
-                {/* To */}
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1.5">To (phone number)</label>
                   <input
@@ -3745,7 +4005,6 @@ const Accounting = () => {
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-500"
                   />
                 </div>
-                {/* Message */}
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1.5">Message</label>
                   <textarea
@@ -3757,7 +4016,6 @@ const Accounting = () => {
                   <p className="text-xs text-gray-400 mt-1">{smsComposeBody.length} characters</p>
                 </div>
               </div>
-              {/* Footer */}
               <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
                 <button onClick={() => setSmsCompose(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">Cancel</button>
                 <button
@@ -3792,232 +4050,16 @@ const Accounting = () => {
             </div>
           </div>
         )}
-        {showBulkEmailModal && (() => {
-          const dname = docNameFor(activeTab);
-          const closeBulkEmail = () => { setShowBulkEmailModal(false); setBulkEmailAddress(""); setBulkEmailTemplateOpen(false); };
-          const applyBulkTemplate = (key) => {
-            if (key === "standard") {
-              setBulkEmailSubject(`${dname} from ${shareCompanyName || "us"}`);
-              setBulkEmailBody(`Hi {customerName},\n\nPlease find attached your ${dname} #{number}.\n\nYou can also view it online: {link}\n\nThank you for your business!`);
-            } else if (key === "reminder") {
-              setBulkEmailSubject(`Reminder: ${dname} #{number} pending`);
-              setBulkEmailBody(`Hi {customerName},\n\nThis is a friendly reminder that your ${dname} #{number} is awaiting your review.\n\nView it here: {link}\n\nPlease feel free to reach out if you have any questions.\n\nBest regards`);
-            } else if (key === "followup") {
-              setBulkEmailSubject(`Following up on ${dname} #{number}`);
-              setBulkEmailBody(`Hi {customerName},\n\nI wanted to follow up regarding ${dname} #{number} shared earlier.\n\nView / Download: {link}\n\nLooking forward to hearing from you.`);
-            } else {
-              const saved = emailTemplatesList.find((t) => t.id === key);
-              if (saved) { setBulkEmailSubject(saved.subject || ""); setBulkEmailBody(saved.body || ""); }
-            }
-            setBulkEmailTemplateOpen(false);
-          };
-          return (
-            <>
-              <div className="fixed inset-0 bg-black/20 z-[100011]" onClick={closeBulkEmail} />
-              <div className="fixed right-0 top-0 bottom-0 w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col" onClick={(e) => e.stopPropagation()}>
-                {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-                  <div className="flex items-center gap-3">
-                    <button onClick={closeBulkEmail} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                      <X className="w-4 h-4 text-gray-500" />
-                    </button>
-                    <div>
-                      <h2 className="text-base font-semibold text-gray-900">Send Email</h2>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        <span className="font-semibold text-blue-600">{selectedIds.length}</span> {dname}{selectedIds.length !== 1 ? "s" : ""} selected
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      disabled={bulkEmailSending}
-                      onClick={handleBulkSendEmail}
-                      className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-                    >
-                      {bulkEmailSending ? (
-                        <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> {bulkEmailProgress.sent}/{bulkEmailProgress.total}</>
-                      ) : (
-                        `Send to ${selectedIds.length}`
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* From */}
-                <div className="flex items-center px-5 py-3 border-b border-gray-100">
-                  <span className="w-16 text-sm text-gray-500 shrink-0">From</span>
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <div className="bg-green-600 text-white rounded-full w-6 h-6 text-[10px] font-bold flex items-center justify-center shrink-0">DC</div>
-                    <span className="text-sm text-gray-800 truncate">noreply@datacircles.in</span>
-                    <Lock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                  </div>
-                </div>
-
-                {/* To */}
-                <div className="flex items-center px-5 py-3 border-b border-gray-100">
-                  <span className="w-16 text-sm text-gray-500 shrink-0">To</span>
-                  <input
-                    type="email"
-                    value={bulkEmailAddress}
-                    onChange={(e) => setBulkEmailAddress(e.target.value)}
-                    placeholder="Override (leave blank to use each contact's email)"
-                    className="flex-1 text-sm text-gray-900 outline-none placeholder-gray-300"
-                  />
-                </div>
-
-                {/* Subject */}
-                <div className="flex items-center px-5 py-3 border-b border-gray-100">
-                  <span className="w-16 text-sm text-gray-500 shrink-0">Subject</span>
-                  <input
-                    type="text"
-                    value={bulkEmailSubject}
-                    onChange={(e) => setBulkEmailSubject(e.target.value)}
-                    className="flex-1 text-sm font-medium text-gray-900 outline-none"
-                  />
-                </div>
-
-                <div className="flex items-center gap-0.5 px-4 py-2 border-b border-gray-100 bg-gray-50">
-                  {[
-                    { icon: <Bold className="w-3.5 h-3.5" />, title: "Bold", command: "bold" },
-                    { icon: <Italic className="w-3.5 h-3.5" />, title: "Italic", command: "italic" },
-                    { icon: <Underline className="w-3.5 h-3.5" />, title: "Underline", command: "underline" },
-                    { icon: <Strikethrough className="w-3.5 h-3.5" />, title: "Strikethrough", command: "strikeThrough" },
-                    { icon: <ListOrdered className="w-3.5 h-3.5" />, title: "Ordered list", command: "insertOrderedList" },
-                    { icon: <List className="w-3.5 h-3.5" />, title: "Unordered list", command: "insertUnorderedList" },
-                  ].map(({ icon, title, command }) => (
-                    <button
-                      key={title}
-                      title={title}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        document.execCommand(command, false, null);
-                        if (emailBodyRef.current) emailBodyRef.current.focus();
-                        if (emailBodyRef.current) setBulkEmailBody(emailBodyRef.current.innerHTML);
-                      }}
-                      className="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors"
-                    >
-                      {icon}
-                    </button>
-                  ))}
-                  <div className="flex-1" />
-                  {/* Template picker */}
-                  <div className="relative">
-                    <button
-                      onClick={() => setBulkEmailTemplateOpen((p) => !p)}
-                      className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                    >
-                      + Add template <ChevronDown className="w-3 h-3" />
-                    </button>
-                    {bulkEmailTemplateOpen && (
-                      <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg w-64 z-10 py-1">
-                        {[
-                          ...emailTemplatesList.map((tpl) => ({
-                            key: tpl.id,
-                            label: tpl.name || "Custom Template",
-                            desc: "From Document Settings",
-                          })),
-                          { key: "standard", label: "Standard", desc: "Thank you for your business" },
-                          { key: "reminder", label: "Reminder", desc: "Document pending review" },
-                          { key: "followup", label: "Follow-up", desc: "Check in on document" },
-                        ].map(({ key, label, desc }) => (
-                          <button key={key} onClick={() => applyBulkTemplate(key)} className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors">
-                            <p className="text-sm font-medium text-gray-800">{label}</p>
-                            <p className="text-xs text-gray-400">{desc}</p>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Placeholder hint */}
-                <div className="px-5 py-2 bg-blue-50 border-b border-blue-100">
-                  <p className="text-[10px] text-blue-600">
-                    <span className="font-semibold">Placeholders</span> — filled per document when sending:{" "}
-                    <code>{"{customerName}"} {"{number}"} {"{amount}"} {"{link}"} {"{docType}"}</code>
-                  </p>
-                </div>
-
-                {/* Body */}
-                <div className="flex-1 overflow-y-auto px-5 pt-4 pb-4 bg-white">
-                  <div
-                    ref={emailBodyRef}
-                    contentEditable
-                    onInput={(e) => setBulkEmailBody(e.currentTarget.innerHTML)}
-                    onBlur={(e) => setBulkEmailBody(e.currentTarget.innerHTML)}
-                    className="w-full text-sm text-gray-800 outline-none min-h-[150px] cursor-text"
-                    style={{ whiteSpace: "pre-wrap" }}
-                  />
-                </div>
-
-                {/* Bottom send */}
-                <div className="px-5 py-4 border-t border-gray-200">
-                  <button
-                    disabled={bulkEmailSending}
-                    onClick={handleBulkSendEmail}
-                    className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                  >
-                    {bulkEmailSending ? (
-                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending {bulkEmailProgress.sent} / {bulkEmailProgress.total}…</>
-                    ) : (
-                      <><Mail className="w-4 h-4" /> Send Email to {selectedIds.length} {dname}{selectedIds.length !== 1 ? "s" : ""}</>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </>
-          );
-        })()}
-        <ConvertConfirmModal
-          isOpen={showConvertModal}
-          onClose={() => setShowConvertModal(false)}
-          onConfirm={confirmConvert}
-          docType={convertDocType}
-          targetType={convertTargetType}
-        />
-        <QuickBrandingModal
-          isOpen={showBrandingModal}
-          onClose={() => {
-            setShowBrandingModal(false);
-            setPendingInvoiceCreation(false);
-          }}
-          onComplete={() => {
-            if (pendingInvoiceCreation) {
-              setEditPanelDoc(null);
-              setShowCreatePanel(true);
-              setPendingInvoiceCreation(false);
-            }
-          }}
-        />
-        <RecordPaymentModal
-          isOpen={paymentModalOpen}
-          onClose={() => {
-            setPaymentModalOpen(false);
-            setSelectedInvoiceForPayment(null);
-          }}
-          invoice={selectedInvoiceForPayment}
-          onSuccess={(updatedInvoice) => {
-            // Keep selectedInvoiceForPayment in sync so the modal's History
-            // tab shows fresh data if the user records another partial payment.
-            if (updatedInvoice) setSelectedInvoiceForPayment(updatedInvoice);
-            fetchData("tax");
-          }}
-        />
-
-        <ChangeSignatureModal
-          isOpen={changeSignatureModalOpen}
-          onClose={() => setChangeSignatureModalOpen(false)}
-          selectedIds={selectedIds}
-          activeTab={activeTab}
-          onSuccess={() => {
-            fetchData(activeTab);
-            setSelectedIds([]);
-          }}
-        />
-
       </div>
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </>
   );
-};
+}
 
 export default Accounting;

@@ -40,6 +40,7 @@ exports.createQuotation = async (req, res) => {
       billingAddress,
       shippingAddress,
       quotationPrefix,
+      quotationSuffix,
       quotationNumber: clientQuotationNumber,
       reference,
     } = req.body;
@@ -81,7 +82,7 @@ exports.createQuotation = async (req, res) => {
     // sequence.
     const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
     const finalPrefix = (quotationPrefix && quotationPrefix.trim()) || documentSettings.documentTypeSettings?.quote?.prefix || "QT-";
-    const finalSuffix = (documentSettings.documentTypeSettings?.quote?.suffix || "").toString().trim();
+    const finalSuffix = (quotationSuffix ?? documentSettings.documentTypeSettings?.quote?.suffix ?? "").toString().trim();
     let quotationNumber;
     try {
       quotationNumber = await resolveDocumentNumber({

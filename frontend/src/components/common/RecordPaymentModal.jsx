@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, IndianRupee, CreditCard, Calendar, FileText, CheckCircle2, Clock } from "lucide-react";
+import { X, IndianRupee, CreditCard, Calendar, FileText, CheckCircle2, Clock, ChevronDown } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
@@ -100,7 +100,14 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         onSuccess(updatedInvoice);
       }
     } catch (error) {
-      toast.error(error.response?.data?.error || "Failed to record payment");
+      const rawMessage = error.response?.data?.error || "";
+      // Backend validation errors (Mongoose's "X validation failed: ...")
+      // are internal implementation details, not something a user can act
+      // on — show a plain message instead of leaking that phrasing.
+      const friendlyMessage = /validation failed/i.test(rawMessage)
+        ? "Couldn't record the payment due to a data issue on this invoice. Please contact support if this keeps happening."
+        : rawMessage || "Failed to record payment";
+      toast.error(friendlyMessage);
     } finally {
       setLoading(false);
     }
@@ -146,7 +153,7 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100020] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
@@ -278,13 +285,14 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                       value={formData.paymentMethod}
                       onChange={handleChange}
                       disabled={amountDue <= 0}
-                      className="block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-50 appearance-none bg-white"
+                      className="block w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-50 appearance-none bg-white"
                       required
                     >
                       {PAYMENT_METHODS.map(m => (
                         <option key={m} value={m}>{m}</option>
                       ))}
                     </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   </div>
                 </div>
               </div>

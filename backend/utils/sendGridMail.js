@@ -19,7 +19,7 @@ async function sendGridMail({
     const msg = {
       to,
       from: {
-        email: "yash.mishra@datacircles.in",
+        email: "noreply@datacircles.in",
         name: "DataCircles"
       },
       subject,

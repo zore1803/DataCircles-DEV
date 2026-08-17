@@ -13,6 +13,7 @@ const subscriptionGate = require('../middlewares/subscriptionGate');
 router.post('/invoices/convert-to-proforma/:id', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.convertToProformaInvoice);
 router.post('/invoices/convert-to-quotation/:id', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.convertToQuotation);
 router.post('/invoices/convert-to-delivery-challan/:id', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.convertToDeliveryChallan);
+router.post('/invoices/bulk-convert-to-delivery-challan', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.bulkConvertInvoiceToDeliveryChallan);
 
 // Proforma Invoice conversions
 router.post('/performa-invoices/convert-to-tax/:id', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.convertToTaxInvoice);

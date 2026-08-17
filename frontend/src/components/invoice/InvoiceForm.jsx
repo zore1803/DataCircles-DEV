@@ -29,6 +29,7 @@ import QuickItemDrawer from "../item/QuickItemDrawer";
 import QuickDealForm from "../deal/QuickDealForm";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import toast from "react-hot-toast";
+import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 
 import SearchIcon from "../common/SearchIcon";
 import InvoiceLivePreview from "./InvoiceLivePreview";
@@ -321,7 +322,17 @@ const InvoiceForm = ({
   conversionData,
   onPreview,
   defaultDueDateDays = null,
+  defaultNotesByType = {},
+  defaultTermsByType = {},
+  defaultNotesFlat = "",
+  defaultTermsFlat = "",
 }) => {
+  const defaultNotesForNew = defaultNotesByType.tax !== undefined
+    ? defaultNotesByType.tax
+    : (defaultNotesFlat || PREDEFINED_NOTES.tax || "");
+  const defaultTermsForNew = defaultTermsByType.tax !== undefined
+    ? defaultTermsByType.tax
+    : (defaultTermsFlat || PREDEFINED_TERMS.tax || "");
   const [form, setForm] = useState({
     deal: "",
     date: "",
@@ -356,8 +367,8 @@ const InvoiceForm = ({
     billingAddress: emptyAddress(),
     shippingAddress: emptyAddress(),
     sameAsBilling: true,
-    notes: "",
-    terms: "",
+    notes: defaultNotesForNew,
+    terms: defaultTermsForNew,
     signature: "",
   });
   const [savedSignatures, setSavedSignatures] = useState([]);
@@ -806,9 +817,9 @@ const InvoiceForm = ({
     return gstinRegex.test(gstin);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const submitInvoice = async (statusValue) => {
     setIsSubmitting(true);
+    const isDraft = statusValue === "Draft";
 
     // Validate required fields
     if (!form.deal) {
@@ -827,51 +838,56 @@ const InvoiceForm = ({
       return;
     }
 
-    // Validate GSTIN format
-    if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
-      setToastMessage(
-        "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
-      );
-      setTimeout(() => setToastMessage(""), 3000);
-      setIsSubmitting(false);
-      return;
-    }
+    // A quick draft only needs enough to identify the document; full GSTIN and
+    // item validation apply once it's actually being created for real.
+    if (!isDraft) {
+      // Validate GSTIN format
+      if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
+        setToastMessage(
+          "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
+        );
+        setTimeout(() => setToastMessage(""), 3000);
+        setIsSubmitting(false);
+        return;
+      }
 
-    // Validate items
-    const invalidItems = form.items.filter(
-      (item) =>
-        !item.name ||
-        !item.rate ||
-        !item.quantity ||
-        (form.isTaxInvoice && !item.hsn) ||
-        (item.discountType === "percentage" && item.discount > 100)
-    );
-    if (invalidItems.length > 0) {
-      setToastMessage(`Item not found`);
-      setTimeout(() => setToastMessage(""), 3000);
-      setIsSubmitting(false);
-      return;
-    }
-
-    const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
-      form.items
-    );
-    const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
-      subtotalAfterItemDiscounts,
-      form.discount
-    );
-    if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
-      setToastMessage(
-        "Invoice discount cannot exceed subtotal after item discounts."
+      // Validate items
+      const invalidItems = form.items.filter(
+        (item) =>
+          !item.name ||
+          !item.rate ||
+          !item.quantity ||
+          (form.isTaxInvoice && !item.hsn) ||
+          (item.discountType === "percentage" && item.discount > 100)
       );
-      setTimeout(() => setToastMessage(""), 3000);
-      setIsSubmitting(false);
-      return;
+      if (invalidItems.length > 0) {
+        setToastMessage(`Item not found`);
+        setTimeout(() => setToastMessage(""), 3000);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
+        form.items
+      );
+      const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
+        subtotalAfterItemDiscounts,
+        form.discount
+      );
+      if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
+        setToastMessage(
+          "Invoice discount cannot exceed subtotal after item discounts."
+        );
+        setTimeout(() => setToastMessage(""), 3000);
+        setIsSubmitting(false);
+        return;
+      }
     }
 
     try {
       const payload = {
         ...form,
+        status: statusValue,
         billingAddress: form.billingAddress,
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
         amount: form.isTaxInvoice
@@ -968,11 +984,17 @@ const InvoiceForm = ({
   };
 
   const handleSaveAndExit = async () => {
-    await handleSubmit(new Event("submit"));
+    await submitInvoice("Pending");
     if (!toastMessage.includes("Failed")) {
       setShowConfirmDialog(false);
       onClose();
     }
+  };
+
+  const handleSaveDraft = () => submitInvoice("Draft");
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    submitInvoice(form.status || "Draft");
   };
 
   const handleClose = () => {
@@ -1226,11 +1248,16 @@ const InvoiceForm = ({
                 </button>
               )}
               <button
-                type="submit"
+                type="button"
+                onClick={handleSaveDraft}
                 disabled={isSubmitting}
                 className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
-                <FileText className="w-3.5 h-3.5" />
+                {isSubmitting ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <FileText className="w-3.5 h-3.5" />
+                )}
                 Save as Draft
               </button>
             </div>
@@ -2068,8 +2095,24 @@ const CreateInvoicePanel = ({
   onRequestFullWidth,
   type = "tax",
   defaultDueDateDays = null,
+  defaultNotesByType = {},
+  defaultTermsByType = {},
+  defaultNotesFlat = "",
+  defaultTermsFlat = "",
+  documentTypeSettings = {},
 }) => {
   const isEditing = !!initialDoc;
+  // Same "per-type value, else flat default, else the built-in copy"
+  // fallback chain Settings → Document Settings and the full-width screens
+  // already use — split view was skipping this entirely and always opening
+  // new documents with blank Notes/Terms regardless of what the org
+  // configured.
+  const defaultNotesForNewDoc = defaultNotesByType[type] !== undefined
+    ? defaultNotesByType[type]
+    : (defaultNotesFlat || PREDEFINED_NOTES[type] || "");
+  const defaultTermsForNewDoc = defaultTermsByType[type] !== undefined
+    ? defaultTermsByType[type]
+    : (defaultTermsFlat || PREDEFINED_TERMS[type] || "");
   // Per-type capabilities. Delivery challans have no GSTIN / tax / HSN; the
   // quotation tax flag is stored under a different key.
   const isChallan = type === "deliveryChallan";
@@ -2077,6 +2120,18 @@ const CreateInvoicePanel = ({
   const supportsGSTIN = !isChallan;
   const taxFlagKey = type === "quotation" ? "isTaxQuotation" : "isTaxInvoice";
   const docName = docNameFor(type);
+  // Document Settings is the single source of truth for the numbering
+  // prefix. Each document type's backend expects its own request field name
+  // (there's no generic "prefix" field) — both maps keyed the same way as
+  // `type` so the rest of this component can stay type-agnostic.
+  const SETTINGS_KEY_BY_TYPE = { tax: "invoice", quotation: "quote", performa: "proformaInvoice", deliveryChallan: "deliveryChallan" };
+  const PREFIX_FIELD_BY_TYPE = { tax: "invoicePrefix", quotation: "quotationPrefix", performa: "performaInvoicePrefix", deliveryChallan: "deliveryChallanPrefix" };
+  const SUFFIX_FIELD_BY_TYPE = { tax: "invoiceSuffix", quotation: "quotationSuffix", performa: "performaInvoiceSuffix", deliveryChallan: "deliveryChallanSuffix" };
+  const NUMBER_FIELD_BY_TYPE = { tax: "invoiceNumber", quotation: "quotationNumber", performa: "performaInvoiceNumber", deliveryChallan: "deliveryChallanNumber" };
+  const DEFAULT_PREFIX_BY_TYPE = { tax: "INV-", quotation: "QT-", performa: "PI-", deliveryChallan: "DC-" };
+  const configuredPrefix =
+    documentTypeSettings[SETTINGS_KEY_BY_TYPE[type]]?.prefix || DEFAULT_PREFIX_BY_TYPE[type];
+  const configuredSuffix = documentTypeSettings[SETTINGS_KEY_BY_TYPE[type]]?.suffix || "";
   // Section badges are numbered by position so a hidden section doesn't leave
   // a gap in the sequence.
   const sectionNo = (() => {
@@ -2112,7 +2167,7 @@ const CreateInvoicePanel = ({
             false,
           transactionType: sourceDoc.transactionType || "intra",
           gstRate: sourceDoc.gstRate || 18,
-          invoicePrefix: sourceDoc.invoicePrefix || "INV-",
+          invoicePrefix: sourceDoc[PREFIX_FIELD_BY_TYPE[type]] || sourceDoc.invoicePrefix || configuredPrefix,
           invoiceSuffix: sourceDoc.invoiceSuffix || "",
           invoiceNumber: sourceDoc.invoiceNumber || "",
           nextInvoiceNumber: sourceDoc.nextInvoiceNumber || 1,
@@ -2150,15 +2205,15 @@ const CreateInvoicePanel = ({
           isTaxInvoice: true,
           transactionType: "intra",
           gstRate: 18,
-          invoicePrefix: "INV-",
-          invoiceSuffix: "",
+          invoicePrefix: configuredPrefix,
+          invoiceSuffix: configuredSuffix,
           invoiceNumber: "",
           nextInvoiceNumber: 1,
           items: [blankItem()],
           discount: { type: "fixed", value: 0 },
           isRoundOff: true,
-          notes: "",
-          terms: "",
+          notes: defaultNotesForNewDoc,
+          terms: defaultTermsForNewDoc,
           signature: "",
           status: "Draft",
         };
@@ -2316,15 +2371,18 @@ const CreateInvoicePanel = ({
         // Keep numbering in sync with edits made in the drawer's Numbering tab.
         if (docSettingsRes.status === "fulfilled") {
           const d = docSettingsRes.value.data || {};
-          setDocSettings((prev) => ({
-            ...prev,
-            invoicePrefix: d.invoicePrefix || "INV-",
-            invoiceSuffix: d.invoiceSuffix || "",
-            invoicePrefixes: d.invoicePrefixes || ["INV-"],
-            invoiceSuffixes: d.invoiceSuffixes || [],
-            nextInvoiceNumber: d.nextInvoiceNumber || 1,
-            documentTypeSettings: d.documentTypeSettings || prev.documentTypeSettings,
-          }));
+          setDocSettings((prev) => {
+            const dtSettings = d.documentTypeSettings || prev.documentTypeSettings;
+            return {
+              ...prev,
+              invoicePrefix: dtSettings?.invoice?.prefix || d.invoicePrefix || "INV-",
+              invoiceSuffix: dtSettings?.invoice?.suffix || d.invoiceSuffix || "",
+              invoicePrefixes: dtSettings?.invoice?.prefixes || d.invoicePrefixes || ["INV-"],
+              invoiceSuffixes: dtSettings?.invoice?.suffixes || d.invoiceSuffixes || [],
+              nextInvoiceNumber: d.nextInvoiceNumber || 1,
+              documentTypeSettings: dtSettings,
+            };
+          });
         }
       } catch (err) {
         console.error("Fetch branding/bank error:", err);
@@ -2391,20 +2449,26 @@ const CreateInvoicePanel = ({
     const loadDocSettings = async () => {
       try {
         const res = await API.get("/document-settings");
+        const dtSettings = res.data?.documentTypeSettings || { invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] } };
         setDocSettings({
-          invoicePrefix: res.data?.invoicePrefix || "INV-",
-          invoiceSuffix: res.data?.invoiceSuffix || "",
-          invoicePrefixes: res.data?.invoicePrefixes || ["INV-"],
-          invoiceSuffixes: res.data?.invoiceSuffixes || [],
+          invoicePrefix: dtSettings.invoice?.prefix || res.data?.invoicePrefix || "INV-",
+          invoiceSuffix: dtSettings.invoice?.suffix || res.data?.invoiceSuffix || "",
+          invoicePrefixes: dtSettings.invoice?.prefixes || res.data?.invoicePrefixes || ["INV-"],
+          invoiceSuffixes: dtSettings.invoice?.suffixes || res.data?.invoiceSuffixes || [],
           nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
           defaultNotes: res.data?.defaultNotes || "",
           defaultTerms: res.data?.defaultTerms || "",
-          documentTypeSettings: res.data?.documentTypeSettings || { invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] } },
+          documentTypeSettings: dtSettings,
         });
+        // dtSettings here is invoice-only (`.invoice.prefix`) — syncing it
+        // into form.invoicePrefix unconditionally would overwrite a
+        // Quotation/Proforma/Delivery Challan panel's already-correct
+        // per-type prefix (set at mount from the `documentTypeSettings`
+        // prop) with the org's *invoice* prefix. Only invoices sync here.
         setForm((prev) => ({
           ...prev,
-          invoicePrefix: res.data?.invoicePrefix || "INV-",
-          invoiceSuffix: res.data?.invoiceSuffix || "",
+          invoicePrefix: type === "tax" ? (dtSettings.invoice?.prefix || res.data?.invoicePrefix || "INV-") : prev.invoicePrefix,
+          invoiceSuffix: type === "tax" ? (dtSettings.invoice?.suffix || res.data?.invoiceSuffix || "") : prev.invoiceSuffix,
           nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
         }));
       } catch (error) {
@@ -2624,14 +2688,22 @@ const CreateInvoicePanel = ({
       if (supportsTax) {
         payload[taxFlagKey] = form.isTaxInvoice;
       }
-      // Numbering is configured per document type and only wired up for
-      // invoices, so the prefix/suffix/next-number fields ride along on that
-      // type alone rather than on every document.
+      // Each document type's create/update endpoint expects its own field
+      // name for the prefix/number (invoicePrefix, quotationPrefix,
+      // performaInvoicePrefix, deliveryChallanPrefix) — sending the generic
+      // "invoicePrefix" for a quotation/proforma/challan is silently ignored
+      // by that type's backend schema, so this maps the internal
+      // form.invoicePrefix/invoiceNumber state onto the correct outgoing key
+      // for whichever `type` this panel instance is.
+      payload[PREFIX_FIELD_BY_TYPE[type]] = form.invoicePrefix?.trim() || configuredPrefix;
+      payload[NUMBER_FIELD_BY_TYPE[type]] = form.invoiceNumber?.toString().trim() || undefined;
+      // Suffix mirrors prefix: sent for every type, under that type's own
+      // field name, so it's applied to the document being created right now
+      // rather than only saved to Settings for future ones.
+      payload[SUFFIX_FIELD_BY_TYPE[type]] = form.invoiceSuffix?.trim() || configuredSuffix;
+      // An explicit "next number" override remains an invoice-only concept —
+      // the other 3 controllers don't accept it.
       if (type === "tax") {
-        payload.invoicePrefix =
-          form.invoicePrefix?.trim() || docSettings.invoicePrefix || "INV-";
-        payload.invoiceSuffix = form.invoiceSuffix ?? docSettings.invoiceSuffix ?? "";
-        payload.invoiceNumber = form.invoiceNumber?.toString().trim() || undefined;
         payload.nextInvoiceNumber =
           form.nextInvoiceNumber ?? docSettings.nextInvoiceNumber ?? 1;
       }
@@ -2851,9 +2923,46 @@ const CreateInvoicePanel = ({
                   )}
                 </>
               ) : (
-                <h2 className="text-xl font-bold text-[#1F2937] truncate">
-                  {isEditing ? `Edit ${docName}` : `Create New ${docName}`}
-                </h2>
+                <div className="flex items-center gap-3 min-w-0">
+                  <h2 className="text-xl font-bold text-[#1F2937] truncate">
+                    {isEditing ? `Edit ${docName}` : `Create New ${docName}`}
+                  </h2>
+                  {/* Same prefix + number boxes the full-width screen shows —
+                      previously only the full-width view let the user see or
+                      change the numbering before saving; split view silently
+                      used whatever Document Settings configured with no
+                      visibility into it. */}
+                  {!isEditing && (
+                    <div className="flex items-center border border-[#E1E4EA] rounded-lg overflow-hidden h-9 bg-white flex-shrink-0">
+                      <input
+                        type="text"
+                        value={form.invoicePrefix}
+                        onChange={(e) => setForm((prev) => ({ ...prev, invoicePrefix: e.target.value }))}
+                        title={`${docName} number prefix`}
+                        aria-label={`${docName} number prefix`}
+                        className="w-16 px-2 py-1 text-sm font-semibold text-[#1F2937] bg-[#F8F9FB] border-r border-[#E1E4EA] focus:outline-none focus:bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Auto"
+                        value={form.invoiceNumber}
+                        onChange={(e) => setForm((prev) => ({ ...prev, invoiceNumber: e.target.value }))}
+                        title={`${docName} number (leave blank to auto-generate)`}
+                        aria-label={`${docName} number`}
+                        className="w-20 px-2 py-1 text-sm font-semibold text-[#1F2937] border-r border-[#E1E4EA] focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Suffix"
+                        value={form.invoiceSuffix}
+                        onChange={(e) => setForm((prev) => ({ ...prev, invoiceSuffix: e.target.value }))}
+                        title={`${docName} number suffix (optional)`}
+                        aria-label={`${docName} number suffix`}
+                        className="w-16 px-2 py-1 text-sm font-semibold text-[#1F2937] bg-[#F8F9FB] focus:outline-none focus:bg-white"
+                      />
+                    </div>
+                  )}
+                </div>
               )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">

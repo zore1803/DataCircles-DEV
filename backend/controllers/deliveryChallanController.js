@@ -37,6 +37,7 @@ exports.createDeliveryChallan = async (req, res) => {
       billingAddress,
       shippingAddress,
       deliveryChallanPrefix,
+      deliveryChallanSuffix,
       deliveryChallanNumber: clientDeliveryChallanNumber,
     } = req.body;
 
@@ -77,7 +78,7 @@ exports.createDeliveryChallan = async (req, res) => {
     // cleanly instead of continuing another prefix's sequence.
     const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
     const finalDCPrefix = (deliveryChallanPrefix && deliveryChallanPrefix.trim()) || documentSettings.documentTypeSettings?.deliveryChallan?.prefix || "DC-";
-    const finalDCSuffix = (documentSettings.documentTypeSettings?.deliveryChallan?.suffix || "").toString().trim();
+    const finalDCSuffix = (deliveryChallanSuffix ?? documentSettings.documentTypeSettings?.deliveryChallan?.suffix ?? "").toString().trim();
     let deliveryChallanNumber;
     try {
       deliveryChallanNumber = await resolveDocumentNumber({

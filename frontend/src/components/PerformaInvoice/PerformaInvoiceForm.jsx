@@ -20,6 +20,7 @@ import QuickDealForm from "../deal/QuickDealForm";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import toast from "react-hot-toast";
 import { AddressFieldsGroup, emptyAddress, isAddressEmpty, SectionHeader } from "../invoice/formPrimitives";
+import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 
 import SearchIcon from "../common/SearchIcon";
 // Function to convert number to words
@@ -297,7 +298,17 @@ const PerformaInvoiceForm = ({
   conversionData,
   onPreview,
   defaultDueDateDays = null,
+  defaultNotesByType = {},
+  defaultTermsByType = {},
+  defaultNotesFlat = "",
+  defaultTermsFlat = "",
 }) => {
+  const defaultNotesForNew = defaultNotesByType.performa !== undefined
+    ? defaultNotesByType.performa
+    : (defaultNotesFlat || PREDEFINED_NOTES.performa || "");
+  const defaultTermsForNew = defaultTermsByType.performa !== undefined
+    ? defaultTermsByType.performa
+    : (defaultTermsFlat || PREDEFINED_TERMS.performa || "");
   const [form, setForm] = useState({
     deal: "",
     date: "",
@@ -306,8 +317,8 @@ const PerformaInvoiceForm = ({
     billingAddress: emptyAddress(),
     shippingAddress: emptyAddress(),
     sameAsBilling: true,
-    notes: "",
-    terms: "",
+    notes: defaultNotesForNew,
+    terms: defaultTermsForNew,
     signature: "",
     items: [
       {
@@ -862,9 +873,9 @@ const PerformaInvoiceForm = ({
     return gstinRegex.test(gstin);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const submitPerformaInvoice = async (statusValue) => {
     setIsSubmitting(true);
+    const isDraft = statusValue === "Draft";
 
     // Validate required fields
     if (!form.deal) {
@@ -879,47 +890,51 @@ const PerformaInvoiceForm = ({
       return;
     }
 
-    // Validate GSTIN format
-    if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
-      toast.error(
-        "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
-      );
-      setIsSubmitting(false);
-      return;
-    }
+    // A quick draft only needs enough to identify the document; full GSTIN and
+    // item validation apply once it's actually being created for real.
+    if (!isDraft) {
+      // Validate GSTIN format
+      if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
+        toast.error(
+          "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
+        );
+        setIsSubmitting(false);
+        return;
+      }
 
-    // Validate items
-    const invalidItems = form.items.filter(
-      (item) =>
-        !item.name ||
-        !item.rate ||
-        !item.quantity ||
-        (form.isTaxInvoice && !item.hsn) ||
-        (item.discountType === "percentage" && item.discount > 100)
-    );
-    if (invalidItems.length > 0) {
-      toast.error(
-        `Please fill in all item details (name, rate, quantity${form.isTaxInvoice ? ", and HSN/SAC" : ""
-        }) and ensure percentage discounts are not above 100.`
+      // Validate items
+      const invalidItems = form.items.filter(
+        (item) =>
+          !item.name ||
+          !item.rate ||
+          !item.quantity ||
+          (form.isTaxInvoice && !item.hsn) ||
+          (item.discountType === "percentage" && item.discount > 100)
       );
-      setIsSubmitting(false);
-      return;
-    }
+      if (invalidItems.length > 0) {
+        toast.error(
+          `Please fill in all item details (name, rate, quantity${form.isTaxInvoice ? ", and HSN/SAC" : ""
+          }) and ensure percentage discounts are not above 100.`
+        );
+        setIsSubmitting(false);
+        return;
+      }
 
-    // Validate invoice discount
-    const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
-      form.items
-    );
-    const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
-      subtotalAfterItemDiscounts,
-      form.discount
-    );
-    if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
-      toast.error(
-        "Invoice discount cannot exceed subtotal after item discounts."
+      // Validate invoice discount
+      const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
+        form.items
       );
-      setIsSubmitting(false);
-      return;
+      const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
+        subtotalAfterItemDiscounts,
+        form.discount
+      );
+      if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
+        toast.error(
+          "Invoice discount cannot exceed subtotal after item discounts."
+        );
+        setIsSubmitting(false);
+        return;
+      }
     }
 
     try {
@@ -935,7 +950,7 @@ const PerformaInvoiceForm = ({
         signature: form.signature,
         amount: calculateTotalAmount(form.items, form.discount),
         discount: form.discount,
-        status: form.status,
+        status: statusValue,
         items: form.items.map((item) => ({
           itemId: item._id,
           name: item.name,
@@ -957,10 +972,10 @@ const PerformaInvoiceForm = ({
           `/performa-invoices/${editingPerformaInvoice._id}`,
           payload
         );
-        toast.success("Pro Forma Invoice updated successfully!");
+        toast.success(isDraft ? "Saved as draft!" : "Pro Forma Invoice updated successfully!");
       } else {
         await API.post("/performa-invoices", payload);
-        toast.success("Pro Forma Invoice created successfully!");
+        toast.success(isDraft ? "Saved as draft!" : "Pro Forma Invoice created successfully!");
       }
 
       setHasUnsavedChanges(false);
@@ -1014,11 +1029,17 @@ const PerformaInvoiceForm = ({
   };
 
   const handleSaveAndExit = async () => {
-    await handleSubmit(new Event("submit"));
+    await submitPerformaInvoice("Pending");
     if (!toastMessage.includes("Failed")) {
       setShowConfirmDialog(false);
       onClose();
     }
+  };
+
+  const handleSaveDraft = () => submitPerformaInvoice("Draft");
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    submitPerformaInvoice(form.status || "Draft");
   };
 
   const handleClose = () => {
@@ -1118,6 +1139,21 @@ const PerformaInvoiceForm = ({
                   ? "Edit Pro Forma Invoice"
                   : "Create Pro Forma Invoice"}
               </h2>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={isSubmitting}
+                className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
+              >
+                {isSubmitting ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <FileText className="w-3.5 h-3.5" />
+                )}
+                Save as Draft
+              </button>
             </div>
           </div>
 

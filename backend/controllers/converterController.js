@@ -820,6 +820,59 @@ exports.bulkConvertQuotationToProforma = async (req, res) => {
   res.status(200).json({ successfulIds, failedIds });
 };
 
+exports.bulkConvertInvoiceToDeliveryChallan = async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: 'ids array required' });
+
+  const successfulIds = [];
+  const failedIds = [];
+
+  for (const id of ids) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const invoice = await Invoice.findOne({ _id: id, organization: req.user.organization }).session(session);
+      if (!invoice) {
+        throw new Error('Invoice not found or unauthorized');
+      }
+
+      const deliveryChallanNumber = await generateDocumentNumber('DC', invoice.organization, session);
+
+      const newId = new mongoose.Types.ObjectId();
+      const deliveryChallanData = {
+        ...invoice.toObject(),
+        _id: newId,
+        deliveryChallanNumber,
+        status: 'Draft',
+        items: invoice.items.map(item => ({
+          ...item,
+          hsn: undefined,
+        })),
+        createdAt: undefined,
+        updatedAt: undefined,
+      };
+      delete deliveryChallanData.invoiceNumber;
+      delete deliveryChallanData.isTaxInvoice;
+      delete deliveryChallanData.receiverGSTIN;
+
+      const deliveryChallan = new DeliveryChallan(deliveryChallanData);
+      await deliveryChallan.save({ session });
+
+      await Invoice.findByIdAndDelete(id).session(session);
+
+      await session.commitTransaction();
+      session.endSession();
+      successfulIds.push(id);
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      failedIds.push(id);
+    }
+  }
+
+  res.status(200).json({ successfulIds, failedIds });
+};
+
 exports.bulkConvertProformaToTaxInvoice = async (req, res) => {
   const { ids } = req.body;
   if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: 'ids array required' });

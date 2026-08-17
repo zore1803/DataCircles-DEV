@@ -67,6 +67,16 @@ router.get(
   invoiceController.downloadInvoice
 );
 
+// POST /api/invoices/bulk-email-grouped — must be before /:id routes
+router.post(
+  "/bulk-email-grouped",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.bulkEmailGrouped
+);
+
 // DELETE /api/invoices/:id (Delete - requires write permission)
 router.delete(
   "/:id",
@@ -97,25 +107,9 @@ router.put(
   invoiceController.updateStatus
 );
 
-// routes/invoiceRoutes.js (append before module.exports)
-router.patch(
-  "/number/:id",
-  requireAuth,
-  subscriptionGate,
-  restrictByPlan("invoices", "write"),
-  checkPermission("invoices", "read-write"),
-  invoiceController.updateInvoiceNumber
-);
-
-router.post(
-  "/:id/email",
-  requireAuth,
-  subscriptionGate,
-  restrictByPlan("invoices", "write"),
-  checkPermission("invoices", "read-write"),
-  invoiceController.sendInvoiceEmail
-);
-
+// POST /api/invoices/bulk-status, /api/invoices/bulk-signature — bring
+// Invoice up to parity with Quotation/Proforma/Delivery Challan, which
+// already had these for the Accounting page's bulk toolbar.
 router.post(
   "/bulk-status",
   requireAuth,
@@ -134,13 +128,24 @@ router.post(
   invoiceController.bulkUpdateSignature
 );
 
+// routes/invoiceRoutes.js (append before module.exports)
+router.patch(
+  "/number/:id",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.updateInvoiceNumber
+);
+
+// POST /api/invoices/:id/payments (Record a payment - requires write permission)
 router.post(
   "/:id/payments",
   requireAuth,
   subscriptionGate,
   restrictByPlan("invoices", "write"),
   checkPermission("invoices", "read-write"),
-  invoiceController.recordPayment
+  invoiceController.addInvoicePayment
 );
 
 module.exports = router;

@@ -23,6 +23,7 @@ import QuickDealForm from "../deal/QuickDealForm";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import toast from "react-hot-toast";
 import { computeDocument } from "../../../../shared/documentTemplates";
+import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 
 import SearchIcon from "../common/SearchIcon";
 // Function to convert number to words
@@ -344,14 +345,26 @@ const InvoiceFormFull = ({
   onExitFullWidth,
   conversionData = null,
   defaultDueDateDays = null,
+  defaultNotesByType = {},
+  defaultTermsByType = {},
+  defaultNotesFlat = "",
+  defaultTermsFlat = "",
+  documentTypeSettings = {},
 }) => {
+  const defaultNotesForNew = defaultNotesByType.tax !== undefined
+    ? defaultNotesByType.tax
+    : (defaultNotesFlat || PREDEFINED_NOTES.tax || "");
+  const defaultTermsForNew = defaultTermsByType.tax !== undefined
+    ? defaultTermsByType.tax
+    : (defaultTermsFlat || PREDEFINED_TERMS.tax || "");
   const [form, setForm] = useState({
     deal: "",
     date: "",
     dueDate: "",
     reference: "",
     receiverGSTIN: "",
-    invoicePrefix: "EST-",
+    invoicePrefix: documentTypeSettings.invoice?.prefix || "INV-",
+    invoiceSuffix: documentTypeSettings.invoice?.suffix || "",
     invoiceNumber: "",
     billingAddress: emptyAddress(),
     shippingAddress: emptyAddress(),
@@ -370,8 +383,8 @@ const InvoiceFormFull = ({
     transactionType: "intra",
     isRoundOff: false,
     hideTotals: false,
-    notes: "",
-    terms: "",
+    notes: defaultNotesForNew,
+    terms: defaultTermsForNew,
     attachments: [],
     bankDetails: "",
     signature: "",
@@ -511,7 +524,8 @@ const InvoiceFormFull = ({
           : "",
         receiverGSTIN: sourceData.receiverGSTIN || "",
         reference: sourceData.reference || "",
-        invoicePrefix: sourceData.invoicePrefix || "EST-",
+        invoicePrefix: sourceData.invoicePrefix || documentTypeSettings.invoice?.prefix || "INV-",
+        invoiceSuffix: sourceData.invoiceSuffix || documentTypeSettings.invoice?.suffix || "",
         invoiceNumber: sourceData.invoiceNumber || "",
         billingAddress: { ...emptyAddress(), ...(sourceData.billingAddress || {}) },
         shippingAddress: { ...emptyAddress(), ...(sourceData.shippingAddress || {}) },
@@ -554,7 +568,8 @@ const InvoiceFormFull = ({
         dueDate: "",
         receiverGSTIN: "",
         reference: "",
-        invoicePrefix: "EST-",
+        invoicePrefix: documentTypeSettings.invoice?.prefix || "INV-",
+        invoiceSuffix: documentTypeSettings.invoice?.suffix || "",
         invoiceNumber: "",
         billingAddress: emptyAddress(),
         shippingAddress: emptyAddress(),
@@ -567,8 +582,8 @@ const InvoiceFormFull = ({
         isTaxInvoice: true,
         gstRate: 18,
         transactionType: "intra",
-        notes: "",
-        terms: "",
+        notes: defaultNotesForNew,
+        terms: defaultTermsForNew,
         attachments: [],
         bankDetails: "",
         signature: "",
@@ -892,9 +907,9 @@ const InvoiceFormFull = ({
     return gstinRegex.test(gstin);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const submitInvoice = async (statusValue) => {
     setIsSubmitting(true);
+    const isDraft = statusValue === "Draft";
 
     if (!form.deal) {
       toast.error("Deal is required.");
@@ -908,53 +923,57 @@ const InvoiceFormFull = ({
       return;
     }
 
-    if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
-      toast.error(
-        "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
-      );
-      setIsSubmitting(false);
-      return;
-    }
+    // A quick draft only needs enough to identify the document; full GSTIN and
+    // item validation apply once it's actually being created for real.
+    if (!isDraft) {
+      if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
+        toast.error(
+          "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
+        );
+        setIsSubmitting(false);
+        return;
+      }
 
-    // items now starts empty (no blank starter row) so this has to be
-    // checked explicitly — an empty array otherwise sails right through
-    // the invalidItems filter below since filtering nothing finds nothing.
-    if (form.items.length === 0) {
-      toast.error("Add at least one product or service.");
-      setIsSubmitting(false);
-      return;
-    }
+      // items now starts empty (no blank starter row) so this has to be
+      // checked explicitly — an empty array otherwise sails right through
+      // the invalidItems filter below since filtering nothing finds nothing.
+      if (form.items.length === 0) {
+        toast.error("Add at least one product or service.");
+        setIsSubmitting(false);
+        return;
+      }
 
-    const invalidItems = form.items.filter(
-      (item) =>
-        !item.name ||
-        !item.rate ||
-        !item.quantity ||
-        (form.isTaxInvoice && !item.hsn) ||
-        (item.discountType === "percentage" && item.discount > 100)
-    );
-    if (invalidItems.length > 0) {
-      toast.error(
-        `Please fill in all item details (name, rate, quantity${form.isTaxInvoice ? ", and HSN/SAC" : ""
-        }) and ensure percentage discounts are not above 100.`
+      const invalidItems = form.items.filter(
+        (item) =>
+          !item.name ||
+          !item.rate ||
+          !item.quantity ||
+          (form.isTaxInvoice && !item.hsn) ||
+          (item.discountType === "percentage" && item.discount > 100)
       );
-      setIsSubmitting(false);
-      return;
-    }
+      if (invalidItems.length > 0) {
+        toast.error(
+          `Please fill in all item details (name, rate, quantity${form.isTaxInvoice ? ", and HSN/SAC" : ""
+          }) and ensure percentage discounts are not above 100.`
+        );
+        setIsSubmitting(false);
+        return;
+      }
 
-    const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
-      form.items
-    );
-    const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
-      subtotalAfterItemDiscounts,
-      form.discount
-    );
-    if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
-      toast.error(
-        "Invoice discount cannot exceed subtotal after item discounts."
+      const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
+        form.items
       );
-      setIsSubmitting(false);
-      return;
+      const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
+        subtotalAfterItemDiscounts,
+        form.discount
+      );
+      if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
+        toast.error(
+          "Invoice discount cannot exceed subtotal after item discounts."
+        );
+        setIsSubmitting(false);
+        return;
+      }
     }
 
     try {
@@ -964,20 +983,21 @@ const InvoiceFormFull = ({
         dueDate: form.dueDate,
         reference: form.reference,
         invoicePrefix: form.invoicePrefix,
+        invoiceSuffix: form.invoiceSuffix,
         invoiceNumber: form.invoiceNumber,
         receiverGSTIN: form.receiverGSTIN,
         billingAddress: form.billingAddress,
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
         signature: form.signature,
         amount: (() => {
-          let t = form.isTaxInvoice 
-            ? computeDocument(form, "invoice").grandTotal 
+          let t = form.isTaxInvoice
+            ? computeDocument(form, "invoice").grandTotal
             : calculateTotalAmount(form.items, form.discount);
           return form.isRoundOff ? Math.round(t) : t;
         })(),
         isRoundOff: form.isRoundOff,
         discount: form.discount,
-        status: form.status,
+        status: statusValue,
         items: form.items.map((item) => ({
           itemId: item._id,
           name: item.name,
@@ -998,10 +1018,10 @@ const InvoiceFormFull = ({
 
       if (editingInvoice) {
         await API.put(`/invoices/${editingInvoice._id}`, payload);
-        toast.success("Invoice updated successfully!");
+        toast.success(isDraft ? "Saved as draft!" : "Invoice updated successfully!");
       } else {
         await API.post("/invoices", payload);
-        toast.success("Invoice created successfully!");
+        toast.success(isDraft ? "Saved as draft!" : "Invoice created successfully!");
       }
 
       setHasUnsavedChanges(false);
@@ -1041,11 +1061,17 @@ const InvoiceFormFull = ({
   };
 
   const handleSaveAndExit = async () => {
-    await handleSubmit(new Event("submit"));
+    await submitInvoice("Pending");
     if (!toastMessage.includes("Failed")) {
       setShowConfirmDialog(false);
       onClose();
     }
+  };
+
+  const handleSaveDraft = () => submitInvoice("Draft");
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    submitInvoice(form.status || "Draft");
   };
 
   const handleClose = () => {
@@ -1183,6 +1209,18 @@ const InvoiceFormFull = ({
                     }}
                     className="w-24 px-3 py-2 text-sm font-semibold text-gray-900 focus:outline-none"
                   />
+                  <input
+                    type="text"
+                    placeholder="Suffix"
+                    value={form.invoiceSuffix}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, invoiceSuffix: e.target.value }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    title="Invoice number suffix (optional)"
+                    aria-label="Invoice number suffix"
+                    className="w-20 px-3 py-2 text-sm font-semibold text-gray-700 bg-gray-50 border-l border-gray-300 focus:outline-none focus:bg-white"
+                  />
                 </div>
               </div>
             </div>
@@ -1211,11 +1249,16 @@ const InvoiceFormFull = ({
                 Settings
               </button>
               <button
-                type="submit"
+                type="button"
+                onClick={handleSaveDraft}
                 disabled={isSubmitting}
                 className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
-                <FileText className="w-3.5 h-3.5" />
+                {isSubmitting ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <FileText className="w-3.5 h-3.5" />
+                )}
                 Save as Draft
               </button>
             </div>
