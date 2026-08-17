@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const DocumentSettings = require('../models/DocumentSettings');
 
 const DEFAULT_PREFIX = 'INV-';
@@ -85,7 +86,70 @@ function normalizeInvoiceNumberSettings(settings = {}) {
     defaultNotesByType: normalizeFooterMap(settings.defaultNotesByType),
     defaultTermsByType: normalizeFooterMap(settings.defaultTermsByType),
     documentTypes: Object.entries(DEFAULT_DOCUMENT_TYPES).map(([key, value]) => ({ key, label: value.label })),
+    defaultDueDateDays: settings.defaultDueDateDays != null ? Number(settings.defaultDueDateDays) : null,
+    whatsappTemplate: settings.whatsappTemplate != null ? String(settings.whatsappTemplate) : null,
+    whatsappLine1: settings.whatsappLine1 != null ? String(settings.whatsappLine1) : 'Thanks for your business!',
+    whatsappLine2: settings.whatsappLine2 != null ? String(settings.whatsappLine2) : '',
+    smsTemplate: settings.smsTemplate != null ? String(settings.smsTemplate) : null,
+    emailSubjectTemplate: settings.emailSubjectTemplate != null ? String(settings.emailSubjectTemplate) : null,
+    emailBodyTemplate: settings.emailBodyTemplate != null ? String(settings.emailBodyTemplate) : null,
+    whatsappTemplates: normalizeTemplateArray(settings.whatsappTemplates),
+    smsTemplates: normalizeTemplateArray(settings.smsTemplates),
+    emailTemplates: normalizeTemplateArray(settings.emailTemplates),
   };
+}
+
+function normalizeTemplateArray(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map((t) => ({ ...t }));
+}
+
+// One-time migration: an organization that customized the old single-slot
+// whatsappLine1/2, smsTemplate, or email templates before the template
+// library existed would otherwise lose that customization the first time the
+// new UI runs (empty array = "nothing saved"). Seeds one named entry per
+// channel from the legacy fields so it carries forward, then returns whether
+// anything changed so the caller knows to persist it.
+function seedTemplateLibrariesFromLegacy(settings) {
+  let changed = false;
+  const out = {};
+
+  if (!Array.isArray(settings.whatsappTemplates) || settings.whatsappTemplates.length === 0) {
+    out.whatsappTemplates = [{
+      id: crypto.randomUUID(),
+      name: 'Default',
+      line1: settings.whatsappLine1 || 'Thanks for your business!',
+      line2: settings.whatsappLine2 || '',
+      isDefault: true,
+      createdAt: new Date(),
+    }];
+    changed = true;
+  }
+
+  if (!Array.isArray(settings.smsTemplates) || settings.smsTemplates.length === 0) {
+    out.smsTemplates = [{
+      id: crypto.randomUUID(),
+      name: 'Default',
+      body: settings.smsTemplate || 'Your {docType} #{number} from {company} is ready. View & Download: {link}',
+      isDefault: true,
+      createdAt: new Date(),
+    }];
+    changed = true;
+  }
+
+  if (!Array.isArray(settings.emailTemplates) || settings.emailTemplates.length === 0) {
+    out.emailTemplates = [{
+      id: crypto.randomUUID(),
+      name: 'Default',
+      subject: settings.emailSubjectTemplate || '{docType} {number} from {company}',
+      body: settings.emailBodyTemplate || 'Hi {customerName},\n\nPlease find attached your {docType} #{number}.\n\nYou can also view and download it online:\n{link}\n\nThank you for your business!\n\nBest regards,\n{company}',
+      isDefault: true,
+      createdAt: new Date(),
+    }];
+    changed = true;
+  }
+
+  return { changed, fields: out };
 }
 
 function buildInvoiceNumber({ prefix, number, suffix }) {
@@ -256,6 +320,38 @@ async function saveDocumentSettingsForOrganization(organizationId, payload = {})
       ...normalizeFooterMap(payload.defaultTermsByType),
     };
   }
+  if (payload.defaultDueDateDays !== undefined) {
+    settingsPayload.defaultDueDateDays = payload.defaultDueDateDays != null ? Number(payload.defaultDueDateDays) : null;
+  }
+  if (payload.whatsappTemplate !== undefined) {
+    settingsPayload.whatsappTemplate = (payload.whatsappTemplate || '').toString();
+  }
+  if (payload.whatsappLine1 !== undefined) {
+    settingsPayload.whatsappLine1 = (payload.whatsappLine1 || '').toString();
+  }
+  if (payload.whatsappLine2 !== undefined) {
+    settingsPayload.whatsappLine2 = (payload.whatsappLine2 || '').toString();
+  }
+  if (payload.smsTemplate !== undefined) {
+    settingsPayload.smsTemplate = (payload.smsTemplate || '').toString();
+  }
+  if (payload.emailSubjectTemplate !== undefined) {
+    settingsPayload.emailSubjectTemplate = (payload.emailSubjectTemplate || '').toString();
+  }
+  if (payload.emailBodyTemplate !== undefined) {
+    settingsPayload.emailBodyTemplate = (payload.emailBodyTemplate || '').toString();
+  }
+  // Each array is sent whole by the Settings UI (it edits its local copy,
+  // then saves the full list), so a plain replace is correct here — no merge.
+  if (payload.whatsappTemplates !== undefined) {
+    settingsPayload.whatsappTemplates = Array.isArray(payload.whatsappTemplates) ? payload.whatsappTemplates : [];
+  }
+  if (payload.smsTemplates !== undefined) {
+    settingsPayload.smsTemplates = Array.isArray(payload.smsTemplates) ? payload.smsTemplates : [];
+  }
+  if (payload.emailTemplates !== undefined) {
+    settingsPayload.emailTemplates = Array.isArray(payload.emailTemplates) ? payload.emailTemplates : [];
+  }
 
   if (existing) {
     Object.assign(existing, settingsPayload);
@@ -280,4 +376,5 @@ module.exports = {
   resolveInvoiceNumber,
   getDocumentSettingsForOrganization,
   saveDocumentSettingsForOrganization,
+  seedTemplateLibrariesFromLegacy,
 };

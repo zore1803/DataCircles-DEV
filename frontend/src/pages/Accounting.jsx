@@ -18,7 +18,6 @@ import {
   Pencil,
   Eye,
   Download,
-  Send,
   Trash2,
   Repeat,
   X,
@@ -40,15 +39,24 @@ import {
   Mail,
   Copy,
   MessageSquare,
+  Printer,
+  PenTool,
+  Eraser,
+  Lock,
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  List,
+  ListOrdered,
+  Link2,
+  Layers,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
-import SearchIcon from "../components/common/SearchIcon";
-import AppToaster from "../components/AppToaster";
 import toast from "react-hot-toast";
-import { useSubscription } from "../contexts/SubscriptionContext";
-import { hasMinPlan } from "../utils/subscriptionHelpers";
-import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
+import AppToaster from "../components/AppToaster";
+import SearchIcon from "../components/common/SearchIcon";
 import HighlightText from "../components/common/HighlightText";
 import { formatNumberFixed } from "../utils/numberFormatter";
 import InvoiceForm, { CreateInvoicePanel } from "../components/invoice/InvoiceForm";
@@ -56,6 +64,7 @@ import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceFo
 import { CreatePerformaPanel } from "../components/PerformaInvoice/PerformaInvoiceForm";
 import PerformaInvoiceFormFull from "../components/PerformaInvoice/PerformaInvoiceFormFull";
 import QuotationForm from "../components/quotation/QuotationForm";
+import ShareModal from "../components/common/ShareModal";
 import { CreateQuotationPanel } from "../components/quotation/QuotationForm";
 import InvoiceFormFull from "../components/invoice/InvoiceFormFull";
 import DeliveryChallanForm from "../components/deliveryChallan/DeliveryChallanForm";
@@ -338,12 +347,12 @@ const InvoiceViewer = ({
   type,
   onEdit,
   onDownload,
-  onSend,
   doc,
   onConvert,
 }) => {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [openConvertMenu, setOpenConvertMenu] = useState(null);
+  const [showShareModal, setShowShareModal] = useState(false);
   // Standard Indian GST invoice practice: the same document is printed as
   // three otherwise-identical copies, distinguished only by this label —
   // "ORIGINAL FOR RECIPIENT" for the customer, "DUPLICATE FOR TRANSPORTER"
@@ -436,94 +445,17 @@ const InvoiceViewer = ({
               >
                 <Download className="w-4 h-4" />
               </button>
-              <button
-                title="Send"
-                onClick={onSend}
-                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-              >
-                <Send className="w-4 h-4" />
-              </button>
               <div className="relative">
                 <button
                   title="Share"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setOpenConvertMenu(openConvertMenu === "share" ? null : "share");
+                    setShowShareModal(true);
                   }}
                   className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                 >
                   <Share2 className="w-4 h-4" />
                 </button>
-                {openConvertMenu === "share" && (
-                  <div className="absolute right-0 mt-1 w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                    <div className="py-1">
-                      {[
-                        {
-                          label: "WhatsApp",
-                          icon: MessageCircle,
-                          iconClass: "text-green-600",
-                          onClick: () => {
-                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
-                            const text = `${title} #${docNumber || ""}\n${url}`;
-                            window.open(
-                              `https://wa.me/?text=${encodeURIComponent(text)}`,
-                              "_blank",
-                              "noopener,noreferrer"
-                            );
-                          },
-                        },
-                        {
-                          label: "Email",
-                          icon: Mail,
-                          iconClass: "text-blue-600",
-                          onClick: () => {
-                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
-                            const subject = `${title} #${docNumber || ""}`;
-                            window.location.href = `mailto:?subject=${encodeURIComponent(
-                              subject
-                            )}&body=${encodeURIComponent(url)}`;
-                          },
-                        },
-                        {
-                          label: "SMS",
-                          icon: MessageSquare,
-                          iconClass: "text-indigo-600",
-                          onClick: () => {
-                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
-                            const text = `${title} #${docNumber || ""} - ${url}`;
-                            window.location.href = `sms:?body=${encodeURIComponent(text)}`;
-                          },
-                        },
-                        {
-                          label: "Copy Link",
-                          icon: Copy,
-                          iconClass: "text-gray-600",
-                          onClick: async () => {
-                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
-                            try {
-                              await navigator.clipboard.writeText(url);
-                              toast.success("Link copied to clipboard");
-                            } catch {
-                              toast.error("Failed to copy link");
-                            }
-                          },
-                        },
-                      ].map((option) => (
-                        <button
-                          key={option.label}
-                          onClick={() => {
-                            option.onClick();
-                            setOpenConvertMenu(null);
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                        >
-                          <option.icon className={`w-4 h-4 ${option.iconClass}`} />
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
               <div className="relative">
                 <button
@@ -589,6 +521,13 @@ const InvoiceViewer = ({
           )}
         </div>
       </div>
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        documentLink={`${window.location.origin}/view/${apiPathFor(type)}/${id}`}
+        documentType={title}
+        documentNumber={docNumber}
+      />
     </div>
   );
 };
@@ -624,7 +563,6 @@ const Accounting = () => {
     hasPrevPage: false,
   };
 
-  const [deals, setDeals] = useState([]);
   const [documents, setDocuments] = useState({
     tax: [],
     performa: [],
@@ -935,15 +873,25 @@ const Accounting = () => {
 
   // UI state
   const [selectedIds, setSelectedIds] = useState([]);
-  const { subscription } = useSubscription();
-  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [editPanelDoc, setEditPanelDoc] = useState(null);
   const [conversionData, setConversionData] = useState(null);
   const [showQuickDealForm, setShowQuickDealForm] = useState(false);
+  const [deals, setDeals] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [defaultDueDateDays, setDefaultDueDateDays] = useState(null);
+  // Named template libraries loaded from Settings → Message Templates. Each
+  // entry is {id, name, ...content, isDefault}; the share menu picks the
+  // default automatically when there's only one, or lets the user choose
+  // when there are several.
+  const [waTemplatesList, setWaTemplatesList] = useState([]);
+  const [smsTemplatesList, setSmsTemplatesList] = useState([]);
+  const [emailTemplatesList, setEmailTemplatesList] = useState([]);
+  const [shareCompanyName, setShareCompanyName] = useState("");
+  // Which channel's template picker is expanded inside the share dropdown,
+  // or null to show the main WhatsApp/Email/SMS/Copy-Link list.
+  const [shareMenuChannel, setShareMenuChannel] = useState(null);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const searchInputRef = useRef(null);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -979,6 +927,21 @@ const Accounting = () => {
   const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false);
   const [bulkUpdateStatus, setBulkUpdateStatus] = useState("");
   const [bulkUpdating, setBulkUpdating] = useState(false);
+  const [showBulkEmailModal, setShowBulkEmailModal] = useState(false);
+  const [bulkShowMoreMenu, setBulkShowMoreMenu] = useState(false);
+  const [bulkEmailAddress, setBulkEmailAddress] = useState("");
+  const [bulkEmailSending, setBulkEmailSending] = useState(false);
+  const [shareMenu, setShareMenu] = useState(null); // { doc, type, x, y }
+  const [emailCompose, setEmailCompose] = useState(null); // { doc, type }
+  const [emailComposeTo, setEmailComposeTo] = useState("");
+  const [emailComposeSubject, setEmailComposeSubject] = useState("");
+  const [emailComposeBody, setEmailComposeBody] = useState("");
+  const [emailComposeSending, setEmailComposeSending] = useState(false);
+  const [emailTemplateOpen, setEmailTemplateOpen] = useState(false);
+  const [smsCompose, setSmsCompose] = useState(null); // { doc, type }
+  const [smsComposeTo, setSmsComposeTo] = useState("");
+  const [smsComposeBody, setSmsComposeBody] = useState("");
+  const [smsComposeSending, setSmsComposeSending] = useState(false);
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in-left entrance) — same as
   // the Companies page.
@@ -1109,7 +1072,27 @@ const Accounting = () => {
 
   useEffect(() => {
     fetchDeals();
+    fetchDocSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchDocSettings = useCallback(async () => {
+    try {
+      const [settingsRes, brandingRes] = await Promise.all([
+        API.get("/document-settings"),
+        API.get("/branding").catch(() => null),
+      ]);
+      const res = settingsRes;
+      if (res.data && res.data.defaultDueDateDays != null) {
+        setDefaultDueDateDays(res.data.defaultDueDateDays);
+      }
+      setWaTemplatesList(Array.isArray(res.data?.whatsappTemplates) ? res.data.whatsappTemplates : []);
+      setSmsTemplatesList(Array.isArray(res.data?.smsTemplates) ? res.data.smsTemplates : []);
+      setEmailTemplatesList(Array.isArray(res.data?.emailTemplates) ? res.data.emailTemplates : []);
+      if (brandingRes?.data?.companyName) setShareCompanyName(brandingRes.data.companyName);
+    } catch (err) {
+      console.error("Failed to load doc settings in accounting", err);
+    }
   }, []);
 
   const fetchDeals = useCallback(async () => {
@@ -1189,10 +1172,6 @@ const Accounting = () => {
   };
 
   const handleSelectAll = () => {
-    if (!hasBulkAccess) {
-      setShowUpgradeModal(true);
-      return;
-    }
     setSelectedIds((prev) =>
       prev.length === currentDocuments.length && currentDocuments.length > 0
         ? []
@@ -1201,10 +1180,6 @@ const Accounting = () => {
   };
 
   const handleSelectOne = (id) => {
-    if (!hasBulkAccess) {
-      setShowUpgradeModal(true);
-      return;
-    }
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
@@ -1303,6 +1278,75 @@ const Accounting = () => {
       setLoading((prev) => ({ ...prev, [type]: false }));
       setShowBulkUpdateModal(false);
       setBulkUpdateStatus("");
+    }
+  };
+
+  const handleBulkDownloadPdf = async () => {
+    if (selectedIds.length === 0) return;
+    const type = activeTab;
+    toast(`Downloading ${selectedIds.length} PDF${selectedIds.length !== 1 ? "s" : ""}...`);
+    for (const id of selectedIds) {
+      try {
+        const response = await API.get(`/${apiPathFor(type)}/download/${id}`, {
+          responseType: "blob",
+        });
+        const url = window.URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${docNameFor(type)}-${id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch {
+        toast.error(`Failed to download PDF for ${id}`);
+      }
+    }
+  };
+
+  const handleBulkSendEmail = async () => {
+    if (selectedIds.length === 0) return;
+    const type = activeTab;
+    setBulkEmailSending(true);
+    const results = await Promise.allSettled(
+      selectedIds.map((id) =>
+        API.post(`/${apiPathFor(type)}/${id}/email`, { email: bulkEmailAddress })
+      )
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed === 0) {
+      toast.success(`Sent ${results.length} email${results.length !== 1 ? "s" : ""}`);
+    } else {
+      toast.error(`Failed to send ${failed} of ${selectedIds.length} emails`);
+    }
+    setBulkEmailSending(false);
+    setShowBulkEmailModal(false);
+    setBulkEmailAddress("");
+  };
+
+  const handleBulkConvertToInvoice = async () => {
+    if (selectedIds.length === 0) return;
+    const confirmed = window.confirm(
+      `Convert ${selectedIds.length} quotation${selectedIds.length !== 1 ? "s" : ""} to invoice${selectedIds.length !== 1 ? "s" : ""}? Each quotation will become a separate invoice and its status will be set to Void.`
+    );
+    if (!confirmed) return;
+    // Must run sequentially — parallel transactions conflict on the shared INV counter document
+    let failed = 0;
+    for (const id of selectedIds) {
+      try {
+        await API.post(`/converter/quotations/convert-to-tax/${id}`);
+      } catch {
+        failed++;
+      }
+    }
+    await fetchData("quotation");
+    await fetchData("tax");
+    setSelectedIds([]);
+    const succeeded = selectedIds.length - failed;
+    if (failed === 0) {
+      toast.success(`Converted ${succeeded} quotation${succeeded !== 1 ? "s" : ""} to invoice${succeeded !== 1 ? "s" : ""}`);
+    } else {
+      toast.error(`Failed to convert ${failed} of ${selectedIds.length} quotations`);
     }
   };
 
@@ -1614,11 +1658,26 @@ const Accounting = () => {
               <Download className="w-4 h-4" />
             </button>
             <button
-              title="Send"
-              onClick={() => handleSend(doc._id, activeTab)}
-              className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+              title="Share"
+              onClick={(e) => {
+                e.stopPropagation();
+                const rect = e.currentTarget.getBoundingClientRect();
+                const zoom = parseFloat(document.documentElement.style.zoom) || 1;
+                // Convert visual pixels → CSS pixels (undo zoom), then right-align dropdown
+                const cssRight = rect.right / zoom;
+                const cssBottom = rect.bottom / zoom;
+                const DROPDOWN_W = 208; // w-52 = 13rem = 208px
+                setShareMenu({
+                  doc,
+                  type: activeTab,
+                  x: Math.max(4, cssRight - DROPDOWN_W),
+                  y: cssBottom + 6,
+                });
+                setShareMenuChannel(null);
+              }}
+              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
             >
-              <Send className="w-4 h-4" />
+              <Share2 className="w-4 h-4" />
             </button>
             <div className="relative">
               <button
@@ -1733,6 +1792,86 @@ const Accounting = () => {
                   <Pencil className="w-4 h-4 text-blue-600" />
                   Bulk Update
                 </button>
+                <button
+                  onClick={handleBulkDownloadPdf}
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  <Download className="w-4 h-4 text-indigo-600" />
+                  Download PDFs
+                </button>
+                <button
+                  onClick={() => setShowBulkEmailModal(true)}
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  <Mail className="w-4 h-4 text-blue-600" />
+                  Send Email
+                </button>
+                {activeTab === "quotation" && (
+                  <button
+                    onClick={handleBulkConvertToInvoice}
+                    className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  >
+                    <Repeat className="w-4 h-4 text-green-600" />
+                    Convert to Invoice
+                  </button>
+                )}
+                <div className="relative flex items-center">
+                  <button
+                    onClick={() => setBulkShowMoreMenu(!bulkShowMoreMenu)}
+                    className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  >
+                    <MoreVertical className="w-4 h-4 text-gray-600" />
+                    More
+                  </button>
+                  {bulkShowMoreMenu && (
+                    <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 shadow-xl rounded-lg z-50 overflow-hidden">
+                      {activeTab === "tax" && (
+                        <button
+                          onClick={() => { setBulkShowMoreMenu(false); toast.error("Record Payment coming soon"); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
+                        >
+                          <IndianRupee className="w-4 h-4 text-emerald-600" />
+                          Record Payment
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setBulkShowMoreMenu(false); toast.error("Print coming soon"); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
+                      >
+                        <Printer className="w-4 h-4 text-gray-600" />
+                        Print
+                      </button>
+                      <button
+                        onClick={() => { setBulkShowMoreMenu(false); toast.error("Change Signature coming soon"); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
+                      >
+                        <PenTool className="w-4 h-4 text-purple-600" />
+                        Change Signature
+                      </button>
+                      <button
+                        onClick={() => { setBulkShowMoreMenu(false); toast.error("Remove Signature coming soon"); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors border-b border-gray-100"
+                      >
+                        <Eraser className="w-4 h-4 text-red-600" />
+                        Remove Signature
+                      </button>
+                      <button
+                        onClick={() => { setBulkShowMoreMenu(false); toast.info("Digital signing feature coming soon. You will be able to send documents for e-signature here."); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
+                      >
+                        <FileText className="w-4 h-4 text-blue-600" />
+                        Digital Sign
+                      </button>
+                      <button
+                        onClick={() => { setBulkShowMoreMenu(false); toast.error("Merge documents coming soon"); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                      >
+                        <Layers className="w-4 h-4 text-indigo-600" />
+                        Merge
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={() => setShowBulkDeleteModal(true)}
                   disabled={bulkDeleting}
@@ -1876,8 +2015,8 @@ const Accounting = () => {
                   <SlidersHorizontal
                     strokeWidth={2.5}
                     className={`w-4 h-4 ${filterStatuses[activeTab]
-                        ? "text-[#0085FF]"
-                        : "text-gray-800"
+                      ? "text-[#0085FF]"
+                      : "text-gray-800"
                       }`}
                   />
                 </button>
@@ -2486,11 +2625,12 @@ const Accounting = () => {
         {/* Two-pane create/edit screen — each document type uses its own
             thin wrapper around the shared CreateInvoicePanel. */}
         {showCreatePanel && (() => {
+          const panelKey = `${activeTab}-${editPanelDoc?._id || "new"}`;
           const panelProps = {
-            key: `${activeTab}-${editPanelDoc?._id || "new"}`,
             deals,
             initialDoc: editPanelDoc,
             conversionData,
+            defaultDueDateDays,
             onFullView: (doc) => handleView(doc, activeTab),
             onClose: () => {
               setShowCreatePanel(false);
@@ -2525,6 +2665,7 @@ const Accounting = () => {
                 fetchData={() => fetchData("tax")}
                 editingInvoice={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
+                defaultDueDateDays={defaultDueDateDays}
                 onPreview={(formData) => {
                   if (!formData.style) {
                     toast.error("Please select an invoice style to preview.");
@@ -2536,9 +2677,10 @@ const Accounting = () => {
                 }}
               />
             ) : (
-              <CreateInvoicePanel 
-                {...panelProps} 
-                type="tax" 
+              <CreateInvoicePanel
+                key={panelKey}
+                {...panelProps}
+                type="tax"
                 onRequestFullWidth={() => setInvoiceFullWidth(true)}
               />
             );
@@ -2554,6 +2696,7 @@ const Accounting = () => {
                 fetchData={() => fetchData("quotation")}
                 editingQuotation={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
+                defaultDueDateDays={defaultDueDateDays}
                 onPreview={(formData) => {
                   if (!formData.style) {
                     toast.error("Please select a Quotation style to preview.");
@@ -2566,6 +2709,7 @@ const Accounting = () => {
               />
             ) : (
               <CreateQuotationPanel
+                key={panelKey}
                 {...panelProps}
                 onRequestFullWidth={() => setQuotationFullWidth(true)}
               />
@@ -2579,6 +2723,7 @@ const Accounting = () => {
                 fetchData={() => fetchData("performa")}
                 editingPerformaInvoice={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
+                defaultDueDateDays={defaultDueDateDays}
                 onPreview={(formData) => {
                   if (!formData.style) {
                     toast.error("Please select a Pro Forma invoice style to preview.");
@@ -2590,8 +2735,9 @@ const Accounting = () => {
                 }}
               />
             ) : (
-              <CreatePerformaPanel 
-                {...panelProps} 
+              <CreatePerformaPanel
+                key={panelKey}
+                {...panelProps}
                 onRequestFullWidth={() => setPerformaFullWidth(true)}
               />
             );
@@ -2604,10 +2750,12 @@ const Accounting = () => {
                 fetchData={() => fetchData("deliveryChallan")}
                 editingDeliveryChallan={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
+                defaultDueDateDays={defaultDueDateDays}
               />
             ) : (
-              <CreateChallanPanel 
-                {...panelProps} 
+              <CreateChallanPanel
+                key={panelKey}
+                {...panelProps}
                 onRequestFullWidth={() => setChallanFullWidth(true)}
               />
             );
@@ -2640,6 +2788,7 @@ const Accounting = () => {
               }}
               fetchData={() => fetchData("tax")}
               editingInvoice={editing}
+              defaultDueDateDays={defaultDueDateDays}
               onExitFullWidth={() => setInvoiceFullWidth(false)}
               onPreview={(formData) => {
                 if (!formData.style) {
@@ -2662,6 +2811,7 @@ const Accounting = () => {
               }}
               fetchData={() => fetchData("tax")}
               editingInvoice={editing}
+              defaultDueDateDays={defaultDueDateDays}
               onRequestFullWidth={() => setInvoiceFullWidth(true)}
               onPreview={(formData) => {
                 if (!formData.style) {
@@ -2688,6 +2838,7 @@ const Accounting = () => {
               }}
               fetchData={() => fetchData("performa")}
               editingPerformaInvoice={editing}
+              defaultDueDateDays={defaultDueDateDays}
               onExitFullWidth={() => setPerformaFullWidth(false)}
               onPreview={(formData) => {
                 if (!formData.style) {
@@ -2710,6 +2861,7 @@ const Accounting = () => {
               }}
               fetchData={() => fetchData("performa")}
               editingPerformaInvoice={editing}
+              defaultDueDateDays={defaultDueDateDays}
               onRequestFullWidth={() => setPerformaFullWidth(true)}
               onPreview={(formData) => {
                 if (!formData.style) {
@@ -2734,6 +2886,7 @@ const Accounting = () => {
             }}
             fetchData={() => fetchData("quotation")}
             editingQuotation={editing}
+            defaultDueDateDays={defaultDueDateDays}
             onPreview={(formData) => {
               if (!formData.style) {
                 toast.error("Please select a Quotation style to preview.");
@@ -2758,6 +2911,7 @@ const Accounting = () => {
               }}
               fetchData={() => fetchData("deliveryChallan")}
               editingDeliveryChallan={editing}
+              defaultDueDateDays={defaultDueDateDays}
               onExitFullWidth={() => setChallanFullWidth(false)}
             />
           ) : (
@@ -2771,6 +2925,7 @@ const Accounting = () => {
               }}
               fetchData={() => fetchData("deliveryChallan")}
               editingDeliveryChallan={editing}
+              defaultDueDateDays={defaultDueDateDays}
               onRequestFullWidth={() => setChallanFullWidth(true)}
             />
           )
@@ -2825,7 +2980,6 @@ const Accounting = () => {
             handleEdit(viewerDoc, viewerType);
           }}
           onDownload={() => handleDownload(viewerId, viewerType)}
-          onSend={() => handleSend(viewerId, viewerType)}
           onConvert={(targetType) =>
             handleConvert(viewerId, viewerType, targetType)
           }
@@ -2924,6 +3078,442 @@ const Accounting = () => {
             </div>
           </div>
         )}
+        {shareMenu && createPortal(
+          <>
+            <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
+            <div
+              className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
+              style={{ top: shareMenu.y, left: shareMenu.x }}
+            >
+              {(() => {
+                const link = `${window.location.origin}/view/${apiPathFor(shareMenu.type)}/${shareMenu.doc._id}`;
+                const num = shareMenu.doc[numberKeyFor(shareMenu.type)];
+                const d = shareMenu.doc;
+                const t = shareMenu.type;
+                const customerName = d.deal?.contactPerson || d.deal?.title || "Customer";
+                const amt = d.amount != null ? `₹${Number(d.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "";
+                const closeMenu = () => { setShareMenu(null); setShareMenuChannel(null); };
+                const fillTpl = (tpl) => tpl
+                  .replace(/{customerName}/g, customerName)
+                  .replace(/{docType}/g, docNameFor(t))
+                  .replace(/{number}/g, num || "—")
+                  .replace(/{amount}/g, amt)
+                  .replace(/{link}/g, link)
+                  .replace(/{company}/g, shareCompanyName || "");
+
+                // Matches the fixed shape shown in Settings → Message Templates →
+                // WhatsApp preview: greeting/details/footer are fixed, only the
+                // two lines are user-editable.
+                const buildWaMsg = (tpl) => `Hello! *${customerName}*\n\n${tpl?.line1 || "Your " + docNameFor(t) + " is ready to view."}\n\nDocument No: ${num || "—"}\nTotal: ${amt}\nLink: ${link}${tpl?.line2 ? `\n\n${tpl.line2}` : ""}\n\nThanks\n*${shareCompanyName || "our team"}*`;
+                const buildSmsMsg = (tpl) => tpl?.body
+                  ? fillTpl(tpl.body)
+                  : `Your ${docNameFor(t)}${num ? ` #${num}` : ""} is ready. View & Download: ${link}`;
+                const buildEmailSubject = (tpl) => tpl?.subject ? fillTpl(tpl.subject) : `${docNameFor(t)} ${num || ""}`;
+                const buildEmailBody = (tpl) => tpl?.body
+                  ? fillTpl(tpl.body)
+                  : `Hi ${customerName},\n\nPlease find attached your ${docNameFor(t)}${num ? ` #${num}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`;
+
+                const channels = {
+                  whatsapp: {
+                    list: waTemplatesList,
+                    send: (tpl) => { window.open(`https://wa.me/?text=${encodeURIComponent(buildWaMsg(tpl))}`, "_blank"); closeMenu(); },
+                  },
+                  email: {
+                    list: emailTemplatesList,
+                    send: (tpl) => {
+                      setEmailComposeTo(d.deal?.contact?.email || d.deal?.company?.email || d.deal?.email || "");
+                      setEmailComposeSubject(buildEmailSubject(tpl));
+                      setEmailComposeBody(buildEmailBody(tpl));
+                      setEmailCompose({ doc: d, type: t });
+                      closeMenu();
+                    },
+                  },
+                  sms: {
+                    list: smsTemplatesList,
+                    send: (tpl) => {
+                      setSmsComposeTo(d.deal?.contact?.phone || d.deal?.company?.phone || d.deal?.phone || "");
+                      setSmsComposeBody(buildSmsMsg(tpl));
+                      setSmsCompose({ doc: d, type: t });
+                      closeMenu();
+                    },
+                  },
+                };
+
+                // 0 or 1 saved template → send straight away with it (or the
+                // built-in fallback). 2+ → let the user pick which one.
+                const openChannel = (channel) => {
+                  const { list, send } = channels[channel];
+                  if (list.length <= 1) send(list[0] || null);
+                  else setShareMenuChannel(channel);
+                };
+
+                if (shareMenuChannel) {
+                  const { list, send } = channels[shareMenuChannel];
+                  return (
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShareMenuChannel(null); }}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-gray-400 hover:text-gray-600 border-b border-gray-100"
+                      >
+                        ← Back
+                      </button>
+                      {list.map((tpl) => (
+                        <button
+                          key={tpl.id}
+                          onClick={(e) => { e.stopPropagation(); send(tpl); }}
+                          className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <span className="truncate">{tpl.name}</span>
+                          {tpl.isDefault && <span className="text-[10px] text-green-600 font-semibold flex-shrink-0">Default</span>}
+                        </button>
+                      ))}
+                    </>
+                  );
+                }
+
+                const items = [
+                  { label: "WhatsApp", icon: <MessageCircle className="w-4 h-4 text-green-600" />, onClick: () => openChannel("whatsapp") },
+                  { label: "Email", icon: <Mail className="w-4 h-4 text-blue-600" />, onClick: () => openChannel("email") },
+                  { label: "SMS", icon: <MessageSquare className="w-4 h-4 text-purple-600" />, onClick: () => openChannel("sms") },
+                  { label: "Copy Link", icon: <Copy className="w-4 h-4 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => { }); toast.success("Link copied"); closeMenu(); } },
+                ];
+                return items.map(({ label, icon, onClick }) => (
+                  <button
+                    key={label}
+                    onClick={(e) => { e.stopPropagation(); onClick(); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    {icon}
+                    {label}
+                  </button>
+                ));
+              })()}
+            </div>
+          </>,
+          document.body
+        )}
+        {emailCompose && (() => {
+          const dname = docNameFor(emailCompose.type);
+          const dnum = emailCompose.doc[numberKeyFor(emailCompose.type)];
+          const link = `${window.location.origin}/view/${apiPathFor(emailCompose.type)}/${emailCompose.doc._id}`;
+          const cname = emailCompose.doc.deal?.contactPerson || emailCompose.doc.deal?.title || "Customer";
+          const eAmt = emailCompose.doc.amount != null
+            ? `₹${Number(emailCompose.doc.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+            : "";
+          const fillEmailTpl = (tpl) => tpl
+            .replace(/{customerName}/g, cname)
+            .replace(/{docType}/g, dname)
+            .replace(/{number}/g, dnum || "—")
+            .replace(/{amount}/g, eAmt)
+            .replace(/{link}/g, link)
+            .replace(/{company}/g, shareCompanyName || "");
+          const applyTemplate = (key) => {
+            const saved = emailTemplatesList.find((tpl) => tpl.id === key);
+            if (saved) {
+              setEmailComposeSubject(fillEmailTpl(saved.subject || ""));
+              setEmailComposeBody(fillEmailTpl(saved.body || ""));
+            } else if (key === "standard") {
+              setEmailComposeSubject(`${dname} ${dnum || ""}`);
+              setEmailComposeBody(`Hi ${cname},\n\nPlease find attached your ${dname}${dnum ? ` #${dnum}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`);
+            } else if (key === "reminder") {
+              setEmailComposeSubject(`Reminder: ${dname} ${dnum || ""} pending`);
+              setEmailComposeBody(`Hi ${cname},\n\nThis is a friendly reminder that your ${dname}${dnum ? ` #${dnum}` : ""} is awaiting your review.\n\nView it here: ${link}\n\nPlease feel free to reach out if you have any questions.\n\nBest regards`);
+            } else if (key === "followup") {
+              setEmailComposeSubject(`Following up on ${dname} ${dnum || ""}`);
+              setEmailComposeBody(`Hi ${cname},\n\nI wanted to follow up regarding ${dname}${dnum ? ` #${dnum}` : ""} shared earlier.\n\nView / Download: ${link}\n\nLooking forward to hearing from you.`);
+            }
+            setEmailTemplateOpen(false);
+          };
+          const doSend = async () => {
+            if (!emailComposeTo || emailComposeSending) return;
+            setEmailComposeSending(true);
+            try {
+              await API.post(`/public/${apiPathFor(emailCompose.type)}/${emailCompose.doc._id}/email`, {
+                email: emailComposeTo,
+                subject: emailComposeSubject,
+                body: emailComposeBody,
+              });
+              toast.success("Email sent successfully");
+              setEmailCompose(null);
+              setEmailComposeTo("");
+              setEmailComposeSubject("");
+              setEmailComposeBody("");
+            } catch {
+              toast.error("Failed to send email");
+            } finally {
+              setEmailComposeSending(false);
+            }
+          };
+          return (
+            <>
+              <div className="fixed inset-0 bg-black/20 z-[100011]" onClick={() => { setEmailCompose(null); setEmailTemplateOpen(false); }} />
+              <div className="fixed right-0 top-0 bottom-0 w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setEmailCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                      <X className="w-4 h-4 text-gray-500" />
+                    </button>
+                    <h2 className="text-base font-semibold text-gray-900">Send Email</h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button className="px-4 py-1.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                      Preview
+                    </button>
+                    <button
+                      disabled={!emailComposeTo || emailComposeSending}
+                      onClick={doSend}
+                      className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                    >
+                      {emailComposeSending ? (
+                        <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                      ) : (
+                        "Send Email"
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* From */}
+                <div className="flex items-center px-5 py-3 border-b border-gray-100">
+                  <span className="w-16 text-sm text-gray-500 shrink-0">From</span>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="bg-green-600 text-white rounded-full w-6 h-6 text-[10px] font-bold flex items-center justify-center shrink-0">DC</div>
+                    <span className="text-sm text-gray-800 truncate">noreply@datacircles.in</span>
+                    <Lock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  </div>
+                  <div className="flex items-center gap-1 ml-2 shrink-0">
+                    <button className="px-2.5 py-0.5 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50 transition-colors">Cc</button>
+                    <button className="px-2.5 py-0.5 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-50 transition-colors">Bcc</button>
+                  </div>
+                </div>
+
+                {/* To */}
+                <div className="flex items-center px-5 py-3 border-b border-gray-100">
+                  <span className="w-16 text-sm text-gray-500 shrink-0">To</span>
+                  <input
+                    type="email"
+                    value={emailComposeTo}
+                    onChange={(e) => setEmailComposeTo(e.target.value)}
+                    placeholder="recipient@example.com"
+                    className="flex-1 text-sm text-gray-900 outline-none placeholder-gray-300"
+                  />
+                </div>
+
+                {/* Subject */}
+                <div className="flex items-center px-5 py-3 border-b border-gray-100">
+                  <span className="w-16 text-sm text-gray-500 shrink-0">Subject</span>
+                  <input
+                    type="text"
+                    value={emailComposeSubject}
+                    onChange={(e) => setEmailComposeSubject(e.target.value)}
+                    className="flex-1 text-sm font-medium text-gray-900 outline-none"
+                  />
+                </div>
+
+                {/* Formatting toolbar */}
+                <div className="flex items-center gap-0.5 px-4 py-2 border-b border-gray-100 bg-gray-50">
+                  {[
+                    { icon: <Bold className="w-3.5 h-3.5" />, title: "Bold" },
+                    { icon: <Italic className="w-3.5 h-3.5" />, title: "Italic" },
+                    { icon: <Underline className="w-3.5 h-3.5" />, title: "Underline" },
+                    { icon: <Strikethrough className="w-3.5 h-3.5" />, title: "Strikethrough" },
+                  ].map(({ icon, title }) => (
+                    <button key={title} title={title} className="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors">{icon}</button>
+                  ))}
+                  <div className="w-px h-4 bg-gray-300 mx-1" />
+                  {[
+                    { icon: <ListOrdered className="w-3.5 h-3.5" />, title: "Ordered list" },
+                    { icon: <List className="w-3.5 h-3.5" />, title: "Unordered list" },
+                    { icon: <Link2 className="w-3.5 h-3.5" />, title: "Link" },
+                  ].map(({ icon, title }) => (
+                    <button key={title} title={title} className="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors">{icon}</button>
+                  ))}
+                  <div className="flex-1" />
+                  {/* Template picker */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setEmailTemplateOpen((p) => !p)}
+                      className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                    >
+                      + Add template <ChevronDown className="w-3 h-3" />
+                    </button>
+                    {emailTemplateOpen && (
+                      <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg w-64 z-10 py-1">
+                        {[
+                          ...emailTemplatesList.map((tpl) => ({
+                            key: tpl.id,
+                            label: tpl.name,
+                            desc: tpl.isDefault ? "Default · From Document Settings" : "From Document Settings",
+                          })),
+                          { key: "standard", label: "Standard", desc: "Thank you for your business" },
+                          { key: "reminder", label: "Reminder", desc: "Document pending review" },
+                          { key: "followup", label: "Follow-up", desc: "Check in on document" },
+                        ].map(({ key, label, desc }) => (
+                          <button
+                            key={key}
+                            onClick={() => applyTemplate(key)}
+                            className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors"
+                          >
+                            <p className="text-sm font-medium text-gray-800">{label}</p>
+                            <p className="text-xs text-gray-400">{desc}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-hidden flex flex-col px-5 pt-4">
+                  <textarea
+                    value={emailComposeBody}
+                    onChange={(e) => setEmailComposeBody(e.target.value)}
+                    placeholder="Write your message here…"
+                    className="flex-1 w-full text-sm text-gray-800 outline-none resize-none placeholder-gray-300"
+                  />
+                </div>
+
+                {/* Bottom send */}
+                <div className="px-5 py-4 border-t border-gray-200">
+                  <button
+                    disabled={!emailComposeTo || emailComposeSending}
+                    onClick={doSend}
+                    className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    {emailComposeSending ? (
+                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                    ) : (
+                      <><Mail className="w-4 h-4" /> Send Email</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </>
+          );
+        })()}
+        {smsCompose && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100011]" onClick={() => setSmsCompose(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="bg-purple-100 p-2 rounded-lg">
+                    <MessageSquare className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900">Send SMS</h2>
+                    <p className="text-xs text-gray-400">{docNameFor(smsCompose.type)} #{smsCompose.doc[numberKeyFor(smsCompose.type)]}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSmsCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+              {/* Body */}
+              <div className="px-6 py-5 space-y-4">
+                {/* To */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">To (phone number)</label>
+                  <input
+                    type="tel"
+                    value={smsComposeTo}
+                    onChange={(e) => setSmsComposeTo(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                {/* Message */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Message</label>
+                  <textarea
+                    rows={4}
+                    value={smsComposeBody}
+                    onChange={(e) => setSmsComposeBody(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-500 resize-none"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">{smsComposeBody.length} characters</p>
+                </div>
+              </div>
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+                <button onClick={() => setSmsCompose(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">Cancel</button>
+                <button
+                  disabled={!smsComposeTo || smsComposeSending}
+                  onClick={async () => {
+                    if (!smsComposeTo || smsComposeSending) return;
+                    setSmsComposeSending(true);
+                    try {
+                      await API.post(`/public/${apiPathFor(smsCompose.type)}/${smsCompose.doc._id}/sms`, {
+                        phone: smsComposeTo,
+                        message: smsComposeBody,
+                      });
+                      toast.success("SMS sent successfully");
+                      setSmsCompose(null);
+                      setSmsComposeTo("");
+                      setSmsComposeBody("");
+                    } catch (err) {
+                      toast.error(err.response?.data?.error || "Failed to send SMS");
+                    } finally {
+                      setSmsComposeSending(false);
+                    }
+                  }}
+                  className="px-5 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                  {smsComposeSending ? (
+                    <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                  ) : (
+                    <><MessageSquare className="w-3.5 h-3.5" /> Send SMS</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showBulkEmailModal && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100003]">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-blue-100 p-2 rounded-lg">
+                  <Mail className="w-5 h-5 text-blue-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">Send Email</h2>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Send <strong>{selectedIds.length}</strong> selected{" "}
+                {docNameFor(activeTab)}
+                {selectedIds.length !== 1 ? "s" : ""} via email. Leave blank to use each document's contact email.
+              </p>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Recipient Email (optional override)
+              </label>
+              <input
+                type="email"
+                value={bulkEmailAddress}
+                onChange={(e) => setBulkEmailAddress(e.target.value)}
+                placeholder="override@example.com"
+                className="w-full mb-6 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+              />
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => { setShowBulkEmailModal(false); setBulkEmailAddress(""); }}
+                  disabled={bulkEmailSending}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkSendEmail}
+                  disabled={bulkEmailSending}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Mail className="w-4 h-4" />
+                  {bulkEmailSending ? "Sending..." : "Send"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <ConvertConfirmModal
           isOpen={showConvertModal}
           onClose={() => setShowConvertModal(false)}
@@ -2949,13 +3539,6 @@ const Accounting = () => {
           }}
         />
       </div>
-
-      <UpgradeRequiredModal
-        open={showUpgradeModal}
-        onClose={() => setShowUpgradeModal(false)}
-        minPlan="growth"
-        feature="Selecting multiple rows"
-      />
     </>
   );
 };

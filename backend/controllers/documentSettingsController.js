@@ -1,9 +1,21 @@
 const DocumentSettings = require('../models/DocumentSettings');
-const { normalizeInvoiceNumberSettings, saveDocumentSettingsForOrganization } = require('../utils/documentNumbering');
+const { normalizeInvoiceNumberSettings, saveDocumentSettingsForOrganization, seedTemplateLibrariesFromLegacy } = require('../utils/documentNumbering');
 
 exports.getDocumentSettings = async (req, res) => {
   try {
-    const settings = await DocumentSettings.findOne({ organization: req.user.organization }).lean();
+    let settings = await DocumentSettings.findOne({ organization: req.user.organization }).lean();
+
+    // First read after the template-library feature shipped: carry the org's
+    // old single-slot templates forward as a named "Default" entry so nothing
+    // they'd already customized disappears.
+    if (settings) {
+      const { changed, fields } = seedTemplateLibrariesFromLegacy(settings);
+      if (changed) {
+        await DocumentSettings.updateOne({ _id: settings._id }, { $set: fields });
+        settings = { ...settings, ...fields };
+      }
+    }
+
     res.json(normalizeInvoiceNumberSettings(settings || {}));
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -12,7 +24,7 @@ exports.getDocumentSettings = async (req, res) => {
 
 exports.updateDocumentSettings = async (req, res) => {
   try {
-    const { invoicePrefix, invoiceSuffix, nextInvoiceNumber, documentTypeSettings, invoicePrefixes, invoiceSuffixes, defaultNotes, defaultTerms, defaultNotesByType, defaultTermsByType } = req.body || {};
+    const { invoicePrefix, invoiceSuffix, nextInvoiceNumber, documentTypeSettings, invoicePrefixes, invoiceSuffixes, defaultNotes, defaultTerms, defaultNotesByType, defaultTermsByType, defaultDueDateDays, whatsappTemplate, whatsappLine1, whatsappLine2, smsTemplate, emailSubjectTemplate, emailBodyTemplate, whatsappTemplates, smsTemplates, emailTemplates } = req.body || {};
     const saved = await saveDocumentSettingsForOrganization(req.user.organization, {
       invoicePrefix,
       invoiceSuffix,
@@ -24,6 +36,16 @@ exports.updateDocumentSettings = async (req, res) => {
       defaultTerms,
       defaultNotesByType,
       defaultTermsByType,
+      defaultDueDateDays,
+      whatsappTemplate,
+      whatsappLine1,
+      whatsappLine2,
+      smsTemplate,
+      emailSubjectTemplate,
+      emailBodyTemplate,
+      whatsappTemplates,
+      smsTemplates,
+      emailTemplates,
     });
 
     res.json({

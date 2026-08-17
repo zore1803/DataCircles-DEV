@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { CreateInvoicePanel } from "../invoice/InvoiceForm";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
 import {
   Plus,
@@ -330,8 +331,6 @@ const ItemSearchSelect = ({
   );
 };
 
-const styles = ["Classic", "Modern", "Minimal", "Elegant"];
-
 const QuotationForm = ({
   deals,
   isOpen,
@@ -343,6 +342,7 @@ const QuotationForm = ({
   // the split-view quotation panel — renders a control to go back to it.
   onExitFullWidth,
   conversionData = null,
+  defaultDueDateDays = null,
 }) => {
   const [form, setForm] = useState({
     deal: "",
@@ -363,7 +363,6 @@ const QuotationForm = ({
     discount: { type: "fixed", value: 0 },
     amount: 0,
     status: "Draft",
-    style: "Regular",
     isTaxQuotation: false,
     isRoundOff: false,
     hideTotals: false,
@@ -530,7 +529,6 @@ const QuotationForm = ({
         discount: sourceData.discount || { type: "fixed", value: 0 },
         amount: sourceData.amount || 0,
         status: sourceData.status || "Draft",
-        style: sourceData.style || "Regular",
         isRoundOff: sourceData.isRoundOff !== undefined ? sourceData.isRoundOff : false,
         hideTotals: sourceData.hideTotals || false,
         isTaxQuotation: sourceData.isTaxQuotation || false,
@@ -558,7 +556,6 @@ const QuotationForm = ({
         discount: { type: "fixed", value: 0 },
         amount: 0,
         status: "Draft",
-        style: "Regular",
         isTaxQuotation: false,
         transactionType: "intra",
         notes: "",
@@ -649,16 +646,6 @@ const QuotationForm = ({
     return 0;
   };
 
-  const calculateTotalAmount = useCallback((items, discount) => {
-    const subtotalAfterItemDiscounts =
-      calculateSubtotalAfterItemDiscounts(items);
-    const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
-      subtotalAfterItemDiscounts,
-      discount
-    );
-    return subtotalAfterItemDiscounts - invoiceDiscountAmount;
-  }, []);
-
   const handleItemChange = (index, field, value) => {
     setForm((prev) => {
       const newItems = [...prev.items];
@@ -715,7 +702,7 @@ const QuotationForm = ({
       return {
         ...prev,
         items: newItems,
-        amount: calculateTotalAmount(newItems, prev.discount),
+        amount: computeDocument({ ...prev, items: newItems }, "quotation").grandTotal,
       };
     });
     setHasUnsavedChanges(true);
@@ -762,7 +749,7 @@ const QuotationForm = ({
       return {
         ...prev,
         discount: newDiscount,
-        amount: calculateTotalAmount(prev.items, newDiscount),
+        amount: computeDocument({ ...prev, discount: newDiscount }, "quotation").grandTotal,
       };
     });
     setHasUnsavedChanges(true);
@@ -781,7 +768,7 @@ const QuotationForm = ({
       return {
         ...prev,
         items: newItems,
-        amount: calculateTotalAmount(newItems, prev.discount),
+        amount: computeDocument({ ...prev, items: newItems }, "quotation").grandTotal,
       };
     });
     setHasUnsavedChanges(true);
@@ -819,7 +806,7 @@ const QuotationForm = ({
       return {
         ...prev,
         items: newItems,
-        amount: calculateTotalAmount(newItems, prev.discount),
+        amount: computeDocument({ ...prev, items: newItems }, "quotation").grandTotal,
       };
     });
     setHasUnsavedChanges(true);
@@ -841,7 +828,7 @@ const QuotationForm = ({
       return {
         ...prev,
         items: newItems,
-        amount: calculateTotalAmount(newItems, prev.discount),
+        amount: computeDocument({ ...prev, items: newItems }, "quotation").grandTotal,
       };
     });
     setQuickAddItem(null);
@@ -855,7 +842,7 @@ const QuotationForm = ({
       return {
         ...prev,
         items: newItems,
-        amount: calculateTotalAmount(newItems, prev.discount),
+        amount: computeDocument({ ...prev, items: newItems }, "quotation").grandTotal,
       };
     });
     setHasUnsavedChanges(true);
@@ -884,9 +871,9 @@ const QuotationForm = ({
     return gstinRegex.test(gstin);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const submitQuotation = async (statusValue) => {
     setIsSubmitting(true);
+    const isDraft = statusValue === 'Draft';
 
     if (!form.deal) {
       toast.error("Deal is required.");
@@ -900,19 +887,22 @@ const QuotationForm = ({
       return;
     }
 
-    if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
-      toast.error(
-        "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
-      );
+    // items starts empty (no blank starter row), and the backend rejects an
+    // empty items array unconditionally — even for drafts — so this can't
+    // live inside the isDraft-skipped block below. Otherwise a draft with no
+    // items reaches the backend and comes back as a raw, confusing "Items
+    // array is required" error instead of a friendly one shown here.
+    if (form.items.length === 0) {
+      toast.error("Add at least one product or service.");
       setIsSubmitting(false);
       return;
     }
 
-    // items now starts empty (no blank starter row) so this has to be
-    // checked explicitly — an empty array otherwise sails right through
-    // the invalidItems filter below since filtering nothing finds nothing.
-    if (form.items.length === 0) {
-      toast.error("Add at least one product or service.");
+    if (!isDraft) {
+      if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
+      toast.error(
+        "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
+      );
       setIsSubmitting(false);
       return;
     }
@@ -942,11 +932,12 @@ const QuotationForm = ({
       form.discount
     );
     if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
-      toast.error(
-        "Quotation discount cannot exceed subtotal after item discounts."
-      );
-      setIsSubmitting(false);
-      return;
+        toast.error(
+          "Quotation discount cannot exceed subtotal after item discounts."
+        );
+        setIsSubmitting(false);
+        return;
+      }
     }
 
     try {
@@ -962,14 +953,12 @@ const QuotationForm = ({
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
         signature: form.signature,
         amount: (() => {
-          let t = form.isTaxQuotation 
-            ? computeDocument(form, "quotation").grandTotal 
-            : calculateTotalAmount(form.items, form.discount);
+          let t = computeDocument(form, "quotation").grandTotal;
           return form.isRoundOff ? Math.round(t) : t;
         })(),
         isRoundOff: form.isRoundOff,
         discount: form.discount,
-        status: form.status,
+        status: statusValue,
         items: form.items.map((item) => ({
           itemId: item._id,
           name: item.name,
@@ -983,17 +972,16 @@ const QuotationForm = ({
           discount: parseFloat(item.discount),
           gstRate: parseFloat(item.gstRate) || 0,
         })),
-        style: form.style,
         isTaxQuotation: form.isTaxQuotation,
         transactionType: form.transactionType,
       };
 
       if (editingQuotation) {
         await API.put(`/quotations/${editingQuotation._id}`, payload);
-        toast.success("Quotation updated successfully!");
+        toast.success(isDraft ? "Saved as draft!" : "Quotation updated successfully!");
       } else {
         await API.post("/quotations", payload);
-        toast.success("Quotation created successfully!");
+        toast.success(isDraft ? "Saved as draft!" : "Quotation created successfully!");
       }
 
       setHasUnsavedChanges(false);
@@ -1009,7 +997,6 @@ const QuotationForm = ({
         discount: { type: "fixed", value: 0 },
         amount: 0,
         status: "Draft",
-        style: "",
         isTaxQuotation: false,
       });
       await fetchData();
@@ -1031,11 +1018,17 @@ const QuotationForm = ({
   };
 
   const handleSaveAndExit = async () => {
-    await handleSubmit(new Event("submit"));
+    await submitQuotation('Pending');
     if (!toastMessage.includes("Failed")) {
       setShowConfirmDialog(false);
       onClose();
     }
+  };
+
+  const handleSaveDraft = () => submitQuotation('Draft');
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    submitQuotation(form.status || 'Draft');
   };
 
   const handleClose = () => {
@@ -1201,32 +1194,18 @@ const QuotationForm = ({
                 Settings
               </button>
               <button
-                type="submit"
+                type="button"
+                onClick={handleSaveDraft}
                 disabled={isSubmitting}
                 className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
                 <FileText className="w-3.5 h-3.5" />
-                Save as Draft
+                {isSubmitting ? "Saving..." : "Save as Draft"}
               </button>
             </div>
           </div>
 
           <div className="flex items-center px-6 py-3 bg-white border-b border-gray-100 text-sm">
-            <span className="text-gray-500 mr-2">Type</span>
-            <select
-              value={form.style}
-              onChange={(e) => {
-                setForm((prev) => ({ ...prev, style: e.target.value }));
-                setHasUnsavedChanges(true);
-              }}
-              className="font-medium text-gray-800 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
-            >
-              <option value="Regular">Regular</option>
-              {styles.map((s, idx) => (
-                <option key={idx} value={s}>{s}</option>
-              ))}
-            </select>
-
             {/* Was read (form.isTaxQuotation gates the HSN/SAC field and its
                 required-on-submit validation) but had no control to actually
                 set it — every quotation created here was permanently
@@ -1341,7 +1320,17 @@ const QuotationForm = ({
                       required
                       value={form.date}
                       onChange={(e) => {
-                        setForm((prev) => ({ ...prev, date: e.target.value }));
+                        const newDate = e.target.value;
+                        setForm((prev) => {
+                          let newDueDate = prev.dueDate;
+                          if (!editingQuotation && !prev.dueDate) {
+                            const offsetDays = defaultDueDateDays ?? 30;
+                            const d = new Date(newDate);
+                            d.setDate(d.getDate() + offsetDays);
+                            newDueDate = d.toISOString().split("T")[0];
+                          }
+                          return { ...prev, date: newDate, dueDate: newDueDate };
+                        });
                         setHasUnsavedChanges(true);
                       }}
                     />
@@ -2055,7 +2044,6 @@ export default QuotationForm;
 
 // Thin wrapper around the shared CreateInvoicePanel for quotation type.
 // Used by Accounting.jsx when opening the two-pane create/edit form.
-import { CreateInvoicePanel } from "../invoice/InvoiceForm";
 
 const CreateQuotationPanel = (props) => (
   <CreateInvoicePanel {...props} type="quotation" />

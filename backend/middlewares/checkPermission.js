@@ -21,10 +21,17 @@ const checkPermission = (resourceName, requiredPermission = 'readonly') => {
       const userPerm = matchedPermission.permission;
 
       if (userPerm === 'read-write') {
+        req.ownOnly = false;
+        return next();
+      }
+
+      if (userPerm === 'own-only') {
+        req.ownOnly = true;
         return next();
       }
 
       if (requiredPermission === 'readonly' && userPerm === 'readonly') {
+        req.ownOnly = false;
         return next();
       }
 

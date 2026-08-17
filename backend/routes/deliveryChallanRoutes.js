@@ -84,4 +84,22 @@ router.patch(
   deliveryChallanController.updateDeliveryChallanNumber
 );
 
+router.post(
+  "/bulk-status",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("delivery-challans", "write"),
+  checkPermission("delivery-challans", "read-write"),
+  deliveryChallanController.bulkUpdateStatus
+);
+
+router.post(
+  "/bulk-signature",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("delivery-challans", "write"),
+  checkPermission("delivery-challans", "read-write"),
+  deliveryChallanController.bulkUpdateSignature
+);
+
 module.exports = router;

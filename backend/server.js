@@ -129,6 +129,9 @@ app.use('/api/payments-timeline', paymentTimelineRoutes);
 const invoiceConverter = require('./routes/converterRoutes');
 app.use('/api/converter', invoiceConverter);
 
+const publicDocumentRoutes = require('./routes/publicDocumentRoutes');
+app.use('/api/public', publicDocumentRoutes);
+
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
 

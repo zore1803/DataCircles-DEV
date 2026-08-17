@@ -32,10 +32,6 @@ const invoiceSchema = new mongoose.Schema({
       min: 0,
     },
   },
-  // Template override for this invoice only. Empty means "follow the
-  // organization's template" (DocumentSettings), so changing that setting
-  // restyles every document that hasn't picked a template of its own.
-  style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant', 'Compact', 'Corporate', 'Vibrant', 'Mono', ''], default: '' },
   // Free-text footer blocks, printed on the document when present.
   notes: { type: String, default: '' },
   terms: { type: String, default: '' },
@@ -57,6 +53,27 @@ const invoiceSchema = new mongoose.Schema({
     discountType: { type: String, enum: ['amount', 'percentage'], default: 'amount' },
     discount: { type: Number, default: 0, min: 0 },
   }],
+  // Payment records for this invoice
+  payments: [{
+    amount: { type: Number, required: true },
+    paymentDate: { type: Date, default: Date.now },
+    paymentMethod: {
+      type: String,
+      enum: ['Cash', 'UPI', 'Net Banking', 'Cheque', 'Card', 'NEFT', 'RTGS', 'IMPS', 'Other'],
+      default: 'UPI',
+    },
+    reference: { type: String, default: '' }, // UTR / cheque no. / txn id
+    notes: { type: String, default: '' },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    recordedAt: { type: Date, default: Date.now },
+  }],
+  digitalSignature: {
+    status: { type: String, enum: ['pending', 'signed', 'cancelled', 'failed', 'none'], default: 'none' },
+    provider: { type: String, enum: ['docusign', 'zoho', 'internal', 'other'] },
+    documentId: { type: String },
+    signedAt: { type: Date },
+    signedUrl: { type: String }
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Invoice', invoiceSchema);

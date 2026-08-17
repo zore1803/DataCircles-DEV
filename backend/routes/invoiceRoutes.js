@@ -107,4 +107,31 @@ router.patch(
   invoiceController.updateInvoiceNumber
 );
 
+router.post(
+  "/:id/email",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.sendInvoiceEmail
+);
+
+router.post(
+  "/bulk-status",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.bulkUpdateStatus
+);
+
+router.post(
+  "/bulk-signature",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.bulkUpdateSignature
+);
+
 module.exports = router;

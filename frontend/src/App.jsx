@@ -59,6 +59,7 @@ import AdminCalendar from "./pages/Calender";
 import Onboarding from "./pages/Onboarding";
 import PlanManagement from "./pages/PlanManagement";
 import Accounting from "./pages/Accounting";
+import PublicDocumentPage from "./pages/PublicDocumentPage";
 import PromotionsAndRewards from "./pages/PromotionsAndRewards";
 import SalesReturn from "./pages/SalesReturn";
 import SalesSubscription from "./pages/SalesSubscription";
@@ -235,9 +236,10 @@ function App() {
     "/reset-password",
     "/onboarding",
   ];
-  const shouldHideNavigation = authRoutes.some(
-    (route) => location.pathname === route || location.pathname === `${route}/`,
-  );
+  const shouldHideNavigation =
+    authRoutes.some(
+      (route) => location.pathname === route || location.pathname === `${route}/`,
+    ) || location.pathname.startsWith("/view/");
 
   const checklistItems = [
     {
@@ -462,6 +464,7 @@ function App() {
               }
             />
             <Route path="/f/:slug" element={<PublicFormPage />} />
+            <Route path="/view/:type/:id" element={<PublicDocumentPage />} />
             <Route
               path="/deals"
               element={

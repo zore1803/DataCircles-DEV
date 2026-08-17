@@ -90,4 +90,22 @@ router.patch(
   quotationController.updateQuotationNumber
 );
 
+router.post(
+  "/bulk-status",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("quotations", "write"),
+  checkPermission("quotations", "read-write"),
+  quotationController.bulkUpdateStatus
+);
+
+router.post(
+  "/bulk-signature",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("quotations", "write"),
+  checkPermission("quotations", "read-write"),
+  quotationController.bulkUpdateSignature
+);
+
 module.exports = router;

@@ -112,7 +112,18 @@ const FullWidthDocumentPanel = ({
           <input
             type="date"
             value={form.date}
-            onChange={(e) => setField("date", e.target.value)}
+            onChange={(e) => {
+              const newDate = e.target.value;
+              setForm((prev) => {
+                let newDueDate = prev.dueDate;
+                if (!prev.dueDate) {
+                  const d = new Date(newDate);
+                  d.setDate(d.getDate() + 30);
+                  newDueDate = d.toISOString().split("T")[0];
+                }
+                return { ...prev, date: newDate, dueDate: newDueDate };
+              });
+            }}
             className={inputClass}
           />
         </div>

@@ -88,4 +88,31 @@ router.patch(
   performaInvoiceController.updatePerformaInvoiceNumber
 );
 
+router.post(
+  "/:id/email",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  performaInvoiceController.sendPerformaInvoiceEmail
+);
+
+router.post(
+  "/bulk-status",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  performaInvoiceController.bulkUpdateStatus
+);
+
+router.post(
+  "/bulk-signature",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  performaInvoiceController.bulkUpdateSignature
+);
+
 module.exports = router;

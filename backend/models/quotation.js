@@ -57,7 +57,6 @@ const quotationSchema = new mongoose.Schema({
   // Free-text footer blocks, printed on the document when present.
   notes: { type: String, default: '' },
   terms: { type: String, default: '' },
-  style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant', 'Compact', 'Corporate', 'Vibrant', 'Mono', ''], default: '' },
   isTaxQuotation: { type: Boolean, default: false },
   isRoundOff: { type: Boolean, default: true },
   transactionType: { type: String, enum: ['intra', 'inter'], default: 'intra' },
@@ -65,6 +64,13 @@ const quotationSchema = new mongoose.Schema({
   signatureType: { type: String, enum: ['text', 'upload'], default: 'text' },
   receiverGSTIN: { type: String },
   items: [itemSchema],
+  digitalSignature: {
+    status: { type: String, enum: ['pending', 'signed', 'cancelled', 'failed', 'none'], default: 'none' },
+    provider: { type: String, enum: ['docusign', 'zoho', 'internal', 'other'] },
+    documentId: { type: String },
+    signedAt: { type: Date },
+    signedUrl: { type: String }
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Quotation', quotationSchema);

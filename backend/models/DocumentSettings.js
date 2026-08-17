@@ -99,6 +99,67 @@ const documentSettingsSchema = new mongoose.Schema(
         createdAt: { type: Date, default: Date.now },
       },
     ],
+    defaultDueDateDays: {
+      type: Number,
+      default: null,
+    },
+    whatsappTemplate: {
+      type: String,
+      default: 'Hello! *{customerName}*\n\nYour {docType} is ready to view.\n\nDocument No: {number}\nTotal: ₹{amount}\nLink: {link}\n\nThank you for your business!',
+    },
+    whatsappLine1: {
+      type: String,
+      default: 'Thanks for your business!',
+    },
+    whatsappLine2: {
+      type: String,
+      default: '',
+    },
+    smsTemplate: {
+      type: String,
+      default: 'Your {docType} #{number} from {company} is ready. View & Download: {link}',
+    },
+    emailSubjectTemplate: {
+      type: String,
+      default: '{docType} {number} from {company}',
+    },
+    emailBodyTemplate: {
+      type: String,
+      default: 'Hi {customerName},\n\nPlease find attached your {docType} #{number}.\n\nYou can also view and download it online:\n{link}\n\nThank you for your business!\n\nBest regards,\n{company}',
+    },
+    // Named template libraries — lets an org keep several message variants per
+    // channel (e.g. "Standard", "Payment Reminder") and pick one at send time.
+    // The singular fields above predate this and now only serve as the seed
+    // for each array's first entry, so existing customization isn't lost.
+    whatsappTemplates: [
+      {
+        id: { type: String, required: true },
+        name: { type: String, required: true, trim: true },
+        line1: { type: String, default: '' },
+        line2: { type: String, default: '' },
+        isDefault: { type: Boolean, default: false },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    smsTemplates: [
+      {
+        id: { type: String, required: true },
+        name: { type: String, required: true, trim: true },
+        body: { type: String, default: '' },
+        isDefault: { type: Boolean, default: false },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    emailTemplates: [
+      {
+        id: { type: String, required: true },
+        name: { type: String, required: true, trim: true },
+        subject: { type: String, default: '' },
+        body: { type: String, default: '' },
+        isDefault: { type: Boolean, default: false },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );

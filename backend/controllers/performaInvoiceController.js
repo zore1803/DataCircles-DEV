@@ -26,7 +26,6 @@ const createPerformaInvoice = async (req, res) => {
       amount,
       status,
       items,
-      style,
       notes,
       terms,
       isTaxInvoice,
@@ -116,7 +115,6 @@ const createPerformaInvoice = async (req, res) => {
       amount,
       status,
       items,
-      style: style || "",
       notes: notes || "",
       terms: terms || "",
       isTaxInvoice: isTaxInvoice || false,
@@ -150,6 +148,10 @@ const getAllPerformaInvoices = async (req, res) => {
   try {
     const { search } = req.query;
     let query = { organization: req.user.organization };
+
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
 
     if (search) {
       const matchingDeals = await Deal.find(
@@ -190,6 +192,10 @@ const getAllPerformaInvoicesPaginated = async (req, res) => {
 
     // Build query object
     const query = { organization: req.user.organization };
+
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
 
     // Search functionality
     if (search) {
@@ -295,9 +301,8 @@ const downloadPerformaInvoice = async (req, res) => {
     const OrgDetails = await Branding.findOne({
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
-        // The template comes from the document's own `style` when it has one,
-    // otherwise from the organization's document settings — resolved inside
-    // htmlDocumentPdf, which renders the same markup as the live preview.
+    // The template is resolved from the organization's document settings
+    // inside htmlDocumentPdf, which renders the same markup as the live preview.
     const copyType = ["original", "duplicate", "triplicate"].includes(req.query.copyType)
       ? req.query.copyType
       : "original";
@@ -347,7 +352,6 @@ const updatePerformaInvoice = async (req, res) => {
       amount,
       status,
       items,
-      style,
       notes,
       terms,
       isTaxInvoice,
@@ -410,7 +414,6 @@ const updatePerformaInvoice = async (req, res) => {
         amount,
         status,
         items,
-        style,
         notes,
         terms,
         isTaxInvoice,
@@ -524,6 +527,94 @@ const updatePerformaInvoiceNumber = async (req, res) => {
   }
 };
 
+const sendPerformaInvoiceEmail = async (req, res) => {
+  try {
+    const nodemailer = require("nodemailer");
+    const invoice = await PerformaInvoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    })
+      .populate({ path: "deal", populate: ["contact", "company"] })
+      .populate("items.itemId");
+
+    if (!invoice) {
+      return res.status(404).json({ error: "Proforma invoice not found" });
+    }
+
+    const bankDetails = await getDefaultBankDetails(req.user.organization);
+    const Branding = require("../models/Branding");
+    const orgDetails = await Branding.findOne({ organization: req.user.organization }).sort({ updatedAt: -1 });
+
+    const pdfBuffer = await htmlDocumentPdf(invoice, bankDetails, orgDetails, "performa");
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const recipient = invoice.deal?.email || req.body.email;
+    if (!recipient) {
+      return res.status(400).json({ error: "No recipient email address available" });
+    }
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: recipient,
+      subject: `Proforma Invoice ${invoice.performaInvoiceNumber}`,
+      text: `Dear ${invoice.deal?.contactPerson || "Customer"},\n\nPlease find attached the proforma invoice.\n\nBest regards,\nYour Company`,
+      attachments: [
+        {
+          filename: `ProformaInvoice-${invoice.performaInvoiceNumber}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        },
+      ],
+    });
+
+    invoice.status = "Sent";
+    await invoice.save();
+
+    res.json({ message: "Proforma invoice emailed successfully" });
+  } catch (error) {
+    res.status(500).json({ error: `Failed to send proforma invoice email: ${error.message}` });
+  }
+};
+
+const bulkUpdateStatus = async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    if (!ids || !ids.length || !status) {
+      return res.status(400).json({ error: "ids and status are required" });
+    }
+    await PerformaInvoice.updateMany(
+      { _id: { $in: ids }, organization: req.user.organization },
+      { status }
+    );
+    res.json({ message: `Updated ${ids.length} proforma invoices to status: ${status}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const bulkUpdateSignature = async (req, res) => {
+  try {
+    const { ids, signature, signatureType } = req.body;
+    if (!ids || !ids.length) {
+      return res.status(400).json({ error: "ids are required" });
+    }
+    await PerformaInvoice.updateMany(
+      { _id: { $in: ids }, organization: req.user.organization },
+      { signature: signature || "", signatureType: signatureType || "text" }
+    );
+    res.json({ message: `Updated signature for ${ids.length} proforma invoices` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createPerformaInvoice,
   getAllPerformaInvoices,
@@ -534,4 +625,7 @@ module.exports = {
   updatePerformaInvoice,
   updateStatus,
   updatePerformaInvoiceNumber,
+  sendPerformaInvoiceEmail,
+  bulkUpdateStatus,
+  bulkUpdateSignature,
 };

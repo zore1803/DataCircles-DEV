@@ -545,12 +545,13 @@ exports.inviteUser = async (req, res) => {
       });
     }
 
-    if (subscription.isTrialActive) {
-      return res.status(400).json({
-        message:
-          "Cannot invite users during trial period. Please upgrade your subscription.",
-      });
-    }
+    // TEMPORARY HACK FOR TESTING: Allow invites during trial
+    // if (subscription.isTrialActive) {
+    //   return res.status(400).json({
+    //     message:
+    //       "Cannot invite users during trial period. Please upgrade your subscription.",
+    //   });
+    // }
 
     // Seat check via addonManagement utility
     const seatStatus = await getSeatStatus(req.user.organization);

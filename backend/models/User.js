@@ -6,7 +6,7 @@ const permissionSchema = new mongoose.Schema(
     name: { type: String, required: true },
     permission: {
       type: String,
-      enum: ["readonly", "read-write"],
+      enum: ["readonly", "read-write", "own-only"],
       required: true,
     },
   },

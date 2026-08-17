@@ -58,6 +58,10 @@ const getAllContacts = async (req, res) => {
     const { search, lifecycleStage, stageStatus } = req.query;
     let query = { organization: req.user.organization };
 
+    if (req.ownOnly) {
+      query.$or = [{ user: req.user._id }, { createdBy: req.user._id }];
+    }
+
     if (search) {
       const matchingCompanies = await Company.find({
         organization: req.user.organization,
@@ -117,6 +121,10 @@ const getAllContactsPaginated = async (req, res) => {
 
     // Build query object
     const query = { organization: req.user.organization };
+
+    if (req.ownOnly) {
+      query.$or = [{ user: req.user._id }, { createdBy: req.user._id }];
+    }
 
     // Search functionality
     if (search) {

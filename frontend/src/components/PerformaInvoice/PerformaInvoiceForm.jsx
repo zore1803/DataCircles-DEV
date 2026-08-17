@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { CreateInvoicePanel } from "../invoice/InvoiceForm";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
 import {
   Plus,
@@ -296,6 +297,7 @@ const PerformaInvoiceForm = ({
   editingPerformaInvoice,
   conversionData,
   onPreview,
+  defaultDueDateDays = null,
 }) => {
   const [form, setForm] = useState({
     deal: "",
@@ -859,9 +861,9 @@ const PerformaInvoiceForm = ({
     return gstinRegex.test(gstin);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const submitPerformaInvoice = async (statusValue) => {
     setIsSubmitting(true);
+    const isDraft = statusValue === 'Draft';
 
     // Validate required fields
     if (!form.deal) {
@@ -876,8 +878,9 @@ const PerformaInvoiceForm = ({
       return;
     }
 
-    // Validate GSTIN format
-    if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
+    if (!isDraft) {
+      // Validate GSTIN format
+      if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
       toast.error(
         "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
       );
@@ -912,11 +915,12 @@ const PerformaInvoiceForm = ({
       form.discount
     );
     if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
-      toast.error(
-        "Invoice discount cannot exceed subtotal after item discounts."
-      );
-      setIsSubmitting(false);
-      return;
+        toast.error(
+          "Invoice discount cannot exceed subtotal after item discounts."
+        );
+        setIsSubmitting(false);
+        return;
+      }
     }
 
     try {
@@ -932,7 +936,7 @@ const PerformaInvoiceForm = ({
         signature: form.signature,
         amount: calculateTotalAmount(form.items, form.discount),
         discount: form.discount,
-        status: form.status,
+        status: statusValue,
         items: form.items.map((item) => ({
           itemId: item._id,
           name: item.name,
@@ -954,10 +958,10 @@ const PerformaInvoiceForm = ({
           `/performa-invoices/${editingPerformaInvoice._id}`,
           payload
         );
-        toast.success("Pro Forma Invoice updated successfully!");
+        toast.success(isDraft ? "Saved as draft!" : "Pro Forma Invoice updated successfully!");
       } else {
         await API.post("/performa-invoices", payload);
-        toast.success("Pro Forma Invoice created successfully!");
+        toast.success(isDraft ? "Saved as draft!" : "Pro Forma Invoice created successfully!");
       }
 
       setHasUnsavedChanges(false);
@@ -1011,11 +1015,17 @@ const PerformaInvoiceForm = ({
   };
 
   const handleSaveAndExit = async () => {
-    await handleSubmit(new Event("submit"));
+    await submitPerformaInvoice('Pending');
     if (!toastMessage.includes("Failed")) {
       setShowConfirmDialog(false);
       onClose();
     }
+  };
+
+  const handleSaveDraft = () => submitPerformaInvoice('Draft');
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    submitPerformaInvoice(form.status || 'Draft');
   };
 
   const handleClose = () => {
@@ -1116,6 +1126,17 @@ const PerformaInvoiceForm = ({
                   : "Create Pro Forma Invoice"}
               </h2>
             </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={isSubmitting}
+                className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                {isSubmitting ? "Saving..." : "Save as Draft"}
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center px-6 py-3 bg-white border-b border-gray-100 text-sm">
@@ -1183,7 +1204,17 @@ const PerformaInvoiceForm = ({
                       required
                       value={form.date}
                       onChange={(e) => {
-                        setForm((prev) => ({ ...prev, date: e.target.value }));
+                        const newDate = e.target.value;
+                        setForm((prev) => {
+                          let newDueDate = prev.dueDate;
+                          if (!editingPerformaInvoice && !prev.dueDate) {
+                            const offsetDays = defaultDueDateDays ?? 30;
+                            const d = new Date(newDate);
+                            d.setDate(d.getDate() + offsetDays);
+                            newDueDate = d.toISOString().split("T")[0];
+                          }
+                          return { ...prev, date: newDate, dueDate: newDueDate };
+                        });
                         setHasUnsavedChanges(true);
                       }}
                       aria-label="Select Pro Forma invoice date"
@@ -1772,8 +1803,6 @@ const PerformaInvoiceForm = ({
 };
 
 export default PerformaInvoiceForm;
-
-import { CreateInvoicePanel } from "../invoice/InvoiceForm";
 
 const CreatePerformaPanel = (props) => (
   <CreateInvoicePanel {...props} type="performa" />

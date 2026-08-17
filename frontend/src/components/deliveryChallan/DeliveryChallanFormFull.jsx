@@ -330,8 +330,6 @@ const ItemSearchSelect = ({
   );
 };
 
-const styles = ["Classic", "Modern", "Minimal", "Elegant"];
-
 const DeliveryChallanFormFull = ({
   deals,
   isOpen,
@@ -343,6 +341,7 @@ const DeliveryChallanFormFull = ({
   // the split-view deliveryChallan panel — renders a control to go back to it.
   onExitFullWidth,
   conversionData = null,
+  defaultDueDateDays = null,
 }) => {
   const [form, setForm] = useState({
     deal: "",
@@ -363,7 +362,6 @@ const DeliveryChallanFormFull = ({
     discount: { type: "fixed", value: 0 },
     amount: 0,
     status: "Draft",
-    style: "Regular",
     isTaxChallan: false,
     isRoundOff: true,
     notes: "",
@@ -529,7 +527,6 @@ const DeliveryChallanFormFull = ({
         discount: sourceData.discount || { type: "fixed", value: 0 },
         amount: sourceData.amount || 0,
         status: sourceData.status || "Draft",
-        style: sourceData.style || "Regular",
         isRoundOff: sourceData.isRoundOff !== undefined ? sourceData.isRoundOff : true,
         isTaxChallan: sourceData.isTaxChallan || false,
         transactionType: sourceData.transactionType || "intra",
@@ -556,7 +553,6 @@ const DeliveryChallanFormFull = ({
         discount: { type: "fixed", value: 0 },
         amount: 0,
         status: "Draft",
-        style: "Regular",
         isTaxChallan: false,
         transactionType: "intra",
         notes: "",
@@ -882,9 +878,9 @@ const DeliveryChallanFormFull = ({
     return gstinRegex.test(gstin);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const submitDeliveryChallan = async (statusValue) => {
     setIsSubmitting(true);
+    const isDraft = statusValue === 'Draft';
 
     if (!form.deal) {
       toast.error("Deal is required.");
@@ -915,7 +911,8 @@ const DeliveryChallanFormFull = ({
       return;
     }
 
-    const invalidItems = form.items.filter(
+    if (!isDraft) {
+      const invalidItems = form.items.filter(
       (item) =>
         !item.name ||
         !item.rate ||
@@ -940,11 +937,12 @@ const DeliveryChallanFormFull = ({
       form.discount
     );
     if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
-      toast.error(
-        "Delivery Challan discount cannot exceed subtotal after item discounts."
-      );
-      setIsSubmitting(false);
-      return;
+        toast.error(
+          "Delivery Challan discount cannot exceed subtotal after item discounts."
+        );
+        setIsSubmitting(false);
+        return;
+      }
     }
 
     try {
@@ -967,7 +965,7 @@ const DeliveryChallanFormFull = ({
         })(),
         isRoundOff: form.isRoundOff,
         discount: form.discount,
-        status: form.status,
+        status: statusValue,
         items: form.items.map((item) => ({
           itemId: item._id,
           name: item.name,
@@ -981,17 +979,16 @@ const DeliveryChallanFormFull = ({
           discount: parseFloat(item.discount),
           gstRate: parseFloat(item.gstRate) || 0,
         })),
-        style: form.style,
         isTaxChallan: form.isTaxChallan,
         transactionType: form.transactionType,
       };
 
       if (editingDeliveryChallan) {
         await API.put(`/delivery-challans/${editingDeliveryChallan._id}`, payload);
-        toast.success("Delivery Challan updated successfully!");
+        toast.success(isDraft ? "Saved as draft!" : "Delivery Challan updated successfully!");
       } else {
         await API.post("/delivery-challans", payload);
-        toast.success("Delivery Challan created successfully!");
+        toast.success(isDraft ? "Saved as draft!" : "Delivery Challan created successfully!");
       }
 
       setHasUnsavedChanges(false);
@@ -1007,7 +1004,6 @@ const DeliveryChallanFormFull = ({
         discount: { type: "fixed", value: 0 },
         amount: 0,
         status: "Draft",
-        style: "",
         isTaxChallan: false,
       });
       await fetchData();
@@ -1029,11 +1025,17 @@ const DeliveryChallanFormFull = ({
   };
 
   const handleSaveAndExit = async () => {
-    await handleSubmit(new Event("submit"));
+    await submitDeliveryChallan('Pending');
     if (!toastMessage.includes("Failed")) {
       setShowConfirmDialog(false);
       onClose();
     }
+  };
+
+  const handleSaveDraft = () => submitDeliveryChallan('Draft');
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    submitDeliveryChallan(form.status || 'Draft');
   };
 
   const handleClose = () => {
@@ -1199,32 +1201,18 @@ const DeliveryChallanFormFull = ({
                 Settings
               </button>
               <button
-                type="submit"
+                type="button"
+                onClick={handleSaveDraft}
                 disabled={isSubmitting}
                 className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
                 <FileText className="w-3.5 h-3.5" />
-                Save as Draft
+                {isSubmitting ? "Saving..." : "Save as Draft"}
               </button>
             </div>
           </div>
 
           <div className="flex items-center px-6 py-3 bg-white border-b border-gray-100 text-sm">
-            <span className="text-gray-500 mr-2">Type</span>
-            <select
-              value={form.style}
-              onChange={(e) => {
-                setForm((prev) => ({ ...prev, style: e.target.value }));
-                setHasUnsavedChanges(true);
-              }}
-              className="font-medium text-gray-800 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
-            >
-              <option value="Regular">Regular</option>
-              {styles.map((s, idx) => (
-                <option key={idx} value={s}>{s}</option>
-              ))}
-            </select>
-
             {/* Was read (form.isTaxChallan gates the HSN/SAC field and its
                 required-on-submit validation) but had no control to actually
                 set it — every deliveryChallan created here was permanently
@@ -1339,7 +1327,17 @@ const DeliveryChallanFormFull = ({
                       required
                       value={form.date}
                       onChange={(e) => {
-                        setForm((prev) => ({ ...prev, date: e.target.value }));
+                        const newDate = e.target.value;
+                        setForm((prev) => {
+                          let newDueDate = prev.dueDate;
+                          if (!editingDeliveryChallan && !prev.dueDate) {
+                            const offsetDays = defaultDueDateDays ?? 30;
+                            const d = new Date(newDate);
+                            d.setDate(d.getDate() + offsetDays);
+                            newDueDate = d.toISOString().split("T")[0];
+                          }
+                          return { ...prev, date: newDate, dueDate: newDueDate };
+                        });
                         setHasUnsavedChanges(true);
                       }}
                     />

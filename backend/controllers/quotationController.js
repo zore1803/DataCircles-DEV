@@ -28,7 +28,6 @@ exports.createQuotation = async (req, res) => {
       amount,
       status,
       items,
-      style,
       notes,
       terms,
       isTaxQuotation,
@@ -138,7 +137,6 @@ exports.createQuotation = async (req, res) => {
       amount,
       status,
       items,
-      style: style || "",
       notes: notes || "",
       terms: terms || "",
       isTaxQuotation: isTaxQuotation || false,
@@ -172,6 +170,11 @@ exports.getAllQuotations = async (req, res) => {
   try {
     const { search } = req.query;
     let query = { organization: req.user.organization };
+
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
+
     if (search) {
       const matchingDeals = await Deal.find(
         { organization: req.user.organization, title: { $regex: search, $options: "i" } },
@@ -208,6 +211,11 @@ exports.getAllQuotationsPaginated = async (req, res) => {
     } = req.query;
 
     const query = { organization: req.user.organization };
+
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
+
     if (search) {
       const matchingDeals = await Deal.find(
         { organization: req.user.organization, title: { $regex: search, $options: "i" } },
@@ -290,9 +298,8 @@ exports.downloadQuotation = async (req, res) => {
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
 
-    // The template comes from the document's own `style` when it has one,
-    // otherwise from the organization's document settings — resolved inside
-    // htmlDocumentPdf, which renders the same markup as the live preview.
+    // The template is resolved from the organization's document settings
+    // inside htmlDocumentPdf, which renders the same markup as the live preview.
     const copyType = ["original", "duplicate", "triplicate"].includes(req.query.copyType)
       ? req.query.copyType
       : "original";
@@ -341,7 +348,6 @@ exports.updateQuotation = async (req, res) => {
       amount,
       status,
       items,
-      style,
       notes,
       terms,
       isTaxQuotation,
@@ -404,7 +410,6 @@ exports.updateQuotation = async (req, res) => {
         amount,
         status,
         items,
-        style,
         notes,
         terms,
         isTaxQuotation,
@@ -480,9 +485,8 @@ exports.sendQuotationEmail = async (req, res) => {
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
 
-    // The template comes from the document's own `style` when it has one,
-    // otherwise from the organization's document settings — resolved inside
-    // htmlDocumentPdf, which renders the same markup as the live preview.
+    // The template is resolved from the organization's document settings
+    // inside htmlDocumentPdf, which renders the same markup as the live preview.
     const pdfBuffer = await htmlDocumentPdf(quotation, bankDetails, orgDetails, "quotation");
 
     const transporter = nodemailer.createTransport({
@@ -570,5 +574,37 @@ exports.updateQuotationNumber = async (req, res) => {
   } catch (err) {
     console.error("updateQuotationNumber error:", err);
     return res.status(500).json({ error: err.message });
+  }
+};
+
+exports.bulkUpdateStatus = async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    if (!ids || !ids.length || !status) {
+      return res.status(400).json({ error: "ids and status are required" });
+    }
+    await Quotation.updateMany(
+      { _id: { $in: ids }, organization: req.user.organization },
+      { status }
+    );
+    res.json({ message: `Updated ${ids.length} quotations to status: ${status}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.bulkUpdateSignature = async (req, res) => {
+  try {
+    const { ids, signature, signatureType } = req.body;
+    if (!ids || !ids.length) {
+      return res.status(400).json({ error: "ids are required" });
+    }
+    await Quotation.updateMany(
+      { _id: { $in: ids }, organization: req.user.organization },
+      { signature: signature || "", signatureType: signatureType || "text" }
+    );
+    res.json({ message: `Updated signature for ${ids.length} quotations` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };

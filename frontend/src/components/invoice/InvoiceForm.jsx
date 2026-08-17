@@ -320,6 +320,7 @@ const InvoiceForm = ({
   editingInvoice,
   conversionData,
   onPreview,
+  defaultDueDateDays = null,
 }) => {
   const [form, setForm] = useState({
     deal: "",
@@ -804,9 +805,9 @@ const InvoiceForm = ({
     return gstinRegex.test(gstin);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const submitInvoice = async (statusValue) => {
     setIsSubmitting(true);
+    const isDraft = statusValue === "Draft";
 
     // Validate required fields
     if (!form.deal) {
@@ -825,51 +826,69 @@ const InvoiceForm = ({
       return;
     }
 
-    // Validate GSTIN format
-    if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
-      setToastMessage(
-        "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
-      );
+    // The backend rejects a document with zero items unconditionally, even
+    // for drafts, so this check can't live inside the isDraft-skipped block
+    // below — otherwise a draft with no items reaches the backend and comes
+    // back as a raw, confusing "Items array is required" error instead of a
+    // friendly one shown here.
+    const hasAnyItem = form.items.some((item) => item.name && item.name.trim());
+    if (!hasAnyItem) {
+      setToastMessage("Add at least one item before saving this invoice.");
       setTimeout(() => setToastMessage(""), 3000);
       setIsSubmitting(false);
       return;
     }
 
-    // Validate items
-    const invalidItems = form.items.filter(
-      (item) =>
-        !item.name ||
-        !item.rate ||
-        !item.quantity ||
-        (form.isTaxInvoice && !item.hsn) ||
-        (item.discountType === "percentage" && item.discount > 100)
-    );
-    if (invalidItems.length > 0) {
-      setToastMessage(`Item not found`);
-      setTimeout(() => setToastMessage(""), 3000);
-      setIsSubmitting(false);
-      return;
-    }
+    // A quick draft only needs enough to identify the document; full GSTIN and
+    // item validation apply once it's actually being created for real.
+    if (!isDraft) {
+      // Validate GSTIN format
+      if (form.receiverGSTIN && !validateGSTIN(form.receiverGSTIN)) {
+        setToastMessage(
+          "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
+        );
+        setTimeout(() => setToastMessage(""), 3000);
+        setIsSubmitting(false);
+        return;
+      }
 
-    const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
-      form.items
-    );
-    const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
-      subtotalAfterItemDiscounts,
-      form.discount
-    );
-    if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
-      setToastMessage(
-        "Invoice discount cannot exceed subtotal after item discounts."
+      // Validate items
+      const invalidItems = form.items.filter(
+        (item) =>
+          !item.name ||
+          !item.rate ||
+          !item.quantity ||
+          (form.isTaxInvoice && !item.hsn) ||
+          (item.discountType === "percentage" && item.discount > 100)
       );
-      setTimeout(() => setToastMessage(""), 3000);
-      setIsSubmitting(false);
-      return;
+      if (invalidItems.length > 0) {
+        setToastMessage(`Item not found`);
+        setTimeout(() => setToastMessage(""), 3000);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const subtotalAfterItemDiscounts = calculateSubtotalAfterItemDiscounts(
+        form.items
+      );
+      const invoiceDiscountAmount = calculateInvoiceDiscountAmount(
+        subtotalAfterItemDiscounts,
+        form.discount
+      );
+      if (invoiceDiscountAmount > subtotalAfterItemDiscounts) {
+        setToastMessage(
+          "Invoice discount cannot exceed subtotal after item discounts."
+        );
+        setTimeout(() => setToastMessage(""), 3000);
+        setIsSubmitting(false);
+        return;
+      }
     }
 
     try {
       const payload = {
         ...form,
+        status: statusValue,
         billingAddress: form.billingAddress,
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
         amount: form.isTaxInvoice
@@ -966,11 +985,17 @@ const InvoiceForm = ({
   };
 
   const handleSaveAndExit = async () => {
-    await handleSubmit(new Event("submit"));
+    await submitInvoice("Pending");
     if (!toastMessage.includes("Failed")) {
       setShowConfirmDialog(false);
       onClose();
     }
+  };
+
+  const handleSaveDraft = () => submitInvoice("Draft");
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    submitInvoice(form.status || "Draft");
   };
 
   const handleClose = () => {
@@ -1223,7 +1248,8 @@ const InvoiceForm = ({
                 </button>
               )}
               <button
-                type="submit"
+                type="button"
+                onClick={handleSaveDraft}
                 disabled={isSubmitting}
                 className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
@@ -1294,7 +1320,17 @@ const InvoiceForm = ({
                     required
                     value={form.date}
                     onChange={(e) => {
-                      setForm((prev) => ({ ...prev, date: e.target.value }));
+                      const newDate = e.target.value;
+                      setForm((prev) => {
+                        let newDueDate = prev.dueDate;
+                        if (!editingInvoice && !prev.dueDate) {
+                          const offsetDays = defaultDueDateDays ?? 30;
+                          const d = new Date(newDate);
+                          d.setDate(d.getDate() + offsetDays);
+                          newDueDate = d.toISOString().split("T")[0];
+                        }
+                        return { ...prev, date: newDate, dueDate: newDueDate };
+                      });
                       setHasUnsavedChanges(true);
                     }}
                   />
@@ -1318,9 +1354,9 @@ const InvoiceForm = ({
                         type="button"
                         className="text-[11px] font-medium px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors"
                         onClick={() => {
-                          const newDate = new Date();
-                          newDate.setDate(newDate.getDate() + days);
-                          setForm(prev => ({ ...prev, dueDate: newDate.toISOString().split('T')[0] }));
+                          const base = form.date ? new Date(form.date) : new Date();
+                          base.setDate(base.getDate() + days);
+                          setForm(prev => ({ ...prev, dueDate: base.toISOString().split('T')[0] }));
                           setHasUnsavedChanges(true);
                         }}
                       >
@@ -2422,22 +2458,34 @@ const CreateInvoicePanel = ({
     const loadDocSettings = async () => {
       try {
         const res = await API.get("/document-settings");
+        const d = res.data || {};
         setDocSettings({
-          invoicePrefix: res.data?.invoicePrefix || "INV-",
-          invoiceSuffix: res.data?.invoiceSuffix || "",
-          invoicePrefixes: res.data?.invoicePrefixes || ["INV-"],
-          invoiceSuffixes: res.data?.invoiceSuffixes || [],
-          nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
-          defaultNotes: res.data?.defaultNotes || "",
-          defaultTerms: res.data?.defaultTerms || "",
-          documentTypeSettings: res.data?.documentTypeSettings || { invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] } },
+          invoicePrefix: d.invoicePrefix || "INV-",
+          invoiceSuffix: d.invoiceSuffix || "",
+          invoicePrefixes: d.invoicePrefixes || ["INV-"],
+          invoiceSuffixes: d.invoiceSuffixes || [],
+          nextInvoiceNumber: d.nextInvoiceNumber || 1,
+          defaultNotes: d.defaultNotes || "",
+          defaultTerms: d.defaultTerms || "",
+          defaultDueDateDays: d.defaultDueDateDays,
+          documentTypeSettings: d.documentTypeSettings || { invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] } },
         });
-        setForm((prev) => ({
-          ...prev,
-          invoicePrefix: res.data?.invoicePrefix || "INV-",
-          invoiceSuffix: res.data?.invoiceSuffix || "",
-          nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
-        }));
+        setForm((prev) => {
+          let newDueDate = prev.dueDate;
+          if (!isEditing && !prev.dueDate && prev.date) {
+            const offsetDays = d.defaultDueDateDays ?? 30;
+            const dateObj = new Date(prev.date);
+            dateObj.setDate(dateObj.getDate() + offsetDays);
+            newDueDate = dateObj.toISOString().split("T")[0];
+          }
+          return {
+            ...prev,
+            invoicePrefix: d.invoicePrefix || "INV-",
+            invoiceSuffix: d.invoiceSuffix || "",
+            nextInvoiceNumber: d.nextInvoiceNumber || 1,
+            dueDate: newDueDate,
+          };
+        });
       } catch (error) {
         console.error("Failed to load document settings", error);
       }
@@ -3081,7 +3129,19 @@ const CreateInvoicePanel = ({
                   <input
                     type="date"
                     value={form.date}
-                    onChange={(e) => setField("date", e.target.value)}
+                    onChange={(e) => {
+                      const newDate = e.target.value;
+                      setForm((prev) => {
+                        let newDueDate = prev.dueDate;
+                        if (!isEditing && !prev.dueDate) {
+                          const offsetDays = docSettings?.defaultDueDateDays ?? 30;
+                          const d = new Date(newDate);
+                          d.setDate(d.getDate() + offsetDays);
+                          newDueDate = d.toISOString().split("T")[0];
+                        }
+                        return { ...prev, date: newDate, dueDate: newDueDate };
+                      });
+                    }}
                     className={inputClass}
                   />
                 </div>

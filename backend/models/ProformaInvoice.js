@@ -32,7 +32,6 @@ const proformaInvoiceSchema = new mongoose.Schema({
       min: 0,
     },
   },
-  style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant', 'Compact', 'Corporate', 'Vibrant', 'Mono', ''], default: '' },
   // Free-text footer blocks, printed on the document when present.
   notes: { type: String, default: '' },
   terms: { type: String, default: '' },
@@ -52,6 +51,13 @@ const proformaInvoiceSchema = new mongoose.Schema({
     discountType: { type: String, enum: ['amount', 'percentage'], default: 'amount' },
     discount: { type: Number, default: 0, min: 0 },
   }],
+  digitalSignature: {
+    status: { type: String, enum: ['pending', 'signed', 'cancelled', 'failed', 'none'], default: 'none' },
+    provider: { type: String, enum: ['docusign', 'zoho', 'internal', 'other'] },
+    documentId: { type: String },
+    signedAt: { type: Date },
+    signedUrl: { type: String }
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model('ProformaInvoice', proformaInvoiceSchema);

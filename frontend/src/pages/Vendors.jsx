@@ -29,6 +29,7 @@ import {
   PinOff,
   EyeOff,
   Video,
+  Settings,
 } from "lucide-react";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import BulkActions from "../components/BulkActions";
@@ -49,6 +50,8 @@ import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import FilterIcon from "../components/common/FilterIcon";
 import ExportModal from "../components/common/ExportModal";
+import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
+import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 
 import SearchIcon from "../components/common/SearchIcon";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
@@ -116,8 +119,8 @@ function Vendors() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [filterCompany, setFilterCompany] = useState("");
-  const [debouncedFilterCompany, setDebouncedFilterCompany] = useState("");
+  const [activeFilters, setActiveFilters] = useState([]);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [editVendor, setEditVendor] = useState(null);
@@ -210,8 +213,8 @@ function Vendors() {
   });
 
   // Toolbar UI state — same shape as Accounting.jsx's action row.
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
 
   // Search expand/collapse animation — same mechanics as Companies.jsx: the
   // title/subtitle shrink away and the search pill grows via a width
@@ -753,13 +756,6 @@ function Vendors() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedFilterCompany(filterCompany);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [filterCompany]);
-
   // Reset to page 1 when the search/filter changes. Skips the initial mount —
   // otherwise it races the first fetch below. Returning `prev` unchanged when
   // already on page 1 avoids handing back a new pagination object on every
@@ -773,7 +769,7 @@ function Vendors() {
     setPagination((prev) =>
       prev.currentPage === 1 ? prev : { ...prev, currentPage: 1 },
     );
-  }, [debouncedSearchTerm, debouncedFilterCompany]);
+  }, [debouncedSearchTerm, activeFilters]);
 
   // Skipped on the very first mount when a `?search=` deep link is pending —
   // that leaves the search-term effect above as the only initial fetch,
@@ -801,7 +797,7 @@ function Vendors() {
       fetchVendors();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearchTerm, debouncedFilterCompany]);
+  }, [debouncedSearchTerm, activeFilters]);
 
   useEffect(() => {
     fetchVendorFields();
@@ -840,8 +836,8 @@ function Vendors() {
       if (debouncedSearchTerm.trim()) {
         params.append("search", debouncedSearchTerm.trim());
       }
-      if (debouncedFilterCompany) {
-        params.append("company", debouncedFilterCompany);
+      if (activeFilters && activeFilters.length > 0) {
+        params.append("advancedFilters", JSON.stringify(activeFilters));
       }
 
       const res = await API.get(`/vendors/pagination?${params.toString()}`);
@@ -907,7 +903,7 @@ function Vendors() {
     try {
       const params = new URLSearchParams({ allIds: "true" });
       if (debouncedSearchTerm.trim()) params.append("search", debouncedSearchTerm.trim());
-      if (debouncedFilterCompany) params.append("company", debouncedFilterCompany);
+      if (activeFilters && activeFilters.length > 0) params.append("advancedFilters", JSON.stringify(activeFilters));
 
       const res = await API.get(`/vendors/pagination?${params.toString()}`);
       setSelectedVendors(res.data.ids || []);
@@ -1035,11 +1031,6 @@ function Vendors() {
     setShowDropdown(null);
   };
 
-  const getUniqueCompanies = () => {
-    const companies = vendors.map((v) => v.company).filter(Boolean);
-    return [...new Set(companies)].sort();
-  };
-
   const handleEditVendor = async (vendor) => {
     try {
       const response = await API.get(`/vendors/${vendor._id}`);
@@ -1132,6 +1123,52 @@ function Vendors() {
   const exitSelectionMode = () => {
     setSelectedVendors([]);
   };
+
+  // Converts the existing columnOrder/hiddenCols state into the shape
+  // ColumnSettingsPanel expects, and translates saves back to state.
+  const columnsForSettings = useMemo(
+    () =>
+      columnOrder
+        .map((id, idx) => {
+          const def = columnDefById[id];
+          if (!def) return null;
+          const isBase = BASE_COLUMN_DEFS.some((c) => c.id === id);
+          return {
+            key: id,
+            label: def.label,
+            visible: !hiddenCols.includes(id),
+            order: idx,
+            required: def.required || false,
+            isCustomField: !isBase,
+            defaultVisible: isBase,
+          };
+        })
+        .filter(Boolean),
+    [columnOrder, hiddenCols, columnDefById]
+  );
+
+  const handleSaveVendorColumns = (savedColumns) => {
+    const newOrder = savedColumns.map((c) => c.key);
+    const newHidden = savedColumns.filter((c) => !c.visible).map((c) => c.key);
+    setColumnOrder(newOrder);
+    setHiddenCols(newHidden);
+  };
+
+  // Columns exposed to the AdvancedFilterPanel — mirrors the base column set
+  // plus any custom vendor fields loaded from the server.
+  const filterColumns = useMemo(() => [
+    { key: "name", label: "Name" },
+    { key: "company", label: "Company" },
+    { key: "email", label: "Email" },
+    { key: "phone", label: "Phone" },
+    { key: "balance", label: "Closing Balance" },
+    ...vendorFields.map((f) => ({
+      key: f.name || f,
+      label: f.name || f,
+      isCustomField: true,
+      options: f.options,
+    })),
+  ], [vendorFields]);
 
   // One flag drives every skeleton on the page — header, table body, and
   // pagination all appear and resolve together, same as Companies.jsx.
@@ -1315,55 +1352,23 @@ function Vendors() {
 
           <div className="relative flex-shrink-0">
             <button
-              title="Filter by company"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowFilterMenu((v) => !v);
-              }}
-              className={`flex items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
-                filterCompany
+              title="Filters"
+              onClick={() => setShowAdvancedFilters(true)}
+              className={`relative flex items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
+                activeFilters.length > 0
                   ? "border-[#0085FF] text-[#0085FF]"
                   : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
               }`}
             >
               <FilterIcon
-                className={`w-4 h-4 ${filterCompany ? "text-[#0085FF]" : "text-gray-800"}`}
+                className={`w-4 h-4 ${activeFilters.length > 0 ? "text-[#0085FF]" : "text-gray-800"}`}
               />
+              {activeFilters.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                  {activeFilters.length}
+                </span>
+              )}
             </button>
-            {showFilterMenu && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute right-0 mt-2 w-56 max-h-72 overflow-auto bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-50"
-              >
-                <button
-                  onClick={() => {
-                    setFilterCompany("");
-                    setShowFilterMenu(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
-                    !filterCompany ? "text-[#0085FF] font-medium" : "text-gray-700"
-                  }`}
-                >
-                  All Companies
-                </button>
-                {getUniqueCompanies().map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => {
-                      setFilterCompany(c);
-                      setShowFilterMenu(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 truncate ${
-                      filterCompany === c
-                        ? "text-[#0085FF] font-medium"
-                        : "text-gray-700"
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="relative flex-shrink-0">
@@ -1391,6 +1396,16 @@ function Vendors() {
                 >
                   <Upload className="w-4 h-4 text-gray-400" />
                   {showImport ? "Hide Import" : "Import"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowColumnSettings(true);
+                    setShowMoreMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Settings className="w-4 h-4 text-gray-400" />
+                  Column Settings
                 </button>
                 <Link
                   to="/settings/forms?module=Vendor"
@@ -1951,6 +1966,26 @@ function Vendors() {
         onClose={() => setShowUpgradeModal(false)}
         minPlan="growth"
         feature="Selecting multiple rows"
+      />
+
+      <AdvancedFilterPanel
+        isOpen={showAdvancedFilters}
+        onClose={() => setShowAdvancedFilters(false)}
+        columns={filterColumns}
+        filters={activeFilters}
+        setFilters={setActiveFilters}
+        onApply={(newFilters) => setActiveFilters(newFilters)}
+        title="Filter Vendors"
+        subtitle="Find specific vendors quickly"
+        emptyStateText="Add a rule to narrow down your vendor list."
+      />
+
+      <ColumnSettingsPanel
+        isOpen={showColumnSettings}
+        onClose={() => setShowColumnSettings(false)}
+        columns={columnsForSettings}
+        onSave={handleSaveVendorColumns}
+        moduleName="Vendors"
       />
     </>
   );

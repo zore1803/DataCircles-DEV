@@ -61,7 +61,11 @@ exports.getAllPurchaseOrders = async (req, res) => {
   try {
     const { search } = req.query;
     let query = { organization: req.user.organization };
-    
+
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
+
     if (search) {
       query.$or = [
         { poNumber: { $regex: search, $options: 'i' } },
@@ -92,7 +96,11 @@ exports.getAllPurchaseOrdersWithPagination = async (req, res) => {
     
     // Build query object
     let query = { organization: req.user.organization };
-    
+
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
+
     // Search functionality
     if (search) {
       query.$or = [
