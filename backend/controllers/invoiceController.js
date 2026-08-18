@@ -7,6 +7,8 @@ const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
 const DocumentSettings = require("../models/DocumentSettings");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
+const sendPaymentEmail = require("../utils/sendPaymentEmail");
+const sendSMS = require("../utils/sendSMS");
 
 const calculateItemAmount = (item) => {
   const rate = parseFloat(item.rate) || 0;
@@ -931,7 +933,8 @@ const bulkEmailGrouped = async (req, res) => {
 // "Save Payment" click hit a 404 and surfaced as "Failed to record payment".
 const addInvoicePayment = async (req, res) => {
   try {
-    const { amount, paymentDate, paymentMethod, reference, notes } = req.body;
+    const { amount, paymentDate, paymentMethod, reference, notes, internalNotes,
+            notifyByEmail, customerEmail, notifyBySMS, customerPhone, signatureUrl } = req.body;
 
     const parsedAmount = parseFloat(amount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
@@ -958,6 +961,7 @@ const addInvoicePayment = async (req, res) => {
       paymentMethod: paymentMethod || "UPI",
       reference: reference || "",
       notes: notes || "",
+      internalNotes: internalNotes || "",
       recordedBy: req.user._id,
       recordedAt: new Date(),
     });
@@ -978,9 +982,141 @@ const addInvoicePayment = async (req, res) => {
     // tightened) that have nothing to do with this payment.
     await invoice.save({ validateModifiedOnly: true });
 
+    // Non-blocking notifications — failure must never affect the payment save response
+    const branding = (notifyByEmail || notifyBySMS)
+      ? await Branding.findOne({ organization: req.user.organization }).lean()
+      : null;
+
+    if (notifyByEmail && customerEmail) {
+      sendPaymentEmail({
+        to: customerEmail,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: parsedAmount,
+        paymentDate,
+        paymentMethod,
+        reference,
+        orgName: branding?.companyName,
+        signatureUrl: signatureUrl || branding?.signatureUrl,
+      }).catch((err) => console.error("Payment receipt email failed:", err.message));
+    }
+
+    if (notifyBySMS && customerPhone) {
+      const orgName = branding?.companyName || "us";
+      const formatted = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(parsedAmount);
+      sendSMS({
+        phone: customerPhone,
+        message: `Payment of ${formatted} received for invoice ${invoice.invoiceNumber}. Thank you! - ${orgName}`,
+      }).catch((err) => console.error("Payment receipt SMS failed:", err.message));
+    }
+
     res.json({ message: "Payment recorded successfully", invoice });
   } catch (error) {
     res.status(500).json({ error: `Failed to record payment: ${error.message}` });
+  }
+};
+
+const getInvoiceById = async (req, res) => {
+  try {
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    })
+      .populate("deal", "title")
+      .populate("payments.recordedBy", "name email");
+    if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+    res.json(invoice);
+  } catch (error) {
+    res.status(500).json({ error: `Failed to fetch invoice: ${error.message}` });
+  }
+};
+
+const getInvoicePayments = async (req, res) => {
+  try {
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).populate("payments.recordedBy", "name email");
+    if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+    res.json({ payments: invoice.payments, totalAmount: invoice.amount });
+  } catch (error) {
+    res.status(500).json({ error: `Failed to fetch payments: ${error.message}` });
+  }
+};
+
+const updateInvoicePayment = async (req, res) => {
+  try {
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+    if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+    const payment = invoice.payments.id(req.params.paymentId);
+    if (!payment) return res.status(404).json({ error: "Payment not found" });
+
+    const { amount, paymentDate, paymentMethod, reference, notes, internalNotes } = req.body;
+    const parsedAmount = parseFloat(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: "A valid payment amount greater than 0 is required." });
+    }
+
+    const otherPaid = (invoice.payments || [])
+      .filter((p) => p._id.toString() !== req.params.paymentId)
+      .reduce((sum, p) => sum + p.amount, 0);
+    const amountDue = invoice.amount - otherPaid;
+    if (parsedAmount > amountDue + 0.01) {
+      return res.status(400).json({ error: `Payment cannot exceed the remaining balance of ₹${amountDue.toFixed(2)}.` });
+    }
+
+    payment.amount = parsedAmount;
+    if (paymentDate) payment.paymentDate = new Date(paymentDate);
+    if (paymentMethod) payment.paymentMethod = paymentMethod;
+    payment.reference = reference ?? payment.reference;
+    payment.notes = notes ?? payment.notes;
+    payment.internalNotes = internalNotes ?? payment.internalNotes;
+
+    const newTotalPaid = otherPaid + parsedAmount;
+    if (newTotalPaid >= invoice.amount - 0.01) {
+      invoice.status = "Paid";
+    } else if (newTotalPaid > 0) {
+      invoice.status = "Partially Paid";
+    } else {
+      invoice.status = "Unpaid";
+    }
+
+    await invoice.save({ validateModifiedOnly: true });
+    res.json({ message: "Payment updated successfully", invoice });
+  } catch (error) {
+    res.status(500).json({ error: `Failed to update payment: ${error.message}` });
+  }
+};
+
+const deleteInvoicePayment = async (req, res) => {
+  try {
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+    if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+    const payment = invoice.payments.id(req.params.paymentId);
+    if (!payment) return res.status(404).json({ error: "Payment not found" });
+
+    payment.deleteOne();
+
+    const totalPaid = (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0);
+    if (totalPaid >= invoice.amount - 0.01) {
+      invoice.status = "Paid";
+    } else if (totalPaid > 0) {
+      invoice.status = "Partially Paid";
+    } else {
+      invoice.status = "Unpaid";
+    }
+
+    await invoice.save({ validateModifiedOnly: true });
+    res.json({ message: "Payment deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: `Failed to delete payment: ${error.message}` });
   }
 };
 
@@ -1000,4 +1136,8 @@ module.exports = {
   updateInvoiceNumber,
   bulkEmailGrouped,
   addInvoicePayment,
+  getInvoiceById,
+  getInvoicePayments,
+  updateInvoicePayment,
+  deleteInvoicePayment,
 };

@@ -21,6 +21,7 @@ import SearchableDropdown from "../contact/SearchableDropdown";
 import toast from "react-hot-toast";
 import { AddressFieldsGroup, emptyAddress, isAddressEmpty, SectionHeader } from "../invoice/formPrimitives";
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
+import { computeDocument } from "../../../../shared/documentTemplates";
 
 import SearchIcon from "../common/SearchIcon";
 // Function to convert number to words
@@ -163,6 +164,7 @@ const ItemSearchSelect = ({
       parentItemId: item.parentItemId || null,
       discountType: "amount",
       discount: 0,
+      gstRate: item.gstRate || 0,
     });
     setIsOpen(false);
     setSearchTerm("");
@@ -774,6 +776,7 @@ const PerformaInvoiceForm = ({
           parentItemId: null,
           discountType: "amount",
           discount: 0,
+          gstRate: 0,
         },
       ],
       amount: calculateTotalAmount(
@@ -948,7 +951,13 @@ const PerformaInvoiceForm = ({
         notes: form.notes,
         terms: form.terms,
         signature: form.signature,
-        amount: calculateTotalAmount(form.items, form.discount),
+        // Same computeDocument() the live preview/PDF and the full-width
+        // Pro Forma form use, so the saved amount honors each item's own
+        // gstRate instead of the old calculateTotalAmount(), which never
+        // added tax at all.
+        amount: form.isTaxInvoice
+          ? computeDocument(form, "performa").grandTotal
+          : calculateTotalAmount(form.items, form.discount),
         discount: form.discount,
         status: statusValue,
         items: form.items.map((item) => ({
@@ -962,9 +971,11 @@ const PerformaInvoiceForm = ({
           parentItemId: item.parentItemId,
           discountType: item.discountType,
           discount: parseFloat(item.discount),
+          gstRate: parseFloat(item.gstRate) || 0,
         })),
         style: form.style,
         isTaxInvoice: form.isTaxInvoice,
+        transactionType: form.transactionType,
       };
 
       if (editingPerformaInvoice) {
@@ -1059,7 +1070,17 @@ const PerformaInvoiceForm = ({
     subtotalAfterItemDiscounts,
     form.discount
   );
-  const finalTotal = subtotalAfterItemDiscounts - invoiceDiscountAmount;
+  // Same shared engine the live preview/PDF and the full-width Pro Forma form
+  // use (shared/documentTemplates.js) — honors each item's own gstRate
+  // rather than only a document-level rate, so this summary, the saved
+  // amount and the PDF can never disagree.
+  const taxDetails = form.isTaxInvoice ? computeDocument(form, "performa") : null;
+  const finalTotal = taxDetails
+    ? taxDetails.grandTotal
+    : subtotalAfterItemDiscounts - invoiceDiscountAmount;
+  const cgstAmount = taxDetails?.totalCGST || 0;
+  const sgstAmount = taxDetails?.totalSGST || 0;
+  const igstAmount = taxDetails?.totalIGST || 0;
 
   return (
     <>
@@ -1530,6 +1551,26 @@ const PerformaInvoiceForm = ({
                               aria-label="HSN/SAC code"
                             />
                           </div>
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-600">
+                              GST Rate (%)
+                            </label>
+                            <select
+                              value={item.gstRate ?? 0}
+                              onChange={(e) => {
+                                handleItemChange(index, "gstRate", parseFloat(e.target.value));
+                                setHasUnsavedChanges(true);
+                              }}
+                              className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                              aria-label="Item GST rate"
+                            >
+                              <option value={0}>0%</option>
+                              <option value={5}>5%</option>
+                              <option value={12}>12%</option>
+                              <option value={18}>18%</option>
+                              <option value={28}>28%</option>
+                            </select>
+                          </div>
                         </>
                       )}
                       {!form.isTaxInvoice && (
@@ -1658,6 +1699,7 @@ const PerformaInvoiceForm = ({
                       min="0"
                       step={form.discount.type === "percentage" ? "0.1" : "0.01"}
                       value={form.discount.value}
+                      onWheel={(e) => e.target.blur()}
                       onChange={(e) => {
                         handleDiscountChange("value", e.target.value);
                         setHasUnsavedChanges(true);
@@ -1713,6 +1755,24 @@ const PerformaInvoiceForm = ({
                       <h6>- ₹{formatNumberToIndian(invoiceDiscountAmount)}</h6>
                     </span>
                   </div>
+                  {taxDetails && !taxDetails.isInterState && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-sm font-medium text-slate-600">CGST</span>
+                        <span className="text-sm font-medium text-slate-900">₹{formatNumberToIndian(cgstAmount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm font-medium text-slate-600">SGST</span>
+                        <span className="text-sm font-medium text-slate-900">₹{formatNumberToIndian(sgstAmount)}</span>
+                      </div>
+                    </>
+                  )}
+                  {taxDetails && taxDetails.isInterState && (
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-slate-600">IGST</span>
+                      <span className="text-sm font-medium text-slate-900">₹{formatNumberToIndian(igstAmount)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between border-t pt-2 mt-2">
                     <span className="text-lg font-bold text-slate-900">
                       Final Total

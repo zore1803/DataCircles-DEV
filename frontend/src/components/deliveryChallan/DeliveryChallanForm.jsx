@@ -1530,6 +1530,7 @@ const DeliveryChallanForm = ({
                         min="0"
                         step="0.01"
                         value={form.discount.value}
+                        onWheel={(e) => e.target.blur()}
                         onChange={(e) => {
                           handleDiscountChange("value", e.target.value);
                           setHasUnsavedChanges(true);

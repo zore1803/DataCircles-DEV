@@ -5,10 +5,10 @@ const callLogSchema = new mongoose.Schema(
   {
     contact: { type: mongoose.Schema.Types.ObjectId, ref: "Contact", required: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    organization: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'Organization', 
-      required: true 
+    organization: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
+      required: true
     },
     callType: { type: String, enum: ["Inbound", "Outbound"], default: "Outbound" },
     status: { type: String, enum: ["Connected", "Missed", "Voicemail", "No Answer"], default: "Connected" },

@@ -52,6 +52,10 @@ const proformaInvoiceSchema = new mongoose.Schema({
     parentItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', default: null },
     discountType: { type: String, enum: ['amount', 'percentage'], default: 'amount' },
     discount: { type: Number, default: 0, min: 0 },
+    // Carried over from the catalog Item/variant at the moment it's added to
+    // the pro forma invoice (not looked up live), same as rate/hsn — matches
+    // the per-item gstRate already stored on Quotation items.
+    gstRate: { type: Number, default: 0, min: 0, max: 100 },
   }],
 }, { timestamps: true });
 

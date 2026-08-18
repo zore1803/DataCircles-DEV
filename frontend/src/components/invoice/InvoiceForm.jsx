@@ -35,7 +35,7 @@ import SearchIcon from "../common/SearchIcon";
 import InvoiceLivePreview from "./InvoiceLivePreview";
 import TemplateDrawer from "./TemplateDrawer";
 import NotesTermsDrawer from "./NotesTermsDrawer";
-import { buildDocumentHtml, GST_RATES, splitGst } from "../../../../shared/documentTemplates.js";
+import { buildDocumentHtml, computeDocument } from "../../../../shared/documentTemplates.js";
 import {
   SectionHeader,
   FieldLabel,
@@ -660,20 +660,6 @@ const InvoiceForm = ({
     setHasUnsavedChanges(true);
   };
 
-  const handleTaxChange = (field, value) => {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-      amount: calculateTotalAmount(
-        prev.items,
-        prev.discount,
-        value,
-        prev.transactionType
-      ),
-    }));
-    setHasUnsavedChanges(true);
-  };
-
   const handleItemSelect = (index, itemData) => {
     setForm((prev) => {
       const newItems = [...prev.items];
@@ -890,19 +876,14 @@ const InvoiceForm = ({
         status: statusValue,
         billingAddress: form.billingAddress,
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
-        amount: form.isTaxInvoice
-          ? calculateTotalAmount(
-            form.items,
-            form.discount,
-            form.gstRate,
-            form.transactionType
-          )
-          : calculateTotalAmount(
-            form.items,
-            form.discount,
-            0,
-            form.transactionType
-          ),
+        // Same computeDocument() the live preview/PDF use, so the saved
+        // amount can never disagree with what the totals card just showed —
+        // and, unlike the old calculateTotalAmount() call, this honors each
+        // item's own gstRate instead of only the document-level rate.
+        amount: (() => {
+          const t = computeDocument(form, "tax").grandTotal;
+          return form.isRoundOff ? Math.round(t) : t;
+        })(),
         items: form.items.map((item) => ({
           itemId: item._id,
           name: item.name,
@@ -914,6 +895,7 @@ const InvoiceForm = ({
           parentItemId: item.parentItemId,
           discountType: item.discountType,
           discount: parseFloat(item.discount),
+          gstRate: parseFloat(item.gstRate) || 0,
         })),
       };
 
@@ -1030,6 +1012,7 @@ const InvoiceForm = ({
           discount: item.discount || 0,
         })),
         discount: sourceData.discount || { type: "fixed", value: 0 },
+        isRoundOff: sourceData.isRoundOff !== undefined ? sourceData.isRoundOff : true,
         amount: sourceData.amount || 0,
         status: editingInvoice ? sourceData.status : "Draft",
         style: sourceData.style || "",
@@ -1133,9 +1116,13 @@ const InvoiceForm = ({
     subtotalAfterItemDiscounts,
     form.discount
   );
-  const netTaxable = subtotalAfterItemDiscounts - invoiceDiscountAmount;
-  const totalTax = form.isTaxInvoice ? (netTaxable * form.gstRate) / 100 : 0;
-  let finalTotal = netTaxable + totalTax;
+  // Same shared engine the live preview/PDF use (shared/documentTemplates.js)
+  // — honors each item's own gstRate instead of a single document-level
+  // rate, so this summary can never disagree with what actually saves/prints.
+  const taxDetails = form.isTaxInvoice ? computeDocument(form, "tax") : null;
+  let finalTotal = taxDetails
+    ? taxDetails.grandTotal
+    : subtotalAfterItemDiscounts - invoiceDiscountAmount;
   let roundOffAmount = 0;
   if (form.isRoundOff) {
     const rounded = Math.round(finalTotal);
@@ -1143,11 +1130,9 @@ const InvoiceForm = ({
     finalTotal = rounded;
   }
 
-  const cgstAmount =
-    form.transactionType === "intra" ? netTaxable * (form.gstRate / 200) : 0;
-  const sgstAmount =
-    form.transactionType === "intra" ? netTaxable * (form.gstRate / 200) : 0;
-  const igstAmount = form.transactionType === "inter" ? totalTax : 0;
+  const cgstAmount = taxDetails?.totalCGST || 0;
+  const sgstAmount = taxDetails?.totalSGST || 0;
+  const igstAmount = taxDetails?.totalIGST || 0;
 
   // format deals with company name
   const formattedDeals = localDeals.map((deal) => ({
@@ -1434,7 +1419,10 @@ const InvoiceForm = ({
               </div>
             </div>
 
-            {/* Section 3: GST & Tax Details (conditional) */}
+            {/* Section 3: GST & Tax Details (conditional) — GST rate is set
+                per item below (Products & Services → More Details), matching
+                the full-width form; there's no document-level rate here
+                since a single rate can't represent a mixed-rate item list. */}
             {form.isTaxInvoice && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <SectionHeader number="03" title="GST & Tax Details" />
@@ -1453,21 +1441,6 @@ const InvoiceForm = ({
                         }));
                         setHasUnsavedChanges(true);
                       }}
-                    />
-                  </div>
-                  <div className="md:col-span-2 space-y-2">
-                    <label className="text-sm font-semibold text-gray-700">GST Rate (%)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.5"
-                      value={form.gstRate}
-                      onChange={(e) =>
-                        handleTaxChange("gstRate", parseFloat(e.target.value) || 0)
-                      }
-                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      placeholder="18"
                     />
                   </div>
                 </div>
@@ -1825,6 +1798,7 @@ const InvoiceForm = ({
                         min="0"
                         step="0.01"
                         value={form.discount.value}
+                        onWheel={(e) => e.target.blur()}
                         onChange={(e) => {
                           handleDiscountChange("value", e.target.value);
                           setHasUnsavedChanges(true);
@@ -1861,21 +1835,21 @@ const InvoiceForm = ({
                       </span>
                     </div>
 
-                    {form.isTaxInvoice && form.transactionType === "intra" && (
+                    {taxDetails && !taxDetails.isInterState && (
                       <>
                         <div className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600 font-medium">CGST @{form.gstRate / 2}%</span>
+                          <span className="text-gray-600 font-medium">CGST</span>
                           <span className="text-gray-900 font-medium">₹{formatNumberFixed(cgstAmount)}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600 font-medium">SGST @{form.gstRate / 2}%</span>
+                          <span className="text-gray-600 font-medium">SGST</span>
                           <span className="text-gray-900 font-medium">₹{formatNumberFixed(sgstAmount)}</span>
                         </div>
                       </>
                     )}
-                    {form.isTaxInvoice && form.transactionType === "inter" && (
+                    {taxDetails && taxDetails.isInterState && (
                       <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-600 font-medium">IGST @{form.gstRate}%</span>
+                        <span className="text-gray-600 font-medium">IGST</span>
                         <span className="text-gray-900 font-medium">₹{formatNumberFixed(igstAmount)}</span>
                       </div>
                     )}
@@ -2597,15 +2571,20 @@ const CreateInvoicePanel = ({
         ? (afterItemDiscounts * form.discount.value) / 100
         : form.discount.value
       : 0;
-  const netTaxable = afterItemDiscounts - invoiceDiscountAmount;
-  // Same split used for the item table and totals in the PDF/live preview
-  // (buildDocumentHtml → computeDocument → splitGst) — kept as one function
-  // so this summary can never disagree with what actually prints.
-  const gstSplit = form.isTaxInvoice
-    ? splitGst(netTaxable, form.gstRate, form.transactionType)
+  // Same shared engine the live preview/PDF use (buildDocumentHtml →
+  // computeDocument → splitGst, in shared/documentTemplates.js) — honors
+  // each item's own gstRate rather than only a document-level rate, so this
+  // summary, the preview pane and the saved amount can never disagree.
+  // ("quotation" maps to "tax" here only for computeDocument's internal
+  // isTaxQuotation/isTaxInvoice lookup — this panel's own state field is
+  // always named form.isTaxInvoice regardless of document type.)
+  const taxDetails = form.isTaxInvoice
+    ? computeDocument(form, type === "quotation" ? "tax" : type)
+    : null;
+  const gstSplit = taxDetails
+    ? { isInterState: taxDetails.isInterState, cgst: taxDetails.totalCGST, sgst: taxDetails.totalSGST, igst: taxDetails.totalIGST }
     : { cgst: 0, sgst: 0, igst: 0, isInterState: false };
-  const taxAmount = gstSplit.cgst + gstSplit.sgst + gstSplit.igst;
-  let finalTotal = netTaxable + taxAmount;
+  let finalTotal = taxDetails ? taxDetails.grandTotal : afterItemDiscounts - invoiceDiscountAmount;
   let roundOffAmount = 0;
   if (form.isRoundOff) {
     const rounded = Math.round(finalTotal);
@@ -2672,6 +2651,7 @@ const CreateInvoicePanel = ({
           parentItemId: it.parentItemId,
           discountType: it.discountType,
           discount: parseFloat(it.discount) || 0,
+          gstRate: parseFloat(it.gstRate) || 0,
         })),
       };
       if (supportsGSTIN) {
@@ -3130,12 +3110,20 @@ const CreateInvoicePanel = ({
                       company && !isAddressEmpty(company.shippingAddresses?.[0])
                         ? { ...emptyAddress(), ...company.shippingAddresses[0] }
                         : emptyAddress();
+                    // Same seller-state vs. customer-state comparison the
+                    // full-width form uses (InvoiceFormFull.jsx) — kept here
+                    // instead of a manual Transaction Type dropdown so both
+                    // views classify a given deal identically.
+                    const sellerState = (orgDetails?.state || "").trim().toLowerCase();
+                    const customerState = (company?.billingAddress?.state || "").trim().toLowerCase();
+                    const autoType = sellerState && customerState && sellerState !== customerState ? "inter" : "intra";
                     setForm((p) => ({
                       ...p,
                       deal: o.value,
                       receiverGSTIN: supportsGSTIN ? company?.gstin || "" : p.receiverGSTIN,
                       billingAddress: nextBilling,
                       shippingAddress: p.sameAsBilling ? nextBilling : nextShipping,
+                      transactionType: supportsTax ? autoType : p.transactionType,
                     }));
                   }}
                 />
@@ -3310,48 +3298,13 @@ const CreateInvoicePanel = ({
             </div>
 
 
-            {form.isTaxInvoice && (
-              <>
-                <div className="flex flex-col gap-1">
-                  <FieldLabel required>GST Rate</FieldLabel>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={form.gstRate}
-                      onChange={(e) => setField("gstRate", Number(e.target.value))}
-                      className={`${inputClass} flex-1 min-w-0`}
-                    >
-                      {GST_RATES.map((r) => (
-                        <option key={r} value={r}>
-                          {r}%
-                        </option>
-                      ))}
-                    </select>
-                    <div className="w-10 flex-shrink-0" aria-hidden="true" />
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <FieldLabel required>Transaction Type</FieldLabel>
-                  {/* Decides whether GST splits as CGST + SGST (buyer in the
-                      same state) or is charged in full as IGST (buyer in a
-                      different state) — see splitGst() in
-                      shared/documentTemplates.js, the single place this
-                      split is calculated for both the preview and the PDF. */}
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={form.transactionType}
-                      onChange={(e) => setField("transactionType", e.target.value)}
-                      className={`${inputClass} flex-1 min-w-0`}
-                    >
-                      <option value="intra">Intra-state (CGST + SGST)</option>
-                      <option value="inter">Inter-state (IGST)</option>
-                    </select>
-                    <div className="w-10 flex-shrink-0" aria-hidden="true" />
-                  </div>
-                </div>
-              </>
-            )}
           </div>
+          {/* GST rate is set per item below (Products & Services → More
+              Details), matching the full-width form — a single document-level
+              rate can't represent a mixed-rate item list. Transaction Type
+              (CGST+SGST vs IGST) is likewise not a manual choice here: it's
+              auto-derived from seller vs. customer state when a deal is
+              picked, same as the full-width form does. */}
           </>
           )}
 
@@ -3752,6 +3705,7 @@ const CreateInvoicePanel = ({
                   min="0"
                   step={form.discount.type === "percentage" ? "0.1" : "0.01"}
                   value={form.discount.value}
+                  onWheel={(e) => e.target.blur()}
                   onChange={(e) => {
                     const raw = e.target.value;
                     const parsed = parseFloat(raw) || 0;
@@ -3828,28 +3782,10 @@ const CreateInvoicePanel = ({
                   <span>Invoice Discount</span>
                   <span>- {money(invoiceDiscountAmount)}</span>
                 </div>
-                {/* Round off toggle */}
-                <div className="flex items-center justify-between py-1">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setForm((p) => ({ ...p, isRoundOff: !p.isRoundOff }))}
-                      className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${form.isRoundOff ? "bg-[#0085FF]" : "bg-[#C1C9D2]"}`}
-                    >
-                      <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${form.isRoundOff ? "translate-x-4" : "translate-x-0.5"}`} />
-                    </button>
-                    <span className="text-[12px] text-gray-600">Round Off</span>
-                  </div>
-                  {form.isRoundOff && roundOffAmount !== 0 && (
-                    <span className={`text-[12px] font-medium ${roundOffAmount > 0 ? "text-green-600" : "text-red-500"}`}>
-                      {roundOffAmount > 0 ? "+" : ""}{money(roundOffAmount)}
-                    </span>
-                  )}
-                </div>
-                {form.isTaxInvoice && (
+                {taxDetails && (
                   gstSplit.isInterState ? (
                     <div className="flex justify-between text-gray-600">
-                      <span>IGST ({form.gstRate}%)</span>
+                      <span>IGST</span>
                       <span className="font-medium text-[#1F2937]">
                         {money(gstSplit.igst)}
                       </span>
@@ -3857,13 +3793,13 @@ const CreateInvoicePanel = ({
                   ) : (
                     <>
                       <div className="flex justify-between text-gray-600">
-                        <span>CGST ({form.gstRate / 2}%)</span>
+                        <span>CGST</span>
                         <span className="font-medium text-[#1F2937]">
                           {money(gstSplit.cgst)}
                         </span>
                       </div>
                       <div className="flex justify-between text-gray-600">
-                        <span>SGST ({form.gstRate / 2}%)</span>
+                        <span>SGST</span>
                         <span className="font-medium text-[#1F2937]">
                           {money(gstSplit.sgst)}
                         </span>
@@ -3871,6 +3807,26 @@ const CreateInvoicePanel = ({
                     </>
                   )
                 )}
+                {/* Round off toggle — after GST so it adjusts the post-tax total */}
+                <div className="flex items-center justify-between py-1">
+                  <div className="flex items-center gap-2">
+                    <label className="relative cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={form.isRoundOff}
+                        onChange={(e) => setForm((p) => ({ ...p, isRoundOff: e.target.checked }))}
+                      />
+                      <div className="w-8 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600" />
+                    </label>
+                    <span className="text-[12px] text-gray-600">Round Off</span>
+                  </div>
+                  {form.isRoundOff && (
+                    <span className={`text-[12px] font-medium ${roundOffAmount > 0 ? "text-green-600" : roundOffAmount < 0 ? "text-red-500" : "text-gray-500"}`}>
+                      {roundOffAmount > 0 ? "+" : ""}{money(roundOffAmount)}
+                    </span>
+                  )}
+                </div>
                 <div className="flex justify-between items-center px-2.5 py-1.5 rounded-lg bg-[#F0F6FF]">
                   <span className="font-bold text-[#0085FF]">Final Total</span>
                   <span className="font-bold text-[#0085FF]">

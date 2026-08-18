@@ -51,7 +51,7 @@ const quillModules = {
   toolbar: [
     [{ 'header': [1, 2, false] }],
     ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-    [{'list': 'ordered'}, {'list': 'bullet'}, {'indent': '-1'}, {'indent': '+1'}],
+    [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
     ['link'],
     ['clean']
   ],
@@ -133,7 +133,7 @@ const CallLogForm = ({
   // see useSearchOverlayOpen.js. Tied to isSliding (the actual visible
   const handleFormChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
-    
+
     // Clear validation error for this field
     if (validationErrors[field]) {
       setValidationErrors(prev => {
@@ -151,7 +151,7 @@ const CallLogForm = ({
       status: newStatus,
       duration: statusConfig?.allowDuration ? prev.duration : "",
     }));
-    
+
     // Clear validation errors when status changes
     if (validationErrors.status || validationErrors.duration) {
       setValidationErrors(prev => {
@@ -166,22 +166,22 @@ const CallLogForm = ({
   // Validation function
   const validateForm = () => {
     const errors = {};
-    
+
     // Validate contact selection (only if no contactId provided)
     if (!contactId && !editLog && !form.contact) {
       errors.contact = "Please select a contact";
     }
-    
+
     // Validate duration requirements
     if (allowDuration && form.status === "Connected" && (!form.duration || form.duration <= 0)) {
       errors.duration = "Duration is required for connected calls and must be greater than 0";
     }
-    
+
     // Validate duration not set for statuses that don't allow it
     if (!allowDuration && form.duration) {
       errors.duration = `Duration cannot be set for "${form.status}" calls`;
     }
-    
+
     return errors;
   };
 
@@ -236,9 +236,8 @@ const CallLogForm = ({
         onClick={onClose}
       />
       <div
- className={`fixed inset-y-0 right-0 z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${
-          isSliding ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`fixed inset-y-0 right-0 z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${isSliding ? "translate-x-0" : "translate-x-full"
+          }`}
       >
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
@@ -335,13 +334,12 @@ const CallLogForm = ({
                   type="number"
                   value={form.duration}
                   onChange={(e) => handleFormChange("duration", e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg text-sm ${
-                    validationErrors.duration 
-                      ? 'border-red-300 focus:ring-red-500' 
+                  className={`w-full px-3 py-2 border rounded-lg text-sm ${validationErrors.duration
+                      ? 'border-red-300 focus:ring-red-500'
                       : allowDuration
-                      ? "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                      : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
-                  }`}
+                        ? "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                        : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                    }`}
                   placeholder={
                     allowDuration ? "Enter duration" : "Not applicable"
                   }
@@ -392,8 +390,8 @@ const CallLogForm = ({
                 {submitting
                   ? "Saving..."
                   : editLog
-                  ? "Update Call Log"
-                  : "Add Call Log"}
+                    ? "Update Call Log"
+                    : "Add Call Log"}
               </button>
             </div>
           </form>

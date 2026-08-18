@@ -138,7 +138,27 @@ router.patch(
   invoiceController.updateInvoiceNumber
 );
 
-// POST /api/invoices/:id/payments (Record a payment - requires write permission)
+// GET /api/invoices/:id (Single invoice)
+router.get(
+  "/:id",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "read"),
+  checkPermission("invoices", "readonly"),
+  invoiceController.getInvoiceById
+);
+
+// GET /api/invoices/:id/payments (List payments)
+router.get(
+  "/:id/payments",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "read"),
+  checkPermission("invoices", "readonly"),
+  invoiceController.getInvoicePayments
+);
+
+// POST /api/invoices/:id/payments (Record a payment)
 router.post(
   "/:id/payments",
   requireAuth,
@@ -146,6 +166,26 @@ router.post(
   restrictByPlan("invoices", "write"),
   checkPermission("invoices", "read-write"),
   invoiceController.addInvoicePayment
+);
+
+// PUT /api/invoices/:id/payments/:paymentId (Update a payment)
+router.put(
+  "/:id/payments/:paymentId",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.updateInvoicePayment
+);
+
+// DELETE /api/invoices/:id/payments/:paymentId (Delete a payment)
+router.delete(
+  "/:id/payments/:paymentId",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.deleteInvoicePayment
 );
 
 module.exports = router;

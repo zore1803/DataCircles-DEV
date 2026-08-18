@@ -52,6 +52,10 @@ const invoiceSchema = new mongoose.Schema({
     parentItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', default: null },
     discountType: { type: String, enum: ['amount', 'percentage'], default: 'amount' },
     discount: { type: Number, default: 0, min: 0 },
+    // Carried over from the catalog Item/variant at the moment it's added to
+    // the invoice (not looked up live), same as rate/hsn — matches the
+    // per-item gstRate already stored on Quotation items.
+    gstRate: { type: Number, default: 0, min: 0, max: 100 },
   }],
   // Payment records for this invoice
   payments: [{
@@ -59,11 +63,12 @@ const invoiceSchema = new mongoose.Schema({
     paymentDate: { type: Date, default: Date.now },
     paymentMethod: {
       type: String,
-      enum: ['Cash', 'UPI', 'Net Banking', 'Cheque', 'Card', 'NEFT', 'RTGS', 'IMPS', 'Other'],
+      enum: ['Cash', 'UPI', 'Net Banking', 'Cheque', 'Card', 'NEFT', 'RTGS', 'IMPS', 'EMI', 'TDS', 'Other'],
       default: 'UPI',
     },
-    reference: { type: String, default: '' }, // UTR / cheque no. / txn id
+    reference: { type: String, default: '' },
     notes: { type: String, default: '' },
+    internalNotes: { type: String, default: '' },
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     recordedAt: { type: Date, default: Date.now },
   }],
