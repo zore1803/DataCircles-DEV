@@ -913,13 +913,11 @@ const PerformaInvoiceForm = ({
           !item.name ||
           !item.rate ||
           !item.quantity ||
-          (form.isTaxInvoice && !item.hsn) ||
           (item.discountType === "percentage" && item.discount > 100)
       );
       if (invalidItems.length > 0) {
         toast.error(
-          `Please fill in all item details (name, rate, quantity${form.isTaxInvoice ? ", and HSN/SAC" : ""
-          }) and ensure percentage discounts are not above 100.`
+          "Please fill in all item details (name, rate, quantity) and ensure percentage discounts are not above 100."
         );
         setIsSubmitting(false);
         return;

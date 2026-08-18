@@ -1681,40 +1681,8 @@ const InvoiceForm = ({
                               <ChevronRight className="w-3.5 h-3.5 transition-transform group-open/details:rotate-90" />
                               More Details
                             </summary>
-                            <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {form.isTaxInvoice && (
-                                <div className="space-y-1">
-                                  <label className="text-xs text-gray-500 font-medium">HSN/SAC Code</label>
-                                  <input
-                                    type="text"
-                                    placeholder="Enter HSN/SAC code"
-                                    value={item.hsn}
-                                    onChange={(e) => {
-                                      handleItemChange(index, "hsn", e.target.value);
-                                      setHasUnsavedChanges(true);
-                                    }}
-                                    className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
-                                    required
-                                  />
-                                </div>
-                              )}
-                              {form.isTaxInvoice && (
-                                <div className="space-y-1">
-                                  <label className="text-xs text-gray-500 font-medium">Rate Includes Tax?</label>
-                                  <select
-                                    value={item.taxInclusive ? "inclusive" : "exclusive"}
-                                    onChange={(e) => {
-                                      handleItemChange(index, "taxInclusive", e.target.value === "inclusive");
-                                      setHasUnsavedChanges(true);
-                                    }}
-                                    className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent cursor-pointer"
-                                  >
-                                    <option value="exclusive">Without Tax</option>
-                                    <option value="inclusive">With Tax</option>
-                                  </select>
-                                </div>
-                              )}
-                              <div className={`space-y-1 ${!form.isTaxInvoice ? "md:col-span-2" : ""}`}>
+                            <div className="pt-3">
+                              <div className="space-y-1">
                                 <label className="text-xs text-gray-500 font-medium">Item Description</label>
                                 <textarea
                                   placeholder="Enter item description..."
@@ -1734,17 +1702,6 @@ const InvoiceForm = ({
                     })}
                   </div>
 
-                  {/* Add New Product Button */}
-                  <div className="mt-4 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={handleOpenItemForm}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-blue-50 text-blue-600 font-semibold text-sm rounded-lg hover:bg-blue-100 transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add New Product
-                    </button>
-                  </div>
                 </>
               )}
             </div>
@@ -2185,16 +2142,19 @@ const CreateInvoicePanel = ({
           items:
             sourceDoc.items && sourceDoc.items.length
               ? sourceDoc.items.map((item) => ({
-                  _id: item.itemId || item._id,
-                  name: item.name,
+                  _id: item.itemId || item._id || null,
+                  name: item.name || "",
                   description: item.description || "",
-                  rate: item.rate,
-                  quantity: item.quantity,
+                  rate: item.rate ?? 0,
+                  quantity: item.quantity ?? 1,
                   hsn: item.hsn || "",
                   isVariant: item.isVariant || false,
                   parentItemId: item.parentItemId || null,
                   discountType: item.discountType || "amount",
                   discount: item.discount || 0,
+                  showDescription: !!item.description,
+                  gstRate: item.gstRate || 18,
+                  taxInclusive: !!item.taxInclusive,
                 }))
               : [blankItem()],
           discount: sourceDoc.discount || { type: "fixed", value: 0 },
@@ -2544,38 +2504,62 @@ const CreateInvoicePanel = ({
     }));
 
   const handleAddToBill = () => {
-    // Resolve item: prefer explicit dropdown selection, fall back to text match
+    const searchText = quickAddSearch.trim();
+    if (!quickAddId && !searchText) return toast.error("Please enter or select a product.");
+
+    // Resolve catalogue item: explicit selection → exact match → single partial match
     let resolvedId = quickAddId;
-    if (!resolvedId && quickAddSearch.trim()) {
-      const lower = quickAddSearch.trim().toLowerCase();
+    if (!resolvedId && searchText) {
+      const lower = searchText.toLowerCase();
       const exact = catalogue.find((c) => c.displayName.toLowerCase() === lower);
-      if (!exact) {
+      if (exact) {
+        resolvedId = exact._id;
+      } else {
         const partial = catalogue.filter((c) =>
           c.displayName.toLowerCase().includes(lower)
         );
         if (partial.length === 1) resolvedId = partial[0]._id;
-      } else {
-        resolvedId = exact._id;
       }
     }
-    if (!resolvedId) return toast.error("Please search and select a product from the suggestions.");
-    const picked = catalogue.find((c) => c._id === resolvedId);
-    if (!picked) return toast.error("Product not found in catalogue.");
-    const newItem = {
-      _id: picked._id,
-      name: picked.name,
-      description: picked.description ? picked.description.replace(/<[^>]*>/g, "").trim() : "",
-      rate: picked.sellingPrice ?? 0,
-      quantity: parseInt(quickAddQty) || 1,
-      hsn: picked.hsnSac || "",
-      isVariant: picked.isVariant || false,
-      parentItemId: picked.parentItemId || null,
-      discountType: "amount",
-      discount: 0,
-      showDescription: false,
-      gstRate: picked.gstRate || form.gstRate || 18,
-      taxInclusive: !!picked.taxInclusive,
-    };
+
+    let newItem;
+    if (resolvedId) {
+      const picked = catalogue.find((c) => c._id === resolvedId);
+      if (!picked) return toast.error("Product not found in catalogue.");
+      newItem = {
+        _id: picked._id,
+        name: picked.name,
+        description: picked.description ? picked.description.replace(/<[^>]*>/g, "").trim() : "",
+        rate: picked.sellingPrice ?? 0,
+        quantity: parseInt(quickAddQty) || 1,
+        hsn: picked.hsnSac || "",
+        isVariant: picked.isVariant || false,
+        parentItemId: picked.parentItemId || null,
+        discountType: "amount",
+        discount: 0,
+        showDescription: false,
+        gstRate: picked.gstRate || form.gstRate || 18,
+        taxInclusive: !!picked.taxInclusive,
+      };
+    } else {
+      // Free-text item not in catalogue
+      newItem = {
+        _id: null,
+        name: searchText,
+        description: "",
+        rate: 0,
+        quantity: parseInt(quickAddQty) || 1,
+        hsn: "",
+        isVariant: false,
+        parentItemId: null,
+        discountType: "amount",
+        discount: 0,
+        showDescription: false,
+        gstRate: form.gstRate || 18,
+        taxInclusive: false,
+      };
+    }
+
     setForm((p) => {
       const isBlank = p.items.length === 1 && !p.items[0].name && !p.items[0]._id;
       return { ...p, items: isBlank ? [newItem] : [...p.items, newItem] };
@@ -2648,16 +2632,11 @@ const CreateInvoicePanel = ({
             "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
           );
       }
-      const needsHsn = supportsTax && form.isTaxInvoice;
       const badItem = form.items.find(
-        (it) => !it.name || !it.rate || !it.quantity || (needsHsn && !it.hsn)
+        (it) => !it.name || !it.rate || !it.quantity
       );
       if (badItem)
-        return toast.error(
-          needsHsn
-            ? "Every item needs a name, rate, quantity and HSN."
-            : "Every item needs a name, rate and quantity."
-        );
+        return toast.error("Every item needs a name, rate and quantity.");
     }
 
     try {
@@ -2758,6 +2737,19 @@ const CreateInvoicePanel = ({
   // Used by the preview *and* the print window so all three agree.
   const previewTemplate = orgTemplate;
 
+  // For new documents, docNumber is "" until saved. Build a preview number
+  // from whatever the user has typed into the prefix/number/suffix fields so
+  // the live preview (and print window) shows the chosen number immediately.
+  const previewDocNumber = (() => {
+    if (isEditing) return docNumber;
+    const num = form.invoiceNumber?.toString().trim();
+    if (!num) return docNumber || "";
+    const pfx = (form.invoicePrefix?.trim() || configuredPrefix);
+    const sep = pfx && !pfx.endsWith("-") ? "-" : "";
+    const sfx = form.invoiceSuffix?.trim();
+    return `${pfx}${sep}${num}${sfx ? `-${sfx}` : ""}`;
+  })();
+
   // Prints exactly what the preview shows — the same shared fragment the PDF
   // is rendered from — including edits that haven't been saved yet, rather
   // than fetching the server's copy of the document.
@@ -2774,7 +2766,7 @@ const CreateInvoicePanel = ({
         orgDetails,
         bankDetails,
         dealName: dealOptions.find((d) => d.value === form.deal)?.label,
-        documentNumber: docNumber,
+        documentNumber: previewDocNumber,
       }
     );
     const win = window.open("", "_blank", "width=900,height=1000");
@@ -2784,7 +2776,7 @@ const CreateInvoicePanel = ({
     }
     win.document.write(`<!doctype html>
 <html>
-<head><meta charset="utf-8" /><title>${docNumber || docName}</title>
+<head><meta charset="utf-8" /><title>${previewDocNumber || docName}</title>
 <style>
   @page { size: A4; margin: 12mm; }
   html, body { margin: 0; padding: 0; }
@@ -3481,8 +3473,8 @@ const CreateInvoicePanel = ({
                   <div className="col-span-2 text-center">Quantity</div>
                   <div className="col-span-2 text-right">Unit Price</div>
                   <div className="col-span-1 text-center">GST %</div>
-                  <div className="col-span-3 text-center">Discount</div>
-                  <div className="col-span-1 text-right">Total</div>
+                  <div className="col-span-2 text-center">Discount</div>
+                  <div className="col-span-2 text-right">Total</div>
                 </div>
 
                 {/* Item rows */}
@@ -3494,20 +3486,13 @@ const CreateInvoicePanel = ({
                       <div key={realIndex} className="group/row border-b border-[#F0F1F3] last:border-b-0 py-3">
                         <div className="grid grid-cols-12 gap-3 items-center">
                           {/* Product name */}
-                          <div className="col-span-3 flex items-center gap-2 min-w-0">
-                            <button
-                              type="button"
-                              onClick={() => removeItem(realIndex)}
-                              className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-[#C1C9D2] hover:text-red-500 transition-colors opacity-0 group-hover/row:opacity-100"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                          <div className="col-span-3 min-w-0">
                             <input
                               type="text"
                               value={item.name || ""}
                               onChange={(e) => updateItem(realIndex, { name: e.target.value })}
                               placeholder="Product name"
-                              className="flex-1 min-w-0 text-[13px] font-medium text-[#1F2937] bg-transparent focus:outline-none focus:bg-[#F8F9FB] rounded px-1 py-1 transition-colors"
+                              className="w-full text-[13px] font-medium text-[#1F2937] bg-transparent focus:outline-none focus:bg-[#F8F9FB] rounded px-1 py-1 transition-colors"
                             />
                           </div>
                           {/* Qty */}
@@ -3550,7 +3535,7 @@ const CreateInvoicePanel = ({
                             </select>
                           </div>
                           {/* Discount */}
-                          <div className="col-span-3">
+                          <div className="col-span-2">
                             <div className="flex items-center border border-[#E1E4EA] rounded-lg bg-[#F8F9FB] focus-within:bg-white focus-within:border-[#0085FF] overflow-hidden">
                               <input
                                 type="number"
@@ -3580,61 +3565,29 @@ const CreateInvoicePanel = ({
                               </select>
                             </div>
                           </div>
-                          {/* Total */}
-                          <div className="col-span-1 text-right text-[13px] font-semibold text-[#1F2937] tabular-nums whitespace-nowrap">
-                            {money(rowAmt)}
+                          {/* Total + Delete */}
+                          <div className="col-span-2 flex items-center justify-end gap-2">
+                            <span className="text-[13px] font-semibold text-[#1F2937] tabular-nums whitespace-nowrap">
+                              {money(rowAmt)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeItem(realIndex)}
+                              className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-[#C1C9D2] hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
 
                         {/* Expandable details: HSN, GST Rate (tax only), Description */}
                         <details className="mt-1 group/d">
-                          <summary className="text-[11px] font-semibold text-[#0085FF] cursor-pointer list-none flex items-center gap-1 w-max select-none py-0.5 ml-7">
+                          <summary className="text-[11px] font-semibold text-[#0085FF] cursor-pointer list-none flex items-center gap-1 w-max select-none py-0.5">
                             <ChevronRight className="w-3 h-3 transition-transform group-open/d:rotate-90" />
                             More Details
                           </summary>
-                          <div className="pt-2 pb-1 ml-7 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {supportsTax && form.isTaxInvoice && (
-                              <div className="flex flex-col gap-1">
-                                <label className="text-[10px] font-medium text-[#525866]">HSN/SAC Code</label>
-                                <input
-                                  type="text"
-                                  placeholder="Enter HSN/SAC code"
-                                  value={item.hsn}
-                                  onChange={(e) => updateItem(realIndex, { hsn: e.target.value })}
-                                  className="w-full text-[12px] border-b border-[#E1E4EA] px-1 py-1 focus:outline-none focus:border-[#0085FF] bg-transparent"
-                                />
-                              </div>
-                            )}
-                            {supportsTax && form.isTaxInvoice && (
-                              <div className="flex flex-col gap-1">
-                                <label className="text-[10px] font-medium text-[#525866]">GST Rate (%)</label>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  step="0.5"
-                                  placeholder="0"
-                                  value={item.gstRate ?? form.gstRate ?? 18}
-                                  onChange={(e) => updateItem(realIndex, { gstRate: e.target.value })}
-                                  onWheel={(e) => e.target.blur()}
-                                  className="w-full text-[12px] border-b border-[#E1E4EA] px-1 py-1 focus:outline-none focus:border-[#0085FF] bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                />
-                              </div>
-                            )}
-                            {supportsTax && form.isTaxInvoice && (
-                              <div className="flex flex-col gap-1">
-                                <label className="text-[10px] font-medium text-[#525866]">Rate Includes Tax?</label>
-                                <select
-                                  value={item.taxInclusive ? "inclusive" : "exclusive"}
-                                  onChange={(e) => updateItem(realIndex, { taxInclusive: e.target.value === "inclusive" })}
-                                  className="w-full text-[12px] border-b border-[#E1E4EA] px-1 py-1 focus:outline-none focus:border-[#0085FF] bg-transparent cursor-pointer"
-                                >
-                                  <option value="exclusive">Without Tax</option>
-                                  <option value="inclusive">With Tax</option>
-                                </select>
-                              </div>
-                            )}
-                            <div className={`flex flex-col gap-1 ${supportsTax && form.isTaxInvoice ? "" : "sm:col-span-2"}`}>
+                          <div className="pt-2 pb-1">
+                            <div className="flex flex-col gap-1">
                               <label className="text-[10px] font-medium text-[#525866]">Description</label>
                               <textarea
                                 rows={2}
@@ -3651,15 +3604,6 @@ const CreateInvoicePanel = ({
                   })}
                 </div>
 
-                {/* Add New Product button */}
-                <button
-                  type="button"
-                  onClick={addItem}
-                  className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 text-[13px] font-medium text-[#0085FF] hover:bg-blue-50 rounded-lg transition-colors border border-dashed border-[#BFDBFE]"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add New Product
-                </button>
               </>
             )}
           </div>
@@ -4021,7 +3965,7 @@ const CreateInvoicePanel = ({
                   type={type}
                   template={previewTemplate}
                   supportsTax={supportsTax}
-                  invoiceNumber={docNumber}
+                  invoiceNumber={previewDocNumber}
                   dealName={dealOptions.find((d) => d.value === form.deal)?.label}
                 />
               </div>
@@ -4093,7 +4037,7 @@ const CreateInvoicePanel = ({
                   type={type}
                   template={previewTemplate}
                   supportsTax={supportsTax}
-                  invoiceNumber={docNumber}
+                  invoiceNumber={previewDocNumber}
                   dealName={dealOptions.find((d) => d.value === form.deal)?.label}
                 />
               </div>

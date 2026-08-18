@@ -1,8 +1,8 @@
 import React from "react";
 import { X, Phone, Clock, User, Calendar } from "lucide-react";
 
-const CallLogDetailView = ({ log, isOpen, onClose }) => {
-  if (!isOpen || !log) return null;
+const CallLogDetailView = ({ log, onClose }) => {
+  if (!log) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -35,10 +35,10 @@ const CallLogDetailView = ({ log, isOpen, onClose }) => {
                 <Calendar className="w-4 h-4" />
                 {new Date(log.timestamp || log.createdAt).toLocaleDateString()}
               </span>
-              {(log.duration !== undefined && log.duration !== null && log.duration !== "") && (
+              {!!log.duration && (
                 <span className="flex items-center gap-1">
                   <Clock className="w-4 h-4" />
-                  {log.duration} min
+                  {Math.floor(log.duration / 60)}m {log.duration % 60}s
                 </span>
               )}
             </div>
@@ -47,7 +47,7 @@ const CallLogDetailView = ({ log, isOpen, onClose }) => {
           <div className="grid grid-cols-2 gap-4 py-4 border-y border-gray-100">
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Type</p>
-              <p className="text-sm text-gray-900">{log.type}</p>
+              <p className="text-sm text-gray-900">{log.callType}</p>
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Logged By</p>

@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 const CallLogForm = ({ companyId, editLog, isOpen, onClose, onSuccess, userId }) => {
   const [formData, setFormData] = useState({
     purpose: "",
-    type: "Outbound",
+    callType: "Outbound",
     status: "Connected",
     duration: "",
     notes: "",
@@ -17,15 +17,16 @@ const CallLogForm = ({ companyId, editLog, isOpen, onClose, onSuccess, userId })
     if (editLog) {
       setFormData({
         purpose: editLog.purpose || "",
-        type: editLog.type || "Outbound",
+        callType: editLog.callType || "Outbound",
         status: editLog.status || "Connected",
-        duration: editLog.duration || "",
+        // Stored in seconds; the field below collects minutes.
+        duration: editLog.duration ? Math.round(editLog.duration / 60) : "",
         notes: editLog.notes || "",
       });
     } else {
       setFormData({
         purpose: "",
-        type: "Outbound",
+        callType: "Outbound",
         status: "Connected",
         duration: "",
         notes: "",
@@ -43,7 +44,12 @@ const CallLogForm = ({ companyId, editLog, isOpen, onClose, onSuccess, userId })
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = { ...formData, company: companyId, user: userId };
+      const payload = {
+        ...formData,
+        duration: formData.duration ? Math.round(Number(formData.duration) * 60) : undefined,
+        company: companyId,
+        user: userId,
+      };
       if (editLog) {
         const res = await API.put(`/call-logs/${editLog._id}`, payload);
         toast.success("Call log updated");
@@ -97,8 +103,8 @@ const CallLogForm = ({ companyId, editLog, isOpen, onClose, onSuccess, userId })
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
                 <select
-                  name="type"
-                  value={formData.type}
+                  name="callType"
+                  value={formData.callType}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                 >

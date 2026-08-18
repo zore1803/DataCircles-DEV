@@ -1456,17 +1456,6 @@ const DeliveryChallanForm = ({
                     })}
                   </div>
 
-                  {/* Add New Product Button */}
-                  <div className="mt-4 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={handleOpenItemForm}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-blue-50 text-blue-600 font-semibold text-sm rounded-lg hover:bg-blue-100 transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add New Product
-                    </button>
-                  </div>
                 </>
               )}
             </div>

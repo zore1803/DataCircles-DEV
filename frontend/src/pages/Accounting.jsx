@@ -215,7 +215,6 @@ const DEFAULT_COL_WIDTHS = {
   dueDate: 170,
   amount: 170,
   status: 170,
-  actions: 70,
 };
 const MIN_COL_WIDTH = 60;
 
@@ -234,13 +233,6 @@ const COLUMN_DEFS = [
   { id: "dueDate", label: "Due Date", icon: Clock, field: "dueDate" },
   { id: "amount", label: "Amount", icon: IndianRupee, field: "amount" },
   { id: "status", label: "Status", icon: CheckCircle2, field: "status" },
-  {
-    id: "actions",
-    label: "Actions",
-    icon: MoreVertical,
-    field: null,
-    required: true,
-  },
 ];
 
 /* Sits on the column's right-hand border. Module-scope + memo so the header
@@ -1830,6 +1822,210 @@ const Accounting = () => {
     setPageInput("");
   }, [activeTab]);
 
+  // Every row action lives behind one "⋮" trigger, instead of a dedicated
+  // "Actions" table column (there is no such column any more — the trigger
+  // is appended into whichever data column ends up rendering last, so it
+  // keeps following the last column through reordering/pinning). Convert is
+  // a nested submenu (rowMenuConvertOpen) inside the same panel rather than
+  // its own separate flyout. Positioning/closing mirrors Companies.jsx's
+  // row-actions menu exactly (also used by Deals): portal to document.body
+  // so it's never clipped by an ancestor's stacking context, a full-screen
+  // invisible overlay to close on outside click (no fragile
+  // document-listener/stopPropagation dance), and top/left clamped on both
+  // ends so it can never render off-screen or behind the sticky header.
+  const renderRowActions = (doc) => {
+    const conversionTargets = getConversionTargets(activeTab);
+    const menuOpen = openRowMenu === doc._id;
+    const closeRowMenu = () => {
+      setOpenRowMenu(null);
+      setRowMenuPos(null);
+      setRowMenuConvertOpen(false);
+    };
+    return (
+      <div className="relative flex items-center justify-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        <button
+          title="More actions"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (menuOpen) {
+              closeRowMenu();
+              return;
+            }
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 224;
+            const MARGIN = 8;
+            // Conservative estimate for the tallest state (main menu
+            // with every optional item shown) — clamped below so it can
+            // never render off-screen regardless of the real height.
+            const MENU_H = 300;
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const viewportH = window.innerHeight / zMenu;
+            const viewportW = window.innerWidth / zMenu;
+            const top = rect.bottom / zMenu + 4;
+            const bottomAnchor = rect.top / zMenu - 4;
+
+            const openUp = viewportH - top < MENU_H + MARGIN;
+            let calcTop = openUp ? bottomAnchor - MENU_H : top;
+            calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+            calcLeft = Math.max(calcLeft, MARGIN);
+
+            // Only one row flyout at a time, and always starts fresh on
+            // the main menu even if a different row's Convert submenu
+            // was left open.
+            setOpenConvertMenu(null);
+            setConvertMenuPos(null);
+            setShareMenu(null);
+            setShareMenuChannel(null);
+            setRowMenuConvertOpen(false);
+            setRowMenuPos({ top: calcTop, left: calcLeft });
+            setOpenRowMenu(doc._id);
+          }}
+          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+        {menuOpen && rowMenuPos && createPortal(
+          <>
+            <div className="fixed inset-0 z-[100050]" onClick={closeRowMenu} />
+            <div
+              key={doc._id}
+              style={{ position: "fixed", top: rowMenuPos.top, left: rowMenuPos.left }}
+              className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[100051] py-1 max-h-[70vh] overflow-y-auto"
+            >
+              {!rowMenuConvertOpen ? (
+                <>
+                  {activeTab === "tax" && doc.status !== "Paid" && (
+                    <button
+                      onClick={() => {
+                        closeRowMenu();
+                        setSelectedInvoiceForPayment(doc);
+                        setPaymentModalOpen(true);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <IndianRupee className="w-4 h-4 text-emerald-600" />
+                      Record Payment
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      closeRowMenu();
+                      handleView(doc, activeTab);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Eye className="w-4 h-4 text-blue-600" />
+                    View
+                  </button>
+                  <button
+                    onClick={() => {
+                      closeRowMenu();
+                      handleEdit(doc, activeTab);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Pencil className="w-4 h-4 text-blue-600" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      closeRowMenu();
+                      handleDownload(doc._id, activeTab);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4 text-green-600" />
+                    Download
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Anchor the share flyout off this menu's own
+                      // position rather than the (now-closed) trigger
+                      // button's rect.
+                      const DROPDOWN_W = 208;
+                      const anchorRight = rowMenuPos.left + 224;
+                      closeRowMenu();
+                      setShareMenu({
+                        doc,
+                        type: activeTab,
+                        x: Math.max(4, anchorRight - DROPDOWN_W),
+                        y: rowMenuPos.top,
+                      });
+                      setShareMenuChannel(null);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Share2 className="w-4 h-4 text-blue-600" />
+                    Share via WhatsApp/Email/SMS
+                  </button>
+                  {conversionTargets.length > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRowMenuConvertOpen(true);
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Repeat className="w-4 h-4 text-orange-600" />
+                        Convert
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    </button>
+                  )}
+                  <div className="border-t border-gray-100 my-1" />
+                  <button
+                    onClick={() => {
+                      closeRowMenu();
+                      handleDelete(doc._id, activeTab);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRowMenuConvertOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 border-b border-gray-100"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Back
+                  </button>
+                  {conversionTargets.map((targetType) => (
+                    <button
+                      key={targetType}
+                      onClick={() => {
+                        handleConvert(doc._id, activeTab, targetType);
+                        closeRowMenu();
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <Repeat className="w-4 h-4 text-orange-600" />
+                      Convert to{" "}
+                      {targetType === "tax" ? "Tax Invoice" : docNameFor(targetType)}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          </>,
+          document.body
+        )}
+      </div>
+    );
+  };
+
   const renderCell = (colId, doc) => {
     const searchQuery = searchTerms[activeTab];
     switch (colId) {
@@ -1934,209 +2130,6 @@ const Accounting = () => {
               )}
           </div>
         );
-
-      case "actions": {
-        // Every row action lives behind one "⋮" trigger now, instead of a
-        // strip of individual icon buttons that kept overflowing the column.
-        // Convert is a nested submenu (rowMenuConvertOpen) inside the same
-        // panel rather than its own separate flyout. Positioning/closing
-        // mirrors Companies.jsx's row-actions menu exactly (also used by
-        // Deals): portal to document.body so it's never clipped by an
-        // ancestor's stacking context, a full-screen invisible overlay to
-        // close on outside click (no fragile document-listener/
-        // stopPropagation dance), and top/left clamped on both ends so it
-        // can never render off-screen or behind the sticky header.
-        const conversionTargets = getConversionTargets(activeTab);
-        const menuOpen = openRowMenu === doc._id;
-        const closeRowMenu = () => {
-          setOpenRowMenu(null);
-          setRowMenuPos(null);
-          setRowMenuConvertOpen(false);
-        };
-        return (
-          <div className="relative flex items-center justify-center">
-            <button
-              title="More actions"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (menuOpen) {
-                  closeRowMenu();
-                  return;
-                }
-                const zMenu = getAncestorZoom(document.body);
-                const MENU_W = 224;
-                const MARGIN = 8;
-                // Conservative estimate for the tallest state (main menu
-                // with every optional item shown) — clamped below so it can
-                // never render off-screen regardless of the real height.
-                const MENU_H = 300;
-
-                const rect = e.currentTarget.getBoundingClientRect();
-                const viewportH = window.innerHeight / zMenu;
-                const viewportW = window.innerWidth / zMenu;
-                const top = rect.bottom / zMenu + 4;
-                const bottomAnchor = rect.top / zMenu - 4;
-
-                const openUp = viewportH - top < MENU_H + MARGIN;
-                let calcTop = openUp ? bottomAnchor - MENU_H : top;
-                calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
-
-                let calcLeft = rect.right / zMenu - MENU_W;
-                calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
-                calcLeft = Math.max(calcLeft, MARGIN);
-
-                // Only one row flyout at a time, and always starts fresh on
-                // the main menu even if a different row's Convert submenu
-                // was left open.
-                setOpenConvertMenu(null);
-                setConvertMenuPos(null);
-                setShareMenu(null);
-                setShareMenuChannel(null);
-                setRowMenuConvertOpen(false);
-                setRowMenuPos({ top: calcTop, left: calcLeft });
-                setOpenRowMenu(doc._id);
-              }}
-              className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-            {menuOpen && rowMenuPos && createPortal(
-              <>
-                <div className="fixed inset-0 z-[100050]" onClick={closeRowMenu} />
-                <div
-                  key={doc._id}
-                  style={{ position: "fixed", top: rowMenuPos.top, left: rowMenuPos.left }}
-                  className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[100051] py-1 max-h-[70vh] overflow-y-auto"
-                >
-                  {!rowMenuConvertOpen ? (
-                    <>
-                      {activeTab === "tax" && doc.status !== "Paid" && (
-                        <button
-                          onClick={() => {
-                            closeRowMenu();
-                            setSelectedInvoiceForPayment(doc);
-                            setPaymentModalOpen(true);
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                        >
-                          <IndianRupee className="w-4 h-4 text-emerald-600" />
-                          Record Payment
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          closeRowMenu();
-                          handleView(doc, activeTab);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                      >
-                        <Eye className="w-4 h-4 text-blue-600" />
-                        View
-                      </button>
-                      <button
-                        onClick={() => {
-                          closeRowMenu();
-                          handleEdit(doc, activeTab);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                      >
-                        <Pencil className="w-4 h-4 text-blue-600" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => {
-                          closeRowMenu();
-                          handleDownload(doc._id, activeTab);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                      >
-                        <Download className="w-4 h-4 text-green-600" />
-                        Download
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Anchor the share flyout off this menu's own
-                          // position rather than the (now-closed) trigger
-                          // button's rect.
-                          const DROPDOWN_W = 208;
-                          const anchorRight = rowMenuPos.left + 224;
-                          closeRowMenu();
-                          setShareMenu({
-                            doc,
-                            type: activeTab,
-                            x: Math.max(4, anchorRight - DROPDOWN_W),
-                            y: rowMenuPos.top,
-                          });
-                          setShareMenuChannel(null);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                      >
-                        <Share2 className="w-4 h-4 text-blue-600" />
-                        Share via WhatsApp/Email/SMS
-                      </button>
-                      {conversionTargets.length > 0 && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRowMenuConvertOpen(true);
-                          }}
-                          className="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          <span className="flex items-center gap-2">
-                            <Repeat className="w-4 h-4 text-orange-600" />
-                            Convert
-                          </span>
-                          <ChevronRight className="w-4 h-4 text-gray-400" />
-                        </button>
-                      )}
-                      <div className="border-t border-gray-100 my-1" />
-                      <button
-                        onClick={() => {
-                          closeRowMenu();
-                          handleDelete(doc._id, activeTab);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Delete
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRowMenuConvertOpen(false);
-                        }}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 border-b border-gray-100"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                        Back
-                      </button>
-                      {conversionTargets.map((targetType) => (
-                        <button
-                          key={targetType}
-                          onClick={() => {
-                            handleConvert(doc._id, activeTab, targetType);
-                            closeRowMenu();
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                        >
-                          <Repeat className="w-4 h-4 text-orange-600" />
-                          Convert to{" "}
-                          {targetType === "tax" ? "Tax Invoice" : docNameFor(targetType)}
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </div>
-              </>,
-              document.body
-            )}
-          </div>
-        );
-      }
 
       default:
         return null;
@@ -2633,18 +2626,13 @@ const Accounting = () => {
                             />
                           )}
                         </span>
-                        {/* Actions isn't a data column — nothing to sort, pin or
-                          hide, so it gets no options button at all instead of
-                          a menu whose items would all be no-ops. */}
-                        {col.id !== "actions" && (
-                          <button
-                            onClick={(e) => openColumnMenu(e, col.id)}
-                            title="Column options"
-                            className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        <button
+                          onClick={(e) => openColumnMenu(e, col.id)}
+                          title="Column options"
+                          className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       <ResizeHandle colId={col.id} />
                       {boundaryShadowSideFor(col.id) && (
@@ -2699,21 +2687,31 @@ const Accounting = () => {
                     </div>
                   </td>
 
-                  {orderedColumns.map((col) => (
-                    <td
-                      key={col.id}
-                      style={{
-                        width: colWidths[col.id],
-                        ...stickyStyleFor(col.id),
-                      }}
-                      className="relative px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
-                    >
-                      {renderCell(col.id, doc)}
-                      {boundaryShadowSideFor(col.id) && (
-                        <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSideFor(col.id))} />
-                      )}
-                    </td>
-                  ))}
+                  {orderedColumns.map((col, colIdx) => {
+                    const isLastCol = colIdx === orderedColumns.length - 1;
+                    return (
+                      <td
+                        key={col.id}
+                        style={{
+                          width: colWidths[col.id],
+                          ...stickyStyleFor(col.id),
+                        }}
+                        className="relative px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
+                      >
+                        {isLastCol ? (
+                          <div className="flex items-center justify-between gap-2 w-full">
+                            {renderCell(col.id, doc)}
+                            {renderRowActions(doc)}
+                          </div>
+                        ) : (
+                          renderCell(col.id, doc)
+                        )}
+                        {boundaryShadowSideFor(col.id) && (
+                          <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSideFor(col.id))} />
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

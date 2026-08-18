@@ -948,13 +948,11 @@ const QuotationForm = ({
           !item.name ||
           !item.rate ||
           !item.quantity ||
-          (form.isTaxQuotation && !item.hsn) ||
           (item.discountType === "percentage" && item.discount > 100)
       );
       if (invalidItems.length > 0) {
         toast.error(
-          `Please fill in all item details (name, rate, quantity${form.isTaxQuotation ? ", and HSN/SAC" : ""
-          }) and ensure percentage discounts are not above 100.`
+          "Please fill in all item details (name, rate, quantity) and ensure percentage discounts are not above 100."
         );
         setIsSubmitting(false);
         return;
@@ -1686,62 +1684,8 @@ const QuotationForm = ({
                           <ChevronRight className="w-3.5 h-3.5 transition-transform group-open/details:rotate-90" />
                           More Details
                         </summary>
-                        <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {form.isTaxQuotation && (
-                            <div className="space-y-1">
-                              <label className="text-xs text-gray-500 font-medium">HSN/SAC Code</label>
-                              <input
-                                type="text"
-                                placeholder="Enter HSN/SAC code"
-                                value={item.hsn}
-                                onChange={(e) => {
-                                  handleItemChange(index, "hsn", e.target.value);
-                                  setHasUnsavedChanges(true);
-                                }}
-                                className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
-                                required
-                              />
-                            </div>
-                          )}
-                          {form.isTaxQuotation && (
-                            <div className="space-y-1">
-                              {/* Pre-filled from the product's own GST Rate
-                                  (Products & Services page) when picked, but
-                                  editable here in case this line needs a
-                                  different rate. */}
-                              <label className="text-xs text-gray-500 font-medium">GST Rate (%)</label>
-                              <input
-                                type="number" onWheel={(e) => e.target.blur()}
-                                min="0"
-                                max="100"
-                                step="0.5"
-                                placeholder="0"
-                                value={item.gstRate}
-                                onChange={(e) => {
-                                  handleItemChange(index, "gstRate", e.target.value);
-                                  setHasUnsavedChanges(true);
-                                }}
-                                className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
-                              />
-                            </div>
-                          )}
-                          {form.isTaxQuotation && (
-                            <div className="space-y-1">
-                              <label className="text-xs text-gray-500 font-medium">Rate Includes Tax?</label>
-                              <select
-                                value={item.taxInclusive ? "inclusive" : "exclusive"}
-                                onChange={(e) => {
-                                  handleItemChange(index, "taxInclusive", e.target.value === "inclusive");
-                                  setHasUnsavedChanges(true);
-                                }}
-                                className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
-                              >
-                                <option value="exclusive">Without Tax</option>
-                                <option value="inclusive">With Tax</option>
-                              </select>
-                            </div>
-                          )}
-                          <div className="space-y-1 md:col-span-2">
+                        <div className="pt-3">
+                          <div className="space-y-1">
                             <label className="text-xs text-gray-500 font-medium">Item Description</label>
                             <textarea
                               placeholder="Enter item description..."
@@ -1761,20 +1705,6 @@ const QuotationForm = ({
                 })}
               </div>
 
-              {/* Add New Product Button — opens the drawer to create a new
-                  catalog product and drops it straight into the bill, same
-                  as the empty-state button above. Finding an EXISTING
-                  product is what the quick-add search bar is for. */}
-              <div className="mt-4 flex justify-center">
-                <button
-                  type="button"
-                  onClick={handleOpenItemForm}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-50 text-blue-600 font-semibold text-sm rounded-lg hover:bg-blue-100 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add New Product
-                </button>
-              </div>
                 </>
               )}
             </div>

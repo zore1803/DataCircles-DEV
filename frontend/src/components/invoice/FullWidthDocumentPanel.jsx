@@ -365,29 +365,53 @@ const FullWidthDocumentPanel = ({
             {form.items.map((item, index) => {
               const row = t.rows[index];
               const hasDescription = item.showDescription || !!item.description;
+              // Show PickerSelect when: item has an _id that matches the catalogue,
+              // OR when the item has no name yet (blank row ready for selection),
+              // OR when the user clicked "Search" to switch back (name was cleared).
+              const inCatalogue = !item.name || (item._id && catalogue.some((c) => c._id === item._id));
               return (
                 <React.Fragment key={index}>
                   <tr className="border-t border-[#E1E4EA] align-top">
                     <td className="px-2 py-2 text-[#99A0AE]">{index + 1}</td>
                     <td className="px-2 py-2 min-w-[220px]">
-                      <PickerSelect
-                        value={item._id}
-                        options={catalogue.map((c) => ({ value: c._id, label: c.displayName }))}
-                        placeholder="Search items or variants"
-                        onSelect={(o) => {
-                          const picked = catalogue.find((c) => c._id === o.value);
-                          if (!picked) return;
-                          updateItem(index, {
-                            _id: picked._id,
-                            name: picked.name,
-                            description: stripHtml(picked.description),
-                            rate: picked.sellingPrice ?? "",
-                            hsn: picked.hsnSac || "",
-                            isVariant: picked.isVariant,
-                            parentItemId: picked.parentItemId,
-                          });
-                        }}
-                      />
+                      {inCatalogue ? (
+                        <PickerSelect
+                          value={item._id}
+                          options={catalogue.map((c) => ({ value: c._id, label: c.displayName }))}
+                          placeholder="Search items or variants"
+                          onSelect={(o) => {
+                            const picked = catalogue.find((c) => c._id === o.value);
+                            if (!picked) return;
+                            updateItem(index, {
+                              _id: picked._id,
+                              name: picked.name,
+                              description: stripHtml(picked.description),
+                              rate: picked.sellingPrice ?? "",
+                              hsn: picked.hsnSac || "",
+                              isVariant: picked.isVariant,
+                              parentItemId: picked.parentItemId,
+                            });
+                          }}
+                        />
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={item.name || ""}
+                            onChange={(e) => updateItem(index, { name: e.target.value, _id: null })}
+                            placeholder="Item name"
+                            className="flex-1 h-10 px-2.5 rounded-lg border border-[#E1E4EA] bg-white text-[13px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] transition-colors"
+                          />
+                          <button
+                            type="button"
+                            title="Switch to catalogue search"
+                            onClick={() => updateItem(index, { _id: null, name: "" })}
+                            className="h-10 px-2 rounded-lg border border-[#E1E4EA] text-[11px] text-[#0085FF] hover:bg-blue-50 transition-colors whitespace-nowrap flex-shrink-0"
+                          >
+                            Search
+                          </button>
+                        </div>
+                      )}
                       {hasDescription ? (
                         <textarea
                           rows={1}

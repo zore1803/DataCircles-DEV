@@ -1805,8 +1805,9 @@ const CompanyProfilePage = () => {
               <CompanyCallLogsTab
                 companyId={id}
                 callLogs={callLogs}
-                onAddCallLog={(newLog) => setCallLogs((prev) => [newLog, ...prev])}
-                onDeleteCallLog={(logId) => setCallLogs((prev) => prev.filter((l) => l._id !== logId))}
+                setCallLogs={setCallLogs}
+                showStats={showStats}
+                isLoading={showRecordsSkeleton}
                 pendingCreate={pendingCreate}
                 onPendingCreateConsumed={() => setPendingCreate(null)}
               />

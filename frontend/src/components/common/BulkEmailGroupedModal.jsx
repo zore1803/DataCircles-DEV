@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Mail, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
@@ -119,8 +120,8 @@ const BulkEmailGroupedModal = ({ isOpen, onClose, selectedIds, documents, onSucc
   // Collect unique skip reasons for the warning summary
   const uniqueReasons = [...new Set(skipped.map((s) => s.reason))];
 
-  return (
-    <div className="relative z-[100]">
+  return createPortal(
+    <div className="relative z-[9999]">
       <div
         className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm"
         aria-hidden="true"
@@ -155,33 +156,36 @@ const BulkEmailGroupedModal = ({ isOpen, onClose, selectedIds, documents, onSucc
                 key={group.groupKey}
                 className="border border-gray-200 rounded-xl overflow-hidden"
               >
-                <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-gray-900">
-                        {group.companyName}
-                      </p>
-                      {group.companyEmail && (
-                        <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-md border border-gray-300 select-all" title="Company Email (Uneditable)">
-                          {group.companyEmail}
-                        </span>
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex flex-col gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[15px] font-semibold text-gray-900 truncate max-w-full">
+                          {group.companyName}
+                        </p>
+                        {group.companyEmail && (
+                          <span className="text-[11px] bg-gray-200/70 text-gray-600 px-2 py-0.5 rounded border border-gray-300 truncate max-w-full" title="Company Email">
+                            {group.companyEmail}
+                          </span>
+                        )}
+                      </div>
+                      {group.contactName && (
+                        <p className="text-xs text-gray-500 mt-0.5">Contact: {group.contactName}</p>
                       )}
                     </div>
-                    {group.contactName && (
-                      <p className="text-xs text-gray-500 mt-1">Contact: {group.contactName}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1 sm:mt-0">
-                    <span className="text-sm font-medium text-gray-500 hidden sm:inline">Send to:</span>
-                    <div className="flex flex-col">
-                      <input
-                        type="email"
-                        value={group.email}
-                        onChange={(e) => setEmailOverrides(prev => ({ ...prev, [group.groupKey]: e.target.value }))}
-                        placeholder="Contact email..."
-                        className="w-full sm:w-64 border border-gray-200 rounded-lg px-3 py-1.5 text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-400 bg-white"
-                      />
-                      {!group.email && <p className="text-[10px] text-red-500 mt-0.5">Email required</p>}
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-sm font-medium text-gray-500 hidden sm:inline">Send to:</span>
+                      <div className="flex flex-col w-full sm:w-[260px] relative">
+                        <input
+                          type="email"
+                          value={group.email}
+                          onChange={(e) => setEmailOverrides(prev => ({ ...prev, [group.groupKey]: e.target.value }))}
+                          placeholder="Enter contact email..."
+                          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all placeholder:text-gray-400 bg-white shadow-sm"
+                        />
+                        {!group.email && <p className="text-[10px] text-red-500 absolute -bottom-4 right-0">Email required</p>}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -264,7 +268,8 @@ const BulkEmailGroupedModal = ({ isOpen, onClose, selectedIds, documents, onSucc
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
