@@ -80,7 +80,7 @@ const ViewDetails = ({ item, onRequestClose, onEdit, onDelete }) => {
     setTimeout(() => setIsOpen(true), 10);
     if (item.images && item.images.length > 0) {
       setImagePreviews(
-        item.images.map((img) => `${import.meta.env.VITE_APP_API_URL}${img}`),
+        item.images.map((img) => img.startsWith("http") ? img : `${import.meta.env.VITE_APP_API_URL}${img}`),
       );
     } else {
       setImagePreviews([]);

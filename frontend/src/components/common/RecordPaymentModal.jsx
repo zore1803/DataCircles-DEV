@@ -63,14 +63,18 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       setCustomerPhone("");
       setSelectedSignature("");
 
-      // Load org branding to get signature
-      API.get("/branding").then((res) => {
-        const sig = res.data?.signatureUrl;
-        if (sig) {
-          setSignatures([{ label: "Default Signature", value: "default", url: sig }]);
-        } else {
-          setSignatures([]);
-        }
+      // Load saved signatures from Document Settings
+      API.get("/document-settings/signatures").then((res) => {
+        const sigs = Array.isArray(res.data) ? res.data : (res.data?.signatures || []);
+        const mapped = sigs.map((s) => ({
+          label: s.name || "Signature",
+          value: s.id || s._id || s.name,
+          url: s.dataUrl || "",
+          isDefault: !!s.isDefault,
+        }));
+        setSignatures(mapped);
+        const defaultSig = mapped.find((s) => s.isDefault);
+        if (defaultSig) setSelectedSignature(defaultSig.value);
       }).catch(() => setSignatures([]));
     }
   }, [isOpen, invoice]); // eslint-disable-line react-hooks/exhaustive-deps

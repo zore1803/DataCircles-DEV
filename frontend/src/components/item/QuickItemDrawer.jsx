@@ -11,6 +11,20 @@ import {
 import ReactQuill from "react-quill-new";
 import toast from "react-hot-toast";
 import API from "../../services/api";
+import CustomDropdown from "../common/CustomDropdown";
+
+const UNIT_OPTIONS = [
+  "OTH — OTHERS",
+  "PCS — PIECES",
+  "NOS — NUMBERS",
+  "KGS — KILOGRAMS",
+  "GMS — GRAMS",
+  "LTR — LITRES",
+  "MTR — METRES",
+  "BOX — BOX",
+  "PKT — PACKET",
+  "SET — SET",
+];
 
 const TABS = ["Details", "Price Lists", "Attachments"];
 
@@ -75,6 +89,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
   const [imageFiles, setImageFiles] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
   const imageInputRef = useRef(null);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
 
   useEffect(() => {
     const urls = imageFiles.map((f) => URL.createObjectURL(f));
@@ -388,23 +403,13 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
 
                 <div>
                   <label className={lbl}>Primary Unit</label>
-                  <select
-                    value={form.primaryUnit}
-                    onChange={(e) => handleChange("primaryUnit", e.target.value)}
-                    className={inp + " appearance-none cursor-pointer"}
-                  >
-                    <option value="">Select Unit</option>
-                    <option value="OTH OTHERS">OTH — OTHERS</option>
-                    <option value="PCS PIECES">PCS — PIECES</option>
-                    <option value="NOS NUMBERS">NOS — NUMBERS</option>
-                    <option value="KGS KILOGRAMS">KGS — KILOGRAMS</option>
-                    <option value="GMS GRAMS">GMS — GRAMS</option>
-                    <option value="LTR LITRES">LTR — LITRES</option>
-                    <option value="MTR METRES">MTR — METRES</option>
-                    <option value="BOX BOX">BOX — BOX</option>
-                    <option value="PKT PACKET">PKT — PACKET</option>
-                    <option value="SET SET">SET — SET</option>
-                  </select>
+                  <CustomDropdown
+                    options={UNIT_OPTIONS}
+                    value={form.primaryUnit ? form.primaryUnit.replace(" ", " — ") : ""}
+                    onChange={(val) => handleChange("primaryUnit", val.replace(" — ", " "))}
+                    placeholder="Select Unit"
+                    buttonClassName={inp + " flex items-center justify-between text-left"}
+                  />
                 </div>
               </div>
 
@@ -538,10 +543,32 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                   <input type="text" value={form.hsnSac} onChange={(e) => handleChange("hsnSac", e.target.value)} placeholder="Enter HSN/SAC Code" className={inp} />
                   <p className="mt-1 text-[11px] text-blue-600 cursor-pointer hover:underline">Click here to check GST approved HSN/SAC codes.</p>
                 </div>
-                <div>
+                <div className="relative">
                   <label className={lbl}>Category</label>
-                  <input type="text" list="qid-categories" value={form.category} onChange={(e) => handleChange("category", e.target.value)} placeholder="Select or type a category" className={inp} />
-                  <datalist id="qid-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+                  <input 
+                    type="text" 
+                    value={form.category} 
+                    onChange={(e) => {
+                       handleChange("category", e.target.value);
+                       setCategoryDropdownOpen(true);
+                    }} 
+                    onFocus={() => setCategoryDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setCategoryDropdownOpen(false), 200)}
+                    placeholder="Select or type a category" 
+                    className={inp} 
+                  />
+                  {categoryDropdownOpen && categories.filter(c => c.toLowerCase().includes((form.category || "").toLowerCase())).length > 0 && (
+                     <div className="absolute z-[10010] mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {categories.filter(c => c.toLowerCase().includes((form.category || "").toLowerCase())).map(c => (
+                           <div key={c} className="px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                               handleChange("category", c);
+                               setCategoryDropdownOpen(false);
+                           }}>
+                              {c}
+                           </div>
+                        ))}
+                     </div>
+                  )}
                 </div>
               </div>
 
@@ -561,7 +588,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                       value={form.description}
                       onChange={(val) => handleChange("description", val)}
                       placeholder="Add product description…"
-                      className="h-[90px] [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-100 [&_.ql-container]:border-none text-sm"
+                      className="[&_.ql-editor]:min-h-[140px] [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-100 [&_.ql-container]:border-none text-sm"
                     />
                   </div>
                 </div>

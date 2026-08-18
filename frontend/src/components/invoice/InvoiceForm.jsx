@@ -1821,7 +1821,7 @@ const InvoiceForm = ({
                               setHasUnsavedChanges(true);
                             }}
                           />
-                          <div className="w-8 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                          <div className="w-7 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
                         </label>
                       </div>
                       <span className={`font-semibold ${roundOffAmount !== 0 ? (roundOffAmount > 0 ? "text-green-600" : "text-red-500") : "text-gray-900"}`}>
@@ -2061,6 +2061,10 @@ const CreateInvoicePanel = ({
   // dedicated full-width screen owned by the parent instead of hiding the
   // preview pane in place. Quotations use this; other types leave it unset.
   onRequestFullWidth,
+  // Snapshot of the full-width screen's in-progress form, handed back the
+  // moment the user collapses to split view — takes precedence over
+  // initialDoc/conversionData so switching views never drops unsaved edits.
+  formOverride = null,
   type = "tax",
   defaultDueDateDays = null,
   defaultNotesByType = {},
@@ -2117,7 +2121,7 @@ const CreateInvoicePanel = ({
   })();
   const [form, setForm] = useState(() => {
     const sourceDoc = initialDoc || conversionData;
-    return sourceDoc
+    const base = sourceDoc
       ? {
           deal: sourceDoc.deal?._id || sourceDoc.deal || "",
           style: sourceDoc.style || "",
@@ -2188,6 +2192,7 @@ const CreateInvoicePanel = ({
           signature: "",
           status: "Draft",
         };
+    return formOverride ? { ...base, ...formOverride } : base;
   });
   const [catalogue, setCatalogue] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -2977,15 +2982,16 @@ const CreateInvoicePanel = ({
               )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {/* When the parent supplies onRequestFullWidth (quotations), this
-                  button hands off to that dedicated full-width screen instead
-                  of just collapsing the preview pane in place. Every other
-                  document type keeps the original in-place toggle. */}
+              {/* When the parent supplies onRequestFullWidth, this button hands
+                  off to a dedicated full-width screen (owned by Accounting.jsx)
+                  instead of just collapsing the preview pane in place — the
+                  current form is passed along so the handoff doesn't drop
+                  whatever's been typed so far. */}
               <button
                 type="button"
                 onClick={() =>
                   onRequestFullWidth
-                    ? onRequestFullWidth()
+                    ? onRequestFullWidth(form)
                     : setHidePreview((v) => !v)
                 }
                 title={
@@ -3821,7 +3827,7 @@ const CreateInvoicePanel = ({
                         checked={form.isRoundOff}
                         onChange={(e) => setForm((p) => ({ ...p, isRoundOff: e.target.checked }))}
                       />
-                      <div className="w-8 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600" />
+                      <div className="w-7 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600" />
                     </label>
                     <span className="text-[12px] text-gray-600">Round Off</span>
                   </div>

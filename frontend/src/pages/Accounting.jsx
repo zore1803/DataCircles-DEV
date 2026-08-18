@@ -1028,14 +1028,21 @@ const Accounting = () => {
   const searchInputRef = useRef(null);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  // Quotations open in the shared split view (form + live preview) by default;
-  // the header's expand button swaps to the dedicated full-width QuotationForm,
-  // which carries the extended field set. Reset whenever the panel closes so a
-  // later quotation always starts back in split view.
+  // Every document type opens in the shared split view (form + live preview)
+  // by default; the header's expand button swaps to that type's dedicated
+  // full-width screen. Each flag is a per-tab VIEW PREFERENCE, deliberately
+  // NOT reset when the panel closes — it persists across opens/closes and
+  // across switching tabs, same as the other three, until the user
+  // explicitly collapses it back via that screen's own minimize button.
   const [quotationFullWidth, setQuotationFullWidth] = useState(false);
   const [invoiceFullWidth, setInvoiceFullWidth] = useState(false);
   const [performaFullWidth, setPerformaFullWidth] = useState(false);
   const [challanFullWidth, setChallanFullWidth] = useState(false);
+  // Snapshot of the currently-open document's in-progress form, handed off
+  // the moment the user toggles between split/full width so switching views
+  // never drops unsaved edits (see CreateInvoicePanel/InvoiceFormFull etc.).
+  // Only one document panel is ever open at a time, so a single slot is enough.
+  const [formHandoff, setFormHandoff] = useState(null);
   const [editing, setEditing] = useState(null);
   const [editingType, setEditingType] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -3082,7 +3089,13 @@ const Accounting = () => {
               setShowCreatePanel(false);
               setEditPanelDoc(null);
               setConversionData(null);
-              setQuotationFullWidth(false);
+              setFormHandoff(null);
+              // Deliberately NOT resetting invoiceFullWidth/quotationFullWidth/
+              // performaFullWidth/challanFullWidth here — each is a per-tab view
+              // preference that should persist across opens/closes (and across
+              // switching tabs) exactly like the other three already do, until
+              // the user explicitly collapses it back via that document type's
+              // own onExitFullWidth (the minimize button).
             },
             onCreated: () => fetchData(activeTab),
             onAddDeal: async () => {
@@ -3107,7 +3120,8 @@ const Accounting = () => {
                 deals={deals}
                 isOpen={true}
                 onClose={panelProps.onClose}
-                onExitFullWidth={() => setInvoiceFullWidth(false)}
+                onExitFullWidth={(currentForm) => { setFormHandoff(currentForm); setInvoiceFullWidth(false); }}
+                formOverride={formHandoff}
                 fetchData={() => fetchData("tax")}
                 editingInvoice={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
@@ -3128,10 +3142,11 @@ const Accounting = () => {
                 }}
               />
             ) : (
-              <CreateInvoicePanel 
-                {...panelProps} 
-                type="tax" 
-                onRequestFullWidth={() => setInvoiceFullWidth(true)}
+              <CreateInvoicePanel
+                {...panelProps}
+                type="tax"
+                formOverride={formHandoff}
+                onRequestFullWidth={(currentForm) => { setFormHandoff(currentForm); setInvoiceFullWidth(true); }}
               />
             );
             // Split view by default; the panel's expand button flips
@@ -3142,7 +3157,8 @@ const Accounting = () => {
                 deals={deals}
                 isOpen={true}
                 onClose={panelProps.onClose}
-                onExitFullWidth={() => setQuotationFullWidth(false)}
+                onExitFullWidth={(currentForm) => { setFormHandoff(currentForm); setQuotationFullWidth(false); }}
+                formOverride={formHandoff}
                 fetchData={() => fetchData("quotation")}
                 editingQuotation={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
@@ -3165,7 +3181,8 @@ const Accounting = () => {
             ) : (
               <CreateQuotationPanel
                 {...panelProps}
-                onRequestFullWidth={() => setQuotationFullWidth(true)}
+                formOverride={formHandoff}
+                onRequestFullWidth={(currentForm) => { setFormHandoff(currentForm); setQuotationFullWidth(true); }}
               />
             );
             case "performa": return performaFullWidth ? (
@@ -3173,7 +3190,8 @@ const Accounting = () => {
                 deals={deals}
                 isOpen={true}
                 onClose={panelProps.onClose}
-                onExitFullWidth={() => setPerformaFullWidth(false)}
+                onExitFullWidth={(currentForm) => { setFormHandoff(currentForm); setPerformaFullWidth(false); }}
+                formOverride={formHandoff}
                 fetchData={() => fetchData("performa")}
                 editingPerformaInvoice={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
@@ -3194,9 +3212,10 @@ const Accounting = () => {
                 }}
               />
             ) : (
-              <CreatePerformaPanel 
-                {...panelProps} 
-                onRequestFullWidth={() => setPerformaFullWidth(true)}
+              <CreatePerformaPanel
+                {...panelProps}
+                formOverride={formHandoff}
+                onRequestFullWidth={(currentForm) => { setFormHandoff(currentForm); setPerformaFullWidth(true); }}
               />
             );
             case "deliveryChallan": return challanFullWidth ? (
@@ -3204,7 +3223,8 @@ const Accounting = () => {
                 deals={deals}
                 isOpen={true}
                 onClose={panelProps.onClose}
-                onExitFullWidth={() => setChallanFullWidth(false)}
+                onExitFullWidth={(currentForm) => { setFormHandoff(currentForm); setChallanFullWidth(false); }}
+                formOverride={formHandoff}
                 fetchData={() => fetchData("deliveryChallan")}
                 editingDeliveryChallan={panelProps.initialDoc}
                 conversionData={panelProps.conversionData}
@@ -3216,9 +3236,10 @@ const Accounting = () => {
                 defaultTermsFlat={defaultTermsFlat}
               />
             ) : (
-              <CreateChallanPanel 
-                {...panelProps} 
-                onRequestFullWidth={() => setChallanFullWidth(true)}
+              <CreateChallanPanel
+                {...panelProps}
+                formOverride={formHandoff}
+                onRequestFullWidth={(currentForm) => { setFormHandoff(currentForm); setChallanFullWidth(true); }}
               />
             );
             default: return null;
@@ -3866,17 +3887,18 @@ const Accounting = () => {
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-xs font-medium text-gray-500">From</span>
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1.5 text-gray-600">
-                        <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-semibold flex items-center justify-center">
+                  {/* From row — same label+value layout as To/Subject */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+                    <div className="flex items-center w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50">
+                      <span className="flex items-center gap-1.5 text-sm text-gray-600 flex-1 min-w-0">
+                        <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-semibold flex items-center justify-center flex-shrink-0">
                           DC
                         </span>
-                        {EMAIL_FROM_ADDRESS}
-                        <Lock className="w-3 h-3 text-gray-400" />
+                        <span className="truncate">{EMAIL_FROM_ADDRESS}</span>
+                        <Lock className="w-3 h-3 text-gray-400 flex-shrink-0" />
                       </span>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                         {!showEmailCc && (
                           <button
                             type="button"

@@ -343,6 +343,11 @@ const DeliveryChallanFormFull = ({
   // Optional. Supplied when this screen was opened as the "full width" mode of
   // the split-view deliveryChallan panel — renders a control to go back to it.
   onExitFullWidth,
+  // Snapshot of the split-view panel's in-progress form, handed off the
+  // moment the user expands to full width — takes precedence over
+  // editingDeliveryChallan/conversionData so switching views never drops
+  // unsaved edits. Passed back the same way when collapsing to split view.
+  formOverride = null,
   conversionData = null,
   defaultDueDateDays = null,
   defaultNotesByType = {},
@@ -508,6 +513,21 @@ const DeliveryChallanFormFull = ({
   }, [isOpen, fetchItems, fetchCompanies, fetchContacts, deals]);
 
   useEffect(() => {
+    if (formOverride) {
+      // The split-view panel (CreateInvoicePanel) stores numbering under
+      // generic keys shared by every document type — this screen's own form
+      // uses deliveryChallan-specific ones, so they're remapped on the way in.
+      const { invoicePrefix, invoiceSuffix, invoiceNumber, ...rest } = formOverride;
+      setForm((prev) => ({
+        ...prev,
+        ...rest,
+        deliveryChallanPrefix: invoicePrefix ?? prev.deliveryChallanPrefix,
+        deliveryChallanSuffix: invoiceSuffix ?? prev.deliveryChallanSuffix,
+        deliveryChallanNumber: invoiceNumber ?? prev.deliveryChallanNumber,
+      }));
+      setHasUnsavedChanges(false);
+      return;
+    }
     const sourceData = editingDeliveryChallan || conversionData;
     if (sourceData) {
       setForm({
@@ -580,7 +600,7 @@ const DeliveryChallanFormFull = ({
       });
       setHasUnsavedChanges(false);
     }
-  }, [editingDeliveryChallan, conversionData]);
+  }, [editingDeliveryChallan, conversionData, formOverride]);
 
   // Same default-signature behavior as the split-view Invoice panel
   // (InvoiceForm.jsx): fall back to the org's default signature whenever
@@ -1208,7 +1228,18 @@ const DeliveryChallanFormFull = ({
               {onExitFullWidth && (
                 <button
                   type="button"
-                  onClick={onExitFullWidth}
+                  onClick={() => {
+                    // Mirror of the remap on the way in: the split-view
+                    // panel expects the generic invoicePrefix/invoiceSuffix/
+                    // invoiceNumber keys, not this screen's deliveryChallan-specific ones.
+                    const { deliveryChallanPrefix, deliveryChallanSuffix, deliveryChallanNumber, ...rest } = form;
+                    onExitFullWidth({
+                      ...rest,
+                      invoicePrefix: deliveryChallanPrefix,
+                      invoiceSuffix: deliveryChallanSuffix,
+                      invoiceNumber: deliveryChallanNumber,
+                    });
+                  }}
                   title="Back to split view with live preview"
                   className="h-8 w-8 flex items-center justify-center bg-white border border-[#E1E4EA] rounded-full text-[#525866] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
                 >
@@ -1845,7 +1876,7 @@ const DeliveryChallanFormFull = ({
                               setHasUnsavedChanges(true);
                             }}
                           />
-                          <div className="w-8 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                          <div className="w-7 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
                         </label>
                       </div>
                       <span className="text-gray-900 font-semibold">{formatNumberFixed(roundOffAmount)}</span>
