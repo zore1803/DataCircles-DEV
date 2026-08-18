@@ -66,10 +66,18 @@ const quillFormats = [
 
 const CallLogForm = ({
   contactId,
+  // Optional. Set when opened from a Company Profile page instead of a
+  // Contact page — narrows the contact picker to that company's contacts
+  // and gets sent along so the saved call log is queryable by company too.
+  companyId,
   editLog,
   isOpen,
   onClose,
   fetchLogs,
+  // Alternate completion callback some callers use instead of fetchLogs —
+  // both are invoked (whichever is actually passed) so this form doesn't
+  // care which one a given caller wired up.
+  onSuccess,
   userId,
 }) => {
   const [form, setForm] = useState(initialFormState);
@@ -92,7 +100,13 @@ const CallLogForm = ({
     const fetchContacts = async () => {
       try {
         const res = await API.get("/contacts");
-        setContacts(res.data);
+        // /contacts has no server-side company filter, so narrow it here —
+        // opened from a Company Profile page, picking a contact from a
+        // different company would silently mislink the call log.
+        const list = companyId
+          ? res.data.filter((c) => (c.company?._id || c.company) === companyId)
+          : res.data;
+        setContacts(list);
       } catch (err) {
         toast.error(err.response?.data?.error || 'Failed to fetch contacts.');
       }
@@ -101,7 +115,7 @@ const CallLogForm = ({
     if (!contactId && !editLog) {
       fetchContacts();
     }
-  }, [contactId, editLog]);
+  }, [contactId, editLog, companyId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -203,20 +217,27 @@ const CallLogForm = ({
         ...form,
         duration: allowDuration ? form.duration : null,
       };
+      let savedLog = null;
       if (editLog) {
-        await API.put(`/call-logs/${editLog._id}`, submitData);
+        const res = await API.put(`/call-logs/${editLog._id}`, submitData);
+        savedLog = res.data;
         toast.success('Call log updated successfully');
       } else {
-        await API.post("/call-logs", {
+        const res = await API.post("/call-logs", {
           ...submitData,
           contact: contactId || form.contact,
+          company: companyId,
           user: userId,
         });
+        savedLog = res.data;
         toast.success('Call log added successfully');
       }
       setForm(initialFormState);
       setValidationErrors({});
-      fetchLogs();
+      // Callers wire up whichever of these fits their refresh strategy —
+      // call both, since only one will actually be a function.
+      fetchLogs?.();
+      onSuccess?.(savedLog);
       onClose();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to save call log.');
@@ -335,10 +356,10 @@ const CallLogForm = ({
                   value={form.duration}
                   onChange={(e) => handleFormChange("duration", e.target.value)}
                   className={`w-full px-3 py-2 border rounded-lg text-sm ${validationErrors.duration
-                      ? 'border-red-300 focus:ring-red-500'
-                      : allowDuration
-                        ? "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                        : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                    ? 'border-red-300 focus:ring-red-500'
+                    : allowDuration
+                      ? "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                      : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
                     }`}
                   placeholder={
                     allowDuration ? "Enter duration" : "Not applicable"

@@ -1,5 +1,6 @@
 // controllers/callLogController.js
 const CallLog = require("../models/CallLog");
+const Contact = require("../models/Contact");
 
 // Create Call Log
 exports.createCallLog = async (req, res) => {
@@ -11,6 +12,20 @@ exports.createCallLog = async (req, res) => {
       user: req.user._id
     };
 
+    // Company Profile's "New Call Log" already knows the company, but a call
+    // logged from the Contact page doesn't send one — derive it from the
+    // contact either way, so every call log is queryable by company
+    // regardless of where it was created.
+    if (!callLogData.company && callLogData.contact) {
+      const contact = await Contact.findOne({
+        _id: callLogData.contact,
+        organization: req.user.organization,
+      }).select("company");
+      if (contact?.company) {
+        callLogData.company = contact.company;
+      }
+    }
+
     const callLog = await CallLog.create(callLogData);
 
     // Populate the response
@@ -21,6 +36,23 @@ exports.createCallLog = async (req, res) => {
     res.status(201).json(populatedCallLog);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+};
+
+// Get Call Logs for a specific company within user's organization
+exports.getCallLogsByCompany = async (req, res) => {
+  try {
+    const callLogs = await CallLog.find({
+      company: req.params.companyId,
+      organization: req.user.organization
+    })
+      .populate("contact", "name email phone")
+      .populate("user", "name email")
+      .sort({ createdAt: -1 });
+
+    res.json(callLogs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
 

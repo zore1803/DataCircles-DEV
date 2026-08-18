@@ -55,9 +55,9 @@ const FullWidthDocumentPanel = ({
   const totalTax = t.totalCGST + t.totalSGST + t.totalIGST;
 
   const inputClass =
-    "w-full h-10 px-2.5 rounded-[25px] border border-[#E1E4EA] bg-white text-[13px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] transition-colors";
+    "w-full h-10 px-2.5 rounded-lg border border-[#E1E4EA] bg-white text-[13px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] transition-colors";
   const readOnlyClass =
-    "w-full h-10 px-2.5 rounded-[25px] border border-[#E1E4EA] bg-[#F5F7FA] text-[13px] text-[#525866]";
+    "w-full h-10 px-2.5 rounded-lg border border-[#E1E4EA] bg-[#F5F7FA] text-[13px] text-[#525866]";
 
   return (
     <div className="w-full flex flex-col items-start gap-1">
@@ -100,7 +100,7 @@ const FullWidthDocumentPanel = ({
               type="button"
               onClick={onAddDeal}
               title="Create a new deal"
-              className="w-10 h-10 flex-shrink-0 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white flex items-center justify-center transition-colors"
+              className="w-10 h-10 flex-shrink-0 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white flex items-center justify-center transition-colors"
             >
               <Plus className="w-4 h-4" />
             </button>

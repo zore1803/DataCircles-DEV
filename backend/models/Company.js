@@ -48,6 +48,7 @@ const companySchema = new mongoose.Schema(
     billingAddress: { type: postalAddressSchema, default: () => ({}) },
     // One or more shipping addresses.
     shippingAddresses: { type: [postalAddressSchema], default: [] },
+    email: { type: String, trim: true, lowercase: true },
     website: String,
     profilePicture: String,
     socialMedia: {

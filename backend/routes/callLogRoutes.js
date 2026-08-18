@@ -14,6 +14,7 @@ const restrictByPlan = require('../middlewares/restrictByPlan');
 router.post("/", requireAuth, subscriptionGate, restrictByPlan("callLogs", "write"), callLogController.createCallLog);
 router.get("/", requireAuth, subscriptionGate, restrictByPlan("callLogs", "read"), callLogController.getCallLogs);
 router.get("/contact/:contactId", requireAuth, subscriptionGate, restrictByPlan("callLogs", "read"), callLogController.getCallLogsByContact);
+router.get("/company/:companyId", requireAuth, subscriptionGate, restrictByPlan("callLogs", "read"), callLogController.getCallLogsByCompany);
 router.put("/:id", requireAuth, subscriptionGate, restrictByPlan("callLogs", "write"), callLogController.updateCallLog);
 router.delete("/:id", requireAuth, subscriptionGate, restrictByPlan("callLogs", "write"), callLogController.deleteCallLog);
 

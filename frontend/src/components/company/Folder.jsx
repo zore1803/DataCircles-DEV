@@ -510,7 +510,7 @@ const formatRowDate = (date) => {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 };
 
-const FileCard = ({ file, onView, onDelete, isLast }) => {
+const FileCard = ({ file, onView, onDelete, onEditLink, isLast }) => {
   const isLink = file.isLink;
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState(null);
@@ -603,6 +603,18 @@ const FileCard = ({ file, onView, onDelete, isLast }) => {
                 <OpenFileIcon size={19} style={{ color: "#5C5D5C" }} />
                 Open File
               </button>
+              {file.isLink && onEditLink && (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onEditLink(file);
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Edit3 size={17} style={{ color: "#5C5D5C" }} />
+                  Edit Link
+                </button>
+              )}
               <button
                 onClick={() => {
                   setMenuOpen(false);
@@ -622,7 +634,7 @@ const FileCard = ({ file, onView, onDelete, isLast }) => {
   );
 };
 
-const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, isFirst, isLast, isEditing, editingName, editingError, onEditingNameChange, onSaveEdit, onCancelEdit, searchTerm }) => (
+const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, onEditLink, isFirst, isLast, isEditing, editingName, editingError, onEditingNameChange, onSaveEdit, onCancelEdit, searchTerm }) => (
   <div className="transition-all">
     <div
       className="flex items-center justify-between gap-2"
@@ -740,6 +752,7 @@ const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, on
                   }
                 }}
                 onDelete={(file) => onDeleteFile(folder._id, file)}
+                onEditLink={(file) => onEditLink(folder._id, file)}
               />
             ))}
           </div>
@@ -1067,6 +1080,53 @@ const AddLinkModal = ({ isOpen, onClose, onSubmit }) => {
   );
 };
 
+const EditLinkModal = ({ isOpen, onClose, onSubmit, initialName, initialUrl }) => {
+  const [linkName, setLinkName] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      setLinkName(initialName || "");
+      setLinkUrl(initialUrl || "");
+    }
+  }, [isOpen, initialName, initialUrl]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (linkName.trim() && linkUrl.trim()) {
+      onSubmit({ name: linkName.trim(), url: linkUrl.trim() });
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-4 w-full max-w-md border border-gray-200">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-semibold text-gray-900">Edit Link</h3>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Display Name</label>
+            <input type="text" value={linkName} onChange={(e) => setLinkName(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" autoFocus />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">URL</label>
+            <input type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-md">Cancel</button>
+            <button type="submit" disabled={!linkName.trim() || !linkUrl.trim()} className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-800 disabled:bg-gray-400 rounded-md transition-colors">Update Link</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // `showStats` is intentionally not accepted any more: it used to feed the
 // old calc()-based height offset. useFillToBottom measures the container's real
 // position instead, so a KPI-row toggle is handled automatically. CompanyFolderTab
@@ -1107,9 +1167,9 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
     initialName: "",
   });
   const [inlineEditingId, setInlineEditingId] = useState(null);
-  const [inlineEditingName, setInlineEditingName] = useState("");
   const [inlineEditingError, setInlineEditingError] = useState("");
   const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [editLinkState, setEditLinkState] = useState({ isOpen: false, folderId: null, fileId: null, fileName: "", fileUrl: "" });
 
   useEffect(() => {
     fetchFolders();
@@ -1469,6 +1529,24 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
         toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
       } else {
         toast.error(err.response?.data?.error || "Failed to add link");
+      }
+    }
+  };
+
+  const handleUpdateLink = async ({ name, url }) => {
+    try {
+      await API.put(`/folders/${editLinkState.folderId}/links/${editLinkState.fileId}`, {
+        fileName: name,
+        fileUrl: url,
+      });
+      toast.success("Link updated successfully");
+      setRefresh(!refresh);
+      setEditLinkState({ isOpen: false, folderId: null, fileId: null, fileName: "", fileUrl: "" });
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Failed to update link");
       }
     }
   };
@@ -2099,6 +2177,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                 onDelete={deleteFolder}
                 onSelect={setSelectedFolderId}
                 onDeleteFile={deleteFile}
+                onEditLink={(folderId, file) => setEditLinkState({ isOpen: true, folderId, fileId: file._id, fileName: file.fileName, fileUrl: file.fileUrl })}
                 isEditing={inlineEditingId === folder._id}
                 editingName={inlineEditingName}
                 editingError={inlineEditingError}
@@ -2610,6 +2689,14 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
           isOpen={linkModalOpen}
           onClose={() => setLinkModalOpen(false)}
           onSubmit={handleAddLink}
+        />
+
+        <EditLinkModal
+          isOpen={editLinkState.isOpen}
+          onClose={() => setEditLinkState({ ...editLinkState, isOpen: false })}
+          onSubmit={handleUpdateLink}
+          initialName={editLinkState.fileName}
+          initialUrl={editLinkState.fileUrl}
         />
 
         <UpgradeRequiredModal

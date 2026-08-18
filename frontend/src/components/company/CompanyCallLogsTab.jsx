@@ -50,9 +50,8 @@ const statusOptions = [
   },
 ];
 
-const CallLogs = ({ contactId }) => {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
+const CompanyCallLogsTab = ({ companyId, callLogs, onAddCallLog, onDeleteCallLog, pendingCreate, onPendingCreateConsumed }) => {
+  const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editLog, setEditLog] = useState(null);
   const [selectedLog, setSelectedLog] = useState(null);
@@ -61,24 +60,15 @@ const CallLogs = ({ contactId }) => {
   const [sortBy, setSortBy] = useState("newest");
   const user = JSON.parse(localStorage.getItem("user"));
 
-  const fetchLogs = async () => {
-    setLoading(true);
-    try {
-      const res = await API.get(`/call-logs/contact/${contactId}`);
-      setLogs(res.data);
-    } catch (err) {
-      toast.error('Failed to fetch call logs.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchLogs();
-  }, [contactId]);
+    if (pendingCreate === "call") {
+      setShowForm(true);
+      if (onPendingCreateConsumed) onPendingCreateConsumed();
+    }
+  }, [pendingCreate, onPendingCreateConsumed]);
 
   // Filter and sort logs
-  const filteredLogs = logs
+  const filteredLogs = (callLogs || [])
     .filter(log => {
       const matchesSearch = log.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.user?.name?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -96,7 +86,7 @@ const CallLogs = ({ contactId }) => {
     if (window.confirm('Delete this call log?')) {
       try {
         await API.delete(`/call-logs/${id}`);
-        fetchLogs();
+        if (onDeleteCallLog) onDeleteCallLog(id);
         toast.success('Call log deleted');
       } catch (err) {
         if (err.response?.status === 402) {
@@ -220,11 +210,13 @@ const CallLogs = ({ contactId }) => {
       {/* Call Log Form */}
       {showForm && (
         <CallLogForm
-          contactId={contactId}
+          companyId={companyId}
           editLog={editLog}
           isOpen={showForm}
           onClose={handleCloseForm}
-          fetchLogs={fetchLogs}
+          onSuccess={(newLog) => {
+            if (onAddCallLog) onAddCallLog(newLog);
+          }}
           userId={user.id}
         />
       )}
@@ -247,9 +239,9 @@ const CallLogs = ({ contactId }) => {
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
           <Phone className="w-10 h-10 text-gray-400 mx-auto mb-3" />
           <p className="text-sm text-gray-600 mb-4">
-            {logs.length === 0 ? 'No call logs yet' : 'No matching calls'}
+            {(callLogs || []).length === 0 ? 'No call logs yet' : 'No matching calls'}
           </p>
-          {logs.length === 0 && (
+          {(callLogs || []).length === 0 && (
             <button
               onClick={() => setShowForm(true)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm transition-colors"
@@ -348,4 +340,4 @@ const CallLogs = ({ contactId }) => {
   );
 };
 
-export default CallLogs;
+export default CompanyCallLogsTab;

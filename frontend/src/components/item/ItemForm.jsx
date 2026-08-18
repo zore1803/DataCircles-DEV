@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
 import {
   X,
@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ReactQuill from "react-quill-new";
+
+// Standard Indian GST slabs, matching the per-item select used on
+// document forms (e.g. InvoiceForm.jsx).
+const GST_RATES = [0, 5, 12, 18, 28];
 
 const ItemForm = ({
   form,
@@ -30,11 +34,51 @@ const ItemForm = ({
     sellingPrice: 0,
     stock: 0,
     isActive: true,
+    gstRate: 0,
   });
   const [variantIndex, setVariantIndex] = useState(null);
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
+
+  // Product images: `existingImages` holds already-uploaded URLs (kept ones,
+  // seeded from the item being edited); `newImageFiles` holds freshly picked
+  // File objects not uploaded yet. Both are merged into one `images` field
+  // on submit.
+  const [existingImages, setExistingImages] = useState(form.images || []);
+  const [newImageFiles, setNewImageFiles] = useState([]);
+  const [newImagePreviews, setNewImagePreviews] = useState([]);
+  const imageInputRef = useRef(null);
+
+  useEffect(() => {
+    setExistingImages(form.images || []);
+    setNewImageFiles([]);
+  }, [form._id]);
+
+  useEffect(() => {
+    const urls = newImageFiles.map((f) => URL.createObjectURL(f));
+    setNewImagePreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [newImageFiles]);
+
+  const handleImageSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length) {
+      setNewImageFiles((prev) => [...prev, ...files]);
+      setIsFormDirty(true);
+    }
+    e.target.value = "";
+  };
+
+  const handleRemoveExistingImage = (url) => {
+    setExistingImages((prev) => prev.filter((u) => u !== url));
+    setIsFormDirty(true);
+  };
+
+  const handleRemoveNewImage = (index) => {
+    setNewImageFiles((prev) => prev.filter((_, i) => i !== index));
+    setIsFormDirty(true);
+  };
 
   // Org-defined custom fields (configured in Settings -> Item Fields).
   // Definitions come from /item-fields/latest; the entered values live in
@@ -371,13 +415,44 @@ const ItemForm = ({
         })
         .filter((field) => field.value !== "");
 
-      const payload = { ...form, variants, additionalFields: processedAdditionalFields };
-      if (form._id) {
-        await API.put(`/items/${form._id}`, payload);
-        toast.success("Item updated successfully!");
+      if (newImageFiles.length > 0) {
+        // Multipart request: scalar fields go in as strings, array/object
+        // fields get JSON-stringified, same approach QuickCompanyForm.jsx
+        // uses for its single profilePicture upload, extended to multiple
+        // files under one "images" field name.
+        const fd = new FormData();
+        Object.entries({ ...form, variants: undefined, additionalFields: undefined, images: undefined }).forEach(
+          ([key, value]) => {
+            if (value === undefined || value === null) return;
+            fd.append(key, typeof value === "boolean" ? String(value) : value);
+          }
+        );
+        fd.append("variants", JSON.stringify(variants));
+        fd.append("additionalFields", JSON.stringify(processedAdditionalFields));
+        fd.append("existingImages", JSON.stringify(existingImages));
+        newImageFiles.forEach((file) => fd.append("images", file));
+
+        if (form._id) {
+          await API.put(`/items/${form._id}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+          toast.success("Item updated successfully!");
+        } else {
+          await API.post("/items", fd, { headers: { "Content-Type": "multipart/form-data" } });
+          toast.success("Item added successfully!");
+        }
       } else {
-        await API.post("/items", payload);
-        toast.success("Item added successfully!");
+        const payload = {
+          ...form,
+          variants,
+          additionalFields: processedAdditionalFields,
+          images: existingImages,
+        };
+        if (form._id) {
+          await API.put(`/items/${form._id}`, payload);
+          toast.success("Item updated successfully!");
+        } else {
+          await API.post("/items", payload);
+          toast.success("Item added successfully!");
+        }
       }
       await fetchItems();
       setIsFormDirty(false);
@@ -675,19 +750,40 @@ const ItemForm = ({
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Stock
-                    </label>
-                    <input
-                      type="number"
-                      name="stock"
-                      value={currentVariant.stock}
-                      onChange={handleVariantChange}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Stock
+                      </label>
+                      <input
+                        type="number"
+                        name="stock"
+                        value={currentVariant.stock}
+                        onChange={handleVariantChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        GST Rate
+                      </label>
+                      <select
+                        value={currentVariant.gstRate ?? 0}
+                        onChange={(e) =>
+                          setCurrentVariant((prev) => ({
+                            ...prev,
+                            gstRate: parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                      >
+                        {GST_RATES.map((rate) => (
+                          <option key={rate} value={rate}>{rate}%</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-2 pt-2">
                     <input
                       type="checkbox"
@@ -812,19 +908,35 @@ const ItemForm = ({
             </div>
           </div>
 
-          {/* Tax Inclusive */}
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={form.taxInclusive}
-              onChange={(e) =>
-                handleFormChange("taxInclusive", e.target.checked)
-              }
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <label className="text-sm text-gray-700 font-medium">
-              Tax Inclusive
-            </label>
+          {/* Tax Inclusive + GST Rate */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.taxInclusive}
+                onChange={(e) =>
+                  handleFormChange("taxInclusive", e.target.checked)
+                }
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label className="text-sm text-gray-700 font-medium">
+                Tax Inclusive
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-gray-700">
+                GST Rate
+              </label>
+              <select
+                value={form.gstRate ?? 0}
+                onChange={(e) => handleFormChange("gstRate", parseFloat(e.target.value) || 0)}
+                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                {GST_RATES.map((rate) => (
+                  <option key={rate} value={rate}>{rate}%</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* HSN/SAC */}
@@ -876,6 +988,56 @@ const ItemForm = ({
               className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter Item Category"
             />
+          </div>
+
+          {/* Product Images */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Product Images
+            </label>
+            <div className="flex flex-wrap gap-3">
+              {existingImages.map((url) => (
+                <div key={url} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 group">
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveExistingImage(url)}
+                    className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+              {newImagePreviews.map((url, i) => (
+                <div key={url} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 group">
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveNewImage(i)}
+                    className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                className="w-20 h-20 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 hover:border-gray-300 transition-colors"
+              >
+                <Plus className="w-5 h-5 mb-1" />
+                <span className="text-[11px] font-medium">Upload</span>
+              </button>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+            </div>
+            <p className="mt-1.5 text-[11px] text-gray-400">Up to 10 images</p>
           </div>
 
           {/* Primary Unit */}

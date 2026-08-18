@@ -217,7 +217,7 @@ const ItemSearchSelect = ({
           value={selectedItem ? selectedItem.displayName : searchTerm}
           onChange={handleSearchChange}
           onFocus={handleInputFocus}
-          className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-[25px] focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 bg-white"
+          className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 bg-white"
           aria-label="Search items or variants"
         />
       </div>
@@ -896,6 +896,7 @@ const InvoiceForm = ({
           discountType: item.discountType,
           discount: parseFloat(item.discount),
           gstRate: parseFloat(item.gstRate) || 0,
+          taxInclusive: !!item.taxInclusive,
         })),
       };
 
@@ -1225,7 +1226,7 @@ const InvoiceForm = ({
                 <button
                   type="button"
                   onClick={() => onPreview(form)}
-                  className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
+                  className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
                   aria-label="Preview invoice"
                 >
                   <Eye className="w-3.5 h-3.5 text-[#525866]" />
@@ -1236,7 +1237,7 @@ const InvoiceForm = ({
                 type="button"
                 onClick={handleSaveDraft}
                 disabled={isSubmitting}
-                className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
+                className="h-8 px-4 flex items-center gap-1.5 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
                 {isSubmitting ? (
                   <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1271,9 +1272,10 @@ const InvoiceForm = ({
 
           <div className="p-6 space-y-6 flex-1 overflow-y-auto">
             {/* Section 1: Invoice Details */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(15,23,42,0.06),0_8px_20px_-12px_rgba(15,23,42,0.12)] border border-slate-200 p-6">
               <SectionHeader number="01" title="Invoice Details" />
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-4">
+              <div className="h-px bg-slate-100 -mx-6 my-4" />
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                 <div className="md:col-span-4 space-y-2">
                   <div className="flex justify-between items-center">
                     <label className="text-sm font-semibold text-gray-700">Select Deal <span className="text-red-500">*</span></label>
@@ -1362,7 +1364,7 @@ const InvoiceForm = ({
             </div>
 
             {/* Section 2: Billing & Shipping Address */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(15,23,42,0.06),0_8px_20px_-12px_rgba(15,23,42,0.12)] border border-slate-200 p-6">
               <div className="flex items-center justify-between mb-4">
                 <SectionHeader number="02" title="Billing & Shipping Address" />
                 <div className="flex items-center gap-2">
@@ -1394,19 +1396,31 @@ const InvoiceForm = ({
                   </span>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 w-full">
+              <div className="h-px bg-slate-100 -mx-6 mb-5" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 w-full md:divide-x md:divide-slate-100">
+                <div className="md:pr-8">
                 <AddressFieldsGroup
                   label="Billing address"
                   value={form.billingAddress}
                   onChange={(next) => {
+                    // Editing the billing state here (not just picking a new
+                    // Deal) should re-classify intra/inter the same way deal
+                    // selection does, so overriding the address on this one
+                    // document actually changes CGST/SGST vs IGST instead of
+                    // silently keeping whatever the deal's company implied.
+                    const customerState = (next.state || "").trim().toLowerCase();
+                    const autoType = sellerState && customerState && sellerState !== customerState ? "inter" : "intra";
                     setForm((prev) => ({
                       ...prev,
                       billingAddress: next,
                       shippingAddress: prev.sameAsBilling ? next : prev.shippingAddress,
+                      transactionType: customerState ? autoType : prev.transactionType,
                     }));
                     setHasUnsavedChanges(true);
                   }}
                 />
+                </div>
+                <div className="md:pl-8">
                 <AddressFieldsGroup
                   label="Shipping address"
                   value={form.shippingAddress}
@@ -1416,6 +1430,7 @@ const InvoiceForm = ({
                     setHasUnsavedChanges(true);
                   }}
                 />
+                </div>
               </div>
             </div>
 
@@ -1424,9 +1439,10 @@ const InvoiceForm = ({
                 the full-width form; there's no document-level rate here
                 since a single rate can't represent a mixed-rate item list. */}
             {form.isTaxInvoice && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(15,23,42,0.06),0_8px_20px_-12px_rgba(15,23,42,0.12)] border border-slate-200 p-6">
                 <SectionHeader number="03" title="GST & Tax Details" />
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-4">
+                <div className="h-px bg-slate-100 -mx-6 my-4" />
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                   <div className="md:col-span-4 space-y-2">
                     <label className="text-sm font-semibold text-gray-700">Receiver GSTIN <span className="text-red-500">*</span></label>
                     <input
@@ -1447,11 +1463,15 @@ const InvoiceForm = ({
               </div>
             )}
 
-            {/* Section 4: Products & Services */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-slate-800">Products & Services</h3>
+            {/* Section 4: Products & Services — the primary work area, so it
+                gets stronger visual weight than the other cards. */}
+            <div className="bg-white rounded-xl shadow-[0_2px_6px_rgba(15,23,42,0.07),0_10px_28px_-14px_rgba(0,133,255,0.28)] border border-blue-100/80 p-6 lg:p-7">
+              <div className="flex justify-between items-center mb-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[#0085FF] text-white text-[11px] font-bold flex-shrink-0 shadow-sm">
+                    04
+                  </div>
+                  <h3 className="text-[15px] font-semibold text-slate-900">Products & Services</h3>
                   <div className="group relative">
                     <div className="w-4 h-4 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px] cursor-help">?</div>
                   </div>
@@ -1473,6 +1493,7 @@ const InvoiceForm = ({
                   </button>
                 </div>
               </div>
+              <div className="h-px bg-slate-100 -mx-6 lg:-mx-7 mb-5" />
 
               {/* Quick-add bar */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3 mb-5 bg-blue-50/60 border border-blue-100 rounded-xl">
@@ -1677,6 +1698,22 @@ const InvoiceForm = ({
                                   />
                                 </div>
                               )}
+                              {form.isTaxInvoice && (
+                                <div className="space-y-1">
+                                  <label className="text-xs text-gray-500 font-medium">Rate Includes Tax?</label>
+                                  <select
+                                    value={item.taxInclusive ? "inclusive" : "exclusive"}
+                                    onChange={(e) => {
+                                      handleItemChange(index, "taxInclusive", e.target.value === "inclusive");
+                                      setHasUnsavedChanges(true);
+                                    }}
+                                    className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent cursor-pointer"
+                                  >
+                                    <option value="exclusive">Without Tax</option>
+                                    <option value="inclusive">With Tax</option>
+                                  </select>
+                                </div>
+                              )}
                               <div className={`space-y-1 ${!form.isTaxInvoice ? "md:col-span-2" : ""}`}>
                                 <label className="text-xs text-gray-500 font-medium">Item Description</label>
                                 <textarea
@@ -1713,10 +1750,10 @@ const InvoiceForm = ({
             </div>
 
             {/* Section 5+: Notes, Terms, Signature, Totals — 2-column grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
               {/* Left Column: Notes, Terms, Attachments */}
-              <div className="space-y-5">
+              <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(15,23,42,0.06),0_8px_20px_-12px_rgba(15,23,42,0.12)] border border-slate-200 p-6 space-y-5">
                 <div>
                   <SectionHeader number="05" title="Notes" />
                   <textarea
@@ -1727,7 +1764,7 @@ const InvoiceForm = ({
                       setForm((prev) => ({ ...prev, notes: e.target.value }));
                       setHasUnsavedChanges(true);
                     }}
-                    className="w-full px-3 py-2 rounded-[25px] border border-gray-200 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 resize-y"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 resize-y"
                   />
                 </div>
 
@@ -1741,7 +1778,7 @@ const InvoiceForm = ({
                       setForm((prev) => ({ ...prev, terms: e.target.value }));
                       setHasUnsavedChanges(true);
                     }}
-                    className="w-full px-3 py-2 rounded-[25px] border border-gray-200 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 resize-y"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 resize-y"
                   />
                 </div>
 
@@ -1760,7 +1797,7 @@ const InvoiceForm = ({
                       <span className="text-sm font-semibold text-gray-700">Attach files</span>
                       <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px]">?</div>
                     </div>
-                    <button type="button" className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 border-dashed rounded-[25px] hover:border-gray-400 transition-colors">
+                    <button type="button" className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 border-dashed rounded-lg hover:border-gray-400 transition-colors">
                       <span className="text-lg">↑</span> Attach Files (Max: 5)
                     </button>
                   </div>
@@ -1774,13 +1811,13 @@ const InvoiceForm = ({
               </div>
 
               {/* Right Column: Totals, Bank, Signature */}
-              <div className="space-y-6">
+              <div className="space-y-6 lg:sticky lg:top-4">
 
-                {/* Math Card */}
-                <div className="bg-[#EBF5EE] rounded-xl p-5 shadow-sm space-y-4 relative">
+                {/* Math Card — Invoice Summary, styled as a sticky summary panel */}
+                <div className="bg-[#EBF5EE] rounded-xl p-5 shadow-[0_2px_8px_-2px_rgba(16,94,54,0.18)] border border-[#BFE3CE] space-y-4 relative">
                   <div className="flex justify-end gap-2 items-center mb-2">
                     <span className="text-xs text-gray-500 font-medium">Extra Discount</span>
-                    <div className="flex items-center border border-gray-200 bg-white rounded-[25px] overflow-hidden h-8">
+                    <div className="flex items-center border border-gray-200 bg-white rounded-lg overflow-hidden h-8">
                       <select
                         value={form.discount.type}
                         onChange={(e) => {
@@ -1891,17 +1928,17 @@ const InvoiceForm = ({
                     <label className="text-sm font-semibold text-gray-700">Select Bank</label>
                     <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px]">?</div>
                   </div>
-                  <button type="button" className="w-full py-3 bg-[#FAF5FF] border border-[#E9D5FF] rounded-[25px] text-[#9333EA] font-semibold text-sm hover:bg-[#F3E8FF] transition-colors flex items-center justify-center gap-2">
+                  <button type="button" className="w-full py-3 bg-[#FAF5FF] border border-[#E9D5FF] rounded-lg text-[#9333EA] font-semibold text-sm hover:bg-[#F3E8FF] transition-colors flex items-center justify-center gap-2">
                     <span className="text-lg">🏦</span> Add Bank to Invoice (Optional)
                   </button>
                 </div>
 
                 {/* Signature */}
-                <div>
+                <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(15,23,42,0.06),0_8px_20px_-12px_rgba(15,23,42,0.12)] border border-slate-200 p-5">
                   <SectionHeader number="07" title="Signature" />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1">
-                      <div className="relative flex items-center h-10 rounded-[25px] border border-gray-200 focus-within:border-blue-500 overflow-hidden">
+                      <div className="relative flex items-center h-10 rounded-lg border border-gray-200 focus-within:border-blue-500 overflow-hidden">
                         <select
                           value={form.signature}
                           onChange={(e) => {
@@ -1947,7 +1984,7 @@ const InvoiceForm = ({
 
             {/* Sticky Footer */}
             <div className="sticky bottom-0 z-20 w-full pt-3 pb-1 -mx-6 mt-12 flex justify-center pointer-events-none">
-              <div className="pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-5 rounded-full border border-[#E1E4EA] bg-white/95 backdrop-blur-sm pl-6 pr-2.5 py-2.5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.22)]">
+              <div className="pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-5 rounded-2xl border border-[#E1E4EA] bg-white/95 backdrop-blur-sm pl-6 pr-2.5 py-2.5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.22)]">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold tracking-wide text-[#99A0AE] uppercase leading-none">
                     Total
@@ -1960,7 +1997,7 @@ const InvoiceForm = ({
                   <button
                     type="button"
                     onClick={() => {}}
-                    className="h-9 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors whitespace-nowrap"
+                    className="h-9 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors whitespace-nowrap"
                   >
                     <Printer className="w-3.5 h-3.5 text-[#525866]" />
                     Print
@@ -1968,7 +2005,7 @@ const InvoiceForm = ({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="h-9 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                    className="h-9 px-4 flex items-center gap-1.5 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     {isSubmitting
                       ? editingInvoice
@@ -2537,6 +2574,7 @@ const CreateInvoicePanel = ({
       discount: 0,
       showDescription: false,
       gstRate: picked.gstRate || form.gstRate || 18,
+      taxInclusive: !!picked.taxInclusive,
     };
     setForm((p) => {
       const isBlank = p.items.length === 1 && !p.items[0].name && !p.items[0]._id;
@@ -2652,6 +2690,7 @@ const CreateInvoicePanel = ({
           discountType: it.discountType,
           discount: parseFloat(it.discount) || 0,
           gstRate: parseFloat(it.gstRate) || 0,
+          taxInclusive: !!it.taxInclusive,
         })),
       };
       if (supportsGSTIN) {
@@ -2781,7 +2820,7 @@ const CreateInvoicePanel = ({
 
   const dealOptions = deals.map((d) => ({ value: d._id, label: d.title }));
   const inputClass =
-    "w-full h-10 px-2.5 rounded-[25px] border border-[#E1E4EA] bg-white text-[13px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] transition-colors";
+    "w-full h-10 px-2.5 rounded-lg border border-[#E1E4EA] bg-white text-[13px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] transition-colors";
 
   // Catalogue descriptions can be stored as rich-text HTML; show plain text in
   // the description field instead of raw markup.
@@ -2982,7 +3021,7 @@ const CreateInvoicePanel = ({
                 type="button"
                 onClick={() => setShowTemplates(true)}
                 title={`${docName} settings`}
-                className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
+                className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
               >
                 <Settings className="w-3.5 h-3.5 text-[#525866]" />
                 Settings
@@ -2993,7 +3032,7 @@ const CreateInvoicePanel = ({
                 type="button"
                 onClick={handleSaveDraft}
                 disabled={submitting}
-                className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
+                className="h-8 px-4 flex items-center gap-1.5 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
                 <FileText className="w-3.5 h-3.5" />
                 Save as Draft
@@ -3024,7 +3063,7 @@ const CreateInvoicePanel = ({
             <button
               type="button"
               onClick={() => setShowTemplates(true)}
-              className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+              className="h-8 px-4 flex items-center gap-1.5 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-sm font-medium transition-colors"
             >
               <Pencil className="w-3.5 h-3.5" />
               Change Template
@@ -3131,7 +3170,7 @@ const CreateInvoicePanel = ({
                   type="button"
                   onClick={onAddDeal}
                   title="Create a new deal"
-                  className="w-10 h-10 flex-shrink-0 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white flex items-center justify-center transition-colors"
+                  className="w-10 h-10 flex-shrink-0 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white flex items-center justify-center transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -3233,13 +3272,21 @@ const CreateInvoicePanel = ({
             <AddressFieldsGroup
               label="Billing address"
               value={form.billingAddress}
-              onChange={(next) =>
+              onChange={(next) => {
+                // Same seller-state vs. customer-state re-check the deal
+                // picker above runs, so editing the billing state directly
+                // on this document also flips CGST/SGST vs IGST instead of
+                // freezing whatever the deal's company implied.
+                const sellerState = (orgDetails?.state || "").trim().toLowerCase();
+                const customerState = (next.state || "").trim().toLowerCase();
+                const autoType = sellerState && customerState && sellerState !== customerState ? "inter" : "intra";
                 setForm((p) => ({
                   ...p,
                   billingAddress: next,
                   shippingAddress: p.sameAsBilling ? next : p.shippingAddress,
-                }))
-              }
+                  transactionType: supportsTax && customerState ? autoType : p.transactionType,
+                }));
+              }}
             />
             <div className="flex items-center gap-2 @md:col-span-2 -mb-1">
               <button
@@ -3574,6 +3621,19 @@ const CreateInvoicePanel = ({
                                 />
                               </div>
                             )}
+                            {supportsTax && form.isTaxInvoice && (
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-medium text-[#525866]">Rate Includes Tax?</label>
+                                <select
+                                  value={item.taxInclusive ? "inclusive" : "exclusive"}
+                                  onChange={(e) => updateItem(realIndex, { taxInclusive: e.target.value === "inclusive" })}
+                                  className="w-full text-[12px] border-b border-[#E1E4EA] px-1 py-1 focus:outline-none focus:border-[#0085FF] bg-transparent cursor-pointer"
+                                >
+                                  <option value="exclusive">Without Tax</option>
+                                  <option value="inclusive">With Tax</option>
+                                </select>
+                              </div>
+                            )}
                             <div className={`flex flex-col gap-1 ${supportsTax && form.isTaxInvoice ? "" : "sm:col-span-2"}`}>
                               <label className="text-[10px] font-medium text-[#525866]">Description</label>
                               <textarea
@@ -3622,7 +3682,7 @@ const CreateInvoicePanel = ({
                 value={form.notes}
                 onChange={(e) => setField("notes", e.target.value)}
                 placeholder={`A short message to the customer, e.g. "Thank you for the business!"`}
-                className="w-full px-3 py-2 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
+                className="w-full px-3 py-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
               />
             </div>
             <div className="flex flex-col">
@@ -3641,7 +3701,7 @@ const CreateInvoicePanel = ({
                 value={form.terms}
                 onChange={(e) => setField("terms", e.target.value)}
                 placeholder={"1. Goods once sold cannot be taken back or exchanged.\n2. Subject to local jurisdiction."}
-                className="w-full px-3 py-2 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
+                className="w-full px-3 py-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
               />
             </div>
           </div>
@@ -3650,7 +3710,7 @@ const CreateInvoicePanel = ({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
             <div className="flex flex-col gap-1">
               <FieldLabel>Signature</FieldLabel>
-              <div className="relative flex items-center h-10 rounded-[25px] border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
+              <div className="relative flex items-center h-10 rounded-lg border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
                 <select
                   value={form.signature}
                   onChange={(e) => setField("signature", e.target.value)}
@@ -3699,7 +3759,7 @@ const CreateInvoicePanel = ({
             <div className="flex flex-col gap-1">
               <FieldLabel>{docName} Discount</FieldLabel>
               <div className="flex items-center gap-2">
-              <div className="relative flex items-center flex-1 min-w-0 h-10 rounded-[25px] border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
+              <div className="relative flex items-center flex-1 min-w-0 h-10 rounded-lg border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
                 <input
                   type="number"
                   min="0"
@@ -3852,7 +3912,7 @@ const CreateInvoicePanel = ({
               ignores pointer events so the empty space either side of the pill
               doesn't block the fields underneath it. */}
           <div className="sticky bottom-0 z-20 w-full pt-3 pb-1 flex justify-center pointer-events-none">
-            <div className="pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-5 rounded-full border border-[#E1E4EA] bg-white/95 backdrop-blur-sm pl-6 pr-2.5 py-2.5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.22)]">
+            <div className="pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-5 rounded-2xl border border-[#E1E4EA] bg-white/95 backdrop-blur-sm pl-6 pr-2.5 py-2.5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.22)]">
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold tracking-wide text-[#99A0AE] uppercase leading-none">
                   Total
@@ -3865,7 +3925,7 @@ const CreateInvoicePanel = ({
                 <button
                   type="button"
                   onClick={handlePrint}
-                  className="h-9 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors whitespace-nowrap"
+                  className="h-9 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors whitespace-nowrap"
                 >
                   <Printer className="w-3.5 h-3.5 text-[#525866]" />
                   Print
@@ -3874,7 +3934,7 @@ const CreateInvoicePanel = ({
                   type="button"
                   onClick={handleSubmit}
                   disabled={submitting}
-                  className="h-9 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="h-9 px-4 flex items-center gap-1.5 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   {submitting
                     ? isEditing

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   X,
   Plus,
@@ -22,7 +22,6 @@ const BLANK_FORM = {
   sellingPrice: "",
   sellingPriceTax: "without Tax",
   taxPercent: "0",
-  taxType: "(0% CGST & 0% SGST, 0% IGST)",
   primaryUnit: "",
   hsnSac: "",
   purchasePrice: "",
@@ -48,7 +47,12 @@ const BLANK_VARIANT = {
   sellingPrice: 0,
   stock: 0,
   isActive: true,
+  gstRate: 0,
 };
+
+// Standard Indian GST slabs, matching the per-item select used on document
+// forms (e.g. InvoiceForm.jsx).
+const GST_RATES = [0, 5, 12, 18, 28];
 
 export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
   const [type, setType] = useState("Product");
@@ -66,6 +70,28 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
   const [currentVariant, setCurrentVariant] = useState(BLANK_VARIANT);
   const [variantIndex, setVariantIndex] = useState(null);
 
+  // Product images: newly picked files plus their preview URLs (there are no
+  // existing images yet — this drawer only creates new items).
+  const [imageFiles, setImageFiles] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
+  const imageInputRef = useRef(null);
+
+  useEffect(() => {
+    const urls = imageFiles.map((f) => URL.createObjectURL(f));
+    setImagePreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [imageFiles]);
+
+  const handleImageSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length) setImageFiles((prev) => [...prev, ...files]);
+    e.target.value = "";
+  };
+
+  const handleRemoveImage = (index) => {
+    setImageFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     setActiveTab("Details");
@@ -76,6 +102,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
     setShowVariantForm(false);
     setCurrentVariant(BLANK_VARIANT);
     setVariantIndex(null);
+    setImageFiles([]);
     API.get("/items/categories")
       .then((res) => setCategories(res.data || []))
       .catch((err) => console.error("Failed to load item categories:", err));
@@ -161,11 +188,27 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
         barcode: form.barcode,
         category: form.category,
         primaryUnit: form.primaryUnit || "OTH OTHERS",
-        images: [],
         isActive: true,
         variants,
       };
-      const res = await API.post("/items", payload);
+
+      let res;
+      if (imageFiles.length > 0) {
+        // Multipart request: scalar fields go in as strings, the variants
+        // array gets JSON-stringified, same approach QuickCompanyForm.jsx
+        // uses for its single profilePicture upload, extended to multiple
+        // files under one "images" field name.
+        const fd = new FormData();
+        Object.entries(payload).forEach(([key, value]) => {
+          if (key === "variants") return;
+          fd.append(key, typeof value === "boolean" ? String(value) : value);
+        });
+        fd.append("variants", JSON.stringify(variants));
+        imageFiles.forEach((file) => fd.append("images", file));
+        res = await API.post("/items", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      } else {
+        res = await API.post("/items", { ...payload, images: [] });
+      }
       toast.success("Item added successfully!");
       if (onSaved) onSaved(res.data);
       onClose();
@@ -300,27 +343,21 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
 
                 <div>
                   <label className={lbl}>Tax % <span className="text-red-500">*</span></label>
-                  <div className="flex border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 bg-white">
-                    <input
-                      type="number"
-                      value={form.taxPercent}
-                      onChange={(e) => handleChange("taxPercent", e.target.value)}
-                      onWheel={(e) => e.target.blur()}
-                      className="w-14 px-3 py-2.5 text-sm focus:outline-none"
-                    />
-                    <select
-                      value={form.taxType}
-                      onChange={(e) => handleChange("taxType", e.target.value)}
-                      className="flex-1 px-2 py-2.5 bg-white border-l border-gray-200 text-xs text-gray-600 focus:outline-none truncate"
-                    >
-                      <option value="(0% CGST & 0% SGST, 0% IGST)">(0% CGST & 0% SGST, 0% IGST)</option>
-                      <option value="(5% CGST & 5% SGST, 5% IGST)">(5% CGST & 5% SGST, 5% IGST)</option>
-                      <option value="(6% CGST & 6% SGST, 12% IGST)">(6% CGST & 6% SGST, 12% IGST)</option>
-                      <option value="(9% CGST & 9% SGST, 18% IGST)">(9% CGST & 9% SGST, 18% IGST)</option>
-                      <option value="(14% CGST & 14% SGST, 28% IGST)">(14% CGST & 14% SGST, 28% IGST)</option>
-                    </select>
-                  </div>
-                  <p className="mt-1 text-[11px] text-blue-600 cursor-pointer hover:underline">Zero Rated (Default)</p>
+                  {/* Single control: its value IS the saved GST rate. (This used
+                      to be a number box plus a separate breakdown dropdown that
+                      weren't wired together — picking a breakdown option didn't
+                      change the number that actually got saved.) */}
+                  <select
+                    value={form.taxPercent}
+                    onChange={(e) => handleChange("taxPercent", e.target.value)}
+                    className={inp + " cursor-pointer"}
+                  >
+                    {GST_RATES.map((rate) => (
+                      <option key={rate} value={rate}>
+                        {rate}% ({rate / 2}% CGST & {rate / 2}% SGST, {rate}% IGST)
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -438,6 +475,18 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                         </div>
                       </div>
                       <div>
+                        <label className={lbl}>GST Rate</label>
+                        <select
+                          value={currentVariant.gstRate ?? 0}
+                          onChange={(e) => setCurrentVariant((prev) => ({ ...prev, gstRate: parseFloat(e.target.value) || 0 }))}
+                          className={inp + " cursor-pointer"}
+                        >
+                          {GST_RATES.map((rate) => (
+                            <option key={rate} value={rate}>{rate}%</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
                         <label className={lbl}>Stock</label>
                         <input type="number" name="stock" min="0" value={currentVariant.stock} onChange={handleVariantChange} onWheel={(e) => e.target.blur()} className={inp} />
                       </div>
@@ -518,13 +567,39 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                 </div>
               </div>
 
-              {/* Images upload placeholder */}
+              {/* Images upload */}
               <div>
                 <label className={lbl}>Product Images &amp; Videos</label>
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 hover:border-gray-300 cursor-pointer transition-colors">
-                    <Plus className="w-5 h-5 mb-1" />
-                    <span className="text-[11px] font-medium">Upload</span>
+                <div className="flex items-start gap-4">
+                  <div className="flex flex-wrap gap-3">
+                    {imagePreviews.map((url, i) => (
+                      <div key={url} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 group">
+                        <img src={url} alt="" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(i)}
+                          className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="w-20 h-20 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 hover:border-gray-300 cursor-pointer transition-colors"
+                    >
+                      <Plus className="w-5 h-5 mb-1" />
+                      <span className="text-[11px] font-medium">Upload</span>
+                    </button>
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleImageSelect}
+                      className="hidden"
+                    />
                   </div>
                   <p className="text-[11px] text-gray-400 leading-relaxed">Up to 10 files · 3 MB/image · 50 MB/video<br />Images: 1024×1024 recommended</p>
                 </div>

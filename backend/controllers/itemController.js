@@ -1,5 +1,46 @@
 const Item = require("../models/Item");
 
+// Helper: delete an S3 object by key, best-effort (mirrors brandingController.js)
+async function deleteFileFromS3(key) {
+  if (!key) return;
+
+  const { DeleteObjectCommand, S3Client } = require("@aws-sdk/client-s3");
+
+  const s3 = new S3Client({
+    region: process.env.AWS_REGION,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    },
+  });
+
+  try {
+    await s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: key }));
+  } catch (error) {
+    console.error("Error deleting item image from S3:", error);
+    // Don't fail the request if deletion fails
+  }
+}
+
+function extractS3KeyFromUrl(url) {
+  if (!url) return null;
+  if (process.env.CLOUDFRONT_DOMAIN && url.includes(process.env.CLOUDFRONT_DOMAIN)) {
+    return url.split(`${process.env.CLOUDFRONT_DOMAIN}/`)[1];
+  }
+  return null;
+}
+
+// Multer (multipart) requests send JSON-shaped fields as strings; parse them
+// back before they hit the schema. No-op for plain JSON requests.
+function parseJsonField(value) {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
 const createItem = async (req, res) => {
   try {
     const itemData = {
@@ -8,8 +49,16 @@ const createItem = async (req, res) => {
       organization: req.user.organization,
     };
 
+    itemData.variants = parseJsonField(itemData.variants);
+    itemData.additionalFields = parseJsonField(itemData.additionalFields);
+
     // Validate and parse gstRate
     itemData.gstRate = parseFloat(itemData.gstRate) || 0;
+
+    // Uploaded product images (multipart requests only)
+    if (req.files && req.files.length) {
+      itemData.images = req.files.map((f) => `https://${process.env.CLOUDFRONT_DOMAIN}/${f.key}`);
+    }
 
     // Validate variants if present
     if (itemData.variants && Array.isArray(itemData.variants)) {
@@ -201,8 +250,32 @@ const updateItem = async (req, res) => {
       organization: req.user.organization,
     };
 
+    itemData.variants = parseJsonField(itemData.variants);
+    itemData.additionalFields = parseJsonField(itemData.additionalFields);
+    const existingImages = parseJsonField(itemData.existingImages) || [];
+    delete itemData.existingImages;
+
     // Validate and parse gstRate
     itemData.gstRate = parseFloat(itemData.gstRate) || 0;
+
+    // Merge kept existing images with any newly uploaded ones; best-effort
+    // delete from S3 whatever the user removed (matches how branding's
+    // logo/signature replacement behaves).
+    if (req.files && req.files.length) {
+      const newImages = req.files.map((f) => `https://${process.env.CLOUDFRONT_DOMAIN}/${f.key}`);
+      itemData.images = [...existingImages, ...newImages];
+    } else if (Array.isArray(existingImages)) {
+      itemData.images = existingImages;
+    }
+
+    if (Array.isArray(itemData.images)) {
+      const currentItem = await Item.findOne({ _id: req.params.id, organization: req.user.organization }).select("images").lean();
+      const removedImages = (currentItem?.images || []).filter((url) => !itemData.images.includes(url));
+      removedImages.forEach((url) => {
+        const key = extractS3KeyFromUrl(url);
+        if (key) deleteFileFromS3(key);
+      });
+    }
 
     // Validate variants if present
     if (itemData.variants && Array.isArray(itemData.variants)) {

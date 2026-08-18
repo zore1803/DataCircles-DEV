@@ -10,6 +10,7 @@ import CompanyNotesTab from "../components/company/CompanyNotesTab";
 import CompanyTasksTab from "../components/company/CompanyTasksTab";
 import CompanyMeetingsTab from "../components/company/CompanyMeetingsTab";
 import CompanyFolderTab from "../components/company/CompanyFolderTab";
+import CompanyCallLogsTab from "../components/company/CompanyCallLogsTab";
 import CompanyCalendar from "../components/company/CompanyCalendar";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import toast from "react-hot-toast";
@@ -67,6 +68,7 @@ const tabs = [
   "Notes",
   "Tasks",
   "Meetings",
+  "Call Logs",
   "Folders",
   "Calendar",
 ];
@@ -77,6 +79,7 @@ const newEntryOptions = [
   { label: "New Invoice", icon: FileText, tab: "Invoices", create: "invoice" },
   { label: "New Notes", icon: StickyNote, tab: "Notes", create: "note" },
   { label: "New Meetings", icon: Calendar, tab: "Meetings", create: "meeting" },
+  { label: "New Call Log", icon: Phone, tab: "Call Logs", create: "call" },
   { label: "New Folders", icon: FolderOpen, tab: "Folders", create: "folder" },
 ];
 
@@ -169,7 +172,10 @@ const CompanyProfilePage = () => {
       : null;
   const goToCompany = (companyId) => {
     if (!companyId) return;
-    navigate(`/companies/${companyId}`, { state: { companyIds } });
+    // Preserve the current tab across prev/next — without this, arrowing
+    // through companies while on e.g. Folders silently dropped back to
+    // Overview on every navigation.
+    navigate(`/companies/${companyId}?tab=${encodeURIComponent(activeTab)}`, { state: { companyIds } });
   };
   const [company, setCompany] = useState(null);
   const [contacts, setContacts] = useState([]);
@@ -177,6 +183,7 @@ const CompanyProfilePage = () => {
   const [meetings, setMeetings] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [folders, setFolders] = useState([]);
+  const [callLogs, setCallLogs] = useState([]);
   const tabFromUrl = searchParams.get("tab");
   const [activeTab, setActiveTabState] = useState(
     tabs.includes(tabFromUrl) ? tabFromUrl : "Overview",
@@ -490,13 +497,25 @@ const CompanyProfilePage = () => {
       });
     });
 
+    callLogs.forEach((call) => {
+      items.push({
+        type: "Call Logs",
+        icon: Phone,
+        iconClass: "bg-green-50 text-green-600",
+        title: `Logged Call: ${call.purpose || "Phone Call"}`,
+        subtitle: call.notes || null,
+        amount: null,
+        date: new Date(call.timestamp || call.createdAt),
+      });
+    });
+
     return items
       .filter((item) => !isNaN(item.date))
       .sort((a, b) => b.date - a.date)
       .slice(0, 8);
   })();
 
-  const activityFeedTabs = ["All", "Deals", "Invoices", "Tasks"];
+  const activityFeedTabs = ["All", "Deals", "Invoices", "Tasks", "Call Logs", "Meetings"];
   const filteredActivityFeed =
     activityFeedFilter === "All"
       ? activityFeedItems
@@ -614,6 +633,7 @@ const CompanyProfilePage = () => {
         const resTasks = await API.get(`/tasks/company/${id}`);
         const resFields = await API.get("/company-fields");
         const resFolders = await API.get("/folders", { params: { companyId: id } });
+        const resCallLogs = await API.get(`/call-logs/company/${id}`).catch(() => ({ data: [] }));
 
         setContacts(
           resContacts.data.filter(
@@ -625,6 +645,7 @@ const CompanyProfilePage = () => {
         setMeetings(resMeetings.data.meetings);
         setTasks(resTasks.data || []);
         setFolders(resFolders.data || []);
+        setCallLogs(resCallLogs.data || []);
         if (resFields.data) {
           setCompanyFieldNames(resFields.data.fields || []);
         }
@@ -1085,408 +1106,408 @@ const CompanyProfilePage = () => {
 
         {/* Tab Content */}
         <div className="min-h-[400px]">
-            {activeTab === "Overview" && (
-              <>
+          {activeTab === "Overview" && (
+            <>
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_319px] gap-4">
-              <div className="space-y-4 min-w-0">
-                {/* Deal Pipeline */}
-                <div className="h-[162px] bg-white border border-gray-200 rounded-lg p-5 overflow-hidden">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-900">
-                      {showOverviewSkeleton ? <Skeleton width={110} height={14} /> : <>Deal Pipeline ({deals.length})</>}
-                    </h3>
-                    {showOverviewSkeleton ? (
-                      <div className="flex items-center gap-2">
-                        <Skeleton shape="circle" width={28} height={28} />
-                        <Skeleton shape="circle" width={28} height={28} />
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setActiveTab("Deals")}
-                          title="View Deals"
-                          className="p-1.5 rounded-full text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
-                        >
-                          <Eye size={14} />
-                        </button>
-                        <button
-                          onClick={() => setActiveTab("Deals")}
-                          title="Add Deal"
-                          className="w-7 h-7 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-                        >
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {showOverviewSkeleton ? (
-                    <div className="flex h-[88px] gap-1">
-                      {pipelineStages.map((stage) => (
-                        <Skeleton key={stage.key} width="100%" height="100%" shape="rect" className="rounded-md flex-1" />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex h-[88px]">
-                      {pipelineData.map((stage, idx) => (
-                        <div
-                          key={stage.key}
-                          className={`flex-1 min-w-0 flex flex-col justify-center ${stage.color} ${idx > 0 ? "-ml-2 sm:-ml-3 pl-6 pr-2 sm:pl-8 sm:pr-5" : "pl-6 pr-2 sm:pl-8 sm:pr-5"}`}
-                          style={{
-                            clipPath:
-                              idx === pipelineData.length - 1
-                                ? "polygon(0 0, 100% 0, 100% 100%, 0 100%, 20px 50%)"
-                                : "polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%, 20px 50%)",
-                          }}
-                        >
-                          <p className="truncate w-full text-[10px] sm:text-xs font-medium">{stage.label}</p>
-                          <p className="truncate w-full text-[9px] sm:text-[11px] opacity-70">
-                            {stage.count} Deal{stage.count !== 1 ? "s" : ""}
-                          </p>
-                          <p className="truncate w-full text-[11px] sm:text-sm font-semibold">
-                            ₹{stage.amount.toLocaleString("en-IN")}
-                          </p>
+                <div className="space-y-4 min-w-0">
+                  {/* Deal Pipeline */}
+                  <div className="h-[162px] bg-white border border-gray-200 rounded-lg p-5 overflow-hidden">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-900">
+                        {showOverviewSkeleton ? <Skeleton width={110} height={14} /> : <>Deal Pipeline ({deals.length})</>}
+                      </h3>
+                      {showOverviewSkeleton ? (
+                        <div className="flex items-center gap-2">
+                          <Skeleton shape="circle" width={28} height={28} />
+                          <Skeleton shape="circle" width={28} height={28} />
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Financial Overview */}
-                <div
-                  className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col min-w-0"
-                  style={{ height: 607, maxHeight: 607, minHeight: 607, flexShrink: 0, flexGrow: 0 }}
-                >
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex-shrink-0">
-                    {showOverviewSkeleton ? <Skeleton width={130} height={14} /> : "Financial Overview"}
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                    {showOverviewSkeleton
-                      ? Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
-                      : financialTiles.map((tile) => (
-                        <div
-                          key={tile.label}
-                          className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl min-w-0"
-                        >
-                          <div className="flex lg:hidden flex-shrink-0 text-gray-500">
-                            <tile.icon size={18} />
-                          </div>
-                          <div className="hidden lg:flex w-10 h-10 bg-white text-gray-500 rounded-lg items-center justify-center flex-shrink-0 border border-gray-200">
-                            <tile.icon size={20} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">
-                              {tile.label}
-                            </p>
-                            <p
-                              className={`truncate w-full text-xs sm:text-sm font-semibold ${tile.valueClassName || "text-gray-900"}`}
-                            >
-                              {tile.value}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-
-                  {showOverviewSkeleton ? (
-                    <Skeleton
-                      width="100%"
-                      height="100%"
-                      shape="rect"
-                      className="rounded-lg"
-                      style={{ flex: "1 1 0%", minHeight: 0, maxHeight: 439, flexShrink: 1, flexGrow: 1 }}
-                    />
-                  ) : (
-                  <div className="flex min-w-0" style={{ flex: "1 1 0%", minHeight: 0 }}>
-                    {/* Fixed Y-axis, stays put while the plot below scrolls horizontally */}
-                    <div style={{ width: 88, height: "100%", flexShrink: 0 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={monthlyIncomeData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
-                          <XAxis
-                            dataKey="month"
-                            tickLine={false}
-                            axisLine={false}
-                            tick={false}
-                            padding={{ left: 0, right: 0 }}
-                          />
-                          <YAxis
-                            domain={[0, incomeYMax]}
-                            tickLine={false}
-                            axisLine={false}
-                            allowDecimals={false}
-                            tickFormatter={(value) => value.toLocaleString("en-IN")}
-                            tick={{ fontSize: 12, fontFamily: "'DM Sans', sans-serif", fill: "rgba(33, 32, 31, 0.56)" }}
-                            width={88}
-                          />
-                          <Area type="linear" dataKey="income" stroke="none" fill="none" isAnimationActive={false} />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    </div>
-
-                    <div
-                      ref={incomeChartScrollRef}
-                      className="income-chart-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden"
-                      style={{ scrollbarWidth: "none", msOverflowStyle: "none", cursor: chartDotCursor }}
-                    >
-                      <div
-                        style={{ minWidth: Math.max(600, monthlyIncomeData.length * 110), height: "100%" }}
-                      >
-                        <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart
-                            data={monthlyIncomeData}
-                            margin={{ top: 8, right: -(Math.max(600, monthlyIncomeData.length * 110) / (monthlyIncomeData.length - 0.5) / 2), left: 0, bottom: 0 }}
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setActiveTab("Deals")}
+                            title="View Deals"
+                            className="p-1.5 rounded-full text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
                           >
-                            <defs>
-                              <linearGradient id="hoverGradient" x1="0" y1="1" x2="0" y2="0">
-                                <stop offset="20.61%" stopColor="#0085FF" stopOpacity={0.6} />
-                                <stop offset="100%" stopColor="#FFFFFF" stopOpacity={0.024} />
-                              </linearGradient>
-                              <pattern id="hatchPattern" patternUnits="userSpaceOnUse" width="9" height="8">
-                                <rect width="1" height="8" fill="rgba(0, 133, 255, 0.3)" />
-                              </pattern>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E7E4E3" vertical={false} />
-                            <XAxis
-                              dataKey="month"
-                              tickLine={false}
-                              axisLine={false}
-                              padding={{ left: 0, right: 0 }}
-                              tick={{ fontSize: 12, fontFamily: "'DM Sans', sans-serif", fill: "rgba(33, 32, 31, 0.56)" }}
-                            />
-                            <YAxis domain={[0, incomeYMax]} hide />
-                            <Tooltip
-                              content={({ active, payload }) => {
-                                if (!active || !payload || payload.length === 0) return null;
-                                const income = payload[0]?.payload?.income || 0;
-                                return (
-                                  <div style={{ position: "relative", display: "inline-block" }}>
-                                    <svg
-                                      viewBox="0 0 86 62"
-                                      preserveAspectRatio="none"
-                                      style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-                                      fill="none"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                      <path fillRule="evenodd" clipRule="evenodd" d="M47.5426 60.1492C45.3504 62.6169 41.7962 62.6169 39.6041 60.1492L35.7402 56.4079C34.8076 55.5049 33.5603 55 32.2621 55H22.0494C14.3824 55 11.6021 54.3038 8.79913 52.9965C5.99616 51.6892 3.79638 49.7708 2.29734 47.3263C0.7983 44.8819 0 42.4573 0 35.7709V19.2291C0 12.5427 0.7983 10.1181 2.29734 7.67366C3.79638 5.22921 5.99616 3.3108 8.79913 2.0035C11.6021 0.696192 14.3824 0 22.0494 0H63.9506C71.6176 0 74.3979 0.696192 77.2009 2.0035C80.0038 3.3108 82.2036 5.22921 83.7027 7.67366C85.2017 10.1181 86 12.5427 86 19.2291V35.7709C86 42.4573 85.2017 44.8819 83.7027 47.3263C82.2036 49.7708 80.0038 51.6892 77.2009 52.9965C74.3979 54.3038 71.6176 55 63.9506 55H56.9085C54.3122 55 51.8177 56.0098 49.9524 57.8158L47.5426 60.1492Z" fill="#21201F" />
-                                    </svg>
-                                    <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "12px 16px 22px", gap: 2, whiteSpace: "nowrap" }}>
-                                      <span style={{ color: "#fff", fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>
-                                        {`₹${income.toLocaleString("en-IN")}`}
-                                      </span>
-                                      <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 500, lineHeight: 1.2 }}>
-                                        Income
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              }}
-                            />
-                            <Area
-                              type="linear"
-                              dataKey="income"
-                              stroke="none"
-                              fill="url(#hatchPattern)"
-                              isAnimationActive={false}
-                            />
-                            <Bar dataKey="paidHighlight" shape={renderHighlightShape} background={{ fill: "transparent" }} isAnimationActive={false} />
-                            <Area
-                              type="linear"
-                              dataKey="income"
-                              stroke="#0085FF"
-                              strokeWidth={2}
-                              fill="none"
-                              dot={{ r: 3, fill: "#0085FF", strokeWidth: 0 }}
-                              activeDot={{ r: 5 }}
-                            />
-                          </ComposedChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Right Sidebar: Activity Timeline + Calendar */}
-              <div className="space-y-4">
-                {/* Activity Timeline */}
-                <div className="h-[267px] flex flex-col bg-white border border-gray-200 rounded-lg p-5">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-5 flex-shrink-0">
-                    {showOverviewSkeleton ? <Skeleton width={110} height={14} /> : "Activity Timeline"}
-                  </h3>
-                  <div className="flex items-center gap-1 mb-4 flex-wrap flex-shrink-0">
-                    {showOverviewSkeleton
-                      ? Array.from({ length: 4 }).map((_, i) => (
-                        <Skeleton key={i} width={i === 0 ? 36 : 56} height={24} className="rounded-full" />
-                      ))
-                      : activityFeedTabs.map((tab) => (
-                        <button
-                          key={tab}
-                          onClick={() => setActivityFeedFilter(tab)}
-                          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${activityFeedFilter === tab
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                            }`}
-                        >
-                          {tab}
-                        </button>
-                      ))}
-                  </div>
-                  <div className="space-y-3 overflow-y-auto flex-1 pr-2 -mr-2">
-                    {showOverviewSkeleton ? (
-                      Array.from({ length: 4 }).map((_, idx) => (
-                        <div key={idx} className="flex items-start gap-2.5">
-                          <Skeleton shape="circle" width={28} height={28} className="flex-shrink-0" />
-                          <div className="min-w-0 flex-1 flex flex-col gap-1">
-                            <Skeleton width="80%" height={11} />
-                            <Skeleton width="40%" height={10} />
-                          </div>
-                          <Skeleton width={36} height={11} className="flex-shrink-0" />
+                            <Eye size={14} />
+                          </button>
+                          <button
+                            onClick={() => setActiveTab("Deals")}
+                            title="Add Deal"
+                            className="w-7 h-7 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                          >
+                            <Plus size={14} />
+                          </button>
                         </div>
-                      ))
-                    ) : filteredActivityFeed.length === 0 ? (
-                      <p className="text-sm text-gray-400 text-center py-4">
-                        No recent activity.
-                      </p>
+                      )}
+                    </div>
+                    {showOverviewSkeleton ? (
+                      <div className="flex h-[88px] gap-1">
+                        {pipelineStages.map((stage) => (
+                          <Skeleton key={stage.key} width="100%" height="100%" shape="rect" className="rounded-md flex-1" />
+                        ))}
+                      </div>
                     ) : (
-                      filteredActivityFeed.map((item, idx) => (
-                        <div key={idx} className="flex items-start gap-2.5">
+                      <div className="flex h-[88px]">
+                        {pipelineData.map((stage, idx) => (
                           <div
-                            className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${item.iconClass}`}
+                            key={stage.key}
+                            className={`flex-1 min-w-0 flex flex-col justify-center ${stage.color} ${idx > 0 ? "-ml-2 sm:-ml-3 pl-6 pr-2 sm:pl-8 sm:pr-5" : "pl-6 pr-2 sm:pl-8 sm:pr-5"}`}
+                            style={{
+                              clipPath:
+                                idx === pipelineData.length - 1
+                                  ? "polygon(0 0, 100% 0, 100% 100%, 0 100%, 20px 50%)"
+                                  : "polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%, 20px 50%)",
+                            }}
                           >
-                            <item.icon size={13} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-medium text-gray-900 truncate">
-                              {item.title}
+                            <p className="truncate w-full text-[10px] sm:text-xs font-medium">{stage.label}</p>
+                            <p className="truncate w-full text-[9px] sm:text-[11px] opacity-70">
+                              {stage.count} Deal{stage.count !== 1 ? "s" : ""}
                             </p>
-                            <p className="text-[11px] text-gray-400">
-                              {item.date.toLocaleDateString("en-US", {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                              })}
+                            <p className="truncate w-full text-[11px] sm:text-sm font-semibold">
+                              ₹{stage.amount.toLocaleString("en-IN")}
                             </p>
-                          </div>
-                          {item.amount != null && (
-                            <p className={`text-xs font-semibold flex-shrink-0 ${item.amountClass}`}>
-                              ₹{item.amount.toLocaleString("en-IN")}
-                            </p>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Mini Calendar */}
-                <div className="bg-white border border-gray-200 rounded-lg p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-900">
-                      {showOverviewSkeleton ? <Skeleton width={70} height={14} /> : "Calendar"}
-                    </h3>
-                    {showOverviewSkeleton ? (
-                      <Skeleton width={70} height={12} />
-                    ) : (
-                      <button
-                        onClick={() => setActiveTab("Calendar")}
-                        className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                      >
-                        View Calendar
-                      </button>
-                    )}
-                  </div>
-                  {showOverviewSkeleton ? (
-                    <Skeleton width="100%" height={220} />
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-7 gap-1 mb-2">
-                        {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
-                          <div
-                            key={d}
-                            className="text-[10px] text-gray-400 text-center font-medium"
-                          >
-                            {d}
                           </div>
                         ))}
                       </div>
-                      <div className="grid grid-cols-7 gap-1">
-                        {miniCalendar.days.map((day, idx) => (
-                          <div
-                            key={idx}
-                            className="flex flex-col items-center"
-                          >
-                            {day && futureEventDays.has(day) && (
-                              <span className="mb-1 w-1.5 h-1.5 rounded-full bg-[#1E3A8A] flex-shrink-0"></span>
-                            )}
-                            <span
-                              className={`text-[11px] w-6 h-6 flex items-center justify-center rounded-full ${day === miniCalendar.today
-                                ? "bg-blue-600 text-white font-semibold"
-                                : day
-                                  ? "text-gray-700"
-                                  : ""
-                                }`}
-                            >
-                              {day || ""}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-
-                  <div className="flex items-center justify-between mt-4 mb-2">
-                    <h4 className="text-xs font-semibold text-gray-900">
-                      {showOverviewSkeleton ? <Skeleton width={70} height={12} /> : "Upcoming"}
-                    </h4>
-                    {!showOverviewSkeleton && [...tasks, ...meetings].length > 4 && (
-                      <button
-                        onClick={() => setShowAllUpcoming(true)}
-                        className="text-[10px] font-medium text-blue-600 hover:text-blue-700 hover:underline"
-                      >
-                        Show All
-                      </button>
                     )}
                   </div>
-                  <div className="space-y-2">
+
+                  {/* Financial Overview */}
+                  <div
+                    className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col min-w-0"
+                    style={{ height: 607, maxHeight: 607, minHeight: 607, flexShrink: 0, flexGrow: 0 }}
+                  >
+                    <h3 className="text-sm font-semibold text-gray-900 mb-3 flex-shrink-0">
+                      {showOverviewSkeleton ? <Skeleton width={130} height={14} /> : "Financial Overview"}
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                      {showOverviewSkeleton
+                        ? Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
+                        : financialTiles.map((tile) => (
+                          <div
+                            key={tile.label}
+                            className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl min-w-0"
+                          >
+                            <div className="flex lg:hidden flex-shrink-0 text-gray-500">
+                              <tile.icon size={18} />
+                            </div>
+                            <div className="hidden lg:flex w-10 h-10 bg-white text-gray-500 rounded-lg items-center justify-center flex-shrink-0 border border-gray-200">
+                              <tile.icon size={20} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">
+                                {tile.label}
+                              </p>
+                              <p
+                                className={`truncate w-full text-xs sm:text-sm font-semibold ${tile.valueClassName || "text-gray-900"}`}
+                              >
+                                {tile.value}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+
                     {showOverviewSkeleton ? (
-                      Array.from({ length: 5 }).map((_, idx) => (
-                        <div key={idx} className="flex items-start gap-2">
-                          <Skeleton shape="circle" width={6} height={6} className="mt-1 flex-shrink-0" />
-                          <div className="min-w-0 flex-1 flex flex-col gap-1">
-                            <Skeleton width="75%" height={11} />
-                            <Skeleton width="35%" height={10} />
+                      <Skeleton
+                        width="100%"
+                        height="100%"
+                        shape="rect"
+                        className="rounded-lg"
+                        style={{ flex: "1 1 0%", minHeight: 0, maxHeight: 439, flexShrink: 1, flexGrow: 1 }}
+                      />
+                    ) : (
+                      <div className="flex min-w-0" style={{ flex: "1 1 0%", minHeight: 0 }}>
+                        {/* Fixed Y-axis, stays put while the plot below scrolls horizontally */}
+                        <div style={{ width: 88, height: "100%", flexShrink: 0 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={monthlyIncomeData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+                              <XAxis
+                                dataKey="month"
+                                tickLine={false}
+                                axisLine={false}
+                                tick={false}
+                                padding={{ left: 0, right: 0 }}
+                              />
+                              <YAxis
+                                domain={[0, incomeYMax]}
+                                tickLine={false}
+                                axisLine={false}
+                                allowDecimals={false}
+                                tickFormatter={(value) => value.toLocaleString("en-IN")}
+                                tick={{ fontSize: 12, fontFamily: "'DM Sans', sans-serif", fill: "rgba(33, 32, 31, 0.56)" }}
+                                width={88}
+                              />
+                              <Area type="linear" dataKey="income" stroke="none" fill="none" isAnimationActive={false} />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div
+                          ref={incomeChartScrollRef}
+                          className="income-chart-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden"
+                          style={{ scrollbarWidth: "none", msOverflowStyle: "none", cursor: chartDotCursor }}
+                        >
+                          <div
+                            style={{ minWidth: Math.max(600, monthlyIncomeData.length * 110), height: "100%" }}
+                          >
+                            <ResponsiveContainer width="100%" height="100%">
+                              <ComposedChart
+                                data={monthlyIncomeData}
+                                margin={{ top: 8, right: -(Math.max(600, monthlyIncomeData.length * 110) / (monthlyIncomeData.length - 0.5) / 2), left: 0, bottom: 0 }}
+                              >
+                                <defs>
+                                  <linearGradient id="hoverGradient" x1="0" y1="1" x2="0" y2="0">
+                                    <stop offset="20.61%" stopColor="#0085FF" stopOpacity={0.6} />
+                                    <stop offset="100%" stopColor="#FFFFFF" stopOpacity={0.024} />
+                                  </linearGradient>
+                                  <pattern id="hatchPattern" patternUnits="userSpaceOnUse" width="9" height="8">
+                                    <rect width="1" height="8" fill="rgba(0, 133, 255, 0.3)" />
+                                  </pattern>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#E7E4E3" vertical={false} />
+                                <XAxis
+                                  dataKey="month"
+                                  tickLine={false}
+                                  axisLine={false}
+                                  padding={{ left: 0, right: 0 }}
+                                  tick={{ fontSize: 12, fontFamily: "'DM Sans', sans-serif", fill: "rgba(33, 32, 31, 0.56)" }}
+                                />
+                                <YAxis domain={[0, incomeYMax]} hide />
+                                <Tooltip
+                                  content={({ active, payload }) => {
+                                    if (!active || !payload || payload.length === 0) return null;
+                                    const income = payload[0]?.payload?.income || 0;
+                                    return (
+                                      <div style={{ position: "relative", display: "inline-block" }}>
+                                        <svg
+                                          viewBox="0 0 86 62"
+                                          preserveAspectRatio="none"
+                                          style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+                                          fill="none"
+                                          xmlns="http://www.w3.org/2000/svg"
+                                        >
+                                          <path fillRule="evenodd" clipRule="evenodd" d="M47.5426 60.1492C45.3504 62.6169 41.7962 62.6169 39.6041 60.1492L35.7402 56.4079C34.8076 55.5049 33.5603 55 32.2621 55H22.0494C14.3824 55 11.6021 54.3038 8.79913 52.9965C5.99616 51.6892 3.79638 49.7708 2.29734 47.3263C0.7983 44.8819 0 42.4573 0 35.7709V19.2291C0 12.5427 0.7983 10.1181 2.29734 7.67366C3.79638 5.22921 5.99616 3.3108 8.79913 2.0035C11.6021 0.696192 14.3824 0 22.0494 0H63.9506C71.6176 0 74.3979 0.696192 77.2009 2.0035C80.0038 3.3108 82.2036 5.22921 83.7027 7.67366C85.2017 10.1181 86 12.5427 86 19.2291V35.7709C86 42.4573 85.2017 44.8819 83.7027 47.3263C82.2036 49.7708 80.0038 51.6892 77.2009 52.9965C74.3979 54.3038 71.6176 55 63.9506 55H56.9085C54.3122 55 51.8177 56.0098 49.9524 57.8158L47.5426 60.1492Z" fill="#21201F" />
+                                        </svg>
+                                        <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "12px 16px 22px", gap: 2, whiteSpace: "nowrap" }}>
+                                          <span style={{ color: "#fff", fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>
+                                            {`₹${income.toLocaleString("en-IN")}`}
+                                          </span>
+                                          <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 500, lineHeight: 1.2 }}>
+                                            Income
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  }}
+                                />
+                                <Area
+                                  type="linear"
+                                  dataKey="income"
+                                  stroke="none"
+                                  fill="url(#hatchPattern)"
+                                  isAnimationActive={false}
+                                />
+                                <Bar dataKey="paidHighlight" shape={renderHighlightShape} background={{ fill: "transparent" }} isAnimationActive={false} />
+                                <Area
+                                  type="linear"
+                                  dataKey="income"
+                                  stroke="#0085FF"
+                                  strokeWidth={2}
+                                  fill="none"
+                                  dot={{ r: 3, fill: "#0085FF", strokeWidth: 0 }}
+                                  activeDot={{ r: 5 }}
+                                />
+                              </ComposedChart>
+                            </ResponsiveContainer>
                           </div>
                         </div>
-                      ))
-                    ) : upcomingItems.length === 0 ? (
-                      <p className="text-xs text-gray-400">Nothing upcoming.</p>
-                    ) : (
-                      upcomingItems.map((item, idx) => (
-                        <div key={idx} className="flex items-start gap-2">
-                          <span
-                            className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.overdue ? "bg-red-500" : "bg-blue-500"
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Sidebar: Activity Timeline + Calendar */}
+                <div className="space-y-4">
+                  {/* Activity Timeline */}
+                  <div className="h-[267px] flex flex-col bg-white border border-gray-200 rounded-lg p-5">
+                    <h3 className="text-sm font-semibold text-gray-900 mb-5 flex-shrink-0">
+                      {showOverviewSkeleton ? <Skeleton width={110} height={14} /> : "Activity Timeline"}
+                    </h3>
+                    <div className="flex items-center gap-1 mb-4 flex-wrap flex-shrink-0">
+                      {showOverviewSkeleton
+                        ? Array.from({ length: 5 }).map((_, i) => (
+                          <Skeleton key={i} width={i === 0 ? 36 : 56} height={24} className="rounded-full" />
+                        ))
+                        : activityFeedTabs.map((tab) => (
+                          <button
+                            key={tab}
+                            onClick={() => setActivityFeedFilter(tab)}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${activityFeedFilter === tab
+                              ? "bg-blue-600 text-white"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                               }`}
-                          />
-                          <div className="min-w-0">
-                            <p
-                              className={`text-xs font-medium truncate ${item.overdue ? "text-red-600" : "text-gray-900"
-                                }`}
-                            >
-                              {item.title} · {item.isMeeting ? "Meeting" : "Task"}
-                            </p>
-                            <p className="text-[11px] text-gray-400">
-                              {item.date.toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "2-digit",
-                              })}
-                            </p>
+                          >
+                            {tab}
+                          </button>
+                        ))}
+                    </div>
+                    <div className="space-y-3 overflow-y-auto flex-1 pr-2 -mr-2">
+                      {showOverviewSkeleton ? (
+                        Array.from({ length: 4 }).map((_, idx) => (
+                          <div key={idx} className="flex items-start gap-2.5">
+                            <Skeleton shape="circle" width={28} height={28} className="flex-shrink-0" />
+                            <div className="min-w-0 flex-1 flex flex-col gap-1">
+                              <Skeleton width="80%" height={11} />
+                              <Skeleton width="40%" height={10} />
+                            </div>
+                            <Skeleton width={36} height={11} className="flex-shrink-0" />
                           </div>
+                        ))
+                      ) : filteredActivityFeed.length === 0 ? (
+                        <p className="text-sm text-gray-400 text-center py-4">
+                          No recent activity.
+                        </p>
+                      ) : (
+                        filteredActivityFeed.map((item, idx) => (
+                          <div key={idx} className="flex items-start gap-2.5">
+                            <div
+                              className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${item.iconClass}`}
+                            >
+                              <item.icon size={13} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-medium text-gray-900 truncate">
+                                {item.title}
+                              </p>
+                              <p className="text-[11px] text-gray-400">
+                                {item.date.toLocaleDateString("en-US", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                })}
+                              </p>
+                            </div>
+                            {item.amount != null && (
+                              <p className={`text-xs font-semibold flex-shrink-0 ${item.amountClass}`}>
+                                ₹{item.amount.toLocaleString("en-IN")}
+                              </p>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mini Calendar */}
+                  <div className="bg-white border border-gray-200 rounded-lg p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-900">
+                        {showOverviewSkeleton ? <Skeleton width={70} height={14} /> : "Calendar"}
+                      </h3>
+                      {showOverviewSkeleton ? (
+                        <Skeleton width={70} height={12} />
+                      ) : (
+                        <button
+                          onClick={() => setActiveTab("Calendar")}
+                          className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                        >
+                          View Calendar
+                        </button>
+                      )}
+                    </div>
+                    {showOverviewSkeleton ? (
+                      <Skeleton width="100%" height={220} />
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-7 gap-1 mb-2">
+                          {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
+                            <div
+                              key={d}
+                              className="text-[10px] text-gray-400 text-center font-medium"
+                            >
+                              {d}
+                            </div>
+                          ))}
                         </div>
-                      ))
+                        <div className="grid grid-cols-7 gap-1">
+                          {miniCalendar.days.map((day, idx) => (
+                            <div
+                              key={idx}
+                              className="flex flex-col items-center"
+                            >
+                              {day && futureEventDays.has(day) && (
+                                <span className="mb-1 w-1.5 h-1.5 rounded-full bg-[#1E3A8A] flex-shrink-0"></span>
+                              )}
+                              <span
+                                className={`text-[11px] w-6 h-6 flex items-center justify-center rounded-full ${day === miniCalendar.today
+                                  ? "bg-blue-600 text-white font-semibold"
+                                  : day
+                                    ? "text-gray-700"
+                                    : ""
+                                  }`}
+                              >
+                                {day || ""}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
                     )}
+
+                    <div className="flex items-center justify-between mt-4 mb-2">
+                      <h4 className="text-xs font-semibold text-gray-900">
+                        {showOverviewSkeleton ? <Skeleton width={70} height={12} /> : "Upcoming"}
+                      </h4>
+                      {!showOverviewSkeleton && [...tasks, ...meetings].length > 4 && (
+                        <button
+                          onClick={() => setShowAllUpcoming(true)}
+                          className="text-[10px] font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                        >
+                          Show All
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {showOverviewSkeleton ? (
+                        Array.from({ length: 5 }).map((_, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <Skeleton shape="circle" width={6} height={6} className="mt-1 flex-shrink-0" />
+                            <div className="min-w-0 flex-1 flex flex-col gap-1">
+                              <Skeleton width="75%" height={11} />
+                              <Skeleton width="35%" height={10} />
+                            </div>
+                          </div>
+                        ))
+                      ) : upcomingItems.length === 0 ? (
+                        <p className="text-xs text-gray-400">Nothing upcoming.</p>
+                      ) : (
+                        upcomingItems.map((item, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <span
+                              className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.overdue ? "bg-red-500" : "bg-blue-500"
+                                }`}
+                            />
+                            <div className="min-w-0">
+                              <p
+                                className={`text-xs font-medium truncate ${item.overdue ? "text-red-600" : "text-gray-900"
+                                  }`}
+                              >
+                                {item.title} · {item.isMeeting ? "Meeting" : "Task"}
+                              </p>
+                              <p className="text-[11px] text-gray-400">
+                                {item.date.toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "2-digit",
+                                })}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
               </div>
 
               {/* Bottom Row: Key Contacts / Tasks / Meetings / Key Files */}
@@ -1715,79 +1736,91 @@ const CompanyProfilePage = () => {
                   </div>
                 </div>
               </div>
-              </>
-            )}
-            {activeTab === "Deals" && (
-              <CompanyDealsKanban
-                deals={deals}
-                setDeals={setDeals}
-                showStats={showStats}
+            </>
+          )}
+          {activeTab === "Deals" && (
+            <CompanyDealsKanban
+              deals={deals}
+              setDeals={setDeals}
+              showStats={showStats}
+              companyId={id}
+              company={company}
+              autoOpenCreate={pendingCreate === "deal"}
+              onAutoOpenCreateConsumed={() => setPendingCreate(null)}
+              contacts={contacts}
+              viewMode={dealsViewMode}
+              setViewMode={setDealsViewMode}
+              isLoading={showRecordsSkeleton}
+            />
+          )}
+          {activeTab === "Contacts" && (
+            <CompanyContactsTab
+              contacts={contacts}
+              meetings={meetings}
+              tasks={tasks}
+              showStats={showStats}
+              companyId={id}
+              autoOpenCreate={pendingCreate === "contact"}
+              onAutoOpenCreateConsumed={() => setPendingCreate(null)}
+              company={company}
+              setContacts={setContacts}
+              isLoading={showRecordsSkeleton}
+            />
+          )}
+          {activeTab === "Invoices" && (
+            <CompanyInvoicesTab
+              invoices={invoices}
+              summary={invoiceSummary}
+              loading={invoicesLoading}
+              showStats={showStats}
+              deals={deals}
+              refreshInvoices={fetchInvoices}
+              autoOpenCreate={pendingCreate === "invoice"}
+              onAutoOpenCreateConsumed={() => setPendingCreate(null)}
+            />
+          )}
+          {activeTab === "Notes" && (
+            <CompanyNotesTab
+              showStats={showStats}
+              autoOpenCreate={pendingCreate === "note"}
+              onAutoOpenCreateConsumed={() => setPendingCreate(null)}
+            />
+          )}
+          {activeTab === "Tasks" && (
+            <CompanyTasksTab companyId={id} tasks={tasks} setTasks={setTasks} showStats={showStats} isLoading={showRecordsSkeleton} />
+          )}
+          {activeTab === "Meetings" && (
+            <CompanyMeetingsTab
+              companyId={id}
+              meetings={meetings}
+              setMeetings={setMeetings}
+              showStats={showStats}
+              isLoading={showRecordsSkeleton}
+              autoOpenCreate={pendingCreate === "meeting"}
+              onAutoOpenCreateConsumed={() => setPendingCreate(null)}
+            />
+          )}
+          {activeTab === "Call Logs" && (
+            <div className="animate-in fade-in duration-300">
+              <CompanyCallLogsTab
                 companyId={id}
-                company={company}
-                autoOpenCreate={pendingCreate === "deal"}
-                onAutoOpenCreateConsumed={() => setPendingCreate(null)}
-                contacts={contacts}
-                viewMode={dealsViewMode}
-                setViewMode={setDealsViewMode}
-                isLoading={showRecordsSkeleton}
+                callLogs={callLogs}
+                onAddCallLog={(newLog) => setCallLogs((prev) => [newLog, ...prev])}
+                onDeleteCallLog={(logId) => setCallLogs((prev) => prev.filter((l) => l._id !== logId))}
+                pendingCreate={pendingCreate}
+                onPendingCreateConsumed={() => setPendingCreate(null)}
               />
-            )}
-            {activeTab === "Contacts" && (
-              <CompanyContactsTab
-                contacts={contacts}
-                meetings={meetings}
-                tasks={tasks}
-                showStats={showStats}
-                companyId={id}
-                autoOpenCreate={pendingCreate === "contact"}
-                onAutoOpenCreateConsumed={() => setPendingCreate(null)}
-                company={company}
-                setContacts={setContacts}
-                isLoading={showRecordsSkeleton}
-              />
-            )}
-            {activeTab === "Invoices" && (
-              <CompanyInvoicesTab
-                invoices={invoices}
-                summary={invoiceSummary}
-                loading={invoicesLoading}
-                showStats={showStats}
-                deals={deals}
-                refreshInvoices={fetchInvoices}
-                autoOpenCreate={pendingCreate === "invoice"}
-                onAutoOpenCreateConsumed={() => setPendingCreate(null)}
-              />
-            )}
-            {activeTab === "Notes" && (
-              <CompanyNotesTab
-                showStats={showStats}
-                autoOpenCreate={pendingCreate === "note"}
-                onAutoOpenCreateConsumed={() => setPendingCreate(null)}
-              />
-            )}
-            {activeTab === "Tasks" && (
-              <CompanyTasksTab companyId={id} tasks={tasks} setTasks={setTasks} showStats={showStats} isLoading={showRecordsSkeleton} />
-            )}
-            {activeTab === "Meetings" && (
-              <CompanyMeetingsTab
-                companyId={id}
-                meetings={meetings}
-                setMeetings={setMeetings}
-                showStats={showStats}
-                isLoading={showRecordsSkeleton}
-                autoOpenCreate={pendingCreate === "meeting"}
-                onAutoOpenCreateConsumed={() => setPendingCreate(null)}
-              />
-            )}
-            {activeTab === "Folders" && (
-              <CompanyFolderTab
-                showStats={showStats}
-                isLoading={showRecordsSkeleton}
-                autoOpenCreate={pendingCreate === "folder"}
-                onAutoOpenCreateConsumed={() => setPendingCreate(null)}
-              />
-            )}
-            {activeTab === "Calendar" && <CompanyCalendar companyId={id} />}
+            </div>
+          )}
+          {activeTab === "Folders" && (
+            <CompanyFolderTab
+              showStats={showStats}
+              isLoading={showRecordsSkeleton}
+              autoOpenCreate={pendingCreate === "folder"}
+              onAutoOpenCreateConsumed={() => setPendingCreate(null)}
+            />
+          )}
+          {activeTab === "Calendar" && <CompanyCalendar companyId={id} />}
         </div>
       </div>
       {showAllUpcoming && (

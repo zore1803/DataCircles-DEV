@@ -1240,23 +1240,6 @@ const DeliveryChallanFormFull = ({
             </div>
           </div>
 
-          <div className="flex items-center px-6 py-3 bg-white border-b border-gray-100 text-sm">
-            <span className="text-gray-500 mr-2">Type</span>
-            <select
-              value={form.style}
-              onChange={(e) => {
-                setForm((prev) => ({ ...prev, style: e.target.value }));
-                setHasUnsavedChanges(true);
-              }}
-              className="font-medium text-gray-800 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
-            >
-              <option value="Regular">Regular</option>
-              {styles.map((s, idx) => (
-                <option key={idx} value={s}>{s}</option>
-              ))}
-            </select>
-
-          </div>
 
           <div className="p-6 space-y-6 flex-1 overflow-y-auto">
             {/* Section 2: Customer Details Card */}

@@ -13,6 +13,7 @@ import API from "../../services/api";
  */
 const BulkEmailGroupedModal = ({ isOpen, onClose, selectedIds, documents, onSuccess }) => {
   const [sending, setSending] = useState(false);
+  const [emailOverrides, setEmailOverrides] = useState({});
 
   // Build groups from the already-loaded invoice list so the user gets an
   // instant preview without an extra round-trip. Deduplication is done here
@@ -43,34 +44,46 @@ const BulkEmailGroupedModal = ({ isOpen, onClose, selectedIds, documents, onSucc
         continue;
       }
 
-      const email = doc.deal?.company?.email;
-      if (!email) {
-        skippedList.push({ id, label: `#${doc.invoiceNumber || id}`, reason: "no customer email" });
-        continue;
-      }
-
-      if (!emailMap[email]) {
+      const companyId = doc.deal?.company?._id || `unknown_company_${doc._id}`;
+      const contactId = doc.deal?.contact?._id || `unknown_contact_${doc._id}`;
+      const groupKey = contactId; // Group by contact ID so each point-of-contact gets a separate email
+      
+      const contactName = doc.deal?.contact?.name || "";
+      const defaultEmail = doc.deal?.contact?.email || "";
+      const companyEmail = doc.deal?.company?.email || "";
+      const email = emailOverrides[groupKey] !== undefined ? emailOverrides[groupKey] : defaultEmail;
+      
+      if (!emailMap[groupKey]) {
         const companyName =
-          doc.deal?.company?.name || doc.deal?.title || email;
-        emailMap[email] = { email, companyName, invoices: [] };
+          doc.deal?.company?.name || doc.deal?.title || email || "Unknown Customer";
+        emailMap[groupKey] = { groupKey, email, defaultEmail, contactName, companyName, companyEmail, invoices: [] };
       }
-      emailMap[email].invoices.push(doc);
+      emailMap[groupKey].invoices.push(doc);
     }
 
     return {
       groups: Object.values(emailMap),
       skipped: skippedList,
     };
-  }, [isOpen, selectedIds, documents]);
+  }, [isOpen, selectedIds, documents, emailOverrides]);
 
-  const sendableIds = groups.flatMap((g) => g.invoices.map((inv) => inv._id));
-  const totalEmails = groups.length;
+  const sendableIds = groups.filter(g => g.email.trim() !== "").flatMap((g) => g.invoices.map((inv) => inv._id));
+  const totalEmails = groups.filter(g => g.email.trim() !== "").length;
 
   const handleSend = async () => {
     if (sendableIds.length === 0) return;
     setSending(true);
     try {
-      const res = await API.post("/invoices/bulk-email-grouped", { ids: sendableIds });
+      // Build invoice-level override map for the backend
+      const invoiceOverrides = {};
+      groups.forEach(g => {
+        if (g.email !== g.defaultEmail && g.email.trim() !== "") {
+          g.invoices.forEach(inv => {
+            invoiceOverrides[inv._id] = g.email;
+          });
+        }
+      });
+      const res = await API.post("/invoices/bulk-email-grouped", { ids: sendableIds, overrides: invoiceOverrides });
       const { successfulIds = [], failedIds = [], skippedIds = [] } = res.data;
       const sentInvoiceCount = successfulIds.length;
       // Count how many distinct email groups had at least one success
@@ -80,9 +93,7 @@ const BulkEmailGroupedModal = ({ isOpen, onClose, selectedIds, documents, onSucc
       const skipCount = skippedIds.length + skipped.length;
 
       if (sentInvoiceCount > 0) {
-        toast.success(
-          `Sent ${emailsSent} email${emailsSent !== 1 ? "s" : ""} (${sentInvoiceCount} invoice${sentInvoiceCount !== 1 ? "s" : ""})${skipCount > 0 ? `. ${skipCount} skipped.` : ""}`
-        );
+        toast.success("Emails sent successfully!");
       } else {
         toast.error("All emails failed — check email server configuration");
       }
@@ -141,14 +152,38 @@ const BulkEmailGroupedModal = ({ isOpen, onClose, selectedIds, documents, onSucc
             {/* One card per customer */}
             {groups.map((group) => (
               <div
-                key={group.email}
+                key={group.groupKey}
                 className="border border-gray-200 rounded-xl overflow-hidden"
               >
-                <div className="bg-gray-50 px-4 py-3 border-b border-gray-100">
-                  <p className="text-sm font-semibold text-gray-900">
-                    {group.companyName}
-                  </p>
-                  <p className="text-xs text-gray-500">{group.email}</p>
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-gray-900">
+                        {group.companyName}
+                      </p>
+                      {group.companyEmail && (
+                        <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-md border border-gray-300 select-all" title="Company Email (Uneditable)">
+                          {group.companyEmail}
+                        </span>
+                      )}
+                    </div>
+                    {group.contactName && (
+                      <p className="text-xs text-gray-500 mt-1">Contact: {group.contactName}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 sm:mt-0">
+                    <span className="text-sm font-medium text-gray-500 hidden sm:inline">Send to:</span>
+                    <div className="flex flex-col">
+                      <input
+                        type="email"
+                        value={group.email}
+                        onChange={(e) => setEmailOverrides(prev => ({ ...prev, [group.groupKey]: e.target.value }))}
+                        placeholder="Contact email..."
+                        className="w-full sm:w-64 border border-gray-200 rounded-lg px-3 py-1.5 text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-400 bg-white"
+                      />
+                      {!group.email && <p className="text-[10px] text-red-500 mt-0.5">Email required</p>}
+                    </div>
+                  </div>
                 </div>
                 <ul className="divide-y divide-gray-100">
                   {group.invoices.map((inv) => (

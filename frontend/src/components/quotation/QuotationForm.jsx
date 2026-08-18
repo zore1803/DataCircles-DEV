@@ -189,6 +189,7 @@ const ItemSearchSelect = ({
       // previously dropped entirely, so a tax quotation line item never
       // carried its product's own GST rate.
       gstRate: item.gstRate ?? 0,
+      taxInclusive: !!item.taxInclusive,
       isVariant: item.isVariant || false,
       parentItemId: item.parentItemId || null,
       discountType: "amount",
@@ -443,6 +444,7 @@ const QuotationForm = ({
               // Variant's own rate falls back to the parent item's, same as
               // sellingPrice/hsnSac above.
               gstRate: variant.gstRate ?? item.gstRate ?? 0,
+              taxInclusive: !!(variant.taxInclusive ?? item.taxInclusive),
               type: item.type,
               category: item.category || "",
               primaryUnit:
@@ -460,6 +462,7 @@ const QuotationForm = ({
               sellingPrice: item.sellingPrice,
               hsnSac: item.hsnSac || "",
               gstRate: item.gstRate ?? 0,
+              taxInclusive: !!item.taxInclusive,
               type: item.type,
               category: item.category || "",
               primaryUnit: item.primaryUnit || "OTH OTHERS",
@@ -539,6 +542,7 @@ const QuotationForm = ({
           quantity: item.quantity || 1,
           hsn: item.hsn || "",
           gstRate: item.gstRate || 0,
+          taxInclusive: !!item.taxInclusive,
           isVariant: item.isVariant || false,
           parentItemId: item.parentItemId || null,
           discountType: item.discountType || "amount",
@@ -825,6 +829,7 @@ const QuotationForm = ({
       quantity: 1,
       hsn: item.hsnSac || "",
       gstRate: item.gstRate ?? 0,
+      taxInclusive: !!item.taxInclusive,
       isVariant: false,
       parentItemId: null,
       discountType: "amount",
@@ -1005,6 +1010,7 @@ const QuotationForm = ({
           discountType: item.discountType,
           discount: parseFloat(item.discount),
           gstRate: parseFloat(item.gstRate) || 0,
+          taxInclusive: !!item.taxInclusive,
         })),
         style: form.style,
         isTaxQuotation: form.isTaxQuotation,
@@ -1257,24 +1263,6 @@ const QuotationForm = ({
             </div>
           </div>
 
-          <div className="flex items-center px-6 py-3 bg-white border-b border-gray-100 text-sm">
-            <span className="text-gray-500 mr-2">Type</span>
-            <select
-              value={form.style}
-              onChange={(e) => {
-                setForm((prev) => ({ ...prev, style: e.target.value }));
-                setHasUnsavedChanges(true);
-              }}
-              className="font-medium text-gray-800 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
-            >
-              <option value="Regular">Regular</option>
-              {styles.map((s, idx) => (
-                <option key={idx} value={s}>{s}</option>
-              ))}
-            </select>
-
-          </div>
-
           <div className="p-6 space-y-6 flex-1 overflow-y-auto">
             {/* Section 2: Customer Details Card */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -1462,10 +1450,17 @@ const QuotationForm = ({
                   label="Billing address"
                   value={form.billingAddress}
                   onChange={(next) => {
+                    // Same seller-state vs. customer-state re-check the deal
+                    // picker runs, so editing the billing state directly on
+                    // this document also flips CGST/SGST vs IGST instead of
+                    // freezing whatever the deal's company implied.
+                    const customerState = (next.state || "").trim().toLowerCase();
+                    const autoType = sellerState && customerState && sellerState !== customerState ? "inter" : "intra";
                     setForm((prev) => ({
                       ...prev,
                       billingAddress: next,
                       shippingAddress: prev.sameAsBilling ? next : prev.shippingAddress,
+                      transactionType: customerState ? autoType : prev.transactionType,
                     }));
                     setHasUnsavedChanges(true);
                   }}
@@ -1728,6 +1723,22 @@ const QuotationForm = ({
                                 }}
                                 className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
                               />
+                            </div>
+                          )}
+                          {form.isTaxQuotation && (
+                            <div className="space-y-1">
+                              <label className="text-xs text-gray-500 font-medium">Rate Includes Tax?</label>
+                              <select
+                                value={item.taxInclusive ? "inclusive" : "exclusive"}
+                                onChange={(e) => {
+                                  handleItemChange(index, "taxInclusive", e.target.value === "inclusive");
+                                  setHasUnsavedChanges(true);
+                                }}
+                                className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent"
+                              >
+                                <option value="exclusive">Without Tax</option>
+                                <option value="inclusive">With Tax</option>
+                              </select>
                             </div>
                           )}
                           <div className="space-y-1 md:col-span-2">

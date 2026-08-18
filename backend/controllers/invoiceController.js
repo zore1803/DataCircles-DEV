@@ -425,7 +425,7 @@ const getAllInvoicesPaginated = async (req, res) => {
     // Execute queries in parallel for better performance
     const [invoices, totalCount] = await Promise.all([
       Invoice.find(query)
-        .populate("deal")
+        .populate({ path: "deal", populate: [{ path: "company", select: "name email" }, { path: "contact", select: "name email" }] })
         .skip(skip)
         .limit(limit)
         .sort(sortObj)
@@ -492,7 +492,7 @@ const downloadInvoice = async (req, res) => {
     const OrgDetails = await Branding.findOne({
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
-        // The template comes from the document's own `style` when it has one,
+    // The template comes from the document's own `style` when it has one,
     // otherwise from the organization's document settings — resolved inside
     // htmlDocumentPdf, which renders the same markup as the live preview.
     const copyType = ["original", "duplicate", "triplicate"].includes(req.query.copyType)
@@ -799,7 +799,7 @@ exports.getInvoices = async (req, res) => {
       filter.user = req.user._id;
     }
 
-    const invoices = await Invoice.find(filter).populate("deal user");
+    const invoices = await Invoice.find(filter).populate({ path: "deal", populate: [{ path: "company", select: "name email" }, { path: "contact", select: "name email" }] }).populate("user");
 
     res.json(invoices);
   } catch (error) {
@@ -810,7 +810,7 @@ exports.getInvoices = async (req, res) => {
 const bulkEmailGrouped = async (req, res) => {
   try {
     const nodemailer = require("nodemailer");
-    const { ids } = req.body;
+    const { ids, overrides } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: "ids array is required" });
     }
@@ -831,26 +831,27 @@ const bulkEmailGrouped = async (req, res) => {
     const skippedIds = [];
     const skippedReasons = [];
 
-    for (const invoice of invoices) {
-      if (!invoice.deal) {
-        skippedIds.push(invoice._id.toString());
-        skippedReasons.push({ id: invoice._id.toString(), reason: "no deal linked" });
+    for (const inv of invoices) {
+      if (!inv.deal) {
+        skippedIds.push(inv._id);
+        skippedReasons.push("no deal linked");
         continue;
       }
-      const email = invoice.deal?.company?.email;
+      const email = (overrides && overrides[inv._id]) || inv.deal?.company?.email;
       if (!email) {
-        skippedIds.push(invoice._id.toString());
-        skippedReasons.push({ id: invoice._id.toString(), reason: "no email" });
+        skippedIds.push(inv._id);
+        skippedReasons.push("no customer email");
         continue;
       }
+
       if (!emailMap[email]) {
         emailMap[email] = {
           email,
-          customerName: invoice.deal?.company?.name || invoice.deal?.title || email,
+          customerName: inv.deal?.company?.name || inv.deal?.title || email,
           invoices: [],
         };
       }
-      emailMap[email].invoices.push(invoice);
+      emailMap[email].invoices.push(inv);
     }
 
     // Fetch org/bank details once and reuse across all groups
@@ -899,7 +900,8 @@ const bulkEmailGrouped = async (req, res) => {
 
       try {
         await transporter.sendMail({
-          from: process.env.EMAIL_USER,
+          from: `"${req.user.name || "DataCircles"}" <${process.env.EMAIL_USER}>`,
+          replyTo: req.user.email,
           to: group.email,
           subject: `Your Invoices from ${orgDetails?.companyName || "Us"}`,
           text: `Dear ${group.customerName},\n\nPlease find attached your invoice(s).\n\nBest regards,\n${orgDetails?.companyName || ""}`,
@@ -934,7 +936,7 @@ const bulkEmailGrouped = async (req, res) => {
 const addInvoicePayment = async (req, res) => {
   try {
     const { amount, paymentDate, paymentMethod, reference, notes, internalNotes,
-            notifyByEmail, customerEmail, notifyBySMS, customerPhone, signatureUrl } = req.body;
+      notifyByEmail, customerEmail, notifyBySMS, customerPhone, signatureUrl } = req.body;
 
     const parsedAmount = parseFloat(amount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {

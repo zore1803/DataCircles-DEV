@@ -56,6 +56,10 @@ const proformaInvoiceSchema = new mongoose.Schema({
     // the pro forma invoice (not looked up live), same as rate/hsn — matches
     // the per-item gstRate already stored on Quotation items.
     gstRate: { type: Number, default: 0, min: 0, max: 100 },
+    // Carried over from the catalog Item/variant at the moment it's added to
+    // the pro forma invoice, same as gstRate — lets computeDocument() know
+    // this line's rate already includes GST instead of taxing it again.
+    taxInclusive: { type: Boolean, default: false },
   }],
 }, { timestamps: true });
 

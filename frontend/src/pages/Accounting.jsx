@@ -215,7 +215,7 @@ const DEFAULT_COL_WIDTHS = {
   dueDate: 170,
   amount: 170,
   status: 170,
-  actions: 260,
+  actions: 70,
 };
 const MIN_COL_WIDTH = 60;
 
@@ -1055,6 +1055,12 @@ const Accounting = () => {
   const [viewerDoc, setViewerDoc] = useState(null);
   const [openConvertMenu, setOpenConvertMenu] = useState(null);
   const [convertMenuPos, setConvertMenuPos] = useState(null);
+  // Single "⋮" menu per row, replacing the old strip of individual icon
+  // buttons — every row action lives here now, with Convert as a nested
+  // submenu (rowMenuConvertOpen) instead of its own flyout.
+  const [openRowMenu, setOpenRowMenu] = useState(null);
+  const [rowMenuPos, setRowMenuPos] = useState(null);
+  const [rowMenuConvertOpen, setRowMenuConvertOpen] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
   const [showBrandingModal, setShowBrandingModal] = useState(false);
@@ -1138,6 +1144,9 @@ const Accounting = () => {
     };
     // The convert menu is fixed-positioned, so any scroll would leave it
     // floating at stale coordinates — close it instead of tracking.
+    // (The row "⋮" menu below closes via its own full-screen portal overlay,
+    // same pattern as Companies.jsx's row-actions menu, instead of this
+    // document-listener approach.)
     const handleScroll = () => {
       if (openConvertMenu) {
         setOpenConvertMenu(null);
@@ -1926,142 +1935,208 @@ const Accounting = () => {
           </div>
         );
 
-      case "actions":
+      case "actions": {
+        // Every row action lives behind one "⋮" trigger now, instead of a
+        // strip of individual icon buttons that kept overflowing the column.
+        // Convert is a nested submenu (rowMenuConvertOpen) inside the same
+        // panel rather than its own separate flyout. Positioning/closing
+        // mirrors Companies.jsx's row-actions menu exactly (also used by
+        // Deals): portal to document.body so it's never clipped by an
+        // ancestor's stacking context, a full-screen invisible overlay to
+        // close on outside click (no fragile document-listener/
+        // stopPropagation dance), and top/left clamped on both ends so it
+        // can never render off-screen or behind the sticky header.
+        const conversionTargets = getConversionTargets(activeTab);
+        const menuOpen = openRowMenu === doc._id;
+        const closeRowMenu = () => {
+          setOpenRowMenu(null);
+          setRowMenuPos(null);
+          setRowMenuConvertOpen(false);
+        };
         return (
-          <div className="flex items-center gap-1">
-            {activeTab === "tax" && doc.status !== "Paid" && (
-              <button
-                title="Record Payment"
-                onClick={() => {
-                  setSelectedInvoiceForPayment(doc);
-                  setPaymentModalOpen(true);
-                }}
-                className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-              >
-                <IndianRupee className="w-4 h-4" />
-              </button>
-            )}
+          <div className="relative flex items-center justify-center">
             <button
-              title="View"
-              onClick={() => handleView(doc, activeTab)}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              title="Edit"
-              onClick={() => handleEdit(doc, activeTab)}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              <Pencil className="w-4 h-4" />
-            </button>
-            <button
-              title="Download"
-              onClick={() => handleDownload(doc._id, activeTab)}
-              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-            <button
-              title="Share via WhatsApp/Email/SMS"
+              title="More actions"
               onClick={(e) => {
                 e.stopPropagation();
+                if (menuOpen) {
+                  closeRowMenu();
+                  return;
+                }
+                const zMenu = getAncestorZoom(document.body);
+                const MENU_W = 224;
+                const MARGIN = 8;
+                // Conservative estimate for the tallest state (main menu
+                // with every optional item shown) — clamped below so it can
+                // never render off-screen regardless of the real height.
+                const MENU_H = 300;
+
                 const rect = e.currentTarget.getBoundingClientRect();
-                const zoom = parseFloat(document.documentElement.style.zoom) || 1;
-                const cssRight = rect.right / zoom;
-                const cssBottom = rect.bottom / zoom;
-                const DROPDOWN_W = 208;
-                setShareMenu({
-                  doc,
-                  type: activeTab,
-                  x: Math.max(4, cssRight - DROPDOWN_W),
-                  y: cssBottom + 6,
-                });
+                const viewportH = window.innerHeight / zMenu;
+                const viewportW = window.innerWidth / zMenu;
+                const top = rect.bottom / zMenu + 4;
+                const bottomAnchor = rect.top / zMenu - 4;
+
+                const openUp = viewportH - top < MENU_H + MARGIN;
+                let calcTop = openUp ? bottomAnchor - MENU_H : top;
+                calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+                let calcLeft = rect.right / zMenu - MENU_W;
+                calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                calcLeft = Math.max(calcLeft, MARGIN);
+
+                // Only one row flyout at a time, and always starts fresh on
+                // the main menu even if a different row's Convert submenu
+                // was left open.
+                setOpenConvertMenu(null);
+                setConvertMenuPos(null);
+                setShareMenu(null);
                 setShareMenuChannel(null);
+                setRowMenuConvertOpen(false);
+                setRowMenuPos({ top: calcTop, left: calcLeft });
+                setOpenRowMenu(doc._id);
               }}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              <Share2 className="w-4 h-4" />
+              <MoreVertical className="w-4 h-4" />
             </button>
-            <div className="relative">
-              <button
-                title="Convert"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (openConvertMenu === doc._id) {
-                    setOpenConvertMenu(null);
-                    setConvertMenuPos(null);
-                    return;
-                  }
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  // getBoundingClientRect() reports coordinates in the page's
-                  // zoomed layout space, but a `position: fixed` element is
-                  // placed in real CSS pixels — without dividing out the
-                  // app's CSS zoom (same correction the Share dropdown uses),
-                  // the menu lands offset from the button at any zoom level
-                  // other than 100%.
-                  const zoom = parseFloat(document.documentElement.style.zoom) || 1;
-                  const cssTop = rect.top / zoom;
-                  const cssBottom = rect.bottom / zoom;
-                  const cssRight = rect.right / zoom;
-                  const MENU_WIDTH = 240;
-                  const MENU_HEIGHT = 160;
-                  // Open leftward so the menu never runs off the right edge,
-                  // and flip above the button when it would overflow the bottom.
-                  const left = Math.max(8, cssRight - MENU_WIDTH);
-                  const openUp =
-                    cssBottom + MENU_HEIGHT > window.innerHeight;
-                  const top = openUp
-                    ? cssTop - MENU_HEIGHT - 4
-                    : cssBottom + 4;
-                  setConvertMenuPos({ top, left });
-                  setOpenConvertMenu(doc._id);
-                }}
-                className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-              >
-                <Repeat className="w-4 h-4" />
-              </button>
-              {openConvertMenu === doc._id && convertMenuPos && (
+            {menuOpen && rowMenuPos && createPortal(
+              <>
+                <div className="fixed inset-0 z-[100050]" onClick={closeRowMenu} />
                 <div
-                  style={{
-                    position: "fixed",
-                    top: convertMenuPos.top,
-                    left: convertMenuPos.left,
-                  }}
-                  className="w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-[100]"
+                  key={doc._id}
+                  style={{ position: "fixed", top: rowMenuPos.top, left: rowMenuPos.left }}
+                  className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[100051] py-1 max-h-[70vh] overflow-y-auto"
                 >
-                  <div className="py-1">
-                    {["tax", "performa", "quotation", "deliveryChallan"]
-                      .filter((t) => t !== activeTab)
-                      .map((targetType) => (
+                  {!rowMenuConvertOpen ? (
+                    <>
+                      {activeTab === "tax" && doc.status !== "Paid" && (
+                        <button
+                          onClick={() => {
+                            closeRowMenu();
+                            setSelectedInvoiceForPayment(doc);
+                            setPaymentModalOpen(true);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                        >
+                          <IndianRupee className="w-4 h-4 text-emerald-600" />
+                          Record Payment
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          closeRowMenu();
+                          handleView(doc, activeTab);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                      >
+                        <Eye className="w-4 h-4 text-blue-600" />
+                        View
+                      </button>
+                      <button
+                        onClick={() => {
+                          closeRowMenu();
+                          handleEdit(doc, activeTab);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                      >
+                        <Pencil className="w-4 h-4 text-blue-600" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => {
+                          closeRowMenu();
+                          handleDownload(doc._id, activeTab);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                      >
+                        <Download className="w-4 h-4 text-green-600" />
+                        Download
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Anchor the share flyout off this menu's own
+                          // position rather than the (now-closed) trigger
+                          // button's rect.
+                          const DROPDOWN_W = 208;
+                          const anchorRight = rowMenuPos.left + 224;
+                          closeRowMenu();
+                          setShareMenu({
+                            doc,
+                            type: activeTab,
+                            x: Math.max(4, anchorRight - DROPDOWN_W),
+                            y: rowMenuPos.top,
+                          });
+                          setShareMenuChannel(null);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                      >
+                        <Share2 className="w-4 h-4 text-blue-600" />
+                        Share via WhatsApp/Email/SMS
+                      </button>
+                      {conversionTargets.length > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRowMenuConvertOpen(true);
+                          }}
+                          className="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <span className="flex items-center gap-2">
+                            <Repeat className="w-4 h-4 text-orange-600" />
+                            Convert
+                          </span>
+                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                        </button>
+                      )}
+                      <div className="border-t border-gray-100 my-1" />
+                      <button
+                        onClick={() => {
+                          closeRowMenu();
+                          handleDelete(doc._id, activeTab);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRowMenuConvertOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 border-b border-gray-100"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        Back
+                      </button>
+                      {conversionTargets.map((targetType) => (
                         <button
                           key={targetType}
                           onClick={() => {
                             handleConvert(doc._id, activeTab, targetType);
-                            setOpenConvertMenu(null);
+                            closeRowMenu();
                           }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                         >
                           <Repeat className="w-4 h-4 text-orange-600" />
                           Convert to{" "}
-                          {targetType === "tax"
-                            ? "Tax Invoice"
-                            : docNameFor(targetType)}
+                          {targetType === "tax" ? "Tax Invoice" : docNameFor(targetType)}
                         </button>
                       ))}
-                  </div>
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
-            <button
-              title="Delete"
-              onClick={() => handleDelete(doc._id, activeTab)}
-              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+              </>,
+              document.body
+            )}
           </div>
         );
+      }
 
       default:
         return null;

@@ -165,6 +165,7 @@ const ItemSearchSelect = ({
       discountType: "amount",
       discount: 0,
       gstRate: item.gstRate || 0,
+      taxInclusive: !!item.taxInclusive,
     });
     setIsOpen(false);
     setSearchTerm("");
@@ -555,6 +556,7 @@ const PerformaInvoiceForm = ({
           discountType: item.discountType || "amount",
           discount: item.discount || 0,
           gstRate: item.gstRate || 0,
+          taxInclusive: !!item.taxInclusive,
         })),
         discount: sourceData.discount || {
           type: "fixed",
@@ -972,6 +974,7 @@ const PerformaInvoiceForm = ({
           discountType: item.discountType,
           discount: parseFloat(item.discount),
           gstRate: parseFloat(item.gstRate) || 0,
+          taxInclusive: !!item.taxInclusive,
         })),
         style: form.style,
         isTaxInvoice: form.isTaxInvoice,
@@ -1343,10 +1346,17 @@ const PerformaInvoiceForm = ({
                   label="Billing address"
                   value={form.billingAddress}
                   onChange={(next) => {
+                    // Same seller-state vs. customer-state re-check the deal
+                    // picker runs, so editing the billing state directly on
+                    // this document also flips CGST/SGST vs IGST instead of
+                    // freezing whatever the deal's company implied.
+                    const customerState = (next.state || "").trim().toLowerCase();
+                    const autoType = sellerState && customerState && sellerState !== customerState ? "inter" : "intra";
                     setForm((prev) => ({
                       ...prev,
                       billingAddress: next,
                       shippingAddress: prev.sameAsBilling ? next : prev.shippingAddress,
+                      transactionType: customerState ? autoType : prev.transactionType,
                     }));
                     setHasUnsavedChanges(true);
                   }}
@@ -1569,6 +1579,27 @@ const PerformaInvoiceForm = ({
                               <option value={12}>12%</option>
                               <option value={18}>18%</option>
                               <option value={28}>28%</option>
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-600">
+                              Rate Includes Tax?
+                            </label>
+                            <select
+                              value={item.taxInclusive ? "inclusive" : "exclusive"}
+                              onChange={(e) => {
+                                handleItemChange(
+                                  index,
+                                  "taxInclusive",
+                                  e.target.value === "inclusive"
+                                );
+                                setHasUnsavedChanges(true);
+                              }}
+                              className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                              aria-label="Rate includes tax"
+                            >
+                              <option value="exclusive">Without Tax</option>
+                              <option value="inclusive">With Tax</option>
                             </select>
                           </div>
                         </>

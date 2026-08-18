@@ -18,7 +18,7 @@ import CompanyMeetingsTable from "./CompanyMeetingsTable";
 import Folder from "./Folder";
 import CompanyCalendar from "./CompanyCalendar";
 import ProfilePicture from "../contact/ProfilePicture";
-import CompanyForm from "./CompanyForm";
+import QuickCompanyForm from "./QuickCompanyForm";
 import useCompanyStore from "../../store/useCompanyStore";
 
 const tabs = ["Notes", "Tasks", "Meetings", "Folder", "Calendar"];
@@ -268,22 +268,12 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
 
       {/* Edit Form Overlay */}
       {showEditForm && company && (
-        <CompanyForm
-          form={{
-            _id: company._id,
-            name: company.name,
-            industry: company.industry,
-            address: company.address,
-            website: company.website,
-            gstin: company.gstin,
-            profilePictureUrl: company.profilePicture,
-            // ... add socialMedia etc. if needed
+        <QuickCompanyForm
+          editCompany={company}
+          onCompanyUpdated={() => {
+            loadCompany(company._id);
+            setShowEditForm(false);
           }}
-          setForm={() => {}} // handle inside form
-          loading={false}
-          companyFieldNames={companyFieldNames}
-          additionalFields={{}}
-          fetchCompanies={() => loadCompany(companyId)} // refresh after save
           onRequestClose={() => setShowEditForm(false)}
         />
       )}

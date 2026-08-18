@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { X, Building2, Upload, AlertCircle, CheckCircle2 } from 'lucide-react';
 import API from '../../services/api';
 import toast from 'react-hot-toast';
+import { INDIA_STATES } from '../../constants/addressOptions';
 
 const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
   const [formData, setFormData] = useState({
     companyName: '',
     gstin: '',
     address: '',
+    state: '',
     email: '',
     mobile: '',
     logoBase64: '',
@@ -48,6 +50,7 @@ const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
           companyName: response.data.branding.companyName || '',
           gstin: response.data.branding.gstin || '',
           address: response.data.branding.address || '',
+          state: response.data.branding.state || '',
           email: response.data.branding.email || '',
           mobile: response.data.branding.mobile || '',
           logoBase64: response.data.branding.logoUrl || '',
@@ -181,6 +184,20 @@ const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
                 rows="2"
                 placeholder="Enter company address"
               />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Seller State (for GST)</label>
+              <select
+                value={formData.state}
+                onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Select state...</option>
+                {INDIA_STATES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">Used to auto-detect Intra/Inter state (CGST+SGST vs IGST) on invoices.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>

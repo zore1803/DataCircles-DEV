@@ -22,6 +22,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
     // One or more shipping addresses; each can mirror the billing address.
     shippingAddresses: [{ ...emptyAddress, sameAsBilling: false }],
     website: "",
+    email: "",
     gstin: "", // Added gstin field
     profilePicture: null,
   });
@@ -50,7 +51,12 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
   // Edit mode starts with the company's already-uploaded picture; a freshly
   // picked file (above) takes over from it once one is chosen.
   const profilePictureDisplayUrl =
-    profilePicturePreview || (isEditing ? editCompany?.profilePicture : null);
+    profilePicturePreview ||
+    (isEditing && editCompany?.profilePicture
+      ? editCompany.profilePicture.startsWith("http")
+        ? editCompany.profilePicture
+        : `${import.meta.env.VITE_APP_API_URL}${editCompany.profilePicture}`
+      : null);
 
   useEffect(() => {
     setShouldRender(true);
@@ -74,6 +80,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
           ? editCompany.shippingAddresses.map((a) => ({ ...emptyAddress, ...a, sameAsBilling: false }))
           : [{ ...emptyAddress, sameAsBilling: false }],
       website: editCompany.website || "",
+      email: editCompany.email || "",
       gstin: editCompany.gstin || "",
       profilePicture: null,
     });
@@ -314,6 +321,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
     payload.append("billingAddress", JSON.stringify(form.billingAddress));
     payload.append("shippingAddresses", JSON.stringify(shippingPayload));
     payload.append("website", form.website);
+    payload.append("email", form.email);
     payload.append("gstin", form.gstin); // Added gstin to payload
 
     const processedAdditionalFields = fieldDefinitions
@@ -592,7 +600,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
           <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 space-y-6">
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Select Profile Picture <span className="text-red-500">*</span>
+                Select Profile Picture
               </label>
               <div className="flex items-center gap-3">
                 {/* The filename text field this replaced told you nothing
@@ -609,12 +617,6 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                       handleFormChange("profilePicture", e.target.files[0]);
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                    // Only required when there's no picture yet — a browser
-                    // can't pre-populate a file input with the company's
-                    // already-uploaded image, so requiring it unconditionally
-                    // forced a re-upload on every edit even though one was
-                    // already on file (and showing right here as a preview).
-                    required={!profilePictureDisplayUrl}
                   />
                   {profilePictureDisplayUrl ? (
                     <img
@@ -784,11 +786,25 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                       `https://${e.target.value.replace(/^https?:\/\//i, "")}`
                     )
                   }
-                  className="flex-1 min-w-0 h-full text-[14px] text-gray-900 focus:outline-none placeholder:text-[#A0A0A0] bg-transparent"
+                  className="flex-1 min-w-0 h-full text-[14px] text-blue-600 focus:outline-none placeholder:text-[#A0A0A0] bg-transparent"
                   placeholder="www.company.com"
                   required
                 />
               </div>
+            </div>
+
+            {/* Email Address */}
+            <div>
+              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => handleFormChange("email", e.target.value)}
+                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                placeholder="contact@company.com"
+              />
             </div>
 
           </div>

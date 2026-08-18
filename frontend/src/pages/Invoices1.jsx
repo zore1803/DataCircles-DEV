@@ -438,6 +438,7 @@ const MergedInvoiceManager = () => {
   const [viewerType, setViewerType] = useState(null);
   const [viewerDoc, setViewerDoc] = useState(null);
   const [openConvertMenu, setOpenConvertMenu] = useState(null);
+  const [convertSubmenuOpen, setConvertSubmenuOpen] = useState(false);
   const [dropdownDirection, setDropdownDirection] = useState({});
   const [showBrandingModal, setShowBrandingModal] = useState(false);
   const [pendingInvoiceCreation, setPendingInvoiceCreation] = useState(false);
@@ -586,6 +587,7 @@ const MergedInvoiceManager = () => {
     const handleClickOutside = (event) => {
       if (openConvertMenu) {
         setOpenConvertMenu(null);
+        setConvertSubmenuOpen(false);
       }
     };
 
@@ -1736,7 +1738,7 @@ const MergedInvoiceManager = () => {
                     <CheckCircle2 className="w-4 h-4 inline mr-1" />
                     Status
                   </SortableHeader>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap min-w-[110px]">
                     <MoreVertical className="w-4 h-4 inline mr-1" />
                     Actions
                   </th>
@@ -1882,63 +1884,95 @@ const MergedInvoiceManager = () => {
                       </select>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-1">
+                      <div className="relative inline-block">
                         <button
-                          title="View"
-                          onClick={() => handleView(doc, activeTab)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          ref={(el) => {
+                            buttonRefs.current[doc._id] = el;
+                          }}
+                          title="Actions"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConvertSubmenuOpen(false);
+                            setOpenConvertMenu(
+                              openConvertMenu === doc._id ? null : doc._id
+                            );
+                          }}
+                          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                         >
-                          <Eye className="w-4 h-4" />
+                          <MoreVertical className="w-4 h-4" />
                         </button>
-                        <button
-                          title="Edit"
-                          onClick={() => handleEdit(doc, activeTab)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          title="Download"
-                          onClick={() => handleDownload(doc._id, activeTab)}
-                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        <button
-                          title="Send"
-                          onClick={() => handleSend(doc._id, activeTab)}
-                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                        >
-                          <Send className="w-4 h-4" />
-                        </button>
-                        <div className="relative">
-                          <button
-                            ref={(el) => {
-                              buttonRefs.current[doc._id] = el; // Just store ref, don't call setState
-                            }}
-                            title="Convert"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenConvertMenu(
-                                openConvertMenu === doc._id ? null : doc._id
-                              );
-                            }}
-                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                          >
-                            <Repeat className="w-4 h-4" />
-                          </button>
 
-                          {openConvertMenu === doc._id && (
-                            <div
-                              className={`absolute ${
-                                currentDocuments.length === 1
-                                  ? "top-[-10px] -translate-y-1/2"
-                                  : index === 0
-                                  ? "top-1/2 -translate-y-1/2"
-                                  : "bottom-full mb-2"
-                              } right-0 w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-50`}
+                        {openConvertMenu === doc._id && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className={`absolute ${
+                              currentDocuments.length === 1
+                                ? "top-[-10px] -translate-y-1/2"
+                                : index === 0
+                                ? "top-1/2 -translate-y-1/2"
+                                : "bottom-full mb-2"
+                            } right-0 w-52 bg-white rounded-lg shadow-lg border border-gray-200 z-50 py-1`}
+                          >
+                            <button
+                              onClick={() => {
+                                handleView(doc, activeTab);
+                                setOpenConvertMenu(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                             >
-                              <div className="py-1">
+                              <Eye className="w-4 h-4 text-blue-600" />
+                              View
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleEdit(doc, activeTab);
+                                setOpenConvertMenu(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <Pencil className="w-4 h-4 text-blue-600" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleDownload(doc._id, activeTab);
+                                setOpenConvertMenu(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <Download className="w-4 h-4 text-green-600" />
+                              Download
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleSend(doc._id, activeTab);
+                                setOpenConvertMenu(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <Send className="w-4 h-4 text-purple-600" />
+                              Send
+                            </button>
+
+                            <div className="border-t border-gray-100 my-1" />
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConvertSubmenuOpen((prev) => !prev);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center justify-between gap-2"
+                            >
+                              <span className="flex items-center gap-2">
+                                <Repeat className="w-4 h-4 text-orange-600" />
+                                Convert to
+                              </span>
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 text-gray-400 transition-transform ${convertSubmenuOpen ? "rotate-180" : ""}`}
+                              />
+                            </button>
+                            {convertSubmenuOpen && (
+                              <div className="bg-gray-50">
                                 {[
                                   "tax",
                                   "performa",
@@ -1956,11 +1990,10 @@ const MergedInvoiceManager = () => {
                                           targetType
                                         );
                                         setOpenConvertMenu(null);
+                                        setConvertSubmenuOpen(false);
                                       }}
-                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                      className="w-full text-left pl-10 pr-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
                                     >
-                                      <Repeat className="w-4 h-4 text-orange-600" />
-                                      Convert to{" "}
                                       {targetType === "tax"
                                         ? "Tax Invoice"
                                         : targetType === "performa"
@@ -1971,16 +2004,22 @@ const MergedInvoiceManager = () => {
                                     </button>
                                   ))}
                               </div>
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          title="Delete"
-                          onClick={() => handleDelete(doc._id, activeTab)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                            )}
+
+                            <div className="border-t border-gray-100 my-1" />
+
+                            <button
+                              onClick={() => {
+                                handleDelete(doc._id, activeTab);
+                                setOpenConvertMenu(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>

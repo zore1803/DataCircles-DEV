@@ -232,14 +232,18 @@ export function computeDocument(doc, type = "tax") {
   const baseRows = (doc.items || []).map((it) => {
     const rate = parseFloat(it.rate) || 0;
     const qty = parseFloat(it.quantity) || 0;
-    const sub = rate * qty;
+    const gstRate = GST_RATES.includes(Number(it.gstRate))
+      ? Number(it.gstRate)
+      : (GST_RATES.includes(Number(doc.gstRate)) ? Number(doc.gstRate) : 18);
+    // When the item's rate already includes GST (carried over from the
+    // catalog Item/variant's own taxInclusive flag), extract the taxable
+    // value from it instead of taxing the tax-inclusive price again.
+    const unitTaxable = it.taxInclusive ? rate / (1 + gstRate / 100) : rate;
+    const sub = unitTaxable * qty;
     const disc =
       it.discountType === "percentage"
         ? (sub * (parseFloat(it.discount) || 0)) / 100
         : parseFloat(it.discount) || 0;
-    const gstRate = GST_RATES.includes(Number(it.gstRate))
-      ? Number(it.gstRate)
-      : (GST_RATES.includes(Number(doc.gstRate)) ? Number(doc.gstRate) : 18);
     return {
       name: it.name || it.itemId?.name || "",
       description: it.description || "",
@@ -720,10 +724,14 @@ export function buildDocumentHtml(doc, options = {}) {
 
   const itemTaxCells = (r) => {
     if (!t.isTax) return "";
+    // Each row's own rate (r.igstRate/cgstRate/sgstRate, set by splitGst()
+    // from that item's own gstRate) — not a single document-level rate —
+    // since different items on the same document can carry different GST
+    // slabs.
     return t.isInterState
-      ? `<td class="r">${r.igst > 0 ? `${fmt(r.igst)} (${t.gstRate}%)` : ""}</td>`
-      : `<td class="r">${r.cgst > 0 ? `${fmt(r.cgst)} (${t.gstRate / 2}%)` : ""}</td>
-        <td class="r">${r.sgst > 0 ? `${fmt(r.sgst)} (${t.gstRate / 2}%)` : ""}</td>`;
+      ? `<td class="r">${r.igst > 0 ? `${fmt(r.igst)} (${r.igstRate}%)` : ""}</td>`
+      : `<td class="r">${r.cgst > 0 ? `${fmt(r.cgst)} (${r.cgstRate}%)` : ""}</td>
+        <td class="r">${r.sgst > 0 ? `${fmt(r.sgst)} (${r.sgstRate}%)` : ""}</td>`;
   };
 
   const itemRows = t.rows.length
@@ -875,12 +883,16 @@ export function buildDocumentHtml(doc, options = {}) {
       <div class="dc-trow"><span class="dc-label">Taxable Amount</span><span>&#8377;${fmt(t.grossTaxable)}</span></div>
       ${discountRow}
       ${
+        // No single "% rate" suffix here — this is a sum across every item,
+        // which can each carry a different GST slab. The per-rate breakdown
+        // that a flat "18%" label would imply lives in the HSN summary table
+        // below instead, grouped correctly by (hsn, rate).
         !t.isTax
           ? ""
           : t.isInterState
-            ? `<div class="dc-trow sep"><span class="dc-label">IGST ${t.gstRate}%</span><span>&#8377;${fmt(t.totalIGST)}</span></div>`
-            : `<div class="dc-trow sep"><span class="dc-label">CGST ${t.gstRate / 2}%</span><span>&#8377;${fmt(t.totalCGST)}</span></div>
-      <div class="dc-trow"><span class="dc-label">SGST ${t.gstRate / 2}%</span><span>&#8377;${fmt(t.totalSGST)}</span></div>`
+            ? `<div class="dc-trow sep"><span class="dc-label">IGST</span><span>&#8377;${fmt(t.totalIGST)}</span></div>`
+            : `<div class="dc-trow sep"><span class="dc-label">CGST</span><span>&#8377;${fmt(t.totalCGST)}</span></div>
+      <div class="dc-trow"><span class="dc-label">SGST</span><span>&#8377;${fmt(t.totalSGST)}</span></div>`
       }
       <div class="dc-grand"><span>Total</span><span>&#8377;${fmt(t.grandTotal)}</span></div>
       ${

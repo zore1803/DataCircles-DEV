@@ -134,6 +134,7 @@ const handleOwnerChange = async (newOwnerId) => {
   // Define all company fields to display (EXCLUDING social media since they're shown as icons)
   const companyFields = [
     { label: "Website", key: "website", type: "link" },
+    { label: "Email Address", key: "email", type: "link" },
     { label: "Company Industry", key: "industry" },
     { label: "Company Locality", key: "address" },
     { label: "Company GSTIN", key: "gstin" },

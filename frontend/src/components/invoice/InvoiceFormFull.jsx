@@ -189,6 +189,7 @@ const ItemSearchSelect = ({
       // previously dropped entirely, so a tax invoice line item never
       // carried its product's own GST rate.
       gstRate: item.gstRate ?? 0,
+      taxInclusive: !!item.taxInclusive,
       isVariant: item.isVariant || false,
       parentItemId: item.parentItemId || null,
       discountType: "amount",
@@ -445,6 +446,7 @@ const InvoiceFormFull = ({
               // Variant's own rate falls back to the parent item's, same as
               // sellingPrice/hsnSac above.
               gstRate: variant.gstRate ?? item.gstRate ?? 0,
+              taxInclusive: !!(variant.taxInclusive ?? item.taxInclusive),
               type: item.type,
               category: item.category || "",
               primaryUnit:
@@ -462,6 +464,7 @@ const InvoiceFormFull = ({
               sellingPrice: item.sellingPrice,
               hsnSac: item.hsnSac || "",
               gstRate: item.gstRate ?? 0,
+              taxInclusive: !!item.taxInclusive,
               type: item.type,
               category: item.category || "",
               primaryUnit: item.primaryUnit || "OTH OTHERS",
@@ -541,6 +544,7 @@ const InvoiceFormFull = ({
           quantity: item.quantity || 1,
           hsn: item.hsn || "",
           gstRate: item.gstRate || 0,
+          taxInclusive: !!item.taxInclusive,
           isVariant: item.isVariant || false,
           parentItemId: item.parentItemId || null,
           discountType: item.discountType || "amount",
@@ -830,6 +834,7 @@ const InvoiceFormFull = ({
       quantity: 1,
       hsn: item.hsnSac || "",
       gstRate: item.gstRate ?? 0,
+      taxInclusive: !!item.taxInclusive,
       isVariant: false,
       parentItemId: null,
       discountType: "amount",
@@ -1010,6 +1015,7 @@ const InvoiceFormFull = ({
           discountType: item.discountType,
           discount: parseFloat(item.discount),
           gstRate: parseFloat(item.gstRate) || 0,
+          taxInclusive: !!item.taxInclusive,
         })),
         style: form.style,
         isTaxInvoice: form.isTaxInvoice,
@@ -1243,7 +1249,7 @@ const InvoiceFormFull = ({
                 type="button"
                 onClick={() => {}}
                 title="Invoice settings"
-                className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
+                className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
               >
                 <Settings className="w-3.5 h-3.5 text-[#525866]" />
                 Settings
@@ -1252,7 +1258,7 @@ const InvoiceFormFull = ({
                 type="button"
                 onClick={handleSaveDraft}
                 disabled={isSubmitting}
-                className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
+                className="h-8 px-4 flex items-center gap-1.5 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
                 {isSubmitting ? (
                   <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1262,24 +1268,6 @@ const InvoiceFormFull = ({
                 Save as Draft
               </button>
             </div>
-          </div>
-
-          <div className="flex items-center px-6 py-3 bg-white border-b border-gray-100 text-sm">
-            <span className="text-gray-500 mr-2">Type</span>
-            <select
-              value={form.style}
-              onChange={(e) => {
-                setForm((prev) => ({ ...prev, style: e.target.value }));
-                setHasUnsavedChanges(true);
-              }}
-              className="font-medium text-gray-800 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
-            >
-              <option value="Regular">Regular</option>
-              {styles.map((s, idx) => (
-                <option key={idx} value={s}>{s}</option>
-              ))}
-            </select>
-
           </div>
 
           <div className="p-6 space-y-6 flex-1 overflow-y-auto">
@@ -1469,10 +1457,17 @@ const InvoiceFormFull = ({
                   label="Billing address"
                   value={form.billingAddress}
                   onChange={(next) => {
+                    // Same seller-state vs. customer-state re-check the deal
+                    // picker runs, so editing the billing state directly on
+                    // this document also flips CGST/SGST vs IGST instead of
+                    // freezing whatever the deal's company implied.
+                    const customerState = (next.state || "").trim().toLowerCase();
+                    const autoType = sellerState && customerState && sellerState !== customerState ? "inter" : "intra";
                     setForm((prev) => ({
                       ...prev,
                       billingAddress: next,
                       shippingAddress: prev.sameAsBilling ? next : prev.shippingAddress,
+                      transactionType: customerState ? autoType : prev.transactionType,
                     }));
                     setHasUnsavedChanges(true);
                   }}
@@ -1756,6 +1751,22 @@ const InvoiceFormFull = ({
                               />
                             </div>
                           )}
+                          {form.isTaxInvoice && (
+                            <div className="space-y-1">
+                              <label className="text-xs text-gray-500 font-medium">Rate Includes Tax?</label>
+                              <select
+                                value={item.taxInclusive ? "inclusive" : "exclusive"}
+                                onChange={(e) => {
+                                  handleItemChange(index, "taxInclusive", e.target.value === "inclusive");
+                                  setHasUnsavedChanges(true);
+                                }}
+                                className="w-full text-sm border-b border-gray-200 px-1 py-1.5 focus:outline-none focus:border-blue-400 bg-transparent cursor-pointer"
+                              >
+                                <option value="exclusive">Without Tax</option>
+                                <option value="inclusive">With Tax</option>
+                              </select>
+                            </div>
+                          )}
                           <div className="space-y-1 md:col-span-2">
                             <label className="text-xs text-gray-500 font-medium">Item Description</label>
                             <textarea
@@ -1813,7 +1824,7 @@ const InvoiceFormFull = ({
                       setForm((prev) => ({ ...prev, notes: e.target.value }));
                       setHasUnsavedChanges(true);
                     }}
-                    className="w-full px-3 py-2 rounded-[25px] border border-gray-200 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 resize-y"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 resize-y"
                   />
                 </div>
 
@@ -1827,7 +1838,7 @@ const InvoiceFormFull = ({
                       setForm((prev) => ({ ...prev, terms: e.target.value }));
                       setHasUnsavedChanges(true);
                     }}
-                    className="w-full px-3 py-2 rounded-[25px] border border-gray-200 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 resize-y"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-blue-500 resize-y"
                   />
                 </div>
 
@@ -1846,7 +1857,7 @@ const InvoiceFormFull = ({
                       <span className="text-sm font-semibold text-gray-700">Attach files</span>
                       <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px]">?</div>
                     </div>
-                    <button type="button" className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 border-dashed rounded-[25px] hover:border-gray-400 transition-colors">
+                    <button type="button" className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 border-dashed rounded-lg hover:border-gray-400 transition-colors">
                       <span className="text-lg">↑</span> Attach Files (Max: 5)
                     </button>
                   </div>
@@ -1867,7 +1878,7 @@ const InvoiceFormFull = ({
                 <div className="bg-[#EBF5EE] rounded-xl p-5 shadow-sm space-y-4 relative">
                   <div className="flex justify-end gap-2 items-center mb-2">
                     <span className="text-xs text-gray-500 font-medium">Extra Discount</span>
-                    <div className="flex items-center border border-gray-200 bg-white rounded-[25px] overflow-hidden h-8">
+                    <div className="flex items-center border border-gray-200 bg-white rounded-lg overflow-hidden h-8">
                       <select
                         value={form.discount.type}
                         onChange={(e) => {
@@ -1975,7 +1986,7 @@ const InvoiceFormFull = ({
                     <label className="text-sm font-semibold text-gray-700">Select Bank</label>
                     <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px]">?</div>
                   </div>
-                  <button type="button" className="w-full py-3 bg-[#FAF5FF] border border-[#E9D5FF] rounded-[25px] text-[#9333EA] font-semibold text-sm hover:bg-[#F3E8FF] transition-colors flex items-center justify-center gap-2">
+                  <button type="button" className="w-full py-3 bg-[#FAF5FF] border border-[#E9D5FF] rounded-lg text-[#9333EA] font-semibold text-sm hover:bg-[#F3E8FF] transition-colors flex items-center justify-center gap-2">
                     <span className="text-lg">🏦</span> Add Bank to Invoice (Optional)
                   </button>
                 </div>
@@ -1988,7 +1999,7 @@ const InvoiceFormFull = ({
                   <SectionHeader number="07" title="Signature" />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1">
-                      <div className="relative flex items-center h-10 rounded-[25px] border border-gray-200 focus-within:border-blue-500 overflow-hidden">
+                      <div className="relative flex items-center h-10 rounded-lg border border-gray-200 focus-within:border-blue-500 overflow-hidden">
                         <select
                           value={form.signature}
                           onChange={(e) => {
@@ -2037,7 +2048,7 @@ const InvoiceFormFull = ({
                 the bottom of the form — matched to the split-view Invoice
                 panel's sticky bar (InvoiceForm.jsx's CreateInvoicePanel). */}
             <div className="sticky bottom-0 z-20 w-full pt-3 pb-1 -mx-6 mt-12 flex justify-center pointer-events-none">
-              <div className="pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-5 rounded-full border border-[#E1E4EA] bg-white/95 backdrop-blur-sm pl-6 pr-2.5 py-2.5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.22)]">
+              <div className="pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-5 rounded-2xl border border-[#E1E4EA] bg-white/95 backdrop-blur-sm pl-6 pr-2.5 py-2.5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.22)]">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold tracking-wide text-[#99A0AE] uppercase leading-none">
                     Total
@@ -2050,7 +2061,7 @@ const InvoiceFormFull = ({
                   <button
                     type="button"
                     onClick={handlePrint}
-                    className="h-9 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors whitespace-nowrap"
+                    className="h-9 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors whitespace-nowrap"
                   >
                     <Printer className="w-3.5 h-3.5 text-[#525866]" />
                     Print
@@ -2058,7 +2069,7 @@ const InvoiceFormFull = ({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="h-9 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                    className="h-9 px-4 flex items-center gap-1.5 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     {isSubmitting
                       ? editingInvoice

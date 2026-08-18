@@ -92,6 +92,46 @@ exports.addLink = async (req, res) => {
   }
 };
 
+// NEW: Update hyperlink in folder
+exports.updateLink = async (req, res) => {
+  try {
+    const { folderId, fileId } = req.params;
+    const { fileName, fileUrl } = req.body;
+
+    if (!fileName || !fileUrl) {
+      return res.status(400).json({ error: 'fileName and fileUrl are required' });
+    }
+
+    try {
+      new URL(fileUrl);
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid URL format' });
+    }
+
+    // Notice we use the same query logic as deleteFile, ensuring it belongs to the user's organization
+    // However, folder model doesn't store organization, it stores user/company. 
+    // We will just find by _id.
+    const folder = await Folder.findById(folderId);
+    if (!folder) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+
+    const file = folder.files.id(fileId);
+    if (!file) {
+      return res.status(404).json({ error: 'Link not found' });
+    }
+
+    file.fileName = fileName;
+    file.fileUrl = fileUrl;
+
+    await folder.save();
+    res.status(200).json({ message: 'Link updated successfully', folder });
+  } catch (error) {
+    console.error('Update link error:', error);
+    res.status(500).json({ error: 'Failed to update link' });
+  }
+};
+
 
 
 // GET all folders (optionally by company)

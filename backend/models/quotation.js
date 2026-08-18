@@ -25,6 +25,10 @@ const itemSchema = new mongoose.Schema({
   // change to the product's own GST rate doesn't retroactively change
   // quotations that already reference it.
   gstRate: { type: Number, default: 0, min: 0, max: 100 },
+  // Carried over from the catalog Item/variant at the moment it's added to
+  // the quotation, same as gstRate — lets computeDocument() know this line's
+  // rate already includes GST instead of taxing it again.
+  taxInclusive: { type: Boolean, default: false },
 });
 
 const quotationSchema = new mongoose.Schema({

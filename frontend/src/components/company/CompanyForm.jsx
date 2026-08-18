@@ -350,6 +350,7 @@ const CompanyForm = ({
     payload.append("gstin", form.gstin || "");
     payload.append("address", form.address || "");
     payload.append("website", form.website || "");
+    payload.append("email", form.email || "");
     payload.append("leadSource", form.leadSource || "");
 
     // Add social media links - using bracket notation
@@ -690,6 +691,20 @@ const CompanyForm = ({
                 onChange={(e) => handleFormChange("website", e.target.value)}
                 className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
                 placeholder="www.company.com"
+              />
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={form.email || ""}
+                onChange={(e) => handleFormChange("email", e.target.value)}
+                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                placeholder="contact@company.com"
               />
             </div>
 
