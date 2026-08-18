@@ -2212,6 +2212,11 @@ const CreateInvoicePanel = ({
       invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] },
     },
   });
+  // Live preview of the number this document will actually get on save
+  // (from the same persistent per-org, per-type counter resolveDocumentNumber
+  // uses on the backend) — shown as the number box's placeholder instead of
+  // a static "Auto"/"1" so it stays in sync with the full-width screen.
+  const [nextNumberPreview, setNextNumberPreview] = useState(null);
   // Rendering template comes from DocumentTemplateSettings — a separate model.
   const [orgTemplate, setOrgTemplate] = useState("Classic");
   // Signatures saved under Settings → Document Settings. New documents adopt
@@ -2447,6 +2452,13 @@ const CreateInvoicePanel = ({
           invoiceSuffix: type === "tax" ? (dtSettings.invoice?.suffix || res.data?.invoiceSuffix || "") : prev.invoiceSuffix,
           nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
         }));
+        const previewKeyByType = {
+          tax: "invoice",
+          quotation: "quote",
+          performa: "proformaInvoice",
+          deliveryChallan: "deliveryChallan",
+        };
+        setNextNumberPreview(res.data?.nextNumbers?.[previewKeyByType[type] || "invoice"] || null);
       } catch (error) {
         console.error("Failed to load document settings", error);
       }
@@ -2960,7 +2972,7 @@ const CreateInvoicePanel = ({
                       />
                       <input
                         type="text"
-                        placeholder="Auto"
+                        placeholder={nextNumberPreview ? String(nextNumberPreview) : "Auto"}
                         value={form.invoiceNumber}
                         onChange={(e) => setForm((prev) => ({ ...prev, invoiceNumber: e.target.value }))}
                         title={`${docName} number (leave blank to auto-generate)`}

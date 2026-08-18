@@ -182,6 +182,7 @@ const createInvoice = async (req, res) => {
         Model: Invoice,
         numberField: "invoiceNumber",
         organization: req.user.organization,
+        documentTypeKey: "invoice",
         prefix: effectivePrefix,
         suffix: effectiveSuffix,
         providedNumber: explicitNumber,

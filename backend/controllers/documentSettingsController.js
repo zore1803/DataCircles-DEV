@@ -1,5 +1,5 @@
 const DocumentSettings = require('../models/DocumentSettings');
-const { normalizeInvoiceNumberSettings, saveDocumentSettingsForOrganization, seedTemplateLibrariesFromLegacy } = require('../utils/documentNumbering');
+const { normalizeInvoiceNumberSettings, saveDocumentSettingsForOrganization, seedTemplateLibrariesFromLegacy, getNextNumberPreviews } = require('../utils/documentNumbering');
 
 exports.getDocumentSettings = async (req, res) => {
   try {
@@ -16,7 +16,15 @@ exports.getDocumentSettings = async (req, res) => {
       }
     }
 
-    res.json(normalizeInvoiceNumberSettings(settings || {}));
+    const normalized = normalizeInvoiceNumberSettings(settings || {});
+    // Live, non-mutating peek at what the next number for each document type
+    // will actually be (backed by the same persistent counter used at create
+    // time) — the create screens use this to show the real upcoming number
+    // instead of a static placeholder, and it stays in sync between the
+    // split and full-width views since both read it from here.
+    normalized.nextNumbers = await getNextNumberPreviews(req.user.organization);
+
+    res.json(normalized);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

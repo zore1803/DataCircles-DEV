@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import API from "../../services/api";
 import QuickItemDrawer from "../item/QuickItemDrawer";
+import TemplateDrawer from "../invoice/TemplateDrawer";
 import { AddressFieldsGroup, emptyAddress, isAddressEmpty, SectionHeader } from "../invoice/formPrimitives";
 import QuickDealForm from "../deal/QuickDealForm";
 import SearchableDropdown from "../contact/SearchableDropdown";
@@ -395,6 +396,8 @@ const PerformaInvoiceFormFull = ({
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
   const [showItemForm, setShowItemForm] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [nextNumberPreview, setNextNumberPreview] = useState(null);
   const [quickAddItem, setQuickAddItem] = useState(null);
   const [quickAddQty, setQuickAddQty] = useState(1);
   const [savedSignatures, setSavedSignatures] = useState([]);
@@ -642,6 +645,23 @@ const PerformaInvoiceFormFull = ({
     };
 
     loadSignatures();
+  }, []);
+
+  // Live preview of the number this performa invoice will actually get on
+  // save (from the same persistent per-org counter resolveDocumentNumber
+  // uses) — shown as the number box's placeholder instead of a static "1" so
+  // it stays in sync with the split-view panel.
+  useEffect(() => {
+    const loadNextNumberPreview = async () => {
+      try {
+        const res = await API.get("/document-settings");
+        setNextNumberPreview(res.data?.nextNumbers?.proformaInvoice || null);
+      } catch (error) {
+        console.error("Failed to load next performa invoice number preview", error);
+      }
+    };
+
+    loadNextNumberPreview();
   }, []);
 
   const calculateItemAmount = (item) => {
@@ -1218,7 +1238,7 @@ const PerformaInvoiceFormFull = ({
                   />
                   <input
                     type="text"
-                    placeholder="1"
+                    placeholder={nextNumberPreview ? String(nextNumberPreview) : "Auto"}
                     value={form.performaInvoiceNumber}
                     onChange={(e) => {
                       setForm((prev) => ({ ...prev, performaInvoiceNumber: e.target.value }));
@@ -1269,7 +1289,7 @@ const PerformaInvoiceFormFull = ({
               )}
               <button
                 type="button"
-                onClick={() => {}}
+                onClick={() => setShowTemplates(true)}
                 title="Performa Invoice settings"
                 className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
               >
@@ -2093,6 +2113,15 @@ const PerformaInvoiceFormFull = ({
           isOpen={showItemForm}
           onClose={() => setShowItemForm(false)}
           onSaved={handleProductCreated}
+        />
+
+        {/* Opened by the "Settings" pill above — same Template/Numbering/
+            Signatures drawer the split view uses. */}
+        <TemplateDrawer
+          isOpen={showTemplates}
+          onClose={() => setShowTemplates(false)}
+          type="performa"
+          docLabel="Performa Invoice"
         />
       </div>
     </>

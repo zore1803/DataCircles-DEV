@@ -85,6 +85,7 @@ exports.createDeliveryChallan = async (req, res) => {
         Model: DeliveryChallan,
         numberField: "deliveryChallanNumber",
         organization: req.user.organization,
+        documentTypeKey: "deliveryChallan",
         prefix: finalDCPrefix,
         suffix: finalDCSuffix,
         providedNumber: clientDeliveryChallanNumber && String(clientDeliveryChallanNumber).trim() ? clientDeliveryChallanNumber : null,

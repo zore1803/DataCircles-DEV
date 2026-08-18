@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const DocumentSettings = require('../models/DocumentSettings');
+const Counter = require('../models/Counter');
 
 const DEFAULT_PREFIX = 'INV-';
 
@@ -282,14 +283,60 @@ async function resolveNextNumberForPrefix({ Model, numberField, organization, pr
   return maxNumber + 1;
 }
 
-// Builds the final number for a document create call, handling both cases:
-// the client supplied an explicit number (validated for prefix-scoped
-// uniqueness), or none was supplied (auto-generated from the prefix-scoped
-// max). Always returns a fully-formed "PREFIX-N" string via buildInvoiceNumber
-// so every document type gets identical separator handling. Pass the create
-// call's transaction `session` through so the uniqueness/max-number reads see
-// a consistent snapshot with the rest of that request.
-async function resolveDocumentNumber({ Model, numberField, organization, prefix, suffix = '', providedNumber, session }) {
+// Persistent, monotonically-increasing counter per organization + document
+// type (invoice | quote | proformaInvoice | deliveryChallan). Unlike the
+// max-of-existing-documents scan above, this never reuses a number: deleting
+// a document — even the most recently created one — does not roll the
+// counter back, so the next document created always gets a genuinely new
+// number and gaps left by deletions are never refilled. The counter is keyed
+// by document type only (not by prefix), so changing the configured prefix
+// in Settings does not restart or affect the sequence; it only changes how
+// the number is displayed. This is a distinct key namespace from any counters
+// used elsewhere, so every organization's sequence starts fresh at 1.
+async function getNextCounterNumber({ organization, documentTypeKey, session }) {
+  const counterId = `${organization}_doc_${documentTypeKey || 'invoice'}`;
+  const counter = await Counter.findOneAndUpdate(
+    { _id: counterId },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true, session, setDefaultsOnInsert: true }
+  );
+  return counter.seq;
+}
+
+// Read-only peek at what the *next* number for each document type will be,
+// without incrementing anything — used by the create-document screens to
+// show the upcoming number (e.g. "2") before the document is actually saved,
+// instead of a static/misleading placeholder. Safe to call as often as
+// needed since it never mutates the counter.
+async function getNextNumberPreviews(organizationId) {
+  const keys = Object.keys(DEFAULT_DOCUMENT_TYPES);
+  const idToKey = {};
+  keys.forEach((key) => {
+    idToKey[`${organizationId}_doc_${key}`] = key;
+  });
+
+  const counters = await Counter.find({ _id: { $in: Object.keys(idToKey) } }).lean();
+
+  const previews = {};
+  keys.forEach((key) => {
+    previews[key] = 1;
+  });
+  counters.forEach((c) => {
+    const key = idToKey[c._id];
+    if (key) previews[key] = (c.seq || 0) + 1;
+  });
+  return previews;
+}
+
+// Builds the final number for a document create (or convert) call, handling
+// both cases: the client supplied an explicit number (validated for
+// prefix-scoped uniqueness), or none was supplied (auto-generated from the
+// persistent per-document-type counter). Always returns a fully-formed
+// "PREFIX-N" string via buildInvoiceNumber so every document type gets
+// identical separator handling. Pass the create call's transaction `session`
+// through so the uniqueness check and counter increment see a consistent
+// snapshot with the rest of that request.
+async function resolveDocumentNumber({ Model, numberField, organization, documentTypeKey, prefix, suffix = '', providedNumber, session }) {
   const normalizedPrefix = (prefix || '').toString().trim() || DEFAULT_PREFIX;
   const normalizedSuffix = (suffix || '').toString().trim();
 
@@ -306,7 +353,7 @@ async function resolveDocumentNumber({ Model, numberField, organization, prefix,
     return number;
   }
 
-  const nextNumber = await resolveNextNumberForPrefix({ Model, numberField, organization, prefix: normalizedPrefix, session });
+  const nextNumber = await getNextCounterNumber({ organization, documentTypeKey, session });
   return buildInvoiceNumber({ prefix: normalizedPrefix, number: nextNumber, suffix: normalizedSuffix });
 }
 
@@ -439,6 +486,8 @@ module.exports = {
   resolveInvoiceNumber,
   resolveNextNumberForPrefix,
   resolveDocumentNumber,
+  getNextCounterNumber,
+  getNextNumberPreviews,
   getDocumentSettingsForOrganization,
   saveDocumentSettingsForOrganization,
   seedTemplateLibrariesFromLegacy,

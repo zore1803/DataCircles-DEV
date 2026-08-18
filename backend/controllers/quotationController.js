@@ -89,6 +89,7 @@ exports.createQuotation = async (req, res) => {
         Model: Quotation,
         numberField: "quotationNumber",
         organization: req.user.organization,
+        documentTypeKey: "quote",
         prefix: finalPrefix,
         suffix: finalSuffix,
         providedNumber: clientQuotationNumber && String(clientQuotationNumber).trim() ? clientQuotationNumber : null,

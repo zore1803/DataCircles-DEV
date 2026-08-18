@@ -408,8 +408,13 @@ const InvoiceViewer = ({
         responseType: "blob",
         params: { copyType },
       });
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      setPdfUrl(URL.createObjectURL(blob));
+      // Named as a File (not a plain Blob) so the browser's built-in PDF
+      // viewer shows this document's actual name instead of "about:blank" —
+      // a bare Blob has no name, and Chrome's PDF viewer falls back to the
+      // blob URL's (nonexistent) location for its title/tab label.
+      const filename = `${apiPathFor(type)}-${doc?.[numberKeyFor(type)] || id}-${copyType}.pdf`;
+      const file = new File([response.data], filename, { type: "application/pdf" });
+      setPdfUrl(URL.createObjectURL(file));
     } catch (error) {
       toast.error("Failed to load PDF");
       console.error("PDF fetch error:", error);
@@ -438,7 +443,12 @@ const InvoiceViewer = ({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100002] p-4">
-      <div className="bg-white rounded-xl w-full h-[90vh] max-w-5xl flex flex-col shadow-2xl">
+      {/* Chrome ignores the #view=FitH / #zoom=... PDF-viewer open params for
+          blob: URLs specifically (they only take effect for a real network
+          request), so the page's native width can't be forced to fit a
+          narrow panel — widened from max-w-5xl (1024px) so the full page
+          width fits without the right edge getting cropped. */}
+      <div className="bg-white rounded-xl w-full h-[90vh] max-w-[1400px] flex flex-col shadow-2xl">
         <div className="flex justify-between items-center px-5 py-2 border-b border-gray-200 bg-gray-50 rounded-t-xl">
           <div className="flex items-center gap-3">
             <div className="bg-blue-100 p-2 rounded-lg">
@@ -613,10 +623,19 @@ const InvoiceViewer = ({
             </button>
           </div>
         </div>
-        <div className="flex-1 p-4 overflow-hidden">
+        <div className="flex-1 p-4 overflow-auto">
           {pdfUrl ? (
             <iframe
-              src={pdfUrl}
+              // toolbar=0/navpanes=0 drop the browser's own PDF chrome (the
+              // bar that was showing "about:blank" plus the redundant
+              // thumbnail rail) since this modal already has its own
+              // download/print/share controls above. view=FitH/zoom=
+              // fragment params are included for browsers that honor them,
+              // but Chrome specifically ignores PDF open params for blob:
+              // URLs, so the real fix for the cropped-right-edge issue is
+              // the widened modal above plus overflow-auto here as a
+              // fallback on narrower screens.
+              src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH&zoom=page-width`}
               width="100%"
               height="100%"
               title="Document PDF"

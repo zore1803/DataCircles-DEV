@@ -85,6 +85,7 @@ const createPerformaInvoice = async (req, res) => {
         Model: PerformaInvoice,
         numberField: "performaInvoiceNumber",
         organization: req.user.organization,
+        documentTypeKey: "proformaInvoice",
         prefix: finalPIPrefix,
         suffix: finalPISuffix,
         providedNumber: clientPerformaInvoiceNumber && String(clientPerformaInvoiceNumber).trim() ? clientPerformaInvoiceNumber : null,
