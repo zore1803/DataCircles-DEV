@@ -161,12 +161,47 @@ const getInventory = async (req, res) => {
  * out-movement larger than the stock on hand is rejected rather than silently creating a
  * negative balance.
  */
+// Maps the form's free-text Category onto the StockMovement `reason` enum that reports group on.
+// Anything the enum has no value for is recorded as "other" — the original wording is still kept
+// verbatim in `category`, so nothing the user typed is lost.
+const REASON_BY_CATEGORY = {
+  purchase: "purchase",
+  sale: "sale",
+  "customer return": "return",
+  return: "return",
+  "damage / loss": "damage",
+  damage: "damage",
+  loss: "damage",
+  "opening stock": "opening_stock",
+  adjustment: "adjustment",
+  "transfer in": "transfer",
+  "transfer out": "transfer",
+  transfer: "transfer",
+};
+
+function categoryToReason(category, direction) {
+  const key = (category || "").trim().toLowerCase();
+  if (REASON_BY_CATEGORY[key]) return REASON_BY_CATEGORY[key];
+  if (key) return "other";
+  return direction === "in" ? "purchase" : "sale";
+}
+
 async function applyStockMovement(req, res, direction) {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const { quantity, reason, notes, referenceNumber, unitPrice, allowNegative } = req.body || {};
+    const {
+      quantity,
+      reason,
+      notes,
+      referenceNumber,
+      unitPrice,
+      allowNegative,
+      category,
+      recordDate,
+      priceIncludesTax,
+    } = req.body || {};
 
     const qty = Number(quantity);
     if (!Number.isFinite(qty) || qty <= 0) {
@@ -204,6 +239,18 @@ async function applyStockMovement(req, res, direction) {
       });
     }
 
+    // The form now asks for a free-text Category rather than picking from the enum directly, so
+    // derive `reason` from it when it maps onto a known value and fall back to "other". An
+    // explicit `reason` in the body still wins, keeping older callers working unchanged.
+    const resolvedReason =
+      reason || categoryToReason(category, direction);
+
+    // Movements are routinely keyed in after the fact, so an explicit recordDate is honoured;
+    // anything unparseable falls back to now rather than writing an Invalid Date.
+    const parsedDate = recordDate ? new Date(recordDate) : null;
+    const parsedRecordDate =
+      parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : new Date();
+
     // Fall back to the item's own price so a movement always carries the value it was made at,
     // even when the caller doesn't supply one.
     const resolvedUnitPrice = Number.isFinite(Number(unitPrice))
@@ -221,10 +268,14 @@ async function applyStockMovement(req, res, direction) {
           quantity: qty,
           previousStock,
           newStock,
-          reason: reason || (direction === "in" ? "purchase" : "sale"),
+          reason: resolvedReason,
           notes: notes || "",
           referenceNumber: referenceNumber || "",
+          category: typeof category === "string" ? category.trim() : "",
+          recordDate: parsedRecordDate,
           unitPrice: resolvedUnitPrice,
+          priceIncludesTax: !!priceIncludesTax,
+          totalValue: qty * resolvedUnitPrice,
           user: req.user._id,
         },
       ],

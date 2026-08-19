@@ -60,6 +60,15 @@ const stockMovementSchema = new mongoose.Schema(
     },
     notes: { type: String, default: "" },
 
+    // Free-text label the user picks (or types) for why the stock moved. `reason` above stays
+    // the small enum that reports group on; this keeps whatever wording the user actually chose,
+    // including org-specific categories the enum has no value for.
+    category: { type: String, default: "" },
+
+    // When the movement actually happened, as opposed to `createdAt` (when it was keyed in).
+    // Backdating a movement is normal — stock is often recorded after the fact.
+    recordDate: { type: Date, default: Date.now },
+
     // Optional pointer to whatever document caused this movement (invoice number, PO number,
     // challan number...). Free-text on purpose: movements can originate from documents this
     // model shouldn't need a hard reference to.
@@ -68,6 +77,13 @@ const stockMovementSchema = new mongoose.Schema(
     // Per-unit price at the time of the movement, so historical stock value stays accurate even
     // after the item's own price changes. Defaults are filled from the item at write time.
     unitPrice: { type: Number, default: 0 },
+
+    // Whether `unitPrice` is tax-inclusive, so P&L reporting doesn't have to guess.
+    priceIncludesTax: { type: Boolean, default: false },
+
+    // quantity × unitPrice at the time of the movement. Stored rather than recomputed so the
+    // historical value survives later price changes, same reasoning as unitPrice itself.
+    totalValue: { type: Number, default: 0 },
 
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },

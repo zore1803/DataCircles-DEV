@@ -3,8 +3,10 @@ import { createPortal } from "react-dom";
 import {
   X, ChevronDown, ChevronUp, MoreVertical, Eye, EyeOff, Plus, Minus,
   ChevronLeft, ChevronRight, Pin, PinOff, Package, Settings,
-  TrendingDown, Boxes, IndianRupee, Wallet, History, ArrowRight,
+  TrendingDown, Boxes, IndianRupee, Wallet, History, ArrowRight, Check,
 } from "lucide-react";
+import * as XLSX from "xlsx";
+import BulkActionBar from "../components/common/BulkActionBar";
 import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
@@ -168,6 +170,26 @@ export default function Inventory() {
   /* pagination page-input */
   const [editingPage, setEditingPage] = useState(false);
   const [pageInput, setPageInput] = useState("");
+
+  /* ── bulk selection ──────────────────────────────────────────────────
+     Mirrors Deals.jsx: the strip's unmount is delayed so it can play a
+     slide-out-right exit on deselect, matching the slide-in-left entrance. */
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    if (selectedIds.length > 0) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [selectedIds.length]);
 
   /* ── debounce search ─────────────────────────────────────────────── */
   useEffect(() => {
@@ -486,6 +508,58 @@ export default function Inventory() {
     return out;
   }, [pagination]);
 
+  /* ── bulk selection handlers ─────────────────────────────────────── */
+  const handleSelectRow = (id) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const handleSelectAllOnPage = (e) =>
+    setSelectedIds(e.target.checked ? filteredItems.map((i) => i._id) : []);
+
+  // "Select All" spans every matching record, not just the loaded page — the list endpoint
+  // exposes `allIds` for exactly this, so the selection isn't silently capped at 10 rows.
+  const handleSelectAllAcrossPages = async () => {
+    const tid = toast.loading("Selecting all records...");
+    try {
+      const params = new URLSearchParams({ allIds: "true" });
+      if (debouncedSearch) params.append("search", debouncedSearch);
+      if (stockStatusFilter) params.append("stockStatus", stockStatusFilter);
+      const res = await API.get(`/inventory?${params.toString()}`);
+      const ids = res.data?.allIds || res.data?.ids || [];
+      setSelectedIds(ids);
+      toast.success(`Selected all ${ids.length} record(s).`, { id: tid });
+    } catch (err) {
+      toast.error("Failed to select all records", { id: tid });
+      console.error(err);
+    }
+  };
+
+  const handleExportExcel = useCallback((rows) => {
+    const list = Array.isArray(rows) ? rows : [rows];
+    if (!list.length) {
+      toast.error("No items selected for export");
+      return;
+    }
+    const sheet = XLSX.utils.json_to_sheet(
+      list.map((i) => ({
+        Item: i.name || "",
+        Category: i.category || "",
+        "Current Stock": Number(i.inventory?.currentStock) || 0,
+        Unit: i.primaryUnit || "",
+        Status: stockStatusOf(i).label,
+        "Purchase Price": Number(i.purchasePrice) || 0,
+        "Selling Price": Number(i.sellingPrice) || 0,
+        "Stock Value":
+          Math.max(Number(i.inventory?.currentStock) || 0, 0) * (Number(i.sellingPrice) || 0),
+      }))
+    );
+    sheet["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, "Inventory");
+    const filename = `Inventory_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(book, filename);
+    toast.success(`Exported ${list.length} item(s) to ${filename}`);
+  }, []);
+
   /* ── row action menu ─────────────────────────────────────────────── */
   const renderActionMenu = (item) => {
     const isOpen = openActionMenuId === item._id;
@@ -623,27 +697,9 @@ export default function Inventory() {
     return (
       <div className="flex items-center justify-between gap-2 w-full min-w-0">
         <div className="flex-1 min-w-0">{content}</div>
-        {isRightmost && (
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {/* Inline Stock In / Stock Out — the two actions this page exists for, so they get
-                one-click access rather than living only behind the ⋮ menu. */}
-            <button
-              onClick={(e) => { e.stopPropagation(); setStockModal({ open: true, item, direction: "in" }); }}
-              title="Stock In"
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-green-50 text-green-700 hover:bg-green-100 text-xs font-medium transition-colors"
-            >
-              <Plus className="w-3 h-3" /> In
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); setStockModal({ open: true, item, direction: "out" }); }}
-              title="Stock Out"
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-50 text-red-700 hover:bg-red-100 text-xs font-medium transition-colors"
-            >
-              <Minus className="w-3 h-3" /> Out
-            </button>
-            {renderActionMenu(item)}
-          </div>
-        )}
+        {/* Stock In / Stock Out live solely in the ⋮ menu — the inline pills crowded the last
+            column and pushed the ⋮ out of line with every other list page. */}
+        {isRightmost && renderActionMenu(item)}
       </div>
     );
   };
@@ -692,6 +748,21 @@ export default function Inventory() {
         className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, height: 64, minHeight: 64, maxHeight: 64, boxSizing: "border-box" }}
       >
+        {showBulkStrip ? (
+          <BulkActionBar
+            selectedCount={selectedIds.length}
+            entityName="item"
+            isClosing={bulkStripClosing}
+            onSelectAll={handleSelectAllAcrossPages}
+            onDeselectAll={() => setSelectedIds([])}
+            onExport={() => {
+              const rows = filteredItems.filter((i) => selectedIds.includes(i._id));
+              handleExportExcel(rows.length > 0 ? rows : filteredItems);
+            }}
+            onCancel={() => setSelectedIds([])}
+          />
+        ) : (
+          <>
         <div className="flex flex-col gap-1 flex-shrink-0">
           <div className="flex items-center gap-2">
             <h2 className="m-0 font-medium truncate text-sm sm:text-base" style={{ lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}>
@@ -736,19 +807,6 @@ export default function Inventory() {
             )}
           </div>
 
-          {/* Quick stock-status filter — the one filter this page is used for most. */}
-          <select
-            value={stockStatusFilter}
-            onChange={(e) => setStockStatusFilter(e.target.value)}
-            title="Stock status"
-            className="h-10 px-3 rounded-full border border-[#E1E4EA] bg-white text-sm text-gray-700 focus:outline-none focus:border-[#0085FF] cursor-pointer flex-shrink-0"
-          >
-            <option value="">All Stock</option>
-            <option value="in">In Stock</option>
-            <option value="low">Low Stock</option>
-            <option value="out">Out of Stock</option>
-          </select>
-
           {/* Advanced filters */}
           <button
             type="button"
@@ -787,10 +845,34 @@ export default function Inventory() {
                 >
                   <Eye className="w-4 h-4 text-gray-400" /> {showStats ? "Hide KPIs" : "Unhide KPIs"}
                 </button>
+
+                {/* Stock-status filter — moved in here off the toolbar, where its pill-shaped
+                    <select> broke the 40px round-icon rhythm the other list pages share. */}
+                <div className="h-px bg-gray-100 my-1" />
+                <p className="px-3 pt-1 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
+                  Stock status
+                </p>
+                {[
+                  { value: "", label: "All Stock" },
+                  { value: "in", label: "In Stock" },
+                  { value: "low", label: "Low Stock" },
+                  { value: "out", label: "Out of Stock" },
+                ].map((opt) => (
+                  <button
+                    key={opt.value || "all"}
+                    onClick={() => { setStockStatusFilter(opt.value); setIsMoreMenuOpen(false); }}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    {opt.label}
+                    {stockStatusFilter === opt.value && <Check className="w-4 h-4 text-[#0085FF]" />}
+                  </button>
+                ))}
               </div>
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
 
       {/* ── KPI band ─────────────────────────────────────────────────── */}
@@ -840,7 +922,12 @@ export default function Inventory() {
                 className="relative px-4 py-3 bg-[#F5F7FA] border-b border-r border-[#E1E4EA]"
               >
                 <div className="flex justify-center items-center">
-                  <Package className="w-4 h-4 text-gray-400" />
+                  <input
+                    type="checkbox"
+                    checked={filteredItems.length > 0 && selectedIds.length === filteredItems.length}
+                    onChange={handleSelectAllOnPage}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                  />
                 </div>
                 <ResizeHandle colId="selection" />
               </th>
@@ -901,13 +988,23 @@ export default function Inventory() {
               </tr>
             ) : (
               filteredItems.map((item) => (
-                <tr key={item._id} className="bg-white hover:bg-blue-50 transition-colors">
+                <tr
+                  key={item._id}
+                  className={`bg-white hover:bg-blue-50 transition-colors ${selectedIds.includes(item._id) ? "!bg-blue-50" : ""}`}
+                >
                   <td
                     style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 10 }}
                     className="px-4 py-3 align-middle border-b border-r border-[#E1E4EA] bg-inherit"
                   >
+                    {/* The stock-status dot that used to live here is redundant with the Status
+                        column's badge, so the column now carries the selection checkbox instead. */}
                     <div className="flex justify-center items-center">
-                      <div className={`w-2 h-2 rounded-full ${stockStatusOf(item).key === "out" ? "bg-red-500" : stockStatusOf(item).key === "low" ? "bg-amber-500" : "bg-green-500"}`} />
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(item._id)}
+                        onChange={() => handleSelectRow(item._id)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                      />
                     </div>
                   </td>
 
