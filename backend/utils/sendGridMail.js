@@ -21,7 +21,7 @@ async function sendGridMail({
       to,
       from: from || {
         email: process.env.SENDGRID_FROM_EMAIL || "noreply@datacircles.in",
-        name: "DataCircles",
+        name: process.env.SENDGRID_FROM_NAME || "DataCircles",
       },
       subject,
       text,

@@ -31,7 +31,7 @@ import PaymentReceiptModal from "../components/vendor/PaymentReceiptModal";
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
   selection: 60,
-  "payment-id": 160,
+  "payment-id": 200,
   party: 220,
   amount: 140,
   direction: 120,
@@ -42,6 +42,11 @@ const MIN_COL_WIDTH = 60;
 // Matches Deals.jsx's KPI band desktop height (h-[120px]) so the two pages'
 // header/stats layout lines up the same way.
 const KPI_BAND_HEIGHT = 120;
+// Bottom edge of the fixed toolbar (top-16 = 64px offset + h-16 = 64px tall).
+// The KPI band and the table both hang off this, so they sit flush against the
+// toolbar and against each other — hardcoding 126/130 here left a 2px overlap
+// above and a 4px white gap between the KPI band and the table header.
+const TOOLBAR_BOTTOM = 128;
 
 const ALL_COLUMNS = [
   { id: "payment-id", key: "payment-id", label: "Transaction ID" },
@@ -629,10 +634,6 @@ export default function PaymentsTimeline() {
 
   /* ── View → Payment Receipt ──────────────────────────────────────── */
   const handleViewReceipt = async (doc) => {
-    if (doc.source !== "Payment" && doc.source !== "Purchase") {
-      toast.error(`Receipts aren't available for ${doc.source} entries yet.`);
-      return;
-    }
     const tid = toast.loading("Loading receipt...");
     try {
       const res = await API.get(`/payments-timeline/${doc._id}/receipt`, {
@@ -975,7 +976,7 @@ export default function PaymentsTimeline() {
       {showStats && (
         <div
           className="fixed right-0 box-border flex flex-col justify-center bg-white border-b border-[#E1E4EA] px-6 py-6"
-          style={{ left: "var(--sidebar-width, 0px)", top: 126, height: KPI_BAND_HEIGHT, zIndex: 38, boxSizing: "border-box" }}
+          style={{ left: "var(--sidebar-width, 0px)", top: TOOLBAR_BOTTOM, height: KPI_BAND_HEIGHT, zIndex: 38, boxSizing: "border-box" }}
         >
           <div className="grid grid-cols-2 lg:flex lg:flex-row lg:items-stretch gap-3 lg:gap-6">
             {[
@@ -1017,7 +1018,7 @@ export default function PaymentsTimeline() {
         style={{
           left: "var(--sidebar-width, 0px)",
           bottom: 64,
-          top: 130 + (showStats ? KPI_BAND_HEIGHT : 0),
+          top: TOOLBAR_BOTTOM + (showStats ? KPI_BAND_HEIGHT : 0),
         }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
@@ -1056,7 +1057,7 @@ export default function PaymentsTimeline() {
                       opacity: isDragging ? 0.35 : 1,
                       ...stickyStyleFor(col.id),
                     }}
-                    className={`relative px-4 py-3 text-left text-xs font-bold text-[#525866] uppercase tracking-wider whitespace-nowrap border-b border-r border-[#E1E4EA] transition-colors ${
+                    className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] border-b border-r border-[#E1E4EA] transition-colors ${
                       isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"
                     } ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
                   >
@@ -1125,7 +1126,7 @@ export default function PaymentsTimeline() {
                       <td
                         key={col.id}
                         style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                        className={`px-4 py-3 text-sm text-gray-900 border-b border-r border-[#E1E4EA] last:border-r-0 bg-inherit whitespace-nowrap ${cellBoundaryShadowSide ? "" : "overflow-hidden"}`}
+                        className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] border-b border-r border-[#E1E4EA] last:border-r-0 bg-inherit whitespace-nowrap ${cellBoundaryShadowSide ? "" : "overflow-hidden"}`}
                       >
                         {renderCell(col.id, doc, isRightmost)}
                         {cellBoundaryShadowSide && (

@@ -350,10 +350,6 @@ function ProductsServices() {
     variants: [],
     discount: { type: "percentage", value: 0 },
     maxDiscountPercent: "",
-    // Starting stock for a new product. Only these are ever sent from this form — after creation
-    // the live stock level is owned by the Inventory module's ledger and can only change via
-    // Stock In / Stock Out.
-    inventory: { openingStock: 0, lowStockThreshold: 0 },
   });
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -472,22 +468,11 @@ function ProductsServices() {
     direction: "desc",
   });
 
-  // Distinct categories across the whole organization. The filter panel's fallback scans
-  // only the rows it's handed, and `items` holds just the current server-fetched page — so
-  // without this the Category dropdown would list only the categories that happen to appear
-  // on the page you're looking at. /items/categories returns them org-wide.
-  const [categoryOptions, setCategoryOptions] = useState([]);
-  useEffect(() => {
-    API.get("/items/categories")
-      .then((res) => setCategoryOptions(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setCategoryOptions([]));
-  }, []);
-
   // Columns available in the rule-builder filter panel (mirrors Companies.jsx pattern).
   const itemFilterColumns = [
     { key: "name", label: "Item Name" },
     { key: "type", label: "Type", options: ["product", "service"] },
-    { key: "category", label: "Category", options: categoryOptions },
+    { key: "category", label: "Category" },
     { key: "sellingPrice", label: "Selling Price" },
     { key: "purchasePrice", label: "Purchase Price" },
     { key: "gstRate", label: "GST Rate" },
@@ -495,9 +480,9 @@ function ProductsServices() {
     { key: "description", label: "Description" },
   ];
 
-  // Feeds AdvancedFilterPanel's Value dropdown for columns with no fixed `options` list.
-  // Must return the RAW field value, not a display-formatted one: filteredItems matches
-  // against raw `row[f.column]`, so an option of "₹1,200.00" would never match 1200.
+  // Feeds AdvancedFilterPanel's Value field: for a column with no fixed `options` list
+  // (like Category), it scans this array for distinct existing values and shows a Select
+  // dropdown instead of a free-text box — same pattern as Deals.jsx's getDealFieldValue.
   const getItemFieldValue = (item, key) => item[key];
 
   // Click-outside handling for the overflow (⋮) menu.
@@ -750,12 +735,6 @@ function ProductsServices() {
       variants: item.variants || [],
       discount: item.discount || { type: "percentage", value: 0 },
       maxDiscountPercent: item.maxDiscountPercent ?? "",
-      inventory: {
-        // Shown read-only while editing (stock moves via Stock In / Stock Out), so this shows
-        // the LIVE stock rather than the original opening figure.
-        openingStock: item.inventory?.currentStock ?? 0,
-        lowStockThreshold: item.inventory?.lowStockThreshold ?? 0,
-      },
     });
     setShowForm(true);
   };
@@ -1976,11 +1955,7 @@ function ProductsServices() {
 
                 return (
                   <>
-                    {/* The bottom border lives on the <th> cells, not here: this table is
-                        `border-separate`, and the CSS separated-borders model ignores borders
-                        declared on row groups — so a `border-b` on <thead> silently renders
-                        nothing, leaving the header with no line under it. */}
-                    <thead className="bg-[#F5F7FA] sticky top-0 z-30 select-none">
+                    <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
                       {table.getHeaderGroups().map((headerGroup) => (
                         <tr key={headerGroup.id}>
                           {headerGroup.headers.map((header) => {
@@ -2007,7 +1982,7 @@ function ProductsServices() {
                                   right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                   zIndex: isSticky ? 20 : 1,
                                 }}
-                                className={`px-4 py-3 text-sm font-bold text-[#525866] border-b border-r border-[#E1E4EA] last:border-r-0 transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                                className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] last:border-r-0 transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                               >
                                 <div className="w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                                   {flexRender(

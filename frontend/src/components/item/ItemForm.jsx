@@ -421,7 +421,7 @@ const ItemForm = ({
         // uses for its single profilePicture upload, extended to multiple
         // files under one "images" field name.
         const fd = new FormData();
-        Object.entries({ ...form, variants: undefined, additionalFields: undefined, images: undefined, discount: undefined }).forEach(
+        Object.entries({ ...form, variants: undefined, additionalFields: undefined, images: undefined, discount: undefined, inventory: undefined }).forEach(
           ([key, value]) => {
             if (value === undefined || value === null) return;
             fd.append(key, typeof value === "boolean" ? String(value) : value);
@@ -430,6 +430,9 @@ const ItemForm = ({
         fd.append("variants", JSON.stringify(variants));
         fd.append("additionalFields", JSON.stringify(processedAdditionalFields));
         fd.append("discount", JSON.stringify(form.discount || { type: "percentage", value: 0 }));
+        // Nested object, so it must be JSON-stringified like variants/discount above —
+        // appending it raw would send the literal string "[object Object]".
+        fd.append("inventory", JSON.stringify(form.inventory || {}));
         fd.append("existingImages", JSON.stringify(existingImages));
         newImageFiles.forEach((file) => fd.append("images", file));
 
@@ -1105,6 +1108,64 @@ const ItemForm = ({
               {/* Add more as needed */}
             </select>
           </div>
+
+          {/* Inventory — every product appears on the Inventory page automatically, so there's no
+              opt-in toggle here. Leaving the quantity blank simply starts the item at 0.
+              After creation the stock level changes exclusively through Inventory's
+              Stock In / Stock Out, so it stays backed by the movement ledger instead of being
+              silently overwritten by a product save. Services carry no stock. */}
+          {form.type === "product" && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-3.5">
+              <p className="text-xs font-semibold text-gray-700 mb-3">Inventory</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    {form._id ? "Current Stock" : "Opening Quantity"}
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    // Opening quantity is the starting balance and is recorded as the first
+                    // ledger entry, so it can only be set while creating the item.
+                    disabled={!!form._id}
+                    placeholder="0"
+                    value={form.inventory?.openingStock ?? 0}
+                    onChange={(e) =>
+                      handleFormChange("inventory", {
+                        ...(form.inventory || {}),
+                        openingStock: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    {form._id
+                      ? "Use Stock In / Stock Out on the Inventory page to change stock."
+                      : "Leave blank to start at 0."}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Low Stock Alert At
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="0"
+                    value={form.inventory?.lowStockThreshold ?? 0}
+                    onChange={(e) =>
+                      handleFormChange("inventory", {
+                        ...(form.inventory || {}),
+                        lowStockThreshold: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Active */}
           <div className="flex items-center gap-2">
