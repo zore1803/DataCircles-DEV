@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
-import { Twitter, Linkedin, Facebook, FolderOpen, ChevronDown, Edit2, Trash2, MinusSquare, X } from "lucide-react";
+import { Twitter, Linkedin, Facebook, FolderOpen, ChevronDown, X } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 const CompanyForm = ({
   form,
@@ -555,31 +555,6 @@ const CompanyForm = ({
             <h2 className="absolute left-1/2 -translate-x-1/2 text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {form._id ? "Edit Company" : "Create New Company"}
             </h2>
-            {form._id && (
-              <>
-                <button
-                  type="button"
-                  title="Edit"
-                  className="w-5 h-5 flex items-center justify-center text-[#0085FF] hover:opacity-70 transition-opacity"
-                >
-                  <Edit2 className="w-[18px] h-[18px]" strokeWidth={2} />
-                </button>
-                <button
-                  type="button"
-                  title="Delete"
-                  className="w-5 h-5 flex items-center justify-center text-[#F60000] hover:opacity-70 transition-opacity"
-                >
-                  <Trash2 className="w-[18px] h-[18px]" strokeWidth={2} />
-                </button>
-                <button
-                  type="button"
-                  title="Select"
-                  className="w-5 h-5 flex items-center justify-center text-[#1C1B1F]/30 hover:opacity-70 transition-opacity"
-                >
-                  <MinusSquare className="w-[18px] h-[18px]" strokeWidth={2} />
-                </button>
-              </>
-            )}
             <button
               type="button"
               onClick={handleClose}
