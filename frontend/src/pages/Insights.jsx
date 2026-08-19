@@ -20,6 +20,9 @@ import {
   ScatterChart,
   Scatter,
   ZAxis,
+  FunnelChart,
+  Funnel,
+  LabelList,
 } from "recharts";
 import {
   Calendar,
@@ -86,6 +89,156 @@ const loadingMessages = [
 // Select a random message
 const randomMessage =
   loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+
+// Horizontal funnel — the exact horn-shaped outline from the Figma source
+// (5 overlapping bezier petals at decreasing opacity, forming one smooth
+// silhouette) as a static background, with divider lines/labels/badges
+// overlaid at real proportions for this org's actual stages. `stages` is an
+// ordered array of { name, value, count, pct } (pct relative to the first
+// stage) — sized for exactly 3 entries (Open/Won/Lost, this system's only
+// fixed statuses) but degrades to N-1 dividers for any length.
+const DealsFunnelChart = ({ stages }) => {
+  if (!stages || stages.length === 0) return null;
+
+  const SVG_W = 770;
+  const SVG_H = 310;
+
+  const n = stages.length;
+  const midY = SVG_H / 2;
+  const topLabelY = 30;
+  const bottomLabelY = SVG_H - 14;
+  // Equal-width columns (the horn's own silhouette already does the
+  // narrowing visually) — n-1 divider lines split it into n real segments.
+  const boundaryX = Array.from({ length: n + 1 }, (_, i) => (i / n) * SVG_W);
+
+  return (
+    <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} width="100%" height="100%" style={{ overflow: "visible" }}>
+      {/* Base horn silhouette — exact path data from the Figma source, 5
+          overlapping bezier petals at decreasing opacity blending into one
+          smooth tapering shape. Purely decorative background; the divider
+          lines/labels/badges above it are what carries the real data. */}
+      <g>
+        <path opacity="0.2" d="M151.575 45.5732L105.747 35.1826C94.8692 32.7162 85.0961 26.7608 77.9175 18.2246C68.2014 6.67093 53.8768 0 38.7808 0H-0.000488281V309.184H38.7808C53.8768 309.184 68.2014 302.513 77.9175 290.959C85.0961 282.423 94.8692 276.468 105.747 274.002L151.575 263.61V45.5732Z" fill="#0085FF" />
+        <path opacity="0.2" d="M203.578 256.031C212.601 254.612 221.127 250.964 228.384 245.418C237.957 238.102 249.672 234.138 261.721 234.138H305.423V75.1211H261.721C249.672 75.1211 237.957 71.157 228.384 63.8408C221.127 58.295 212.601 54.6478 203.578 53.2285L154.606 45.5244V263.734L203.578 256.031Z" fill="#0085FF" fillOpacity="0.75" />
+        <path opacity="0.2" d="M460.03 110.828L413.481 104.314C402.434 102.769 391.971 98.4024 383.102 91.6367C373.144 84.0402 361.201 79.4863 348.713 78.5244L308.455 75.4229V233.195L349.161 230.256C361.38 229.373 373.119 225.136 383.083 218.009C391.978 211.648 402.302 207.577 413.144 206.154L460.03 200.004V110.828Z" fill="#0085FF" fillOpacity="0.5" />
+        <path opacity="0.2" d="M615.393 134.536L566.5 131.367C557.153 130.761 548.188 127.435 540.709 121.797C533.101 116.061 523.958 112.719 514.445 112.197L463.818 109.42V199.758L513.621 197.025C523.691 196.473 533.396 193.063 541.599 187.196C549.735 181.378 559.348 177.976 569.333 177.382L615.393 174.641V134.536Z" fill="#0085FF" fillOpacity="0.25" />
+        <path opacity="0.2" d="M770 174.945V133.594H618.424V174.945H770Z" fill="#0085FF" />
+      </g>
+
+      {/* The first stage sits before any divider, so it needs its own
+          value/name label at the funnel's left edge instead of at a
+          boundary — otherwise only the later stages (at dividers) get labeled. */}
+      <text x={boundaryX[0] + 4} y={topLabelY} textAnchor="start" fontSize={13} fontWeight={600} fill="#0E121B">
+        ₹{formatNumberToIndian(Math.round(stages[0].value))}
+      </text>
+      <text x={boundaryX[0] + 4} y={bottomLabelY} textAnchor="start" fontSize={12} fill="#525866">
+        {stages[0].name}
+      </text>
+
+      {/* Divider lines + value (above) / stage name (below) labels, at the
+          boundary between each pair of consecutive stages. */}
+      {stages.slice(0, -1).map((stage, i) => {
+        const x = boundaryX[i + 1];
+        return (
+          <g key={`divider-${stage.name}`}>
+            <line x1={x} y1={20} x2={x} y2={SVG_H - 20} stroke="#1F2937" strokeOpacity={0.15} strokeWidth={1.5} />
+            <text x={x} y={topLabelY} textAnchor="middle" fontSize={13} fontWeight={600} fill="#0E121B">
+              ₹{formatNumberToIndian(Math.round(stages[i + 1].value))}
+            </text>
+            <text x={x} y={bottomLabelY} textAnchor="middle" fontSize={12} fill="#525866">
+              {stages[i + 1].name}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Percentage badge centered in each stage segment. */}
+      {stages.map((stage, i) => {
+        const cx = (boundaryX[i] + boundaryX[i + 1]) / 2;
+        return (
+          <g key={`badge-${stage.name}`}>
+            <rect x={cx - 26} y={midY - 14} width={52} height={28} rx={14} fill="#0F0E0E" />
+            <text x={cx} y={midY + 5} textAnchor="middle" fontSize={14} fontWeight={600} fill="#FFFFFF">
+              {stage.pct}%
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+};
+
+// Asymmetric treemap for "Deals by Industry" — matches the Figma reference's
+// layout shape (big cell top-left, tall cell bottom-right, two small cells
+// splitting the remaining space) but cell sizes are proportional to each
+// industry's real share of deal value, not fixed reference pixel heights.
+// Handles 1-5 items; more than 5 shouldn't happen since callers cap at 4 +
+// an "Others" bucket.
+const DealsIndustryTreemap = ({ items }) => {
+  if (!items || items.length === 0) return null;
+
+  const colors = [
+    { bg: "#0085FF", text: "#FFFFFF" },
+    { bg: "rgba(0,133,255,0.75)", text: "#FFFFFF" },
+    { bg: "#009FE0", text: "#FFFFFF" },
+    { bg: "#FC9C32", text: "#1C1C1D" },
+    { bg: "#E7E4E3", text: "#1C1C1D" },
+  ];
+
+  const Cell = ({ item, idx, style }) => (
+    <div
+      className="rounded flex flex-col justify-between p-4 min-h-0"
+      style={{ background: colors[idx % colors.length].bg, color: colors[idx % colors.length].text, ...style }}
+    >
+      <span className="text-[15px] font-medium truncate">{item.name}</span>
+      <div className="flex items-end justify-between gap-2">
+        <span className="text-2xl font-medium">{item.pct}%</span>
+        <span
+          className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-white flex-shrink-0"
+          style={{ color: "#21201F" }}
+        >
+          ₹{formatNumberToIndian(Math.round(item.value))}
+        </span>
+      </div>
+    </div>
+  );
+
+  const [i0, i1, i2, i3, i4] = items;
+  // Column split: left holds items 0/2/3, right holds items 1/4 — sized by
+  // each column's share of the total so real data drives the proportions.
+  const leftShare = (i0?.pct || 0) + (i2?.pct || 0) + (i3?.pct || 0);
+  const rightShare = (i1?.pct || 0) + (i4?.pct || 0);
+  const leftFlex = leftShare || 1;
+  const rightFlex = rightShare || (items.length > 1 ? 1 : 0);
+
+  if (items.length === 1) {
+    return (
+      <div className="flex gap-0.5" style={{ height: 327 }}>
+        <Cell item={i0} idx={0} style={{ flex: 1 }} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-0.5" style={{ height: 327 }}>
+      <div className="flex flex-col gap-0.5" style={{ flex: leftFlex, minWidth: 0 }}>
+        <Cell item={i0} idx={0} style={{ flex: i0.pct || 1 }} />
+        {(i2 || i3) && (
+          <div className="flex gap-0.5" style={{ flex: (i2?.pct || 0) + (i3?.pct || 0) || 1 }}>
+            {i2 && <Cell item={i2} idx={2} style={{ flex: i2.pct || 1 }} />}
+            {i3 && <Cell item={i3} idx={3} style={{ flex: i3.pct || 1 }} />}
+          </div>
+        )}
+      </div>
+      {(i1 || i4) && (
+        <div className="flex flex-col gap-0.5" style={{ flex: rightFlex, minWidth: 0 }}>
+          {i4 && <Cell item={i4} idx={4} style={{ flex: i4.pct || 1 }} />}
+          {i1 && <Cell item={i1} idx={1} style={{ flex: i1.pct || 1 }} />}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Insights = () => {
   const [activeTab, setActiveTab] = useState("overview");
@@ -3156,6 +3309,58 @@ const Insights = () => {
       0
     );
 
+    // Month-over-month trends for the KPI row, mirroring the Companies tab's
+    // StatCard pattern (icon + label/value + bottom-right change badge).
+    const lastMonthDate = new Date(currentYear, currentMonth - 1, 1);
+    const lastMonth = lastMonthDate.getMonth();
+    const lastMonthYear = lastMonthDate.getFullYear();
+    const dealsLastMonth = filteredData.filteredDeals.filter((d) => {
+      const created = new Date(d.createdAt);
+      return created.getMonth() === lastMonth && created.getFullYear() === lastMonthYear;
+    });
+    const dealsLastMonthValue = dealsLastMonth.reduce((sum, d) => sum + (d.amount || 0), 0);
+    const pctChange = (curr, prev) =>
+      prev > 0 ? Math.round(((curr - prev) / prev) * 100) : curr > 0 ? 100 : 0;
+
+    const pipelineValueChange = pctChange(dealsThisMonthValue, dealsLastMonthValue);
+    const newDealsChange = pctChange(dealsThisMonthCount, dealsLastMonth.length);
+
+    const wonThisMonthDeals = wonDeals.filter((d) => {
+      const closed = new Date(d.updatedAt || d.createdAt);
+      return closed.getMonth() === currentMonth && closed.getFullYear() === currentYear;
+    });
+    const wonLastMonthDeals = wonDeals.filter((d) => {
+      const closed = new Date(d.updatedAt || d.createdAt);
+      return closed.getMonth() === lastMonth && closed.getFullYear() === lastMonthYear;
+    });
+    const wonDealsChange = pctChange(wonThisMonthDeals.length, wonLastMonthDeals.length);
+
+    const avgDealSizeThisMonthDeals =
+      dealsThisMonth.length > 0 ? dealsThisMonthValue / dealsThisMonth.length : 0;
+    const avgDealSizeLastMonthDeals =
+      dealsLastMonth.length > 0 ? dealsLastMonthValue / dealsLastMonth.length : 0;
+    const avgDealSizeChangeDeals = pctChange(avgDealSizeThisMonthDeals, avgDealSizeLastMonthDeals);
+
+    const closedThisMonth = filteredData.filteredDeals.filter((d) => {
+      if (d.status !== "Won" && d.status !== "Lost") return false;
+      const closed = new Date(d.updatedAt || d.createdAt);
+      return closed.getMonth() === currentMonth && closed.getFullYear() === currentYear;
+    });
+    const closedLastMonth = filteredData.filteredDeals.filter((d) => {
+      if (d.status !== "Won" && d.status !== "Lost") return false;
+      const closed = new Date(d.updatedAt || d.createdAt);
+      return closed.getMonth() === lastMonth && closed.getFullYear() === lastMonthYear;
+    });
+    const winRateThisMonth =
+      closedThisMonth.length > 0
+        ? (wonThisMonthDeals.length / closedThisMonth.length) * 100
+        : 0;
+    const winRateLastMonth =
+      closedLastMonth.length > 0
+        ? (wonLastMonthDeals.length / closedLastMonth.length) * 100
+        : 0;
+    const winRateChange = pctChange(winRateThisMonth, winRateLastMonth);
+
     // User-wise analysis
     const userDeals = filteredData.filteredDeals.reduce((acc, deal) => {
       const userId = deal.user?._id;
@@ -3276,417 +3481,325 @@ const Insights = () => {
       }
     })();
 
+    // Deals Funnel data — this system only has 3 fixed deal statuses
+    // (Open/Won/Lost, not a Lead/Qualified/Proposal taxonomy), so the funnel
+    // always shows exactly those 3, in that order, each real value/count.
+    const funnelStages = (() => {
+      const baseline = openValue || 1;
+      return [
+        { name: "Open", value: openValue, count: openDeals.length },
+        { name: "Won", value: wonValue, count: wonDeals.length },
+        { name: "Lost", value: lostValue, count: lostDeals.length },
+      ].map((s) => ({ ...s, pct: Math.round((s.value / baseline) * 100) }));
+    })();
+
+    // Deals by Stage table — same real stages as the funnel above (not a
+    // fixed Lead/Qualified/Proposal taxonomy). Conversion is each stage's
+    // share of the total deal count (bounded 0-100%, so it reads sensibly
+    // regardless of how stage values compare to each other — the funnel's
+    // value-vs-baseline pct was reused here originally, which is why a
+    // higher-value later stage like Won could show a nonsensical "295%").
+    // Drop Off is simply the complement. Avg. Time and Risk are derived from
+    // each stage's deals' actual age (days since created, or days-to-close
+    // for Won/Lost) since this system doesn't track stage-transition history.
+    const stageTableData = funnelStages.map((stage) => {
+      const dealsInStage = filteredData.filteredDeals.filter((d) => d.status === stage.name);
+      const now = Date.now();
+      const ages = dealsInStage.map((d) => {
+        const created = new Date(d.createdAt).getTime();
+        const end = stage.name === "Won" || stage.name === "Lost" ? new Date(d.updatedAt || d.createdAt).getTime() : now;
+        return Math.max(0, (end - created) / (24 * 60 * 60 * 1000));
+      });
+      const avgDays = ages.length > 0 ? Math.round(ages.reduce((s, a) => s + a, 0) / ages.length) : 0;
+      const risk = avgDays > 21 ? "High" : avgDays > 7 ? "Medium" : "Low";
+      const conversion = totalDeals > 0 ? Math.round((stage.count / totalDeals) * 100) : 0;
+      const dropOff = Math.max(0, 100 - conversion);
+      return { ...stage, avgDays, risk, conversion, dropOff };
+    });
+
+    // Deals by Industry — real deal value grouped by each deal's company's
+    // industry (top 4 + an "Others" bucket for the rest), not the fixed
+    // Construction/Manufacturing/Retail/Agency placeholder categories from
+    // the design spec, since a company's actual industries are whatever its
+    // records were tagged with.
+    const dealsByIndustry = (() => {
+      const companyIndustryMap = {};
+      filteredData.filteredCompanies.forEach((c) => {
+        companyIndustryMap[c._id] = c.industry || "Other";
+      });
+      const totals = {};
+      filteredData.filteredDeals.forEach((d) => {
+        const companyId = d.company?._id || d.company;
+        const industry = companyIndustryMap[companyId] || "Other";
+        totals[industry] = (totals[industry] || 0) + (d.amount || 0);
+      });
+      const entries = Object.entries(totals)
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1]);
+      const top = entries.slice(0, 4).map(([name, value]) => ({ name, value }));
+      const restValue = entries.slice(4).reduce((s, [, v]) => s + v, 0);
+      const items = restValue > 0 ? [...top, { name: "Others", value: restValue }] : top;
+      items.sort((a, b) => b.value - a.value);
+      const total = items.reduce((s, i) => s + i.value, 0);
+      return items.map((i) => ({ ...i, pct: total > 0 ? Math.round((i.value / total) * 100) : 0 }));
+    })();
+
+    // Revenue Trend — Open/Won/Lost deal value per month, last 6 months.
+    const revenueTrendData = (() => {
+      const now = new Date();
+      const months = Array.from({ length: 6 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+        return { key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) };
+      });
+      const buckets = Object.fromEntries(months.map((m) => [m.key, { Open: 0, Won: 0, Lost: 0 }]));
+      filteredData.filteredDeals.forEach((d) => {
+        const created = new Date(d.createdAt);
+        const key = `${created.getFullYear()}-${created.getMonth()}`;
+        if (!buckets[key]) return;
+        const bucket = d.status === "Won" || d.status === "Lost" ? d.status : "Open";
+        buckets[key][bucket] += d.amount || 0;
+      });
+      // A linear axis makes small months (₹7K-95K) visually indistinguishable
+      // from 0 next to the ₹22L peak — a log scale keeps them readable
+      // without distorting the peak. Log scales can't plot a true 0, so each
+      // series also carries a floored "*Plot" companion (chart position)
+      // alongside its real value (used for the tooltip/labels).
+      const LOG_FLOOR = 5000;
+      return months.map((m) => {
+        const raw = buckets[m.key];
+        return {
+          name: m.label,
+          ...raw,
+          OpenPlot: Math.max(raw.Open, LOG_FLOOR),
+          WonPlot: Math.max(raw.Won, LOG_FLOOR),
+          LostPlot: Math.max(raw.Lost, LOG_FLOOR),
+        };
+      });
+    })();
+    // Compact, single-line ticks (no space before the unit, so recharts
+    // never wraps them onto a second line inside the axis's tick width) —
+    // stays purely data-driven since recharts derives the tick values
+    // themselves from the actual min/max of revenueTrendData.
+    const formatCrLakh = (v) => {
+      if (v >= 1e7) return `₹${(v / 1e7).toFixed(v % 1e7 === 0 ? 0 : 1)}Cr`;
+      if (v >= 1e5) return `₹${(v / 1e5).toFixed(v % 1e5 === 0 ? 0 : 1)}L`;
+      if (v === 0) return "₹0";
+      return `₹${formatNumberToIndian(v)}`;
+    };
+
+    // recharts' default log-scale ticks follow a "nice number" 1-2-5-10
+    // sequence (5K, 10K, 20K, 50K, 1L...), which alternates between ×2 and
+    // ×2.5 steps — technically still a log scale, but the gaps between
+    // gridlines end up visibly uneven. Generating ticks with one constant
+    // ratio instead guarantees every gap is pixel-identical.
+    const revenueYAxis = (() => {
+      const allValues = revenueTrendData.flatMap((d) => [d.OpenPlot, d.WonPlot, d.LostPlot]);
+      const minV = Math.min(...allValues);
+      const maxV = Math.max(...allValues);
+      const TICK_COUNT = 7;
+      const ratio = Math.pow(maxV / minV, 1 / (TICK_COUNT - 1));
+      // Round each tick to 2 significant figures for a readable label — the
+      // resulting gaps are still visually equal since the deviation from a
+      // true constant ratio is tiny relative to the overall span.
+      const roundNice = (v) => {
+        const magnitude = Math.pow(10, Math.floor(Math.log10(v)) - 1);
+        return Math.round(v / magnitude) * magnitude;
+      };
+      const ticks = Array.from({ length: TICK_COUNT }, (_, i) => roundNice(minV * Math.pow(ratio, i)));
+      return { domain: [minV, maxV], ticks };
+    })();
+
     return (
       <div className="space-y-6">
-        {/* Header with Actions */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-gray-900">
-            Deals Insights
-          </h2>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => (window.location.href = "/deals")}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-            >
-              <Briefcase className="w-4 h-4" />
-              View All Deals
-            </button>
-            <button
-              onClick={() => exportToPDF("Deals")}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Export Report
-            </button>
-          </div>
+        {/* KPI row — same StatCard pattern (icon + label/value + bottom-right
+            change badge) used on the Companies tab. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard
+            title="Total Pipeline Value"
+            value={`₹${formatNumberToIndian(totalValue)}`}
+            icon={<IndianRupeeIcon className="w-6 h-6" />}
+            color="text-blue-600"
+            change={pipelineValueChange}
+            changeLabel="vs last month"
+          />
+          <StatCard
+            title="Won Deals"
+            value={wonDeals.length}
+            icon={<Trophy className="w-6 h-6" />}
+            color="text-green-600"
+            change={wonDealsChange}
+            changeLabel="vs last month"
+          />
+          <StatCard
+            title="New This Month"
+            value={dealsThisMonthCount}
+            icon={<TrendingUp className="w-6 h-6" />}
+            color="text-purple-600"
+            change={newDealsChange}
+            changeLabel="vs last month"
+          />
+          <StatCard
+            title="Avg. Deal Size"
+            value={`₹${formatNumberToIndian(Math.round(averageDealValue))}`}
+            icon={<Briefcase className="w-6 h-6" />}
+            color="text-emerald-600"
+            change={avgDealSizeChangeDeals}
+            changeLabel="vs last month"
+          />
+          <StatCard
+            title="Win Rate"
+            value={`${winRate.toFixed(1)}%`}
+            icon={<Target className="w-6 h-6" />}
+            color="text-orange-600"
+            change={winRateChange}
+            changeLabel="vs last month"
+          />
         </div>
 
-        {/* Primary Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Total Deals */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Deals</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {totalDeals}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-blue-600" />
-              </div>
+        {/* Two cards below the KPI row, widths proportional to the KPI cards
+            they sit under: left spans KPIs 1-3 (3fr), right spans KPIs 3-5
+            (2fr). Right card content TBD. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-stretch">
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px] flex flex-col">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Deals Funnel</h3>
+            <div className="flex-1 flex items-center mt-2">
+              <DealsFunnelChart stages={funnelStages} />
             </div>
           </div>
-
-          {/* Total Value */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Total Pipeline Value
-                </p>
-                <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  ₹{formatNumberToIndian(totalValue)}
-                </h6>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <IndianRupeeIcon className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          {/* Average Deal Value */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Average Deal Size
-                </p>
-                <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  ₹{formatNumberToIndian(Math.round(averageDealValue))}
-                </h6>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-purple-600" />
+          {/* Revenue Trend — Open/Won/Lost deal value per month. */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px] flex flex-col">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h3 className="text-sm font-semibold text-[#0E121B] opacity-70">Revenue Trend</h3>
+              <div className="flex items-center gap-4">
+                {[
+                  { key: "Lost", color: "#F60000" },
+                  { key: "Open", color: "#0085FF" },
+                  { key: "Won", color: "#00C950" },
+                ].map(({ key, color }) => (
+                  <div key={key} className="flex items-center gap-1.5">
+                    <span className="inline-block w-5 h-0.5 rounded-full" style={{ background: color }} />
+                    <span className="text-xs" style={{ color: "rgba(31,31,33,0.56)" }}>
+                      {key} Deal Value
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-
-          {/* Win Rate */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Win Rate</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {winRate.toFixed(1)}%
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {wonDeals.length} won / {totalClosedDeals} closed
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                <Target className="w-6 h-6 text-orange-600" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Won, Lost, Open Deals */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Won Deals */}
-          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg border border-green-200 p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-green-600 rounded-lg flex items-center justify-center">
-                <Trophy className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-green-700">Won Deals</p>
-                <p className="text-3xl font-bold text-green-900 mt-1">
-                  {wonDeals.length}
-                </p>
-                <h6 className="text-sm text-green-600 mt-1">
-                  ₹{formatNumberToIndian(wonValue)} •{" "}
-                  {((wonValue / totalValue) * 100).toFixed(1)}% of value
-                </h6>
-              </div>
-            </div>
-          </div>
-
-          {/* Open Deals */}
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border border-blue-200 p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Clock className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-blue-700">Open Deals</p>
-                <p className="text-3xl font-bold text-blue-900 mt-1">
-                  {openDeals.length}
-                </p>
-                <h6 className="text-sm text-blue-600 mt-1">
-                  ₹{formatNumberToIndian(openValue)} •{" "}
-                  {((openValue / totalValue) * 100).toFixed(1)}% of value
-                </h6>
-              </div>
-            </div>
-          </div>
-
-          {/* Lost Deals */}
-          <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg border border-red-200 p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-red-600 rounded-lg flex items-center justify-center">
-                <XCircle className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-red-700">Lost Deals</p>
-                <p className="text-3xl font-bold text-red-900 mt-1">
-                  {lostDeals.length}
-                </p>
-                <h6 className="text-sm text-red-600 mt-1">
-                  ₹{formatNumberToIndian(lostValue)} • {lossRate.toFixed(1)}%
-                  loss rate
-                </h6>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Deal Status Distribution */}
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-gray-900">
-                Deal Status Distribution
-              </h3>
-              <PieChartIcon className="w-5 h-5 text-gray-400" />
-            </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={dealStatusChartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) =>
-                    `${name} ${(percent * 100).toFixed(0)}%`
-                  }
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {dealStatusChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value, name, props) => [
-                    `${value} deals (₹${formatNumberToIndian(
-                      props.payload.amount
-                    )})`,
-                    name,
-                  ]}
+            <ResponsiveContainer width="100%" height={280} className="mt-2">
+              <LineChart data={revenueTrendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(31,41,55,0.1)" />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 10, fill: "#1F2937" }}
+                  axisLine={{ stroke: "rgba(31,41,55,0.3)" }}
+                  tickLine={false}
                 />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* User Performance Chart with Filter */}
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-gray-900">
-                Deals by User
-              </h3>
-              <div className="flex items-center gap-3">
-                <select
-                  value={selectedUser}
-                  onChange={(e) => setSelectedUser(e.target.value)}
-                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                >
-                  <option value="all">All Users (Top 10)</option>
-                  {uniqueUsers.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                    </option>
-                  ))}
-                </select>
-                <BarChart3 className="w-5 h-5 text-gray-400" />
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={userPerformanceChartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="Won" fill="#10b981" />
-                <Bar dataKey="Open" fill="#3b82f6" />
-                <Bar dataKey="Lost" fill="#ef4444" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* User Performance Table */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Sales Performance by User
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Total Deals
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Won
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Open
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Lost
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Total Value
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Won Value
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Conversion Rate
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                {userStats.map((user, index) => (
-                  <tr
-                    key={index}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {user.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
-                      {user.totalDeals}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold">
-                      {user.wonDeals}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-semibold">
-                      {user.openDeals}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-semibold">
-                      {user.lostDeals}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
-                      <h6>₹{formatNumberToIndian(user.totalValue)}</h6>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold">
-                      <h6>₹{formatNumberToIndian(user.wonValue)}</h6>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-gray-100 rounded-full h-2 w-20">
-                          <div
-                            className="bg-green-600 h-full rounded-full transition-all duration-300"
-                            style={{ width: `${user.conversionRate}%` }}
-                          />
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900">
-                          {user.conversionRate.toFixed(1)}%
-                        </span>
+                <YAxis
+                  scale="log"
+                  domain={revenueYAxis.domain}
+                  ticks={revenueYAxis.ticks}
+                  tickFormatter={formatCrLakh}
+                  tick={{ fontSize: 10, fill: "#1F2937" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={52}
+                  tickMargin={4}
+                  allowDataOverflow
+                />
+                <Tooltip
+                  content={({ active, label, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const raw = payload[0]?.payload || {};
+                    const rows = [
+                      { key: "Lost", color: "#F60000" },
+                      { key: "Open", color: "#0085FF" },
+                      { key: "Won", color: "#00C950" },
+                    ];
+                    return (
+                      <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-4 py-3">
+                        <p className="text-sm font-semibold text-[#0E121B] mb-1">{label}</p>
+                        {rows.map(({ key, color }) => (
+                          <p key={key} className="text-sm" style={{ color }}>
+                            {key} : ₹{formatNumberToIndian(raw[key] || 0)}
+                          </p>
+                        ))}
                       </div>
-                    </td>
+                    );
+                  }}
+                />
+                <Line type="monotone" dataKey="OpenPlot" name="Open" stroke="#0085FF" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="WonPlot" name="Won" stroke="#00C950" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="LostPlot" name="Lost" stroke="#F60000" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-stretch">
+          {/* Deals by Stage — same real stages as the funnel/table above. */}
+          <div className="bg-white p-[18px] rounded-lg border border-[#E1E4EA] min-h-[360px]">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Deals by Stage</h3>
+            <div className="bg-[#F8FAFC] rounded-md p-2 mt-3 overflow-x-auto">
+              <table className="w-full text-xs" style={{ minWidth: 640 }}>
+                <thead>
+                  <tr className="bg-white rounded-md">
+                    {["Stage", "Deal Count", "Revenue", "Avg. Time", "Conversion", "Drop Off", "Risk Score"].map((h) => (
+                      <th key={h} className="font-normal text-[#1F2937] text-center py-1.5 px-1.5">
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {stageTableData.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center text-gray-400 py-6">
+                        No deals yet
+                      </td>
+                    </tr>
+                  ) : (
+                    stageTableData.map((stage) => (
+                      <tr key={stage.name} className="border-t border-[#1F2937]/10">
+                        <td className="text-center font-medium text-[#1F2937] py-2 px-1.5">{stage.name}</td>
+                        <td className="text-center py-2 px-1.5">{stage.count}</td>
+                        <td className="text-center py-2 px-1.5">₹{formatNumberToIndian(Math.round(stage.value))}</td>
+                        <td className="text-center py-2 px-1.5">{stage.avgDays} Days</td>
+                        <td className="text-center py-2 px-1.5">{stage.conversion}%</td>
+                        <td className="text-center py-2 px-1.5">{stage.dropOff}%</td>
+                        <td className="text-center py-2 px-1.5">
+                          <span
+                            className="inline-flex items-center justify-center px-2.5 py-1 rounded-full font-medium"
+                            style={
+                              stage.risk === "Low"
+                                ? { background: "rgba(52,199,89,0.1)", color: "#34C759" }
+                                : stage.risk === "Medium"
+                                ? { background: "rgba(252,156,50,0.1)", color: "#FC9C32" }
+                                : { background: "rgba(246,0,0,0.2)", color: "#F60000" }
+                            }
+                          >
+                            {stage.risk}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {/* Deals by Industry — real deal value by company industry. */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Deals by Industry</h3>
+            {dealsByIndustry.length === 0 ? (
+              <p className="text-sm text-gray-400 py-16 text-center">No deals yet</p>
+            ) : (
+              <div className="mt-3">
+                <DealsIndustryTreemap items={dealsByIndustry} />
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Top Companies */}
-          {topCompanies.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Top Companies by Deal Value
-              </h3>
-              <div className="space-y-3">
-                {topCompanies.map(([companyName, data], index) => (
-                  <div
-                    key={companyName}
-                    className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-gray-900">
-                        {companyName}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {data.count} deals • {data.won} won
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <h6 className="text-sm font-bold text-gray-900">
-                        ₹{formatNumberToIndian(data.amount)}
-                      </h6>
-                      <p className="text-xs text-gray-500">
-                        {((data.amount / totalValue) * 100).toFixed(1)}%
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Largest Deals */}
-          {largestDeals.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Largest Deals
-              </h3>
-              <div className="space-y-3">
-                {largestDeals.map((deal, index) => (
-                  <div
-                    key={deal._id}
-                    className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-gray-900">
-                        {deal.title}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {deal.company?.name || "No company"} • {deal.user?.name}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <h6 className="text-sm font-bold text-gray-900">
-                        ₹{formatNumberToIndian(deal.amount || 0)}
-                      </h6>
-                      <div className="mt-1">{getStatusBadge(deal.status)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* This Month Summary */}
-        <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg border border-indigo-200 p-6">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <Calendar className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-indigo-700">
-                Deals Created This Month
-              </p>
-              <p className="text-3xl font-bold text-indigo-900 mt-1">
-                {dealsThisMonthCount} Deals
-              </p>
-              <p className="text-sm text-indigo-600 mt-1">
-                Total Value:
-                <h6>₹{formatNumberToIndian(dealsThisMonthValue)}</h6> •{" "}
-                {((dealsThisMonthCount / totalDeals) * 100).toFixed(1)}% of all
-                deals
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
     );
   };
@@ -3761,413 +3874,96 @@ const Insights = () => {
         100
     );
 
+    // KPI row — same 5-card StatCard pattern used on the Companies tab.
+    const totalVendorSpend = filteredData.filteredPurchases.reduce((sum, p) => sum + (p.grandTotal || 0), 0);
+    const outstandingPayables = filteredData.filteredVendors
+      .filter((v) => (v.balance || 0) > 0)
+      .reduce((sum, v) => sum + v.balance, 0);
+    const totalCredits = filteredData.filteredVendors
+      .filter((v) => (v.balance || 0) < 0)
+      .reduce((sum, v) => sum + Math.abs(v.balance), 0);
+    const activeVendorIds = new Set(
+      filteredData.filteredPurchases.map((p) => p.vendor?._id || p.vendor).filter(Boolean)
+    );
+    const activeVendors = activeVendorIds.size;
+    const avgVendorSpend = activeVendors > 0 ? totalVendorSpend / activeVendors : 0;
+
+    const lastMonthDateV = new Date(currentYear, currentMonth - 1, 1);
+    const lastMonthV = lastMonthDateV.getMonth();
+    const lastMonthYearV = lastMonthDateV.getFullYear();
+    const purchasesThisMonth = filteredData.filteredPurchases.filter((p) => {
+      const d = new Date(p.purchaseDate || p.createdAt);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    });
+    const purchasesLastMonth = filteredData.filteredPurchases.filter((p) => {
+      const d = new Date(p.purchaseDate || p.createdAt);
+      return d.getMonth() === lastMonthV && d.getFullYear() === lastMonthYearV;
+    });
+    const spendThisMonth = purchasesThisMonth.reduce((sum, p) => sum + (p.grandTotal || 0), 0);
+    const spendLastMonth = purchasesLastMonth.reduce((sum, p) => sum + (p.grandTotal || 0), 0);
+    const vendorSpendChange =
+      spendLastMonth > 0 ? Math.round(((spendThisMonth - spendLastMonth) / spendLastMonth) * 100) : spendThisMonth > 0 ? 100 : 0;
+    const activeThisMonth = new Set(purchasesThisMonth.map((p) => p.vendor?._id || p.vendor)).size;
+    const activeLastMonth = new Set(purchasesLastMonth.map((p) => p.vendor?._id || p.vendor)).size;
+    const activeVendorsChange =
+      activeLastMonth > 0 ? Math.round(((activeThisMonth - activeLastMonth) / activeLastMonth) * 100) : activeThisMonth > 0 ? 100 : 0;
+
     return (
       <div className="space-y-6">
-        {/* Header with Actions */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-gray-900">
-            Vendors Insights
-          </h2>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => (window.location.href = "/vendors")}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-            >
-              <Users className="w-4 h-4" />
-              View All Vendors
-            </button>
-            <button
-              onClick={() => exportToPDF("Vendors")}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Export Report
-            </button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard
+            title="Total Vendor Spend"
+            value={`₹${formatNumberToIndian(Math.round(totalVendorSpend))}`}
+            icon={<IndianRupeeIcon className="w-6 h-6" />}
+            color="text-blue-600"
+            change={vendorSpendChange}
+            changeLabel="vs last month"
+          />
+          <StatCard
+            title="Outstanding Payables"
+            value={`₹${formatNumberToIndian(Math.round(outstandingPayables))}`}
+            icon={<Clock className="w-6 h-6" />}
+            color="text-red-600"
+          />
+          <StatCard
+            title="Total Received / Credits"
+            value={`₹${formatNumberToIndian(Math.round(totalCredits))}`}
+            icon={<Building className="w-6 h-6" />}
+            color="text-green-600"
+          />
+          <StatCard
+            title="Active Vendors"
+            value={activeVendors}
+            icon={<Users className="w-6 h-6" />}
+            color="text-purple-600"
+            change={activeVendorsChange}
+            changeLabel="vs last month"
+          />
+          <StatCard
+            title="Average Vendor Spend"
+            value={`₹${formatNumberToIndian(Math.round(avgVendorSpend))}`}
+            icon={<TrendingUp className="w-6 h-6" />}
+            color="text-orange-600"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-stretch">
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
+          </div>
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
           </div>
         </div>
 
-        {/* Primary Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Total Vendors */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Total Vendors
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {totalVendors}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Users className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
           </div>
-
-          {/* Total Outstanding */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Total Outstanding
-                </p>
-                <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  ₹{formatNumberToIndian(totalBalance)}
-                </h6>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <IndianRupeeIcon className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
           </div>
-
-          {/* Average Balance */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Average Balance
-                </p>
-                <h6 className="text-3xl font-bold text-gray-900 mt-2">
-                  ₹{formatNumberToIndian(Math.round(averageBalance))}
-                </h6>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </div>
-
-          {/* New This Month */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  New This Month
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {vendorsThisMonth}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-orange-600" />
-              </div>
-            </div>
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
           </div>
         </div>
 
-        {/* Secondary Metrics Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* With GSTIN */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-                <FileText className="w-5 h-5 text-indigo-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">With GSTIN</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {vendorsWithGSTIN}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {((vendorsWithGSTIN / totalVendors) * 100).toFixed(1)}% of
-                  total
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* With Email */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center">
-                <Mail className="w-5 h-5 text-pink-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">With Email</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {vendorsWithEmail}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {((vendorsWithEmail / totalVendors) * 100).toFixed(1)}% of
-                  total
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* With Phone */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
-                <Phone className="w-5 h-5 text-teal-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">With Phone</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {vendorsWithPhone}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {((vendorsWithPhone / totalVendors) * 100).toFixed(1)}% of
-                  total
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Data Completeness */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Data Completeness
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {completenessScore}%
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Based on key fields
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Balance Distribution */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Balance Distribution
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-green-700">
-                    Positive Balance
-                  </p>
-                  <p className="text-2xl font-bold text-green-900 mt-1">
-                    {vendorsWithPositiveBalance}
-                  </p>
-                </div>
-                <div className="w-10 h-10 bg-green-200 rounded-lg flex items-center justify-center">
-                  <ArrowUp className="w-5 h-5 text-green-700" />
-                </div>
-              </div>
-              <p className="text-xs text-green-600 mt-2">
-                {((vendorsWithPositiveBalance / totalVendors) * 100).toFixed(1)}
-                % of vendors
-              </p>
-            </div>
-
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-700">
-                    Zero Balance
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">
-                    {vendorsWithZeroBalance}
-                  </p>
-                </div>
-                <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
-                  <Minus className="w-5 h-5 text-gray-700" />
-                </div>
-              </div>
-              <p className="text-xs text-gray-600 mt-2">
-                {((vendorsWithZeroBalance / totalVendors) * 100).toFixed(1)}% of
-                vendors
-              </p>
-            </div>
-
-            {/* <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-red-700">Negative Balance</p>
-                <p className="text-2xl font-bold text-red-900 mt-1">{vendorsWithNegativeBalance}</p>
-              </div>
-              <div className="w-10 h-10 bg-red-200 rounded-lg flex items-center justify-center">
-                <ArrowDown className="w-5 h-5 text-red-700" />
-              </div>
-            </div>
-            <p className="text-xs text-red-600 mt-2">
-              {((vendorsWithNegativeBalance / totalVendors) * 100).toFixed(1)}% of vendors
-            </p>
-          </div> */}
-          </div>
-        </div>
-
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Top Vendors by Outstanding Balance */}
-          {topVendorsByBalance.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Top Vendors by Balance
-              </h3>
-              <div className="space-y-3">
-                {topVendorsByBalance.map((vendor, index) => (
-                  <div
-                    key={vendor._id}
-                    className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-gray-900">
-                        {vendor.name}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {vendor.company || "No company"}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <h6 className="text-sm font-bold text-gray-900">
-                        ₹{formatNumberToIndian(vendor.balance || 0)}
-                      </h6>
-                      {vendor.gstin && (
-                        <p className="text-xs text-gray-500 font-mono">
-                          {vendor.gstin}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Top Companies */}
-          {topCompanies.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Vendors by Company
-              </h3>
-              <div className="space-y-3">
-                {topCompanies.map(([company, count], index) => (
-                  <div key={company} className="flex items-center gap-4">
-                    <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">
-                        {company}
-                      </p>
-                      <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden mt-2">
-                        <div
-                          className="bg-gradient-to-r from-green-500 to-green-600 h-full rounded-full transition-all duration-300"
-                          style={{ width: `${(count / totalVendors) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-gray-900 min-w-[70px] text-right">
-                      {count} vendors
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Data Quality Overview */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Data Quality Overview
-          </h3>
-          <div className="space-y-4">
-            {/* Email Coverage */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-gray-400" />
-                  Email Information
-                </span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {vendorsWithEmail} / {totalVendors} (
-                  {((vendorsWithEmail / totalVendors) * 100).toFixed(1)}%)
-                </span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-pink-600 h-full rounded-full transition-all duration-300"
-                  style={{
-                    width: `${(vendorsWithEmail / totalVendors) * 100}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Phone Coverage */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                  <Phone className="w-4 h-4 text-gray-400" />
-                  Phone Information
-                </span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {vendorsWithPhone} / {totalVendors} (
-                  {((vendorsWithPhone / totalVendors) * 100).toFixed(1)}%)
-                </span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-teal-600 h-full rounded-full transition-all duration-300"
-                  style={{
-                    width: `${(vendorsWithPhone / totalVendors) * 100}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* GSTIN Coverage */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  GSTIN Information
-                </span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {vendorsWithGSTIN} / {totalVendors} (
-                  {((vendorsWithGSTIN / totalVendors) * 100).toFixed(1)}%)
-                </span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-indigo-600 h-full rounded-full transition-all duration-300"
-                  style={{
-                    width: `${(vendorsWithGSTIN / totalVendors) * 100}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Company Coverage */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                  <Building className="w-4 h-4 text-gray-400" />
-                  Company Information
-                </span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {vendorsWithCompany} / {totalVendors} (
-                  {((vendorsWithCompany / totalVendors) * 100).toFixed(1)}%)
-                </span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-purple-600 h-full rounded-full transition-all duration-300"
-                  style={{
-                    width: `${(vendorsWithCompany / totalVendors) * 100}%`,
-                  }}
-                />
-              </div>
-            </div>
-          </div>
+        <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
         </div>
       </div>
     );
@@ -5547,6 +5343,18 @@ const Insights = () => {
     );
   }
 
+  const clearAllFilters = () => {
+    setDateRange({ startDate: "", endDate: "" });
+    setFilters({
+      contactStatus: "all",
+      companySize: "all",
+      dealStage: "all",
+      vendorStatus: "all",
+      purchaseStatus: "all",
+      poStatus: "all",
+    });
+  };
+
   const activeFilterCount =
     (dateRange.startDate ? 1 : 0) +
     (dateRange.endDate ? 1 : 0) +
@@ -5594,7 +5402,7 @@ const Insights = () => {
           ))}
         </div>
 
-        <div className="relative flex-shrink-0">
+        <div className="relative flex-shrink-0 flex items-center gap-1.5">
           <button
             onClick={() => setShowFiltersPanel((prev) => !prev)}
             className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
@@ -5607,6 +5415,18 @@ const Insights = () => {
               </span>
             )}
           </button>
+
+          {/* One-click clear — skips opening the panel entirely when all you
+              want is to empty out whatever filters are active. */}
+          {activeFilterCount > 0 && (
+            <button
+              onClick={clearAllFilters}
+              className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+              title="Clear all filters"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
 
           {showFiltersPanel && (
             <>
@@ -5711,17 +5531,7 @@ const Insights = () => {
           </div>
           <div className="flex items-end">
             <button
-              onClick={() => {
-                setDateRange({ startDate: "", endDate: "" });
-                setFilters({
-                  contactStatus: "all",
-                  companySize: "all",
-                  dealStage: "all",
-                  vendorStatus: "all",
-                  purchaseStatus: "all",
-                  poStatus: "all",
-                });
-              }}
+              onClick={clearAllFilters}
               className="w-full px-4 py-2 flex items-center justify-center gap-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors"
             >
               <RefreshCw className="w-4 h-4" />
