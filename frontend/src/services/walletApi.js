@@ -1,6 +1,6 @@
 // services/walletApi.js
 //
-// Prepaid credit wallet ΓÇö deliberately separate from subscriptionApi.js. The
+// Prepaid credit wallet — deliberately separate from subscriptionApi.js. The
 // wallet is independent of subscription state and must stay that way.
 import API from './api';
 

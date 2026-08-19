@@ -2,8 +2,8 @@
 const mongoose = require('mongoose');
 
 // Singleton, Super-Admin editable. Two independent knobs:
-//   creditValueInRupees ΓÇö what a customer pays per credit
-//   usagePricing        ΓÇö how many credits a future feature consumes
+//   creditValueInRupees — what a customer pays per credit
+//   usagePricing        — how many credits a future feature consumes
 const walletConfigSchema = new mongoose.Schema(
   {
     creditValueInRupees: { type: Number, required: true, default: 1 },

@@ -1516,7 +1516,6 @@ const Insights = () => {
             stageCounts[stage] = (stageCounts[stage] || 0) + 1;
           });
           const stageEntries = Object.entries(stageCounts).sort((a, b) => b[1] - a[1]);
-          const maxStageCount = Math.max(1, ...stageEntries.map(([, count]) => count));
           const pipelineStageColors = ["#0085FF", "#0C4FCD", "#2E7D32", "#D97706", "#E82222", "#00C950"];
 
           // Monthly Invoiced / Collected / Outstanding for the Revenue &
@@ -1620,9 +1619,27 @@ const Insights = () => {
 
               {/* Revenue & Collections */}
               <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                <h3 className="text-base font-bold text-gray-900 mb-4">
-                  Revenue &amp; Collections
-                </h3>
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <h3 className="text-base font-bold text-gray-900">
+                    Revenue &amp; Collections
+                  </h3>
+                  {totalRevenue > 0 && (
+                    <div className="flex items-center gap-4 flex-shrink-0">
+                      <div className="text-right">
+                        <p className="text-[11px] text-gray-500 leading-tight">Outstanding</p>
+                        <p className="text-sm font-semibold text-[#E82222] leading-tight">
+                          ₹{formatNumberToIndian(Math.round(outstanding))}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[11px] text-gray-500 leading-tight">Collection Rate</p>
+                        <p className="text-sm font-semibold text-[#00C950] leading-tight">
+                          {collectionRate}%
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 {totalRevenue === 0 ? (
                   <p className="text-sm text-gray-400 py-10 text-center">No invoices yet</p>
                 ) : (
@@ -2277,6 +2294,29 @@ const Insights = () => {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+                </div>
+                <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[272px]">
+                  <h3 className="text-sm font-semibold text-[#0E121B]">Top Companies</h3>
+                  <p className="text-xs text-[#525866] mt-1">
+                    {totalContacts > 0
+                      ? `${Math.round((contactsWithPhone / totalContacts) * 100)}% have a phone · ${Math.round((contactsWithCompany / totalContacts) * 100)}% linked to a company`
+                      : "By number of contacts"}
+                  </p>
+                  {topCompanies.length === 0 ? (
+                    <p className="text-sm text-gray-400 py-10 text-center">No company data yet</p>
+                  ) : (
+                    <div className="mt-4 flex flex-col gap-2.5">
+                      {topCompanies.map(([company, count], idx) => (
+                        <div key={company} className="flex items-center gap-2.5">
+                          <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
+                          <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">{company}</span>
+                          <span className="text-xs font-medium text-[#525866] flex-shrink-0">
+                            {count} contact{count !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -3041,9 +3081,12 @@ const Insights = () => {
         {/* Companies by Industry — same size/style/proportion as the
             Contacts tab's Contact Acquisition Sources donut (1fr of a
             2fr_1fr grid). */}
+        <div className="flex flex-col gap-4">
         <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
           <h3 className="text-sm font-semibold text-[#0E121B]">Companies by Industry</h3>
-          <p className="text-xs text-[#525866] mt-1">Where your companies are concentrated</p>
+          <p className="text-xs text-[#525866] mt-1">
+            Where your companies are concentrated · {completenessScore}% profile completeness
+          </p>
           {totalCompanies === 0 || companySourceData.length === 0 ? (
             <p className="text-sm text-gray-400 py-10 text-center">No companies yet</p>
           ) : (
@@ -3112,6 +3155,26 @@ const Insights = () => {
               </div>
             </div>
           )}
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+          <h3 className="text-sm font-semibold text-[#0E121B]">Top Locations</h3>
+          <p className="text-xs text-[#525866] mt-1">By number of companies</p>
+          {topLocations.length === 0 ? (
+            <p className="text-sm text-gray-400 py-10 text-center">No address data yet</p>
+          ) : (
+            <div className="mt-4 flex flex-col gap-2.5">
+              {topLocations.map(([location, count], idx) => (
+                <div key={location} className="flex items-center gap-2.5">
+                  <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
+                  <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">{location}</span>
+                  <span className="text-xs font-medium text-[#525866] flex-shrink-0">
+                    {count} compan{count !== 1 ? "ies" : "y"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         </div>
         </div>
 
@@ -3665,7 +3728,12 @@ const Insights = () => {
             (2fr). Right card content TBD. */}
         <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-stretch">
           <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px] flex flex-col">
-            <h3 className="text-sm font-semibold text-[#0E121B]">Deals Funnel</h3>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-[#0E121B]">Deals Funnel</h3>
+              <span className="text-xs text-[#525866]">
+                Win {winRate.toFixed(1)}% · Loss {lossRate.toFixed(1)}%
+              </span>
+            </div>
             <div className="flex-1 flex items-center mt-2">
               <DealsFunnelChart stages={funnelStages} />
             </div>
@@ -3804,6 +3872,147 @@ const Insights = () => {
           </div>
         </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 items-stretch">
+          {/* Deal Status Breakdown */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[340px]">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Deal Status Breakdown</h3>
+            <p className="text-xs text-[#525866] mt-1">Count and value by status</p>
+            {dealStatusChartData.length === 0 ? (
+              <p className="text-sm text-gray-400 py-16 text-center">No deals yet</p>
+            ) : (
+              <div className="flex items-center justify-between gap-4 mt-4 flex-wrap">
+                <div className="relative flex-shrink-0" style={{ width: 160, height: 160 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={dealStatusChartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        cornerRadius={3}
+                        paddingAngle={dealStatusChartData.length > 1 ? 2 : 0}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {dealStatusChartData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value, name, { payload }) => [
+                          `${value} deal${value !== 1 ? "s" : ""} · ₹${formatNumberToIndian(payload.amount)}`,
+                          payload.name,
+                        ]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-col gap-1.5 max-w-[220px] flex-shrink-0">
+                  {dealStatusChartData.map((entry) => (
+                    <div key={entry.name} className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: entry.color }} />
+                      <span className="text-xs text-[#21201F]/70 truncate min-w-[80px]">{entry.name}</span>
+                      <span className="text-[11px] text-[#525866] text-right flex-shrink-0 ml-4">
+                        {entry.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          {/* User Performance — filterable by user via uniqueUsers. */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[340px]">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <h3 className="text-sm font-semibold text-[#0E121B]">User Performance</h3>
+                <p className="text-xs text-[#525866] mt-1">Deals by outcome, per user</p>
+              </div>
+              <select
+                value={selectedUser}
+                onChange={(e) => setSelectedUser(e.target.value)}
+                className="text-xs border border-[#E1E4EA] rounded-lg px-2.5 py-1.5 text-[#0E121B] bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+              >
+                <option value="all">All Users</option>
+                {uniqueUsers.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+            {userPerformanceChartData.length === 0 ? (
+              <p className="text-sm text-gray-400 py-16 text-center">No deals yet</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260} className="mt-2">
+                <BarChart data={userPerformanceChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(31,41,55,0.1)" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#1F2937" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "#1F2937" }} axisLine={false} tickLine={false} width={32} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="Won" stackId="a" fill="#00C950" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="Lost" stackId="a" fill="#F60000" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="Open" stackId="a" fill="#0085FF" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+          {/* Top Companies by Deal Value */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Top Companies by Deal Value</h3>
+            {topCompanies.length === 0 ? (
+              <p className="text-sm text-gray-400 py-10 text-center">No company-linked deals yet</p>
+            ) : (
+              <div className="mt-4 flex flex-col gap-2.5">
+                {topCompanies.map(([company, data], idx) => (
+                  <div key={company} className="flex items-center gap-2.5">
+                    <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
+                    <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">{company}</span>
+                    <span className="text-[11px] text-[#525866] flex-shrink-0">{data.count} deal{data.count !== 1 ? "s" : ""}</span>
+                    <span className="text-xs font-medium text-[#0E121B] flex-shrink-0 w-24 text-right">
+                      ₹{formatNumberToIndian(Math.round(data.amount))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Largest Deals */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Largest Deals</h3>
+            {largestDeals.length === 0 ? (
+              <p className="text-sm text-gray-400 py-10 text-center">No deals yet</p>
+            ) : (
+              <div className="mt-4 flex flex-col gap-2.5">
+                {largestDeals.map((deal, idx) => (
+                  <div key={deal._id} className="flex items-center gap-2.5">
+                    <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
+                    <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">{deal.title || deal.company?.name || "Untitled deal"}</span>
+                    <span
+                      className="text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0"
+                      style={
+                        deal.status === "Won"
+                          ? { background: "rgba(0,201,80,0.1)", color: "#00A63E" }
+                          : deal.status === "Lost"
+                          ? { background: "rgba(232,34,34,0.1)", color: "#E82222" }
+                          : { background: "rgba(0,133,255,0.1)", color: "#0085FF" }
+                      }
+                    >
+                      {deal.status}
+                    </span>
+                    <span className="text-xs font-medium text-[#0E121B] flex-shrink-0 w-24 text-right">
+                      ₹{formatNumberToIndian(deal.amount || 0)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
       </div>
     );
   };
@@ -3850,11 +4059,6 @@ const Insights = () => {
         createdDate.getFullYear() === currentYear
       );
     }).length;
-
-    // Top vendors by balance
-    const topVendorsByBalance = [...filteredData.filteredVendors]
-      .sort((a, b) => (b.balance || 0) - (a.balance || 0))
-      .slice(0, 5);
 
     // Company distribution (top 5)
     const companyDistribution = filteredData.filteredVendors
@@ -4344,6 +4548,56 @@ const Insights = () => {
           </div>
         </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+          {/* Vendor Balance Overview */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Vendor Balance Overview</h3>
+            <p className="text-xs text-[#525866] mt-1">
+              {completenessScore}% profile completeness · {vendorsThisMonth} new this month
+            </p>
+            <div className="grid grid-cols-3 gap-3 mt-4">
+              <div className="text-center">
+                <p className="text-lg font-semibold text-[#E82222]">{vendorsWithPositiveBalance}</p>
+                <p className="text-[11px] text-[#525866] mt-0.5">Payable</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold text-[#D87000]">{vendorsWithNegativeBalance}</p>
+                <p className="text-[11px] text-[#525866] mt-0.5">Credit</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold text-[#34C759]">{vendorsWithZeroBalance}</p>
+                <p className="text-[11px] text-[#525866] mt-0.5">Settled</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+              <span className="text-xs text-gray-500">Average Balance</span>
+              <span className="text-sm font-semibold text-gray-900">
+                ₹{formatNumberToIndian(Math.round(averageBalance || 0))}
+              </span>
+            </div>
+          </div>
+          {/* Top Companies (by number of linked vendors) */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Top Companies</h3>
+            <p className="text-xs text-[#525866] mt-1">By number of vendors</p>
+            {topCompanies.length === 0 ? (
+              <p className="text-sm text-gray-400 py-10 text-center">No company data yet</p>
+            ) : (
+              <div className="mt-4 flex flex-col gap-2.5">
+                {topCompanies.map(([company, count], idx) => (
+                  <div key={company} className="flex items-center gap-2.5">
+                    <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
+                    <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">{company}</span>
+                    <span className="text-xs font-medium text-[#525866] flex-shrink-0">
+                      {count} vendor{count !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-[#0E121B]">Vendors Directory</h3>
           <div className="bg-white rounded-xl border border-[#E1E4EA] overflow-hidden">
@@ -4486,35 +4740,6 @@ const Insights = () => {
     const largestPOs = [...filteredData.filteredPurchaseOrders]
       .sort((a, b) => (b.totalAmount || 0) - (a.totalAmount || 0))
       .slice(0, 5);
-
-    // Recent POs (last 10)
-    const recentPOs = [...filteredData.filteredPurchaseOrders]
-      .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate))
-      .slice(0, 5);
-
-    // Monthly trend (last 6 months)
-    const monthlyData = {};
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-    filteredData.filteredPurchaseOrders.forEach((po) => {
-      const date = new Date(po.orderDate);
-      if (date >= sixMonthsAgo) {
-        const monthKey = `${date.getFullYear()}-${String(
-          date.getMonth() + 1
-        ).padStart(2, "0")}`;
-        monthlyData[monthKey] = monthlyData[monthKey] || {
-          count: 0,
-          amount: 0,
-        };
-        monthlyData[monthKey].count += 1;
-        monthlyData[monthKey].amount += po.totalAmount || 0;
-      }
-    });
-
-    const monthlyTrend = Object.entries(monthlyData)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-6);
 
     // KPI row — same 5-card StatCard pattern used on the Companies tab, with
     // real month-over-month deltas against last month's purchase orders.
@@ -5054,6 +5279,55 @@ const Insights = () => {
             )}
           </div>
         </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 items-stretch">
+          {/* Largest POs */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Largest Purchase Orders</h3>
+            {largestPOs.length === 0 ? (
+              <p className="text-sm text-gray-400 py-10 text-center">No purchase orders yet</p>
+            ) : (
+              <div className="mt-4 flex flex-col gap-2.5">
+                {largestPOs.map((po, idx) => (
+                  <div key={po._id} className="flex items-center gap-2.5">
+                    <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
+                    <span className="text-xs font-medium text-[#0085FF] flex-shrink-0">{po.poNumber}</span>
+                    <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">{po.vendor?.name || "Unknown Vendor"}</span>
+                    <span className="text-xs font-medium text-[#0E121B] flex-shrink-0 w-24 text-right">
+                      ₹{formatNumberToIndian(Math.round(po.totalAmount || 0))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* PO Summary */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">PO Summary</h3>
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">Average PO Amount</span>
+                <span className="text-sm font-semibold text-gray-900">
+                  ₹{formatNumberToIndian(Math.round(averagePOAmount))}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                <span className="text-xs text-gray-500">This Month</span>
+                <span className="text-sm font-semibold text-gray-900">{posThisMonthCount} POs</span>
+              </div>
+              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                <span className="text-xs text-gray-500">This Week</span>
+                <span className="text-sm font-semibold text-gray-900">{posThisWeek} POs</span>
+              </div>
+              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                <span className="text-xs text-gray-500">Pending</span>
+                <span className="text-sm font-semibold text-gray-900">
+                  {pendingPOsCount} (₹{formatNumberToIndian(Math.round(pendingPOsAmount))})
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -5121,30 +5395,6 @@ const Insights = () => {
     const largestPurchases = [...filteredData.filteredPurchases]
       .sort((a, b) => (b.grandTotal || 0) - (a.grandTotal || 0))
       .slice(0, 5);
-
-    // Monthly trend (last 6 months)
-    const monthlyData = {};
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-    filteredData.filteredPurchases.forEach((purchase) => {
-      const date = new Date(purchase.purchaseDate);
-      if (date >= sixMonthsAgo) {
-        const monthKey = `${date.getFullYear()}-${String(
-          date.getMonth() + 1
-        ).padStart(2, "0")}`;
-        monthlyData[monthKey] = monthlyData[monthKey] || {
-          count: 0,
-          amount: 0,
-        };
-        monthlyData[monthKey].count += 1;
-        monthlyData[monthKey].amount += purchase.grandTotal || 0;
-      }
-    });
-
-    const monthlyTrend = Object.entries(monthlyData)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-6);
 
     // KPI row — same 5-card StatCard pattern used on the Companies tab, with
     // real month-over-month deltas against last month's purchases.
@@ -5737,6 +5987,68 @@ const Insights = () => {
             )}
           </div>
         </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+          {/* Largest Purchases */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Largest Purchases</h3>
+            {largestPurchases.length === 0 ? (
+              <p className="text-sm text-gray-400 py-10 text-center">No purchases yet</p>
+            ) : (
+              <div className="mt-4 flex flex-col gap-2.5">
+                {largestPurchases.map((p, idx) => (
+                  <div key={p._id} className="flex items-center gap-2.5">
+                    <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
+                    <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">{p.vendor?.name || "Unknown Vendor"}</span>
+                    <span className="text-xs font-medium text-[#0E121B] flex-shrink-0">
+                      ₹{formatNumberToIndian(Math.round(p.grandTotal || 0))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Top Vendors by Purchase Value */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Top Vendors by Purchase Value</h3>
+            {topVendors.length === 0 ? (
+              <p className="text-sm text-gray-400 py-10 text-center">No purchases yet</p>
+            ) : (
+              <div className="mt-4 flex flex-col gap-2.5">
+                {topVendors.map(([vendorName, data], idx) => (
+                  <div key={vendorName} className="flex items-center gap-2.5">
+                    <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
+                    <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">{vendorName}</span>
+                    <span className="text-[11px] text-[#525866] flex-shrink-0">{data.count} purchase{data.count !== 1 ? "s" : ""}</span>
+                    <span className="text-xs font-medium text-[#0E121B] flex-shrink-0 w-24 text-right">
+                      ₹{formatNumberToIndian(Math.round(data.amount))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Purchase Summary */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Purchase Summary</h3>
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">Average Purchase</span>
+                <span className="text-sm font-semibold text-gray-900">
+                  ₹{formatNumberToIndian(Math.round(averagePurchaseAmount))}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                <span className="text-xs text-gray-500">This Month</span>
+                <span className="text-sm font-semibold text-gray-900">{purchasesThisMonthCount} purchases</span>
+              </div>
+              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                <span className="text-xs text-gray-500">This Week</span>
+                <span className="text-sm font-semibold text-gray-900">{purchasesThisWeek} purchases</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -5852,11 +6164,6 @@ const Insights = () => {
     // Largest invoices
     const largestInvoices = [...filteredData.filteredInvoices]
       .sort((a, b) => (b.amount || 0) - (a.amount || 0))
-      .slice(0, 5);
-
-    // Recent invoices
-    const recentInvoices = [...filteredData.filteredInvoices]
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 5);
 
     // Chart data for invoice status
@@ -6357,6 +6664,109 @@ const Insights = () => {
                 </ResponsiveContainer>
               )}
             </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+          {/* Invoice Status Breakdown */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Invoice Status Breakdown</h3>
+            <p className="text-xs text-[#525866] mt-1">
+              Avg. ₹{formatNumberToIndian(Math.round(averageInvoiceAmount))} · {invoicesThisMonthCount} this month
+            </p>
+            {invoiceStatusChartData.length === 0 ? (
+              <p className="text-sm text-gray-400 py-16 text-center">No invoices yet</p>
+            ) : (
+              <div className="relative mt-2" style={{ width: 160, height: 160, margin: "8px auto 0" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={invoiceStatusChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={80}
+                      cornerRadius={3}
+                      paddingAngle={invoiceStatusChartData.length > 1 ? 2 : 0}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {invoiceStatusChartData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value, name, { payload }) => [
+                        `${value} invoice${value !== 1 ? "s" : ""} · ₹${formatNumberToIndian(payload.amount)}`,
+                        payload.name,
+                      ]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {invoiceStatusChartData.length > 0 && (
+              <div className="flex flex-col gap-1.5 mt-3">
+                {invoiceStatusChartData.map((entry) => (
+                  <div key={entry.name} className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: entry.color }} />
+                    <span className="text-xs text-[#21201F]/70 truncate flex-1 min-w-0">{entry.name}</span>
+                    <span className="text-[11px] text-[#525866] flex-shrink-0">{entry.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Top Deals by Invoice Amount */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Top Deals by Invoice Amount</h3>
+            {topDeals.length === 0 ? (
+              <p className="text-sm text-gray-400 py-10 text-center">No deal-linked invoices yet</p>
+            ) : (
+              <div className="mt-4 flex flex-col gap-2.5">
+                {topDeals.map(([dealTitle, data], idx) => (
+                  <div key={dealTitle} className="flex items-center gap-2.5">
+                    <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
+                    <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">{dealTitle}</span>
+                    <span className="text-[11px] text-[#525866] flex-shrink-0">{data.paid}/{data.count} paid</span>
+                    <span className="text-xs font-medium text-[#0E121B] flex-shrink-0 w-24 text-right">
+                      ₹{formatNumberToIndian(Math.round(data.amount))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Largest Invoices */}
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Largest Invoices</h3>
+            {largestInvoices.length === 0 ? (
+              <p className="text-sm text-gray-400 py-10 text-center">No invoices yet</p>
+            ) : (
+              <div className="mt-4 flex flex-col gap-2.5">
+                {largestInvoices.map((inv, idx) => (
+                  <div key={inv._id} className="flex items-center gap-2.5">
+                    <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
+                    <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">
+                      {inv.deal?.title || inv.deal?.company?.name || "Untitled"}
+                    </span>
+                    <span
+                      className="text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0"
+                      style={
+                        inv.status === "Paid"
+                          ? { background: "rgba(0,201,80,0.1)", color: "#00A63E" }
+                          : { background: "rgba(0,133,255,0.1)", color: "#0085FF" }
+                      }
+                    >
+                      {inv.status}
+                    </span>
+                    <span className="text-xs font-medium text-[#0E121B] flex-shrink-0 w-24 text-right">
+                      ₹{formatNumberToIndian(inv.amount || 0)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

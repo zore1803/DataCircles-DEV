@@ -1,6 +1,6 @@
 // services/walletService.js
 //
-// Prepaid credit wallet. Completely independent of Subscription ΓÇö nothing here
+// Prepaid credit wallet. Completely independent of Subscription — nothing here
 // reads or writes subscription state, and subscription lifecycle events must
 // never touch the wallet. Future usage-based features consume credits through
 // the generic debit() below; there are deliberately no feature-specific
@@ -177,7 +177,7 @@ async function applyLedgerEntry(organizationId, delta, opts) {
   try {
     await session.withTransaction(async () => {
       // The $gte guard is what actually prevents a negative balance under
-      // concurrent debits ΓÇö not a read-then-write check.
+      // concurrent debits — not a read-then-write check.
       const filter = { organization: organizationId };
       if (delta < 0) filter.balance = { $gte: -delta };
 
@@ -224,7 +224,7 @@ async function applyLedgerEntry(organizationId, delta, opts) {
 
 /**
  * Purpose: Price a credit top-up and open a one-time Razorpay Order for it.
- * Nothing is credited here ΓÇö credits are only granted after the payment is
+ * Nothing is credited here — credits are only granted after the payment is
  * verified server-side in verifyAndCreditTopup.
  * Inputs: organizationId, requestedCredits (number of credits to buy)
  * Outputs: Promise<{ order, credits, subtotal, gst, gstRate, total, creditValueInRupees }>
@@ -255,7 +255,7 @@ async function createTopupOrder(organizationId, requestedCredits) {
 
   return {
     order,
-    // Frontend never hardcodes the gateway key ΓÇö same convention as the
+    // Frontend never hardcodes the gateway key — same convention as the
     // subscription checkout's paymentDetails.
     key: process.env.RAZORPAY_KEY_ID,
     credits,
