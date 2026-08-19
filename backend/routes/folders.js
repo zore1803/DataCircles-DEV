@@ -51,6 +51,14 @@ router.put('/:folderId/links/:fileId',
   folderController.updateLink
 );
 
+// PATCH rename an uploaded file without replacing its stored object
+router.patch('/:folderId/files/:fileId',
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('folders', 'write'),
+  folderController.renameFile
+);
+
 // GET all folders (optionally by company)
 router.get('/',
   requireAuth,

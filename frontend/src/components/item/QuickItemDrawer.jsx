@@ -48,6 +48,7 @@ const BLANK_FORM = {
   openingStockValue: "0",
   discountValue: "0",
   discountType: "percentage",
+  maxDiscountPercent: "",
   lowStockAlert: "0",
   showInOnlineStore: true,
   notForSale: false,
@@ -205,20 +206,28 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
         primaryUnit: form.primaryUnit || "OTH OTHERS",
         isActive: true,
         variants,
+        // Default discount applied when this product is added to a
+        // document — the user can still change it there.
+        discount: { type: form.discountType, value: parseFloat(form.discountValue) || 0 },
+        // Upper bound on document discount %, null = no limit.
+        maxDiscountPercent: form.maxDiscountPercent === "" || form.maxDiscountPercent === undefined
+          ? null
+          : parseFloat(form.maxDiscountPercent),
       };
 
       let res;
       if (imageFiles.length > 0) {
-        // Multipart request: scalar fields go in as strings, the variants
-        // array gets JSON-stringified, same approach QuickCompanyForm.jsx
+        // Multipart request: scalar fields go in as strings, object/array
+        // fields get JSON-stringified, same approach QuickCompanyForm.jsx
         // uses for its single profilePicture upload, extended to multiple
         // files under one "images" field name.
         const fd = new FormData();
         Object.entries(payload).forEach(([key, value]) => {
-          if (key === "variants") return;
-          fd.append(key, typeof value === "boolean" ? String(value) : value);
+          if (key === "variants" || key === "discount") return;
+          fd.append(key, value === null || value === undefined ? "" : (typeof value === "boolean" ? String(value) : value));
         });
         fd.append("variants", JSON.stringify(variants));
+        fd.append("discount", JSON.stringify(payload.discount));
         imageFiles.forEach((file) => fd.append("images", file));
         res = await API.post("/items", fd, { headers: { "Content-Type": "multipart/form-data" } });
       } else {
@@ -688,9 +697,19 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                 </div>
 
                 <div>
-                  <label className={lbl + " flex items-center gap-1"}>Max Discount % <Lock className="w-3 h-3 text-gray-400" /></label>
-                  <input type="text" disabled placeholder="e.g. 10" className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-100 text-gray-400 cursor-not-allowed" />
-                  <p className="mt-1 text-[11px] text-gray-400">Upgrade to set per-product discount limits.</p>
+                  <label className={lbl}>Max Discount %</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    placeholder="e.g. 10"
+                    value={form.maxDiscountPercent}
+                    onChange={(e) => handleChange("maxDiscountPercent", e.target.value)}
+                    onWheel={(e) => e.target.blur()}
+                    className={inp}
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">Leave blank for no limit. Caps the discount % a user can apply to this product on a document.</p>
                 </div>
 
                 <div>

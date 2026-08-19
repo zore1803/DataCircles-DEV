@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const Branding = require("../models/Branding");
 const Deal = require("../models/Deal");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
+const sendGridMail = require("../utils/sendGridMail");
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -534,7 +535,6 @@ const updatePerformaInvoiceNumber = async (req, res) => {
 
 const sendPerformaInvoiceEmail = async (req, res) => {
   try {
-    const nodemailer = require("nodemailer");
     const pi = await PerformaInvoice.findOne({
       _id: req.params.id,
       organization: req.user.organization,
@@ -550,14 +550,6 @@ const sendPerformaInvoiceEmail = async (req, res) => {
     const orgDetails = await Branding.findOne({ organization: req.user.organization }).sort({ updatedAt: -1 });
     const pdfBuffer = await htmlDocumentPdf(pi, bankDetails, orgDetails, "performa");
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
     const recipient = req.body.email || pi.deal?.email;
     if (!recipient) {
       return res.status(400).json({ error: "No recipient email address available" });
@@ -566,8 +558,7 @@ const sendPerformaInvoiceEmail = async (req, res) => {
     const subject = req.body.subject || `Proforma Invoice ${pi.performaInvoiceNumber}`;
     const body = req.body.body || `Dear ${pi.deal?.contactPerson || "Customer"},\n\nPlease find attached your proforma invoice.\n\nBest regards`;
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    await sendGridMail({
       to: recipient,
       subject,
       text: body,

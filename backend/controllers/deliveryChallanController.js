@@ -2,7 +2,7 @@ const DeliveryChallan = require("../models/deliveryChallan");
 const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const Branding = require("../models/Branding");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
-const nodemailer = require("nodemailer");
+const sendGridMail = require("../utils/sendGridMail");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
@@ -459,16 +459,7 @@ exports.sendDeliveryChallanEmail = async (req, res) => {
     // inside htmlDocumentPdf, which renders the same markup as the live preview.
     const pdfBuffer = await htmlDocumentPdf(deliveryChallan, bankDetails, orgDetails, "deliveryChallan");
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
     const mailOptions = {
-      from: process.env.EMAIL_USER,
       to: deliveryChallan.deal.email || req.body.email,
       subject: `Delivery Challan ${deliveryChallan.deliveryChallanNumber}`,
       text: `Dear ${
@@ -483,7 +474,7 @@ exports.sendDeliveryChallanEmail = async (req, res) => {
       ],
     };
 
-    await transporter.sendMail(mailOptions);
+    await sendGridMail(mailOptions);
     deliveryChallan.status = "Sent";
     await deliveryChallan.save();
 

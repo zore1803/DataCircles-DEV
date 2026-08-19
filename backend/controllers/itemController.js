@@ -51,9 +51,22 @@ const createItem = async (req, res) => {
 
     itemData.variants = parseJsonField(itemData.variants);
     itemData.additionalFields = parseJsonField(itemData.additionalFields);
+    itemData.discount = parseJsonField(itemData.discount);
 
     // Validate and parse gstRate
     itemData.gstRate = parseFloat(itemData.gstRate) || 0;
+
+    // Default discount + max discount cap
+    if (itemData.discount) {
+      itemData.discount = {
+        type: itemData.discount.type === "amount" ? "amount" : "percentage",
+        value: parseFloat(itemData.discount.value) || 0,
+      };
+    }
+    itemData.maxDiscountPercent =
+      itemData.maxDiscountPercent === "" || itemData.maxDiscountPercent === undefined || itemData.maxDiscountPercent === null
+        ? null
+        : parseFloat(itemData.maxDiscountPercent);
 
     // Uploaded product images (multipart requests only)
     if (req.files && req.files.length) {
@@ -252,11 +265,24 @@ const updateItem = async (req, res) => {
 
     itemData.variants = parseJsonField(itemData.variants);
     itemData.additionalFields = parseJsonField(itemData.additionalFields);
+    itemData.discount = parseJsonField(itemData.discount);
     const existingImages = parseJsonField(itemData.existingImages) || [];
     delete itemData.existingImages;
 
     // Validate and parse gstRate
     itemData.gstRate = parseFloat(itemData.gstRate) || 0;
+
+    // Default discount + max discount cap
+    if (itemData.discount) {
+      itemData.discount = {
+        type: itemData.discount.type === "amount" ? "amount" : "percentage",
+        value: parseFloat(itemData.discount.value) || 0,
+      };
+    }
+    itemData.maxDiscountPercent =
+      itemData.maxDiscountPercent === "" || itemData.maxDiscountPercent === undefined || itemData.maxDiscountPercent === null
+        ? null
+        : parseFloat(itemData.maxDiscountPercent);
 
     // Merge kept existing images with any newly uploaded ones; best-effort
     // delete from S3 whatever the user removed (matches how branding's

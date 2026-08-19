@@ -98,16 +98,16 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
         onClick={onClose} 
         aria-hidden="true" 
       />
-      <div className="relative w-1/2 max-w-none h-full bg-white shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-300">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-[#E1E4EA] bg-white">
+      <div className="fixed dc-panel-card dc-panel-w payment-panel bg-white shadow-2xl flex flex-col z-10 overflow-hidden animate-slideInRight">
+        <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50/50">
           <h2 className="text-lg font-bold text-gray-900">Add Payment</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1.5 rounded-full hover:bg-gray-100">
+          <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors">
             <X size={20} />
           </button>
         </div>
         
-        <div className="overflow-y-auto flex-1 p-6">
-          <form id="payment-form" onSubmit={handleSubmit} className="space-y-5">
+        <div className="overflow-y-auto flex-1 p-5 space-y-4 bg-gray-50/30">
+          <form id="payment-form" onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Vendor <span className="text-red-500">*</span></label>
               <div className="relative">
@@ -264,11 +264,11 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
           </form>
         </div>
 
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#E1E4EA] bg-gray-50">
+        <div className="flex shrink-0 items-center justify-between gap-3 p-5 border-t border-gray-200 bg-gray-50/50">
           <button 
             type="button" 
             onClick={onClose}
-            className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-[#E1E4EA] rounded-full hover:bg-gray-50 transition-colors"
+            className="min-w-[120px] px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-[#E1E4EA] rounded-full hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
@@ -276,7 +276,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             type="submit" 
             form="payment-form"
             disabled={loading}
-            className="px-5 py-2 text-sm font-medium text-white bg-[#0085FF] rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="min-w-[140px] justify-center px-5 py-2 text-sm font-medium text-white bg-[#0085FF] rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
             Save Payment

@@ -510,7 +510,7 @@ const formatRowDate = (date) => {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 };
 
-const FileCard = ({ file, onView, onDelete, onEditLink, isLast }) => {
+const FileCard = ({ file, fileIndex, onView, onDelete, onEditLink, onRenameFile, isLast }) => {
   const isLink = file.isLink;
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState(null);
@@ -519,10 +519,22 @@ const FileCard = ({ file, onView, onDelete, onEditLink, isLast }) => {
   const openMenu = () => {
     const rect = menuButtonRef.current.getBoundingClientRect();
     const zoom = parseFloat(document.documentElement.style.zoom) || 1;
-    setMenuPos({ 
-      top: (rect.bottom + 4) / zoom, 
-      left: (rect.right / zoom) - 160 
-    });
+    const menuWidth = 160;
+    const menuHeight = 3 * 34 + 12;
+    const margin = 8;
+    const viewportWidth = window.innerWidth / zoom;
+    const viewportHeight = window.innerHeight / zoom;
+    const belowTop = rect.bottom / zoom + 4;
+    const aboveTop = rect.top / zoom - menuHeight - 4;
+    const top = belowTop + menuHeight + margin <= viewportHeight
+      ? belowTop
+      : Math.max(margin, aboveTop);
+    const left = Math.max(
+      margin,
+      Math.min((rect.right / zoom) - menuWidth, viewportWidth - menuWidth - margin),
+    );
+
+    setMenuPos({ top, left });
     setMenuOpen(true);
   };
 
@@ -611,12 +623,24 @@ const FileCard = ({ file, onView, onDelete, onEditLink, isLast }) => {
                 <button
                   onClick={() => {
                     setMenuOpen(false);
-                    onEditLink(file);
+                    onEditLink(file, fileIndex);
                   }}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
                   <Edit3 size={17} style={{ color: "#5C5D5C" }} />
                   Edit Link
+                </button>
+              )}
+              {!file.isLink && onRenameFile && (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onRenameFile(file, fileIndex);
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Edit3 size={17} style={{ color: "#5C5D5C" }} />
+                  Rename File
                 </button>
               )}
               <button
@@ -638,7 +662,7 @@ const FileCard = ({ file, onView, onDelete, onEditLink, isLast }) => {
   );
 };
 
-const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, onEditLink, isFirst, isLast, isEditing, editingName, editingError, onEditingNameChange, onSaveEdit, onCancelEdit, searchTerm }) => (
+const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, onEditLink, onRenameFile, isFirst, isLast, isEditing, editingName, editingError, onEditingNameChange, onSaveEdit, onCancelEdit, searchTerm }) => (
   <div className="transition-all">
     <div
       className="flex items-center justify-between gap-2"
@@ -756,7 +780,9 @@ const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, on
                   }
                 }}
                 onDelete={(file) => onDeleteFile(folder._id, file)}
-                onEditLink={(file) => onEditLink(folder._id, file)}
+                fileIndex={idx}
+                onEditLink={(file, index) => onEditLink(folder._id, file, index)}
+                onRenameFile={(file, index) => onRenameFile(folder._id, file, index)}
               />
             ))}
           </div>
@@ -1013,13 +1039,15 @@ const AddLinkModal = ({ isOpen, onClose, onSubmit }) => {
   const [linkName, setLinkName] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (linkName.trim() && linkUrl.trim()) {
-      onSubmit({ name: linkName.trim(), url: linkUrl.trim() });
-      setLinkName("");
-      setLinkUrl("");
-      onClose();
+      const saved = await onSubmit({ name: linkName.trim(), url: linkUrl.trim() });
+      if (saved !== false) {
+        setLinkName("");
+        setLinkUrl("");
+        onClose();
+      }
     }
   };
 
@@ -1131,6 +1159,64 @@ const EditLinkModal = ({ isOpen, onClose, onSubmit, initialName, initialUrl }) =
   );
 };
 
+const RenameFileModal = ({ isOpen, onClose, onSubmit, initialName }) => {
+  const [fileName, setFileName] = useState("");
+  const [extension, setExtension] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      const lastDot = (initialName || "").lastIndexOf(".");
+      const hasExtension = lastDot > 0;
+      setFileName(hasExtension ? initialName.slice(0, lastDot) : (initialName || ""));
+      setExtension(hasExtension ? initialName.slice(lastDot) : "");
+    }
+  }, [isOpen, initialName]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (fileName.trim()) {
+      onSubmit(`${fileName.trim()}${extension}`);
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-4 w-full max-w-md border border-gray-200">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-semibold text-gray-900">Rename File</h3>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Display Name</label>
+            <input
+              type="text"
+              value={fileName}
+              onChange={(e) => setFileName(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
+              autoFocus
+            />
+            {extension && <span className="block mt-1 text-xs text-gray-500">File type: {extension}</span>}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-md">
+              Cancel
+            </button>
+            <button type="submit" disabled={!fileName.trim()} className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-800 disabled:bg-gray-400 rounded-md transition-colors">
+              Rename File
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // `showStats` is intentionally not accepted any more: it used to feed the
 // old calc()-based height offset. useFillToBottom measures the container's real
 // position instead, so a KPI-row toggle is handled automatically. CompanyFolderTab
@@ -1174,7 +1260,9 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   const [inlineEditingName, setInlineEditingName] = useState("");
   const [inlineEditingError, setInlineEditingError] = useState("");
   const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkFolderId, setLinkFolderId] = useState("");
   const [editLinkState, setEditLinkState] = useState({ isOpen: false, folderId: null, fileId: null, fileName: "", fileUrl: "" });
+  const [renameFileState, setRenameFileState] = useState({ isOpen: false, folderId: null, fileId: null, fileName: "" });
 
   useEffect(() => {
     fetchFolders();
@@ -1516,25 +1604,29 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   };
 
   const handleAddLink = async ({ name, url }) => {
-    if (!selectedFolderId) {
+    const folderId = linkFolderId || selectedFolderId;
+    if (!folderId) {
       toast.error("Select a folder");
       return;
     }
 
     try {
       await API.post("/folders/add-link", {
-        folderId: selectedFolderId,
+        folderId,
         fileName: name,
         fileUrl: url,
       });
       setRefresh(!refresh);
+      setLinkFolderId("");
       toast.success("Link added");
+      return true;
     } catch (err) {
       if (err.response?.status === 402) {
         toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
       } else {
         toast.error(err.response?.data?.error || "Failed to add link");
       }
+      return false;
     }
   };
 
@@ -1552,6 +1644,21 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
         toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
       } else {
         toast.error(err.response?.data?.error || "Failed to update link");
+      }
+    }
+  };
+
+  const handleRenameFile = async (fileName) => {
+    try {
+      await API.patch(`/folders/${renameFileState.folderId}/files/${renameFileState.fileId}`, { fileName });
+      toast.success("File renamed successfully");
+      setRefresh(!refresh);
+      setRenameFileState({ isOpen: false, folderId: null, fileId: null, fileName: "" });
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Failed to rename file");
       }
     }
   };
@@ -2182,7 +2289,8 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                     onDelete={deleteFolder}
                     onSelect={setSelectedFolderId}
                     onDeleteFile={deleteFile}
-                    onEditLink={(folderId, file) => setEditLinkState({ isOpen: true, folderId, fileId: file._id, fileName: file.fileName, fileUrl: file.fileUrl })}
+                    onEditLink={(folderId, file, fileIndex) => setEditLinkState({ isOpen: true, folderId, fileId: file._id ?? fileIndex, fileName: file.fileName, fileUrl: file.fileUrl })}
+                    onRenameFile={(folderId, file, fileIndex) => setRenameFileState({ isOpen: true, folderId, fileId: file._id ?? fileIndex, fileName: file.fileName })}
                     isEditing={inlineEditingId === folder._id}
                     editingName={inlineEditingName}
                     editingError={inlineEditingError}
@@ -2379,6 +2487,17 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                     >
                       Upload Files
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLinkFolderId(selectedFolderId);
+                        setSelectedFolderId("");
+                        setLinkModalOpen(true);
+                      }}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                    >
+                      Add Link
+                    </button>
                     <button
                       onClick={() => {
                         setSelectedFolderId("");
@@ -2692,7 +2811,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
 
         <AddLinkModal
           isOpen={linkModalOpen}
-          onClose={() => setLinkModalOpen(false)}
+          onClose={() => {
+            setLinkModalOpen(false);
+            setLinkFolderId("");
+          }}
           onSubmit={handleAddLink}
         />
 
@@ -2702,6 +2824,13 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
           onSubmit={handleUpdateLink}
           initialName={editLinkState.fileName}
           initialUrl={editLinkState.fileUrl}
+        />
+
+        <RenameFileModal
+          isOpen={renameFileState.isOpen}
+          onClose={() => setRenameFileState({ ...renameFileState, isOpen: false })}
+          onSubmit={handleRenameFile}
+          initialName={renameFileState.fileName}
         />
 
         <UpgradeRequiredModal

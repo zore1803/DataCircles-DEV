@@ -84,11 +84,21 @@
   width: 100%;
 }
 
+.payment-panel {
+  top: 4rem;
+  bottom: 4rem;
+}
+
 @media (min-width: 1024px) {
   .dc-panel-w {
     width: 33.333vw;
     min-width: 440px;
     max-width: 100%;
+  }
+
+  .payment-panel {
+    width: min(45vw, 720px);
+    min-width: 560px;
   }
 }
 

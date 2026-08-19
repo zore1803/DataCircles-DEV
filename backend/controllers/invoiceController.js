@@ -9,6 +9,7 @@ const DocumentSettings = require("../models/DocumentSettings");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
 const sendPaymentEmail = require("../utils/sendPaymentEmail");
 const sendSMS = require("../utils/sendSMS");
+const sendGridMail = require("../utils/sendGridMail");
 
 const calculateItemAmount = (item) => {
   const rate = parseFloat(item.rate) || 0;
@@ -810,7 +811,6 @@ exports.getInvoices = async (req, res) => {
 
 const bulkEmailGrouped = async (req, res) => {
   try {
-    const nodemailer = require("nodemailer");
     const { ids, overrides } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: "ids array is required" });
@@ -862,14 +862,6 @@ const bulkEmailGrouped = async (req, res) => {
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
     const successfulIds = [];
     const failedIds = [];
 
@@ -900,8 +892,7 @@ const bulkEmailGrouped = async (req, res) => {
       if (attachments.length === 0) continue;
 
       try {
-        await transporter.sendMail({
-          from: `"${req.user.name || "DataCircles"}" <${process.env.EMAIL_USER}>`,
+        await sendGridMail({
           replyTo: req.user.email,
           to: group.email,
           subject: `Your Invoices from ${orgDetails?.companyName || "Us"}`,

@@ -108,6 +108,19 @@ exports.getPaymentsTimeline = async (req, res) => {
     const endIndex = page * limit;
     const paginatedTransactions = allTransactions.slice(startIndex, endIndex);
 
+    // KPI totals over every matching transaction (all pages), not just the
+    // slice being returned — the frontend was computing these from
+    // `documents` alone, which is only the current page (10 rows), so the
+    // Total Credit/Debit/Net/Transactions cards read wildly low against the
+    // real "534 total" count.
+    let totalCredit = 0;
+    let totalDebit = 0;
+    allTransactions.forEach((t) => {
+      const amt = Number(t.amount) || 0;
+      if (t.direction === "IN") totalCredit += amt;
+      else totalDebit += amt;
+    });
+
     res.json({
       documents: paginatedTransactions,
       pagination: {
@@ -117,6 +130,12 @@ exports.getPaymentsTimeline = async (req, res) => {
         totalPages,
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1
+      },
+      summary: {
+        totalCredit,
+        totalDebit,
+        net: totalCredit - totalDebit,
+        count: totalCount
       }
     });
   } catch (err) {

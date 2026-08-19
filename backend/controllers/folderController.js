@@ -116,7 +116,7 @@ exports.updateLink = async (req, res) => {
       return res.status(404).json({ error: 'Folder not found' });
     }
 
-    const file = folder.files.id(fileId);
+    const file = folder.files.id(fileId) || folder.files[Number(fileId)];
     if (!file) {
       return res.status(404).json({ error: 'Link not found' });
     }
@@ -129,6 +129,40 @@ exports.updateLink = async (req, res) => {
   } catch (error) {
     console.error('Update link error:', error);
     res.status(500).json({ error: 'Failed to update link' });
+  }
+};
+
+// Rename an uploaded file without changing its S3 object or URL.
+exports.renameFile = async (req, res) => {
+  try {
+    const { folderId, fileId } = req.params;
+    const fileName = (req.body.fileName || '').trim();
+
+    if (!fileName) {
+      return res.status(400).json({ error: 'fileName is required' });
+    }
+
+    const folder = await Folder.findById(folderId);
+    if (!folder) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+
+    const file = folder.files.id(fileId) || folder.files[Number(fileId)];
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    if (file.isLink) {
+      return res.status(400).json({ error: 'Use the link update endpoint for URL entries' });
+    }
+
+    file.fileName = fileName;
+    await folder.save();
+
+    res.status(200).json({ message: 'File renamed successfully', folder });
+  } catch (error) {
+    console.error('Rename file error:', error);
+    res.status(500).json({ error: 'Failed to rename file' });
   }
 };
 

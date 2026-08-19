@@ -340,6 +340,7 @@ function ProductsServices() {
     purchasePrice: 0,
     sellingPrice: 0,
     taxInclusive: true,
+    gstRate: 0,
     hsnSac: "",
     barcode: "",
     category: "",
@@ -347,6 +348,8 @@ function ProductsServices() {
     images: [],
     isActive: true,
     variants: [],
+    discount: { type: "percentage", value: 0 },
+    maxDiscountPercent: "",
   });
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -717,6 +720,7 @@ function ProductsServices() {
       purchasePrice: item.purchasePrice || 0,
       sellingPrice: item.sellingPrice || 0,
       taxInclusive: item.taxInclusive !== undefined ? item.taxInclusive : true,
+      gstRate: item.gstRate || 0,
       hsnSac: item.hsnSac || "",
       barcode: item.barcode || "",
       category: item.category || "",
@@ -724,6 +728,8 @@ function ProductsServices() {
       images: item.images || [],
       isActive: item.isActive !== undefined ? item.isActive : true,
       variants: item.variants || [],
+      discount: item.discount || { type: "percentage", value: 0 },
+      maxDiscountPercent: item.maxDiscountPercent ?? "",
     });
     setShowForm(true);
   };

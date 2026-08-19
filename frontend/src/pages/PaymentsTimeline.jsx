@@ -83,6 +83,12 @@ export default function PaymentsTimeline() {
     currentPage: 1, limit: 10, totalCount: 0, totalPages: 0,
     hasNextPage: false, hasPrevPage: false
   });
+  // Aggregate totals across every matching transaction (server-computed,
+  // not just the current page's 10 rows) — see paymentStats below.
+  const [serverSummary, setServerSummary] = useState(null);
+  // Full records for every currently-selected id, populated by fetchAllIds
+  // (Select All) — see paymentStats below for why this exists.
+  const [allSelectableDocs, setAllSelectableDocs] = useState(null);
   const [showLoadingSkeleton, setShowLoadingSkeleton] = useState(true);
   useTopLoadingSignal(showLoadingSkeleton);
   // Full-page skeleton (same as Deals.jsx/Companies.jsx) only for the very
@@ -284,6 +290,7 @@ export default function PaymentsTimeline() {
       const res = await API.get(`/payments-timeline?${params.toString()}`);
       setDocuments(res.data.documents || []);
       if (res.data.pagination) setPagination(res.data.pagination);
+      setServerSummary(res.data.summary || null);
     } catch (err) {
       toast.error("Failed to load transactions timeline");
       console.error(err);
@@ -310,6 +317,13 @@ export default function PaymentsTimeline() {
       const res = await API.get(`/payments-timeline?${params.toString()}`);
       const allDocs = res.data.documents || [];
       setSelectedIds(allDocs.map(d => d._id));
+      // The KPI band narrows to the selection (paymentStats below), which
+      // needs each selected row's actual amount/direction — but this fetch
+      // is the ONLY place that has every matching record; the page-level
+      // `documents` state only ever holds the current page's 10. Cached here
+      // so "selected" totals cover the real full selection, not just
+      // whichever of those 534 happen to also be on the visible page.
+      setAllSelectableDocs(allDocs);
       toast.success(`Selected all ${allDocs.length} record(s).`, { id: tid });
     } catch (err) {
       toast.error("Failed to fetch all records", { id: tid });
@@ -350,12 +364,45 @@ export default function PaymentsTimeline() {
   /* ── KPI stats — narrows to the current selection when one exists,
      same behavior as Deals.jsx's dealStatistics ─────────────────── */
   const paymentStats = useMemo(() => {
-    const source = selectedIds.length > 0
-      ? filteredDocs.filter(d => selectedIds.includes(d._id))
-      : filteredDocs;
+    // Selecting specific rows narrows the KPIs to just that selection —
+    // necessarily a client-side sum since it's an arbitrary subset. Looks up
+    // each selected id against allSelectableDocs FIRST (the full fetch
+    // fetchAllIds/"Select All" populates, covering every matching record)
+    // and falls back to the current page's filteredDocs for ids selected by
+    // hand — using filteredDocs alone silently truncated "534 selected" down
+    // to whatever subset of those also happened to be on the visible page.
+    if (selectedIds.length > 0) {
+      const byId = new Map();
+      (allSelectableDocs || []).forEach(d => byId.set(d._id, d));
+      filteredDocs.forEach(d => byId.set(d._id, d)); // freshest data wins for overlapping ids
+      let totalCredit = 0;
+      let totalDebit = 0;
+      let matched = 0;
+      selectedIds.forEach(id => {
+        const d = byId.get(id);
+        if (!d) return;
+        matched += 1;
+        const amt = Number(d.amount) || 0;
+        if (d.direction === "IN") totalCredit += amt;
+        else totalDebit += amt;
+      });
+      return {
+        totalCredit,
+        totalDebit,
+        net: totalCredit - totalDebit,
+        count: matched || selectedIds.length,
+        isFiltered: true,
+      };
+    }
+    // Unselected: use the server-computed totals across every matching
+    // transaction (all pages), not just the current page's 10 rows — falls
+    // back to the old current-page-only math only if that hasn't loaded yet.
+    if (serverSummary) {
+      return { ...serverSummary, isFiltered: false };
+    }
     let totalCredit = 0;
     let totalDebit = 0;
-    source.forEach(d => {
+    filteredDocs.forEach(d => {
       const amt = Number(d.amount) || 0;
       if (d.direction === "IN") totalCredit += amt;
       else totalDebit += amt;
@@ -364,10 +411,10 @@ export default function PaymentsTimeline() {
       totalCredit,
       totalDebit,
       net: totalCredit - totalDebit,
-      count: source.length,
-      isFiltered: selectedIds.length > 0,
+      count: filteredDocs.length,
+      isFiltered: false,
     };
-  }, [filteredDocs, selectedIds]);
+  }, [filteredDocs, selectedIds, serverSummary, allSelectableDocs]);
 
   const handleSelectAll = e =>
     setSelectedIds(e.target.checked ? filteredDocs.map(d => d._id) : []);
@@ -745,6 +792,25 @@ export default function PaymentsTimeline() {
           boxSizing: "border-box",
         }}
       >
+        {stripVisible ? (
+          <BulkActionBar
+            selectedCount={selectedIds.length}
+            entityName="payment"
+            isClosing={stripClosing}
+            onSelectAll={fetchAllIds}
+            onDeselectAll={() => setSelectedIds([])}
+            onExport={() => {
+              const selectedDocs = documents.filter(doc => selectedIds.includes(doc._id));
+              handleExportExcel(selectedDocs.length > 0 ? selectedDocs : selectedIds.map(id => ({ _id: id })));
+            }}
+            onDelete={() => {
+              setDeleteConfirmState({ isOpen: true, type: "bulk", target: selectedIds });
+            }}
+            onUpdateStatus={() => setShowBulkActions(true)}
+            onCancel={() => setSelectedIds([])}
+          />
+        ) : (
+          <>
         <div className="flex flex-col gap-1 flex-shrink-0">
           <div className="flex items-center gap-2">
             <h2
@@ -873,6 +939,8 @@ export default function PaymentsTimeline() {
             <span className="whitespace-nowrap">Add Payment</span>
           </button>
         </div>
+          </>
+        )}
       </div>
 
       {/* ── KPI stat cards — same band treatment as Deals.jsx's stats row
@@ -918,38 +986,13 @@ export default function PaymentsTimeline() {
         </div>
       )}
 
-      {/* ── BulkActionBar — floats between title bar and table when rows are selected ── */}
-      {stripVisible && (
-        <div
-          className="fixed right-0 px-6 z-[40]"
-          style={{ left: "var(--sidebar-width, 0px)", top: 126 + (showStats ? KPI_BAND_HEIGHT : 0), paddingTop: 4, paddingBottom: 4 }}
-        >
-          <BulkActionBar
-            selectedCount={selectedIds.length}
-            entityName="payment"
-            isClosing={stripClosing}
-            onSelectAll={fetchAllIds}
-            onDeselectAll={() => setSelectedIds([])}
-            onExport={() => {
-              const selectedDocs = documents.filter(doc => selectedIds.includes(doc._id));
-              handleExportExcel(selectedDocs.length > 0 ? selectedDocs : selectedIds.map(id => ({ _id: id })));
-            }}
-            onDelete={() => {
-              setDeleteConfirmState({ isOpen: true, type: "bulk", target: selectedIds });
-            }}
-            onUpdateStatus={() => setShowBulkActions(true)}
-            onCancel={() => setSelectedIds([])}
-          />
-        </div>
-      )}
-
       {/* ── Full-bleed table (matches Accounting.jsx layout) ──────── */}
       <div
         className="fixed right-0 overflow-x-auto overflow-y-auto bg-white"
         style={{
           left: "var(--sidebar-width, 0px)",
           bottom: 64,
-          top: (stripVisible ? 178 : 130) + (showStats ? KPI_BAND_HEIGHT : 0),
+          top: 130 + (showStats ? KPI_BAND_HEIGHT : 0),
         }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
@@ -1123,7 +1166,7 @@ export default function PaymentsTimeline() {
             onChange={e => handleLimitChange(parseInt(e.target.value))}
             className="border border-gray-300 rounded-md text-sm py-1 pl-2 pr-6 focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
           >
-            {[10, 25, 50, 100].map(val => <option key={val} value={val}>{val} per page</option>)}
+            {[10, 20, 50, 100].map(val => <option key={val} value={val}>{val} per page</option>)}
           </select>
         </div>
 

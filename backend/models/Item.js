@@ -51,6 +51,23 @@ const itemSchema = new mongoose.Schema({
   // GST/Tax
   gstRate: { type: Number, default: 0 }, // GST rate for the item (used for CGST/SGST/IGST calculation)
 
+  // Default discount applied when this product is added to a document
+  // (invoice/quotation/etc.) — a starting point the user can still change
+  // on that specific document, not a forced discount.
+  discount: {
+    type: {
+      type: String,
+      enum: ['percentage', 'amount'],
+      default: 'percentage',
+    },
+    value: { type: Number, default: 0, min: 0 },
+  },
+  // Upper bound on how much discount a user can apply to this product on a
+  // document (always a percentage, regardless of the discount type above —
+  // e.g. max 10% even if the applied discount is entered as a flat amount).
+  // null/undefined = no limit.
+  maxDiscountPercent: { type: Number, default: null, min: 0, max: 100 },
+
   // Identification
   hsnSac: { type: String, default: "" },
   barcode: { type: String, default: "" },
