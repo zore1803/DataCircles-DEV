@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import ReactQuill from "react-quill-new";
+import "react-quill/dist/quill.snow.css";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
@@ -22,9 +24,176 @@ import {
   Timer,
   Flag,
   FileText,
+  Briefcase,
   Pencil,
   ChevronDown,
+  Heading1,
+  Heading2,
+  Heading3,
+  Heading4,
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  ListOrdered,
+  List,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  Link2,
+  Quote,
+  Code,
+  Type,
 } from "lucide-react";
+
+// Same toolbar/editor system used by the Notes feature (NoteSection.jsx),
+// reused here so the meeting Description field gets the same rich-text
+// formatting instead of a plain textarea.
+const MeetingQuillToolbar = () => (
+  <div id="meeting-toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white border-b border-[#1F2937]/10 rounded-t-2xl">
+    <div className="flex gap-0.5 pr-1.5">
+      <button type="button" className="ql-header w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="1">
+        <Heading1 className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-header w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="2">
+        <Heading2 className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-header w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="3">
+        <Heading3 className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-header w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="4">
+        <Heading4 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+
+    <div className="flex gap-0.5 px-1.5">
+      <button type="button" className="ql-bold w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+        <Bold className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-italic w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+        <Italic className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-underline w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+        <Underline className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-strike w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+        <Strikethrough className="w-3.5 h-3.5" />
+      </button>
+    </div>
+
+    <div className="flex gap-0.5 px-1.5">
+      <button type="button" className="ql-list w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="ordered">
+        <ListOrdered className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-list w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="bullet">
+        <List className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-indent w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="-1">
+        <AlignLeft className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-indent w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="+1">
+        <AlignRight className="w-3.5 h-3.5" />
+      </button>
+    </div>
+
+    <div className="flex gap-0.5 px-1.5">
+      <button type="button" className="ql-align w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="">
+        <AlignLeft className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-align w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="center">
+        <AlignCenter className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-align w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="right">
+        <AlignRight className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-align w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="justify">
+        <AlignJustify className="w-3.5 h-3.5" />
+      </button>
+    </div>
+
+    <div className="flex gap-0.5 pl-1.5">
+      <button type="button" className="ql-link w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+        <Link2 className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-blockquote w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+        <Quote className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-code-block w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+        <Code className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" className="ql-clean w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors">
+        <Type className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  </div>
+);
+
+const MeetingEditorStyles = () => (
+  <style jsx global>{`
+    .dc-meeting-editor .ql-toolbar.ql-snow,
+    .dc-meeting-editor .ql-container.ql-snow,
+    .dc-meeting-editor .ql-editor {
+      border: none !important;
+    }
+    .dc-meeting-editor.quill-wrap {
+      border: 1px solid rgba(31, 41, 55, 0.1);
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    .dc-meeting-editor .ql-container.ql-snow {
+      font-family: inherit !important;
+    }
+    .dc-meeting-editor .ql-editor {
+      padding: 0.75rem !important;
+      min-height: 120px !important;
+      font-size: 12px !important;
+      line-height: 1.6 !important;
+      color: #1F2937 !important;
+    }
+    .dc-meeting-editor .ql-editor.ql-blank::before {
+      left: 0.75rem !important;
+      color: #1F2937 !important;
+      opacity: 0.5 !important;
+      font-style: normal !important;
+      font-weight: 400 !important;
+      font-size: 12px !important;
+    }
+    #meeting-toolbar button {
+      border: none !important;
+      color: #6b7280 !important;
+      transition: all 0.2s !important;
+    }
+    #meeting-toolbar button:hover {
+      background-color: #f9fafb !important;
+      color: #111827 !important;
+    }
+    #meeting-toolbar button.ql-active {
+      background-color: #eff6ff !important;
+      color: #2563eb !important;
+    }
+    #meeting-toolbar .ql-stroke {
+      stroke: currentColor !important;
+    }
+    #meeting-toolbar .ql-fill {
+      fill: currentColor !important;
+    }
+  `}</style>
+);
+
+const baseMeetingQuillModules = {
+  toolbar: {
+    container: "#meeting-toolbar",
+  },
+  clipboard: {
+    matchVisual: false,
+  },
+};
+
+const meetingQuillFormats = [
+  "header", "bold", "italic", "underline", "strike",
+  "list", "indent", "align", "link", "blockquote", "code-block",
+];
 
 const initialState = {
   title: "",
@@ -36,6 +205,9 @@ const initialState = {
   meetingCategory: "",
   location: "",
   description: "",
+  linkedContactId: null,
+  linkedDealId: null,
+  linkedInvoiceId: null,
   participants: [],
   internalParticipants: [],
   linkedTo: "company",
@@ -85,14 +257,17 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled, isOpen, onOp
         type="button"
         disabled={disabled}
         onClick={() => onOpenChange(!isOpen)}
-        className={`w-full flex items-center justify-end gap-2 px-3 py-1.5 rounded-full text-xs font-semibold focus:outline-none transition-all ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'
-          } ${selectedOption.className}`}
+        className={`w-full flex items-center justify-between gap-2 px-3 h-8 rounded-full text-[12px] font-medium focus:outline-none transition-all border border-[#1F2937]/10 bg-white ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
       >
         <div className="flex items-center gap-1.5">
-          {selectedOption.icon && <selectedOption.icon className="w-3 h-3" />}
-          <span className="capitalize">{selectedOption.label}</span>
+          {selectedOption.icon && (
+            <span className={`flex items-center justify-center w-5 h-5 rounded-full ${selectedOption.className}`}>
+              <selectedOption.icon className="w-3 h-3" />
+            </span>
+          )}
+          <span className="capitalize text-[#1F2937]">{selectedOption.label}</span>
         </div>
-        {!disabled && <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />}
+        {!disabled && <ChevronDown className={`w-3.5 h-3.5 text-[#1F2937] opacity-50 transition-transform ${isOpen ? "rotate-180" : ""}`} />}
       </button>
 
       {isOpen && (
@@ -128,34 +303,51 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled, isOpen, onOp
 // vendor). Styled as a right-aligned pill so it sits in the same meta-row
 // rhythm as the Duration / Meeting Type / Priority dropdowns instead of
 // being a full-width field like the old modal used.
-const EntityPickerDropdown = ({ entities, value, onChange, entityType, disabled, isOpen, onOpenChange }) => {
+const EntityPickerDropdown = ({ entities, value, onChange, entityType, disabled, isOpen, onOpenChange, displayKey = "name" }) => {
   const [searchTerm, setSearchTerm] = useState("");
+  const wrapperRef = useRef(null);
 
-  const Icon = entityType === "contact" ? User : entityType === "vendor" ? Truck : Building2;
+  const Icon = entityType === "contact" ? User : entityType === "vendor" ? Truck : entityType === "deal" ? Briefcase : entityType === "invoice" ? FileText : Building2;
   const selected = entities.find((e) => e._id === value);
   const filtered = entities.filter((e) =>
-    (e.name || "").toLowerCase().includes(searchTerm.toLowerCase())
+    (e[displayKey] || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleToggle = () => {
+    if (isOpen) {
+      onOpenChange(false);
+      return;
+    }
+    onOpenChange(true);
+    // Same fix as MultiSelectDropdown: when the trigger is near the bottom
+    // of the scrollable panel, the list would otherwise open mostly/fully
+    // off-screen. Scroll it toward the top as it opens instead.
+    requestAnimationFrame(() => {
+      wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   return (
-    <div className="relative">
+    <div ref={wrapperRef} className="relative">
       <button
         type="button"
         disabled={disabled}
-        onClick={() => onOpenChange(!isOpen)}
-        className={`flex items-center justify-end gap-2 px-3 py-1.5 rounded-full text-xs font-semibold focus:outline-none transition-all bg-gray-50 text-gray-700 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-100'}`}
+        onClick={handleToggle}
+        className={`w-full flex items-center justify-between gap-2 px-3 h-8 rounded-full text-[12px] font-medium focus:outline-none transition-all border border-[#1F2937]/10 bg-white ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
       >
-        <Icon className="w-3 h-3 flex-shrink-0" />
-        <span className="truncate max-w-[150px]">
-          {selected?.name || `Select ${entityType}`}
-        </span>
-        {!disabled && <ChevronDown className={`w-3 h-3 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Icon className="w-3.5 h-3.5 flex-shrink-0 text-[#1F2937] opacity-50" />
+          <span className={`truncate ${selected ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}>
+            {selected?.[displayKey] || selected?.name || `Select ${entityType}`}
+          </span>
+        </div>
+        {!disabled && <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 text-[#1F2937] opacity-50 transition-transform ${isOpen ? "rotate-180" : ""}`} />}
       </button>
 
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => onOpenChange(false)} />
-          <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-100 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="absolute left-0 right-0 mt-2 w-full bg-white border border-gray-100 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-2 border-b border-gray-100">
               <div className="relative">
                 <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-3.5 h-3.5 text-[#525866]" />
@@ -172,7 +364,7 @@ const EntityPickerDropdown = ({ entities, value, onChange, entityType, disabled,
             <div className="max-h-52 overflow-y-auto py-1">
               {filtered.length === 0 ? (
                 <p className="px-4 py-3 text-xs text-center text-gray-400">
-                  No {entityType} found
+                  No {entityType} yet
                 </p>
               ) : (
                 filtered.map((entity) => (
@@ -187,7 +379,7 @@ const EntityPickerDropdown = ({ entities, value, onChange, entityType, disabled,
                     className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs transition-colors hover:bg-gray-50 ${value === entity._id ? 'bg-blue-50/50 text-blue-600' : 'text-gray-600'}`}
                   >
                     <Icon className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span className="font-medium truncate">{entity.name}</span>
+                    <span className="font-medium truncate">{entity[displayKey] || entity.name}</span>
                     {value === entity._id && <CheckCircle2 className="w-3.5 h-3.5 ml-auto text-blue-600 flex-shrink-0" />}
                   </button>
                 ))
@@ -200,13 +392,12 @@ const EntityPickerDropdown = ({ entities, value, onChange, entityType, disabled,
   );
 };
 
-const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placeholder = "Select participants" }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placeholder = "Select participants", isOpen, onOpenChange }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const wrapperRef = useRef(null);
 
   const openDropdown = () => {
-    setIsOpen(true);
+    onOpenChange(true);
     // The list opens BELOW the button, so when the button itself is near
     // the bottom of the scrollable panel, the list renders mostly/fully
     // off-screen and needs a manual scroll to see any options. Scroll the
@@ -226,7 +417,7 @@ const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placehol
       ? selectedUsers.filter(id => id !== userId)
       : [...selectedUsers, userId];
     onSelectionChange(updatedSelection);
-    setIsOpen(false);
+    onOpenChange(false);
   };
 
   const selectedUsersList = users.filter(user => selectedUsers.includes(user._id));
@@ -234,7 +425,7 @@ const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placehol
   return (
     <div className="space-y-3">
       {selectedUsersList.length > 0 && (
-        <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-xl border border-gray-200">
+        <div className="flex flex-wrap gap-2 p-2 bg-[#F9F9FB] rounded-2xl border border-[#1F2937]/10">
           {selectedUsersList.map((user) => (
             <ParticipantChip
               key={user._id}
@@ -248,18 +439,17 @@ const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placehol
       <div ref={wrapperRef} className="relative">
         <button
           type="button"
-          onClick={() => (isOpen ? setIsOpen(false) : openDropdown())}
-          className="w-full flex items-center justify-between px-4 py-3 bg-white border border-gray-300 rounded-xl text-left hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onClick={() => (isOpen ? onOpenChange(false) : openDropdown())}
+          className="w-full flex items-center justify-between px-3 h-8 rounded-full text-[12px] border border-[#1F2937]/10 bg-white hover:bg-gray-50 transition-colors focus:outline-none"
         >
-          <div className="flex items-center gap-2">
-            <Plus className="w-4 h-4 text-gray-400" />
-            <span className={selectedUsers.length === 0 ? "text-gray-500" : "text-gray-900"}>
-              {selectedUsers.length === 0 ? placeholder : `${selectedUsers.length} participant(s) selected`}
-            </span>
-          </div>
-          <Users className="w-4 h-4 text-gray-400" />
+          <span className={selectedUsers.length === 0 ? "text-[#1F2937] opacity-50" : "text-[#1F2937]"}>
+            {selectedUsers.length === 0 ? placeholder : `${selectedUsers.length} participant(s) selected`}
+          </span>
+          <Plus className="w-3.5 h-3.5 text-[#1F2937] opacity-50 flex-shrink-0" />
         </button>
         {isOpen && (
+          <>
+          <div className="fixed inset-0 z-40" onClick={() => onOpenChange(false)} />
           <div className="absolute z-50 w-full mt-2 bg-white border border-gray-300 rounded-xl shadow-xl max-h-64 overflow-hidden">
             <div className="p-3 border-b border-gray-200">
               <div className="relative">
@@ -304,6 +494,7 @@ const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placehol
               )}
             </div>
           </div>
+          </>
         )}
       </div>
     </div>
@@ -368,6 +559,14 @@ const AdminMeetingForm = ({
   onDelete,
   onClose,
   startInEditMode,
+  // When set, the meeting is scoped to a single company (e.g. opened from
+  // that company's own Meetings tab) — the Entity Type/record pickers are
+  // hidden and the company is preset instead of asking the user to pick it
+  // again from the full list.
+  initialCompanyId = null,
+  // Display-only label shown in place of the hidden Entity Type/Company
+  // picker when initialCompanyId is set.
+  companyName = "",
 }) => {
   const [form, setForm] = useState(initialState);
   const { meetingTypes } = useSystemSettings();
@@ -383,8 +582,11 @@ const AdminMeetingForm = ({
   const [shouldRender, setShouldRender] = useState(false);
   const [existingMeetings, setExistingMeetings] = useState([]);
   const [companyContacts, setCompanyContacts] = useState([]);
+  const [linkableDeals, setLinkableDeals] = useState([]);
+  const [linkableInvoices, setLinkableInvoices] = useState([]);
   const [timeConflict, setTimeConflict] = useState(null);
   const [errors, setErrors] = useState({});
+  const quillModules = useMemo(() => baseMeetingQuillModules, []);
   const [isEditMode, setIsEditMode] = useState(mode === "create" || !!startInEditMode);
 
   const entityTypeOptions = [
@@ -493,6 +695,12 @@ const AdminMeetingForm = ({
       API.get("/auth/google/status")
         .then((res) => setGoogleStatus(res.data))
         .catch(() => setGoogleStatus(null));
+      API.get("/deals")
+        .then((res) => setLinkableDeals(res.data || []))
+        .catch(() => setLinkableDeals([]));
+      API.get("/invoices")
+        .then((res) => setLinkableInvoices(res.data || []))
+        .catch(() => setLinkableInvoices([]));
 
       if (meetingData && mode === "view") {
         const initialFormData = {
@@ -507,6 +715,9 @@ const AdminMeetingForm = ({
           contactId: meetingData.contact?._id || meetingData.contact || null,
           companyId: meetingData.company?._id || meetingData.company || null,
           vendorId: meetingData.vendor?._id || meetingData.vendor || null,
+          linkedContactId: meetingData.linkedContactId?._id || meetingData.linkedContactId || null,
+          linkedDealId: meetingData.linkedDealId?._id || meetingData.linkedDealId || null,
+          linkedInvoiceId: meetingData.linkedInvoiceId?._id || meetingData.linkedInvoiceId || null,
         };
         setForm(initialFormData);
 
@@ -520,10 +731,15 @@ const AdminMeetingForm = ({
         const initialFormData = {
           ...initialState,
           date: calendarDate || "",
+          linkedTo: "company",
+          companyId: initialCompanyId || null,
         };
         setForm(initialFormData);
         setCompanyContacts([]);
 
+        if (initialCompanyId) {
+          fetchCompanyContacts(initialCompanyId);
+        }
         if (calendarDate) {
           fetchMeetingsForDate(calendarDate);
         }
@@ -657,6 +873,9 @@ const AdminMeetingForm = ({
         meetingType: form.meetingType,
         meetingCategory: form.meetingCategory,
         location: form.location,
+        linkedContactId: form.linkedContactId,
+        linkedDealId: form.linkedDealId,
+        linkedInvoiceId: form.linkedInvoiceId,
         linkedTo: form.linkedTo,
         scheduledAt: getScheduledAt(),
         participants: form.participants || [],
@@ -726,15 +945,17 @@ const AdminMeetingForm = ({
       >
         <div className="h-full flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50">
-            <h3 className="text-base font-bold text-gray-900">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {mode === "view" && meetingData ? "Edit Meeting" : "Add New Meeting"}
-            </h3>
+            </h2>
             <button
               onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+              aria-label="Close"
             >
-              <X className="w-4 h-4" />
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
 
@@ -742,35 +963,47 @@ const AdminMeetingForm = ({
           <div className="flex-1 overflow-y-auto">
             <form onSubmit={handleSubmit} className="flex flex-col h-full">
               {/* Content */}
-              <div className="p-5 space-y-6">
-                <div className="space-y-3">
+              <div className="px-8 py-6 space-y-6">
+                <div>
+                  <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    Meeting Title <span className="text-[#FF4935]">*</span>
+                  </label>
                   <input
                     type="text"
                     value={form.title}
                     onChange={(e) => handleChange("title", e.target.value)}
-                    className={`w-full text-2xl font-bold border-none bg-transparent placeholder-gray-300 focus:outline-none focus:ring-0 ${errors.title ? 'text-red-600' : 'text-gray-900'
+                    className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter disabled:opacity-50 ${errors.title ? "border-red-300 ring-1 ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
                       }`}
-                    placeholder="Meeting Title"
+                    placeholder="Enter Meeting Title"
                     disabled={readOnly}
                   />
-                  {errors.title && <p className="text-xs text-red-500 font-medium">*{errors.title}</p>}
+                  {errors.title && <p className="text-red-500 text-xs mt-1 font-inter">{errors.title}</p>}
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-700">Description</label>
-                  <textarea
-                    value={form.description}
-                    onChange={(e) => handleChange("description", e.target.value)}
-                    rows={5}
-                    className="w-full px-3 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none resize-none text-xs text-gray-600"
-                    placeholder="Description the meeting objectives, requirements and important details"
+                {/* Meeting Type */}
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Meeting Type</label>
+                  <SingleSelectDropdown
+                    options={meetingTypeOptions}
+                    value={form.meetingType}
+                    onChange={(val) => handleChange("meetingType", val)}
                     disabled={readOnly}
+                    isOpen={openDropdown === "meetingType"}
+                    onOpenChange={(open) => setOpenDropdown(open ? "meetingType" : null)}
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-gray-700">Location</label>
+                <div className="flex items-center gap-3">
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                  <h3 className="flex-shrink-0 text-[14px] font-medium leading-[120%] text-[#1F2937]">
+                    Meeting Information
+                  </h3>
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[12px] font-medium text-[#161618] tracking-[-0.05em]">Location</label>
                     <div className="flex items-center gap-3">
                     {!readOnly && googleStatus?.configured && !googleStatus?.connected && (
                       <button
@@ -840,24 +1073,33 @@ const AdminMeetingForm = ({
                     type="text"
                     value={form.location}
                     onChange={(e) => handleChange("location", e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none text-xs text-gray-600"
+                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:opacity-50"
                     placeholder="Meeting Room Address or video call link"
                     disabled={readOnly}
                   />
                 </div>
-              </div>
 
-              {/* Meta */}
-              <div className="px-5 pb-5 space-y-5 bg-white border-t border-gray-100 pt-5">
-                {/* Meta Rows */}
-                <div className="space-y-3">
-                  {/* Entity Type */}
+                {/* Read-only company label — shown instead of the Entity
+                    Type/record picker when the form is already scoped to a
+                    single company. */}
+                {initialCompanyId && companyName && (
                   <div>
-                    <div className="flex items-center justify-between group">
-                      <div className="flex items-center gap-2 text-gray-600 text-xs">
-                        <User className="w-3.5 h-3.5" />
-                        <span>Entity Type</span>
-                      </div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Company</label>
+                    <div className="w-full flex items-center gap-1.5 px-3 h-8 rounded-full border border-[#1F2937]/10 bg-[#F9F9FB] text-[12px] text-[#1F2937]">
+                      <Building2 className="w-3.5 h-3.5 flex-shrink-0 opacity-50" />
+                      <span className="truncate">{companyName}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Entity Type / related record — hidden when the form is
+                    already scoped to a single company (opened from that
+                    company's own Meetings tab), since picking one again
+                    would be redundant. */}
+                {!initialCompanyId && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Entity Type</label>
                       <SingleSelectDropdown
                         options={entityTypeOptions}
                         value={form.linkedTo}
@@ -866,17 +1108,13 @@ const AdminMeetingForm = ({
                         isOpen={openDropdown === "linkedTo"}
                         onOpenChange={(open) => setOpenDropdown(open ? "linkedTo" : null)}
                       />
+                      {errors.linkedTo && <p className="text-red-500 text-xs mt-1 font-inter">{errors.linkedTo}</p>}
                     </div>
-                    {errors.linkedTo && <p className="text-[10px] text-red-500 font-medium text-right mt-1">{errors.linkedTo}</p>}
-                  </div>
 
-                  {/* Related record */}
-                  <div>
-                    <div className="flex items-center justify-between group">
-                      <div className="flex items-center gap-2 text-gray-600 text-xs">
-                        <Building className="w-3.5 h-3.5" />
-                        <span className="capitalize">{form.linkedTo || "Record"}</span>
-                      </div>
+                    <div>
+                      <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2 capitalize">
+                        {form.linkedTo || "Record"}
+                      </label>
                       <EntityPickerDropdown
                         entities={entityList}
                         value={getSelectedEntityId()}
@@ -895,102 +1133,34 @@ const AdminMeetingForm = ({
                         isOpen={openDropdown === "entity"}
                         onOpenChange={(open) => setOpenDropdown(open ? "entity" : null)}
                       />
+                      {errors.entity && <p className="text-red-500 text-xs mt-1 font-inter">{errors.entity}</p>}
                     </div>
-                    {errors.entity && <p className="text-[10px] text-red-500 font-medium text-right mt-1">{errors.entity}</p>}
                   </div>
+                )}
 
-                  {/* Date */}
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-gray-600 text-xs">
-                        <Calendar className="w-3.5 h-3.5" />
-                        <span>Date</span>
-                      </div>
-                      <input
-                        type="date"
-                        value={form.date || calendarDate || ""}
-                        onChange={(e) => handleChange("date", e.target.value)}
-                        disabled={readOnly}
-                        className={`text-xs font-medium border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer ${errors.date ? 'text-red-600' : 'text-gray-900'}`}
-                      />
-                    </div>
-                    {errors.date && <p className="text-[10px] text-red-500 font-medium text-right mt-1">{errors.date}</p>}
-                  </div>
-
-                  {/* Time */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>Time</span>
-                    </div>
-                    <input
-                      type="time"
-                      value={form.time}
-                      onChange={(e) => handleChange("time", e.target.value)}
-                      disabled={readOnly}
-                      className="text-xs font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Duration */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs">
-                      <Timer className="w-3.5 h-3.5" />
-                      <span>Duration</span>
-                    </div>
-                    <SingleSelectDropdown
-                      options={durationOptions}
-                      value={form.duration}
-                      onChange={(val) => handleChange("duration", val)}
-                      disabled={readOnly}
-                      isOpen={openDropdown === "duration"}
-                      onOpenChange={(open) => setOpenDropdown(open ? "duration" : null)}
-                    />
-                  </div>
-
-                  {/* Meeting Type */}
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs">
-                      <div className="flex items-center gap-2">
-                        <Video className="w-3.5 h-3.5" />
-                        <span>Meeting Type</span>
-                      </div>
-                    </div>
-                    <SingleSelectDropdown
-                      options={meetingTypeOptions}
-                      value={form.meetingType}
-                      onChange={(val) => handleChange("meetingType", val)}
-                      disabled={readOnly}
-                      isOpen={openDropdown === "meetingType"}
-                      onOpenChange={(open) => setOpenDropdown(open ? "meetingType" : null)}
-                    />
-                  </div>
-
+                <div className="grid grid-cols-2 gap-4">
                   {/* Meeting Category */}
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs">
-                      <FileText className="w-3.5 h-3.5" />
-                      <span>Category</span>
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Category</label>
+                    <div className="relative">
+                      <select
+                        value={form.meetingCategory}
+                        onChange={(e) => handleChange("meetingCategory", e.target.value)}
+                        disabled={readOnly}
+                        className="w-full appearance-none border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                      >
+                        <option value="">— Select —</option>
+                        {meetingTypes.map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#1F2937] opacity-50" />
                     </div>
-                    <select
-                      value={form.meetingCategory}
-                      onChange={(e) => handleChange("meetingCategory", e.target.value)}
-                      disabled={readOnly}
-                      className="text-xs font-semibold text-gray-700 bg-transparent focus:outline-none border-none disabled:opacity-60"
-                    >
-                      <option value="">— Select —</option>
-                      {meetingTypes.map(t => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
                   </div>
 
                   {/* Priority */}
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs">
-                      <Flag className="w-3.5 h-3.5" />
-                      <span>Priority</span>
-                    </div>
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Priority</label>
                     <SingleSelectDropdown
                       options={priorityOptions}
                       value={form.priority}
@@ -1000,69 +1170,188 @@ const AdminMeetingForm = ({
                       onOpenChange={(open) => setOpenDropdown(open ? "priority" : null)}
                     />
                   </div>
-
-                  {/* Internal Team — your own staff attending, kept as a
-                      separate list from Client Contacts below so Meeting
-                      Details can actually tell the two apart instead of
-                      lumping everyone under one bucket. */}
-                  <div className="space-y-3 pt-2">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs">
-                      <Users className="w-3.5 h-3.5" />
-                      <span>Internal Team</span>
-                    </div>
-                    <MultiSelectDropdown
-                      users={users}
-                      selectedUsers={form.internalParticipants}
-                      onSelectionChange={(internalParticipants) => handleChange("internalParticipants", internalParticipants)}
-                      placeholder="Add internal team members"
-                    />
-                  </div>
-
-                  {/* Client Contacts — only a company has its own contact
-                      list to pick from; a contact meeting IS the contact,
-                      and vendors have no contacts in this model. */}
-                  {form.linkedTo === "company" && (
-                    <div className="space-y-3 pt-2">
-                      <div className="flex items-center gap-2 text-gray-600 text-xs">
-                        <Users className="w-3.5 h-3.5" />
-                        <span>Client Contacts</span>
-                      </div>
-                      <MultiSelectDropdown
-                        users={companyContacts}
-                        selectedUsers={form.participants}
-                        onSelectionChange={(participants) => handleChange("participants", participants)}
-                        placeholder={form.companyId ? "Add client contacts" : "Select a company first"}
-                      />
-                      {errors.participants && <p className="text-[10px] text-red-500 font-medium">{errors.participants}</p>}
-                    </div>
-                  )}
                 </div>
 
-                {/* Conflict Alert in Right Column */}
-                {timeConflict && (
-                  <div className="pt-2">
-                    <TimeConflictAlert
-                      conflict={timeConflict}
-                      suggestedTimes={getSuggestedTimes()}
-                      onTimeSelect={(time) => handleChange("time", time)}
+                <div className="grid grid-cols-3 gap-4">
+                  {/* Date */}
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Date</label>
+                    <input
+                      type="date"
+                      value={form.date || calendarDate || ""}
+                      onChange={(e) => handleChange("date", e.target.value)}
+                      disabled={readOnly}
+                      className={`w-full border rounded-full px-3 h-8 text-[12px] focus:outline-none focus:ring-1 transition-all cursor-pointer disabled:opacity-50 ${errors.date ? "border-red-300 ring-1 ring-red-500 text-red-600" : "border-[#1F2937]/10 focus:ring-blue-500 text-[#1F2937]"}`}
+                    />
+                    {errors.date && <p className="text-red-500 text-xs mt-1 font-inter">{errors.date}</p>}
+                  </div>
+
+                  {/* Time */}
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Time</label>
+                    <input
+                      type="time"
+                      value={form.time}
+                      onChange={(e) => handleChange("time", e.target.value)}
+                      disabled={readOnly}
+                      className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer disabled:opacity-50"
                     />
                   </div>
+
+                  {/* Duration */}
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Duration</label>
+                    <SingleSelectDropdown
+                      options={durationOptions}
+                      value={form.duration}
+                      onChange={(val) => handleChange("duration", val)}
+                      disabled={readOnly}
+                      isOpen={openDropdown === "duration"}
+                      onOpenChange={(open) => setOpenDropdown(open ? "duration" : null)}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                  <h3 className="flex-shrink-0 text-[14px] font-medium leading-[120%] text-[#1F2937]">
+                    Participation
+                  </h3>
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                </div>
+
+                {/* Internal Team — your own staff attending, kept as a
+                    separate list from Client Contacts below so Meeting
+                    Details can actually tell the two apart instead of
+                    lumping everyone under one bucket. */}
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Internal Team</label>
+                  <MultiSelectDropdown
+                    users={users}
+                    selectedUsers={form.internalParticipants}
+                    onSelectionChange={(internalParticipants) => handleChange("internalParticipants", internalParticipants)}
+                    placeholder="Add internal team members"
+                    isOpen={openDropdown === "internalTeam"}
+                    onOpenChange={(open) => setOpenDropdown(open ? "internalTeam" : null)}
+                  />
+                </div>
+
+                {/* Client Contacts — only a company has its own contact
+                    list to pick from; a contact meeting IS the contact,
+                    and vendors have no contacts in this model. */}
+                {form.linkedTo === "company" && (
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Client Contacts</label>
+                    <MultiSelectDropdown
+                      users={companyContacts}
+                      selectedUsers={form.participants}
+                      onSelectionChange={(participants) => handleChange("participants", participants)}
+                      placeholder={form.companyId ? "Add client contacts" : "Select a company first"}
+                      isOpen={openDropdown === "clientContacts"}
+                      onOpenChange={(open) => setOpenDropdown(open ? "clientContacts" : null)}
+                    />
+                    {errors.participants && <p className="text-red-500 text-xs mt-1 font-inter">{errors.participants}</p>}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3">
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                  <h3 className="flex-shrink-0 text-[14px] font-medium leading-[120%] text-[#1F2937]">
+                    Meeting Purpose
+                  </h3>
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Description</label>
+                  <MeetingEditorStyles />
+                  <div className="dc-meeting-editor quill-wrap">
+                    <MeetingQuillToolbar />
+                    <ReactQuill
+                      theme="snow"
+                      value={form.description}
+                      onChange={(value) => handleChange("description", value)}
+                      modules={quillModules}
+                      formats={meetingQuillFormats}
+                      placeholder="Describe the meeting objectives, requirements and important details"
+                      readOnly={readOnly}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                  <h3 className="flex-shrink-0 text-[14px] font-medium leading-[120%] text-[#1F2937]">
+                    Link
+                  </h3>
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Link Contact</label>
+                  <EntityPickerDropdown
+                    entities={companyContacts.length > 0 ? companyContacts : allContacts}
+                    value={form.linkedContactId}
+                    onChange={(val) => handleChange("linkedContactId", val)}
+                    entityType="contact"
+                    displayKey="name"
+                    disabled={readOnly}
+                    isOpen={openDropdown === "linkedContact"}
+                    onOpenChange={(open) => setOpenDropdown(open ? "linkedContact" : null)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Link Deal</label>
+                  <EntityPickerDropdown
+                    entities={linkableDeals}
+                    value={form.linkedDealId}
+                    onChange={(val) => handleChange("linkedDealId", val)}
+                    entityType="deal"
+                    displayKey="title"
+                    disabled={readOnly}
+                    isOpen={openDropdown === "linkedDeal"}
+                    onOpenChange={(open) => setOpenDropdown(open ? "linkedDeal" : null)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Link Invoice</label>
+                  <EntityPickerDropdown
+                    entities={linkableInvoices}
+                    value={form.linkedInvoiceId}
+                    onChange={(val) => handleChange("linkedInvoiceId", val)}
+                    entityType="invoice"
+                    displayKey="invoiceNumber"
+                    disabled={readOnly}
+                    isOpen={openDropdown === "linkedInvoice"}
+                    onOpenChange={(open) => setOpenDropdown(open ? "linkedInvoice" : null)}
+                  />
+                </div>
+
+                {/* Conflict Alert */}
+                {timeConflict && (
+                  <TimeConflictAlert
+                    conflict={timeConflict}
+                    suggestedTimes={getSuggestedTimes()}
+                    onTimeSelect={(time) => handleChange("time", time)}
+                  />
                 )}
               </div>
             </form>
           </div>
 
           {/* Footer Actions */}
-          <div className="p-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-between">
             <div>
               {mode === "view" && meetingData && onDelete && (
                 <button
                   type="button"
                   onClick={handleDelete}
-                  className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-100 bg-white"
+                  className="w-8 h-8 flex items-center justify-center rounded-full text-red-500 hover:bg-red-50 border border-[#1F2937]/10 transition-colors"
                   title="Delete Meeting"
                 >
-                  <Trash2 className="w-5 h-5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -1071,14 +1360,14 @@ const AdminMeetingForm = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-5 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+                className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors font-inter"
               >
                 Cancel
               </button>
               {readOnly ? (
                 <button
                   onClick={() => setIsEditMode(true)}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-200 transition-all flex items-center gap-2"
+                  className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 transition-colors font-inter flex items-center gap-2"
                 >
                   <Pencil className="w-4 h-4" />
                   Edit Meeting
@@ -1087,18 +1376,15 @@ const AdminMeetingForm = ({
                 <button
                   onClick={handleSubmit}
                   disabled={loading || timeConflict}
-                  className={`px-6 py-2 rounded-xl text-xs font-bold shadow-lg transition-all flex items-center gap-2 ${loading || timeConflict
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200'
+                  className={`px-6 py-2 rounded-[25px] text-sm font-bold transition-colors font-inter flex items-center gap-2 ${loading || timeConflict
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-[#158FFF] text-white hover:opacity-90"
                     }`}
                 >
                   {loading ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <span className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4" />
-                      {meetingData && mode === "view" ? "Save Changes" : "Schedule Meeting"}
-                    </span>
+                    <>{meetingData && mode === "view" ? "Save Changes" : "Schedule Meeting"}</>
                   )}
                 </button>
               )}

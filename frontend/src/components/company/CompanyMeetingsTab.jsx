@@ -24,7 +24,7 @@ import {
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
 import API from "../../services/api";
-import CompanyMeetingForm from "./CompanyMeetingForm";
+import AdminMeetingForm from "../admin/AdminMeetingForm";
 import MeetingDetailsModal from "./MeetingDetailsModal";
 import FilterIcon from "../common/FilterIcon";
 import HighlightText from "../common/HighlightText";
@@ -90,7 +90,7 @@ const MoreVertIcon = ({ size = 20, ...props }) => (
   </svg>
 );
 
-export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetings, showStats = true, isLoading = false, autoOpenCreate = false, onAutoOpenCreateConsumed }) {
+export default function CompanyMeetingsTab({ companyId, companyName, meetings = [], setMeetings, showStats = true, isLoading = false, autoOpenCreate = false, onAutoOpenCreateConsumed }) {
   const [searchTerm, setSearchTerm] = useState("");
   const {
     containerRef: fillContainerRef,
@@ -2103,14 +2103,15 @@ export default function CompanyMeetingsTab({ companyId, meetings = [], setMeetin
       />
 
       {showMeetingForm && (
-        <CompanyMeetingForm
+        <AdminMeetingForm
           open={showMeetingForm}
           mode={editingMeeting ? "view" : "create"}
           startInEditMode={!!editingMeeting}
           meetingData={editingMeeting}
-          companyId={companyId}
-          users={users}
-          staffUsers={staffUsers}
+          initialCompanyId={companyId}
+          companyName={companyName}
+          users={staffUsers}
+          companies={[{ _id: companyId, name: companyName }]}
           onSave={handleMeetingSave}
           onDelete={handleMeetingDelete}
           onClose={closeMeetingForm}

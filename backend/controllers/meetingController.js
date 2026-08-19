@@ -359,6 +359,9 @@ exports.createMeeting = async (req, res) => {
       vendorId,
       participants,
       internalParticipants,
+      linkedContactId,
+      linkedDealId,
+      linkedInvoiceId,
     } = req.body;
 
     // Add the normalizeDate function (same as in createTask)
@@ -486,6 +489,12 @@ exports.createMeeting = async (req, res) => {
       // a company one can. Kept out of the per-type branch below so it
       // isn't silently dropped for non-company meetings.
       internalParticipants: internalParticipants || [],
+      // Optional cross-links, independent of linkedTo — e.g. a company
+      // meeting can still reference the specific contact attending, or the
+      // deal/invoice it's about.
+      linkedContactId: linkedContactId || null,
+      linkedDealId: linkedDealId || null,
+      linkedInvoiceId: linkedInvoiceId || null,
     };
 
     // Add the appropriate reference based on linkedTo type
@@ -509,6 +518,9 @@ exports.createMeeting = async (req, res) => {
       { path: "participants", select: "name email role" },
       { path: "internalParticipants", select: "name email" },
       { path: "createdBy", select: "name email" },
+      { path: "linkedContactId", select: "name email phone" },
+      { path: "linkedDealId", select: "title amount status" },
+      { path: "linkedInvoiceId", select: "invoiceNumber amount status" },
     ]);
 
     // Gather participant IDs for notification settings check
@@ -951,6 +963,9 @@ exports.updateMeeting = async (req, res) => {
       outcome,
       participants,
       internalParticipants,
+      linkedContactId,
+      linkedDealId,
+      linkedInvoiceId,
     } = req.body;
 
     const meeting = await Meeting.findOne({
@@ -1024,6 +1039,9 @@ exports.updateMeeting = async (req, res) => {
     if (outcome) meeting.outcome = outcome;
     if (participants) meeting.participants = participants;
     if (internalParticipants) meeting.internalParticipants = internalParticipants;
+    if (linkedContactId !== undefined) meeting.linkedContactId = linkedContactId || null;
+    if (linkedDealId !== undefined) meeting.linkedDealId = linkedDealId || null;
+    if (linkedInvoiceId !== undefined) meeting.linkedInvoiceId = linkedInvoiceId || null;
 
     meeting.updatedBy = req.user.id;
     await meeting.save();
@@ -1037,6 +1055,9 @@ exports.updateMeeting = async (req, res) => {
       { path: "internalParticipants", select: "name email" },
       { path: "createdBy", select: "name email" },
       { path: "updatedBy", select: "name email" },
+      { path: "linkedContactId", select: "name email phone" },
+      { path: "linkedDealId", select: "title amount status" },
+      { path: "linkedInvoiceId", select: "invoiceNumber amount status" },
     ]);
 
     // Send update notification if significant changes occurred

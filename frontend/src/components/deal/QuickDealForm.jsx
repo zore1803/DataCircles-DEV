@@ -177,9 +177,9 @@ const QuickDealForm = ({
     };
 
     const hasError = validationErrors[fieldDef.name];
-    const inputClassName = `w-full border rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${hasError
+    const inputClassName = `w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${hasError
         ? 'border-red-300 ring-1 ring-red-500'
-        : 'border-[#E0E0E1] focus:ring-blue-500'
+        : 'border-[#1F2937]/10 focus:ring-blue-500'
       }`;
 
     switch (fieldDef.type) {
@@ -204,6 +204,7 @@ const QuickDealForm = ({
             displayKey="name"
             valueKey="_id"
             required={fieldDef.required}
+            compact
           />
         );
       case "text":
@@ -212,7 +213,7 @@ const QuickDealForm = ({
             rows={3}
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className={`${inputClassName.replace('h-12', 'py-3')} resize-vertical`}
+            className={`w-full border rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter resize-vertical ${hasError ? 'border-red-300 ring-1 ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'}`}
             placeholder={`Enter ${fieldDef.name}`}
           />
         );
@@ -246,7 +247,7 @@ const QuickDealForm = ({
                 return (
                   <label
                     key={index}
-                    className="flex items-center gap-2 cursor-pointer hover:bg-[#F2F2F7] rounded-xl px-4 py-3 transition-colors border border-transparent hover:border-[#E0E0E1]"
+                    className="flex items-center gap-2 cursor-pointer hover:bg-[#F2F2F7] rounded-full px-3 h-8 transition-colors border border-transparent hover:border-[#1F2937]/10"
                   >
                     <input
                       type="checkbox"
@@ -260,14 +261,14 @@ const QuickDealForm = ({
                         }
                         handleFieldChange(newValues);
                       }}
-                      className="w-4 h-4 text-blue-600 border-[#E0E0E1] rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-blue-600 border-[#1F2937]/10 rounded focus:ring-blue-500"
                     />
-                    <span className="text-[14px] text-gray-900 font-medium font-inter">{option}</span>
+                    <span className="text-[12px] text-[#1F2937] font-medium font-inter">{option}</span>
                   </label>
                 );
               })}
             {(!fieldDef.options || fieldDef.options.length === 0) && (
-              <p className="text-[14px] text-gray-400 italic px-4 py-2 font-inter">
+              <p className="text-[12px] text-[#1F2937] opacity-50 italic px-3 py-2 font-inter">
                 No options available
               </p>
             )}
@@ -467,31 +468,32 @@ const QuickDealForm = ({
           }`}
       >
         <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
-          <div className="flex justify-between items-center p-4 border-b border-gray-100 flex-shrink-0 bg-white">
-            <h3 className="text-base font-semibold text-gray-700">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {isEditing ? "Edit Deal" : "Create New Deal"}
-            </h3>
+            </h2>
             <button
               type="button"
               onClick={handleClose}
-              className="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
               aria-label="Close"
             >
-              <X className="w-5 h-5 text-gray-400" />
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-8">
+          <div className="flex-1 overflow-y-auto px-8 py-6">
             <div className="space-y-6">
             {/* Title - Now with validation */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Deal Made <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Deal Name <span className="text-[#FF4935]">*</span>
               </label>
               <input
                 type="text"
                 value={form.title}
                 onChange={(e) => handleFormChange("title", e.target.value)}
-                className={`w-full border rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.title ? 'border-red-300 ring-1 ring-red-500' : 'border-[#E0E0E1] focus:ring-blue-500'
+                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.title ? 'border-red-300 ring-1 ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'
                   }`}
                 placeholder="Enter Deal Title"
                 required
@@ -503,14 +505,14 @@ const QuickDealForm = ({
 
             {/* Amount - Now with validation */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Amount <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Amount <span className="text-[#FF4935]">*</span>
               </label>
               <input
                 type="number"
                 value={form.amount}
                 onChange={(e) => handleFormChange("amount", e.target.value)}
-                className={`w-full border rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.amount ? 'border-red-300 ring-1 ring-red-500' : 'border-[#E0E0E1] focus:ring-blue-500'
+                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.amount ? 'border-red-300 ring-1 ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'
                   }`}
                 min={"0"}
                 step="1"
@@ -524,10 +526,10 @@ const QuickDealForm = ({
 
             {/* Status */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Status <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Status <span className="text-[#FF4935]">*</span>
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <SearchableDropdown
                   options={statusOptions.map(opt => ({ name: opt, _id: opt }))}
                   value={form.status}
@@ -537,22 +539,23 @@ const QuickDealForm = ({
                   valueKey="_id"
                   className="flex-1"
                   required={true}
+                  compact
                 />
                 <button
                   type="button"
-                  className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1]"
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
                 >
-                  <Plus className="w-5 h-5 text-gray-600" />
+                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
                 </button>
               </div>
             </div>
 
             {/* Company - NOW REQUIRED */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Company <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Company <span className="text-[#FF4935]">*</span>
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <SearchableDropdown
                   options={localCompanies}
                   value={form.company}
@@ -563,14 +566,15 @@ const QuickDealForm = ({
                   className="flex-1"
                   required={true}
                   error={validationErrors.company}
+                  compact
                 />
                 <button
                   type="button"
                   onClick={() => setShowQuickCompanyForm(true)}
-                  className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer"
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
                   title="Add New Company"
                 >
-                  <Plus className="w-5 h-5 text-gray-600" />
+                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
                 </button>
               </div>
               {validationErrors.company && (
@@ -580,10 +584,10 @@ const QuickDealForm = ({
 
             {/* Contact - NOW REQUIRED */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Contact <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Contact <span className="text-[#FF4935]">*</span>
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <SearchableDropdown
                   options={localContacts}
                   value={form.contact}
@@ -594,14 +598,15 @@ const QuickDealForm = ({
                   className="flex-1"
                   required={true}
                   error={validationErrors.contact}
+                  compact
                 />
                 <button
                   type="button"
                   onClick={() => setShowQuickContactForm(true)}
-                  className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1] cursor-pointer"
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
                   title="Add New Contact"
                 >
-                  <Plus className="w-5 h-5 text-gray-600" />
+                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
                 </button>
               </div>
               {validationErrors.contact && (
@@ -611,15 +616,19 @@ const QuickDealForm = ({
 
             {/* Additional Fields - Now with validation */}
             {fieldDefinitions.length > 0 && (
-              <div className="pt-4 space-y-6">
-                <h3 className="text-[16px] font-bold text-[#111216]">
-                  Custom Fields
-                </h3>
-                <div className="space-y-3 sm:space-y-4">
+              <div className="pt-4 space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                  <h3 className="flex-shrink-0 text-[14px] font-medium leading-[120%] text-[#1F2937]">
+                    Custom Fields
+                  </h3>
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                </div>
+                <div className="space-y-4">
                   {fieldDefinitions.map((fieldDef) => (
                     <div key={fieldDef.name}>
-                      <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                        {fieldDef.name} {fieldDef.required && <span className="text-red-500">*</span>}
+                      <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                        {fieldDef.name} {fieldDef.required && <span className="text-[#FF4935]">*</span>}
                       </label>
                       {renderFieldInput(
                         fieldDef,
@@ -632,16 +641,16 @@ const QuickDealForm = ({
             )}
             </div>
           </div>
-          <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0 bg-white">
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={handleClose}
-              className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors font-inter"
+              className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors font-inter"
             >
               Cancel
             </button>
             <button
-              className="px-6 py-2.5 bg-[#0C4FCD] text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
+              className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
               type="submit"
               disabled={loading}
             >

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { X, Paperclip } from "lucide-react";
 import toast from "react-hot-toast";
 import CustomDropdown from "../common/CustomDropdown";
 
@@ -96,62 +97,51 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated }) => {
         `}
       >
         <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
-          {/* Sticky header — compact, matching the note editor card */}
-          <div className="flex justify-between items-center flex-shrink-0 p-4 border-b border-gray-100">
-            <h3 className="text-base font-semibold text-gray-700">
+          {/* Sticky header — matches the QuickCompanyForm header spec */}
+          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               Create New Journal
-            </h3>
+            </h2>
             <button
               type="button"
               onClick={handleClose}
-              className="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
               aria-label="Close"
             >
-              <svg
-                className="w-5 h-5 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
 
-          {/* Form body */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+          {/* Scrollable body */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 space-y-6">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Journal Name
               </label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                 placeholder="e.g. Petty Cash Journal"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Journal Date
               </label>
               <input
                 type="date"
                 value={form.date}
                 onChange={(e) => handleFormChange("date", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Category
               </label>
               <CustomDropdown
@@ -160,27 +150,27 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated }) => {
                 onChange={(value) => handleFormChange("category", value)}
                 placeholder="Select Category"
                 searchable
-                buttonClassName={`w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-left flex items-center justify-between transition-all bg-white ${form.category ? "text-gray-900 font-medium" : "text-[#A0A0A0]"}`}
+                buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${form.category ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Opening Balance
               </label>
               <div className="flex items-center gap-2">
-                <div className="flex items-center rounded-full border border-[#E0E0E1] p-1 flex-shrink-0">
+                <div className="flex items-center rounded-full border border-[#1F2937]/10 p-1 flex-shrink-0">
                   {["Debit", "Credit"].map((type) => (
                     <button
                       key={type}
                       type="button"
                       onClick={() => handleFormChange("balanceType", type)}
-                      className={`h-9 px-3.5 rounded-full text-[13px] font-semibold transition-colors ${
+                      className={`h-6 px-3 rounded-full text-[12px] font-medium transition-colors ${
                         form.balanceType === type
                           ? type === "Debit"
                             ? "bg-red-50 text-red-600"
                             : "bg-emerald-50 text-emerald-600"
-                          : "text-gray-500 hover:bg-gray-50"
+                          : "text-[#1F2937] opacity-50 hover:opacity-100"
                       }`}
                     >
                       {type}
@@ -193,47 +183,60 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated }) => {
                   min="0"
                   value={form.openingBalance}
                   onChange={(e) => handleFormChange("openingBalance", e.target.value)}
-                  className="flex-1 min-w-0 border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                  className="flex-1 min-w-0 border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                   placeholder="0.00"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Notes
               </label>
               <textarea
                 value={form.notes}
                 onChange={(e) => handleFormChange("notes", e.target.value)}
                 rows={4}
-                className="w-full border border-[#E0E0E1] rounded-2xl px-4 py-3 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] resize-none"
+                className="w-full border border-[#1F2937]/10 rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 resize-none"
                 placeholder="Optional notes for this journal entry"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Attach Files
               </label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={handleFilesSelected}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={attachments.length >= MAX_FILES}
-                className="w-full border border-dashed border-[#D0D0D2] rounded-2xl px-4 py-3 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-              >
-                {attachments.length >= MAX_FILES
-                  ? `Maximum ${MAX_FILES} files attached`
-                  : "Click to upload files"}
-              </button>
-              <p className="mt-1 text-[11px] text-gray-400">
+              <div className="flex items-center gap-3">
+                <div
+                  onClick={() => attachments.length < MAX_FILES && fileInputRef.current?.click()}
+                  className={`flex-1 flex items-center px-3 h-8 rounded-full border border-[#1F2937]/10 ${
+                    attachments.length >= MAX_FILES ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                  }`}
+                >
+                  <span className="text-[12px] leading-5 text-[#1F2937] opacity-50 truncate">
+                    {attachments.length >= MAX_FILES
+                      ? `Maximum ${MAX_FILES} files attached`
+                      : "Click to upload files"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={attachments.length >= MAX_FILES}
+                  title="Attach files"
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Paperclip className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFilesSelected}
+                  className="hidden"
+                />
+              </div>
+              <p className="text-[12px] font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">
                 Up to {MAX_FILES} files ({attachments.length}/{MAX_FILES} attached)
               </p>
 
@@ -242,30 +245,18 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated }) => {
                   {attachments.map((file, index) => (
                     <li
                       key={`${file.name}-${index}`}
-                      className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-gray-50 border border-gray-100"
+                      className="flex items-center justify-between gap-2 px-3 h-8 rounded-full bg-[#F9F9FB] border border-[#1F2937]/10"
                     >
-                      <span className="text-[13px] text-gray-700 truncate">
+                      <span className="text-[12px] text-[#1F2937] truncate">
                         {file.name}
                       </span>
                       <button
                         type="button"
                         onClick={() => removeAttachment(index)}
                         aria-label={`Remove ${file.name}`}
-                        className="flex-shrink-0 p-1 rounded-full hover:bg-gray-200 transition-colors"
+                        className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors"
                       >
-                        <svg
-                          className="w-3.5 h-3.5 text-gray-500"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
+                        <X className="w-3 h-3 text-[#1F2937]" strokeWidth={2.5} />
                       </button>
                     </li>
                   ))}
@@ -274,17 +265,17 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated }) => {
             </div>
           </div>
 
-          {/* Sticky footer — compact, matching the note editor card */}
-          <div className="flex-shrink-0 p-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
+          {/* Sticky footer — matches the QuickCompanyForm footer spec */}
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={handleClose}
-              className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors"
+              className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
-              className="px-6 py-2.5 bg-[#0C4FCD] text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               type="submit"
               disabled={loading}
             >

@@ -1792,6 +1792,7 @@ const CompanyProfilePage = () => {
           {activeTab === "Meetings" && (
             <CompanyMeetingsTab
               companyId={id}
+              companyName={company?.name}
               meetings={meetings}
               setMeetings={setMeetings}
               showStats={showStats}

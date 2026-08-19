@@ -4,7 +4,7 @@ import API from "../../services/api";
 import SearchableDropdown from "./SearchableDropdown";
 import CustomDropdown from "../common/CustomDropdown";
 import QuickCompanyForm from "../company/QuickCompanyForm";
-import { Plus } from "lucide-react";
+import { Plus, X, Paperclip } from "lucide-react";
 import toast from "react-hot-toast";
 
 const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onRequestClose, initialCompanyId = "", editContact = null }) => {
@@ -14,10 +14,25 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
     email: "",
     phone: "",
     company: initialCompanyId,
+    leadSource: "",
   });
   const [additionalFields, setAdditionalFields] = useState({});
   const [fieldDefinitions, setFieldDefinitions] = useState([]);
   const [profilePicture, setProfilePicture] = useState(null);
+  const profilePictureInputRef = useRef(null);
+  // Object URL for the currently picked file, so the preview shows the actual
+  // image instead of just its filename. Revoked whenever the selection
+  // changes or the form unmounts, since object URLs otherwise leak.
+  const [profilePicturePreview, setProfilePicturePreview] = useState(null);
+  useEffect(() => {
+    if (!profilePicture) {
+      setProfilePicturePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(profilePicture);
+    setProfilePicturePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [profilePicture]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
@@ -47,6 +62,7 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
       email: editContact.email || "",
       phone: editContact.phone || "",
       company: editContact.company?._id || editContact.company || "",
+      leadSource: editContact.leadSource || "",
     });
     const pf = {};
     (editContact.additionalFields || []).forEach((f) => {
@@ -143,6 +159,10 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
       errors.company = "Please select a company";
     }
 
+    if (!form.leadSource) {
+      errors.leadSource = "Please select a lead source";
+    }
+
     // Validate required additional fields
     fieldDefinitions.forEach((fieldDef) => {
       if (fieldDef.required) {
@@ -175,9 +195,9 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
     };
 
     const hasError = validationErrors[`additional_${fieldDef.name}`];
-    const inputClassName = `w-full border rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${hasError
+    const inputClassName = `w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${hasError
       ? 'border-red-300 ring-1 ring-red-500'
-      : 'border-[#E0E0E1] focus:ring-blue-500'
+      : 'border-[#1F2937]/10 focus:ring-blue-500'
       }`;
 
     switch (fieldDef.type) {
@@ -201,7 +221,7 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
             onChange={(newValue) => handleFieldChange(newValue)}
             placeholder={`Select ${fieldDef.name}`}
             required={fieldDef.required}
-            buttonClassName={`w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-left flex items-center justify-between transition-all bg-white font-inter ${value ? "text-gray-900 font-medium" : "text-[#A0A0A0]"}`}
+            buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${value ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
           />
         );
 
@@ -211,7 +231,7 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
             rows={3}
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className={`${inputClassName.replace('h-12', 'py-3')} resize-vertical`}
+            className={`w-full border rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter resize-vertical ${hasError ? 'border-red-300 ring-1 ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'}`}
             placeholder={`Enter ${fieldDef.name}`}
           />
         );
@@ -248,7 +268,7 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
                 return (
                   <label
                     key={index}
-                    className="flex items-center gap-2 cursor-pointer hover:bg-[#F2F2F7] rounded-xl px-4 py-3 transition-colors border border-transparent hover:border-[#E0E0E1]"
+                    className="flex items-center gap-2 cursor-pointer hover:bg-[#F2F2F7] rounded-full px-3 h-8 transition-colors border border-transparent hover:border-[#1F2937]/10"
                   >
                     <input
                       type="checkbox"
@@ -262,9 +282,9 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
                         }
                         handleFieldChange(newValues);
                       }}
-                      className="w-4 h-4 text-blue-600 border-[#E0E0E1] rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-blue-600 border-[#1F2937]/10 rounded focus:ring-blue-500"
                     />
-                    <span className="text-[14px] text-gray-900 font-medium font-inter">{option}</span>
+                    <span className="text-[12px] text-[#1F2937] font-medium font-inter">{option}</span>
                   </label>
                 );
               })}
@@ -330,6 +350,7 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
     payload.append("email", form.email);
     payload.append("phone", form.phone);
     payload.append("company", form.company);
+    payload.append("leadSource", form.leadSource);
 
     const processedAdditionalFields = fieldDefinitions
       .map((fieldDef) => {
@@ -460,46 +481,89 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
         `}
       >
         <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
-          <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0">
-            <h2 className="text-[24px] font-bold text-[#111216]">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {isEditing ? "Edit Contact" : "Create New Contact"}
             </h2>
             <button
               type="button"
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
               aria-label="Close"
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
 
-          <div className="space-y-6 overflow-y-auto flex-1 p-8">
+          <div className="space-y-6 overflow-y-auto flex-1 px-8 py-6">
+            {/* Profile Picture */}
+            <div>
+              <label className="block text-[12px] font-medium text-[#161618] mb-2 tracking-[-0.05em]">
+                Profile Picture <span className="text-[#FF4935]">*</span>
+              </label>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 flex items-center px-3 h-8 rounded-full border border-[#1F2937]/10">
+                  <span className="text-[12px] leading-5 text-[#1F2937] opacity-50 truncate">
+                    {profilePicture ? profilePicture.name : "Choose a file"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => profilePictureInputRef.current?.click()}
+                  title="Upload profile picture"
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
+                >
+                  <Paperclip className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                </button>
+                <input
+                  ref={profilePictureInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  required={!profilePicture}
+                />
+              </div>
+              <p className="text-[12px] font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">PNG, JPEG upto 5MB</p>
+              {profilePicturePreview && (
+                <div className="relative mt-2 inline-block">
+                  <img
+                    src={profilePicturePreview}
+                    alt="Contact"
+                    className="block max-h-20 max-w-[160px] w-auto h-auto object-contain rounded-lg border border-[#E0E0E1]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfilePicture(null);
+                      if (profilePictureInputRef.current) {
+                        profilePictureInputRef.current.value = "";
+                      }
+                    }}
+                    title="Remove photo"
+                    aria-label="Remove photo"
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-white border border-[#E0E0E1] shadow-sm flex items-center justify-center text-[#1C1B1F] hover:bg-gray-50 transition-colors"
+                  >
+                    <X className="w-3 h-3" strokeWidth={2.5} />
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Name - Now with validation */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Full Name <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Full Name <span className="text-[#FF4935]">*</span>
               </label>
               <input
                 type="text"
                 placeholder="Enter Full Name"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
-                className={`w-full border rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.name
+                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.name
                   ? 'border-red-300 ring-1 ring-red-500'
-                  : 'border-[#E0E0E1] focus:ring-blue-500'
+                  : 'border-[#1F2937]/10 focus:ring-blue-500'
                   }`}
                 required
               />
@@ -510,17 +574,17 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
 
             {/* Email - Now with validation */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Email <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Email <span className="text-[#FF4935]">*</span>
               </label>
               <input
                 type="email"
                 placeholder="example@gmail.com"
                 value={form.email}
                 onChange={(e) => handleFormChange("email", e.target.value)}
-                className={`w-full border rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.email
+                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.email
                   ? 'border-red-300 ring-1 ring-red-500'
-                  : 'border-[#E0E0E1] focus:ring-blue-500'
+                  : 'border-[#1F2937]/10 focus:ring-blue-500'
                   }`}
                 required
               />
@@ -531,24 +595,24 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
 
             {/* Phone */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Phone <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Phone <span className="text-[#FF4935]">*</span>
               </label>
               <input
                 type="tel"
                 placeholder="+91 123456789"
                 value={form.phone}
                 onChange={(e) => handleFormChange("phone", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
               />
             </div>
 
             {/* Company - Now required with validation */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Company <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Company <span className="text-[#FF4935]">*</span>
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <SearchableDropdown
                   options={localCompanies}
                   value={form.company}
@@ -559,14 +623,15 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
                   className="flex-1"
                   required={true}
                   error={validationErrors.company}
+                  compact
                 />
                 <button
                   type="button"
                   onClick={() => setShowQuickCompanyForm(true)}
-                  className="w-12 h-12 flex items-center justify-center bg-[#F2F2F7] text-[#111216] rounded-xl hover:bg-gray-200 transition-colors border border-[#E0E0E1]"
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
                   title="Add New Company"
                 >
-                  <Plus className="w-5 h-5 text-gray-600" />
+                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
                 </button>
               </div>
               {validationErrors.company && (
@@ -574,40 +639,39 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
               )}
             </div>
 
-            {/* Profile Picture */}
+            {/* Lead Source */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                Profile Picture <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Lead Source <span className="text-[#FF4935]">*</span>
               </label>
-              <div className="relative border border-[#E0E0E1] rounded-xl h-12 flex items-center bg-white overflow-hidden font-inter">
-                <div className="bg-[#F2F2F7] px-4 h-full flex items-center text-[14px] text-gray-600 font-medium border-r border-[#E0E0E1]">
-                  Choose File
-                </div>
-                <div className={`px-4 text-[14px] truncate ${profilePicture ? "text-gray-900 font-medium" : "text-[#A0A0A0]"}`}>
-                  {profilePicture ? profilePicture.name : "No File Chosen"}
-                </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  required
-                />
-              </div>
-              <p className="text-[12px] font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">PNG, JPEG upto 5MB</p>
+              <CustomDropdown
+                options={["Referral", "Website", "Cold Call", "Social Media", "Event", "Advertisement", "Other"]}
+                value={form.leadSource}
+                onChange={(value) => handleFormChange("leadSource", value)}
+                placeholder="Choose Lead Source"
+                required
+                buttonClassName={`w-full border rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${validationErrors.leadSource ? 'border-red-300 ring-1 ring-red-500' : 'border-[#1F2937]/10'} ${form.leadSource ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
+              />
+              {validationErrors.leadSource && (
+                <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.leadSource}</p>
+              )}
             </div>
 
             {/* Additional Fields - Now with validation */}
             {fieldDefinitions.length > 0 && (
-              <div className="pt-4 space-y-6">
-                <h3 className="text-[16px] font-bold text-[#111216]">
-                  Custom Fields
-                </h3>
+              <div className="pt-4 space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                  <h3 className="flex-shrink-0 text-[14px] font-medium leading-[120%] text-[#1F2937]">
+                    Custom Fields
+                  </h3>
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                </div>
                 <div className="space-y-3 sm:space-y-4">
                   {fieldDefinitions.map((fieldDef) => (
                     <div key={fieldDef.name}>
-                      <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
-                        {fieldDef.name} {fieldDef.required && <span className="text-red-500">*</span>}
+                      <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                        {fieldDef.name} {fieldDef.required && <span className="text-[#FF4935]">*</span>}
                       </label>
                       {renderFieldInput(
                         fieldDef,
@@ -620,16 +684,16 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
             )}
           </div>
 
-          <div className="p-8 pt-6 border-t border-[#F2F2F7] flex gap-4 flex-shrink-0 bg-white">
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 border border-[#E0E0E1] text-[#111216] h-12 rounded-xl text-[14px] font-bold hover:bg-gray-50 transition-colors font-inter"
+              className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors font-inter"
             >
               Cancel
             </button>
             <button
-              className="flex-1 bg-[#0C4FCD] text-white h-12 rounded-xl text-[14px] font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
+              className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
               type="submit"
               disabled={loading}
             >

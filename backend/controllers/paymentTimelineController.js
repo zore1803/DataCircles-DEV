@@ -12,6 +12,18 @@ exports.getPaymentsTimeline = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const partyFilter = req.query.party ? req.query.party.trim().toLowerCase() : "";
+    const typeFilter = req.query.type ? req.query.type.trim() : "";
+    const directionFilter = req.query.direction ? req.query.direction.trim().toUpperCase() : "";
+    const searchQuery = req.query.search ? req.query.search.trim().toLowerCase() : "";
+
+    let rules = [];
+    if (req.query.rules) {
+      try {
+        rules = JSON.parse(req.query.rules);
+      } catch (e) {
+        rules = [];
+      }
+    }
 
     // Fetch from all relevant collections concurrently
     const [payments, invoices, purchases, subPayments, bankAccounts, wallet] = await Promise.all([
@@ -101,6 +113,80 @@ exports.getPaymentsTimeline = async (req, res) => {
 
     if (partyFilter) {
       allTransactions = allTransactions.filter(t => (t.party || "").toLowerCase().includes(partyFilter));
+    }
+
+    if (searchQuery) {
+      allTransactions = allTransactions.filter(t =>
+        (t["payment-id"] || "").toLowerCase().includes(searchQuery) ||
+        (t.party || "").toLowerCase().includes(searchQuery)
+      );
+    }
+
+    if (directionFilter) {
+      if (directionFilter === "CREDIT" || directionFilter === "IN") {
+        allTransactions = allTransactions.filter(t => t.direction === "IN");
+      } else if (directionFilter === "DEBIT" || directionFilter === "OUT") {
+        allTransactions = allTransactions.filter(t => t.direction === "OUT");
+      }
+    }
+
+    if (typeFilter) {
+      if (typeFilter === "Credit") {
+        allTransactions = allTransactions.filter(t => t.direction === "IN");
+      } else if (typeFilter === "Debit") {
+        allTransactions = allTransactions.filter(t => t.direction === "OUT");
+      } else if (["Invoice", "Purchase", "Subscription", "Payment"].includes(typeFilter)) {
+        allTransactions = allTransactions.filter(t => (t.source || "").toLowerCase() === typeFilter.toLowerCase());
+      }
+    }
+
+    // Apply Advanced Filter Rules
+    if (Array.isArray(rules) && rules.length > 0) {
+      allTransactions = allTransactions.filter(t => {
+        return rules.every(rule => {
+          if (!rule.column) return true;
+          let colVal = t[rule.column];
+
+          // Handle direction mapping for Credit/Debit
+          if (rule.column === "direction") {
+            colVal = t.direction === "IN" ? "Credit" : "Debit";
+          }
+
+          const op = rule.operator || "contains";
+          const val = rule.value != null ? String(rule.value).trim().toLowerCase() : "";
+
+          if (op === "is_empty") return colVal == null || String(colVal).trim() === "";
+          if (op === "is_not_empty") return colVal != null && String(colVal).trim() !== "";
+
+          if (rule.column === "amount") {
+            const numT = Number(t.amount) || 0;
+            const numV = Number(rule.value) || 0;
+            if (op === "greater_than") return numT > numV;
+            if (op === "less_than") return numT < numV;
+            if (op === "is") return numT === numV;
+            if (op === "is_not") return numT !== numV;
+          }
+
+          const strVal = colVal != null ? String(colVal).toLowerCase() : "";
+
+          if (op === "contains") return strVal.includes(val);
+          if (op === "not_contains") return !strVal.includes(val);
+          if (op === "is") return strVal === val;
+          if (op === "is_not") return strVal !== val;
+          if (op === "greater_than") return Number(strVal) > Number(val);
+          if (op === "less_than") return Number(strVal) < Number(val);
+          if (op === "in") {
+            const parts = val.split(",").map(p => p.trim());
+            return parts.includes(strVal);
+          }
+          if (op === "not_in") {
+            const parts = val.split(",").map(p => p.trim());
+            return !parts.includes(strVal);
+          }
+
+          return true;
+        });
+      });
     }
 
     allTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
