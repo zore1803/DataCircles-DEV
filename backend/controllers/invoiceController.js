@@ -9,6 +9,7 @@ const DocumentSettings = require("../models/DocumentSettings");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
 const sendPaymentEmail = require("../utils/sendPaymentEmail");
 const sendSMS = require("../utils/sendSMS");
+const sendGridMail = require("../utils/sendGridMail");
 
 const calculateItemAmount = (item) => {
   const rate = parseFloat(item.rate) || 0;
@@ -254,6 +255,94 @@ const createInvoice = async (req, res) => {
     await session.abortTransaction();
     session.endSession();
     res.status(500).json({ error: err.message });
+  }
+};
+
+// Duplicate: clones an existing invoice into a brand-new Draft invoice with
+// a freshly generated number. Does not touch the source invoice, and never
+// carries over payments/digitalSignature/timestamps or the old number.
+const duplicateInvoice = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const source = await Invoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!source) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const effectivePrefix = (documentSettings.documentTypeSettings?.invoice?.prefix ?? documentSettings.invoicePrefix ?? "").toString().trim() || "INV-";
+    const effectiveSuffix = (documentSettings.documentTypeSettings?.invoice?.suffix ?? documentSettings.invoiceSuffix ?? "").toString().trim();
+
+    let newInvoiceNumber;
+    try {
+      newInvoiceNumber = await resolveDocumentNumber({
+        Model: Invoice,
+        numberField: "invoiceNumber",
+        organization: req.user.organization,
+        documentTypeKey: "invoice",
+        prefix: effectivePrefix,
+        suffix: effectiveSuffix,
+        providedNumber: null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
+
+    // Bulk signature updates write via updateMany (no schema validation), so
+    // older invoices can carry a signatureType like "image" that the
+    // ['text','upload'] enum never actually allowed. A new document's .save()
+    // does validate, so that stale value must be normalized here rather than
+    // copied straight through.
+    const validSignatureTypes = ["text", "upload"];
+    const normalizedSignatureType = validSignatureTypes.includes(source.signatureType)
+      ? source.signatureType
+      : (source.signature ? "upload" : "text");
+
+    const duplicate = new Invoice({
+      deal: source.deal,
+      date: new Date(),
+      amount: source.amount,
+      discount: source.discount,
+      status: "Draft",
+      items: source.items,
+      style: source.style,
+      notes: source.notes,
+      terms: source.terms,
+      isTaxInvoice: source.isTaxInvoice,
+      signature: source.signature,
+      signatureType: normalizedSignatureType,
+      receiverGSTIN: source.receiverGSTIN,
+      billingAddress: source.billingAddress,
+      shippingAddress: source.shippingAddress,
+      transactionType: source.transactionType,
+      gstRate: source.gstRate,
+      invoiceNumber: newInvoiceNumber,
+      user: req.user.id,
+      organization: req.user.organization,
+      duplicatedFrom: source._id,
+    });
+
+    await duplicate.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json(duplicate);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: `Failed to duplicate invoice: ${err.message}` });
   }
 };
 
@@ -810,7 +899,6 @@ exports.getInvoices = async (req, res) => {
 
 const bulkEmailGrouped = async (req, res) => {
   try {
-    const nodemailer = require("nodemailer");
     const { ids, overrides } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: "ids array is required" });
@@ -862,14 +950,6 @@ const bulkEmailGrouped = async (req, res) => {
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
     const successfulIds = [];
     const failedIds = [];
 
@@ -900,8 +980,7 @@ const bulkEmailGrouped = async (req, res) => {
       if (attachments.length === 0) continue;
 
       try {
-        await transporter.sendMail({
-          from: `"${req.user.name || "DataCircles"}" <${process.env.EMAIL_USER}>`,
+        await sendGridMail({
           replyTo: req.user.email,
           to: group.email,
           subject: `Your Invoices from ${orgDetails?.companyName || "Us"}`,
@@ -1125,6 +1204,7 @@ const deleteInvoicePayment = async (req, res) => {
 
 module.exports = {
   createInvoice,
+  duplicateInvoice,
   getAllInvoices,
   getAllInvoicesPaginated,
   getMyInvoices,

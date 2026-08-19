@@ -41,6 +41,10 @@ export const VIDEO_TUTORIALS = {
     videoId: "YOUR_PRODUCTS_VIDEO_ID",
     title: "Products Module - Managing Inventory & Items",
   },
+  paymentsTimeline: {
+    videoId: "YOUR_PAYMENTS_TIMELINE_VIDEO_ID",
+    title: "Payments Timeline - Tracking Money In & Out",
+  },
   // Add more modules as needed
 };
 

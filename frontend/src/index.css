@@ -96,11 +96,21 @@
   width: 100%;
 }
 
+.payment-panel {
+  top: 4rem;
+  bottom: 4rem;
+}
+
 @media (min-width: 1024px) {
   .dc-panel-w {
     width: 33.333vw;
     min-width: 440px;
     max-width: 100%;
+  }
+
+  .payment-panel {
+    width: min(45vw, 720px);
+    min-width: 560px;
   }
 }
 
@@ -138,6 +148,12 @@
 
 .overflow-x-auto::-webkit-scrollbar {
   height: 8px;
+  /* Customizing ::-webkit-scrollbar on an element requires declaring both
+     axes explicitly — leaving `width` unset collapsed the vertical
+     scrollbar to invisible on any container (like PaymentsTimeline's table
+     wrapper) that combines this class with overflow-y-auto, even though
+     the horizontal bar (height) rendered fine. */
+  width: 8px;
 }
 
 .overflow-x-auto::-webkit-scrollbar-track {

@@ -61,6 +61,9 @@ const proformaInvoiceSchema = new mongoose.Schema({
     // this line's rate already includes GST instead of taxing it again.
     taxInclusive: { type: Boolean, default: false },
   }],
+  // Set when this pro forma invoice was created via the "Duplicate" action,
+  // pointing at the source document it was cloned from.
+  duplicatedFrom: { type: mongoose.Schema.Types.ObjectId, ref: 'ProformaInvoice' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('ProformaInvoice', proformaInvoiceSchema);

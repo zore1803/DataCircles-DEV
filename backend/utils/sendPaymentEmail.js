@@ -1,6 +1,4 @@
-const sgMail = require("@sendgrid/mail");
-
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+const sendGridMail = require("./sendGridMail");
 
 /**
  * Send a payment receipt email via SendGrid.
@@ -71,9 +69,8 @@ async function sendPaymentEmail({ to, invoiceNumber, amount, paymentDate, paymen
       </div>
     </div>`;
 
-  await sgMail.send({
+  await sendGridMail({
     to,
-    from: process.env.EMAIL_USER,
     subject: `Payment Receipt — ${invoiceNumber}`,
     html,
     text: `Payment of ${formattedAmount} received for invoice ${invoiceNumber} on ${formattedDate} via ${paymentMethod}.`,

@@ -2,7 +2,7 @@ const DeliveryChallan = require("../models/deliveryChallan");
 const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const Branding = require("../models/Branding");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
-const nodemailer = require("nodemailer");
+const sendGridMail = require("../utils/sendGridMail");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
@@ -140,6 +140,87 @@ exports.createDeliveryChallan = async (req, res) => {
     res
       .status(500)
       .json({ error: `Failed to create delivery challan: ${err.message}` });
+  }
+};
+
+// Duplicate: clones an existing delivery challan into a brand-new Draft
+// challan with a freshly generated number. Does not touch the source.
+exports.duplicateDeliveryChallan = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const source = await DeliveryChallan.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!source) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Delivery challan not found" });
+    }
+
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const finalDCPrefix = documentSettings.documentTypeSettings?.deliveryChallan?.prefix || "DC-";
+    const finalDCSuffix = (documentSettings.documentTypeSettings?.deliveryChallan?.suffix ?? "").toString().trim();
+
+    let newDeliveryChallanNumber;
+    try {
+      newDeliveryChallanNumber = await resolveDocumentNumber({
+        Model: DeliveryChallan,
+        numberField: "deliveryChallanNumber",
+        organization: req.user.organization,
+        documentTypeKey: "deliveryChallan",
+        prefix: finalDCPrefix,
+        suffix: finalDCSuffix,
+        providedNumber: null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
+
+    // Bulk signature updates write via updateMany (no schema validation), so
+    // older challans can carry a signatureType like "image" that the
+    // ['text','upload'] enum never actually allowed. A new document's .save()
+    // does validate, so that stale value must be normalized here rather than
+    // copied straight through.
+    const validSignatureTypes = ["text", "upload"];
+    const normalizedSignatureType = validSignatureTypes.includes(source.signatureType)
+      ? source.signatureType
+      : (source.signature ? "upload" : "text");
+
+    const duplicate = new DeliveryChallan({
+      deal: source.deal,
+      deliveryChallanNumber: newDeliveryChallanNumber,
+      date: new Date(),
+      amount: source.amount,
+      status: "Draft",
+      items: source.items,
+      notes: source.notes,
+      terms: source.terms,
+      signature: source.signature,
+      signatureType: normalizedSignatureType,
+      discount: source.discount,
+      billingAddress: source.billingAddress,
+      shippingAddress: source.shippingAddress,
+      user: req.user.id,
+      organization: req.user.organization,
+      duplicatedFrom: source._id,
+    });
+
+    await duplicate.save({ session });
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json(duplicate);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: `Failed to duplicate delivery challan: ${err.message}` });
   }
 };
 
@@ -459,16 +540,7 @@ exports.sendDeliveryChallanEmail = async (req, res) => {
     // inside htmlDocumentPdf, which renders the same markup as the live preview.
     const pdfBuffer = await htmlDocumentPdf(deliveryChallan, bankDetails, orgDetails, "deliveryChallan");
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
     const mailOptions = {
-      from: process.env.EMAIL_USER,
       to: deliveryChallan.deal.email || req.body.email,
       subject: `Delivery Challan ${deliveryChallan.deliveryChallanNumber}`,
       text: `Dear ${
@@ -483,7 +555,7 @@ exports.sendDeliveryChallanEmail = async (req, res) => {
       ],
     };
 
-    await transporter.sendMail(mailOptions);
+    await sendGridMail(mailOptions);
     deliveryChallan.status = "Sent";
     await deliveryChallan.save();
 

@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const Branding = require("../models/Branding");
 const Deal = require("../models/Deal");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
+const sendGridMail = require("../utils/sendGridMail");
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -149,6 +150,92 @@ const createPerformaInvoice = async (req, res) => {
     res
       .status(500)
       .json({ error: `Failed to create proformainvoice: ${err.message}` });
+  }
+};
+
+// Duplicate: clones an existing pro forma invoice into a brand-new Draft
+// document with a freshly generated number. Does not touch the source.
+const duplicatePerformaInvoice = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const source = await PerformaInvoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!source) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Proforma invoice not found" });
+    }
+
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const finalPIPrefix = documentSettings.documentTypeSettings?.proformaInvoice?.prefix || "PI-";
+    const finalPISuffix = (documentSettings.documentTypeSettings?.proformaInvoice?.suffix ?? "").toString().trim();
+
+    let newPerformaInvoiceNumber;
+    try {
+      newPerformaInvoiceNumber = await resolveDocumentNumber({
+        Model: PerformaInvoice,
+        numberField: "performaInvoiceNumber",
+        organization: req.user.organization,
+        documentTypeKey: "proformaInvoice",
+        prefix: finalPIPrefix,
+        suffix: finalPISuffix,
+        providedNumber: null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
+
+    // Bulk signature updates write via updateMany (no schema validation), so
+    // older documents can carry a signatureType like "image" that the
+    // ['text','upload'] enum never actually allowed. A new document's .save()
+    // does validate, so that stale value must be normalized here rather than
+    // copied straight through.
+    const validSignatureTypes = ["text", "upload"];
+    const normalizedSignatureType = validSignatureTypes.includes(source.signatureType)
+      ? source.signatureType
+      : (source.signature ? "upload" : "text");
+
+    const duplicate = new PerformaInvoice({
+      deal: source.deal,
+      date: new Date(),
+      amount: source.amount,
+      status: "Draft",
+      items: source.items,
+      style: source.style,
+      notes: source.notes,
+      terms: source.terms,
+      isTaxInvoice: source.isTaxInvoice,
+      transactionType: source.transactionType,
+      signature: source.signature,
+      signatureType: normalizedSignatureType,
+      discount: source.discount,
+      receiverGSTIN: source.receiverGSTIN,
+      billingAddress: source.billingAddress,
+      shippingAddress: source.shippingAddress,
+      performaInvoiceNumber: newPerformaInvoiceNumber,
+      user: req.user.id,
+      organization: req.user.organization,
+      duplicatedFrom: source._id,
+    });
+
+    await duplicate.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json(duplicate);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: `Failed to duplicate proformainvoice: ${err.message}` });
   }
 };
 
@@ -534,7 +621,6 @@ const updatePerformaInvoiceNumber = async (req, res) => {
 
 const sendPerformaInvoiceEmail = async (req, res) => {
   try {
-    const nodemailer = require("nodemailer");
     const pi = await PerformaInvoice.findOne({
       _id: req.params.id,
       organization: req.user.organization,
@@ -550,14 +636,6 @@ const sendPerformaInvoiceEmail = async (req, res) => {
     const orgDetails = await Branding.findOne({ organization: req.user.organization }).sort({ updatedAt: -1 });
     const pdfBuffer = await htmlDocumentPdf(pi, bankDetails, orgDetails, "performa");
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
     const recipient = req.body.email || pi.deal?.email;
     if (!recipient) {
       return res.status(400).json({ error: "No recipient email address available" });
@@ -566,8 +644,7 @@ const sendPerformaInvoiceEmail = async (req, res) => {
     const subject = req.body.subject || `Proforma Invoice ${pi.performaInvoiceNumber}`;
     const body = req.body.body || `Dear ${pi.deal?.contactPerson || "Customer"},\n\nPlease find attached your proforma invoice.\n\nBest regards`;
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    await sendGridMail({
       to: recipient,
       subject,
       text: body,
@@ -628,6 +705,7 @@ const bulkUpdateSignature = async (req, res) => {
 
 module.exports = {
   createPerformaInvoice,
+  duplicatePerformaInvoice,
   getAllPerformaInvoices,
   getAllPerformaInvoicesPaginated,
   getMyPerformaInvoices,

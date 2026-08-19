@@ -8,7 +8,6 @@ const SubscriptionPayment = require("../models/SubscriptionPayment.js");
 const KanbanBoard = require("../models/KanbanBoard");
 const BankDetails = require("../models/BankDetails");
 const generateUniqueCode = require("../utils/generateUniqueCode");
-const sendMail = require("../utils/sendMail");
 const { logUserAction } = require("../utils/logger");
 const razorpay = require("../config/razorpay");
 const jwt = require("jsonwebtoken");

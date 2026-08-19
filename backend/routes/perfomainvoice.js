@@ -49,6 +49,16 @@ router.get(
   performaInvoiceController.downloadPerformaInvoice
 );
 
+// POST /api/performa-invoices/:id/duplicate (Create a new Draft pro forma invoice cloned from an existing one)
+router.post(
+  "/:id/duplicate",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  performaInvoiceController.duplicatePerformaInvoice
+);
+
 // DELETE /api/performa-invoices/:id (Delete - requires write permission)
 router.delete(
   "/:id",

@@ -421,7 +421,7 @@ const ItemForm = ({
         // uses for its single profilePicture upload, extended to multiple
         // files under one "images" field name.
         const fd = new FormData();
-        Object.entries({ ...form, variants: undefined, additionalFields: undefined, images: undefined }).forEach(
+        Object.entries({ ...form, variants: undefined, additionalFields: undefined, images: undefined, discount: undefined }).forEach(
           ([key, value]) => {
             if (value === undefined || value === null) return;
             fd.append(key, typeof value === "boolean" ? String(value) : value);
@@ -429,6 +429,7 @@ const ItemForm = ({
         );
         fd.append("variants", JSON.stringify(variants));
         fd.append("additionalFields", JSON.stringify(processedAdditionalFields));
+        fd.append("discount", JSON.stringify(form.discount || { type: "percentage", value: 0 }));
         fd.append("existingImages", JSON.stringify(existingImages));
         newImageFiles.forEach((file) => fd.append("images", file));
 
@@ -936,6 +937,53 @@ const ItemForm = ({
                   <option key={rate} value={rate}>{rate}%</option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Default Discount + Max Discount % */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                Discount
+              </label>
+              <div className="flex border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 bg-white">
+                <input
+                  type="number"
+                  min="0"
+                  value={form.discount?.value ?? 0}
+                  onChange={(e) =>
+                    handleFormChange("discount", { ...(form.discount || { type: "percentage" }), value: parseFloat(e.target.value) || 0 })
+                  }
+                  className="flex-1 min-w-0 px-3 py-2.5 text-sm focus:outline-none"
+                />
+                <select
+                  value={form.discount?.type ?? "percentage"}
+                  onChange={(e) =>
+                    handleFormChange("discount", { ...(form.discount || { value: 0 }), type: e.target.value })
+                  }
+                  className="px-2 py-2.5 bg-gray-50 border-l border-gray-200 text-xs text-gray-600 focus:outline-none"
+                >
+                  <option value="percentage">% Percentage</option>
+                  <option value="amount">₹ Amount</option>
+                </select>
+              </div>
+              <p className="mt-1 text-[11px] text-gray-400">Default discount applied when added to a document.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                Max Discount %
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                placeholder="e.g. 10"
+                value={form.maxDiscountPercent ?? ""}
+                onChange={(e) => handleFormChange("maxDiscountPercent", e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-[11px] text-gray-400">Leave blank for no limit.</p>
             </div>
           </div>
 

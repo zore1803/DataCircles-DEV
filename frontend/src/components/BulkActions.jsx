@@ -112,6 +112,17 @@ const BulkActions = ({
           </select>
         );
 
+      case "date":
+        return (
+          <input
+            type="date"
+            value={updateValue}
+            onChange={(e) => setUpdateValue(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            required
+          />
+        );
+
       default:
         return (
           <input

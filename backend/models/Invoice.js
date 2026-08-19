@@ -82,7 +82,10 @@ const invoiceSchema = new mongoose.Schema({
     documentId: { type: String },
     signedAt: { type: Date },
     signedUrl: { type: String }
-  }
+  },
+  // Set when this invoice was created via the "Duplicate" action, pointing
+  // at the source invoice it was cloned from. Never set on the source itself.
+  duplicatedFrom: { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Invoice', invoiceSchema);

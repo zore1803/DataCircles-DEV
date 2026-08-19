@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { 
+import {
   X, ChevronDown, ChevronUp, MoreVertical, Pencil, Trash2, Eye, EyeOff,
   SlidersHorizontal, Plus, Download, Share2, Edit2,
-  ChevronLeft, ChevronRight, Pin, PinOff, FileText
+  ChevronLeft, ChevronRight, Pin, PinOff, FileText,
+  Settings, Upload, Video, TrendingUp, TrendingDown, Wallet, ListChecks,
 } from "lucide-react";
 import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
@@ -17,6 +18,15 @@ import { getAncestorZoom } from "../utils/domUtils";
 import BulkActionBar from "../components/common/BulkActionBar";
 import { useBulkStrip } from "../hooks/useBulkSelection";
 import * as XLSX from "xlsx";
+import { useColumnSettings } from "../hooks/useColumnSettings";
+import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
+import VideoTutorialModal from "../components/VideoTutorialModal";
+import { getVideoTutorial } from "../utils/videoTutorials";
+import BulkActions from "../components/BulkActions";
+import ImportPayments from "../components/payments/ImportPayments";
+import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
+import PageSkeleton from "../components/common/PageSkeleton";
+import PaymentReceiptModal from "../components/vendor/PaymentReceiptModal";
 
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
@@ -29,6 +39,9 @@ const DEFAULT_COL_WIDTHS = {
   date: 180,
 };
 const MIN_COL_WIDTH = 60;
+// Matches Deals.jsx's KPI band desktop height (h-[120px]) so the two pages'
+// header/stats layout lines up the same way.
+const KPI_BAND_HEIGHT = 120;
 
 const ALL_COLUMNS = [
   { id: "payment-id", key: "payment-id", label: "Transaction ID" },
@@ -71,20 +84,37 @@ export default function PaymentsTimeline() {
     currentPage: 1, limit: 10, totalCount: 0, totalPages: 0,
     hasNextPage: false, hasPrevPage: false
   });
+  // Aggregate totals across every matching transaction (server-computed,
+  // not just the current page's 10 rows) — see paymentStats below.
+  const [serverSummary, setServerSummary] = useState(null);
+  // Full records for every currently-selected id, populated by fetchAllIds
+  // (Select All) — see paymentStats below for why this exists.
+  const [allSelectableDocs, setAllSelectableDocs] = useState(null);
   const [showLoadingSkeleton, setShowLoadingSkeleton] = useState(true);
   useTopLoadingSignal(showLoadingSkeleton);
+  // Full-page skeleton (same as Deals.jsx/Companies.jsx) only for the very
+  // first load of this page — subsequent refetches (page change, search,
+  // sort) keep the header/KPIs/pagination visible and only skeleton the
+  // table rows, so navigating away and back doesn't re-flash the whole page.
+  const hasLoadedOnceRef = useRef(false);
 
   /* search */
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const searchInputRef = useRef(null);
 
-  /* columns */
-  const [columnOrder, setColumnOrder] = useState(ALL_COLUMNS.map(c => c.id));
+  /* columns — visibility + order persist via useColumnSettings (same hook
+     Companies.jsx uses); pin side stays local/session-only, matching how
+     Companies.jsx's own pinnedColumns state also isn't part of that hook. */
+  const defaultColumns = useMemo(
+    () => ALL_COLUMNS.map((c, i) => ({ key: c.id, label: c.label, visible: true, order: i, sortable: true, required: i === 0 })),
+    []
+  );
+  const { columns, saveColumns, getVisibleColumns } = useColumnSettings("paymentsTimeline", defaultColumns);
   const [colWidths, setColWidths]     = useState(DEFAULT_COL_WIDTHS);
   const [pinnedCols, setPinnedCols]   = useState({});
-  const [hiddenCols, setHiddenCols]   = useState([]);
   const [sortConfig, setSortConfig]   = useState({ key: null, direction: null });
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
 
   /* Column header menu */
   const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
@@ -109,6 +139,14 @@ export default function PaymentsTimeline() {
   const [selectedIds, setSelectedIds] = useState([]);
   const { visible: stripVisible, closing: stripClosing } = useBulkStrip(selectedIds.length);
 
+  /* three-dot header menu + KPI/Import/Video Tutorial/Bulk Update */
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef(null);
+  const [showStats, setShowStats] = useState(true);
+  const [showVideoTutorial, setShowVideoTutorial] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+
   /* misc UI */
   const [showFilterMenu,    setShowFilterMenu]    = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -118,6 +156,11 @@ export default function PaymentsTimeline() {
   const [deleteConfirmState, setDeleteConfirmState] = useState({ isOpen: false, type: "single", target: null });
   const [editingPage, setEditingPage] = useState(false);
   const [pageInput, setPageInput] = useState("");
+  /* "View" action — full record + vendor for the receipt modal (the list
+     endpoint only returns a flattened summary row, so this fetches the
+     real Payment/Purchase document on demand). */
+  const [receiptData, setReceiptData] = useState(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   /* Fetch companies list for Party filter */
   useEffect(() => {
@@ -140,11 +183,20 @@ export default function PaymentsTimeline() {
 
   const openColumnMenu = (e, colId) => {
     e.stopPropagation();
+    // Anchor the menu's RIGHT edge to the chevron button's right edge (same
+    // formula as DealsTable.jsx's renderHeaderMenu), not the button's left
+    // edge — anchoring left made the menu grow rightward off a narrow
+    // column's trigger and overshoot into the next column instead of
+    // staying over the column it belongs to.
+    const zMenu = getAncestorZoom(document.body);
+    const MENU_W = 220;
     const rect = e.currentTarget.getBoundingClientRect();
-    const z = getAncestorZoom(document.body);
+    let calcLeft = rect.right / zMenu - MENU_W;
+    calcLeft = Math.min(calcLeft, window.innerWidth / zMenu - MENU_W - 8);
+    calcLeft = Math.max(calcLeft, 8);
     setColumnMenuPos({
-      top: (rect.bottom + 4) / z,
-      left: Math.min(window.innerWidth - 186, rect.left) / z,
+      top: rect.bottom / zMenu + 4,
+      left: calcLeft,
     });
     setOpenColumnMenuKey(colId);
   };
@@ -164,16 +216,27 @@ export default function PaymentsTimeline() {
   }, []);
 
   /* ── orderedColumns (mirrors Accounting.jsx pattern) ─────────────── */
-  const orderedColumns = useMemo(
-    () => columnOrder
-      .map(id => ALL_COLUMNS.find(c => c.id === id))
-      .filter(c => c && !hiddenCols.includes(c.id))
+  const orderedColumns = useMemo(() => {
+    const visible = getVisibleColumns(); // already ordered
+    return visible
+      .map(vc => ALL_COLUMNS.find(c => c.id === vc.key))
+      .filter(Boolean)
       .sort((a, b) => {
         const rank = c => pinnedCols[c.id] === "left" ? 0 : pinnedCols[c.id] === "right" ? 2 : 1;
         return rank(a) - rank(b);
-      }),
-    [columnOrder, pinnedCols, hiddenCols]
-  );
+      });
+  }, [columns, pinnedCols]);
+
+  /* ── pinned-block boundary shadow (same as DealsTable.jsx) — applied to
+     the last left-pinned column and the first right-pinned column, in
+     display order, so the pinned block reads as "floating" above the
+     scrollable columns behind it. ───────────────────────────────────── */
+  const leftPinnedInOrder = orderedColumns.filter(c => pinnedCols[c.id] === "left");
+  const rightPinnedInOrder = orderedColumns.filter(c => pinnedCols[c.id] === "right");
+  const lastLeftPinnedKey = leftPinnedInOrder.length > 0 ? leftPinnedInOrder[leftPinnedInOrder.length - 1].id : null;
+  const firstRightPinnedKey = rightPinnedInOrder.length > 0 ? rightPinnedInOrder[0].id : null;
+  const boundaryShadowSideFor = (colId) =>
+    colId === lastLeftPinnedKey ? "left" : colId === firstRightPinnedKey ? "right" : null;
 
   /* ── sticky offset map (same as Accounting.jsx) ─────────────────── */
   const stickyStyles = useMemo(() => {
@@ -204,6 +267,17 @@ export default function PaymentsTimeline() {
     return () => document.removeEventListener("click", handle);
   }, []);
 
+  /* ── close the three-dot header menu on outside click ───────────── */
+  useEffect(() => {
+    const handle = (e) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) {
+        setIsMoreMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
+
   /* ── data fetching ───────────────────────────────────────────────── */
   const fetchData = useCallback(async () => {
     setShowLoadingSkeleton(true);
@@ -222,11 +296,13 @@ export default function PaymentsTimeline() {
       const res = await API.get(`/payments-timeline?${params.toString()}`);
       setDocuments(res.data.documents || []);
       if (res.data.pagination) setPagination(res.data.pagination);
+      setServerSummary(res.data.summary || null);
     } catch (err) {
       toast.error("Failed to load transactions timeline");
       console.error(err);
     } finally {
       setShowLoadingSkeleton(false);
+      hasLoadedOnceRef.current = true;
     }
   }, [pagination.currentPage, pagination.limit, searchQuery, activeFilters]);
 
@@ -247,6 +323,13 @@ export default function PaymentsTimeline() {
       const res = await API.get(`/payments-timeline?${params.toString()}`);
       const allDocs = res.data.documents || [];
       setSelectedIds(allDocs.map(d => d._id));
+      // The KPI band narrows to the selection (paymentStats below), which
+      // needs each selected row's actual amount/direction — but this fetch
+      // is the ONLY place that has every matching record; the page-level
+      // `documents` state only ever holds the current page's 10. Cached here
+      // so "selected" totals cover the real full selection, not just
+      // whichever of those 534 happen to also be on the visible page.
+      setAllSelectableDocs(allDocs);
       toast.success(`Selected all ${allDocs.length} record(s).`, { id: tid });
     } catch (err) {
       toast.error("Failed to fetch all records", { id: tid });
@@ -284,6 +367,61 @@ export default function PaymentsTimeline() {
     return list;
   }, [documents, sortConfig]);
 
+  /* ── KPI stats — narrows to the current selection when one exists,
+     same behavior as Deals.jsx's dealStatistics ─────────────────── */
+  const paymentStats = useMemo(() => {
+    // Selecting specific rows narrows the KPIs to just that selection —
+    // necessarily a client-side sum since it's an arbitrary subset. Looks up
+    // each selected id against allSelectableDocs FIRST (the full fetch
+    // fetchAllIds/"Select All" populates, covering every matching record)
+    // and falls back to the current page's filteredDocs for ids selected by
+    // hand — using filteredDocs alone silently truncated "534 selected" down
+    // to whatever subset of those also happened to be on the visible page.
+    if (selectedIds.length > 0) {
+      const byId = new Map();
+      (allSelectableDocs || []).forEach(d => byId.set(d._id, d));
+      filteredDocs.forEach(d => byId.set(d._id, d)); // freshest data wins for overlapping ids
+      let totalCredit = 0;
+      let totalDebit = 0;
+      let matched = 0;
+      selectedIds.forEach(id => {
+        const d = byId.get(id);
+        if (!d) return;
+        matched += 1;
+        const amt = Number(d.amount) || 0;
+        if (d.direction === "IN") totalCredit += amt;
+        else totalDebit += amt;
+      });
+      return {
+        totalCredit,
+        totalDebit,
+        net: totalCredit - totalDebit,
+        count: matched || selectedIds.length,
+        isFiltered: true,
+      };
+    }
+    // Unselected: use the server-computed totals across every matching
+    // transaction (all pages), not just the current page's 10 rows — falls
+    // back to the old current-page-only math only if that hasn't loaded yet.
+    if (serverSummary) {
+      return { ...serverSummary, isFiltered: false };
+    }
+    let totalCredit = 0;
+    let totalDebit = 0;
+    filteredDocs.forEach(d => {
+      const amt = Number(d.amount) || 0;
+      if (d.direction === "IN") totalCredit += amt;
+      else totalDebit += amt;
+    });
+    return {
+      totalCredit,
+      totalDebit,
+      net: totalCredit - totalDebit,
+      count: filteredDocs.length,
+      isFiltered: false,
+    };
+  }, [filteredDocs, selectedIds, serverSummary, allSelectableDocs]);
+
   const handleSelectAll = e =>
     setSelectedIds(e.target.checked ? filteredDocs.map(d => d._id) : []);
 
@@ -291,6 +429,35 @@ export default function PaymentsTimeline() {
     setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
+
+  /* ── Bulk Update ─────────────────────────────────────────────────
+     Rows come from 4 different source collections (Payment/Invoice/
+     Purchase/Subscription), so the editable field set is limited to the
+     3 fields updateTimelineEntry's generic fallback branch actually
+     applies uniformly across every source: paymentDate, notes, bank. */
+  const paymentFieldConfig = {
+    // Keys match the normalized doc's own property names (so BulkActions'
+    // hasOwnProperty check against selected rows passes for every source) —
+    // "date" gets translated to the backend's expected "paymentDate" body
+    // key in handleBulkUpdatePayments below.
+    fields: [
+      { key: "date", label: "Date", type: "date" },
+      { key: "bank", label: "Bank Account", type: "text" },
+      { key: "notes", label: "Notes", type: "text" },
+    ],
+  };
+
+  const handleBulkUpdatePayments = async ({ field, value, itemIds }) => {
+    const bodyKey = field === "date" ? "paymentDate" : field;
+    await Promise.all(itemIds.map(async (id) => {
+      const doc = documents.find(d => d._id === id);
+      if (!doc) return;
+      await API.put(`/payments-timeline/${id}`, { source: doc.source, [bodyKey]: value });
+    }));
+    toast.success("Updated selected entries");
+    setSelectedIds([]);
+    fetchData();
+  };
 
   /* ── Export to Excel function ───────────────────────────────────── */
   const handleExportExcel = useCallback((itemsToExport) => {
@@ -360,19 +527,21 @@ export default function PaymentsTimeline() {
     <ColumnResizeHandle colId={colId} onResizeStart={startColumnResize} />
   ), []);
 
-  /* ── Column drag-reorder (exact clone of Accounting.jsx) ─────────── */
+  /* ── Column drag-reorder — reorders only the visible columns and
+     reassigns `order` for all of them, same pattern Companies.jsx's
+     handleColumnReorder uses, so the new order persists via saveColumns. */
   const handleColumnReorder = useCallback((draggedKey, targetKey) => {
     if (!draggedKey || draggedKey === targetKey) return;
-    setColumnOrder(prev => {
-      const next = [...prev];
-      const from = next.indexOf(draggedKey);
-      const to   = next.indexOf(targetKey);
-      if (from === -1 || to === -1) return prev;
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      return next;
-    });
-  }, []);
+    const visible = columns.filter(c => c.visible).sort((a, b) => a.order - b.order);
+    const from = visible.findIndex(c => c.key === draggedKey);
+    const to = visible.findIndex(c => c.key === targetKey);
+    if (from === -1 || to === -1) return;
+    const reordered = [...visible];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+    const hidden = columns.filter(c => !c.visible);
+    saveColumns([...reordered.map((c, i) => ({ ...c, order: i })), ...hidden]);
+  }, [columns, saveColumns]);
 
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
@@ -458,6 +627,25 @@ export default function PaymentsTimeline() {
     document.addEventListener("mouseup",   handleMouseUp);
   };
 
+  /* ── View → Payment Receipt ──────────────────────────────────────── */
+  const handleViewReceipt = async (doc) => {
+    if (doc.source !== "Payment" && doc.source !== "Purchase") {
+      toast.error(`Receipts aren't available for ${doc.source} entries yet.`);
+      return;
+    }
+    const tid = toast.loading("Loading receipt...");
+    try {
+      const res = await API.get(`/payments-timeline/${doc._id}/receipt`, {
+        params: { source: doc.source },
+      });
+      setReceiptData(res.data);
+      setShowReceiptModal(true);
+      toast.dismiss(tid);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to load receipt", { id: tid });
+    }
+  };
+
   /* ── Action menu ─────────────────────────────────────────────────── */
   const renderActionMenu = doc => {
     const isOpen = openActionMenuId === doc._id;
@@ -469,11 +657,31 @@ export default function PaymentsTimeline() {
             if (isOpen) {
               setOpenActionMenuId(null);
               setActionMenuPos(null);
-            } else {
-              const rect = e.currentTarget.getBoundingClientRect();
-              setActionMenuPos({ top: rect.top + rect.height / 2, right: window.innerWidth - rect.left + 4 });
-              setOpenActionMenuId(doc._id);
+              return;
             }
+            // Same zoom correction + row-center anchor + viewport clamp as
+            // DealsTable.jsx's row-actions menu — this previously used the
+            // raw (unzoomed) rect and anchored to the button's top edge with
+            // no clamping at all, which under the app's CSS zoom drifted the
+            // portal far from the row that was actually clicked.
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 160; // matches w-40 below
+            const MENU_H = 189; // 5 buttons (~36px each) + 1 divider (~9px)
+            const MARGIN = 8;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const viewportH = window.innerHeight / zMenu;
+            const viewportW = window.innerWidth / zMenu;
+
+            const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+            let calcTop = rowCenter - MENU_H / 2;
+            calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+            calcLeft = Math.max(calcLeft, MARGIN);
+
+            setActionMenuPos({ top: calcTop, left: calcLeft });
+            setOpenActionMenuId(doc._id);
           }}
           className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
         >
@@ -485,11 +693,11 @@ export default function PaymentsTimeline() {
             <div className="fixed inset-0 z-[59]" onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); }} />
             <div
               className="fixed w-40 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-[60] overflow-hidden"
-              style={{ top: actionMenuPos.top, right: actionMenuPos.right, transform: "translateY(-50%)" }}
+              style={{ top: actionMenuPos.top, left: actionMenuPos.left }}
               onClick={e => e.stopPropagation()}
             >
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); toast.success("View details coming soon!"); }}>
+                onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); handleViewReceipt(doc); }}>
                 <Eye className="w-4 h-4 text-gray-400" /> View
               </button>
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
@@ -582,20 +790,75 @@ export default function PaymentsTimeline() {
     return items;
   }, [pagination]);
 
+  // First-load-only full-page skeleton — same component/usage Deals.jsx
+  // uses (`if (loading) return <PageSkeleton .../>`).
+  if (showLoadingSkeleton && documents.length === 0 && !hasLoadedOnceRef.current) {
+    return (
+      <PageSkeleton variant="kanban" boardVariant="table" tableRows={pagination.limit} tableCols={ALL_COLUMNS.length} />
+    );
+  }
+
   /* ─────────────────────────────────────────────────────────────────── */
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-[#FAFBFC]">
 
-      {/* ── Fixed header bar ─────────────────────────────────────────────────────── */}
+      {/* ── Fixed header bar — same shape/classes as Deals.jsx's "New Strip":
+          border-b bg-white flex justify-between, fixed 64px height, title
+          block stacked (name + video icon, subtitle below) instead of a
+          single title+badge line. ──────────────────────────────────────── */}
       <div
-        className="fixed right-0 h-16 px-6 flex items-center justify-between border-b border-[#E1E4EA] bg-white top-[54px] lg:top-16"
-        style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
+        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
+        style={{
+          left: "var(--sidebar-width, 0px)",
+          zIndex: 40,
+          height: "64px",
+          minHeight: "64px",
+          maxHeight: "64px",
+          boxSizing: "border-box",
+        }}
       >
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Payments Timeline</h1>
-          <span className="px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
-            {pagination.totalCount} total
-          </span>
+        {stripVisible ? (
+          <BulkActionBar
+            selectedCount={selectedIds.length}
+            entityName="payment"
+            isClosing={stripClosing}
+            onSelectAll={fetchAllIds}
+            onDeselectAll={() => setSelectedIds([])}
+            onExport={() => {
+              const selectedDocs = documents.filter(doc => selectedIds.includes(doc._id));
+              handleExportExcel(selectedDocs.length > 0 ? selectedDocs : selectedIds.map(id => ({ _id: id })));
+            }}
+            onDelete={() => {
+              setDeleteConfirmState({ isOpen: true, type: "bulk", target: selectedIds });
+            }}
+            onUpdateStatus={() => setShowBulkActions(true)}
+            onCancel={() => setSelectedIds([])}
+          />
+        ) : (
+          <>
+        <div className="flex flex-col gap-1 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <h2
+              className="m-0 font-medium truncate text-sm sm:text-base"
+              style={{ lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
+            >
+              Payments Timeline
+            </h2>
+            <button
+              type="button"
+              onClick={() => setShowVideoTutorial(true)}
+              className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 transition-all flex-shrink-0 shadow-sm"
+              title="Watch Payments Timeline Video Guide"
+            >
+              <Video className="w-3.5 h-3.5" />
+            </button>
+            <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] sm:text-xs font-semibold flex-shrink-0">
+              {pagination.totalCount} total
+            </span>
+          </div>
+          <p className="text-[#5B5A64] text-[10px] sm:text-sm m-0 leading-tight truncate">
+            Track money in and out
+          </p>
         </div>
 
         <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
@@ -645,6 +908,50 @@ export default function PaymentsTimeline() {
             )}
           </button>
 
+          {/* More options */}
+          <div className="relative" ref={moreMenuRef}>
+            <button
+              onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+              className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+              title="More options"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+
+            {isMoreMenuOpen && (
+              <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
+                <button
+                  onClick={() => { setShowColumnSettings(true); setIsMoreMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Settings className="w-4 h-4 text-gray-400" />
+                  Columns
+                </button>
+                <button
+                  onClick={() => { setShowStats((prev) => !prev); setIsMoreMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Eye className="w-4 h-4 text-gray-400" />
+                  {showStats ? "Hide KPIs" : "Unhide KPIs"}
+                </button>
+                <button
+                  onClick={() => { setShowImport(true); setIsMoreMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Upload className="w-4 h-4 text-gray-400" />
+                  Import
+                </button>
+                <button
+                  onClick={() => { setShowVideoTutorial(true); setIsMoreMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Video className="w-4 h-4 text-gray-400" />
+                  Video Tutorial
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Add Button */}
           <button
             onClick={() => {
@@ -657,29 +964,50 @@ export default function PaymentsTimeline() {
             <span className="whitespace-nowrap">Add Payment</span>
           </button>
         </div>
+          </>
+        )}
       </div>
 
-      {/* ── BulkActionBar — floats between title bar and table when rows are selected ── */}
-      {stripVisible && (
+      {/* ── KPI stat cards — same band treatment as Deals.jsx's stats row
+          (bordered band, 40x40 icon boxes, gap-6 between cards), narrowing
+          to the selection when rows are selected. Toggled via the
+          three-dot menu's Hide/Unhide KPIs item. ─────────────────────── */}
+      {showStats && (
         <div
-          className="fixed right-0 px-6 z-[40]"
-          style={{ left: "var(--sidebar-width, 0px)", top: 126, paddingTop: 4, paddingBottom: 4 }}
+          className="fixed right-0 box-border flex flex-col justify-center bg-white border-b border-[#E1E4EA] px-6 py-6"
+          style={{ left: "var(--sidebar-width, 0px)", top: 126, height: KPI_BAND_HEIGHT, zIndex: 38, boxSizing: "border-box" }}
         >
-          <BulkActionBar
-            selectedCount={selectedIds.length}
-            entityName="payment"
-            isClosing={stripClosing}
-            onSelectAll={fetchAllIds}
-            onDeselectAll={() => setSelectedIds([])}
-            onExport={() => {
-              const selectedDocs = documents.filter(doc => selectedIds.includes(doc._id));
-              handleExportExcel(selectedDocs.length > 0 ? selectedDocs : selectedIds.map(id => ({ _id: id })));
-            }}
-            onDelete={() => {
-              setDeleteConfirmState({ isOpen: true, type: "bulk", target: selectedIds });
-            }}
-            onCancel={() => setSelectedIds([])}
-          />
+          <div className="grid grid-cols-2 lg:flex lg:flex-row lg:items-stretch gap-3 lg:gap-6">
+            {[
+              { label: "Total Credit", value: `₹${paymentStats.totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: TrendingUp, iconClass: "text-green-600" },
+              { label: "Total Debit", value: `₹${paymentStats.totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: TrendingDown, iconClass: "text-red-600" },
+              { label: "Net", value: `₹${paymentStats.net.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: Wallet, iconClass: paymentStats.net >= 0 ? "text-green-600" : "text-red-600" },
+              { label: "Transactions", value: paymentStats.count, icon: ListChecks, iconClass: "text-[#0085FF]" },
+            ].map(({ label, value, icon: Icon, iconClass }) => (
+              <div
+                key={label}
+                className="box-border flex flex-row items-center justify-between min-w-0 lg:min-w-[200px] lg:w-[280px] lg:flex-1 bg-white"
+                style={{ padding: "16px", border: "1px solid #E1E4EA", borderRadius: "12px" }}
+              >
+                <div className="flex flex-row items-center min-w-0" style={{ gap: "14px" }}>
+                  <div
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{ width: "40px", height: "40px", padding: "8px", background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: "6px" }}
+                  >
+                    <Icon className={`w-5 h-5 ${iconClass}`} />
+                  </div>
+                  <div className="flex flex-col items-start min-w-0" style={{ gap: "4px" }}>
+                    <span className="truncate text-xs" style={{ color: "#525866" }}>
+                      {label}{paymentStats.isFiltered ? " (selected)" : ""}
+                    </span>
+                    <span className="truncate text-lg font-semibold" style={{ color: "#0E121B" }}>
+                      {value}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -689,7 +1017,7 @@ export default function PaymentsTimeline() {
         style={{
           left: "var(--sidebar-width, 0px)",
           bottom: 64,
-          top: stripVisible ? 178 : 130,
+          top: 130 + (showStats ? KPI_BAND_HEIGHT : 0),
         }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
@@ -715,6 +1043,7 @@ export default function PaymentsTimeline() {
               {orderedColumns.map(col => {
                 const isDragging = draggedColKey === col.id;
                 const isDragOver = dragOverColKey === col.id && draggedColKey && draggedColKey !== col.id;
+                const boundaryShadowSide = boundaryShadowSideFor(col.id);
 
                 return (
                   <th
@@ -743,6 +1072,9 @@ export default function PaymentsTimeline() {
                       </button>
                     </div>
                     <ResizeHandle colId={col.id} />
+                    {boundaryShadowSide && (
+                      <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSide)} />
+                    )}
                   </th>
                 );
               })}
@@ -788,13 +1120,17 @@ export default function PaymentsTimeline() {
                   {/* Data cells */}
                   {orderedColumns.map((col, colIdx) => {
                     const isRightmost = colIdx === orderedColumns.length - 1;
+                    const cellBoundaryShadowSide = boundaryShadowSideFor(col.id);
                     return (
                       <td
                         key={col.id}
                         style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                        className="px-4 py-3 text-sm text-gray-900 border-b border-r border-[#E1E4EA] last:border-r-0 overflow-hidden bg-inherit whitespace-nowrap"
+                        className={`px-4 py-3 text-sm text-gray-900 border-b border-r border-[#E1E4EA] last:border-r-0 bg-inherit whitespace-nowrap ${cellBoundaryShadowSide ? "" : "overflow-hidden"}`}
                       >
                         {renderCell(col.id, doc, isRightmost)}
+                        {cellBoundaryShadowSide && (
+                          <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
+                        )}
                       </td>
                     );
                   })}
@@ -855,7 +1191,7 @@ export default function PaymentsTimeline() {
             onChange={e => handleLimitChange(parseInt(e.target.value))}
             className="border border-gray-300 rounded-md text-sm py-1 pl-2 pr-6 focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
           >
-            {[10, 25, 50, 100].map(val => <option key={val} value={val}>{val} per page</option>)}
+            {[10, 20, 50, 100].map(val => <option key={val} value={val}>{val} per page</option>)}
           </select>
         </div>
 
@@ -1003,9 +1339,10 @@ export default function PaymentsTimeline() {
                     <button
                       onClick={() => {
                         closeColumnMenu();
-                        setHiddenCols(prev => [...prev, col.id]);
+                        saveColumns(columns.map(c => c.key === col.id ? { ...c, visible: false } : c));
                       }}
-                      className={`${itemClass} text-[#161618] hover:bg-gray-50`}
+                      disabled={columns.find(c => c.key === col.id)?.required}
+                      className={`${itemClass} text-[#161618] hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent`}
                     >
                       <EyeOff className="w-3.5 h-3.5 text-[#1C1B1F]" />
                       Hide Column
@@ -1026,6 +1363,13 @@ export default function PaymentsTimeline() {
           setEditingPaymentItem(null);
         }}
         onSuccess={() => fetchData()}
+      />
+
+      <PaymentReceiptModal
+        isOpen={showReceiptModal}
+        onClose={() => { setShowReceiptModal(false); setReceiptData(null); }}
+        payment={receiptData?.payment}
+        vendor={receiptData?.vendor}
       />
 
       {/* ── Custom Delete Warning Modal ───────────────────────────── */}
@@ -1111,6 +1455,40 @@ export default function PaymentsTimeline() {
         title="Filter Transactions"
         subtitle="Find specific transactions quickly"
         emptyStateText="Add a rule to narrow down your payments timeline."
+      />
+
+      {/* ── Columns panel (same shared component Companies.jsx/Deals.jsx use) ── */}
+      <ColumnSettingsPanel
+        isOpen={showColumnSettings}
+        onClose={() => setShowColumnSettings(false)}
+        columns={columns}
+        onSave={saveColumns}
+        moduleName="Payments Timeline"
+      />
+
+      {/* ── Video Tutorial ───────────────────────────────────────────── */}
+      <VideoTutorialModal
+        isOpen={showVideoTutorial}
+        onClose={() => setShowVideoTutorial(false)}
+        videoId={getVideoTutorial("paymentsTimeline")?.videoId}
+        title={getVideoTutorial("paymentsTimeline")?.title}
+      />
+
+      {/* ── Import (Payment records only) ───────────────────────────── */}
+      <ImportPayments
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        onImportSuccess={() => fetchData()}
+      />
+
+      {/* ── Bulk Update ──────────────────────────────────────────────── */}
+      <BulkActions
+        isOpen={showBulkActions}
+        onClose={() => setShowBulkActions(false)}
+        selectedItems={documents.filter(doc => selectedIds.includes(doc._id))}
+        onBulkUpdate={handleBulkUpdatePayments}
+        fieldConfig={paymentFieldConfig}
+        module="transactions"
       />
     </div>
   );
