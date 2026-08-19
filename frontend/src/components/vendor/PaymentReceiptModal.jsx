@@ -127,9 +127,13 @@ const PaymentReceiptModal = ({ isOpen, onClose, payment, vendor }) => {
           {payment.notes && (
             <div className="mb-8">
               <span className="text-sm font-medium text-gray-600 block mb-2">Notes:</span>
-              <div className="bg-gray-50 p-4 rounded-lg border">
-                <span className="text-gray-900">{payment.notes}</span>
-              </div>
+              {/* Notes are saved as rich-text HTML by PaymentFormModal's
+                  editor, so they're rendered here rather than shown as raw
+                  text (which would print the markup tags literally). */}
+              <div
+                className="bg-gray-50 p-4 rounded-lg border text-gray-900 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                dangerouslySetInnerHTML={{ __html: payment.notes }}
+              />
             </div>
           )}
 

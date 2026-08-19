@@ -156,6 +156,93 @@ exports.createQuotation = async (req, res) => {
   }
 };
 
+// Duplicate: clones an existing quotation into a brand-new Draft quotation
+// with a freshly generated number. Does not touch the source quotation.
+exports.duplicateQuotation = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const source = await Quotation.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!source) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Quotation not found" });
+    }
+
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const finalPrefix = documentSettings.documentTypeSettings?.quote?.prefix || "QT-";
+    const finalSuffix = (documentSettings.documentTypeSettings?.quote?.suffix ?? "").toString().trim();
+
+    let newQuotationNumber;
+    try {
+      newQuotationNumber = await resolveDocumentNumber({
+        Model: Quotation,
+        numberField: "quotationNumber",
+        organization: req.user.organization,
+        documentTypeKey: "quote",
+        prefix: finalPrefix,
+        suffix: finalSuffix,
+        providedNumber: null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
+
+    // Bulk signature updates write via updateMany (no schema validation), so
+    // older quotations can carry a signatureType like "image" that the
+    // ['text','upload'] enum never actually allowed. A new document's .save()
+    // does validate, so that stale value must be normalized here rather than
+    // copied straight through.
+    const validSignatureTypes = ["text", "upload"];
+    const normalizedSignatureType = validSignatureTypes.includes(source.signatureType)
+      ? source.signatureType
+      : (source.signature ? "upload" : "text");
+
+    const duplicate = new Quotation({
+      deal: source.deal,
+      quotationPrefix: finalPrefix,
+      quotationNumber: newQuotationNumber,
+      reference: source.reference,
+      date: new Date(),
+      amount: source.amount,
+      status: "Draft",
+      items: source.items,
+      notes: source.notes,
+      terms: source.terms,
+      isTaxQuotation: source.isTaxQuotation,
+      isRoundOff: source.isRoundOff,
+      transactionType: source.transactionType,
+      signature: source.signature,
+      signatureType: normalizedSignatureType,
+      discount: source.discount,
+      receiverGSTIN: source.receiverGSTIN,
+      billingAddress: source.billingAddress,
+      shippingAddress: source.shippingAddress,
+      user: req.user.id,
+      organization: req.user.organization,
+      duplicatedFrom: source._id,
+    });
+
+    await duplicate.save({ session });
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json(duplicate);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: `Failed to duplicate quotation: ${err.message}` });
+  }
+};
+
 // Get All Quotations
 exports.getAllQuotations = async (req, res) => {
   try {

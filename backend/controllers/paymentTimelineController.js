@@ -144,6 +144,47 @@ exports.getPaymentsTimeline = async (req, res) => {
   }
 };
 
+// Backs the timeline's "View" action — fetches the full record (the list
+// endpoint above only returns a flattened summary row) plus its vendor, in
+// the shape PaymentReceiptModal expects. Only Payment and Purchase rows have
+// a vendor and a receipt-shaped meaning; Invoice/Subscription rows already
+// have their own document viewers elsewhere in the app.
+exports.getPaymentReceipt = async (req, res) => {
+  try {
+    const orgId = req.user.organization;
+    const { id } = req.params;
+    const source = (req.query.source || "").trim();
+
+    if (source === "Payment") {
+      const payment = await Payment.findOne({ _id: id, organization: orgId }).populate("vendor");
+      if (!payment) return res.status(404).json({ error: "Payment not found" });
+      return res.json({ payment, vendor: payment.vendor });
+    }
+
+    if (source === "Purchase") {
+      const purchase = await Purchase.findOne({ _id: id, organization: orgId }).populate("vendor");
+      if (!purchase) return res.status(404).json({ error: "Purchase not found" });
+      // Normalized onto the same field names PaymentReceiptModal reads from a
+      // real Payment document, so the modal doesn't need to know the source.
+      const payment = {
+        _id: purchase._id,
+        amount: purchase.grandTotal || purchase.subtotal,
+        paymentDate: purchase.purchaseDate || purchase.createdAt,
+        direction: "OUT",
+        paymentType: "Purchase",
+        bank: "",
+        notes: purchase.notes || "",
+      };
+      return res.json({ payment, vendor: purchase.vendor });
+    }
+
+    return res.status(400).json({ error: `Receipts aren't available for "${source}" entries` });
+  } catch (err) {
+    console.error("Fetch payment receipt error:", err);
+    res.status(500).json({ error: "Failed to fetch payment receipt" });
+  }
+};
+
 exports.createPayment = async (req, res) => {
   try {
     const { vendor, vendorName, amount, paymentDate, direction, paymentType, bank, notes } = req.body;

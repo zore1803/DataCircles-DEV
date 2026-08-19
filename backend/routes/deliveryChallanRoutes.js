@@ -43,6 +43,14 @@ router.get(
   checkPermission("delivery-challans", "readonly"),
   deliveryChallanController.downloadDeliveryChallan
 );
+router.post(
+  "/:id/duplicate",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("delivery-challans", "write"),
+  checkPermission("delivery-challans", "read-write"),
+  deliveryChallanController.duplicateDeliveryChallan
+);
 router.delete(
   "/:id",
   requireAuth,

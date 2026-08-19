@@ -258,6 +258,94 @@ const createInvoice = async (req, res) => {
   }
 };
 
+// Duplicate: clones an existing invoice into a brand-new Draft invoice with
+// a freshly generated number. Does not touch the source invoice, and never
+// carries over payments/digitalSignature/timestamps or the old number.
+const duplicateInvoice = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const source = await Invoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!source) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const effectivePrefix = (documentSettings.documentTypeSettings?.invoice?.prefix ?? documentSettings.invoicePrefix ?? "").toString().trim() || "INV-";
+    const effectiveSuffix = (documentSettings.documentTypeSettings?.invoice?.suffix ?? documentSettings.invoiceSuffix ?? "").toString().trim();
+
+    let newInvoiceNumber;
+    try {
+      newInvoiceNumber = await resolveDocumentNumber({
+        Model: Invoice,
+        numberField: "invoiceNumber",
+        organization: req.user.organization,
+        documentTypeKey: "invoice",
+        prefix: effectivePrefix,
+        suffix: effectiveSuffix,
+        providedNumber: null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
+
+    // Bulk signature updates write via updateMany (no schema validation), so
+    // older invoices can carry a signatureType like "image" that the
+    // ['text','upload'] enum never actually allowed. A new document's .save()
+    // does validate, so that stale value must be normalized here rather than
+    // copied straight through.
+    const validSignatureTypes = ["text", "upload"];
+    const normalizedSignatureType = validSignatureTypes.includes(source.signatureType)
+      ? source.signatureType
+      : (source.signature ? "upload" : "text");
+
+    const duplicate = new Invoice({
+      deal: source.deal,
+      date: new Date(),
+      amount: source.amount,
+      discount: source.discount,
+      status: "Draft",
+      items: source.items,
+      style: source.style,
+      notes: source.notes,
+      terms: source.terms,
+      isTaxInvoice: source.isTaxInvoice,
+      signature: source.signature,
+      signatureType: normalizedSignatureType,
+      receiverGSTIN: source.receiverGSTIN,
+      billingAddress: source.billingAddress,
+      shippingAddress: source.shippingAddress,
+      transactionType: source.transactionType,
+      gstRate: source.gstRate,
+      invoiceNumber: newInvoiceNumber,
+      user: req.user.id,
+      organization: req.user.organization,
+      duplicatedFrom: source._id,
+    });
+
+    await duplicate.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json(duplicate);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: `Failed to duplicate invoice: ${err.message}` });
+  }
+};
+
 const getAllInvoices = async (req, res) => {
   try {
     const { search } = req.query;
@@ -1116,6 +1204,7 @@ const deleteInvoicePayment = async (req, res) => {
 
 module.exports = {
   createInvoice,
+  duplicateInvoice,
   getAllInvoices,
   getAllInvoicesPaginated,
   getMyInvoices,

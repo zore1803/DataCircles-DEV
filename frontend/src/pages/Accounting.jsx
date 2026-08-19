@@ -822,6 +822,12 @@ const Accounting = () => {
     quotation: false,
     deliveryChallan: false,
   });
+  const fetchSequenceRef = useRef({
+    tax: 0,
+    performa: 0,
+    quotation: 0,
+    deliveryChallan: 0,
+  });
   const [searchTerms, setSearchTerms] = useState(emptyByType);
   const [debouncedSearchTerms, setDebouncedSearchTerms] = useState(emptyByType);
   const [filterStatuses, setFilterStatuses] = useState(emptyByType);
@@ -1273,6 +1279,10 @@ const Accounting = () => {
         ...prev,
         [activeTab]: searchTerms[activeTab],
       }));
+      setPaginations((prev) => ({
+        ...prev,
+        [activeTab]: { ...prev[activeTab], currentPage: 1 },
+      }));
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerms, activeTab]);
@@ -1283,16 +1293,13 @@ const Accounting = () => {
         ...prev,
         [activeTab]: filterStatuses[activeTab],
       }));
+      setPaginations((prev) => ({
+        ...prev,
+        [activeTab]: { ...prev[activeTab], currentPage: 1 },
+      }));
     }, 300);
     return () => clearTimeout(timer);
   }, [filterStatuses, activeTab]);
-
-  useEffect(() => {
-    setPaginations((prev) => ({
-      ...prev,
-      [activeTab]: { ...prev[activeTab], currentPage: 1 },
-    }));
-  }, [debouncedSearchTerms, debouncedFilterStatuses, activeTab]);
 
   // The fetch effects below key off these primitives rather than the whole
   // per-tab objects, so they're statically checkable and only re-run when the
@@ -1311,13 +1318,9 @@ const Accounting = () => {
 
   useEffect(() => {
     fetchData(activeTab);
+    // One request effect covers paging, sorting, search and status changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePage, activeLimit, activeSort, activeTab]);
-
-  useEffect(() => {
-    if (activePage === 1) fetchData(activeTab);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSearch, activeStatusFilter, activeTab]);
+  }, [activePage, activeLimit, activeSort.key, activeSort.direction, activeSearch, activeStatusFilter, activeTab]);
 
   useEffect(() => {
     fetchDeals();
@@ -1361,6 +1364,7 @@ const Accounting = () => {
   }, []);
 
   const fetchData = async (type) => {
+    const requestSequence = ++fetchSequenceRef.current[type];
     setLoading((prev) => ({ ...prev, [type]: true }));
     const params = new URLSearchParams({
       page: paginations[type].currentPage.toString(),
@@ -1379,6 +1383,11 @@ const Accounting = () => {
       const res = await API.get(
         `/${apiPathFor(type)}/pagination?${params.toString()}`
       );
+      if (requestSequence !== fetchSequenceRef.current[type]) return;
+      const serverPagination = res.data.pagination;
+      const safeCurrentPage = serverPagination.totalPages > 0
+        ? Math.min(serverPagination.currentPage, serverPagination.totalPages)
+        : 1;
       setDocuments((prev) => ({
         ...prev,
         [type]: res.data[dataKeyFor(type)] || [],
@@ -1387,21 +1396,24 @@ const Accounting = () => {
         ...prev,
         [type]: {
           ...prev[type],
-          currentPage: res.data.pagination.currentPage,
-          totalPages: res.data.pagination.totalPages,
-          totalCount: res.data.pagination.totalCount,
-          hasNextPage: res.data.pagination.hasNextPage,
-          hasPrevPage: res.data.pagination.hasPrevPage,
+          currentPage: safeCurrentPage,
+          totalPages: serverPagination.totalPages,
+          totalCount: serverPagination.totalCount,
+          hasNextPage: safeCurrentPage < serverPagination.totalPages,
+          hasPrevPage: safeCurrentPage > 1,
         },
       }));
     } catch (err) {
+      if (requestSequence !== fetchSequenceRef.current[type]) return;
       toast.error(
         err.response?.data?.error || `Failed to load ${pluralNameFor(type)}`
       );
       console.error(`Fetch ${type} documents error:`, err.response?.data);
     } finally {
-      setLoading((prev) => ({ ...prev, [type]: false }));
-      hasLoadedOnceRef.current[type] = true;
+      if (requestSequence === fetchSequenceRef.current[type]) {
+        setLoading((prev) => ({ ...prev, [type]: false }));
+        hasLoadedOnceRef.current[type] = true;
+      }
     }
   };
 
@@ -1779,6 +1791,25 @@ const Accounting = () => {
     }
   };
 
+  // Clones an existing document into a brand-new Draft document with its own
+  // number via the backend's duplicate endpoint. Distinct from "Convert":
+  // duplicate stays on the same document type and never touches the source.
+  const handleDuplicate = async (id, type) => {
+    try {
+      setLoading((prev) => ({ ...prev, [type]: true }));
+      await API.post(`/${apiPathFor(type)}/${id}/duplicate`);
+      await fetchData(type);
+      toast.success(`${docNameFor(type)} duplicated successfully`);
+    } catch (err) {
+      toast.error(
+        err.response?.data?.error || `Failed to duplicate ${type} document`
+      );
+      console.error(`Duplicate ${type} document error:`, err);
+    } finally {
+      setLoading((prev) => ({ ...prev, [type]: false }));
+    }
+  };
+
   const handleConvert = (id, sourceType, targetType) => {
     setConvertDocId(id);
     setConvertDocType(sourceType);
@@ -2084,6 +2115,16 @@ const Accounting = () => {
                       <ChevronRight className="w-4 h-4 text-gray-400" />
                     </button>
                   )}
+                  <button
+                    onClick={() => {
+                      closeRowMenu();
+                      handleDuplicate(doc._id, activeTab);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Copy className="w-4 h-4 text-indigo-600" />
+                    Duplicate
+                  </button>
                   <div className="border-t border-gray-100 my-1" />
                   <button
                     onClick={() => {

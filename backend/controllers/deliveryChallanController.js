@@ -143,6 +143,87 @@ exports.createDeliveryChallan = async (req, res) => {
   }
 };
 
+// Duplicate: clones an existing delivery challan into a brand-new Draft
+// challan with a freshly generated number. Does not touch the source.
+exports.duplicateDeliveryChallan = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const source = await DeliveryChallan.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!source) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Delivery challan not found" });
+    }
+
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const finalDCPrefix = documentSettings.documentTypeSettings?.deliveryChallan?.prefix || "DC-";
+    const finalDCSuffix = (documentSettings.documentTypeSettings?.deliveryChallan?.suffix ?? "").toString().trim();
+
+    let newDeliveryChallanNumber;
+    try {
+      newDeliveryChallanNumber = await resolveDocumentNumber({
+        Model: DeliveryChallan,
+        numberField: "deliveryChallanNumber",
+        organization: req.user.organization,
+        documentTypeKey: "deliveryChallan",
+        prefix: finalDCPrefix,
+        suffix: finalDCSuffix,
+        providedNumber: null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
+
+    // Bulk signature updates write via updateMany (no schema validation), so
+    // older challans can carry a signatureType like "image" that the
+    // ['text','upload'] enum never actually allowed. A new document's .save()
+    // does validate, so that stale value must be normalized here rather than
+    // copied straight through.
+    const validSignatureTypes = ["text", "upload"];
+    const normalizedSignatureType = validSignatureTypes.includes(source.signatureType)
+      ? source.signatureType
+      : (source.signature ? "upload" : "text");
+
+    const duplicate = new DeliveryChallan({
+      deal: source.deal,
+      deliveryChallanNumber: newDeliveryChallanNumber,
+      date: new Date(),
+      amount: source.amount,
+      status: "Draft",
+      items: source.items,
+      notes: source.notes,
+      terms: source.terms,
+      signature: source.signature,
+      signatureType: normalizedSignatureType,
+      discount: source.discount,
+      billingAddress: source.billingAddress,
+      shippingAddress: source.shippingAddress,
+      user: req.user.id,
+      organization: req.user.organization,
+      duplicatedFrom: source._id,
+    });
+
+    await duplicate.save({ session });
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json(duplicate);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: `Failed to duplicate delivery challan: ${err.message}` });
+  }
+};
+
 // Get All Delivery Challans
 exports.getAllDeliveryChallans = async (req, res) => {
   try {

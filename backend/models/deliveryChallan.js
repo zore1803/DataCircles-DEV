@@ -52,7 +52,10 @@ const deliveryChallanSchema = new mongoose.Schema({
     documentId: { type: String },
     signedAt: { type: Date },
     signedUrl: { type: String }
-  }
+  },
+  // Set when this delivery challan was created via the "Duplicate" action,
+  // pointing at the source challan it was cloned from.
+  duplicatedFrom: { type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryChallan' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('DeliveryChallan', deliveryChallanSchema);

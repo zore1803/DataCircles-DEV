@@ -26,6 +26,7 @@ import BulkActions from "../components/BulkActions";
 import ImportPayments from "../components/payments/ImportPayments";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import PageSkeleton from "../components/common/PageSkeleton";
+import PaymentReceiptModal from "../components/vendor/PaymentReceiptModal";
 
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
@@ -155,6 +156,11 @@ export default function PaymentsTimeline() {
   const [deleteConfirmState, setDeleteConfirmState] = useState({ isOpen: false, type: "single", target: null });
   const [editingPage, setEditingPage] = useState(false);
   const [pageInput, setPageInput] = useState("");
+  /* "View" action — full record + vendor for the receipt modal (the list
+     endpoint only returns a flattened summary row, so this fetches the
+     real Payment/Purchase document on demand). */
+  const [receiptData, setReceiptData] = useState(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   /* Fetch companies list for Party filter */
   useEffect(() => {
@@ -621,6 +627,25 @@ export default function PaymentsTimeline() {
     document.addEventListener("mouseup",   handleMouseUp);
   };
 
+  /* ── View → Payment Receipt ──────────────────────────────────────── */
+  const handleViewReceipt = async (doc) => {
+    if (doc.source !== "Payment" && doc.source !== "Purchase") {
+      toast.error(`Receipts aren't available for ${doc.source} entries yet.`);
+      return;
+    }
+    const tid = toast.loading("Loading receipt...");
+    try {
+      const res = await API.get(`/payments-timeline/${doc._id}/receipt`, {
+        params: { source: doc.source },
+      });
+      setReceiptData(res.data);
+      setShowReceiptModal(true);
+      toast.dismiss(tid);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to load receipt", { id: tid });
+    }
+  };
+
   /* ── Action menu ─────────────────────────────────────────────────── */
   const renderActionMenu = doc => {
     const isOpen = openActionMenuId === doc._id;
@@ -672,7 +697,7 @@ export default function PaymentsTimeline() {
               onClick={e => e.stopPropagation()}
             >
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); toast.success("View details coming soon!"); }}>
+                onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); handleViewReceipt(doc); }}>
                 <Eye className="w-4 h-4 text-gray-400" /> View
               </button>
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
@@ -1338,6 +1363,13 @@ export default function PaymentsTimeline() {
           setEditingPaymentItem(null);
         }}
         onSuccess={() => fetchData()}
+      />
+
+      <PaymentReceiptModal
+        isOpen={showReceiptModal}
+        onClose={() => { setShowReceiptModal(false); setReceiptData(null); }}
+        payment={receiptData?.payment}
+        vendor={receiptData?.vendor}
       />
 
       {/* ── Custom Delete Warning Modal ───────────────────────────── */}

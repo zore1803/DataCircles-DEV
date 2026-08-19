@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { X, Bold as BoldIcon, Italic as ItalicIcon, Underline as UnderlineIcon, Strikethrough as StrikethroughIcon, List as ListIcon, ListOrdered, Link as LinkIcon } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import BankLogo from "../BankLogo";
@@ -8,6 +8,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
   const [vendors, setVendors] = useState([]);
   const [banks, setBanks] = useState([]);
   const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
+  const notesEditorRef = useRef(null);
   const [selectedBankId, setSelectedBankId] = useState("");
   const [loading, setLoading] = useState(false);
   const [vendorSearch, setVendorSearch] = useState("");
@@ -59,8 +60,36 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
         bank: "",
         notes: ""
       });
+      // notesEditorRef is an uncontrolled contentEditable (see execCmd below)
+      // so re-opening the panel must also clear its live DOM content, not
+      // just the notes state — otherwise the previous payment's notes (and
+      // formatting) would still be visible underneath the reset state.
+      if (notesEditorRef.current) notesEditorRef.current.innerHTML = "";
     }
   }, [isOpen]);
+
+  // execCommand is deprecated but still the simplest way to drive a handful
+  // of basic rich-text commands (bold/italic/underline/lists) against a
+  // contentEditable div without pulling in an editor library — same pattern
+  // Accounting.jsx's email composer uses.
+  const execNotesCmd = (cmd, value = null) => {
+    notesEditorRef.current?.focus();
+    document.execCommand(cmd, false, value);
+    setFormData((p) => ({ ...p, notes: notesEditorRef.current?.innerHTML || "" }));
+  };
+  const insertNotesLink = () => {
+    const url = window.prompt("Enter URL");
+    if (url) execNotesCmd("createLink", url);
+  };
+  const notesToolbarButtons = [
+    { icon: <BoldIcon className="w-3.5 h-3.5" />, title: "Bold", onClick: () => execNotesCmd("bold") },
+    { icon: <ItalicIcon className="w-3.5 h-3.5" />, title: "Italic", onClick: () => execNotesCmd("italic") },
+    { icon: <UnderlineIcon className="w-3.5 h-3.5" />, title: "Underline", onClick: () => execNotesCmd("underline") },
+    { icon: <StrikethroughIcon className="w-3.5 h-3.5" />, title: "Strikethrough", onClick: () => execNotesCmd("strikeThrough") },
+    { icon: <ListOrdered className="w-3.5 h-3.5" />, title: "Numbered list", onClick: () => execNotesCmd("insertOrderedList") },
+    { icon: <ListIcon className="w-3.5 h-3.5" />, title: "Bulleted list", onClick: () => execNotesCmd("insertUnorderedList") },
+    { icon: <LinkIcon className="w-3.5 h-3.5" />, title: "Insert link", onClick: insertNotesLink },
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -100,7 +129,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
       />
       <div className="fixed dc-panel-card dc-panel-w payment-panel bg-white shadow-2xl flex flex-col z-10 overflow-hidden animate-slideInRight">
         <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50/50">
-          <h2 className="text-lg font-bold text-gray-900">Add Payment</h2>
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Add Vendor Payment</h2>
           <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors">
             <X size={20} />
           </button>
@@ -253,12 +282,35 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <textarea 
-                value={formData.notes}
-                onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
-                rows={3}
-                placeholder="Optional payment notes..."
-                className="w-full px-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
+              <div className="flex items-center gap-0.5 border border-[#E1E4EA] border-b-0 rounded-t-lg bg-gray-50 px-1.5 py-1">
+                {notesToolbarButtons.map(({ icon, title, onClick }) => (
+                  <button
+                    key={title}
+                    type="button"
+                    title={title}
+                    // Mousedown (not click) so the editor's text selection
+                    // survives — a click first steals focus/selection away
+                    // from the contentEditable.
+                    onMouseDown={(e) => { e.preventDefault(); onClick(); }}
+                    className="p-1.5 text-gray-600 hover:bg-gray-200 rounded transition-colors"
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
+              <div
+                ref={(el) => {
+                  notesEditorRef.current = el;
+                  if (el && el.dataset.init !== "true") {
+                    el.innerHTML = formData.notes;
+                    el.dataset.init = "true";
+                  }
+                }}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={(e) => setFormData((p) => ({ ...p, notes: e.currentTarget.innerHTML }))}
+                data-placeholder="Optional payment notes..."
+                className="w-full min-h-[88px] px-3 py-2 border border-[#E1E4EA] rounded-b-lg text-sm focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
               />
             </div>
           </form>
@@ -279,7 +331,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             className="min-w-[140px] justify-center px-5 py-2 text-sm font-medium text-white bg-[#0085FF] rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-            Save Payment
+            Add Payment
           </button>
         </div>
       </div>

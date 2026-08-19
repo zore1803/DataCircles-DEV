@@ -74,7 +74,10 @@ const quotationSchema = new mongoose.Schema({
     documentId: { type: String },
     signedAt: { type: Date },
     signedUrl: { type: String }
-  }
+  },
+  // Set when this quotation was created via the "Duplicate" action, pointing
+  // at the source quotation it was cloned from. Never set on the source itself.
+  duplicatedFrom: { type: mongoose.Schema.Types.ObjectId, ref: 'Quotation' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Quotation', quotationSchema);

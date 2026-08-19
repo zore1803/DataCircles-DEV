@@ -138,6 +138,16 @@ router.patch(
   invoiceController.updateInvoiceNumber
 );
 
+// POST /api/invoices/:id/duplicate (Create a new Draft invoice cloned from an existing one)
+router.post(
+  "/:id/duplicate",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.duplicateInvoice
+);
+
 // GET /api/invoices/:id (Single invoice)
 router.get(
   "/:id",

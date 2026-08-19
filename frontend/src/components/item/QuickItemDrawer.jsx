@@ -4,7 +4,6 @@ import {
   Plus,
   ChevronRight,
   Lock,
-  Paperclip,
   Trash2,
   Edit2,
 } from "lucide-react";
@@ -25,8 +24,6 @@ const UNIT_OPTIONS = [
   "PKT — PACKET",
   "SET — SET",
 ];
-
-const TABS = ["Details", "Price Lists", "Attachments"];
 
 // onSaved(item) fires after the item is actually created in the backend —
 // callers use it to refresh their item list / picker, same as ItemForm's
@@ -74,7 +71,6 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState([]);
-  const [activeTab, setActiveTab] = useState("Details");
 
   // Form State
   const [form, setForm] = useState(BLANK_FORM);
@@ -110,7 +106,6 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
 
   useEffect(() => {
     if (!isOpen) return;
-    setActiveTab("Details");
     setShowMoreDetails(false);
     setType("Product");
     setForm(BLANK_FORM);
@@ -272,30 +267,6 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
               {saving ? "Adding…" : "Add Item"}
             </button>
           </div>
-
-          {/* Tabs */}
-          <div className="flex items-center px-6 gap-0">
-            {TABS.map((tab) => {
-              const locked = tab !== "Details";
-              const isActive = activeTab === tab;
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => !locked && setActiveTab(tab)}
-                  className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                    isActive ? "border-blue-600 text-blue-600"
-                    : locked  ? "border-transparent text-gray-400 cursor-not-allowed"
-                              : "border-transparent text-gray-500 hover:text-gray-800"
-                  }`}
-                >
-                  {tab === "Attachments" && <Paperclip className="w-3.5 h-3.5" />}
-                  {tab}
-                  {locked && <Lock className="w-3 h-3" />}
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         {/* ── Scrollable body ── */}
@@ -305,9 +276,6 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
           <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <span className="text-sm font-bold text-gray-900">Basic Details</span>
-              <button className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700">
-                <Plus className="w-3.5 h-3.5" /> Add Custom Fields
-              </button>
             </div>
 
             <div className="px-5 py-5 space-y-5">
