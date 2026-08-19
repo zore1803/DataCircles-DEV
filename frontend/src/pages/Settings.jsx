@@ -395,7 +395,18 @@ const Settings = () => {
 
   if (activeSection) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div
+        className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100"
+        style={{
+          marginTop: -24,
+          marginLeft: -32,
+          marginRight: -32,
+          paddingTop: 24,
+          paddingLeft: 24,
+          paddingRight: 24,
+          boxSizing: "border-box",
+        }}
+      >
         <div>
           {/* Enhanced Header with back button */}
           <div className="mb-8">

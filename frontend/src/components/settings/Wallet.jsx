@@ -1,6 +1,6 @@
 // components/settings/Wallet.jsx
 //
-// Org-facing prepaid credit wallet. Independent of the subscription ΓÇö nothing
+// Org-facing prepaid credit wallet. Independent of the subscription — nothing
 // here reads or changes plan state. Pricing (credit value, GST) always comes
 // from the backend; this component never computes what will be charged.
 import React, { useCallback, useEffect, useState } from "react";
@@ -32,7 +32,7 @@ const formatDateTime = (d) =>
   });
 
 const formatRupees = (n) =>
-  `Γé╣${Number(n).toLocaleString("en-IN", {
+  `₹${Number(n).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -228,7 +228,7 @@ const Wallet = () => {
                     : "border-gray-200 bg-white text-gray-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
                 }`}
               >
-                Γé╣{amount.toLocaleString("en-IN")}
+                ₹{amount.toLocaleString("en-IN")}
               </button>
             );
           })}
@@ -243,7 +243,7 @@ const Wallet = () => {
               Amount to add
             </label>
             <div className="flex items-center rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 transition focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
-              <span className="mr-1.5 text-lg text-gray-400">Γé╣</span>
+              <span className="mr-1.5 text-lg text-gray-400">₹</span>
               <input
                 id="wallet-amount"
                 type="number"
@@ -266,7 +266,7 @@ const Wallet = () => {
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
             >
               <Plus className="h-4 w-4" />
-              {purchasing ? "ProcessingΓÇª" : "Buy Credits"}
+              {purchasing ? "Processing…" : "Buy Credits"}
             </button>
           </div>
 
