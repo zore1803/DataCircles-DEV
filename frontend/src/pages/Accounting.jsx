@@ -372,6 +372,15 @@ const ConvertConfirmModal = ({
   );
 };
 
+// Fixed rendering order for stitched multi-copy PDFs — independent of the
+// order the user happened to check the boxes in.
+const COPY_TYPE_ORDER = ["original", "duplicate", "triplicate"];
+const COPY_TYPE_CHECKBOXES = [
+  { key: "original", label: "Customer" },
+  { key: "duplicate", label: "Transport" },
+  { key: "triplicate", label: "Supplier" },
+];
+
 const InvoiceViewer = ({
   isOpen,
   onClose,
@@ -385,12 +394,29 @@ const InvoiceViewer = ({
 }) => {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [openConvertMenu, setOpenConvertMenu] = useState(null);
-  // Standard Indian GST invoice practice: the same document is printed as
-  // three otherwise-identical copies, distinguished only by this label —
+  // Standard Indian GST invoice practice: the same document is printed as up
+  // to three otherwise-identical copies, distinguished only by this label —
   // "ORIGINAL FOR RECIPIENT" for the customer, "DUPLICATE FOR TRANSPORTER"
   // for the goods carrier, "TRIPLICATE FOR SUPPLIER" for the seller's own
-  // records. Re-fetches the PDF with the chosen label baked in.
-  const [copyType, setCopyType] = useState("original");
+  // records. Any combination can be checked at once; when more than one is
+  // checked, each copy's own single-page PDF is fetched and stitched into
+  // one multi-page PDF client-side (same pdf-lib approach the bulk "merge
+  // selected documents" toolbar action already uses), always in
+  // original -> duplicate -> triplicate order regardless of check order.
+  const [copyTypes, setCopyTypes] = useState(["original"]);
+  const copyTypesKey = copyTypes.join(",");
+
+  const toggleCopyType = (key) => {
+    setCopyTypes((prev) => {
+      if (prev.includes(key)) {
+        // At least one copy must stay selected — otherwise there's nothing
+        // to render and the viewer would be left showing a stale PDF.
+        if (prev.length === 1) return prev;
+        return prev.filter((k) => k !== key);
+      }
+      return COPY_TYPE_ORDER.filter((k) => k === key || prev.includes(k));
+    });
+  };
 
   useEffect(() => {
     if (isOpen && id && type) {
@@ -400,20 +426,43 @@ const InvoiceViewer = ({
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, id, type, copyType]);
+  }, [isOpen, id, type, copyTypesKey]);
 
   const fetchPdf = async () => {
     try {
-      const response = await API.get(`/${apiPathFor(type)}/download/${id}`, {
-        responseType: "blob",
-        params: { copyType },
-      });
+      const orderedTypes = COPY_TYPE_ORDER.filter((k) => copyTypes.includes(k));
+      let fileBytes;
+      if (orderedTypes.length <= 1) {
+        const response = await API.get(`/${apiPathFor(type)}/download/${id}`, {
+          responseType: "arraybuffer",
+          params: { copyType: orderedTypes[0] || "original" },
+        });
+        fileBytes = response.data;
+      } else {
+        const merged = await PDFDocument.create();
+        for (const ct of orderedTypes) {
+          const response = await API.get(`/${apiPathFor(type)}/download/${id}`, {
+            responseType: "arraybuffer",
+            params: { copyType: ct },
+          });
+          const src = await PDFDocument.load(response.data);
+          const copiedPages = await merged.copyPages(src, src.getPageIndices());
+          copiedPages.forEach((page) => merged.addPage(page));
+        }
+        // pdf-lib doesn't carry the source PDFs' /Title metadata onto a
+        // freshly-created document — left unset, Chrome's PDF viewer falls
+        // back to showing the blob: URL's own UUID as the document title
+        // instead of our filename (only happened once merging kicked in,
+        // i.e. once more than one copy-type box got checked).
+        merged.setTitle(`${apiPathFor(type)}-${doc?.[numberKeyFor(type)] || id}`);
+        fileBytes = await merged.save();
+      }
       // Named as a File (not a plain Blob) so the browser's built-in PDF
       // viewer shows this document's actual name instead of "about:blank" —
       // a bare Blob has no name, and Chrome's PDF viewer falls back to the
       // blob URL's (nonexistent) location for its title/tab label.
-      const filename = `${apiPathFor(type)}-${doc?.[numberKeyFor(type)] || id}-${copyType}.pdf`;
-      const file = new File([response.data], filename, { type: "application/pdf" });
+      const filename = `${apiPathFor(type)}-${doc?.[numberKeyFor(type)] || id}-${orderedTypes.join("+") || "original"}.pdf`;
+      const file = new File([fileBytes], filename, { type: "application/pdf" });
       setPdfUrl(URL.createObjectURL(file));
     } catch (error) {
       toast.error("Failed to load PDF");
@@ -424,12 +473,46 @@ const InvoiceViewer = ({
 
   const handleDownloadCurrentCopy = () => {
     if (!pdfUrl) return;
+    const orderedTypes = COPY_TYPE_ORDER.filter((k) => copyTypes.includes(k));
     const link = document.createElement("a");
     link.href = pdfUrl;
-    link.setAttribute("download", `${apiPathFor(type)}-${docNumber || id}-${copyType}.pdf`);
+    link.setAttribute("download", `${apiPathFor(type)}-${docNumber || id}-${orderedTypes.join("+") || "original"}.pdf`);
     document.body.appendChild(link);
     link.click();
     link.remove();
+  };
+
+  // Prints whichever copy(ies) are currently checked/loaded — a hidden
+  // iframe on the already-fetched pdfUrl, same trick the bulk print action
+  // (handleBulkPrint) uses, so it's one native print job rather than
+  // reopening/downloading anything.
+  const handlePrintCurrentCopy = () => {
+    if (!pdfUrl) return;
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        console.error("Print error", err);
+        toast.error("Couldn't open the print dialog — try downloading instead.");
+      }
+      setTimeout(() => iframe.remove(), 60000);
+    };
+    iframe.src = pdfUrl;
+    document.body.appendChild(iframe);
+  };
+
+  const handleWhatsAppShare = () => {
+    const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
+    const text = `${title} #${docNumber || ""}\n${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   };
 
   const isTax =
@@ -442,66 +525,90 @@ const InvoiceViewer = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100002] p-4">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100002] p-2">
       {/* Chrome ignores the #view=FitH / #zoom=... PDF-viewer open params for
           blob: URLs specifically (they only take effect for a real network
           request), so the page's native width can't be forced to fit a
           narrow panel — widened from max-w-5xl (1024px) so the full page
           width fits without the right edge getting cropped. */}
-      <div className="bg-white rounded-xl w-full h-[90vh] max-w-[1400px] flex flex-col shadow-2xl">
-        <div className="flex justify-between items-center px-5 py-2 border-b border-gray-200 bg-gray-50 rounded-t-xl">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-100 p-2 rounded-lg">
-              <FileText className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">
-                {title} #{docNumber || "N/A"}
-              </h2>
-              <p className="text-sm text-gray-600">View and manage document</p>
-            </div>
-          </div>
-          <div className="flex gap-3 items-center">
-            <select
-              title="Copy type"
-              value={copyType}
-              onChange={(e) => setCopyType(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 bg-white focus:outline-none focus:border-blue-500"
+      <div className="bg-white rounded-xl w-full h-[97vh] max-w-[1400px] flex flex-col shadow-2xl">
+        <div className="flex justify-between items-center px-5 py-2 border-b border-gray-200 bg-white rounded-t-xl gap-4">
+          {/* Which copies to include, each an independent checkbox — checking
+              more than one stitches them into one multi-page PDF (Customer
+              page, then Transport, then Supplier), matching printed GST
+              invoice practice of Original/Duplicate/Triplicate copies. */}
+          <div className="flex items-center gap-5 flex-wrap min-w-0">
+            <span className="text-sm font-semibold text-gray-900 truncate flex-shrink-0" title={`${title} #${docNumber || "N/A"}`}>
+              {docNumber || title}
+            </span>
+            {COPY_TYPE_CHECKBOXES.map((opt) => (
+              <label key={opt.key} className="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer select-none flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={copyTypes.includes(opt.key)}
+                  onChange={() => toggleCopyType(opt.key)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                />
+                {opt.label}
+              </label>
+            ))}
+            <label
+              className="flex items-center gap-2 text-sm font-medium text-gray-400 cursor-not-allowed select-none flex-shrink-0"
+              title="Attaching a linked Delivery Challan isn't supported yet"
             >
-              <option value="original">Original for Recipient</option>
-              <option value="duplicate">Duplicate for Transporter</option>
-              <option value="triplicate">Triplicate for Supplier</option>
-            </select>
-            <div className="flex gap-2">
+              <input type="checkbox" checked={false} disabled className="w-4 h-4 rounded cursor-not-allowed" />
+              Delivery Challan
+            </label>
+          </div>
+          <div className="flex gap-3 items-center flex-shrink-0">
+            <div className="flex items-center gap-2">
               <button
-                title="Edit"
                 onClick={onEdit}
-                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                className="h-9 px-3 flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium rounded-lg hover:bg-amber-100 transition-colors"
               >
-                <Pencil className="w-4 h-4" />
+                <Pencil className="w-3.5 h-3.5" />
+                Edit
+              </button>
+              <button
+                onClick={onSend}
+                className="h-9 px-3 flex items-center gap-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Email
+              </button>
+              <button
+                onClick={handleWhatsAppShare}
+                className="h-9 px-3 flex items-center gap-1.5 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                Whatsapp
               </button>
               <button
                 title="Download"
                 onClick={handleDownloadCurrentCopy}
-                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <Download className="w-4 h-4" />
               </button>
               <button
-                title="Send"
-                onClick={onSend}
-                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                title="Print"
+                onClick={handlePrintCurrentCopy}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <Send className="w-4 h-4" />
+                <Printer className="w-4 h-4" />
               </button>
+              {/* Overflow for the less-common share paths (SMS / copy link) —
+                  WhatsApp and Email got promoted to their own labeled buttons
+                  above to match the reference layout, so this now only holds
+                  the two that didn't. */}
               <div className="relative">
                 <button
-                  title="Share"
+                  title="More share options"
                   onClick={(e) => {
                     e.stopPropagation();
                     setOpenConvertMenu(openConvertMenu === "share" ? null : "share");
                   }}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <Share2 className="w-4 h-4" />
                 </button>
@@ -509,32 +616,6 @@ const InvoiceViewer = ({
                   <div className="absolute right-0 mt-1 w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                     <div className="py-1">
                       {[
-                        {
-                          label: "WhatsApp",
-                          icon: MessageCircle,
-                          iconClass: "text-green-600",
-                          onClick: () => {
-                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
-                            const text = `${title} #${docNumber || ""}\n${url}`;
-                            window.open(
-                              `https://wa.me/?text=${encodeURIComponent(text)}`,
-                              "_blank",
-                              "noopener,noreferrer"
-                            );
-                          },
-                        },
-                        {
-                          label: "Email",
-                          icon: Mail,
-                          iconClass: "text-blue-600",
-                          onClick: () => {
-                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
-                            const subject = `${title} #${docNumber || ""}`;
-                            window.location.href = `mailto:?subject=${encodeURIComponent(
-                              subject
-                            )}&body=${encodeURIComponent(url)}`;
-                          },
-                        },
                         {
                           label: "SMS",
                           icon: MessageSquare,
@@ -623,19 +704,24 @@ const InvoiceViewer = ({
             </button>
           </div>
         </div>
-        <div className="flex-1 p-4 overflow-auto">
+        <div className="flex-1 p-2 overflow-auto">
           {pdfUrl ? (
             <iframe
-              // toolbar=0/navpanes=0 drop the browser's own PDF chrome (the
-              // bar that was showing "about:blank" plus the redundant
-              // thumbnail rail) since this modal already has its own
-              // download/print/share controls above. view=FitH/zoom=
-              // fragment params are included for browsers that honor them,
-              // but Chrome specifically ignores PDF open params for blob:
-              // URLs, so the real fix for the cropped-right-edge issue is
-              // the widened modal above plus overflow-auto here as a
-              // fallback on narrower screens.
-              src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH&zoom=page-width`}
+              // The browser's own PDF toolbar is left ON (unlike most other
+              // embeds in this app) specifically so its page-count indicator
+              // and next/prev controls are available — the only way to
+              // surface "page 1 of N" when multiple copy-type checkboxes are
+              // stitched into one multi-page PDF, without building a custom
+              // pager. navpanes=0 stays OFF though: Chrome shows a left
+              // thumbnail rail by default for multi-page PDFs, which was
+              // squeezing the actual page into what looked like "half
+              // width" — navpanes=0 is one of the few fragment params Chrome
+              // actually honors for blob: URLs (unlike view=/zoom=, which it
+              // silently ignores for blob: URLs, so those aren't relied on;
+              // the real fix for full-width rendering is this plus the
+              // widened modal above and overflow-auto here as a fallback on
+              // narrower screens).
+              src={`${pdfUrl}#navpanes=0`}
               width="100%"
               height="100%"
               title="Document PDF"
@@ -1769,31 +1855,25 @@ const Accounting = () => {
     setShowViewer(true);
   };
 
-  const handleSend = async (id, type) => {
-    const path = apiPathFor(type);
-    try {
-      const response = await API.get(`/${path}/download/${id}`, {
-        responseType: "blob",
-      });
-      const file = new File(
-        [response.data],
-        `${path.split("-").join("")}-${id}.pdf`,
-        { type: "application/pdf" }
-      );
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `Share ${docNameFor(type)}`,
-          text: "Here is the document PDF",
-        });
-        toast.success("Shared successfully");
-      } else {
-        toast.error("Sharing not supported in this browser");
-      }
-    } catch (error) {
-      toast.error(`Failed to prepare ${type} document for sharing`);
-      console.error(`Send ${type} document error:`, error);
-    }
+  // Opens the same "Send Email" compose drawer the row-menu's template flow
+  // uses (prefilled To/Subject/Body), rather than the OS-level Web Share
+  // sheet — that's a different, file-sharing feature (WhatsApp/Discord/
+  // Nearby Sharing/etc.) that doesn't belong behind an "Email" button.
+  const handleSend = (doc, type) => {
+    if (!doc) return;
+    const link = `${window.location.origin}/view/${apiPathFor(type)}/${doc._id}`;
+    const num = doc[numberKeyFor(type)];
+    const customerName = doc.deal?.contactPerson || doc.deal?.title || "Customer";
+    setEmailComposeTo(doc.deal?.contact?.email || doc.deal?.company?.email || doc.deal?.email || "");
+    setEmailComposeCc("");
+    setEmailComposeBcc("");
+    setEmailComposeSubject(`${docNameFor(type)} ${num || ""}`);
+    setEmailComposeBody(
+      textToEmailHtml(
+        `Hi ${customerName},\n\nPlease find attached your ${docNameFor(type)}${num ? ` #${num}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`
+      )
+    );
+    setEmailCompose({ doc, type });
   };
 
   const handleStatusChange = async (id, newStatus, type) => {
@@ -2325,8 +2405,9 @@ const Accounting = () => {
                         Digital Sign
                       </button>
                       <button
-                        onClick={() => { setBulkShowMoreMenu(false); toast.error("Merge documents coming soon"); }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                        onClick={() => { setBulkShowMoreMenu(false); handleBulkDownloadPdf(); }}
+                        disabled={bulkDownloading}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors disabled:opacity-50"
                       >
                         <Layers className="w-4 h-4 text-indigo-600" />
                         Merge
@@ -3517,7 +3598,7 @@ const Accounting = () => {
             handleEdit(viewerDoc, viewerType);
           }}
           onDownload={() => handleDownload(viewerId, viewerType)}
-          onSend={() => handleSend(viewerId, viewerType)}
+          onSend={() => handleSend(viewerDoc, viewerType)}
           onConvert={(targetType) =>
             handleConvert(viewerId, viewerType, targetType)
           }

@@ -907,12 +907,17 @@ function Deals() {
   const [showColumnSettings, setShowColumnSettings] = useState(false);
 
   const defaultColumns = useMemo(() => {
+    // Keys must match DealsTable's own column `id`s (see the `columns` useMemo
+    // in DealsTable.jsx) — this is what makes hiding/reordering here actually
+    // affect the rendered table via the visibleColumns/columnOrder props below.
     const baseColumns = [
-      { key: "title", label: "Deal Title", visible: true, order: 0, required: true, defaultVisible: true, sortable: true },
-      { key: "amount", label: "Amount", visible: true, order: 1, sortable: true },
-      { key: "status", label: "Stage", visible: true, order: 2, sortable: true },
-      { key: "company", label: "Company", visible: true, order: 3, sortable: true },
-      { key: "contact", label: "Contact", visible: true, order: 4, sortable: true },
+      { key: "dealId", label: "Deal ID", visible: true, order: 0, sortable: false },
+      { key: "title", label: "Deal Title", visible: true, order: 1, required: true, defaultVisible: true, sortable: true },
+      { key: "amount", label: "Amount", visible: true, order: 2, sortable: true },
+      { key: "status", label: "Stage", visible: true, order: 3, sortable: true },
+      { key: "company", label: "Company", visible: true, order: 4, sortable: true },
+      { key: "contact", label: "Contact", visible: true, order: 5, sortable: true },
+      { key: "dueDate", label: "Due Date", visible: true, order: 6, sortable: false },
     ];
 
     if (dealFields && dealFields.length > 0) {
@@ -937,6 +942,17 @@ function Deals() {
   );
 
   const visibleColumns = useMemo(() => getVisibleColumns(), [columns]);
+  // Non-custom-field columns the user has hidden via the Columns panel —
+  // DealsTable unions this with its own per-session "Hide Column" quick
+  // action, so both routes to hiding a column keep working.
+  const persistedHiddenColumnKeys = useMemo(
+    () => columns.filter((c) => !c.visible && !c.isCustomField).map((c) => c.key),
+    [columns]
+  );
+  const persistedColumnOrderKeys = useMemo(
+    () => visibleColumns.filter((c) => !c.isCustomField).map((c) => c.key),
+    [visibleColumns]
+  );
   // ----------------------------------------------------
 
   const toggleStar = async (e, dealId) => {
@@ -2574,6 +2590,16 @@ function Deals() {
                     </div>
                     <button
                       onClick={() => {
+                        setShowColumnSettings(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Settings className="w-4 h-4 text-gray-400" />
+                      Columns
+                    </button>
+                    <button
+                      onClick={() => {
                         setShowSettings(true);
                         setIsMoreMenuOpen(false);
                       }}
@@ -2882,6 +2908,8 @@ function Deals() {
                   loading={loading}
                   skeletonRows={dealsPerPage}
                   searchTerm={filters.searchTerm}
+                  externalHiddenColumns={persistedHiddenColumnKeys}
+                  externalColumnOrder={persistedColumnOrderKeys}
                 />
               </div>
             </div>

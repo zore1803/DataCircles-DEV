@@ -34,7 +34,7 @@ const TableSkeleton = ({ rows = 10, cols = 6 }) => (
 // filter / view-toggle controls inline), KPI strip, then either the kanban
 // board (column header + total bar + cards) or the deals table, whichever
 // view is currently active — so the skeleton never flashes the wrong shape.
-const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", tableRows = 10 }) => (
+const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", tableRows = 10, tableCols = 7 }) => (
   <div className="space-y-0 -m-6">
     {/* Title strip: "Deals" + subtitle, then one right-aligned group —
         search icon, filter, list/kanban switcher, more-menu, New Deal —
@@ -85,7 +85,7 @@ const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", table
             <div className="flex items-center justify-center flex-shrink-0 border-r border-[#E1E4EA]" style={{ width: 60 }}>
               <Skeleton shape="rect" width={16} height={16} className="rounded" />
             </div>
-            {Array.from({ length: 7 }).map((_, i) => (
+            {Array.from({ length: tableCols }).map((_, i) => (
               <div key={i} className="flex items-center flex-1 px-3 border-r border-[#E1E4EA] last:border-r-0">
                 <Skeleton width={80 + (i % 3) * 20} height={10} />
               </div>
@@ -96,7 +96,7 @@ const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", table
               <div className="flex items-center justify-center flex-shrink-0 border-r border-[#E1E4EA]" style={{ width: 60 }}>
                 <Skeleton shape="rect" width={16} height={16} className="rounded" />
               </div>
-              {Array.from({ length: 7 }).map((_, c) => (
+              {Array.from({ length: tableCols }).map((_, c) => (
                 <div key={c} className="flex items-center flex-1 px-3 border-r border-[#E1E4EA] last:border-r-0">
                   <Skeleton width={`${50 + ((r + c) % 4) * 10}%`} height={12} />
                 </div>

@@ -72,7 +72,11 @@ async function seedCallLogs() {
       const contacts = await Contact.find({ company: company._id });
       
       // Seed 8-15 call logs per company for a good timeline view
-      const numLogs = Math.floor(Math.random() * 8) + 8;
+      let numLogs = Math.floor(Math.random() * 8) + 8;
+      
+      if (company.name.match(/Amber Collective 143/i)) {
+        numLogs = Math.floor(Math.random() * 11) + 60; // 60 to 70 logs for Amber Collective
+      }
       
       for (let i = 0; i < numLogs; i++) {
         const user = users[Math.floor(Math.random() * users.length)];
