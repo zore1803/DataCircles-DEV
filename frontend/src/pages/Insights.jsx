@@ -16,6 +16,7 @@ import {
   Cell,
   Area,
   AreaChart,
+  ComposedChart,
   Legend,
   ScatterChart,
   Scatter,
@@ -3908,6 +3909,114 @@ const Insights = () => {
     const activeVendorsChange =
       activeLastMonth > 0 ? Math.round(((activeThisMonth - activeLastMonth) / activeLastMonth) * 100) : activeThisMonth > 0 ? 100 : 0;
 
+    // Payment Distribution — real breakdown of purchase statuses (proxy for payment state)
+    const paymentStatusColors = {
+      Received: "#34C759",
+      Pending: "#0085FF",
+      Partial: "#FC9C32",
+      Draft: "#9747FF",
+      Cancelled: "#E82222",
+    };
+    const purchaseStatusCounts = filteredData.filteredPurchases.reduce((acc, p) => {
+      const key = p.status || "Draft";
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const totalPurchasesForStatus = filteredData.filteredPurchases.length;
+    const paymentDistribution = Object.entries(purchaseStatusCounts)
+      .map(([status, count]) => ({
+        status,
+        count,
+        pct: totalPurchasesForStatus > 0 ? Math.round((count / totalPurchasesForStatus) * 100) : 0,
+        color: paymentStatusColors[status] || "#9CA3AF",
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // Vendor Spend Overtime — Total Spend / Received / Pending value per month, last 6 months.
+    const vendorSpendTrendData = (() => {
+      const now = new Date();
+      const months = Array.from({ length: 6 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+        return { key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) };
+      });
+      const buckets = Object.fromEntries(months.map((m) => [m.key, { Spend: 0, Received: 0, Pending: 0 }]));
+      filteredData.filteredPurchases.forEach((p) => {
+        const d = new Date(p.purchaseDate || p.createdAt);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (!buckets[key]) return;
+        buckets[key].Spend += p.grandTotal || 0;
+        if (p.status === "Received") buckets[key].Received += p.grandTotal || 0;
+        else if (p.status === "Pending" || p.status === "Partial") buckets[key].Pending += p.grandTotal || 0;
+      });
+      return months.map((m) => ({ name: m.label, ...buckets[m.key] }));
+    })();
+    const vendorSpendTrendFormatY = (v) => {
+      if (v >= 1e7) return `₹${(v / 1e7).toFixed(v % 1e7 === 0 ? 0 : 1)}Cr`;
+      if (v >= 1e5) return `₹${(v / 1e5).toFixed(v % 1e5 === 0 ? 0 : 1)}L`;
+      if (v >= 1e3) return `₹${(v / 1e3).toFixed(v % 1e3 === 0 ? 0 : 1)}K`;
+      return `₹${v}`;
+    };
+
+    // Top Vendors by Spend — real per-vendor rollup from purchases + vendor balance.
+    const topVendorsBySpend = (() => {
+      const byVendor = {};
+      filteredData.filteredPurchases.forEach((p) => {
+        const vendorId = p.vendor?._id || p.vendor;
+        if (!vendorId) return;
+        if (!byVendor[vendorId]) {
+          byVendor[vendorId] = { vendorId, totalPaid: 0, transactions: 0, lastPayment: null, statuses: [] };
+        }
+        byVendor[vendorId].totalPaid += p.grandTotal || 0;
+        byVendor[vendorId].transactions += 1;
+        byVendor[vendorId].statuses.push(p.status);
+        const d = new Date(p.purchaseDate || p.createdAt);
+        if (!byVendor[vendorId].lastPayment || d > byVendor[vendorId].lastPayment) {
+          byVendor[vendorId].lastPayment = d;
+        }
+      });
+      const vendorLookup = Object.fromEntries(filteredData.filteredVendors.map((v) => [v._id, v]));
+      return Object.values(byVendor)
+        .map((row) => {
+          const vendor = vendorLookup[row.vendorId];
+          // Worst-case status across the vendor's purchases: any Pending/Draft
+          // wins over Partial, which wins over a clean all-Received history.
+          let status = "Paid";
+          if (row.statuses.some((s) => s === "Pending" || s === "Draft" || s === "Cancelled")) status = "Pending";
+          else if (row.statuses.some((s) => s === "Partial")) status = "Partially Paid";
+          return {
+            ...row,
+            name: vendor?.name || "Unknown Vendor",
+            outstanding: Math.max(vendor?.balance || 0, 0),
+            status,
+          };
+        })
+        .sort((a, b) => b.totalPaid - a.totalPaid)
+        .slice(0, 4);
+    })();
+    const vendorSpendGoesTotal = topVendorsBySpend.reduce((sum, v) => sum + v.totalPaid, 0);
+    const vendorStatusStyles = {
+      Paid: { bg: "rgba(52,199,89,0.1)", color: "#34C759" },
+      "Partially Paid": { bg: "rgba(216,112,0,0.1)", color: "#D87000" },
+      Pending: { bg: "rgba(232,34,34,0.1)", color: "#E82222" },
+    };
+
+    // Recent Payments — most recent purchases across all vendors.
+    const recentPayments = [...filteredData.filteredPurchases]
+      .sort((a, b) => new Date(b.purchaseDate || b.createdAt) - new Date(a.purchaseDate || a.createdAt))
+      .slice(0, 4)
+      .map((p) => {
+        const d = new Date(p.purchaseDate || p.createdAt);
+        const status = p.status === "Received" ? "Paid" : p.status === "Partial" ? "Partially Paid" : "Pending";
+        return {
+          id: p._id,
+          day: d.toLocaleDateString("en-IN", { day: "2-digit" }),
+          month: d.toLocaleDateString("en-IN", { month: "short" }),
+          amount: p.grandTotal || 0,
+          vendorName: p.vendor?.name || "Unknown Vendor",
+          status,
+        };
+      });
+
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -3947,23 +4056,352 @@ const Insights = () => {
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-stretch">
-          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 items-stretch">
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm flex flex-col">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h3 className="text-sm font-semibold text-[#0E121B]">Vendor Spend Overtime</h3>
+              <div className="flex items-center gap-4">
+                {[
+                  { key: "Spend", color: "#0085FF" },
+                  { key: "Received", color: "#00C950" },
+                  { key: "Pending", color: "#D87000" },
+                ].map(({ key, color }) => (
+                  <div key={key} className="flex items-center gap-1.5">
+                    <span className="inline-block w-5 h-0.5 rounded-full" style={{ background: color }} />
+                    <span className="text-xs" style={{ color: "rgba(31,31,33,0.56)" }}>
+                      {key}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={280} className="mt-2">
+              <ComposedChart data={vendorSpendTrendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <defs>
+                  <pattern
+                    id="vendorSpendHatch"
+                    width="6"
+                    height="6"
+                    patternUnits="userSpaceOnUse"
+                    patternTransform="rotate(45)"
+                  >
+                    <rect width="6" height="6" fill="rgba(0,133,255,0.06)" />
+                    <line x1="0" y1="0" x2="0" y2="6" stroke="#0085FF" strokeOpacity="0.35" strokeWidth="1.5" />
+                  </pattern>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(31,41,55,0.1)" />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 10, fill: "#1F2937" }}
+                  axisLine={{ stroke: "rgba(31,41,55,0.3)" }}
+                  tickLine={false}
+                />
+                <YAxis
+                  tickFormatter={vendorSpendTrendFormatY}
+                  tick={{ fontSize: 10, fill: "#1F2937" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={52}
+                  tickMargin={4}
+                />
+                <Tooltip
+                  formatter={(value, name) => [`₹${formatNumberToIndian(Math.round(value))}`, name]}
+                  contentStyle={{ borderRadius: 8, border: "1px solid #E7E4E3", fontSize: 12 }}
+                />
+                <Area
+                  type="linear"
+                  dataKey="Spend"
+                  stroke="#0085FF"
+                  strokeWidth={2}
+                  fill="url(#vendorSpendHatch)"
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+                <Line type="linear" dataKey="Received" stroke="#00C950" strokeWidth={2} strokeDasharray="4 3" dot={false} />
+                <Line type="linear" dataKey="Pending" stroke="#D87000" strokeWidth={2} strokeDasharray="4 3" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
           </div>
-          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Payment Distribution</h3>
+            <p className="text-xs text-[#525866] mt-1">Purchase status breakdown across vendors</p>
+            {paymentDistribution.length === 0 ? (
+              <p className="text-sm text-gray-400 py-10 text-center">No purchase data available</p>
+            ) : (
+              <div className="flex items-center justify-between gap-4 mt-4 flex-wrap">
+                <div className="relative flex-shrink-0" style={{ width: 220, height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={paymentDistribution}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={68}
+                        outerRadius={108}
+                        cornerRadius={3}
+                        paddingAngle={paymentDistribution.length > 1 ? 2 : 0}
+                        dataKey="count"
+                        nameKey="status"
+                        stroke="none"
+                        label={({ cx, cy, midAngle, innerRadius, outerRadius, value }) => {
+                          const RADIAN = Math.PI / 180;
+                          const r = (innerRadius + outerRadius) / 2;
+                          const x = cx + r * Math.cos(-midAngle * RADIAN);
+                          const y = cy + r * Math.sin(-midAngle * RADIAN);
+                          const pct = Math.round((value / totalPurchasesForStatus) * 100);
+                          const text = `${pct}%`;
+                          const w = text.length * 6 + 10;
+                          return (
+                            <g>
+                              <rect x={x - w / 2} y={y - 8} width={w} height={16} rx={6} fill="#FFFFFF" />
+                              <text
+                                x={x}
+                                y={y}
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                                fontSize={11}
+                                fontWeight={500}
+                                fill="#21201F"
+                              >
+                                {text}
+                              </text>
+                            </g>
+                          );
+                        }}
+                        labelLine={false}
+                      >
+                        {paymentDistribution.map((entry) => (
+                          <Cell key={entry.status} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-col gap-1.5 flex-shrink-0">
+                  {paymentDistribution.map((entry) => (
+                    <div key={entry.status} className="flex items-center gap-1.5">
+                      <span
+                        className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                        style={{ background: entry.color }}
+                      />
+                      <span className="text-xs text-[#21201F]/70 truncate min-w-[90px]">{entry.status}</span>
+                      <span className="text-[11px] text-[#525866] text-right flex-shrink-0 w-8">
+                        {entry.pct}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
-          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
+          <div className="bg-white p-3 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[200px] flex flex-col gap-3">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Top Vendors by Spend</h3>
+            {topVendorsBySpend.length === 0 ? (
+              <p className="text-sm text-gray-400 py-10 text-center">No purchase data available</p>
+            ) : (
+              <div className="bg-[#F8FAFC] rounded-md p-2 flex-1 flex flex-col overflow-x-auto">
+                <table className="w-full h-full min-w-[420px] border-collapse flex-1 flex flex-col">
+                  <thead>
+                    <tr className="bg-white rounded-md flex w-full">
+                      {["Vendor", "Total Paid", "Outstanding", "Transactions", "Last Payment"].map((h) => (
+                        <th
+                          key={h}
+                          className="flex-1 text-[12px] font-normal text-[#1F2937] text-center py-1.5 px-1.5 first:text-left"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="flex-1 flex flex-col justify-around">
+                    {topVendorsBySpend.map((row) => (
+                      <tr key={row.vendorId} className="flex items-center w-full border-t border-[#1F2937]/10">
+                        <td className="flex-1 text-[12px] font-medium text-[#1F2937] py-1 px-1.5 truncate">
+                          {row.name}
+                        </td>
+                        <td className="flex-1 text-[12px] font-medium text-black text-center py-1 px-1.5">
+                          ₹{formatNumberToIndian(Math.round(row.totalPaid))}
+                        </td>
+                        <td className="flex-1 text-[12px] font-medium text-black text-center py-1 px-1.5">
+                          ₹{formatNumberToIndian(Math.round(row.outstanding))}
+                        </td>
+                        <td className="flex-1 text-[12px] font-medium text-black text-center py-1 px-1.5">
+                          {row.transactions}
+                        </td>
+                        <td className="flex-1 text-[12px] font-medium text-black text-center py-1 px-1.5">
+                          {row.lastPayment
+                            ? row.lastPayment.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
+          <div className="bg-white p-3 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[200px] flex flex-col gap-3">
+            <h3 className="text-sm font-semibold text-[#0E121B]">Where Your Vendor Spend Goes</h3>
+            {topVendorsBySpend.length === 0 ? (
+              <p className="text-sm text-gray-400 py-10 text-center">No purchase data available</p>
+            ) : (
+              <div className="bg-[#F8FAFC] rounded-md p-2 flex-1 flex flex-col overflow-x-auto">
+                <div className="flex items-center w-full bg-white rounded-md">
+                  {["Vendor", "Spend Share", "Top Spend", "% of Total", "Status"].map((h) => (
+                    <div
+                      key={h}
+                      className="flex-1 text-[12px] font-normal text-[#1F2937] text-center py-1.5 px-1.5 first:text-left"
+                    >
+                      {h}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex-1 flex flex-col justify-around">
+                  {topVendorsBySpend.map((row) => {
+                    const pct = vendorSpendGoesTotal > 0 ? (row.totalPaid / vendorSpendGoesTotal) * 100 : 0;
+                    const style = vendorStatusStyles[row.status];
+                    return (
+                      <div key={row.vendorId} className="flex items-center w-full border-t border-[#1F2937]/10">
+                        <div className="flex-1 text-[12px] font-medium text-[#1F2937] py-1 px-1.5 truncate">
+                          {row.name}
+                        </div>
+                        <div className="flex-1 flex items-center justify-center py-1 px-1.5">
+                          <div className="relative w-full max-w-[110px] h-1.5 rounded-full bg-[#0085FF]/25">
+                            <div
+                              className="absolute inset-y-0 left-0 rounded-full bg-[#0085FF]"
+                              style={{ width: `${Math.min(pct, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex-1 text-[12px] font-medium text-black text-center py-1 px-1.5">
+                          ₹{formatNumberToIndian(Math.round(row.totalPaid))}
+                        </div>
+                        <div className="flex-1 text-[12px] font-medium text-black text-center py-1 px-1.5">
+                          {pct.toFixed(1)}%
+                        </div>
+                        <div className="flex-1 flex items-center justify-center py-1 px-1.5">
+                          <span
+                            className="text-[12px] font-medium px-2.5 py-1 rounded-full whitespace-nowrap"
+                            style={{ background: style.bg, color: style.color }}
+                          >
+                            {row.status}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
+          <div className="bg-white p-4 rounded-lg border border-[#E1E4EA] shadow-sm min-h-[200px] flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[#1C1C1D]">Recent Payments</h3>
+              <span className="text-xs font-semibold text-[#0085FF] cursor-pointer" onClick={() => setActiveTab("purchases")}>
+                View All
+              </span>
+            </div>
+            {recentPayments.length === 0 ? (
+              <p className="flex-1 flex items-center justify-center text-sm text-gray-400">No purchases yet</p>
+            ) : (
+              <div className="flex-1 flex flex-col justify-around">
+                {recentPayments.map((p) => {
+                  const style = vendorStatusStyles[p.status];
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex items-center gap-4 py-2 border-b border-[#E7E4E3] last:border-b-0"
+                    >
+                      <div className="flex flex-col items-center w-[43px] shrink-0">
+                        <span className="text-base font-medium text-black">{p.day}</span>
+                        <span className="text-[10px] font-medium text-[#6B7280]/50">{p.month}</span>
+                      </div>
+                      <div className="w-[42px] h-[42px] rounded-full bg-[#0085FF]/10 flex items-center justify-center shrink-0">
+                        <Wallet className="w-5 h-5 text-[#0085FF]" />
+                      </div>
+                      <span className="text-sm font-medium text-[#404040] whitespace-nowrap">
+                        ₹{formatNumberToIndian(Math.round(p.amount))}
+                      </span>
+                      <span className="text-sm font-medium text-[#525252] truncate flex-1">{p.vendorName}</span>
+                      <span
+                        className="text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap shrink-0"
+                        style={{ background: style.bg, color: style.color }}
+                      >
+                        {p.status}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px]">
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold text-[#0E121B]">Vendors Directory</h3>
+          <div className="bg-white rounded-xl border border-[#E1E4EA] overflow-hidden">
+            {filteredData.filteredVendors.length === 0 ? (
+              <p className="text-sm text-gray-400 py-16 text-center">No vendors yet</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] border-collapse">
+                  <thead>
+                    <tr className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+                      {["Vendor", "Company", "Contact", "Created", "Balance", "Status"].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left text-xs font-medium text-[#525866] py-3 px-3 whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredData.filteredVendors.slice(0, 8).map((v) => (
+                      <tr key={v._id} className="border-b border-[#E1E4EA] last:border-b-0">
+                        <td className="py-2.5 px-3 text-sm font-medium text-[#222530] whitespace-nowrap">
+                          {v.name}
+                        </td>
+                        <td className="py-2.5 px-3 text-sm text-[#525866] whitespace-nowrap">
+                          {v.company || "—"}
+                        </td>
+                        <td className="py-2.5 px-3 text-sm text-[#525866] whitespace-nowrap">
+                          {v.email || v.phone || "—"}
+                        </td>
+                        <td className="py-2.5 px-3 text-sm text-[#525866] whitespace-nowrap">
+                          {v.createdAt
+                            ? new Date(v.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                            : "—"}
+                        </td>
+                        <td className="py-2.5 px-3 text-sm text-[#525866] whitespace-nowrap">
+                          ₹{formatNumberToIndian(Math.round(v.balance || 0))}
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span
+                            className="text-xs font-medium px-2.5 py-1 rounded-full"
+                            style={
+                              (v.balance || 0) > 0
+                                ? { background: "rgba(232,34,34,0.1)", color: "#E82222" }
+                                : (v.balance || 0) < 0
+                                ? { background: "rgba(216,112,0,0.1)", color: "#D87000" }
+                                : { background: "rgba(52,199,89,0.1)", color: "#34C759" }
+                            }
+                          >
+                            {(v.balance || 0) > 0 ? "Payable" : (v.balance || 0) < 0 ? "Credit" : "Settled"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
