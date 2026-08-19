@@ -422,9 +422,20 @@ function App() {
         <main
           className={`transition-all duration-300 ease-in-out py-6 px-4 sm:px-6 lg:px-8 ${
             userIsAuthenticated && !shouldHideNavigation
-              ? "pt-[70px] lg:pt-20 lg:ml-16"
+              ? "pt-[70px] lg:pt-20"
               : ""
           }`}
+          style={
+            userIsAuthenticated && !shouldHideNavigation
+              ? {
+                  marginLeft:
+                    window.innerWidth >= 1024
+                      ? "var(--sidebar-width, 64px)"
+                      : undefined,
+                  transition: "margin-left 300ms ease-in-out",
+                }
+              : undefined
+          }
         >
           <Routes>
             <Route path="/login" element={<Login />} />

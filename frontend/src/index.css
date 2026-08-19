@@ -34,6 +34,18 @@
   min-height: 100vh;
 }
 
+/* Dozens of page toolbars/headers pin themselves to the sidebar edge via
+   `left: var(--sidebar-width, 0px)` in inline styles, updated by Navbar.jsx
+   whenever the sidebar expands/collapses/pins. Most of those inline styles
+   never declared a transition of their own, so their `left` snapped
+   instantly while the sidebar itself slid smoothly — one shared rule here
+   keeps every one of them in step without having to touch each call site.
+   The attribute selector matches because React's `left` style ends up
+   reflected in the element's serialized `style` attribute. */
+[style*="var(--sidebar-width"] {
+  transition: left 300ms ease-in-out;
+}
+
 @media (min-width: 1024px) {
   .dc-loader-fill {
     min-height: calc(100vh / var(--dynamic-zoom, 1));

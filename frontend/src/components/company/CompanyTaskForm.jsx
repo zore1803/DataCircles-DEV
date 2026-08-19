@@ -1,8 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import API from "../../services/api";
-import ReactQuill from "react-quill-new";
-import "react-quill/dist/quill.snow.css";
-import { useSystemSettings } from "../../hooks/useSystemSettings";
 import toast from "react-hot-toast";
 import {
   X,
@@ -24,26 +21,161 @@ import {
   Timer,
   Flag,
   User as UserIcon,
+  Search,
 } from "lucide-react";
 
-const SingleSelectDropdown = ({ options, value, onChange, disabled, dropUp = false }) => {
+// Compact searchable picker for Contact/Deal — a plain <select> with 15+
+// options has no search and pops open as a tall, unstyled native list (see
+// screenshot); this keeps the same pill trigger but opens a small card with
+// a search box and a capped-height list instead. Anchored directly under its
+// own trigger via plain absolute positioning (not a portal) so it always
+// opens exactly where it visually belongs; a max-height + internal scroll
+// keeps it from ever growing large enough to need repositioning.
+const SearchableEntityDropdown = ({ options, value, onChange, displayKey, placeholder, disabled, onOpenChange }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const selectedOption = options.find(opt => opt.value === value) || options[0];
+  const [search, setSearch] = useState("");
+  const selected = options.find((o) => o._id === value);
+  const filtered = options.filter((o) =>
+    (o[displayKey] || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const popupRef = useRef(null);
+
+  // While open, tell the form to add temporary bottom padding — otherwise a
+  // dropdown on the last field has nowhere to scroll to and stays clipped.
+  // Then scroll the popup itself (not the trigger) into view: "nearest"
+  // moves the modal body by exactly enough to reveal the whole card.
+  useEffect(() => {
+    if (!isOpen) return;
+    onOpenChange?.(true);
+    const id = setTimeout(() => {
+      popupRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 0);
+    return () => {
+      clearTimeout(id);
+      onOpenChange?.(false);
+    };
+  }, [isOpen, onOpenChange]);
+
+  const toggle = () => {
+    setIsOpen((v) => !v);
+    if (isOpen) setSearch("");
+  };
 
   return (
     <div className="relative">
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-end gap-2 px-3 py-1.5 rounded-full text-xs font-semibold focus:outline-none transition-all ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'
-          } ${selectedOption.className}`}
+        onClick={toggle}
+        className={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between gap-2 transition-all bg-white font-inter disabled:bg-gray-50 disabled:text-gray-400 ${disabled ? "cursor-not-allowed" : "cursor-pointer"} ${selected ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
+      >
+        <span className="truncate">{selected ? selected[displayKey] : placeholder}</span>
+        {!disabled && <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />}
+      </button>
+
+      {isOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => {
+              setIsOpen(false);
+              setSearch("");
+            }}
+          />
+          <div
+            ref={popupRef}
+            className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200"
+          >
+            <div className="p-2 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search..."
+                  className="w-full pl-8 pr-2 h-7 border border-gray-200 rounded-full text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            {/* Exactly 4 rows visible (~30px each incl. padding), including
+                "None" — scrolls internally past that instead of growing taller. */}
+            <div className="max-h-[120px] overflow-y-auto py-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onChange("");
+                  setIsOpen(false);
+                  setSearch("");
+                }}
+                className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:bg-gray-50 ${!value ? "bg-blue-50/50 text-blue-600" : "text-gray-600"}`}
+              >
+                None
+              </button>
+              {filtered.length === 0 ? (
+                <p className="px-3 py-2 text-[12px] text-center text-gray-400">No results</p>
+              ) : (
+                filtered.map((o) => (
+                  <button
+                    key={o._id}
+                    type="button"
+                    onClick={() => {
+                      onChange(o._id);
+                      setIsOpen(false);
+                      setSearch("");
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-[12px] truncate transition-colors hover:bg-gray-50 ${value === o._id ? "bg-blue-50/50 text-blue-600" : "text-gray-700"}`}
+                  >
+                    {o[displayKey]}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// Pill-shaped select, styled like QuickCompanyForm's CustomDropdown trigger
+// (border, rounded-full, h-8, 12px text) instead of the colored badge this
+// used to render as, so it reads as one more field in the form rather than a
+// status chip. Anchored the same in-flow way as SearchableEntityDropdown.
+const SingleSelectDropdown = ({ options, value, onChange, disabled, onOpenChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const popupRef = useRef(null);
+  const selectedOption = options.find(opt => opt.value === value) || options[0];
+
+  // See SearchableEntityDropdown above — opens scroll room, then scrolls
+  // the opened card fully into view.
+  useEffect(() => {
+    if (!isOpen) return;
+    onOpenChange?.(true);
+    const id = setTimeout(() => {
+      popupRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 0);
+    return () => {
+      clearTimeout(id);
+      onOpenChange?.(false);
+    };
+  }, [isOpen, onOpenChange]);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setIsOpen((v) => !v)}
+        className={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter text-[#1F2937] disabled:bg-gray-50 disabled:text-gray-400 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
       >
         <div className="flex items-center gap-1.5">
-          {selectedOption.icon && <selectedOption.icon className="w-3 h-3" />}
+          {selectedOption.icon && <selectedOption.icon className="w-3.5 h-3.5" />}
           <span className="capitalize">{selectedOption.label}</span>
         </div>
-        {!disabled && <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />}
+        {!disabled && <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />}
       </button>
 
       {isOpen && (
@@ -52,7 +184,10 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled, dropUp = fal
             className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute right-0 top-[calc(100%+8px)] w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div
+            ref={popupRef}
+            className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 max-h-[180px] overflow-y-auto animate-in fade-in zoom-in duration-200"
+          >
             {options.map((option) => (
               <button
                 key={option.value}
@@ -67,7 +202,7 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled, dropUp = fal
                 <div className={`p-1.5 rounded-lg ${option.className} border-none`}>
                   {option.icon && <option.icon className="w-3.5 h-3.5" />}
                 </div>
-                <span className="font-medium text-right flex-1">{option.label}</span>
+                <span className="font-medium text-left flex-1">{option.label}</span>
                 {value === option.value && <CheckIcon className="w-4 h-4 ml-auto text-blue-600" />}
               </button>
             ))}
@@ -102,20 +237,9 @@ const StatusBadge = ({ status }) => {
       border: "border-emerald-200",
       icon: <CheckCircle2 className="w-3 h-3" />,
     },
-    "In Progress": {
-      bg: "bg-blue-50",
-      text: "text-blue-700",
-      border: "border-blue-200",
-      icon: <Loader2 className="w-3 h-3" />,
-    },
   };
 
-  const config = configs[status] || {
-    bg: "bg-gray-50",
-    text: "text-gray-700",
-    border: "border-gray-200",
-    icon: <Clock className="w-3 h-3" />,
-  };
+  const config = configs[status] || configs.Pending;
 
   return (
     <div
@@ -178,6 +302,16 @@ const CompanyTaskForm = ({
   const [shouldRender, setShouldRender] = useState(false);
   const [errors, setErrors] = useState({});
   const [showUserSelector, setShowUserSelector] = useState(false);
+  const [userSelectorSearch, setUserSelectorSearch] = useState("");
+  const assigneesFieldRef = useRef(null);
+  // Extra scroll room is only added while a dropdown is actually open, so the
+  // form doesn't sit with a big empty gap under its last field the rest of
+  // the time. Counted rather than a boolean so overlapping open/close
+  // transitions can't leave it stuck on.
+  const [openDropdowns, setOpenDropdowns] = useState(0);
+  const handleDropdownOpenChange = useCallback((open) => {
+    setOpenDropdowns((n) => Math.max(0, n + (open ? 1 : -1)));
+  }, []);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditMode, setIsEditMode] = useState(mode === "create");
   const [company, setCompany] = useState(null);
@@ -186,14 +320,11 @@ const CompanyTaskForm = ({
   const [relatedContactId, setRelatedContactId] = useState("");
   const [relatedDealId, setRelatedDealId] = useState("");
 
-  const { taskStatuses } = useSystemSettings();
-
-  const statusOptions = taskStatuses.map(status => {
-    if (status === 'Pending') return { value: 'Pending', label: 'Pending', icon: Clock, className: 'bg-amber-50 text-amber-600' };
-    if (status === 'Completed') return { value: 'Completed', label: 'Completed', icon: CheckIcon, className: 'bg-emerald-50 text-emerald-600' };
-    if (status === 'In Progress') return { value: 'In Progress', label: 'In Progress', icon: Loader2, className: 'bg-blue-50 text-blue-600' };
-    return { value: status, label: status, icon: Clock, className: 'bg-gray-50 text-gray-600' };
-  });
+  const statusOptions = [
+    { value: 'Pending', label: 'Pending', icon: Clock, className: 'bg-amber-50 text-amber-600' },
+    { value: 'Completed', label: 'Completed', icon: CheckIcon, className: 'bg-emerald-50 text-emerald-600' },
+    { value: 'In Progress', label: 'In Progress', icon: Loader2, className: 'bg-blue-50 text-blue-600' },
+  ];
 
   const priorityOptions = [
     { value: 'low', label: 'Low', icon: Flag, className: 'bg-green-50 text-green-600' },
@@ -264,6 +395,28 @@ const CompanyTaskForm = ({
       setShowUserSelector(false);
     }
   }, [open, mode, taskData, calendarDate, companyId, startInEditMode]);
+
+  // Lock the page behind the backdrop so it can't be scrolled while this
+  // overlay is open.
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
+
+  // Scroll the Assignees field into view when its list opens — it sits at
+  // the bottom of the scrollable body, right against the sticky footer, so
+  // the dropdown would otherwise render partly hidden below the fold.
+  useEffect(() => {
+    if (showUserSelector) {
+      assigneesFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      setUserSelectorSearch("");
+    }
+  }, [showUserSelector]);
 
   const handleChange = (key, val) => {
     setForm((f) => ({ ...f, [key]: val }));
@@ -407,239 +560,257 @@ const CompanyTaskForm = ({
           isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
       >
-        <div className="h-full flex flex-col">
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gray-50">
-            <h3 className="text-lg font-bold text-gray-900">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
+          {/* Sticky header — matches the CompanyForm header spec */}
+          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {mode === "view" ? "Edit Task" : "Add New Task"}
-            </h3>
+            </h2>
             <button
+              type="button"
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+              aria-label="Close"
             >
-              <X className="w-5 h-5" />
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
 
-          {/* Form Body */}
-          <div className="flex-1 overflow-y-auto">
-            <form onSubmit={handleSubmit} className="flex flex-col h-full">
-              {/* Content */}
-              <div className="p-6 space-y-8">
-                <div className="space-y-4">
-                  <input
-                    type="text"
-                    value={form.title}
-                    onChange={(e) => handleChange("title", e.target.value)}
-                    className={`w-full text-3xl font-bold border-none bg-transparent placeholder-gray-300 focus:outline-none focus:ring-0 ${errors.title ? 'text-red-600' : 'text-gray-900'
-                      }`}
-                    placeholder="Task Title"
-                    disabled={!isEditMode && mode === "view"}
-                  />
-                  {errors.title && <p className="text-xs text-red-500 font-medium">*{errors.title}</p>}
-                </div>
+          {/* Scrollable body */}
+          {/* The extra bottom padding only appears while a dropdown is open,
+              giving it somewhere to scroll to; otherwise the form would sit
+              with a large empty gap under its last field. */}
+          <div
+            className={`flex-1 min-h-0 overflow-y-auto px-8 pt-6 space-y-6 transition-[padding] duration-200 ${
+              openDropdowns > 0 ? "pb-52" : "pb-6"
+            }`}
+          >
+            <div>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Task Title <span className="text-[#FF4935]">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.title}
+                onChange={(e) => handleChange("title", e.target.value)}
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:bg-gray-50 disabled:text-gray-400"
+                placeholder="Enter Task Title"
+                disabled={!isEditMode && mode === "view"}
+              />
+              {errors.title && <p className="text-[12px] text-[#FF4935] font-medium mt-1.5">{errors.title}</p>}
+            </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700">Description</label>
-                  <textarea
-                    value={form.description}
-                    onChange={(e) => handleChange("description", e.target.value)}
-                    rows={6}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none resize-none text-sm text-gray-600"
-                    placeholder="Description the task objectives, requirements and important details"
-                    disabled={!isEditMode && mode === "view"}
-                  />
-                </div>
+            <div>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Description
+              </label>
+              <textarea
+                value={form.description}
+                onChange={(e) => handleChange("description", e.target.value)}
+                rows={4}
+                className="w-full border border-[#1F2937]/10 rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter resize-vertical disabled:bg-gray-50 disabled:text-gray-400 placeholder:text-[#1F2937] placeholder:opacity-50"
+                placeholder="Describe the task objectives, requirements and important details"
+                disabled={!isEditMode && mode === "view"}
+              />
+            </div>
+
+            <div>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Related to
+              </label>
+              <div className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 flex items-center gap-2 bg-gray-50 text-[12px] text-[#1F2937]">
+                <Building className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                <span className="truncate">{company?.name || "Company Name"}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  Contact
+                </label>
+                <SearchableEntityDropdown
+                  options={contacts}
+                  value={relatedContactId}
+                  onChange={setRelatedContactId}
+                  displayKey="name"
+                  placeholder="None"
+                  disabled={!isEditMode && mode === "view"}
+                  onOpenChange={handleDropdownOpenChange}
+                />
               </div>
 
-              {/* Meta */}
-              <div className="px-6 pb-48 space-y-6 bg-white border-t border-gray-100 pt-6">
-                <div className="space-y-4">
-                  {/* Related to */}
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <UserIcon className="w-4 h-4" />
-                      <span>Related to</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-900 text-sm font-medium">
-                      <Building className="w-4 h-4 text-gray-400" />
-                      <span className="truncate max-w-[150px]">{company?.name || "Company Name"}</span>
-                    </div>
-                  </div>
+              <div>
+                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  Deal
+                </label>
+                <SearchableEntityDropdown
+                  options={deals.map((d) => ({ ...d, _displayTitle: d.title || d.name }))}
+                  value={relatedDealId}
+                  onChange={setRelatedDealId}
+                  displayKey="_displayTitle"
+                  placeholder="None"
+                  disabled={!isEditMode && mode === "view"}
+                  onOpenChange={handleDropdownOpenChange}
+                />
+              </div>
+            </div>
 
-                  {/* Related Contact */}
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <UserIcon className="w-4 h-4" />
-                      <span>Contact</span>
-                    </div>
-                    <select
-                      value={relatedContactId}
-                      onChange={(e) => setRelatedContactId(e.target.value)}
-                      disabled={!isEditMode && mode === "view"}
-                      className="text-sm font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer max-w-[150px]"
-                    >
-                      <option value="">None</option>
-                      {contacts.map((c) => (
-                        <option key={c._id} value={c._id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  Selected Date
+                </label>
+                <input
+                  type="date"
+                  value={form.selectedDate || calendarDate || ""}
+                  onChange={(e) => handleChange("selectedDate", e.target.value)}
+                  disabled={!isEditMode && mode === "view"}
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all disabled:bg-gray-50 disabled:text-gray-400"
+                />
+              </div>
 
-                  {/* Related Deal */}
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Building className="w-4 h-4" />
-                      <span>Deal</span>
-                    </div>
-                    <select
-                      value={relatedDealId}
-                      onChange={(e) => setRelatedDealId(e.target.value)}
-                      disabled={!isEditMode && mode === "view"}
-                      className="text-sm font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer max-w-[150px]"
-                    >
-                      <option value="">None</option>
-                      {deals.map((d) => (
-                        <option key={d._id} value={d._id}>
-                          {d.title || d.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <div>
+                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  Due Date
+                </label>
+                <input
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(e) => handleChange("dueDate", e.target.value)}
+                  disabled={!isEditMode && mode === "view"}
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all disabled:bg-gray-50 disabled:text-gray-400"
+                />
+                {errors.dueDate && <p className="text-[12px] text-[#FF4935] font-medium mt-1.5">{errors.dueDate}</p>}
+              </div>
+            </div>
 
-                  {/* Selected Date (Start Date) */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Calendar className="w-4 h-4" />
-                      <span>Selected Date</span>
-                    </div>
-                    <input
-                      type="date"
-                      value={form.selectedDate || calendarDate || ""}
-                      onChange={(e) => handleChange("selectedDate", e.target.value)}
-                      disabled={!isEditMode && mode === "view"}
-                      className="text-sm font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="flex items-center gap-1.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  <Timer className="w-3.5 h-3.5" />
+                  Status
+                </label>
+                <SingleSelectDropdown
+                  options={statusOptions}
+                  value={form.status}
+                  onChange={(val) => handleChange("status", val)}
+                  disabled={!isEditMode && mode === "view"}
+                  onOpenChange={handleDropdownOpenChange}
+                />
+              </div>
+
+              <div>
+                <label className="flex items-center gap-1.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  <Flag className="w-3.5 h-3.5" />
+                  Priority
+                </label>
+                <SingleSelectDropdown
+                  options={priorityOptions}
+                  value={form.priority}
+                  onChange={(val) => handleChange("priority", val)}
+                  disabled={!isEditMode && mode === "view"}
+                  onOpenChange={handleDropdownOpenChange}
+                />
+              </div>
+            </div>
+
+            <div ref={assigneesFieldRef}>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Assignees
+              </label>
+              <div className="space-y-2 relative">
+                {assignedUsers.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {assignedUsers.map(user => (
+                      <div key={user._id} className="w-7 h-7 rounded-full overflow-hidden border-2 border-white ring-1 ring-gray-100 flex items-center justify-center bg-gray-100" title={user.name}>
+                        <UserIcon className="w-3.5 h-3.5 text-gray-400" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {isEditMode && (
+                  <button
+                    type="button"
+                    onClick={() => setShowUserSelector(!showUserSelector)}
+                    className="w-full flex items-center justify-between border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] bg-white hover:bg-gray-50 transition-colors focus:outline-none"
+                  >
+                    <span className="text-[#1F2937] opacity-50">
+                      {form.users?.length ? `${form.users.length} selected` : "Select Users"}
+                    </span>
+                    <Plus className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                  </button>
+                )}
+
+                {showUserSelector && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowUserSelector(false)}
                     />
-                  </div>
-
-                  {/* Due Date (End Date) */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Calendar className="w-4 h-4" />
-                      <span>Due Date</span>
-                    </div>
-                    <input
-                      type="date"
-                      value={form.dueDate}
-                      onChange={(e) => handleChange("dueDate", e.target.value)}
-                      disabled={!isEditMode && mode === "view"}
-                      className="text-sm font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Status */}
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Timer className="w-4 h-4" />
-                      <span>Status</span>
-                    </div>
-                    <SingleSelectDropdown
-                      options={statusOptions}
-                      value={form.status}
-                      onChange={(val) => handleChange("status", val)}
-                      disabled={!isEditMode && mode === "view"}
-                      dropUp={true}
-                    />
-                  </div>
-
-                  {/* Priority */}
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Flag className="w-4 h-4" />
-                      <span>Priority</span>
-                    </div>
-                    <SingleSelectDropdown
-                      options={priorityOptions}
-                      value={form.priority}
-                      onChange={(val) => handleChange("priority", val)}
-                      disabled={!isEditMode && mode === "view"}
-                      dropUp={true}
-                    />
-                  </div>
-
-                  {/* Assignees */}
-                  <div className="space-y-3 pt-2">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Users className="w-4 h-4" />
-                      <span>Assignees</span>
-                    </div>
-
-                    {/* User chips and selector */}
-                    <div className="space-y-2 relative">
-                      {assignedUsers.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {assignedUsers.map(user => (
-                            <div key={user._id} className="w-6 h-6 rounded-full overflow-hidden border-2 border-white ring-1 ring-gray-100 flex items-center justify-center bg-gray-100" title={user.name}>
-                              <UserIcon className="w-3 h-3 text-gray-400" />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {isEditMode && (
-                        <button
-                          type="button"
-                          onClick={() => setShowUserSelector(!showUserSelector)}
-                          className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs hover:bg-gray-100 transition-colors focus:outline-none"
-                        >
-                          <span className="text-gray-500">Select Users</span>
-                          <Plus className="w-3 h-3 text-gray-400" />
-                        </button>
-                      )}
-
-                      {showUserSelector && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-40"
-                            onClick={() => setShowUserSelector(false)}
+                    <div className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                      <div className="p-2 border-b border-gray-100">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                          <input
+                            type="text"
+                            autoFocus
+                            value={userSelectorSearch}
+                            onChange={(e) => setUserSelectorSearch(e.target.value)}
+                            placeholder="Search users..."
+                            className="w-full pl-8 pr-2 h-7 border border-gray-200 rounded-full text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500"
                           />
-                          <div className="absolute z-50 left-0 right-0 bottom-full mb-2 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto p-2 space-y-1 animate-in fade-in slide-in-from-bottom-2">
-                            {users?.map((user) => (
-                              <label
-                                key={user._id}
-                                className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={form.users?.includes(user._id)}
-                                  onChange={() => handleUserSelection(user._id)}
-                                  className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-xs font-medium text-gray-700 truncate">{user.name || user.email}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </>
-                      )}
+                        </div>
+                      </div>
+                      <div className="max-h-40 overflow-y-auto p-1">
+                        {(users || [])
+                          .filter((user) =>
+                            (user.name || user.email || "")
+                              .toLowerCase()
+                              .includes(userSelectorSearch.toLowerCase())
+                          )
+                          .map((user) => (
+                            <label
+                              key={user._id}
+                              className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={form.users?.includes(user._id)}
+                                onChange={() => handleUserSelection(user._id)}
+                                className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-[12px] font-medium text-[#1F2937] truncate">{user.name || user.email}</span>
+                            </label>
+                          ))}
+                        {(users || []).filter((user) =>
+                          (user.name || user.email || "")
+                            .toLowerCase()
+                            .includes(userSelectorSearch.toLowerCase())
+                        ).length === 0 && (
+                          <p className="px-3 py-2 text-[12px] text-center text-gray-400">No results</p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
-            </form>
+            </div>
           </div>
 
-          {/* Footer Actions */}
-          <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-3">
+          {/* Sticky footer — matches the CompanyForm footer spec */}
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             {mode === "view" && onDelete && (
               <button
                 type="button"
                 onClick={handleDelete}
-                className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-100 bg-white mr-auto"
+                disabled={isDeleting}
+                className="mr-auto w-8 h-8 flex items-center justify-center text-[#DF120B] hover:bg-red-50 rounded-full transition-colors disabled:opacity-50"
                 title="Delete Task"
               >
-                <Trash2 className="w-5 h-5" />
+                <Trash2 className="w-4 h-4" />
               </button>
             )}
 
@@ -647,39 +818,32 @@ const CompanyTaskForm = ({
               <button
                 type="button"
                 onClick={() => setIsEditMode(true)}
-                className="p-2.5 text-gray-600 hover:bg-gray-100 rounded-xl transition-all border border-gray-100 bg-white"
+                className="w-8 h-8 flex items-center justify-center text-[#1F2937] hover:bg-gray-100 rounded-full transition-colors"
                 title="Edit Task"
               >
-                <Edit3 className="w-5 h-5" />
+                <Edit3 className="w-4 h-4" />
               </button>
             )}
 
             <button
+              type="button"
               onClick={onClose}
-              className="px-6 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+              className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
 
             {isEditMode && (
               <button
-                type="button"
-                onClick={handleSubmit}
+                type="submit"
                 disabled={loading}
-                className="px-8 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    {mode === "create" ? "Create Task" : "Update Task"}
-                  </>
-                )}
+                {loading ? "Saving..." : mode === "create" ? "Create Task" : "Update Task"}
               </button>
             )}
           </div>
-        </div>
+        </form>
       </div>
     </>
   );

@@ -2,12 +2,12 @@ import React, { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import { createPortal } from "react-dom";
 import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
-import Select from "react-select";
 import API from "../../services/api";
 import { useParams } from "react-router-dom";
 import toast from 'react-hot-toast';
 import { getAncestorZoom } from "../../utils/domUtils";
 import {
+  ChevronDown,
   StickyNote,
   Plus,
   Edit3,
@@ -48,6 +48,167 @@ import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 
 import SearchIcon from "../common/SearchIcon";
+
+// Same pill-trigger + rounded-xl checkmark-list popup used for Status/Priority
+// on the Task form, instead of CustomDropdown's plain full-bleed list.
+// Anchored directly under its own trigger via plain absolute positioning
+// (not a portal) so it always opens exactly where it visually belongs; a
+// max-height + internal scroll keeps it from ever growing large enough to
+// need repositioning.
+const NoteTypeDropdown = ({ options, value, onChange, onOpenChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const popupRef = useRef(null);
+
+  // See EntityPickerDropdown below — tells the form to open up scroll room,
+  // then scrolls the opened card fully into view.
+  useEffect(() => {
+    if (!isOpen) return;
+    onOpenChange?.(true);
+    const id = setTimeout(() => {
+      popupRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 0);
+    return () => {
+      clearTimeout(id);
+      onOpenChange?.(false);
+    };
+  }, [isOpen, onOpenChange]);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter text-[#1F2937]"
+      >
+        <span className="truncate">{value}</span>
+        <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div
+            ref={popupRef}
+            className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 max-h-[180px] overflow-y-auto animate-in fade-in zoom-in duration-200"
+          >
+            {options.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => {
+                  onChange(option);
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-gray-50 ${value === option ? "bg-blue-50/50 text-blue-600" : "text-gray-600"}`}
+              >
+                <span className="font-medium text-left flex-1">{option}</span>
+                {value === option && <CheckCircle className="w-4 h-4 ml-auto text-blue-600" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// Searchable single-pick dropdown for the "Link Contact"/"Link Deal"/"Link
+// Invoice" fields — matches the Task form's SearchableEntityDropdown (pill
+// trigger, search box, capped list), anchored the same in-flow way as above.
+const EntityPickerDropdown = ({ options, value, onChange, displayKey, placeholder, onOpenChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const selected = options.find((o) => o._id === value);
+  const filtered = options.filter((o) => (o[displayKey] || "").toLowerCase().includes(search.toLowerCase()));
+
+  const popupRef = useRef(null);
+
+  // While open, tell the form to add temporary bottom padding — otherwise a
+  // dropdown on the last field has nowhere to scroll to and stays clipped.
+  // Then scroll the popup itself (not the trigger) into view: "nearest"
+  // moves the modal body by exactly enough to reveal the whole card.
+  useEffect(() => {
+    if (!isOpen) return;
+    onOpenChange?.(true);
+    const id = setTimeout(() => {
+      popupRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 0);
+    return () => {
+      clearTimeout(id);
+      onOpenChange?.(false);
+    };
+  }, [isOpen, onOpenChange]);
+
+  const toggle = () => {
+    setIsOpen((v) => !v);
+    if (isOpen) setSearch("");
+  };
+
+  return (
+    <div className="relative flex-1 min-w-0">
+      <button
+        type="button"
+        onClick={toggle}
+        className={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between gap-2 transition-all bg-white font-inter ${selected ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
+      >
+        <span className="truncate">{selected ? selected[displayKey] : placeholder}</span>
+        <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {isOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => {
+              setIsOpen(false);
+              setSearch("");
+            }}
+          />
+          <div
+            ref={popupRef}
+            className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200"
+          >
+            <div className="p-2 border-b border-gray-100">
+              <div className="relative">
+                <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#525866]" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search..."
+                  className="w-full pl-8 pr-2 h-7 border border-gray-200 rounded-full text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            {/* Exactly 4 rows visible (~30px each incl. padding) — scrolls
+                internally past that instead of growing the popup taller. */}
+            <div className="max-h-[120px] overflow-y-auto py-1">
+              {filtered.length === 0 ? (
+                <p className="px-3 py-2 text-[12px] text-center text-gray-400">No results</p>
+              ) : (
+                filtered.map((o) => (
+                  <button
+                    key={o._id}
+                    type="button"
+                    onClick={() => {
+                      onChange(o._id);
+                      setIsOpen(false);
+                      setSearch("");
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-[12px] truncate transition-colors hover:bg-gray-50 ${value === o._id ? "bg-blue-50/50 text-blue-600" : "text-gray-700"}`}
+                  >
+                    {o[displayKey]}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 const QuillToolbar = () => (
   <div id="toolbar" className="flex flex-wrap items-center gap-1 p-2 bg-white border-b border-gray-300 rounded-t-2xl">
@@ -162,6 +323,14 @@ const NoteStyles = () => (
       color: #374151 !important;
       border-bottom-left-radius: 1rem !important;
       border-bottom-right-radius: 1rem !important;
+    }
+
+    /* Compact variant for the create/edit form — the 400px default is sized
+       for the full-page note viewer, not this modal, which should open small
+       and grow with the note's actual content. */
+    .dc-note-editor-compact .ql-editor {
+      padding: 1rem !important;
+      min-height: 160px !important;
     }
 
     .ql-editor.ql-blank::before {
@@ -785,7 +954,6 @@ export const NoteCard = ({ note, onEdit, onDelete, onView, onDuplicate }) => {
       className="bg-white hover:border-blue-200 transition-all group relative flex flex-col items-start overflow-hidden"
       style={{
         width: "100%",
-        height: "100%",
         borderRadius: 12,
         border: "1px solid #F3F4F6",
         boxShadow: "0px 0px 6px rgba(0, 0, 0, 0.02), 0px 2px 4px rgba(0, 0, 0, 0.08)",
@@ -999,6 +1167,8 @@ export const NoteEditor = ({
   taggedContacts,
   setTaggedContacts,
   contacts,
+  deals = [],
+  invoices = [],
   noteType,
   setNoteType,
   visibility,
@@ -1013,7 +1183,21 @@ export const NoteEditor = ({
   const [shouldRender, setShouldRender] = useState(false);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [linkModalUrl, setLinkModalUrl] = useState("");
+  const [contactToAdd, setContactToAdd] = useState("");
+  const [taggedDeals, setTaggedDeals] = useState([]);
+  const [dealToAdd, setDealToAdd] = useState("");
+  const [taggedInvoices, setTaggedInvoices] = useState([]);
+  const [invoiceToAdd, setInvoiceToAdd] = useState("");
   const pendingLinkRef = useRef({ quill: null, range: null });
+
+  // Extra scroll room is only added while a dropdown is actually open, so the
+  // form doesn't sit with a big empty gap under its last field the rest of
+  // the time. Counted rather than a boolean so overlapping open/close
+  // transitions can't leave it stuck on.
+  const [openDropdowns, setOpenDropdowns] = useState(0);
+  const handleDropdownOpenChange = useCallback((open) => {
+    setOpenDropdowns((n) => Math.max(0, n + (open ? 1 : -1)));
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -1023,6 +1207,17 @@ export const NoteEditor = ({
       setIsSliding(false);
       setTimeout(() => setShouldRender(false), 300);
     }
+  }, [isOpen]);
+
+  // Lock the page behind the backdrop so it can't be scrolled while this
+  // overlay is open.
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
   }, [isOpen]);
 
   const quillModules = useMemo(() => ({
@@ -1063,41 +1258,6 @@ export const NoteEditor = ({
 
   if (!shouldRender) return null;
 
-  const contactOptions = contacts.map(contact => ({
-    label: contact.name,
-    value: contact._id
-  }));
-
-  const customSelectStyles = {
-    control: (base) => ({
-      ...base,
-      border: 'none',
-      boxShadow: 'none',
-      background: 'transparent',
-      minHeight: 'auto',
-      '&:hover': { border: 'none' }
-    }),
-    valueContainer: (base) => ({
-      ...base,
-      padding: '0',
-      flexWrap: 'nowrap'
-    }),
-    input: (base) => ({
-      ...base,
-      margin: '0',
-      padding: '0'
-    }),
-    placeholder: (base) => ({
-      ...base,
-      whiteSpace: 'nowrap',
-      color: '#374151'
-    }),
-    singleValue: (base) => ({
-      ...base,
-      color: '#374151'
-    })
-  };
-
   return (
     <>
       <div
@@ -1105,119 +1265,271 @@ export const NoteEditor = ({
         style={{ opacity: isSliding ? 1 : 0 }}
         onClick={onClose}
       />
-      <div className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl overflow-hidden flex flex-col transform transition-transform duration-300 ease-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}>
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
-          <h3 className="text-base font-semibold text-gray-700">
+      <div className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl overflow-hidden flex flex-col transform transition-transform duration-300 ease-out font-inter ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}>
+        {/* Sticky header — matches the CompanyForm/TaskForm header spec */}
+        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
             {isEditing ? 'Edit Note' : 'Create New Note'}
-          </h3>
+          </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100"
+            title="Close"
+            className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+            aria-label="Close"
           >
-            <X className="w-5 h-5 text-gray-400" />
+            <X className="w-[18px] h-[18px]" strokeWidth={2} />
           </button>
         </div>
 
         <form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="flex flex-col min-h-0 flex-1">
-          {/* Main Body */}
-          <div className="p-8 space-y-8 overflow-y-auto min-h-0 flex-1">
-            {/* Note Title Input */}
-            <input
-              type="text"
-              value={noteTitle}
-              onChange={(e) => setNoteTitle(e.target.value)}
-              placeholder="Note Title"
-              className="w-full text-4xl font-bold border-none focus:outline-none placeholder-gray-300 text-gray-800"
-              autoFocus
-            />
-
-            {/* Action Row */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-xl text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-all flex-1 min-w-0">
-                  <Users className="w-4 h-4 flex-shrink-0" />
-                  <Select
-                    isMulti
-                    options={contactOptions}
-                    value={taggedContacts}
-                    onChange={setTaggedContacts}
-                    placeholder="Select Contact"
-                    styles={customSelectStyles}
-                    className="flex-1 min-w-0 whitespace-nowrap"
-                    components={{
-                      MultiValue: () => null, // Don't show chips here
-                      IndicatorSeparator: () => null,
-                      DropdownIndicator: () => null
-                    }}
-                  />
-                </div>
-
-                <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-xl flex-shrink-0">
-                  <Type className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                  <select
-                    value={noteType}
-                    onChange={(e) => setNoteType(e.target.value)}
-                    className="bg-transparent text-xs font-semibold text-gray-700 focus:outline-none"
-                  >
-                    {noteTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-xl flex-shrink-0">
-                  <Eye className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                  <select
-                    value={visibility}
-                    onChange={(e) => setVisibility(e.target.value)}
-                    className="bg-transparent text-xs font-semibold text-gray-700 focus:outline-none"
-                  >
-                    <option value="Team">Team</option>
-                    <option value="Private">Private</option>
-                  </select>
-                </div>
-              </div>
-
-              <span className="text-xs text-gray-400 font-medium font-['Outfit']">
-                Tagged Contacts will Receive Notifications About this Note
-              </span>
+          {/* Scrollable body */}
+          {/* The extra bottom padding only appears while a dropdown is open,
+              giving it somewhere to scroll to; otherwise the form would sit
+              with a large empty gap under its last field. */}
+          <div
+            className={`px-8 pt-6 space-y-6 overflow-y-auto min-h-0 flex-1 transition-[padding] duration-200 ${
+              openDropdowns > 0 ? "pb-52" : "pb-6"
+            }`}
+          >
+            <div>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Note Title
+              </label>
+              <input
+                type="text"
+                value={noteTitle}
+                onChange={(e) => setNoteTitle(e.target.value)}
+                placeholder="Enter Note Title"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                autoFocus
+              />
             </div>
 
             {/* Editor Area */}
-            <div className="border border-gray-300 rounded-2xl">
-              <QuillToolbar />
-              <ReactQuill
-                value={noteContent}
-                onChange={setNoteContent}
-                modules={quillModules}
-                formats={quillFormats}
-                theme="snow"
-                placeholder="Start writing your note..."
-                className="min-h-[400px]"
-              />
+            <div>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Note
+              </label>
+              <div className="border border-[#1F2937]/10 rounded-2xl overflow-hidden dc-note-editor-compact">
+                <QuillToolbar />
+                <ReactQuill
+                  value={noteContent}
+                  onChange={setNoteContent}
+                  modules={quillModules}
+                  formats={quillFormats}
+                  theme="snow"
+                  placeholder="Start writing your note..."
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  Note Type <span className="text-[#FF4935]">*</span>
+                </label>
+                <NoteTypeDropdown
+                  options={noteTypes}
+                  value={noteType}
+                  onChange={setNoteType}
+                  onOpenChange={handleDropdownOpenChange}
+                />
+              </div>
+
+              <div>
+                <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  Visibility <span className="text-[#FF4935]">*</span>
+                </label>
+                <NoteTypeDropdown
+                  options={["Team", "Private"]}
+                  value={visibility}
+                  onChange={setVisibility}
+                  onOpenChange={handleDropdownOpenChange}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Link Contact <span className="text-[#FF4935]">*</span>
+              </label>
+              <div className="flex items-center gap-3">
+                <EntityPickerDropdown
+                  options={contacts}
+                  value={contactToAdd}
+                  onChange={setContactToAdd}
+                  displayKey="name"
+                  placeholder="Choose Contact"
+                  onOpenChange={handleDropdownOpenChange}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!contactToAdd) return;
+                    const contact = contacts.find((c) => c._id === contactToAdd);
+                    if (!contact) return;
+                    if (!taggedContacts.some((tc) => tc.value === contact._id)) {
+                      setTaggedContacts([...taggedContacts, { label: contact.name, value: contact._id }]);
+                    }
+                    setContactToAdd("");
+                  }}
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] flex items-center justify-center hover:opacity-90 transition-opacity"
+                  title="Add contact"
+                >
+                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                </button>
+              </div>
+              {taggedContacts.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {taggedContacts.map((tc) => (
+                    <span
+                      key={tc.value}
+                      className="inline-flex items-center gap-1 pl-2.5 pr-1.5 h-6 rounded-full bg-blue-50 text-blue-700 text-[11px] font-medium"
+                    >
+                      {tc.label}
+                      <button
+                        type="button"
+                        onClick={() => setTaggedContacts(taggedContacts.filter((c) => c.value !== tc.value))}
+                        className="hover:bg-blue-100 rounded-full p-0.5"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Link Deal <span className="text-[#FF4935]">*</span>
+              </label>
+              <div className="flex items-center gap-3">
+                <EntityPickerDropdown
+                  options={deals}
+                  value={dealToAdd}
+                  onChange={setDealToAdd}
+                  displayKey="title"
+                  placeholder="Choose Deal"
+                  onOpenChange={handleDropdownOpenChange}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!dealToAdd) return;
+                    const deal = deals.find((d) => d._id === dealToAdd);
+                    if (!deal) return;
+                    if (!taggedDeals.some((td) => td.value === deal._id)) {
+                      setTaggedDeals([...taggedDeals, { label: deal.title || deal.name, value: deal._id }]);
+                    }
+                    setDealToAdd("");
+                  }}
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] flex items-center justify-center hover:opacity-90 transition-opacity"
+                  title="Add deal"
+                >
+                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                </button>
+              </div>
+              {taggedDeals.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {taggedDeals.map((td) => (
+                    <span
+                      key={td.value}
+                      className="inline-flex items-center gap-1 pl-2.5 pr-1.5 h-6 rounded-full bg-blue-50 text-blue-700 text-[11px] font-medium"
+                    >
+                      {td.label}
+                      <button
+                        type="button"
+                        onClick={() => setTaggedDeals(taggedDeals.filter((d) => d.value !== td.value))}
+                        className="hover:bg-blue-100 rounded-full p-0.5"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Link Invoice <span className="text-[#FF4935]">*</span>
+              </label>
+              <div className="flex items-center gap-3">
+                <EntityPickerDropdown
+                  options={invoices}
+                  value={invoiceToAdd}
+                  onChange={setInvoiceToAdd}
+                  displayKey="invoiceNumber"
+                  placeholder="Choose Invoice"
+                  onOpenChange={handleDropdownOpenChange}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!invoiceToAdd) return;
+                    const invoice = invoices.find((i) => i._id === invoiceToAdd);
+                    if (!invoice) return;
+                    if (!taggedInvoices.some((ti) => ti.value === invoice._id)) {
+                      setTaggedInvoices([...taggedInvoices, { label: invoice.invoiceNumber, value: invoice._id }]);
+                    }
+                    setInvoiceToAdd("");
+                  }}
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] flex items-center justify-center hover:opacity-90 transition-opacity"
+                  title="Add invoice"
+                >
+                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                </button>
+              </div>
+              {taggedInvoices.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {taggedInvoices.map((ti) => (
+                    <span
+                      key={ti.value}
+                      className="inline-flex items-center gap-1 pl-2.5 pr-1.5 h-6 rounded-full bg-blue-50 text-blue-700 text-[11px] font-medium"
+                    >
+                      {ti.label}
+                      <button
+                        type="button"
+                        onClick={() => setTaggedInvoices(taggedInvoices.filter((i) => i.value !== ti.value))}
+                        className="hover:bg-blue-100 rounded-full p-0.5"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Footer Actions */}
-          <div className="p-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3 flex-shrink-0">
+          {/* Sticky footer — matches the CompanyForm/TaskForm footer spec */}
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             {isEditing && (
               <button
                 type="button"
                 onClick={onDelete}
-                className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-300 bg-white mr-auto"
+                className="mr-auto w-8 h-8 flex items-center justify-center text-[#DF120B] hover:bg-red-50 rounded-full transition-colors"
                 title="Delete Note"
               >
-                <Trash2 className="w-5 h-5" />
+                <Trash2 className="w-4 h-4" />
               </button>
             )}
 
             <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+
+            <button
               type="submit"
               disabled={loading || !noteContent.trim() || noteContent === '<p><br></p>'}
-              className="flex items-center gap-2 px-6 py-2.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-all text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              <CheckCircle className="w-5 h-5" />
               {loading ? 'Saving...' : 'Save Note'}
             </button>
           </div>
@@ -1282,6 +1594,8 @@ const NoteSection = ({ companyId: propCompanyId, dealId, isQuickView }) => {
   const companyId = propCompanyId || (dealId ? undefined : paramCompanyId);
   const [notes, setNotes] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [deals, setDeals] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
   const [taggedContacts, setTaggedContacts] = useState([]);
@@ -1327,10 +1641,32 @@ const NoteSection = ({ companyId: propCompanyId, dealId, isQuickView }) => {
     }
   }, [companyId]);
 
+  const fetchDeals = useCallback(async () => {
+    if (!companyId) return;
+    try {
+      const res = await API.get("/deals");
+      setDeals(res.data.filter((d) => d.company?._id === companyId));
+    } catch (err) {
+      toast.error("Failed to load deals");
+    }
+  }, [companyId]);
+
+  const fetchInvoices = useCallback(async () => {
+    if (!companyId) return;
+    try {
+      const res = await API.get("/invoices");
+      setInvoices(res.data.filter((inv) => inv.deal?.company === companyId || inv.deal?.company?._id === companyId));
+    } catch (err) {
+      toast.error("Failed to load invoices");
+    }
+  }, [companyId]);
+
   useEffect(() => {
     fetchNotes();
     fetchContacts();
-  }, [fetchNotes, fetchContacts]);
+    fetchDeals();
+    fetchInvoices();
+  }, [fetchNotes, fetchContacts, fetchDeals, fetchInvoices]);
 
   const handleAddOrUpdateNote = async () => {
     if (!noteContent.trim() || noteContent === "<p><br></p>") {
@@ -1529,6 +1865,8 @@ const NoteSection = ({ companyId: propCompanyId, dealId, isQuickView }) => {
         taggedContacts={taggedContacts}
         setTaggedContacts={setTaggedContacts}
         contacts={contacts}
+        deals={deals}
+        invoices={invoices}
         noteType={noteType}
         setNoteType={setNoteType}
         visibility={visibility}

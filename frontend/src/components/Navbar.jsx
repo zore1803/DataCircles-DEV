@@ -30,6 +30,8 @@ import {
   Tag,
   Calculator,
   Crown,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import API from "../services/api";
 import dataCirclesLogo from "../assets/Datacircles logo.png";
@@ -129,7 +131,10 @@ const Navbar = () => {
   const [profile, setProfile] = useState("");
   const [kanbanName, setKanbanName] = useState("");
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
+  const [isPinned, setIsPinned] = useState(
+    () => localStorage.getItem("sidebarPinned") === "true"
+  );
+  const [isHovered, setIsHovered] = useState(() => isPinned);
   const [salesOpen, setSalesOpen] = useState(false);
   const [procurementOpen, setProcurementOpen] = useState(false);
   const [paymentsOpen, setPaymentsOpen] = useState(false);
@@ -146,16 +151,26 @@ const Navbar = () => {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");
 
+  // Keeps --sidebar-width in sync with the sidebar's own rendered width so
+  // that content using the var (the <main> margin, and the many fixed-position
+  // toolbars/headers across pages) shifts in step with the hover expand/collapse
+  // instead of staying pinned at the collapsed 64px and letting the expanded
+  // 280px panel overlay the page.
   useEffect(() => {
-    if (window.innerWidth >= 1024) {
-      document.documentElement.style.setProperty(
-        "--sidebar-width",
-        "64px"
-      );
-    } else {
-      document.documentElement.style.setProperty("--sidebar-width", "0px");
-    }
-  }, []);
+    const applyWidth = () => {
+      if (window.innerWidth >= 1024) {
+        document.documentElement.style.setProperty(
+          "--sidebar-width",
+          isHovered || isPinned ? "280px" : "64px"
+        );
+      } else {
+        document.documentElement.style.setProperty("--sidebar-width", "0px");
+      }
+    };
+    applyWidth();
+    window.addEventListener("resize", applyWidth);
+    return () => window.removeEventListener("resize", applyWidth);
+  }, [isHovered, isPinned]);
 
   // Keep --sidebar-width in sync with hover/mobile state so the main content
   // area shifts correctly and never gets covered by the expanded sidebar.
@@ -587,7 +602,7 @@ const Navbar = () => {
           transition: "width 300ms ease-in-out, transform 300ms ease-in-out",
           width:
             window.innerWidth >= 1024
-              ? (isHovered ? "280px" : "64px")
+              ? (isHovered || isPinned ? "280px" : "64px")
               : undefined,
         }}
         onMouseEnter={() => {
@@ -596,7 +611,7 @@ const Navbar = () => {
           }
         }}
         onMouseLeave={() => {
-          if (window.innerWidth >= 1024) {
+          if (window.innerWidth >= 1024 && !isPinned) {
             setIsHovered(false);
             setSalesOpen(false);
             setProcurementOpen(false);
@@ -624,36 +639,60 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Collapses the panel back to the icon rail. Only offered while the
-              panel is open — collapsed, the rail has no room for it. */}
           {(isHovered || isMobileOpen) && (
-            <button
-              type="button"
-              onClick={() => {
-                setIsHovered(false);
-                setIsMobileOpen(false);
-              }}
-              title="Collapse menu"
-              aria-label="Collapse menu"
-              className="flex items-center justify-center w-6 h-6 flex-shrink-0 rounded hover:opacity-70 transition-opacity"
-            >
-              {/* The frame, border and glyph all come from the design's SVG. */}
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                aria-hidden="true"
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {/* Pins the panel open so it no longer collapses on mouse-leave.
+                  Desktop-only — mobile already opens/closes via the hamburger. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPinned((prev) => {
+                    const next = !prev;
+                    localStorage.setItem("sidebarPinned", String(next));
+                    return next;
+                  });
+                }}
+                title={isPinned ? "Unpin menu" : "Pin menu open"}
+                aria-label={isPinned ? "Unpin menu" : "Pin menu open"}
+                className={`hidden lg:flex items-center justify-center w-6 h-6 rounded hover:opacity-70 transition-opacity ${
+                  isPinned ? "text-[#0085FF]" : "text-[#0A0A0A]"
+                }`}
               >
-                <rect x="0.5" y="0.5" width="23" height="23" rx="3.5" fill="white" />
-                <rect x="0.5" y="0.5" width="23" height="23" rx="3.5" stroke="#E5E5E5" />
-                <path
-                  d="M7.22388 12.0001L11.3619 16.1382L12.3047 15.1954L9.10949 12.0001L12.3047 8.80487L11.3619 7.86206L7.22388 12.0001ZM10.9905 12.0001L15.1285 16.1382L16.0713 15.1954L12.8761 12.0001L16.0713 8.80487L15.1285 7.86206L10.9905 12.0001Z"
-                  fill="#0A0A0A"
-                />
-              </svg>
-            </button>
+                {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
+              </button>
+
+              {/* Collapses the panel back to the icon rail. Only offered while the
+                  panel is open — collapsed, the rail has no room for it. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPinned(false);
+                  localStorage.setItem("sidebarPinned", "false");
+                  setIsHovered(false);
+                  setIsMobileOpen(false);
+                }}
+                title="Collapse menu"
+                aria-label="Collapse menu"
+                className="flex items-center justify-center w-6 h-6 flex-shrink-0 rounded hover:opacity-70 transition-opacity"
+              >
+                {/* The frame, border and glyph all come from the design's SVG. */}
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <rect x="0.5" y="0.5" width="23" height="23" rx="3.5" fill="white" />
+                  <rect x="0.5" y="0.5" width="23" height="23" rx="3.5" stroke="#E5E5E5" />
+                  <path
+                    d="M7.22388 12.0001L11.3619 16.1382L12.3047 15.1954L9.10949 12.0001L12.3047 8.80487L11.3619 7.86206L7.22388 12.0001ZM10.9905 12.0001L15.1285 16.1382L16.0713 15.1954L12.8761 12.0001L16.0713 8.80487L15.1285 7.86206L10.9905 12.0001Z"
+                    fill="#0A0A0A"
+                  />
+                </svg>
+              </button>
+            </div>
           )}
         </div>
         {/* Company switcher. Sits in the strip that carries the page toolbar's
