@@ -279,10 +279,9 @@ exports.getPaymentsTimeline = async (req, res) => {
 };
 
 // Backs the timeline's "View" action — fetches the full record (the list
-// endpoint above only returns a flattened summary row) plus its vendor, in
-// the shape PaymentReceiptModal expects. Only Payment and Purchase rows have
-// a vendor and a receipt-shaped meaning; Invoice/Subscription rows already
-// have their own document viewers elsewhere in the app.
+// endpoint above only returns a flattened summary row) plus its party, in the
+// shape PaymentReceiptModal expects. Every timeline source is normalized into
+// one receipt shape so the View action behaves consistently across tabs.
 exports.getPaymentReceipt = async (req, res) => {
   try {
     const orgId = req.user.organization;
@@ -310,6 +309,50 @@ exports.getPaymentReceipt = async (req, res) => {
         notes: purchase.notes || "",
       };
       return res.json({ payment, vendor: purchase.vendor });
+    }
+
+    if (source === "Invoice") {
+      const invoice = await Invoice.findOne({ _id: id, organization: orgId })
+        .populate({ path: "deal", populate: ["contact", "company"] });
+      if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+      const party = invoice.deal?.company || invoice.deal?.contact || {
+        name: invoice.deal?.title || "Customer",
+      };
+      const payment = {
+        _id: invoice._id,
+        amount: invoice.amount,
+        paymentDate: invoice.date || invoice.createdAt,
+        direction: "IN",
+        paymentType: "Invoice",
+        bank: "",
+        notes: invoice.notes || "",
+        reference: invoice.invoiceNumber,
+      };
+      return res.json({ payment, vendor: party });
+    }
+
+    if (source === "Subscription") {
+      const subscriptionPayment = await SubscriptionPayment.findOne({
+        _id: id,
+        organization: orgId,
+      });
+      if (!subscriptionPayment) return res.status(404).json({ error: "Subscription payment not found" });
+
+      const payment = {
+        _id: subscriptionPayment._id,
+        amount: subscriptionPayment.amount,
+        paymentDate: subscriptionPayment.createdAt,
+        direction: "OUT",
+        paymentType: subscriptionPayment.method || "Subscription",
+        bank: "",
+        notes: subscriptionPayment.paymentFor || "",
+        reference: subscriptionPayment.razorpayPaymentId || "",
+      };
+      return res.json({
+        payment,
+        vendor: { name: "DataCircles", company: "DataCircles System" },
+      });
     }
 
     return res.status(400).json({ error: `Receipts aren't available for "${source}" entries` });

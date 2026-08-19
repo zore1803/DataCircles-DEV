@@ -57,7 +57,7 @@ const BulkActionBar = ({
     <div
       className={`${
         isClosing ? 'animate-slideOutRight' : 'animate-slideInLeft'
-      } flex flex-nowrap lg:flex-wrap items-center justify-between gap-4 lg:gap-6 bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4 overflow-x-auto lg:overflow-visible`}
+      } flex flex-nowrap lg:flex-wrap items-center justify-between gap-4 lg:gap-6 w-full bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4 overflow-x-auto lg:overflow-visible`}
       style={{ minHeight: 44 }}
     >
       <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0 py-2">

@@ -76,6 +76,25 @@ const itemSchema = new mongoose.Schema({
   // Units
   primaryUnit: { type: String, default: "OTH OTHERS" },
 
+  // --- Inventory ---
+  // Stock tracking for this item. `currentStock` is a denormalized running total:
+  // the StockMovement collection is the source of truth (append-only ledger), and every
+  // stock-in/stock-out writes both inside one transaction so they can't drift.
+  //
+  // Every product is inventory automatically — the Inventory page selects on `type: "product"`,
+  // NOT on this flag, so a product added in Products & Services shows up there straight away
+  // with a quantity of 0. `trackInventory` is retained only so existing documents keep their
+  // shape; nothing filters on it.
+  inventory: {
+    trackInventory: { type: Boolean, default: true },
+    openingStock: { type: Number, default: 0 },
+    currentStock: { type: Number, default: 0 },
+    // Item is flagged "Low Stock" once currentStock <= this. 0 means "only flag when
+    // stock actually runs out or goes negative".
+    lowStockThreshold: { type: Number, default: 0 },
+    lastMovementAt: { type: Date, default: null },
+  },
+
   // Media
   images: [{ type: String }],
 
@@ -98,5 +117,7 @@ itemSchema.index({ organization: 1, name: 1 });
 itemSchema.index({ organization: 1, category: 1 });
 itemSchema.index({ organization: 1, isActive: 1 });
 itemSchema.index({ organization: 1, gstRate: 1 });
+// Inventory page lists an org's products, sorted/filtered by stock level.
+itemSchema.index({ organization: 1, type: 1, "inventory.currentStock": 1 });
 
 module.exports = mongoose.model("Item", itemSchema);

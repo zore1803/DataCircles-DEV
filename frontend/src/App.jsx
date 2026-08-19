@@ -41,6 +41,7 @@ import AllMeetings from "./pages/AllMeetings";
 import PurchaseOrderPage from "./pages/PurchaseOrderPage";
 import PurchasePage from "./pages/PurchasePage";
 import ProductsServices from "./pages/ProductsServices";
+import Inventory from "./pages/Inventory";
 import { SubscriptionProvider, useSubscription } from "./contexts/SubscriptionContext";
 import { Megaphone, X } from "lucide-react";
 import PaymentSuccess from "./pages/PaymentSuccess";
@@ -724,6 +725,14 @@ function App() {
               element={
                 <PrivateRoute>
                   <ProductsServices />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/inventory"
+              element={
+                <PrivateRoute>
+                  <Inventory />
                 </PrivateRoute>
               }
             />

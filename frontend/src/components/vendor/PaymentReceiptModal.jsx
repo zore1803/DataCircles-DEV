@@ -22,6 +22,11 @@ const PaymentReceiptModal = ({ isOpen, onClose, payment, vendor }) => {
   };
 
   const getPaymentId = () => {
+    // Invoice/Subscription rows carry their real document number/transaction
+    // reference (set by paymentTimelineController.getPaymentReceipt) — show
+    // that instead of a generated id so it matches the number on the actual
+    // document, same as Payment/Purchase receipts already do implicitly.
+    if (payment.reference) return payment.reference;
     return `${payment.direction === "OUT" ? "PAYOUT" : "PAYIN"}-${payment._id.slice(-6).toUpperCase()}`;
   };
 
@@ -137,9 +142,14 @@ const PaymentReceiptModal = ({ isOpen, onClose, payment, vendor }) => {
             </div>
           )}
 
-          {/* Vendor Details */}
+          {/* Party Details — "vendor" here is whichever counterparty the
+              source document has: an actual Vendor for Payment/Purchase
+              rows, but a Company/Contact for Invoice rows and DataCircles
+              itself for Subscription rows. */}
           <div className="border-t border-gray-200 pt-6 mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Vendor Details:</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              {payment.paymentType === "Invoice" ? "Customer Details:" : "Party Details:"}
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <span className="text-sm font-medium text-gray-600 block">Name:</span>

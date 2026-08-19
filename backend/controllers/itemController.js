@@ -1,4 +1,24 @@
 const Item = require("../models/Item");
+const StockMovement = require("../models/StockMovement");
+
+// Normalizes the inventory block posted by the item form. Multipart requests deliver nested
+// objects as strings, so the caller parses first and passes the resulting object here.
+//
+// `currentStock` is deliberately NOT read from client input on update: stock is owned by the
+// StockMovement ledger and only ever changes through the inventory stock-in/stock-out endpoints.
+// Letting the product edit form post a stale currentStock back would silently overwrite real
+// stock levels and bypass the audit trail entirely.
+function normalizeInventoryInput(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  if (raw.lowStockThreshold !== undefined) {
+    out.lowStockThreshold = Math.max(0, parseFloat(raw.lowStockThreshold) || 0);
+  }
+  if (raw.openingStock !== undefined) {
+    out.openingStock = parseFloat(raw.openingStock) || 0;
+  }
+  return out;
+}
 
 // Helper: delete an S3 object by key, best-effort (mirrors brandingController.js)
 async function deleteFileFromS3(key) {
@@ -53,6 +73,21 @@ const createItem = async (req, res) => {
     itemData.additionalFields = parseJsonField(itemData.additionalFields);
     itemData.discount = parseJsonField(itemData.discount);
 
+    // Inventory block from the item form. Every product is stock-tracked automatically, so this
+    // is always populated (defaulting to a quantity of 0) rather than depending on an opt-in —
+    // that's what makes a newly created product appear on the Inventory page immediately.
+    // On create there's no ledger yet, so the opening stock becomes the starting currentStock
+    // and gets its own ledger row after the item is saved.
+    const inventoryInput = normalizeInventoryInput(parseJsonField(itemData.inventory)) || {};
+    const opening = inventoryInput.openingStock || 0;
+    itemData.inventory = {
+      trackInventory: true,
+      lowStockThreshold: inventoryInput.lowStockThreshold || 0,
+      openingStock: opening,
+      currentStock: opening,
+      lastMovementAt: opening !== 0 ? new Date() : null,
+    };
+
     // Validate and parse gstRate
     itemData.gstRate = parseFloat(itemData.gstRate) || 0;
 
@@ -89,9 +124,31 @@ const createItem = async (req, res) => {
         variant.attributes = variant.attributes || {};
       }
     }
-    console.log(itemData);
     const item = new Item(itemData);
     await item.save();
+
+    // Seed the ledger so a tracked item's stock history starts from its opening balance rather
+    // than from its first manual movement. Best-effort: the item is already saved and correct, so
+    // a ledger failure is logged rather than failing the whole create.
+    if (item.inventory?.openingStock) {
+      try {
+        await StockMovement.create({
+          organization: req.user.organization,
+          item: item._id,
+          direction: item.inventory.openingStock >= 0 ? "in" : "out",
+          quantity: Math.abs(item.inventory.openingStock),
+          previousStock: 0,
+          newStock: item.inventory.openingStock,
+          reason: "opening_stock",
+          notes: "Opening stock",
+          unitPrice: parseFloat(item.purchasePrice) || 0,
+          user: req.user.id,
+        });
+      } catch (ledgerErr) {
+        console.error("Failed to record opening stock movement:", ledgerErr);
+      }
+    }
+
     res.status(201).json(item);
   } catch (err) {
     console.error("Create item error:", err);
@@ -268,6 +325,16 @@ const updateItem = async (req, res) => {
     itemData.discount = parseJsonField(itemData.discount);
     const existingImages = parseJsonField(itemData.existingImages) || [];
     delete itemData.existingImages;
+
+    // Only the two inventory SETTINGS are editable from the product form — never the stock level
+    // itself. Assigning the whole posted object here would let a stale currentStock from the form
+    // overwrite real stock and bypass the StockMovement ledger, so the incoming block is rebuilt
+    // field-by-field with dot paths (which also avoids clobbering the untouched sub-fields).
+    const inventoryInput = normalizeInventoryInput(parseJsonField(itemData.inventory));
+    delete itemData.inventory;
+    if (inventoryInput?.lowStockThreshold !== undefined) {
+      itemData["inventory.lowStockThreshold"] = inventoryInput.lowStockThreshold;
+    }
 
     // Validate and parse gstRate
     itemData.gstRate = parseFloat(itemData.gstRate) || 0;

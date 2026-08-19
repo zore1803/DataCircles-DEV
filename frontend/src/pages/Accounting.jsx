@@ -805,7 +805,8 @@ const Accounting = () => {
   const [emailTemplateOpen, setEmailTemplateOpen] = useState(false);
   const [emailPreviewMode, setEmailPreviewMode] = useState(false);
   const emailBodyEditorRef = useRef(null);
-  const EMAIL_FROM_ADDRESS = "noreply@datacircles.in";
+  const EMAIL_FROM_ADDRESS = import.meta.env.VITE_SENDGRID_FROM_EMAIL || "";
+  const EMAIL_FROM_NAME = import.meta.env.VITE_SENDGRID_FROM_NAME || "";
   const [smsCompose, setSmsCompose] = useState(null); // { doc, type }
   const [smsComposeTo, setSmsComposeTo] = useState("");
   const [smsComposeBody, setSmsComposeBody] = useState("");
@@ -4036,7 +4037,10 @@ const Accounting = () => {
                         <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-semibold flex items-center justify-center flex-shrink-0">
                           DC
                         </span>
-                        <span className="truncate">{EMAIL_FROM_ADDRESS}</span>
+                        <span className="min-w-0 truncate">
+                          {EMAIL_FROM_NAME && <strong className="mr-1">{EMAIL_FROM_NAME}</strong>}
+                          {EMAIL_FROM_ADDRESS}
+                        </span>
                         <Lock className="w-3 h-3 text-gray-400 flex-shrink-0" />
                       </span>
                       <div className="flex items-center gap-1 flex-shrink-0 ml-2">

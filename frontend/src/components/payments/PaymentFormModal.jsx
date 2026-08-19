@@ -128,20 +128,20 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
         aria-hidden="true" 
       />
       <div className="fixed dc-panel-card dc-panel-w payment-panel bg-white shadow-2xl flex flex-col z-10 overflow-hidden animate-slideInRight">
-        <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50/50">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50/50">
           <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Add Vendor Payment</h2>
           <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors">
             <X size={20} />
           </button>
         </div>
         
-        <div className="overflow-y-auto flex-1 p-5 space-y-4 bg-gray-50/30">
-          <form id="payment-form" onSubmit={handleSubmit} className="space-y-4">
+        <div className="overflow-y-auto flex-1 p-4 space-y-3 bg-gray-50/30">
+          <form id="payment-form" onSubmit={handleSubmit} className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Vendor <span className="text-red-500">*</span></label>
               <div className="relative">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={vendorSearch}
                   onChange={(e) => {
                     setVendorSearch(e.target.value);
@@ -149,7 +149,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                   }}
                   required={!selectedVendorId}
                   placeholder="Search or enter new vendor name"
-                  className="w-full h-10 px-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
+                  className="w-full h-9 px-3 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
                 />
                 {vendorSearch && !selectedVendorId && filteredVendors.length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-[#E1E4EA] rounded-md shadow-lg max-h-48 overflow-y-auto">
@@ -171,61 +171,59 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount <span className="text-red-500">*</span></label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">₹</span>
-                  <input 
-                    type="number" 
-                    required
-                    min="0"
-                    step="0.01"
-                    value={formData.amount}
-                    onChange={e => setFormData(p => ({ ...p, amount: e.target.value }))}
-                    className="w-full h-10 pl-8 pr-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Date <span className="text-red-500">*</span></label>
-                <input 
-                  type="date" 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount <span className="text-red-500">*</span></label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">₹</span>
+                <input
+                  type="number"
                   required
-                  value={formData.paymentDate}
-                  onChange={e => setFormData(p => ({ ...p, paymentDate: e.target.value }))}
-                  className="w-full h-10 px-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
+                  min="0"
+                  step="0.01"
+                  value={formData.amount}
+                  onChange={e => setFormData(p => ({ ...p, amount: e.target.value }))}
+                  className="w-full h-9 pl-8 pr-3 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Direction <span className="text-red-500">*</span></label>
-                <select 
-                  value={formData.direction}
-                  onChange={e => setFormData(p => ({ ...p, direction: e.target.value }))}
-                  className="w-full h-10 px-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] bg-white"
-                >
-                  <option value="OUT">Debit (Out)</option>
-                  <option value="IN">Credit (In)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Type <span className="text-red-500">*</span></label>
-                <select 
-                  value={formData.paymentType}
-                  onChange={e => setFormData(p => ({ ...p, paymentType: e.target.value }))}
-                  className="w-full h-10 px-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] bg-white"
-                >
-                  <option value="UPI">UPI</option>
-                  <option value="Net Banking">Net Banking</option>
-                  <option value="Cash">Cash</option>
-                  <option value="Card">Card</option>
-                  <option value="Cheque">Cheque</option>
-                  <option value="EMI">EMI</option>
-                </select>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Date <span className="text-red-500">*</span></label>
+              <input
+                type="date"
+                required
+                value={formData.paymentDate}
+                onChange={e => setFormData(p => ({ ...p, paymentDate: e.target.value }))}
+                className="w-full h-9 px-3 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Direction <span className="text-red-500">*</span></label>
+              <select
+                value={formData.direction}
+                onChange={e => setFormData(p => ({ ...p, direction: e.target.value }))}
+                className="w-full h-9 px-3 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] bg-white"
+              >
+                <option value="OUT">Debit (Out)</option>
+                <option value="IN">Credit (In)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type <span className="text-red-500">*</span></label>
+              <select
+                value={formData.paymentType}
+                onChange={e => setFormData(p => ({ ...p, paymentType: e.target.value }))}
+                className="w-full h-9 px-3 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] bg-white"
+              >
+                <option value="UPI">UPI</option>
+                <option value="Net Banking">Net Banking</option>
+                <option value="Cash">Cash</option>
+                <option value="Card">Card</option>
+                <option value="Cheque">Cheque</option>
+                <option value="EMI">EMI</option>
+              </select>
             </div>
 
             <div>
@@ -234,7 +232,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                 <button 
                   type="button"
                   onClick={() => setBankDropdownOpen(!bankDropdownOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2.5 border border-[#E1E4EA] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0085FF] bg-white"
+                  className="w-full flex items-center justify-between px-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0085FF] bg-white"
                 >
                   {selectedBankObj ? (
                     <div className="flex items-center gap-2.5">
@@ -310,13 +308,13 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                 suppressContentEditableWarning
                 onInput={(e) => setFormData((p) => ({ ...p, notes: e.currentTarget.innerHTML }))}
                 data-placeholder="Optional payment notes..."
-                className="w-full min-h-[88px] px-3 py-2 border border-[#E1E4EA] rounded-b-lg text-sm focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                className="w-full min-h-[72px] px-3 py-2 border border-[#E1E4EA] rounded-b-lg text-sm focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
               />
             </div>
           </form>
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 p-5 border-t border-gray-200 bg-gray-50/50">
+        <div className="flex shrink-0 items-center justify-between gap-3 p-4 border-t border-gray-200 bg-gray-50/50">
           <button 
             type="button" 
             onClick={onClose}

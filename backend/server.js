@@ -201,6 +201,9 @@ app.use('/api/item-fields', itemFieldsRoutes);
 const itemRoutes = require("./routes/itemRoutes");
 app.use("/api/items", itemRoutes);
 
+const inventoryRoutes = require("./routes/inventoryRoutes");
+app.use("/api/inventory", inventoryRoutes);
+
 const organizationRoutes = require("./routes/organisation");
 app.use("/api/organisation", organizationRoutes);
 
