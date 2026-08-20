@@ -4152,7 +4152,7 @@ const Insights = () => {
         const key = `${d.getFullYear()}-${d.getMonth()}`;
         if (!buckets[key]) return;
         buckets[key].Spend += p.grandTotal || 0;
-        if (p.status === "Received") buckets[key].Received += p.grandTotal || 0;
+        if (p.status === "Paid") buckets[key].Received += p.grandTotal || 0;
         else if (p.status === "Pending" || p.status === "Partial") buckets[key].Pending += p.grandTotal || 0;
       });
       return months.map((m) => ({ name: m.label, ...buckets[m.key] }));
@@ -4213,7 +4213,7 @@ const Insights = () => {
       .slice(0, 4)
       .map((p) => {
         const d = new Date(p.purchaseDate || p.createdAt);
-        const status = p.status === "Received" ? "Paid" : p.status === "Partial" ? "Partially Paid" : "Pending";
+        const status = p.status === "Paid" ? "Paid" : p.status === "Partial" ? "Partially Paid" : "Pending";
         return {
           id: p._id,
           day: d.toLocaleDateString("en-IN", { day: "2-digit" }),
@@ -5398,7 +5398,7 @@ const Insights = () => {
 
     // KPI row — same 5-card StatCard pattern used on the Companies tab, with
     // real month-over-month deltas against last month's purchases.
-    const paidPurchases = filteredData.filteredPurchases.filter((p) => p.status === "Received");
+    const paidPurchases = filteredData.filteredPurchases.filter((p) => p.status === "Paid");
     const paidPurchasesAmount = paidPurchases.reduce((s, p) => s + (p.grandTotal || 0), 0);
     const outstandingPurchases = filteredData.filteredPurchases.filter(
       (p) => p.status === "Pending" || p.status === "Partial" || p.status === "Draft"
@@ -5418,8 +5418,8 @@ const Insights = () => {
     });
     const pctChangePurch = (curr, prev) => (prev > 0 ? Math.round(((curr - prev) / prev) * 100) : curr > 0 ? 100 : 0);
     const totalPurchasesChange = pctChangePurch(purchasesThisMonthAmount, purchasesLastMonth.reduce((s, p) => s + (p.grandTotal || 0), 0));
-    const paidThisMonth = purchasesThisMonth.filter((p) => p.status === "Received").reduce((s, p) => s + (p.grandTotal || 0), 0);
-    const paidLastMonth = purchasesLastMonth.filter((p) => p.status === "Received").reduce((s, p) => s + (p.grandTotal || 0), 0);
+    const paidThisMonth = purchasesThisMonth.filter((p) => p.status === "Paid").reduce((s, p) => s + (p.grandTotal || 0), 0);
+    const paidLastMonth = purchasesLastMonth.filter((p) => p.status === "Paid").reduce((s, p) => s + (p.grandTotal || 0), 0);
     const paidPurchasesChange = pctChangePurch(paidThisMonth, paidLastMonth);
     const outstandingThisMonth = purchasesThisMonth
       .filter((p) => p.status === "Pending" || p.status === "Partial" || p.status === "Draft")
@@ -5448,7 +5448,7 @@ const Insights = () => {
         const key = `${d.getFullYear()}-${d.getMonth()}`;
         if (!buckets[key]) return;
         buckets[key].Total += p.grandTotal || 0;
-        if (p.status === "Received") buckets[key].Paid += p.grandTotal || 0;
+        if (p.status === "Paid") buckets[key].Paid += p.grandTotal || 0;
         else if (p.status === "Pending" || p.status === "Partial" || p.status === "Draft") {
           buckets[key].Outstanding += p.grandTotal || 0;
         }
@@ -5947,7 +5947,7 @@ const Insights = () => {
                       .slice(0, 8)
                       .map((p) => {
                         const statusStyle =
-                          p.status === "Received"
+                          p.status === "Paid"
                             ? { bg: "rgba(52,199,89,0.1)", color: "#34C759" }
                             : p.status === "Partial"
                             ? { bg: "rgba(252,156,50,0.1)", color: "#FC9C32" }

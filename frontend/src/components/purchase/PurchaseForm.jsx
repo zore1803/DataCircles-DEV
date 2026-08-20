@@ -54,6 +54,8 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
               type: item.type,
               sku: variant.sku,
               stock: variant.stock ?? item.inventory?.currentStock ?? 0,
+              gstRate: variant.gstRate ?? item.gstRate ?? 0,
+              taxInclusive: variant.taxInclusive ?? item.taxInclusive ?? false,
             }));
           }
           return [
@@ -66,6 +68,8 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
               type: item.type,
               sku: null,
               stock: item.inventory?.currentStock ?? 0,
+              gstRate: item.gstRate || 0,
+              taxInclusive: item.taxInclusive || false,
             },
           ];
         });
@@ -100,6 +104,8 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
       unitPrice: item.unitPrice,
       quantity: 1,
       sku: item.sku,
+      gstRate: item.gstRate || 0,
+      taxInclusive: item.taxInclusive || false,
     });
     setIsOpen(false);
     setSearchTerm("");
@@ -107,7 +113,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
 
   const getBorderColor = () => {
     if (error) return "border-red-300 focus:ring-red-500";
-    return "border-gray-200 focus:ring-blue-500";
+    return "border-[#1F2937]/10 focus:ring-blue-500";
   };
 
   return (
@@ -121,7 +127,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
           value={searchTerm}
           onChange={handleSearchChange}
           onFocus={handleInputFocus}
-          className={`w-full pl-10 pr-4 py-2.5 bg-white border rounded-lg text-sm focus:outline-none focus:ring-2 transition-all ${getBorderColor()}`}
+          className={`w-full pl-9 pr-4 h-8 bg-white border rounded-full text-[12px] focus:outline-none focus:ring-1 transition-all ${getBorderColor()}`}
         />
       </div>
       {isOpen && (
@@ -187,6 +193,33 @@ const PurchaseForm = ({
   // Form State
   const [vendorId, setVendorId] = useState("");
   const [selectedPO, setSelectedPO] = useState("");
+  const handlePOChange = async (e) => {
+    const poId = e.target.value;
+    setSelectedPO(poId);
+    if (!poId) return;
+    try {
+      const res = await API.get("/purchase-orders/" + poId);
+      const po = res.data.purchaseOrder || res.data;
+      if (po) {
+        if (po.vendor?._id || po.vendor) setVendorId(po.vendor?._id || po.vendor);
+        setItems(po.items.map(item => ({
+          _id: item.itemId || null,
+          variantId: item.variantId || null,
+          name: item.name,
+          description: item.description || "",
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          sku: item.sku || null,
+          gstRate: item.gstRate || 0,
+          taxInclusive: item.taxInclusive || false
+        })));
+        if (po.notes) setNotes(po.notes);
+        if (po.transactionType) setTransactionType(po.transactionType);
+      }
+    } catch (err) {
+      console.error("Failed to fetch PO details", err);
+    }
+  };
   const [items, setItems] = useState([
     {
       _id: null,
@@ -208,7 +241,11 @@ const PurchaseForm = ({
     const fetchPOs = async () => {
       try {
         const res = await API.get("/purchase-orders");
-        setPurchaseOrders(res.data.purchaseOrders || res.data || []);
+        const all = res.data.purchaseOrders || res.data || [];
+        // Only an Approved PO can be converted to a Purchase (enforced
+        // server-side too, in purchaseController.js) — a Pending/Rejected/
+        // Delivered one shouldn't even be selectable here.
+        setPurchaseOrders(all.filter((po) => po.status === "Approved"));
       } catch (err) {
         console.error("Failed to fetch POs", err);
       }
@@ -379,12 +416,12 @@ const PurchaseForm = ({
         onClick={handleClose}
       />
 
-      {/* Compact card — narrow single-column layout, matched to
-          PurchaseOrderForm.jsx and the reference design. */}
+      {/* Same dc-panel-card/dc-panel-w shell as CompanyForm/DealForm/ItemForm
+          etc. — width now matches the rest of the app's quick-drawers
+          instead of a wider one-off 600px. */}
       <div
         className={`
-          fixed top-6 bottom-6 right-6 rounded-[24px] z-[10001]
-          w-full sm:w-[600px]
+          fixed dc-panel-card dc-panel-w z-[10001]
           bg-white shadow-2xl flex flex-col overflow-hidden
           transform transition-transform duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
@@ -392,7 +429,7 @@ const PurchaseForm = ({
       >
         {/* Header */}
         <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
-          <h2 className="text-sm text-gray-500 font-medium uppercase tracking-wide">
+          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
             {editingPurchase ? "EDIT PURCHASE" : "CREATE NEW PURCHASE"}
           </h2>
           <div className="flex items-center gap-4">
@@ -423,7 +460,7 @@ const PurchaseForm = ({
           {/* Vendor & PO Link */}
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Select Vendor <span className="text-red-500">*</span>
               </label>
               <div className="flex items-center gap-2">
@@ -451,14 +488,14 @@ const PurchaseForm = ({
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Link to Purchase Order (Optional)
               </label>
               <div className="relative">
                 <select
                   value={selectedPO}
-                  onChange={(e) => setSelectedPO(e.target.value)}
-                  className="w-full appearance-none px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  onChange={handlePOChange}
+                  className="w-full appearance-none px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
                 >
                   <option value="">Select Purchase Order</option>
                   {purchaseOrders.map((po) => (
@@ -506,7 +543,7 @@ const PurchaseForm = ({
 
                   {/* Item Search */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                       Item <span className="text-red-500">*</span>
                     </label>
                     <ItemSearchSelect
@@ -520,7 +557,7 @@ const PurchaseForm = ({
                   </div>
                   {/* Manual Name */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                       Manual Item Name <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -530,14 +567,14 @@ const PurchaseForm = ({
                       onChange={(e) =>
                         updateItem(index, "name", e.target.value)
                       }
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     {/* Quantity */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                         Quantity
                       </label>
                       <div className="relative">
@@ -547,7 +584,7 @@ const PurchaseForm = ({
                           onChange={(e) =>
                             updateItem(index, "quantity", e.target.value)
                           }
-                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                           placeholder="01"
                         />
                         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
@@ -557,7 +594,7 @@ const PurchaseForm = ({
                     </div>
                     {/* Unit Price */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                         Unit Price <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
@@ -567,22 +604,55 @@ const PurchaseForm = ({
                           onChange={(e) =>
                             updateItem(index, "unitPrice", e.target.value)
                           }
-                          className="w-full pl-7 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full pl-7 pr-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                           placeholder="0"
                         />
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-sm">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-[12px]">
                           ₹
                         </span>
                       </div>
+                    </div>
+                    {/* GST % */}
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
+                        GST %
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={item.gstRate ?? ""}
+                          onChange={(e) =>
+                            updateItem(index, "gstRate", e.target.value)
+                          }
+                          className="w-full pl-3 pr-7 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                          placeholder="0"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-[12px]">
+                          %
+                        </span>
+                      </div>
+                      <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={item.taxInclusive || false}
+                          onChange={(e) =>
+                            updateItem(index, "taxInclusive", e.target.checked)
+                          }
+                          className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                        />
+                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                          Tax Inc.
+                        </span>
+                      </label>
                     </div>
                   </div>
 
                   {/* Amount */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                       Amount
                     </label>
-                    <div className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm font-semibold text-gray-800">
+                    <div className="w-full px-3 h-8 flex items-center bg-gray-100 border border-[#1F2937]/10 rounded-full text-[12px] font-semibold text-gray-800">
                       ₹
                       {formatNumberFixed(
                         (parseFloat(item.unitPrice) || 0) * (parseFloat(item.quantity) || 0)
@@ -596,28 +666,28 @@ const PurchaseForm = ({
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+            <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
               Additional Notes <span className="text-red-500">*</span>
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add Additional Notes"
-              className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[90px] resize-none"
+              className="w-full px-3 py-2 bg-white border border-[#1F2937]/10 rounded-2xl text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all min-h-[90px] resize-none"
             />
           </div>
 
           {/* Status, Transaction Type, GST Rate */}
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Status
               </label>
               <div className="relative">
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="w-full appearance-none px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  className="w-full appearance-none px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
                 >
                   <option value="Draft">Draft</option>
                   <option value="Pending">Pending</option>
@@ -630,41 +700,19 @@ const PurchaseForm = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Transaction Type
                 </label>
                 <div className="relative">
                   <select
                     value={transactionType}
                     onChange={(e) => setTransactionType(e.target.value)}
-                    className="w-full appearance-none px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    className="w-full appearance-none px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
                   >
                     <option value="intra">Intra State</option>
                     <option value="inter">Inter State</option>
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                    <ChevronDown className="w-4 h-4" />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  GST Rate (%)
-                </label>
-                <div className="relative">
-                  <select
-                    value={gstRate}
-                    onChange={(e) => setGstRate(parseFloat(e.target.value) || 0)}
-                    className="w-full appearance-none px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  >
-                    <option value={0}>0</option>
-                    <option value={5}>5</option>
-                    <option value={12}>12</option>
-                    <option value={18}>18</option>
-                    <option value={28}>28</option>
                   </select>
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
                     <ChevronDown className="w-4 h-4" />
@@ -681,7 +729,7 @@ const PurchaseForm = ({
               <span className="font-semibold">₹{formatNumberFixed(subtotal)}</span>
             </div>
 
-            {gstRate > 0 && (
+            {totalTax > 0 && (
               <div className="flex justify-between items-center text-slate-700">
                 <span className="text-sm">Total Tax</span>
                 <span className="font-semibold">₹{formatNumberFixed(totalTax)}</span>
@@ -697,12 +745,12 @@ const PurchaseForm = ({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-4 border-t border-dashed border-gray-300 flex gap-3 items-center bg-white flex-shrink-0">
+        {/* Footer — matches the CompanyForm/ItemForm quick-drawer footer spec */}
+        <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={handleClose}
-            className="flex-1 px-4 py-2.5 border border-red-200 text-red-500 font-medium rounded-full hover:bg-red-50 text-sm transition-colors"
+            className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
@@ -710,7 +758,7 @@ const PurchaseForm = ({
             type="button"
             onClick={handleSubmit}
             disabled={loading}
-            className="flex-1 px-4 py-2.5 bg-[#0085FF] text-white font-medium rounded-full hover:bg-blue-600 text-sm transition-colors disabled:opacity-70"
+            className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading
               ? "Creating..."

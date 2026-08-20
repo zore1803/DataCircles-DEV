@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Bold as BoldIcon, Italic as ItalicIcon, Underline as UnderlineIcon, Strikethrough as StrikethroughIcon, List as ListIcon, ListOrdered, Link as LinkIcon } from "lucide-react";
+import { X, ChevronDown, Bold as BoldIcon, Italic as ItalicIcon, Underline as UnderlineIcon, Strikethrough as StrikethroughIcon, List as ListIcon, ListOrdered, Link as LinkIcon } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import BankLogo from "../BankLogo";
 
 export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
+  const [isSliding, setIsSliding] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false);
   const [vendors, setVendors] = useState([]);
   const [banks, setBanks] = useState([]);
   const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
@@ -44,6 +46,23 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
     } catch (err) {
       console.error("Fetch banks failed", err);
     }
+  };
+
+  // Slide-in/out animation, matching the other quick-drawer forms (ItemForm,
+  // CallLogForm, CompanyForm) instead of popping open and vanishing instantly.
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      setTimeout(() => setIsSliding(true), 10);
+    } else {
+      setIsSliding(false);
+      setTimeout(() => setShouldRender(false), 300);
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    setIsSliding(false);
+    setTimeout(() => onClose(), 300);
   };
 
   useEffect(() => {
@@ -103,7 +122,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
       await API.post("/payments-timeline", payload);
       toast.success("Payment added successfully!");
       onSuccess();
-      onClose();
+      handleClose();
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.error || "Failed to add payment");
@@ -112,7 +131,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
     }
   };
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   const filteredVendors = vendors.filter(v => 
     (v.name || v.companyName || "").toLowerCase().includes(vendorSearch.toLowerCase())
@@ -121,24 +140,34 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
   const selectedBankObj = banks.find(bk => bk._id === selectedBankId);
 
   return (
-    <div className="fixed inset-0 z-[100000] flex justify-end bg-black/40 backdrop-blur-sm transition-opacity duration-300">
-      <div 
-        className="fixed inset-0" 
-        onClick={onClose} 
-        aria-hidden="true" 
+    <>
+      <div
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100000] transition-opacity duration-300"
+        style={{ opacity: isSliding ? 1 : 0 }}
+        onClick={handleClose}
+        aria-hidden="true"
       />
-      <div className="fixed dc-panel-card dc-panel-w payment-panel bg-white shadow-2xl flex flex-col z-10 overflow-hidden animate-slideInRight">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50/50">
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Add Vendor Payment</h2>
-          <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors">
-            <X size={20} />
+      <div
+        className={`fixed dc-panel-card dc-panel-w bg-white shadow-2xl flex flex-col z-[100001] overflow-hidden transform transition-transform duration-300 ease-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">Add Vendor Payment</h2>
+          <button
+            type="button"
+            onClick={handleClose}
+            title="Close"
+            className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+            aria-label="Close"
+          >
+            <X className="w-[18px] h-[18px]" strokeWidth={2} />
           </button>
         </div>
-        
-        <div className="overflow-y-auto flex-1 p-4 space-y-3 bg-gray-50/30">
-          <form id="payment-form" onSubmit={handleSubmit} className="space-y-3">
+
+        <div className="space-y-6 overflow-y-auto flex-1 px-8 py-6">
+          <form id="payment-form" onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Vendor <span className="text-red-500">*</span></label>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Vendor <span className="text-red-500">*</span></label>
               <div className="relative">
                 <input
                   type="text"
@@ -149,10 +178,10 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                   }}
                   required={!selectedVendorId}
                   placeholder="Search or enter new vendor name"
-                  className="w-full h-9 px-3 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                 />
                 {vendorSearch && !selectedVendorId && filteredVendors.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-[#E1E4EA] rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  <div className="absolute z-10 w-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                     {filteredVendors.map(v => (
                       <button
                         key={v._id}
@@ -161,7 +190,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                           setSelectedVendorId(v._id);
                           setVendorSearch(v.name || v.companyName);
                         }}
-                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 focus:bg-blue-50 transition-colors"
+                        className="w-full text-left px-4 py-2.5 text-[12px] hover:bg-gray-50 transition-colors"
                       >
                         {v.name || v.companyName}
                       </button>
@@ -172,9 +201,9 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Amount <span className="text-red-500">*</span></label>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Amount <span className="text-red-500">*</span></label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">₹</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#1F2937] opacity-50 text-[12px]">₹</span>
                 <input
                   type="number"
                   required
@@ -182,28 +211,28 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                   step="0.01"
                   value={formData.amount}
                   onChange={e => setFormData(p => ({ ...p, amount: e.target.value }))}
-                  className="w-full h-9 pl-8 pr-3 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
+                  className="w-full border border-[#1F2937]/10 rounded-full pl-7 pr-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Date <span className="text-red-500">*</span></label>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Payment Date <span className="text-red-500">*</span></label>
               <input
                 type="date"
                 required
                 value={formData.paymentDate}
                 onChange={e => setFormData(p => ({ ...p, paymentDate: e.target.value }))}
-                className="w-full h-9 px-3 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Direction <span className="text-red-500">*</span></label>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Direction <span className="text-red-500">*</span></label>
               <select
                 value={formData.direction}
                 onChange={e => setFormData(p => ({ ...p, direction: e.target.value }))}
-                className="w-full h-9 px-3 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] bg-white"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all bg-white cursor-pointer"
               >
                 <option value="OUT">Debit (Out)</option>
                 <option value="IN">Credit (In)</option>
@@ -211,11 +240,11 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Type <span className="text-red-500">*</span></label>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Type <span className="text-red-500">*</span></label>
               <select
                 value={formData.paymentType}
                 onChange={e => setFormData(p => ({ ...p, paymentType: e.target.value }))}
-                className="w-full h-9 px-3 border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] bg-white"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all bg-white cursor-pointer"
               >
                 <option value="UPI">UPI</option>
                 <option value="Net Banking">Net Banking</option>
@@ -227,49 +256,47 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Select Bank Account</label>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Select Bank Account</label>
               <div className="relative w-full">
-                <button 
+                <button
                   type="button"
                   onClick={() => setBankDropdownOpen(!bankDropdownOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2 border border-[#E1E4EA] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0085FF] bg-white"
+                  className="w-full flex items-center justify-between border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all bg-white"
                 >
                   {selectedBankObj ? (
-                    <div className="flex items-center gap-2.5">
-                      <BankLogo bankName={selectedBankObj.bankName || selectedBankObj.bank || ""} size={28} />
-                      <span className="text-sm font-medium text-gray-800">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <BankLogo bankName={selectedBankObj.bankName || selectedBankObj.bank || ""} size={20} />
+                      <span className="text-[12px] font-medium text-[#1F2937] truncate">
                         {selectedBankObj.bankName || selectedBankObj.bank}
                         {selectedBankObj.branch ? ` (${selectedBankObj.branch})` : ""}
                         {selectedBankObj.accountNumber ? ` - XXXX${selectedBankObj.accountNumber.slice(-4)}` : ""}
                       </span>
                     </div>
                   ) : (
-                    <span className="text-gray-500 text-sm">Select a bank...</span>
+                    <span className="text-[#1F2937] opacity-50 text-[12px]">Select a bank...</span>
                   )}
-                  <svg className="h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 text-gray-400 transition-transform ${bankDropdownOpen ? "rotate-180" : ""}`} />
                 </button>
                 {bankDropdownOpen && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-[#E1E4EA] rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  <div className="absolute z-10 w-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                     {banks.map(b => {
                       const name = b.bankName || b.bank || "Bank";
                       const branch = b.branch ? ` (${b.branch})` : "";
                       const lastFour = b.accountNumber ? b.accountNumber.slice(-4) : "";
                       return (
-                        <button 
-                          key={b._id} 
+                        <button
+                          key={b._id}
                           type="button"
                           onClick={() => {
                             setSelectedBankId(b._id);
                             setFormData(p => ({ ...p, bank: name }));
                             setBankDropdownOpen(false);
                           }}
-                          className="flex items-center gap-2.5 w-full px-3 py-2 text-sm hover:bg-blue-50 text-left transition-colors"
+                          className="flex items-center gap-2.5 w-full px-4 py-2.5 text-[12px] hover:bg-gray-50 text-left transition-colors"
                         >
-                          <BankLogo bankName={name} size={28} />
-                          <span className="font-medium text-gray-800">{name}{branch}</span>
-                          {lastFour && <span className="text-gray-500 text-xs ml-auto">XXXX{lastFour}</span>}
+                          <BankLogo bankName={name} size={20} />
+                          <span className="font-medium text-[#1F2937]">{name}{branch}</span>
+                          {lastFour && <span className="text-[#1F2937] opacity-50 text-[11px] ml-auto">XXXX{lastFour}</span>}
                         </button>
                       );
                     })}
@@ -279,8 +306,8 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <div className="flex items-center gap-0.5 border border-[#E1E4EA] border-b-0 rounded-t-lg bg-gray-50 px-1.5 py-1">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Notes</label>
+              <div className="flex items-center gap-0.5 border border-[#1F2937]/10 border-b-0 rounded-t-2xl bg-gray-50 px-1.5 py-1">
                 {notesToolbarButtons.map(({ icon, title, onClick }) => (
                   <button
                     key={title}
@@ -308,31 +335,31 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                 suppressContentEditableWarning
                 onInput={(e) => setFormData((p) => ({ ...p, notes: e.currentTarget.innerHTML }))}
                 data-placeholder="Optional payment notes..."
-                className="w-full min-h-[72px] px-3 py-2 border border-[#E1E4EA] rounded-b-lg text-sm focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF] empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                className="w-full min-h-[72px] px-3 py-2 border border-[#1F2937]/10 rounded-b-2xl text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all empty:before:content-[attr(data-placeholder)] empty:before:text-[#1F2937] empty:before:opacity-50 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
               />
             </div>
           </form>
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 p-4 border-t border-gray-200 bg-gray-50/50">
-          <button 
-            type="button" 
-            onClick={onClose}
-            className="min-w-[120px] px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-[#E1E4EA] rounded-full hover:bg-gray-50 transition-colors"
+        <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             form="payment-form"
             disabled={loading}
-            className="min-w-[140px] justify-center px-5 py-2 text-sm font-medium text-white bg-[#0085FF] rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           >
             {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
             Add Payment
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 }

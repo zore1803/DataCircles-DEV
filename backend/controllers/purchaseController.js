@@ -3,6 +3,7 @@ const Vendor = require("../models/Vendor");
 const PurchaseOrder = require("../models/PurchaseOrder");
 const Branding = require("../models/Branding");
 const purchaseDocumentPdf = require("../utils/purchaseDocumentPdf");
+const { syncDocumentStock } = require("../utils/inventorySync");
 
 // Helper function to calculate item total
 const calculateItemTotal = (quantity, unitPrice) => {
@@ -52,6 +53,16 @@ exports.createPurchase = async (req, res) => {
         organization: req.user.organization
       });
       if (!poExists) return res.status(404).json({ message: "Purchase Order not found" });
+
+      // Only an Approved PO can become a Purchase — converting a Pending/Rejected/
+      // Delivered one would let goods get "received" and paid for before the order
+      // was actually approved. Enforced here (not just hidden in the UI) since this
+      // endpoint can be hit directly.
+      if (poExists.status !== "Approved") {
+        return res.status(400).json({
+          message: `Only an Approved Purchase Order can be converted to a Purchase (this one is "${poExists.status}").`,
+        });
+      }
 
       // Prevent duplicate conversion: Check if a Purchase already exists for this PO
       const duplicatePurchase = await Purchase.findOne({
@@ -321,6 +332,13 @@ exports.updatePurchase = async (req, res) => {
         });
         if (!poExists) return res.status(404).json({ message: "Purchase Order not found" });
 
+        // Same "must be Approved" rule as createPurchase — see the comment there.
+        if (poExists.status !== "Approved") {
+          return res.status(400).json({
+            message: `Only an Approved Purchase Order can be converted to a Purchase (this one is "${poExists.status}").`,
+          });
+        }
+
         // Prevent duplicate conversion on edit
         const duplicatePurchase = await Purchase.findOne({
           purchaseOrder,
@@ -346,11 +364,11 @@ exports.updatePurchase = async (req, res) => {
 
     // Inventory Sync Logic
     const newStatus = purchase.status;
-    const isNowReceived = newStatus === "Received";
-    const wasReceived = oldStatus === "Received";
+    const isNowReceived = newStatus === "Paid";
+    const wasReceived = oldStatus === "Paid";
 
     if (isNowReceived && !wasReceived && oldStockMovementStatus !== 'applied') {
-      // Draft -> Received
+      // Draft -> Paid
       await syncDocumentStock({
         organization: req.user.organization,
         documentId: purchase._id,
@@ -360,13 +378,13 @@ exports.updatePurchase = async (req, res) => {
         previousItems: [],
         baseDirection: "in",
         userId: req.user.id,
-        reason: "purchase_received",
+        reason: "purchase",
         isReversal: false,
       });
       purchase.stockMovementStatus = 'applied';
       await purchase.save({ validateModifiedOnly: true });
     } else if (isNowReceived && wasReceived && oldStockMovementStatus === 'applied') {
-      // Received -> Received (Edited)
+      // Paid -> Paid (Edited)
       await syncDocumentStock({
         organization: req.user.organization,
         documentId: purchase._id,
@@ -376,11 +394,11 @@ exports.updatePurchase = async (req, res) => {
         previousItems: oldItems, // Delta calculation
         baseDirection: "in",
         userId: req.user.id,
-        reason: "purchase_received",
+        reason: "purchase",
         isReversal: false,
       });
     } else if (!isNowReceived && wasReceived && oldStockMovementStatus === 'applied') {
-      // Received -> Draft/Cancelled
+      // Paid -> Draft/Cancelled
       await syncDocumentStock({
         organization: req.user.organization,
         documentId: purchase._id,
@@ -390,7 +408,7 @@ exports.updatePurchase = async (req, res) => {
         previousItems: [],
         baseDirection: "in",
         userId: req.user.id,
-        reason: "cancellation",
+        reason: "adjustment",
         isReversal: true,
       });
       purchase.stockMovementStatus = 'reversed';
@@ -415,7 +433,7 @@ exports.updatePurchase = async (req, res) => {
 exports.updatePurchaseStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    const validStatuses = ["Draft", "Pending", "Received", "Partial", "Cancelled"];
+    const validStatuses = ["Draft", "Pending", "Paid", "Partial", "Cancelled"];
 
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
@@ -443,11 +461,11 @@ exports.updatePurchaseStatus = async (req, res) => {
     // Inventory Sync Logic
     const oldStatus = oldPurchase.status;
     const oldStockMovementStatus = oldPurchase.stockMovementStatus;
-    const isNowReceived = status === "Received";
-    const wasReceived = oldStatus === "Received";
+    const isNowReceived = status === "Paid";
+    const wasReceived = oldStatus === "Paid";
 
     if (isNowReceived && !wasReceived && oldStockMovementStatus !== 'applied') {
-      // Draft -> Received
+      // Draft -> Paid
       await syncDocumentStock({
         organization: req.user.organization,
         documentId: purchase._id,
@@ -457,13 +475,13 @@ exports.updatePurchaseStatus = async (req, res) => {
         previousItems: [],
         baseDirection: "in",
         userId: req.user.id,
-        reason: "purchase_received",
+        reason: "purchase",
         isReversal: false,
       });
       purchase.stockMovementStatus = 'applied';
       await purchase.save({ validateModifiedOnly: true });
     } else if (!isNowReceived && wasReceived && oldStockMovementStatus === 'applied') {
-      // Received -> Draft/Cancelled
+      // Paid -> Draft/Cancelled
       await syncDocumentStock({
         organization: req.user.organization,
         documentId: purchase._id,
@@ -473,7 +491,7 @@ exports.updatePurchaseStatus = async (req, res) => {
         previousItems: [],
         baseDirection: "in",
         userId: req.user.id,
-        reason: "cancellation",
+        reason: "adjustment",
         isReversal: true,
       });
       purchase.stockMovementStatus = 'reversed';
@@ -509,7 +527,7 @@ exports.deletePurchase = async (req, res) => {
         previousItems: [],
         baseDirection: "in",
         userId: req.user.id,
-        reason: "cancellation",
+        reason: "adjustment",
         isReversal: true,
       });
     }
@@ -683,7 +701,7 @@ exports.bulkImportPurchases = async (req, res) => {
       });
     }
 
-    const validStatuses = ["Draft", "Pending", "Received", "Partial", "Cancelled"];
+    const validStatuses = ["Draft", "Pending", "Paid", "Partial", "Cancelled"];
     const errors = [];
     let imported = 0;
 

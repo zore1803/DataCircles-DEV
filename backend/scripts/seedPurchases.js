@@ -49,7 +49,7 @@ const seedPurchases = async () => {
     await PurchaseOrder.deleteMany({ organization: orgId });
     await Purchase.deleteMany({ organization: orgId });
 
-    const statuses = ["Draft", "Pending", "Received", "Partial", "Cancelled"];
+    const statuses = ["Draft", "Pending", "Paid", "Partial", "Cancelled"];
     const poStatuses = ["Pending", "Approved", "Rejected", "Delivered"];
     const gstRates = [0, 5, 12, 18, 28];
     const transTypes = ["intra", "inter"];

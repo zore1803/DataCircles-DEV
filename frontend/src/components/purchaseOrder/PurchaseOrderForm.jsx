@@ -45,15 +45,15 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
           e.stopPropagation();
           setIsOpen(!isOpen);
         }}
-        className={`w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+        className={`w-full flex items-center justify-between px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
       >
-        <div className="flex items-center gap-2">
-          <div className={`p-1 rounded-md ${selectedOption.className} border-none`}>
-            {selectedOption.icon && <selectedOption.icon className="w-3.5 h-3.5" />}
+        <div className="flex items-center gap-1.5">
+          <div className={`p-1 rounded-full ${selectedOption.className} border-none`}>
+            {selectedOption.icon && <selectedOption.icon className="w-3 h-3" />}
           </div>
-          <span className="font-medium text-gray-700 capitalize">{selectedOption.label}</span>
+          <span className="font-medium text-[#1F2937] capitalize">{selectedOption.label}</span>
         </div>
-        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
@@ -125,6 +125,8 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
               type: item.type,
               sku: variant.sku,
               stock: variant.stock ?? item.inventory?.currentStock ?? 0,
+              gstRate: variant.gstRate ?? item.gstRate ?? 0,
+              taxInclusive: variant.taxInclusive ?? item.taxInclusive ?? false,
             }));
           }
           return [
@@ -137,6 +139,8 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
               type: item.type,
               sku: null,
               stock: item.inventory?.currentStock ?? 0,
+              gstRate: item.gstRate || 0,
+              taxInclusive: item.taxInclusive || false,
             },
           ];
         });
@@ -171,6 +175,8 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
       unitPrice: item.unitPrice,
       quantity: 1,
       sku: item.sku,
+      gstRate: item.gstRate || 0,
+      taxInclusive: item.taxInclusive || false,
     });
     setIsOpen(false);
     setSearchTerm("");
@@ -178,7 +184,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
 
   const getBorderColor = () => {
     if (error) return "border-red-300 focus:ring-red-500";
-    return "border-gray-200 focus:ring-blue-500";
+    return "border-[#1F2937]/10 focus:ring-blue-500";
   };
 
   const displayValue = value?.name || searchTerm;
@@ -194,7 +200,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
           value={searchTerm} // Use searchTerm to allow typing
           onChange={handleSearchChange}
           onFocus={handleInputFocus}
-          className={`w-full pl-10 pr-4 py-2.5 bg-white border rounded-lg text-sm focus:outline-none focus:ring-2 transition-all ${getBorderColor()}`}
+          className={`w-full pl-9 pr-4 h-8 bg-white border rounded-full text-[12px] focus:outline-none focus:ring-1 transition-all ${getBorderColor()}`}
         />
       </div>
       {isOpen && (
@@ -277,6 +283,7 @@ const PurchaseOrderForm = ({
   const [paymentTerms, setPaymentTerms] = useState("Net 30");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("Approved");
+  const [transactionType, setTransactionType] = useState("intra");
 
   const [localVendors, setLocalVendors] = useState(vendors || []);
   const [showQuickVendorForm, setShowQuickVendorForm] = useState(false);
@@ -431,12 +438,12 @@ const PurchaseOrderForm = ({
         onClick={handleClose}
       />
 
-      {/* Compact card — narrow single-column layout instead of the old wide
-          two/three-column drawer, matched to the reference design. */}
+      {/* Same dc-panel-card/dc-panel-w shell as CompanyForm/DealForm/ItemForm
+          etc. — width now matches the rest of the app's quick-drawers
+          instead of a wider one-off 600px. */}
       <div
         className={`
-          fixed top-6 bottom-6 right-6 rounded-[24px] z-[10001]
-          w-full sm:w-[600px]
+          fixed dc-panel-card dc-panel-w z-[10001]
           bg-white shadow-2xl flex flex-col overflow-hidden
           transform transition-transform duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
@@ -444,7 +451,7 @@ const PurchaseOrderForm = ({
       >
         {/* Header */}
         <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
-          <h2 className="text-sm text-gray-500 font-medium uppercase tracking-wide">
+          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
             {editingPO ? "EDIT PURCHASE ORDER" : "CREATE NEW PURCHASE ORDER"}
           </h2>
           <div className="flex items-center gap-4">
@@ -474,7 +481,7 @@ const PurchaseOrderForm = ({
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
           {/* Vendor Section */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+            <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
               Select Vendor <span className="text-red-500">*</span>
             </label>
             <div className="flex items-center gap-2">
@@ -533,7 +540,7 @@ const PurchaseOrderForm = ({
 
                   {/* Item Search */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                       Item <span className="text-red-500">*</span>
                     </label>
                     <ItemSearchSelect
@@ -547,7 +554,7 @@ const PurchaseOrderForm = ({
                   </div>
                   {/* Description */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                       Description <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -557,14 +564,14 @@ const PurchaseOrderForm = ({
                       onChange={(e) =>
                         updateItem(index, "description", e.target.value)
                       }
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     {/* Quantity */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                         Quantity
                       </label>
                       <div className="relative">
@@ -574,7 +581,7 @@ const PurchaseOrderForm = ({
                           onChange={(e) =>
                             updateItem(index, "quantity", e.target.value)
                           }
-                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                           placeholder="01"
                         />
                         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
@@ -584,7 +591,7 @@ const PurchaseOrderForm = ({
                     </div>
                     {/* Unit Price */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                         Unit Price <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
@@ -594,22 +601,55 @@ const PurchaseOrderForm = ({
                           onChange={(e) =>
                             updateItem(index, "unitPrice", e.target.value)
                           }
-                          className="w-full pl-7 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full pl-7 pr-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                           placeholder="0"
                         />
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-sm">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-[12px]">
                           ₹
                         </span>
                       </div>
+                    </div>
+                    {/* GST % */}
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
+                        GST %
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={item.gstRate ?? ""}
+                          onChange={(e) =>
+                            updateItem(index, "gstRate", e.target.value)
+                          }
+                          className="w-full pl-3 pr-7 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                          placeholder="0"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-[12px]">
+                          %
+                        </span>
+                      </div>
+                      <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={item.taxInclusive || false}
+                          onChange={(e) =>
+                            updateItem(index, "taxInclusive", e.target.checked)
+                          }
+                          className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                        />
+                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                          Tax Inc.
+                        </span>
+                      </label>
                     </div>
                   </div>
 
                   {/* Amount */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                       Amount
                     </label>
-                    <div className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm font-semibold text-gray-800">
+                    <div className="w-full px-3 h-8 flex items-center bg-gray-100 border border-[#1F2937]/10 rounded-full text-[12px] font-semibold text-gray-800">
                       ₹
                       {formatNumberFixed(
                         (parseFloat(item.quantity) || 0) *
@@ -620,23 +660,23 @@ const PurchaseOrderForm = ({
 
                   {/* Purchase Price & Selling Price */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                       Purchase Price <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       placeholder="Enter Purchase Price"
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                       Selling Price <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       placeholder="Enter Selling Price"
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                     />
                   </div>
                 </div>
@@ -647,22 +687,22 @@ const PurchaseOrderForm = ({
           {/* Terms and Notes */}
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Payment Terms <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={paymentTerms}
                 onChange={(e) => setPaymentTerms(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Notes
               </label>
-              <div className="w-full bg-white border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
+              <div className="w-full bg-white border border-[#1F2937]/10 rounded-2xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-500 transition-all">
                 {/* Rich Text Editor Mock Toolbar */}
                 <div className="px-2 py-1.5 border-b border-gray-100 flex items-center gap-1.5 overflow-x-auto bg-gray-50/50">
                   <div className="flex items-center gap-0.5">
@@ -692,7 +732,7 @@ const PurchaseOrderForm = ({
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Additional Notes"
-                  className="w-full px-3 py-2.5 text-sm focus:outline-none min-h-[100px] resize-none"
+                  className="w-full px-3 py-2 text-[12px] focus:outline-none min-h-[100px] resize-none"
                 />
               </div>
             </div>
@@ -700,7 +740,7 @@ const PurchaseOrderForm = ({
 
           {/* Status */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+            <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
               Status
             </label>
             <SingleSelectDropdown
@@ -721,12 +761,12 @@ const PurchaseOrderForm = ({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-4 border-t border-dashed border-gray-300 flex gap-3 items-center bg-white flex-shrink-0">
+        {/* Footer — matches the CompanyForm/ItemForm quick-drawer footer spec */}
+        <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={handleClose}
-            className="flex-1 px-4 py-2.5 border border-red-200 text-red-500 font-medium rounded-full hover:bg-red-50 text-sm transition-colors"
+            className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
@@ -734,7 +774,7 @@ const PurchaseOrderForm = ({
             type="button"
             onClick={handleSubmit}
             disabled={loading}
-            className="flex-1 px-4 py-2.5 bg-[#0085FF] text-white font-medium rounded-full hover:bg-blue-600 text-sm transition-colors disabled:opacity-70"
+            className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading
               ? "Creating..."

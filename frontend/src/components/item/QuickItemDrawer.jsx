@@ -301,14 +301,14 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
         {/* ── Scrollable body ── */}
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
 
-          {/* ── Basic Details card ── */}
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          {/* ── Basic Details — flat section, no card wrapper (matches
+              CompanyForm.jsx/QuickCompanyForm's heading+divider style) ── */}
+          <div className="space-y-5">
+            <div className="pb-2 border-b border-gray-100">
               <span className="text-sm font-bold text-gray-900">Basic Details</span>
             </div>
 
-            <div className="px-5 py-5 space-y-5">
-              {/* Product / Service toggle */}
+            {/* Product / Service toggle */}
               <div className="inline-flex p-0.5 bg-gray-100 rounded-lg border border-gray-200">
                 {["Product", "Service"].map((t) => (
                   <button
@@ -533,16 +533,14 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                   </div>
                 )}
               </div>
-            </div>
           </div>
 
-          {/* ── Additional Information card ── */}
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
+          {/* ── Additional Information — flat section, no card wrapper ── */}
+          <div className="space-y-5">
+            <div className="pb-2 border-b border-gray-100">
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Additional Information</span>
               <span className="ml-2 text-xs text-gray-400">Optional</span>
             </div>
-            <div className="px-5 py-5 space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={lbl}>HSN/SAC</label>
@@ -637,12 +635,11 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                   <p className="text-[11px] text-gray-400 leading-relaxed">Up to 10 files · 3 MB/image · 50 MB/video<br />Images: 1024×1024 recommended</p>
                 </div>
               </div>
-            </div>
           </div>
 
-          {/* ── Opening Stock card ── */}
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          {/* ── Opening Stock — flat section, no card wrapper ── */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <div>
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Opening Stock</span>
                 <span className="ml-2 text-xs text-gray-400">Optional</span>
@@ -651,22 +648,20 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                 <Lock className="w-3 h-3" /> Add batches
               </button>
             </div>
-            <div className="px-5 py-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={lbl}>Opening Quantity</label>
-                  <input type="number" min="0" value={form.openingQuantity} onChange={(e) => handleChange("openingQuantity", e.target.value)} onWheel={(e) => e.target.blur()} className={inp} />
-                  <p className="mt-1 text-[11px] text-gray-400">Quantity available in your existing inventory</p>
-                </div>
-                <div>
-                  <label className={lbl}>Opening Purchase Price (with tax)</label>
-                  <input type="number" min="0" value={form.openingPurchasePrice} onChange={(e) => handleChange("openingPurchasePrice", e.target.value)} onWheel={(e) => e.target.blur()} className={inp} />
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={lbl}>Opening Quantity</label>
+                <input type="number" min="0" value={form.openingQuantity} onChange={(e) => handleChange("openingQuantity", e.target.value)} onWheel={(e) => e.target.blur()} className={inp} />
+                <p className="mt-1 text-[11px] text-gray-400">Quantity available in your existing inventory</p>
               </div>
-              <div className="w-1/2 pr-2">
-                <label className={lbl}>Opening Stock Value (with tax)</label>
-                <input type="number" min="0" value={form.openingStockValue} onChange={(e) => handleChange("openingStockValue", e.target.value)} onWheel={(e) => e.target.blur()} className={inp} />
+              <div>
+                <label className={lbl}>Opening Purchase Price (with tax)</label>
+                <input type="number" min="0" value={form.openingPurchasePrice} onChange={(e) => handleChange("openingPurchasePrice", e.target.value)} onWheel={(e) => e.target.blur()} className={inp} />
               </div>
+            </div>
+            <div className="w-1/2 pr-2">
+              <label className={lbl}>Opening Stock Value (with tax)</label>
+              <input type="number" min="0" value={form.openingStockValue} onChange={(e) => handleChange("openingStockValue", e.target.value)} onWheel={(e) => e.target.blur()} className={inp} />
             </div>
           </div>
 

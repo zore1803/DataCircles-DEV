@@ -223,14 +223,28 @@ exports.updatePurchaseOrder = async (req, res) => {
 
     // Update fields
     if (items) {
-      let totalAmount = 0;
+      const { transactionType } = req.body;
       const formattedItems = items.map(item => {
-        const itemTotal = item.quantity * item.unitPrice;
-        totalAmount += itemTotal;
-        return { ...item, total: itemTotal };
+        const itemTotal = calculateItemTotal(item.quantity, item.unitPrice);
+        const gstRate = parseFloat(item.gstRate) || 0;
+        const taxInclusive = item.taxInclusive || false;
+        const taxAmount = taxInclusive 
+            ? itemTotal - (itemTotal / (1 + gstRate / 100))
+            : itemTotal * (gstRate / 100);
+            
+        return { ...item, total: itemTotal, gstRate, taxInclusive, taxAmount };
       });
+
+      const subtotal = calculateSubtotal(formattedItems);
+      const totalTax = calculateTax(formattedItems);
+      const grandTotal = subtotal + totalTax;
+
       purchaseOrder.items = formattedItems;
-      purchaseOrder.totalAmount = totalAmount;
+      purchaseOrder.subtotal = subtotal;
+      purchaseOrder.totalTax = totalTax;
+      purchaseOrder.grandTotal = grandTotal;
+      purchaseOrder.totalAmount = grandTotal;
+      if (transactionType) purchaseOrder.transactionType = transactionType;
     }
 
     if (paymentTerms) purchaseOrder.paymentTerms = paymentTerms;

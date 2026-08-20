@@ -40,7 +40,11 @@ const purchaseSchema = new mongoose.Schema(
     grandTotal: { type: Number, default: 0, min: 0 },
     status: {
       type: String,
-      enum: ["Draft", "Pending", "Received", "Partial", "Cancelled"],
+      // "Paid" was "Received" — renamed to match the frontend's terminology
+      // (PurchasePage.jsx's status dropdown/badges have always said "Paid";
+      // sending that value 400'd against this enum, which is the root cause
+      // of "Failed to update status" / net::ERR on the status dropdown).
+      enum: ["Draft", "Pending", "Paid", "Partial", "Cancelled"],
       default: "Draft",
     },
     notes: { type: String, default: "" },

@@ -275,9 +275,13 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
     ? "bg-[#16A34A] hover:bg-green-700"
     : "bg-[#DC2626] hover:bg-red-700";
 
+  // Same pill field spec as QuickCompanyForm/QuickVendorForm/CallLogForm —
+  // brings this drawer's fields in line with the rest of the app's
+  // quick-drawers (the shell/header already matched; only the fields
+  // themselves were still the older h-11/rounded-lg style).
   const fieldClass =
-    "w-full h-11 px-3 border border-[#E1E4EA] rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]";
-  const labelClass = "block text-sm font-semibold text-gray-800 mb-1.5";
+    "w-full h-8 px-3 border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50";
+  const labelClass = "block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2";
   const helpClass = "mt-1.5 text-xs text-gray-500 leading-relaxed";
 
   return (
@@ -314,8 +318,9 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
         </div>
 
         {/* Body — flat field list, same as ItemForm/CompanyForm (no per-section
-            bordered "card" wrappers around groups of fields). Every field
-            keeps its own existing size (fieldClass, h-11 etc.) untouched. */}
+            bordered "card" wrappers around groups of fields). Fields now use
+            the same pill spec (fieldClass above) as the rest of the app's
+            quick-drawers, not the older h-11/rounded-lg style. */}
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 font-inter custom-scrollbar">
           <div>
             <h3 className="text-sm font-semibold text-gray-900 truncate">{item.name}</h3>
@@ -361,9 +366,9 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
                       setNegativeWarning(null);
                     }}
                     placeholder="0"
-                    className={`${fieldClass} rounded-r-none`}
+                    className={`${fieldClass.replace("rounded-full", "rounded-l-full")} border-r-0`}
                   />
-                  <span className="h-11 px-3 flex items-center border border-l-0 border-[#E1E4EA] rounded-r-lg bg-gray-50 text-sm font-semibold text-gray-600 whitespace-nowrap">
+                  <span className="h-8 px-3 flex items-center border border-l-0 border-[#1F2937]/10 rounded-r-full bg-gray-50 text-[12px] font-semibold text-gray-600 whitespace-nowrap">
                     {(item.primaryUnit || "PCS").split(" ")[0]}
                   </span>
                 </div>
@@ -402,7 +407,7 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
                 rows={2}
                 value={form.notes}
                 onChange={(e) => set({ notes: e.target.value })}
-                className="w-full px-3 py-2.5 border border-[#E1E4EA] rounded-lg text-sm resize-y focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
+                className="w-full px-3 py-2 border border-[#1F2937]/10 rounded-2xl text-[12px] resize-y focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
               />
               <p className={helpClass}>Add notes here to help you remember important details.</p>
             </div>
@@ -444,7 +449,7 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
               <div>
                 <label className={labelClass}>Stock {isIn ? "In" : "Out"} Value</label>
                 {/* Derived, never typed — qty × price, so it can't disagree with the inputs. */}
-                <div className="w-full h-11 px-3 flex items-center border border-[#E1E4EA] rounded-lg bg-gray-50 text-sm font-semibold text-gray-900">
+                <div className="w-full h-8 px-3 flex items-center border border-[#1F2937]/10 rounded-full bg-gray-50 text-[12px] font-semibold text-gray-900">
                   {movementValue.toLocaleString("en-IN", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,

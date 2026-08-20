@@ -263,7 +263,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
       setIsFormDirty(true);
     };
 
-    const inputClassName = "w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter";
+    const inputClassName = "w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter";
 
     switch (fieldDef.type) {
       case "number":
@@ -285,7 +285,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
             <select
               value={value || ""}
               onChange={(e) => handleFieldChange(e.target.value)}
-              className={`${inputClassName.replace('h-12', 'h-12 appearance-none')} cursor-pointer bg-white`}
+              className={`${inputClassName.replace('h-8', 'h-8 appearance-none')} cursor-pointer bg-white`}
               required={fieldDef.required}
             >
               <option value="">Select {fieldDef.name}</option>
@@ -310,7 +310,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
             rows={3}
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className={`${inputClassName.replace('h-12', 'py-3')} resize-vertical`}
+            className={`${inputClassName.replace('h-8', 'py-2')} rounded-2xl resize-vertical`}
             placeholder={`Enter ${fieldDef.name}`}
             required={fieldDef.required}
           />
@@ -540,23 +540,24 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
           }`}
       >
         <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
-          <div className="flex justify-between items-center p-4 border-b border-gray-100 flex-shrink-0">
-            <h3 className="text-base font-semibold text-gray-700">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {isEditing ? "Edit Vendor" : "Create New Vendor"}
-            </h3>
+            </h2>
             <button
               type="button"
               onClick={handleClose}
-              className="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
               aria-label="Close"
             >
-              <X className="w-5 h-5 text-gray-400" />
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto p-8 space-y-6">
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-3">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Profile Picture
               </label>
               <div className="flex items-center space-x-6 p-4 border border-[#E0E0E1] rounded-xl bg-gray-50/50">
@@ -601,21 +602,21 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Vendor Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
                 placeholder="Enter Vendor Name"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 GSTIN <span className="text-red-500">*</span>
               </label>
               <div className="flex gap-2">
@@ -625,7 +626,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                   onChange={(e) =>
                     handleFormChange("gstin", e.target.value.toUpperCase())
                   }
-                  className="flex-1 border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                  className="flex-1 min-w-0 border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
                   placeholder="GSTIN123456789"
                   maxLength="15"
                 />
@@ -633,7 +634,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                   type="button"
                   onClick={fetchGSTINDetails}
                   disabled={gstinLoading || !form.gstin?.trim()}
-                  className={`px-8 h-12 text-[14px] font-bold rounded-xl transition-colors font-inter shadow-sm ${gstinLoading || !form.gstin?.trim()
+                  className={`px-4 h-8 text-[12px] font-bold rounded-full transition-colors font-inter flex-shrink-0 ${gstinLoading || !form.gstin?.trim()
                       ? "bg-[#F2F2F7] text-gray-400 cursor-not-allowed"
                       : "bg-[#F2F2F7] text-[#111216] hover:bg-gray-200"
                     }`}
@@ -704,46 +705,46 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Email
               </label>
               <input
                 type="email"
                 value={form.email}
                 onChange={(e) => handleFormChange("email", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
                 placeholder="Enter Vendor Email"
               />
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Phone
               </label>
               <input
                 type="tel"
                 value={form.phone}
                 onChange={(e) => handleFormChange("phone", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
                 placeholder="Enter Phone Number"
               />
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Company
               </label>
               <input
                 type="text"
                 value={form.company}
                 onChange={(e) => handleFormChange("company", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
                 placeholder="Enter Company Name"
               />
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Address Line 1
               </label>
               <input
@@ -752,13 +753,13 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                 onChange={(e) =>
                   handleFormChange("address.line1", e.target.value)
                 }
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
                 placeholder="Enter Address line 1"
               />
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Address Line 2
               </label>
               <input
@@ -767,13 +768,13 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                 onChange={(e) =>
                   handleFormChange("address.line2", e.target.value)
                 }
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
                 placeholder="Enter Address line 2"
               />
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 City
               </label>
               <input
@@ -782,13 +783,13 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                 onChange={(e) =>
                   handleFormChange("address.city", e.target.value)
                 }
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
                 placeholder="Enter City"
               />
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 State
               </label>
               <input
@@ -797,13 +798,13 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                 onChange={(e) =>
                   handleFormChange("address.state", e.target.value)
                 }
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
                 placeholder="Enter State"
               />
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Pincode
               </label>
               <input
@@ -812,13 +813,13 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                 onChange={(e) =>
                   handleFormChange("address.pincode", e.target.value)
                 }
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
                 placeholder="Enter Pincode"
               />
             </div>
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Country
               </label>
               <input
@@ -827,7 +828,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                 onChange={(e) =>
                   handleFormChange("address.country", e.target.value)
                 }
-                className="w-full border border-[#E0E0E1] rounded-[25px] px-4 h-11 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] font-inter"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
                 placeholder="Enter Country"
               />
             </div>
@@ -840,7 +841,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                 <div className="space-y-6 font-inter">
                   {fieldDefinitions.map((fieldDef) => (
                     <div key={fieldDef.name}>
-                      <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                      <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                         {fieldDef.name} {fieldDef.required && <span className="text-red-500">*</span>}
                       </label>
                       {renderFieldInput(
@@ -854,16 +855,16 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
             )}
           </div>
 
-          <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0 bg-white">
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={handleClose}
-              className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors font-inter"
+              className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors font-inter"
             >
               Cancel
             </button>
             <button
-              className="px-6 py-2.5 bg-[#0C4FCD] text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
+              className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter"
               type="submit"
               disabled={loading}
             >

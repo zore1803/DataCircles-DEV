@@ -240,6 +240,7 @@ const PurchaseOrderPage = () => {
   // Row actions (⋮) menu — portaled to document.body, viewport-aware, same
   // pattern as Companies.jsx.
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const [activeRowMenuState, setActiveRowMenuState] = useState("main"); // "main" or "status"
   const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
 
@@ -554,6 +555,17 @@ const PurchaseOrderPage = () => {
     ],
   };
 
+  const updateSingleStatus = async (id, newStatus) => {
+    try {
+      await API.put(`/purchase-orders/${id}/status`, { status: newStatus });
+      setPurchaseOrders((prev) => prev.map((po) => po._id === id ? { ...po, status: newStatus } : po));
+      toast.success("Status updated successfully!");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update status");
+    }
+    setOpenRowActionsId(null);
+  };
+
   const handlePageChange = (page) => {
     if (
       page >= 1 &&
@@ -789,6 +801,7 @@ const PurchaseOrderPage = () => {
 
             setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(po._id);
+            setActiveRowMenuState("main");
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="More actions"
@@ -805,43 +818,83 @@ const PurchaseOrderPage = () => {
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
               className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
             >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenRowActionsId(null);
-                  setRowActionsPos(null);
-                  handleView(po);
-                }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-              >
-                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                View
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenRowActionsId(null);
-                  setRowActionsPos(null);
-                  handleEdit(po);
-                }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-              >
-                <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                Edit
-              </button>
-              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenRowActionsId(null);
-                  setRowActionsPos(null);
-                  handleDelete(po._id);
-                }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
-                Delete
-              </button>
+              {activeRowMenuState === "status" ? (
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("main"); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-semibold text-gray-500 hover:bg-gray-50 whitespace-nowrap mb-1"
+                  >
+                    ← Back
+                  </button>
+                  {statusOptions.map(st => {
+                    const optVal = st.value;
+                    const optLabel = st.label;
+                    return (
+                      <button
+                        key={optVal}
+                        onClick={(e) => { e.stopPropagation(); updateSingleStatus(po._id, optVal); }}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal hover:bg-gray-50 whitespace-nowrap ${po.status === optVal ? 'bg-blue-50 text-blue-600' : 'text-[#161618]'}`}
+                      >
+                        {optLabel}
+                      </button>
+                    )
+                  })}
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenRowActionsId(null);
+                      setRowActionsPos(null);
+                      handleView(po);
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    View
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenRowActionsId(null);
+                      setRowActionsPos(null);
+                      handleEdit(po);
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Edit
+                  </button>
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenRowActionsId(null);
+                      setRowActionsPos(null);
+                      handleDelete(po._id);
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
+                    Delete
+                  </button>
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    Change Status
+                  </button>
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); window.location.href = "/purchases?convertPO=" + po._id; }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#0085FF] hover:bg-blue-50 whitespace-nowrap"
+                  >
+                    Convert to Purchase
+                  </button>
+                </>
+              )}
             </div>
           </>,
           document.body,
@@ -1118,6 +1171,7 @@ const PurchaseOrderPage = () => {
     sortConfig,
     pinnedColumns,
     openRowActionsId,
+    activeRowMenuState,
     openColumnMenuKey,
     columnMenuPos,
     searchTerm,
