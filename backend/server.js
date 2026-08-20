@@ -180,6 +180,9 @@ app.use('/api/deal-fields', dealFieldsRoutes);
 const callLogRoutes = require("./routes/callLogRoutes");
 app.use("/api/call-logs", callLogRoutes);
 
+const journalRoutes = require("./routes/journalRoutes");
+app.use("/api/journals", journalRoutes);
+
 const vendorRoutes = require("./routes/vendorRoutes");
 app.use("/api/vendors", vendorRoutes);
 

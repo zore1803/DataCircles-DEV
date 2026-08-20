@@ -2,23 +2,18 @@ import React, { useEffect, useRef, useState } from "react";
 import { X, Paperclip } from "lucide-react";
 import toast from "react-hot-toast";
 import CustomDropdown from "../common/CustomDropdown";
+import API from "../../services/api";
 
 const MAX_FILES = 3;
 
-const JOURNAL_CATEGORIES = [
-  "Cash",
-  "Bank",
-  "Sales",
-  "Purchase",
-  "Expense",
-  "Income",
-  "Adjustment",
-  "Other",
-];
+// Matches the Journal model's `category` enum exactly (backend/models/Journal.js) —
+// keep these two lists in sync.
+const JOURNAL_CATEGORIES = ["Bank", "Cash", "Loan", "Credit Card", "Petty Cash", "Other"];
 
 // Drawer chrome (overlay, sliding panel, sticky header/footer) copied from
 // QuickCompanyForm so it matches the rest of the app's "New X" pattern.
-const QuickJournalForm = ({ onRequestClose, onJournalCreated }) => {
+// Pass `editJournal` to open this in edit mode instead of create.
+const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, editJournal }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
@@ -34,6 +29,17 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated }) => {
 
   useEffect(() => {
     setTimeout(() => setIsOpen(true), 10);
+    if (editJournal) {
+      setForm({
+        name: editJournal.name || "",
+        date: editJournal.date ? new Date(editJournal.date).toISOString().split("T")[0] : "",
+        category: editJournal.category || "",
+        balanceType: editJournal.balanceType || "Debit",
+        openingBalance: editJournal.openingBalance ?? "",
+        notes: editJournal.description || "",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFormChange = (field, value) => {
@@ -69,12 +75,35 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.name.trim()) {
+      toast.error("Journal name is required");
+      return;
+    }
     setLoading(true);
     try {
-      // TODO: wire up to the Journals API once the data model is defined —
-      // will need multipart/form-data to carry `attachments` alongside `form`.
-      if (onJournalCreated) onJournalCreated({ ...form, attachments });
+      // Attachments aren't persisted yet — no upload endpoint wired for
+      // Journals yet, matching the rest of this first basic pass.
+      const payload = {
+        name: form.name,
+        category: form.category,
+        date: form.date || undefined,
+        description: form.notes,
+        openingBalance: form.openingBalance === "" ? 0 : Number(form.openingBalance),
+        balanceType: form.balanceType,
+      };
+
+      if (editJournal) {
+        const res = await API.put(`/journals/${editJournal._id}`, payload);
+        toast.success("Journal updated");
+        if (onJournalUpdated) onJournalUpdated(res.data);
+      } else {
+        const res = await API.post("/journals", payload);
+        toast.success("Journal created");
+        if (onJournalCreated) onJournalCreated(res.data);
+      }
       handleClose();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to save journal");
     } finally {
       setLoading(false);
     }
@@ -100,7 +129,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated }) => {
           {/* Sticky header — matches the QuickCompanyForm header spec */}
           <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
             <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
-              Create New Journal
+              {editJournal ? "Edit Journal" : "Create New Journal"}
             </h2>
             <button
               type="button"
@@ -279,7 +308,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated }) => {
               type="submit"
               disabled={loading}
             >
-              {loading ? "Saving..." : "Create Journal"}
+              {loading ? "Saving..." : editJournal ? "Update Journal" : "Create Journal"}
             </button>
           </div>
         </form>

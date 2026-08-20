@@ -1,83 +1,266 @@
-import React from "react";
-import { X, Phone, Clock, User, Calendar } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { X, Trash2, Edit3, Clock, User, Calendar, PhoneOutgoing, PhoneIncoming } from "lucide-react";
 
-const CallLogDetailView = ({ log, onClose }) => {
-  if (!log) return null;
+// Matches the "View Task" quick-drawer style (TaskDetailsModal): a
+// right-anchored slide-in panel with a compact ID-style header, info card,
+// and Edit/Delete actions — instead of the old centered modal.
+const CallLogDetailView = ({ open, log, onClose, onEdit, onDelete }) => {
+  const [isSliding, setIsSliding] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setShouldRender(true);
+      setTimeout(() => setIsSliding(true), 10);
+    } else {
+      setIsSliding(false);
+      setTimeout(() => setShouldRender(false), 300);
+    }
+  }, [open]);
+
+  if (!shouldRender || !log) return null;
+
+  const callId = `CALL-${(log._id || "").slice(-5).toUpperCase()}`;
+  const loggedBy = typeof log.user === "object" ? log.user : null;
+  const CallTypeIcon = log.callType === "Inbound" ? PhoneIncoming : PhoneOutgoing;
+
+  const formatFullDateTime = (dateString) => {
+    if (!dateString) return "—";
+    return new Date(dateString).toLocaleString("en-US", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const statusColor =
+    log.status === "Connected" ? "#00C950" : log.status === "Missed" ? "#FB3748" : "#6B7280";
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between p-5 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-              <Phone className="w-5 h-5 text-blue-600" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900">Call Log Details</h2>
+    <>
+      <div
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300"
+        style={{ opacity: isSliding ? 1 : 0 }}
+        onClick={onClose}
+      />
+      <div
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 font-inter ${
+          isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex flex-row justify-between items-center flex-shrink-0"
+          style={{ padding: "23px 24px", gap: 10, height: 55 }}
+        >
+          <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 14, lineHeight: "20px", color: "#78788D" }}>
+            {callId}
+          </span>
+          <div className="flex flex-row items-center justify-end" style={{ gap: 4 }}>
+            {onEdit && (
+              <button
+                onClick={() => onEdit(log)}
+                className="p-1 rounded-lg hover:bg-blue-50 transition-colors"
+                title="Edit"
+              >
+                <Edit3 className="w-5 h-5" style={{ color: "#0085FF" }} />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => onDelete(log)}
+                className="p-1 rounded-lg hover:bg-red-50 transition-colors"
+                title="Delete"
+              >
+                <Trash2 className="w-5 h-5" style={{ color: "#F60000" }} />
+              </button>
+            )}
+            <div style={{ width: 1, height: 18, backgroundColor: "rgba(28, 27, 31, 0.3)" }} />
+            <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 transition-colors" title="Close">
+              <X className="w-5 h-5" style={{ color: "#1C1B1F" }} />
+            </button>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <X size={24} />
-          </button>
         </div>
 
-        <div className="p-5 overflow-y-auto space-y-6">
-          <div>
-            <h3 className="text-lg font-medium text-gray-900">{log.purpose}</h3>
-            <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-500">
-              <span className="flex items-center gap-1.5 bg-gray-100 px-2 py-1 rounded-md">
-                <span className={`w-2 h-2 rounded-full ${
-                  log.status === 'Connected' ? 'bg-green-500' :
-                  log.status === 'Missed' ? 'bg-red-500' :
-                  log.status === 'Voicemail' ? 'bg-yellow-500' : 'bg-gray-500'
-                }`} />
-                {log.status}
+        <div style={{ borderBottom: "1px solid #D9D9D9" }} />
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto space-y-3">
+          {/* Title strip */}
+          <div className="flex flex-col items-start" style={{ padding: 24, gap: 14 }}>
+            <div className="flex flex-col items-start w-full" style={{ gap: 6 }}>
+              <h1
+                style={{
+                  fontFamily: "Inter",
+                  fontWeight: 500,
+                  fontSize: 16,
+                  lineHeight: "120%",
+                  letterSpacing: "-0.5px",
+                  color: "#0E121B",
+                }}
+                className="truncate w-full"
+              >
+                {log.purpose || "Phone Call"}
+              </h1>
+              <span
+                style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}
+                className="truncate w-full"
+              >
+                Logged by {loggedBy?.name || "Unknown"} on {formatFullDateTime(log.createdAt)}
               </span>
-              <span className="flex items-center gap-1">
-                <Calendar className="w-4 h-4" />
-                {new Date(log.timestamp || log.createdAt).toLocaleDateString()}
-              </span>
-              {!!log.duration && (
-                <span className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  {Math.floor(log.duration / 60)}m {log.duration % 60}s
+            </div>
+          </div>
+
+          {/* Call Information */}
+          <div className="flex flex-col items-start w-full" style={{ padding: "12px 24px", gap: 14 }}>
+            <p style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
+              Call Information
+            </p>
+            <div
+              className="flex flex-col items-start w-full"
+              style={{ padding: 14, gap: 16, backgroundColor: "#F8FAFC", borderRadius: 14 }}
+            >
+              {/* Logged By + Status pill */}
+              <div className="flex flex-row items-center justify-between w-full" style={{ gap: 16 }}>
+                <div className="flex flex-row items-center min-w-0" style={{ gap: 12 }}>
+                  <div
+                    className="rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700 flex-shrink-0"
+                    style={{ width: 32, height: 32 }}
+                  >
+                    {(loggedBy?.name || "?").charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex flex-col items-start min-w-0 w-full" style={{ gap: 4 }}>
+                    <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#6B7280" }}>
+                      Logged By
+                    </span>
+                    <span
+                      style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}
+                      className="truncate block w-full"
+                    >
+                      {loggedBy?.name || "Unknown"}
+                    </span>
+                  </div>
+                </div>
+                <span
+                  className="inline-flex items-center justify-center flex-shrink-0"
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 35,
+                    backgroundColor: statusColor,
+                    fontFamily: "Inter",
+                    fontWeight: 500,
+                    fontSize: 12,
+                    lineHeight: "120%",
+                    color: "#FFFFFF",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {log.status || "Connected"}
                 </span>
-              )}
-            </div>
-          </div>
+              </div>
 
-          <div className="grid grid-cols-2 gap-4 py-4 border-y border-gray-100">
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Type</p>
-              <p className="text-sm text-gray-900">{log.callType}</p>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Logged By</p>
-              <p className="text-sm text-gray-900 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-gray-400" />
-                {log.user?.name || "Unknown"}
-              </p>
-            </div>
-          </div>
-
-          {log.notes && (
-            <div>
-              <p className="text-sm font-medium text-gray-900 mb-2">Notes</p>
-              <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                {log.notes}
+              {/* Type / Duration / Date */}
+              <div className="flex flex-row items-start w-full" style={{ gap: 16 }}>
+                <div className="flex flex-col items-start flex-1" style={{ gap: 6 }}>
+                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+                    Type
+                  </span>
+                  <span
+                    className="flex items-center gap-1.5"
+                    style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}
+                  >
+                    <CallTypeIcon className="w-3.5 h-3.5 text-gray-400" />
+                    {log.callType || "Outbound"}
+                  </span>
+                </div>
+                <div className="flex flex-col items-start flex-1" style={{ gap: 6 }}>
+                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+                    Duration
+                  </span>
+                  <span
+                    className="flex items-center gap-1.5"
+                    style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}
+                  >
+                    <Clock className="w-3.5 h-3.5 text-gray-400" />
+                    {log.duration ? `${Math.floor(log.duration / 60)}m ${log.duration % 60}s` : "—"}
+                  </span>
+                </div>
+                <div className="flex flex-col items-start flex-1" style={{ gap: 6 }}>
+                  <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#6B7280" }}>
+                    Date
+                  </span>
+                  <span
+                    className="flex items-center gap-1.5"
+                    style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                    {log.createdAt ? new Date(log.createdAt).toLocaleDateString() : "—"}
+                  </span>
+                </div>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Notes header */}
+          <div
+            className="flex flex-row justify-between items-center w-full"
+            style={{ padding: "12px 24px", gap: 14, height: 44 }}
+          >
+            <p style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}>
+              Notes
+            </p>
+            {onEdit && (
+              <button
+                onClick={() => onEdit(log)}
+                className="flex items-center justify-center hover:bg-blue-50 rounded-md transition-all flex-shrink-0"
+                style={{ width: 20, height: 20 }}
+                title="Edit notes"
+              >
+                <Edit3 className="w-4 h-4" style={{ color: "#0085FF" }} />
+              </button>
+            )}
+          </div>
+
+          {/* Notes content */}
+          <div
+            className="box-border flex flex-col items-start w-full"
+            style={{ padding: "12px 24px", gap: 14, borderBottom: "1px solid #D9D9D9" }}
+          >
+            <p
+              className="w-full whitespace-pre-wrap"
+              style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 14, lineHeight: "150%", color: "rgba(31, 41, 55, 0.8)" }}
+            >
+              {log.notes || "No notes provided."}
+            </p>
+          </div>
         </div>
 
-        <div className="p-5 border-t border-gray-100 flex justify-end">
+        <div style={{ borderTop: "1px solid #D9D9D9" }} />
+
+        {/* Footer */}
+        <div className="flex-shrink-0 py-2.5 px-4 bg-white flex items-center justify-end gap-3">
           <button
+            type="button"
             onClick={onClose}
-            className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
+            className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
           >
             Close
           </button>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(log)}
+              className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 transition-colors"
+            >
+              Edit Call Log
+            </button>
+          )}
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

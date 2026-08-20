@@ -124,6 +124,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
                 item.sellingPrice,
               type: item.type,
               sku: variant.sku,
+              stock: variant.stock ?? item.inventory?.currentStock ?? 0,
             }));
           }
           return [
@@ -135,6 +136,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
               unitPrice: item.purchasePrice || item.sellingPrice,
               type: item.type,
               sku: null,
+              stock: item.inventory?.currentStock ?? 0,
             },
           ];
         });
@@ -217,6 +219,11 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
                     {item.sku && (
                       <div className="text-xs text-gray-500">
                         SKU: {item.sku}
+                      </div>
+                    )}
+                    {item.type === "product" && (
+                      <div className="text-xs font-medium text-slate-600 mt-0.5">
+                        Stock: {item.stock ?? 0}
                       </div>
                     )}
                   </div>

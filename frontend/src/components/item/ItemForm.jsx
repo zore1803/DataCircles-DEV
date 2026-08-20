@@ -368,7 +368,7 @@ const ItemForm = ({
 
   const validateForm = () => {
     const errors = {};
-    if (!form.name.trim()) errors.name = "Item name is required";
+    if (!form.name.trim()) errors.name = form.type === "service" ? "Service name is required" : "Item name is required";
     if (form.purchasePrice < 0) errors.purchasePrice = "Invalid price";
     if (form.sellingPrice < 0) errors.sellingPrice = "Invalid price";
 
@@ -529,40 +529,44 @@ const ItemForm = ({
   };
 
   return (
-    <div
-      className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex justify-end p-2 transition-opacity duration-300 ${isOpen ? "opacity-100" : "opacity-0"}`}
-      onClick={handleClose}
-    >
+    <>
       <div
-        className={`bg-white w-full max-w-2xl h-full rounded-2xl shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ${isOpen ? "translate-x-0" : "translate-x-full"}`}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300"
+        style={{ opacity: isOpen ? 1 : 0 }}
+        onClick={handleClose}
+      />
+      <div
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-out ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
-          <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wide">
+        {/* Header — matches the CompanyForm/CompanyTaskForm quick-drawer header spec */}
+        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
             {form._id ? "Edit Item" : "Create New Item"}
           </h2>
           <button
             type="button"
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            title="Close"
+            className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+            aria-label="Close"
           >
-            <X className="w-5 h-5" />
+            <X className="w-[18px] h-[18px]" strokeWidth={2} />
           </button>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 font-inter custom-scrollbar">
-          {/* Item Name */}
+          {/* Item/Service Name — label and placeholder follow the Type field below */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-              Item Name <span className="text-red-500">*</span>
+              {form.type === "service" ? "Service Name" : "Item Name"} <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => handleFormChange("name", e.target.value)}
-              placeholder="Enter Item Name"
+              placeholder={form.type === "service" ? "Enter Service Name" : "Enter Item Name"}
               className={`w-full px-3.5 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${validationErrors.name ? "border-red-300" : "border-gray-200"}`}
             />
             {validationErrors.name && (
@@ -1041,10 +1045,10 @@ const ItemForm = ({
             />
           </div>
 
-          {/* Product Images */}
+          {/* Images — heading follows the Product/Service type, matching QuickItemDrawer */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-              Product Images
+              {form.type === "service" ? "Service Images" : "Product Images"}
             </label>
             <div className="flex flex-wrap gap-3">
               {existingImages.map((url) => (
@@ -1265,12 +1269,12 @@ const ItemForm = ({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-4 border-t border-dashed border-gray-300 flex gap-3 items-center bg-white flex-shrink-0">
+        {/* Footer — matches the CompanyTaskForm quick-drawer footer spec */}
+        <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={handleClose}
-            className="flex-1 px-4 py-2.5 border border-red-200 text-red-500 font-medium rounded-full hover:bg-red-50 text-sm transition-colors"
+            className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
@@ -1278,7 +1282,7 @@ const ItemForm = ({
             type="button"
             onClick={handleSubmit}
             disabled={loading}
-            className="flex-1 px-4 py-2.5 bg-[#0085FF] text-white font-medium rounded-full hover:bg-blue-600 text-sm transition-colors shadow-sm disabled:opacity-70"
+            className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? "Saving..." : form._id ? "Update Item" : "Create Item"}
           </button>
@@ -1290,7 +1294,7 @@ const ItemForm = ({
       {/* Unsaved-changes confirmation — closing (X/backdrop/Cancel) while the
           form is dirty asks instead of silently discarding edits. */}
       {showConfirmDialog && (
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] z-[10002] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-[1px] z-[10002] flex items-center justify-center p-4">
           <div
             className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6"
             onClick={(e) => e.stopPropagation()}
@@ -1328,7 +1332,7 @@ const ItemForm = ({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

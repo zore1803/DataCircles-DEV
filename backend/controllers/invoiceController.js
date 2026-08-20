@@ -10,6 +10,7 @@ const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require(".
 const sendPaymentEmail = require("../utils/sendPaymentEmail");
 const sendSMS = require("../utils/sendSMS");
 const sendGridMail = require("../utils/sendGridMail");
+const { syncDocumentStock } = require("../utils/inventorySync");
 
 const calculateItemAmount = (item) => {
   const rate = parseFloat(item.rate) || 0;
@@ -246,6 +247,23 @@ const createInvoice = async (req, res) => {
     });
 
     await invoice.save({ session });
+
+    await syncDocumentStock({
+      organization: req.user.organization,
+      documentId: invoice._id,
+      documentModel: 'Invoice',
+      documentNumber: finalInvoiceNumber,
+      items: invoice.items,
+      previousItems: [],
+      baseDirection: 'out',
+      userId: req.user.id,
+      reason: 'sale',
+      isReversal: false,
+      session
+    });
+    
+    invoice.stockMovementStatus = 'applied';
+    await invoice.save({ session, validateModifiedOnly: true });
 
     await session.commitTransaction();
     session.endSession();
@@ -602,26 +620,56 @@ const downloadInvoice = async (req, res) => {
 };
 
 const deleteInvoice = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const invoice = await Invoice.findOne({
       _id: req.params.id,
       organization: req.user.organization,
-    });
+    }).session(session);
 
     if (!invoice) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ error: "Invoice not found" });
     }
 
-    await invoice.deleteOne();
+    if (invoice.stockMovementStatus === 'applied') {
+      await syncDocumentStock({
+        organization: req.user.organization,
+        documentId: invoice._id,
+        documentModel: 'Invoice',
+        documentNumber: invoice.invoiceNumber,
+        items: invoice.items,
+        previousItems: [],
+        baseDirection: 'out',
+        userId: req.user.id,
+        reason: 'sale',
+        isReversal: true,
+        session
+      });
+    }
+
+    await invoice.deleteOne({ session });
+    
+    await session.commitTransaction();
+    session.endSession();
+
     res.json({
       message: "Invoice deleted successfully",
     });
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({ error: err.message });
   }
 };
 
 const updateInvoice = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const {
       deal,
@@ -727,69 +775,127 @@ const updateInvoice = async (req, res) => {
       }
     }
 
-    const invoice = await Invoice.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        organization: req.user.organization,
-      },
-      {
-        deal,
-        date,
-        dueDate,
-        amount,
-        discount,
-        status,
-        items,
-        style,
-        notes,
-        terms,
-        isTaxInvoice,
-        signature,
-        signatureType,
-        receiverGSTIN: finalReceiverGSTIN,
-        billingAddress: finalBillingAddress,
-        shippingAddress: finalShippingAddress,
-        transactionType: isTaxInvoice ? transactionType || "intra" : undefined,
-        gstRate: isTaxInvoice ? gstRate || 18 : undefined,
-      },
-      { new: true }
-    );
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
 
     if (!invoice) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ error: "Invoice not found" });
     }
+
+    const previousItems = invoice.items.map(item => ({
+      itemId: item.itemId,
+      variantId: item.isVariant ? item.parentItemId : undefined, // fallback, though variant mapping might need exact variantId if it existed
+      quantity: item.quantity
+    }));
+
+    // Update fields
+    invoice.deal = deal;
+    invoice.date = date;
+    invoice.dueDate = dueDate;
+    invoice.amount = amount;
+    invoice.discount = discount;
+    invoice.status = status;
+    invoice.items = items;
+    invoice.style = style;
+    invoice.notes = notes;
+    invoice.terms = terms;
+    invoice.isTaxInvoice = isTaxInvoice;
+    invoice.signature = signature;
+    invoice.signatureType = signatureType;
+    invoice.receiverGSTIN = finalReceiverGSTIN;
+    invoice.billingAddress = finalBillingAddress;
+    invoice.shippingAddress = finalShippingAddress;
+    invoice.transactionType = isTaxInvoice ? transactionType || "intra" : undefined;
+    invoice.gstRate = isTaxInvoice ? gstRate || 18 : undefined;
+
+    await invoice.save({ session });
+
+    if (invoice.stockMovementStatus === 'applied' || invoice.stockMovementStatus === 'pending') {
+      await syncDocumentStock({
+        organization: req.user.organization,
+        documentId: invoice._id,
+        documentModel: 'Invoice',
+        documentNumber: invoice.invoiceNumber,
+        items: invoice.items,
+        previousItems: invoice.stockMovementStatus === 'applied' ? previousItems : [],
+        baseDirection: 'out',
+        userId: req.user.id,
+        reason: 'sale',
+        isReversal: invoice.status === 'Cancelled',
+        session
+      });
+      invoice.stockMovementStatus = invoice.status === 'Cancelled' ? 'reversed' : 'applied';
+      await invoice.save({ session, validateModifiedOnly: true });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.json({
       message: "Invoice updated successfully",
       invoice,
     });
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({ error: err.message });
   }
 };
 
 const updateStatus = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { status } = req.body;
 
-    const invoice = await Invoice.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        organization: req.user.organization,
-      },
-      { status },
-      { new: true }
-    );
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
 
     if (!invoice) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ error: "Invoice not found" });
     }
+
+    const oldStatus = invoice.status;
+    invoice.status = status;
+
+    if (status === 'Cancelled' && invoice.stockMovementStatus === 'applied') {
+      await syncDocumentStock({
+        organization: req.user.organization,
+        documentId: invoice._id,
+        documentModel: 'Invoice',
+        documentNumber: invoice.invoiceNumber,
+        items: invoice.items,
+        previousItems: [],
+        baseDirection: 'out',
+        userId: req.user.id,
+        reason: 'sale',
+        isReversal: true,
+        session
+      });
+      invoice.stockMovementStatus = 'reversed';
+    }
+
+    await invoice.save({ session, validateModifiedOnly: true });
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.json({
       message: "Invoice status updated successfully",
       invoice,
     });
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({ error: err.message });
   }
 };

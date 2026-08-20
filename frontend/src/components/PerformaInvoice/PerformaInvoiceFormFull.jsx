@@ -318,6 +318,11 @@ const ItemSearchSelect = ({
                           </div>
                           <div className="text-xs text-slate-500">
                             {item.primaryUnit}
+                            {item.type === "product" && (
+                              <span className="ml-1 font-medium text-slate-600">
+                                • Stock: {item.stock ?? 0}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -458,6 +463,7 @@ const PerformaInvoiceFormFull = ({
                 variant.primaryUnit || item.primaryUnit || "OTH OTHERS",
               isVariant: true,
               parentItemId: item._id,
+              stock: variant.stock ?? item.inventory?.currentStock ?? 0,
             }));
           }
           return [
@@ -475,6 +481,7 @@ const PerformaInvoiceFormFull = ({
               primaryUnit: item.primaryUnit || "OTH OTHERS",
               isVariant: false,
               parentItemId: null,
+              stock: item.inventory?.currentStock ?? 0,
             },
           ];
         });
@@ -869,7 +876,8 @@ const PerformaInvoiceFormFull = ({
       gstRate: item.gstRate ?? 0,
       taxInclusive: !!item.taxInclusive,
       isVariant: false,
-      parentItemId: null,
+              parentItemId: null,
+              stock: item.inventory?.currentStock ?? 0,
       discountType: "amount",
       discount: 0,
     };

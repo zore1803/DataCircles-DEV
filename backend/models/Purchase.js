@@ -50,6 +50,7 @@ const purchaseSchema = new mongoose.Schema(
       ref: "Organization",
       required: true,
     },
+    stockMovementStatus: { type: String, enum: ['pending', 'applied', 'reversed'], default: 'pending' },
   },
   { timestamps: true }
 );

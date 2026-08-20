@@ -296,6 +296,11 @@ const ItemSearchSelect = ({
                           </div>
                           <div className="text-xs text-slate-500">
                             {item.primaryUnit}
+                            {item.type === "product" && (
+                              <span className="ml-1 font-medium text-slate-600">
+                                • Stock: {item.stock ?? 0}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2403,6 +2408,7 @@ const CreateInvoicePanel = ({
                 hsnSac: v.hsnSac || item.hsnSac || "",
                 isVariant: true,
                 parentItemId: item._id,
+                stock: v.stock ?? item.inventory?.currentStock ?? 0,
               }));
             }
             return [
@@ -2415,6 +2421,7 @@ const CreateInvoicePanel = ({
                 hsnSac: item.hsnSac || "",
                 isVariant: false,
                 parentItemId: null,
+                stock: item.inventory?.currentStock ?? 0,
               },
             ];
           });

@@ -106,28 +106,28 @@ const ViewDetails = ({ item, onRequestClose, onEdit, onDelete }) => {
   if (!shouldRender) return null;
 
   return (
-    <div
-      className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex justify-end p-2 transition-opacity duration-300 ${isOpen ? "opacity-100" : "opacity-0"}`}
-      onClick={handleClose}
-    >
+    <>
       <div
-        className={`bg-white w-full max-w-lg h-full rounded-2xl shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ${isOpen ? "translate-x-0" : "translate-x-full"}`}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300"
+        style={{ opacity: isOpen ? 1 : 0 }}
+        onClick={handleClose}
+      />
+      <div
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-out ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 font-sf">
-              Item Details
-            </h2>
-            <p className="text-sm text-gray-500 mt-1 font-inter">
-              View item information and variants
-            </p>
-          </div>
+        {/* Header — matches the quick-drawer header spec, with the
+            id-style Edit/Delete/Close row TaskDetailsModal/CallLogDetailView use. */}
+        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+            Item Details
+          </h2>
           <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={onEdit}
               className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer"
+              title="Edit"
             >
               <Edit2 className="w-4 h-4" />
             </button>
@@ -135,16 +135,19 @@ const ViewDetails = ({ item, onRequestClose, onEdit, onDelete }) => {
               type="button"
               onClick={onDelete}
               className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+              title="Delete"
             >
               <Trash2 className="w-4 h-4" />
             </button>
-            <div className="w-px h-5 bg-gray-300 mx-2"></div>
+            <div className="w-px h-5 bg-gray-300 mx-1"></div>
             <button
               type="button"
               onClick={handleClose}
-              className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 transition-colors cursor-pointer"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+              aria-label="Close"
             >
-              <X className="w-5 h-5" />
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
         </div>
@@ -326,7 +329,7 @@ const ViewDetails = ({ item, onRequestClose, onEdit, onDelete }) => {
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

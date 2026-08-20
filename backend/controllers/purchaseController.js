@@ -52,6 +52,15 @@ exports.createPurchase = async (req, res) => {
         organization: req.user.organization
       });
       if (!poExists) return res.status(404).json({ message: "Purchase Order not found" });
+
+      // Prevent duplicate conversion: Check if a Purchase already exists for this PO
+      const duplicatePurchase = await Purchase.findOne({
+        purchaseOrder,
+        organization: req.user.organization
+      });
+      if (duplicatePurchase) {
+        return res.status(400).json({ message: "A Purchase has already been created for this Purchase Order." });
+      }
     }
 
     // Validate items
@@ -111,7 +120,7 @@ exports.getAllPurchases = async (req, res) => {
   try {
     const { search } = req.query;
     let query = { organization: req.user.organization };
-    
+
     if (search) {
       query.$or = [
         { purchaseNumber: { $regex: search, $options: 'i' } },
@@ -120,7 +129,7 @@ exports.getAllPurchases = async (req, res) => {
         { 'items.name': { $regex: search, $options: 'i' } }
       ];
     }
-    
+
     const purchases = await Purchase.find(query)
       .populate("vendor", "name email")
       .populate("purchaseOrder", "poNumber vendor")
@@ -140,13 +149,13 @@ exports.getAllPurchasesWithPagination = async (req, res) => {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100); // Max 100 items per page
     const skip = (page - 1) * limit;
-    
+
     // Filter parameters
     const { search, status, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
-    
+
     // Build query object
     let query = { organization: req.user.organization };
-    
+
     // Search functionality
     if (search) {
       query.$or = [
@@ -156,12 +165,12 @@ exports.getAllPurchasesWithPagination = async (req, res) => {
         { 'items.name': { $regex: search, $options: 'i' } }
       ];
     }
-    
+
     // Status filter
     if (status) {
       query.status = status;
     }
-    
+
     // Build sort object
     const sortObj = {};
     sortObj[sortBy] = sortOrder === 'desc' ? -1 : 1;
@@ -187,12 +196,12 @@ exports.getAllPurchasesWithPagination = async (req, res) => {
         .select('-__v'), // Exclude version field
       Purchase.countDocuments(query)
     ]);
-    
+
     // Calculate pagination metadata
     const totalPages = Math.ceil(totalCount / limit);
     const hasNextPage = page < totalPages;
     const hasPrevPage = page > 1;
-    
+
     res.json({
       purchases,
       pagination: {
@@ -208,9 +217,9 @@ exports.getAllPurchasesWithPagination = async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching purchases:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch purchases',
-      message: err.message 
+      message: err.message
     });
   }
 };
@@ -219,18 +228,18 @@ exports.getAllPurchasesWithPagination = async (req, res) => {
 exports.getPurchasesByVendor = async (req, res) => {
   try {
     const { vendorId } = req.params;
-    
+
     // Verify vendor belongs to organization
     const vendor = await Vendor.findOne({
       _id: vendorId,
       organization: req.user.organization
     });
-    
+
     if (!vendor) {
       return res.status(404).json({ message: "Vendor not found" });
     }
-    
-    const purchases = await Purchase.find({ 
+
+    const purchases = await Purchase.find({
       vendor: vendorId,
       organization: req.user.organization
     })
@@ -255,7 +264,7 @@ exports.getPurchaseById = async (req, res) => {
       .populate("vendor", "name email phone")
       .populate("purchaseOrder", "poNumber vendor")
       .populate("items.itemId", "name description purchasePrice hsnSac gstRate");
-      
+
     if (!purchase) return res.status(404).json({ message: "Purchase not found" });
     res.json(purchase);
   } catch (err) {
@@ -273,8 +282,14 @@ exports.updatePurchase = async (req, res) => {
       _id: req.params.id,
       organization: req.user.organization
     });
-    
+
     if (!purchase) return res.status(404).json({ message: "Purchase not found" });
+
+    // Store old values for inventory delta
+    const oldStatus = purchase.status;
+    const oldStockMovementStatus = purchase.stockMovementStatus;
+    // Deep copy to prevent reference issues
+    const oldItems = purchase.items && purchase.items.length ? JSON.parse(JSON.stringify(purchase.items)) : [];
 
     // If items updated, recalc subtotal and item totals
     if (items) {
@@ -305,6 +320,16 @@ exports.updatePurchase = async (req, res) => {
           organization: req.user.organization
         });
         if (!poExists) return res.status(404).json({ message: "Purchase Order not found" });
+
+        // Prevent duplicate conversion on edit
+        const duplicatePurchase = await Purchase.findOne({
+          purchaseOrder,
+          organization: req.user.organization,
+          _id: { $ne: req.params.id }
+        });
+        if (duplicatePurchase) {
+          return res.status(400).json({ message: "Another Purchase has already been created for this Purchase Order." });
+        }
       }
       purchase.purchaseOrder = purchaseOrder || null;
     }
@@ -318,6 +343,59 @@ exports.updatePurchase = async (req, res) => {
     }
 
     await purchase.save();
+
+    // Inventory Sync Logic
+    const newStatus = purchase.status;
+    const isNowReceived = newStatus === "Received";
+    const wasReceived = oldStatus === "Received";
+
+    if (isNowReceived && !wasReceived && oldStockMovementStatus !== 'applied') {
+      // Draft -> Received
+      await syncDocumentStock({
+        organization: req.user.organization,
+        documentId: purchase._id,
+        documentModel: "Purchase",
+        documentNumber: purchase.purchaseNumber,
+        items: purchase.items,
+        previousItems: [],
+        baseDirection: "in",
+        userId: req.user.id,
+        reason: "purchase_received",
+        isReversal: false,
+      });
+      purchase.stockMovementStatus = 'applied';
+      await purchase.save({ validateModifiedOnly: true });
+    } else if (isNowReceived && wasReceived && oldStockMovementStatus === 'applied') {
+      // Received -> Received (Edited)
+      await syncDocumentStock({
+        organization: req.user.organization,
+        documentId: purchase._id,
+        documentModel: "Purchase",
+        documentNumber: purchase.purchaseNumber,
+        items: purchase.items,
+        previousItems: oldItems, // Delta calculation
+        baseDirection: "in",
+        userId: req.user.id,
+        reason: "purchase_received",
+        isReversal: false,
+      });
+    } else if (!isNowReceived && wasReceived && oldStockMovementStatus === 'applied') {
+      // Received -> Draft/Cancelled
+      await syncDocumentStock({
+        organization: req.user.organization,
+        documentId: purchase._id,
+        documentModel: "Purchase",
+        documentNumber: purchase.purchaseNumber,
+        items: purchase.items,
+        previousItems: [],
+        baseDirection: "in",
+        userId: req.user.id,
+        reason: "cancellation",
+        isReversal: true,
+      });
+      purchase.stockMovementStatus = 'reversed';
+      await purchase.save({ validateModifiedOnly: true });
+    }
 
     // Populate references
     await purchase.populate([
@@ -343,10 +421,13 @@ exports.updatePurchaseStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid status" });
     }
 
+    const oldPurchase = await Purchase.findOne({ _id: req.params.id, organization: req.user.organization });
+    if (!oldPurchase) return res.status(404).json({ message: "Purchase not found" });
+
     const purchase = await Purchase.findOneAndUpdate(
-      { 
+      {
         _id: req.params.id,
-        organization: req.user.organization 
+        organization: req.user.organization
       },
       { status },
       { new: true }
@@ -354,9 +435,49 @@ exports.updatePurchaseStatus = async (req, res) => {
       .populate('vendor', 'name email phone')
       .populate('purchaseOrder', 'poNumber vendor')
       .populate('items.itemId', 'name description purchasePrice hsnSac gstRate');
-    
+
     if (!purchase) {
       return res.status(404).json({ message: "Purchase not found" });
+    }
+
+    // Inventory Sync Logic
+    const oldStatus = oldPurchase.status;
+    const oldStockMovementStatus = oldPurchase.stockMovementStatus;
+    const isNowReceived = status === "Received";
+    const wasReceived = oldStatus === "Received";
+
+    if (isNowReceived && !wasReceived && oldStockMovementStatus !== 'applied') {
+      // Draft -> Received
+      await syncDocumentStock({
+        organization: req.user.organization,
+        documentId: purchase._id,
+        documentModel: "Purchase",
+        documentNumber: purchase.purchaseNumber,
+        items: purchase.items,
+        previousItems: [],
+        baseDirection: "in",
+        userId: req.user.id,
+        reason: "purchase_received",
+        isReversal: false,
+      });
+      purchase.stockMovementStatus = 'applied';
+      await purchase.save({ validateModifiedOnly: true });
+    } else if (!isNowReceived && wasReceived && oldStockMovementStatus === 'applied') {
+      // Received -> Draft/Cancelled
+      await syncDocumentStock({
+        organization: req.user.organization,
+        documentId: purchase._id,
+        documentModel: "Purchase",
+        documentNumber: purchase.purchaseNumber,
+        items: purchase.items,
+        previousItems: [],
+        baseDirection: "in",
+        userId: req.user.id,
+        reason: "cancellation",
+        isReversal: true,
+      });
+      purchase.stockMovementStatus = 'reversed';
+      await purchase.save({ validateModifiedOnly: true });
     }
 
     res.json(purchase);
@@ -369,15 +490,32 @@ exports.updatePurchaseStatus = async (req, res) => {
 // Delete Purchase
 exports.deletePurchase = async (req, res) => {
   try {
-    const purchase = await Purchase.findOneAndDelete({
+    const purchase = await Purchase.findOne({
       _id: req.params.id,
       organization: req.user.organization
     });
-    
+
     if (!purchase) {
       return res.status(404).json({ message: "Purchase not found" });
     }
-    
+
+    if (purchase.stockMovementStatus === 'applied') {
+      await syncDocumentStock({
+        organization: req.user.organization,
+        documentId: purchase._id,
+        documentModel: "Purchase",
+        documentNumber: purchase.purchaseNumber,
+        items: purchase.items,
+        previousItems: [],
+        baseDirection: "in",
+        userId: req.user.id,
+        reason: "cancellation",
+        isReversal: true,
+      });
+    }
+
+    await purchase.deleteOne();
+
     res.json({ message: "Purchase deleted successfully" });
   } catch (err) {
     console.error("Delete purchase error:", err);

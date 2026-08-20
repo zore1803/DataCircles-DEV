@@ -20,6 +20,7 @@ import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import PageSkeleton from "../components/common/PageSkeleton";
 import StockMovementModal from "../components/inventory/StockMovementModal";
+import HighlightText from "../components/common/HighlightText";
 
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
@@ -641,8 +642,14 @@ export default function Inventory() {
               {(item.name || "?").slice(0, 2)}
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-sm font-semibold text-gray-900 truncate">{item.name}</span>
-              {item.hsnSac && <span className="text-[10px] text-gray-400 truncate">HSN {item.hsnSac}</span>}
+              <span className="text-sm font-semibold text-gray-900 truncate">
+                <HighlightText text={item.name} query={searchQuery} />
+              </span>
+              {item.hsnSac && (
+                <span className="text-[10px] text-gray-400 truncate">
+                  HSN <HighlightText text={item.hsnSac} query={searchQuery} />
+                </span>
+              )}
             </div>
           </div>
         );
@@ -691,7 +698,11 @@ export default function Inventory() {
         content = <span className="text-sm text-gray-600">{relativeTime(item.inventory?.lastMovementAt)}</span>;
         break;
       default:
-        content = <span className="text-sm text-gray-700 truncate block">{item[colId] || "—"}</span>;
+        content = (
+          <span className="text-sm text-gray-700 truncate block">
+            {item[colId] ? <HighlightText text={item[colId]} query={searchQuery} /> : "—"}
+          </span>
+        );
     }
 
     return (

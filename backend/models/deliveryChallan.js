@@ -29,10 +29,10 @@ const deliveryChallanSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true },
-  status: { 
-    type: String, 
-    enum: ['Draft', 'Sent', 'Delivered', 'Cancelled'], 
-    required: true 
+  status: {
+    type: String,
+    enum: ['Draft', 'Sent', 'Delivered', 'Cancelled'],
+    required: true
   },
   billingAddress: { type: postalAddressSchema, default: () => ({}) },
   shippingAddress: { type: postalAddressSchema, default: () => ({}) },
@@ -56,6 +56,7 @@ const deliveryChallanSchema = new mongoose.Schema({
   // Set when this delivery challan was created via the "Duplicate" action,
   // pointing at the source challan it was cloned from.
   duplicatedFrom: { type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryChallan' },
+  stockMovementStatus: { type: String, enum: ['pending', 'applied', 'reversed'], default: 'pending' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('DeliveryChallan', deliveryChallanSchema);

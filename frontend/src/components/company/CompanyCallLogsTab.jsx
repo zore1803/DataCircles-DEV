@@ -83,6 +83,7 @@ const CompanyCallLogsTab = ({ companyId, callLogs = [], setCallLogs, showStats =
   const [showForm, setShowForm] = useState(false);
   const [editLog, setEditLog] = useState(null);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [logDetailsOpen, setLogDetailsOpen] = useState(false);
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
   const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
@@ -390,6 +391,7 @@ const CompanyCallLogsTab = ({ companyId, callLogs = [], setCallLogs, showStats =
   };
 
   const handleEdit = (log) => {
+    setLogDetailsOpen(false);
     setEditLog(log);
     setShowForm(true);
   };
@@ -407,7 +409,15 @@ const CompanyCallLogsTab = ({ companyId, callLogs = [], setCallLogs, showStats =
     }
   };
 
-  const handleLogClick = (log) => setSelectedLog(log);
+  const handleLogClick = (log) => {
+    setSelectedLog(log);
+    setLogDetailsOpen(true);
+  };
+
+  const handleLogDeleteRequest = (log) => {
+    setLogDetailsOpen(false);
+    setLogToDelete(log);
+  };
 
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const handleSort = (key, direction) => {
@@ -716,7 +726,13 @@ const CompanyCallLogsTab = ({ companyId, callLogs = [], setCallLogs, showStats =
       )}
 
       {/* Call Log Detail View */}
-      {selectedLog && <CallLogDetailView log={selectedLog} onClose={() => setSelectedLog(null)} />}
+      <CallLogDetailView
+        open={logDetailsOpen}
+        log={selectedLog}
+        onClose={() => setLogDetailsOpen(false)}
+        onEdit={handleEdit}
+        onDelete={handleLogDeleteRequest}
+      />
 
       {/* Call log table or empty state */}
       {!isLoading && callLogs.length === 0 ? (

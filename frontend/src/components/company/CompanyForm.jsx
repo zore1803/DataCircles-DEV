@@ -814,7 +814,7 @@ const CompanyForm = ({
               <div className="space-y-4">
                 {/* Twitter/X */}
                 <div>
-                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
+                  <label className="text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
                     <Twitter className="w-4 h-4" />X (Twitter)
                   </label>
                   <input
@@ -830,7 +830,7 @@ const CompanyForm = ({
 
                 {/* LinkedIn */}
                 <div>
-                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
+                  <label className="text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
                     <Linkedin className="w-4 h-4" />
                     LinkedIn
                   </label>
@@ -847,7 +847,7 @@ const CompanyForm = ({
 
                 {/* Facebook */}
                 <div>
-                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
+                  <label className="text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
                     <Facebook className="w-4 h-4" />
                     Facebook
                   </label>
@@ -864,7 +864,7 @@ const CompanyForm = ({
 
                 {/* WhatsApp */}
                 <div>
-                  <label className="block text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
+                  <label className="text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
                     <FaWhatsapp className="w-4 h-4" />
                     WhatsApp Number
                   </label>

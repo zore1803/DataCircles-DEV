@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { X, Phone } from "lucide-react";
+import { X } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 
+// Matches the quick-drawer style shared by CompanyTaskForm / CompanyForm:
+// a right-anchored slide-in panel (dc-panel-card + dc-panel-w) with a
+// compact pill-shaped header/footer/inputs, instead of a centered modal.
 const CallLogForm = ({ companyId, editLog, isOpen, onClose, onSuccess, userId }) => {
   const [formData, setFormData] = useState({
     purpose: "",
@@ -12,6 +15,18 @@ const CallLogForm = ({ companyId, editLog, isOpen, onClose, onSuccess, userId })
     notes: "",
   });
   const [saving, setSaving] = useState(false);
+  const [isSliding, setIsSliding] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      setTimeout(() => setIsSliding(true), 10);
+    } else {
+      setIsSliding(false);
+      setTimeout(() => setShouldRender(false), 300);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (editLog) {
@@ -34,10 +49,15 @@ const CallLogForm = ({ companyId, editLog, isOpen, onClose, onSuccess, userId })
     }
   }, [editLog, isOpen]);
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleClose = () => {
+    setIsSliding(false);
+    setTimeout(() => onClose(), 300);
   };
 
   const handleSubmit = async (e) => {
@@ -59,7 +79,7 @@ const CallLogForm = ({ companyId, editLog, isOpen, onClose, onSuccess, userId })
         toast.success("Call logged successfully");
         onSuccess(res.data);
       }
-      onClose();
+      handleClose();
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to save call log");
     } finally {
@@ -68,57 +88,75 @@ const CallLogForm = ({ companyId, editLog, isOpen, onClose, onSuccess, userId })
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between p-5 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-              <Phone className="w-5 h-5 text-blue-600" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900">
+    <>
+      <div
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-all duration-300"
+        style={{ opacity: isSliding ? 1 : 0 }}
+        onClick={handleClose}
+      />
+      <div
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out overflow-hidden ${
+          isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
+        }`}
+      >
+        <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
+          {/* Sticky header — matches the CompanyForm/CompanyTaskForm header spec */}
+          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {editLog ? "Edit Call Log" : "Log a Call"}
             </h2>
+            <button
+              type="button"
+              onClick={handleClose}
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+              aria-label="Close"
+            >
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
+            </button>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <X size={24} />
-          </button>
-        </div>
 
-        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto">
-          <div className="space-y-4">
+          {/* Scrollable body */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-8 pt-6 pb-6 space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Purpose / Title *</label>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Purpose / Title <span className="text-[#FF4935]">*</span>
+              </label>
               <input
                 type="text"
                 name="purpose"
                 value={formData.purpose}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                 placeholder="E.g., Discovery Call, Follow up"
               />
             </div>
-            
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  Type
+                </label>
                 <select
                   name="callType"
                   value={formData.callType}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                 >
                   <option value="Outbound">Outbound</option>
                   <option value="Inbound">Inbound</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  Status
+                </label>
                 <select
                   name="status"
                   value={formData.status}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                 >
                   <option value="Connected">Connected</option>
                   <option value="Missed">Missed</option>
@@ -130,51 +168,56 @@ const CallLogForm = ({ companyId, editLog, isOpen, onClose, onSuccess, userId })
 
             {(formData.status === "Connected" || formData.status === "Voicemail") && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
+                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  Duration (minutes)
+                </label>
                 <input
                   type="number"
                   name="duration"
                   value={formData.duration}
                   onChange={handleChange}
                   min="0"
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                   placeholder="e.g., 15"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Notes
+              </label>
               <textarea
                 name="notes"
                 value={formData.notes}
                 onChange={handleChange}
                 rows="4"
-                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                className="w-full border border-[#1F2937]/10 rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter resize-vertical placeholder:text-[#1F2937] placeholder:opacity-50"
                 placeholder="What was discussed?"
               ></textarea>
             </div>
           </div>
 
-          <div className="mt-6 flex justify-end gap-3 pt-5 border-t border-gray-100">
+          {/* Sticky footer — matches the CompanyTaskForm footer spec */}
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             <button
               type="button"
-              onClick={onClose}
-              className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
+              onClick={handleClose}
+              className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+              className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {saving ? "Saving..." : "Save Call Log"}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </>
   );
 };
 

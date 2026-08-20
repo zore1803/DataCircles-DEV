@@ -3999,9 +3999,12 @@ const Accounting = () => {
           ];
           return (
             <>
-              <div className="fixed inset-0 bg-black/20 z-[100011]" onClick={() => { setEmailCompose(null); setEmailTemplateOpen(false); }} />
-              <div className="fixed right-0 top-0 bottom-0 w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100011]" onClick={() => { setEmailCompose(null); setEmailTemplateOpen(false); }} />
+              {/* Same inset, rounded quick-drawer chrome as CompanyForm/ItemForm/CallLogForm
+                  (dc-panel-card) — this panel just keeps its own wider, taller compose width
+                  instead of the standard dc-panel-w. */}
+              <div className="fixed dc-panel-card w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 rounded-t-2xl flex-shrink-0">
                   <div className="flex items-center gap-3">
                     <button onClick={() => setEmailCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                       <X className="w-4 h-4 text-gray-500" />
@@ -4200,7 +4203,7 @@ const Accounting = () => {
                     )}
                   </div>
                 </div>
-                <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100 bg-white">
+                <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100 bg-white rounded-b-2xl">
                   <button
                     disabled={!emailComposeTo || emailComposeSending}
                     onClick={doSend}

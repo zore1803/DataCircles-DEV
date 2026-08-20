@@ -86,6 +86,7 @@ const invoiceSchema = new mongoose.Schema({
   // Set when this invoice was created via the "Duplicate" action, pointing
   // at the source invoice it was cloned from. Never set on the source itself.
   duplicatedFrom: { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice' },
+  stockMovementStatus: { type: String, enum: ['pending', 'applied', 'reversed'], default: 'pending' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Invoice', invoiceSchema);

@@ -87,6 +87,25 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
   const [imagePreviews, setImagePreviews] = useState([]);
   const imageInputRef = useRef(null);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [isSliding, setIsSliding] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false);
+
+  // Slide-in/out animation, matching the quick-drawer forms (CompanyForm,
+  // ItemForm, CallLogForm) instead of popping open/closed instantly.
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      setTimeout(() => setIsSliding(true), 10);
+    } else {
+      setIsSliding(false);
+      setTimeout(() => setShouldRender(false), 300);
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    setIsSliding(false);
+    setTimeout(() => onClose(), 300);
+  };
 
   useEffect(() => {
     const urls = imageFiles.map((f) => URL.createObjectURL(f));
@@ -182,7 +201,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
   // then actually creates it via the same /items endpoint.
   const handleSave = async () => {
     if (!form.name.trim()) {
-      toast.error("Product name is required");
+      toast.error(type === "Service" ? "Service name is required" : "Product name is required");
       return;
     }
     try {
@@ -239,22 +258,32 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
     }
   };
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   /* shared input style matching old ItemForm exactly */
   const inp = "w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400";
   const lbl = "block text-xs font-semibold text-gray-700 mb-1.5";
 
   return (
-    <div className="fixed inset-0 z-[100005] flex justify-end">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-
-      <div className="relative w-full max-w-[860px] bg-[#F9FAFB] h-full flex flex-col shadow-2xl">
+    <>
+      <div
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100005] transition-opacity duration-300"
+        style={{ opacity: isSliding ? 1 : 0 }}
+        onClick={handleClose}
+      />
+      {/* Wider than the standard dc-panel-w (33vw/440px) — this drawer holds
+          several 2-column sectioned cards that need the room — but shares the
+          same dc-panel-card inset/rounded-corner chrome and slide animation
+          as the rest of the quick-drawer forms. */}
+      <div
+        className={`fixed dc-panel-card z-[100006] w-full max-w-[860px] bg-[#F9FAFB] flex flex-col shadow-2xl transform transition-transform duration-300 ease-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* ── Header ── */}
-        <div className="bg-white border-b border-gray-100 flex-shrink-0">
+        <div className="bg-white border-b border-gray-100 flex-shrink-0 rounded-t-2xl">
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-3">
-              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+              <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 transition-colors">
                 <X className="w-5 h-5" />
               </button>
               <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Add Item</h2>
@@ -295,14 +324,14 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                 ))}
               </div>
 
-              {/* Item Name */}
+              {/* Item/Service Name — label and placeholder follow the Product/Service toggle */}
               <div>
-                <label className={lbl}>Item Name <span className="text-red-500">*</span></label>
+                <label className={lbl}>{type === "Service" ? "Service Name" : "Item Name"} <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={(e) => handleChange("name", e.target.value)}
-                  placeholder="Enter Item Name"
+                  placeholder={type === "Service" ? "Enter Service Name" : "Enter Item Name"}
                   className={inp}
                 />
               </div>
@@ -571,9 +600,9 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                 </div>
               </div>
 
-              {/* Images upload */}
+              {/* Images upload — heading follows the Product/Service toggle */}
               <div>
-                <label className={lbl}>Product Images &amp; Videos</label>
+                <label className={lbl}>{type === "Service" ? "Service Images & Videos" : "Product Images & Videos"}</label>
                 <div className="flex items-start gap-4">
                   <div className="flex flex-wrap gap-3">
                     {imagePreviews.map((url, i) => (
@@ -715,8 +744,8 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
         </div>
 
         {/* ── Footer ── */}
-        <div className="flex items-center justify-between px-6 py-4 bg-white border-t border-gray-100 flex-shrink-0">
-          <button type="button" onClick={onClose} className="px-5 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-full hover:bg-gray-50 transition-colors">
+        <div className="flex items-center justify-between px-6 py-4 bg-white border-t border-gray-100 flex-shrink-0 rounded-b-2xl">
+          <button type="button" onClick={handleClose} className="px-5 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-full hover:bg-gray-50 transition-colors">
             Cancel
           </button>
           <button
@@ -729,6 +758,6 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 }
