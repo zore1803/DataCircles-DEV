@@ -18,6 +18,10 @@ import toast from "react-hot-toast";
 
 import SearchIcon from "../common/SearchIcon";
 const API_BASE = `${import.meta.env.VITE_APP_API_URL}/api`;
+// The product's description is rich text ("<p>...</p>" etc, same as
+// PurchaseForm.jsx/InvoiceForm.jsx's own stripHtml) — strip the markup
+// before it lands in the plain <input> below, which was showing raw tags.
+const stripHtml = (html) => String(html || "").replace(/<[^>]*>/g, "").trim();
 
 const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -117,7 +121,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
               _id: item._id,
               variantId: variant._id,
               name: `${item.name} – ${variant.name}`,
-              description: item.description || "",
+              description: stripHtml(item.description),
               unitPrice:
                 variant.purchasePrice ||
                 item.purchasePrice ||
@@ -134,7 +138,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
               _id: item._id,
               variantId: null,
               name: item.name,
-              description: item.description || "",
+              description: stripHtml(item.description),
               unitPrice: item.purchasePrice || item.sellingPrice,
               type: item.type,
               sku: null,
@@ -171,7 +175,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
       _id: item._id,
       variantId: item.variantId,
       name: item.name,
-      description: item.description || "",
+      description: stripHtml(item.description),
       unitPrice: item.unitPrice,
       quantity: 1,
       sku: item.sku,
@@ -297,7 +301,7 @@ const PurchaseOrderForm = ({
           _id: item.itemId || null,
           variantId: item.variantId || null,
           name: item.name,
-          description: item.description || "",
+          description: stripHtml(item.description),
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           sku: item.sku || null,
@@ -664,7 +668,8 @@ const PurchaseOrderForm = ({
                     </div>
                   </div>
 
-                  {/* Amount */}
+                  {/* Amount — read-only. Always quantity × unitPrice; edit Unit Price to
+                      change it. */}
                   <div>
                     <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                       Amount

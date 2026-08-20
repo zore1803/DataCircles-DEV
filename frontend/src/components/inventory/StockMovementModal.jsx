@@ -247,7 +247,7 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
     }
     setLoading(true);
     try {
-      await API.post(`/inventory/${item._id}/stock-${isIn ? "in" : "out"}`, {
+      const res = await API.post(`/inventory/${item._id}/stock-${isIn ? "in" : "out"}`, {
         quantity: qty,
         recordDate: form.recordDate || undefined,
         category: form.category,
@@ -257,7 +257,11 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
         ...(allowNegative ? { allowNegative: true } : {}),
       });
       toast.success(`Stock ${isIn ? "added" : "removed"} successfully`);
-      onSuccess?.();
+      // Hand the caller the item exactly as the write just returned it (the
+      // authoritative post-transaction document) so it can patch the row in
+      // place immediately, instead of only firing a background refetch that
+      // the table wouldn't reflect until its next render pass.
+      onSuccess?.(res.data);
       handleClose();
     } catch (err) {
       const data = err.response?.data;

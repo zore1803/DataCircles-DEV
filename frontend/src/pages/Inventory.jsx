@@ -1222,7 +1222,16 @@ export default function Inventory() {
         item={stockModal.item}
         direction={stockModal.direction}
         onClose={() => setStockModal({ open: false, item: null, direction: "in" })}
-        onSuccess={fetchData}
+        onSuccess={(data) => {
+          // Patch this row's stock in place from the write's own response —
+          // don't wait on fetchData's GET to land before the table shows the
+          // new number. fetchData still runs after, for the KPI summary/
+          // pagination totals a single row-patch can't account for.
+          if (data?.item?._id) {
+            setItems((prev) => prev.map((it) => (it._id === data.item._id ? data.item : it)));
+          }
+          fetchData();
+        }}
       />
 
       {/* ── Stock history drawer ─────────────────────────────────────── */}

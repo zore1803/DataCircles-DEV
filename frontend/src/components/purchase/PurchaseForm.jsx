@@ -687,32 +687,17 @@ const PurchaseForm = ({
                     </div>
                   </div>
 
-                  {/* Amount — editable. This is quantity × unitPrice (the same figure Tax Inc.
-                      and GST% use to derive the subtotal/tax split below), so editing it
-                      back-solves for the Unit Price at the current quantity instead of the
-                      other way around. Whatever Tax Inc. is set to keeps meaning the same
-                      thing it always did for this row — only the direction of entry changes. */}
+                  {/* Amount — read-only. Always quantity × unitPrice; edit Unit Price to
+                      change it. */}
                   <div>
                     <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                       Amount
                     </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={
-                          (parseFloat(item.unitPrice) || 0) * (parseFloat(item.quantity) || 0) || ""
-                        }
-                        onChange={(e) => {
-                          const amount = parseFloat(e.target.value) || 0;
-                          const qty = parseFloat(item.quantity) || 0;
-                          updateItem(index, "unitPrice", qty > 0 ? amount / qty : 0);
-                        }}
-                        className="w-full pl-7 pr-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] font-semibold text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                        placeholder="0"
-                      />
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-[12px]">
-                        ₹
-                      </span>
+                    <div className="w-full px-3 h-8 flex items-center bg-gray-100 border border-[#1F2937]/10 rounded-full text-[12px] font-semibold text-gray-800">
+                      ₹
+                      {formatNumberFixed(
+                        (parseFloat(item.unitPrice) || 0) * (parseFloat(item.quantity) || 0)
+                      )}
                     </div>
                   </div>
                 </div>

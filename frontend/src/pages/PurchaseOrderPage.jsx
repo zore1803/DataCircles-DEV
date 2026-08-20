@@ -149,6 +149,9 @@ const PurchaseOrderPage = () => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editingPO, setEditingPO] = useState(null);
+  // Id of the PO currently being converted — disables just that row's button
+  // while the request is in flight instead of blocking the whole page.
+  const [convertingPOId, setConvertingPOId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -423,6 +426,36 @@ const PurchaseOrderPage = () => {
       setPurchaseOrders([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // One-click convert: creates the Purchase straight from the PO's own
+  // vendor/items/notes/tax fields — same payload PurchaseForm.jsx builds
+  // when it pre-fills from a PO, just submitted immediately instead of
+  // opening a form for review first. Stays on this page; just refetches so
+  // this row flips from "Convert to Purchase" to "View <purchaseNumber>".
+  const handleConvertToPurchase = async (po) => {
+    if (po.status !== "Approved" && po.status !== "Delivered") {
+      toast.error("Only Approved or Delivered Purchase Orders can be converted.");
+      return;
+    }
+    setConvertingPOId(po._id);
+    try {
+      await API.post("/purchases", {
+        vendor: po.vendor?._id || po.vendor,
+        purchaseOrder: po._id,
+        items: po.items,
+        notes: po.notes || "",
+        transactionType: po.transactionType,
+        gstRate: po.gstRate,
+        status: "Draft",
+      });
+      toast.success("Converted to purchase successfully");
+      await fetchPurchaseOrders();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.response?.data?.error || "Failed to convert to purchase");
+    } finally {
+      setConvertingPOId(null);
     }
   };
 
@@ -897,7 +930,9 @@ const PurchaseOrderPage = () => {
                         e.stopPropagation();
                         setOpenRowActionsId(null);
                         setRowActionsPos(null);
-                        window.location.href = "/purchases?view=" + po.convertedPurchase._id;
+                        // Route is "/purchase" (singular) — App.jsx. "/purchases"
+                        // matches nothing and renders a blank page.
+                        window.location.href = "/purchase?view=" + po.convertedPurchase._id;
                       }}
                       title={`Already converted to ${po.convertedPurchase.purchaseNumber}`}
                       className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap text-gray-500 hover:bg-gray-50"
@@ -908,17 +943,16 @@ const PurchaseOrderPage = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (po.status !== "Approved" && po.status !== "Delivered") {
-                          toast.error("Only Approved or Delivered Purchase Orders can be converted.");
-                          return;
-                        }
-                        window.location.href = "/purchases?convertPO=" + po._id;
+                        setOpenRowActionsId(null);
+                        setRowActionsPos(null);
+                        handleConvertToPurchase(po);
                       }}
+                      disabled={convertingPOId === po._id}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${
                         po.status === "Approved" || po.status === "Delivered" ? "text-[#0085FF] hover:bg-blue-50" : "text-gray-400 cursor-not-allowed"
-                      }`}
+                      } disabled:opacity-50`}
                     >
-                      Convert to Purchase
+                      {convertingPOId === po._id ? "Converting…" : "Convert to Purchase"}
                     </button>
                   )}
                 </>

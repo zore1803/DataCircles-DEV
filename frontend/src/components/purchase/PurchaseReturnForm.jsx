@@ -144,9 +144,11 @@ const PurchaseReturnForm = ({ editingReturn, vendors, onRequestClose, onSuccess,
     }
   };
 
+  // Same pill field spec as QuickCompanyForm/QuickVendorForm/QuickJournalForm
+  // — was a mismatched rounded-lg/h-10/text-sm before.
   const fieldClass =
-    "w-full border border-[#1F2937]/10 rounded-lg px-3 h-10 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all";
-  const labelClass = "block text-xs font-semibold text-gray-700 mb-1.5";
+    "w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all";
+  const labelClass = "block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2";
 
   return (
     <>
@@ -160,16 +162,23 @@ const PurchaseReturnForm = ({ editingReturn, vendors, onRequestClose, onSuccess,
         className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
-          <h2 className="text-base font-bold text-gray-900">
+        {/* Header — matches the CompanyForm/ItemForm quick-drawer header spec */}
+        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
             {isEditing ? `Edit Return ${editingReturn.returnNumber}` : "New Purchase Return"}
           </h2>
-          <button onClick={handleClose} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors">
-            <X className="w-5 h-5" />
+          <button
+            type="button"
+            onClick={handleClose}
+            title="Close"
+            className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+            aria-label="Close"
+          >
+            <X className="w-[18px] h-[18px]" strokeWidth={2} />
           </button>
         </div>
 
-        <form id="pr-form" onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-5">
+        <form id="pr-form" onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto px-6 py-6 space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Vendor *</label>
@@ -220,7 +229,7 @@ const PurchaseReturnForm = ({ editingReturn, vendors, onRequestClose, onSuccess,
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-semibold text-gray-700">Items *</label>
+              <label className="text-[12px] font-medium text-[#161618] tracking-[-0.05em]">Items *</label>
               <button type="button" onClick={addItem} className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
                 <Plus className="w-3.5 h-3.5" /> Add Item
               </button>
@@ -253,7 +262,7 @@ const PurchaseReturnForm = ({ editingReturn, vendors, onRequestClose, onSuccess,
                     placeholder="Rate"
                     className={`${fieldClass} w-24 flex-shrink-0`}
                   />
-                  <span className="w-24 flex-shrink-0 text-sm font-medium text-gray-600 text-right truncate">
+                  <span className="w-24 flex-shrink-0 text-[12px] font-medium text-gray-600 text-right truncate">
                     {money((parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0))}
                   </span>
                   <button
@@ -316,20 +325,25 @@ const PurchaseReturnForm = ({ editingReturn, vendors, onRequestClose, onSuccess,
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
               placeholder="Internal notes about this return..."
-              className="w-full px-3 py-2 border border-[#1F2937]/10 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all resize-none"
+              className="w-full px-3 py-2 border border-[#1F2937]/10 rounded-2xl text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all resize-none"
             />
           </div>
         </form>
 
-        <div className="flex-shrink-0 flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
-          <button type="button" onClick={handleClose} className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors">
+        {/* Footer — matches the CompanyForm/ItemForm quick-drawer footer spec */}
+        <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
+          >
             Cancel
           </button>
           <button
             type="submit"
             form="pr-form"
             disabled={saving}
-            className="px-5 py-2.5 bg-[#0085FF] hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg font-medium transition-colors"
+            className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? "Saving..." : isEditing ? "Save Changes" : "Create Return"}
           </button>
